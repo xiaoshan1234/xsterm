@@ -63,8 +63,34 @@ export default function Sidebar({ activeMenu, onMenuClick }: SidebarProps) {
     </svg>
   );
 
+  const renderSubMenu = () => {
+    if (activeMenu === "chat") {
+      return (
+        <>
+          <div className="submenu-header">Conversation Manager</div>
+          <SubMenuItem label="New Chat" />
+          <SubMenuItem label="Chat History" />
+          <SubMenuItem label="Search Chats" />
+          <SubMenuItem label="Export Chat" />
+        </>
+      );
+    }
+    if (activeMenu === "settings") {
+      return (
+        <>
+          <div className="submenu-header">Settings</div>
+          <SubMenuItem label="Appearance" />
+          <SubMenuItem label="Terminal" />
+          <SubMenuItem label="Shortcuts" />
+          <SubMenuItem label="About" />
+        </>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${activeMenu ? "expanded" : ""}`}>
       <div className="sidebar-toolbar">
         <div className="sidebar-section">
           <SidebarItem
@@ -93,25 +119,7 @@ export default function Sidebar({ activeMenu, onMenuClick }: SidebarProps) {
         </div>
       </div>
 
-      {activeMenu === "chat" && (
-        <div className="sidebar-submenu">
-          <div className="submenu-header">Conversation Manager</div>
-          <SubMenuItem label="New Chat" />
-          <SubMenuItem label="Chat History" />
-          <SubMenuItem label="Search Chats" />
-          <SubMenuItem label="Export Chat" />
-        </div>
-      )}
-
-      {activeMenu === "settings" && (
-        <div className="sidebar-submenu">
-          <div className="submenu-header">Settings</div>
-          <SubMenuItem label="Appearance" />
-          <SubMenuItem label="Terminal" />
-          <SubMenuItem label="Shortcuts" />
-          <SubMenuItem label="About" />
-        </div>
-      )}
+      {activeMenu && <div className="sidebar-submenu">{renderSubMenu()}</div>}
     </div>
   );
 }

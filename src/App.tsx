@@ -9,8 +9,8 @@ function App() {
   return (
     <div className="app-container">
       <Sidebar activeMenu={activeMenu} onMenuClick={setActiveMenu} />
-      <div className="main-content">
-        <Terminal />
+      <div className={`main-content ${activeMenu ? "with-menu" : ""}`}>
+        <Terminal hasSidebarMenu={!!activeMenu} />
       </div>
     </div>
   );

@@ -5,7 +5,11 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 
-export default function Terminal() {
+interface TerminalProps {
+  hasSidebarMenu: boolean;
+}
+
+export default function Terminal({ hasSidebarMenu }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -84,6 +88,14 @@ export default function Terminal() {
       xterm.dispose();
     };
   }, []);
+
+  useEffect(() => {
+    if (fitAddonRef.current) {
+      setTimeout(() => {
+        fitAddonRef.current?.fit();
+      }, 100);
+    }
+  }, [hasSidebarMenu]);
 
   return <div ref={terminalRef} style={{ width: "100%", height: "100%" }} />;
 }
