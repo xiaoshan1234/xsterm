@@ -3,23 +3,19 @@ import { ReactNode } from "react";
 interface SidebarItemProps {
   icon: ReactNode;
   label: string;
-  isOpen: boolean;
+  isActive: boolean;
   onClick: () => void;
-  children?: ReactNode;
 }
 
-function SidebarItem({ icon, label, isOpen, onClick, children }: SidebarItemProps) {
+function SidebarItem({ icon, label, isActive, onClick }: SidebarItemProps) {
   return (
-    <div className="sidebar-item">
-      <button className="sidebar-btn" onClick={onClick} title={label}>
-        {icon}
-      </button>
-      {isOpen && children && (
-        <div className="sidebar-submenu">
-          {children}
-        </div>
-      )}
-    </div>
+    <button
+      className={`sidebar-btn ${isActive ? "active" : ""}`}
+      onClick={onClick}
+      title={label}
+    >
+      {icon}
+    </button>
   );
 }
 
@@ -55,33 +51,67 @@ export default function Sidebar({ activeMenu, onMenuClick }: SidebarProps) {
     </svg>
   );
 
+  const ExpandIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+
+  const CollapseIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
+  );
+
   return (
     <div className="sidebar">
       <div className="sidebar-toolbar">
-        <SidebarItem
-          icon={<ChatIcon />}
-          label="Conversation Manager"
-          isOpen={activeMenu === "chat"}
-          onClick={() => onMenuClick(activeMenu === "chat" ? null : "chat")}
-        >
+        <div className="sidebar-section">
+          <SidebarItem
+            icon={<ChatIcon />}
+            label="Conversation Manager"
+            isActive={activeMenu === "chat"}
+            onClick={() => onMenuClick(activeMenu === "chat" ? null : "chat")}
+          />
+          <SidebarItem
+            icon={<SettingsIcon />}
+            label="Settings"
+            isActive={activeMenu === "settings"}
+            onClick={() => onMenuClick(activeMenu === "settings" ? null : "settings")}
+          />
+        </div>
+
+        <div className="sidebar-divider" />
+
+        <div className="sidebar-section sidebar-bottom">
+          <SidebarItem
+            icon={activeMenu ? <CollapseIcon /> : <ExpandIcon />}
+            label={activeMenu ? "Collapse Menu" : "Expand Menu"}
+            isActive={false}
+            onClick={() => onMenuClick(null)}
+          />
+        </div>
+      </div>
+
+      {activeMenu === "chat" && (
+        <div className="sidebar-submenu">
+          <div className="submenu-header">Conversation Manager</div>
           <SubMenuItem label="New Chat" />
           <SubMenuItem label="Chat History" />
           <SubMenuItem label="Search Chats" />
           <SubMenuItem label="Export Chat" />
-        </SidebarItem>
+        </div>
+      )}
 
-        <SidebarItem
-          icon={<SettingsIcon />}
-          label="Settings"
-          isOpen={activeMenu === "settings"}
-          onClick={() => onMenuClick(activeMenu === "settings" ? null : "settings")}
-        >
+      {activeMenu === "settings" && (
+        <div className="sidebar-submenu">
+          <div className="submenu-header">Settings</div>
           <SubMenuItem label="Appearance" />
           <SubMenuItem label="Terminal" />
           <SubMenuItem label="Shortcuts" />
           <SubMenuItem label="About" />
-        </SidebarItem>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
