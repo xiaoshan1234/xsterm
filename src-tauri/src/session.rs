@@ -125,10 +125,8 @@ impl SessionManager {
             c.args(["-NoLogo", "-NoProfile"]);
             c
         } else {
-            let mut c = CommandBuilder::new(&shell_path);
-            if shell_path.contains("bash") {
-                c.arg("--login");
-            }
+            let mut c = CommandBuilder::new("bash");
+            c.args(["-c", "stty -echo; exec bash --login"]);
             c
         };
 
