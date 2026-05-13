@@ -85,5 +85,5 @@ export default function Terminal() {
     };
   }, []);
 
-  return <div ref={terminalRef} style={{ width: "100%", height: "100vh" }} />;
+  return <div ref={terminalRef} style={{ width: "100%", height: "100%" }} />;
 }

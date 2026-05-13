@@ -1,7 +1,19 @@
+import { useState } from "react";
+import Sidebar from "./components/Sidebar";
 import Terminal from "./components/Terminal";
+import "./App.css";
 
 function App() {
-  return <Terminal />;
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+  return (
+    <div className="app-container">
+      <Sidebar activeMenu={activeMenu} onMenuClick={setActiveMenu} />
+      <div className="main-content">
+        <Terminal />
+      </div>
+    </div>
+  );
 }
 
 export default App;
