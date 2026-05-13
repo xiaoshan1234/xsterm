@@ -1,18 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
+import { useSession } from "../contexts/SessionContext";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
-  hasSidebarMenu: boolean;
+  sessionId: number;
 }
 
-export default function Terminal({ hasSidebarMenu }: TerminalProps) {
+export default function Terminal({ sessionId }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const { writeSession, resizeSession } = useSession();
+
+  const handleData = useCallback(
+    (data: string) => {
+      writeSession(sessionId, data);
+    },
+    [sessionId, writeSession]
+  );
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -52,50 +59,32 @@ export default function Terminal({ hasSidebarMenu }: TerminalProps) {
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    const init = async () => {
-      try {
-        await invoke("spawn_terminal", {
-          rows: xterm.rows,
-          cols: xterm.cols,
-        });
-      } catch (e) {
-        xterm.writeln(`Failed to spawn terminal: ${e}`);
-      }
-    };
-
-    init();
-
-    const unlisten = listen<number[]>("terminal-data", (event) => {
-      const decoder = new TextDecoder();
-      const text = decoder.decode(new Uint8Array(event.payload));
-      xterm.write(text);
-    });
-
-    xterm.onData((data) => {
-      const arr = Array.from(data).map((c) => c.charCodeAt(0));
-      invoke("write_terminal", { data: arr });
-    });
+    xterm.onData(handleData);
 
     const handleResize = () => {
-      fitAddon.fit();
+      if (fitAddonRef.current) {
+        fitAddonRef.current.fit();
+        resizeSession(sessionId, xterm.rows, xterm.cols);
+      }
     };
 
     window.addEventListener("resize", handleResize);
 
+    const handleOutput = (event: Event) => {
+      const customEvent = event as CustomEvent<number[]>;
+      const decoder = new TextDecoder();
+      const text = decoder.decode(new Uint8Array(customEvent.detail));
+      xterm.write(text);
+    };
+
+    window.addEventListener(`session-output-${sessionId}`, handleOutput);
+
     return () => {
       window.removeEventListener("resize", handleResize);
-      unlisten.then((fn) => fn());
+      window.removeEventListener(`session-output-${sessionId}`, handleOutput);
       xterm.dispose();
     };
-  }, []);
-
-  useEffect(() => {
-    if (fitAddonRef.current) {
-      setTimeout(() => {
-        fitAddonRef.current?.fit();
-      }, 100);
-    }
-  }, [hasSidebarMenu]);
+  }, [sessionId, handleData, resizeSession]);
 
   return <div ref={terminalRef} style={{ width: "100%", height: "100%" }} />;
 }

@@ -1,43 +1,14 @@
-import { ReactNode } from "react";
-
-interface SidebarItemProps {
-  icon: ReactNode;
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-}
-
-function SidebarItem({ icon, label, isActive, onClick }: SidebarItemProps) {
-  return (
-    <button
-      className={`sidebar-btn ${isActive ? "active" : ""}`}
-      onClick={onClick}
-      title={label}
-    >
-      {icon}
-    </button>
-  );
-}
-
-interface SubMenuItemProps {
-  label: string;
-  onClick?: () => void;
-}
-
-function SubMenuItem({ label, onClick }: SubMenuItemProps) {
-  return (
-    <button className="submenu-item" onClick={onClick}>
-      {label}
-    </button>
-  );
-}
+import { useState } from "react";
+import { useSession } from "../contexts/SessionContext";
 
 interface SidebarProps {
-  activeMenu: string | null;
-  onMenuClick: (menu: string | null) => void;
+  onCreateSession: () => void;
 }
 
-export default function Sidebar({ activeMenu, onMenuClick }: SidebarProps) {
+export default function Sidebar({ onCreateSession }: SidebarProps) {
+  const { sessions, activeSessionId, setActiveSession } = useSession();
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
   const ChatIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -51,75 +22,100 @@ export default function Sidebar({ activeMenu, onMenuClick }: SidebarProps) {
     </svg>
   );
 
-  const ExpandIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="6 9 12 15 18 9" />
+  const LocalIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
     </svg>
   );
 
-  const CollapseIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="18 15 12 9 6 15" />
+  const SshIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </svg>
   );
 
-  const renderSubMenu = () => {
-    if (activeMenu === "chat") {
-      return (
-        <>
-          <div className="submenu-header">Conversation Manager</div>
-          <SubMenuItem label="New Chat" />
-          <SubMenuItem label="Chat History" />
-          <SubMenuItem label="Search Chats" />
-          <SubMenuItem label="Export Chat" />
-        </>
-      );
-    }
-    if (activeMenu === "settings") {
-      return (
-        <>
-          <div className="submenu-header">Settings</div>
-          <SubMenuItem label="Appearance" />
-          <SubMenuItem label="Terminal" />
-          <SubMenuItem label="Shortcuts" />
-          <SubMenuItem label="About" />
-        </>
-      );
-    }
-    return null;
+  const handleMenuClick = (menu: string) => {
+    setActiveMenu(activeMenu === menu ? null : menu);
   };
 
   return (
     <div className={`sidebar ${activeMenu ? "expanded" : ""}`}>
       <div className="sidebar-toolbar">
         <div className="sidebar-section">
-          <SidebarItem
-            icon={<ChatIcon />}
-            label="Conversation Manager"
-            isActive={activeMenu === "chat"}
-            onClick={() => onMenuClick(activeMenu === "chat" ? null : "chat")}
-          />
-          <SidebarItem
-            icon={<SettingsIcon />}
-            label="Settings"
-            isActive={activeMenu === "settings"}
-            onClick={() => onMenuClick(activeMenu === "settings" ? null : "settings")}
-          />
+          <button
+            className={`sidebar-btn ${activeMenu === "chat" ? "active" : ""}`}
+            onClick={() => handleMenuClick("chat")}
+            title="Conversation Manager"
+          >
+            <ChatIcon />
+          </button>
+          <button
+            className={`sidebar-btn ${activeMenu === "settings" ? "active" : ""}`}
+            onClick={() => handleMenuClick("settings")}
+            title="Settings"
+          >
+            <SettingsIcon />
+          </button>
         </div>
 
         <div className="sidebar-divider" />
 
-        <div className="sidebar-section sidebar-bottom">
-          <SidebarItem
-            icon={activeMenu ? <CollapseIcon /> : <ExpandIcon />}
-            label={activeMenu ? "Collapse Menu" : "Expand Menu"}
-            isActive={false}
-            onClick={() => onMenuClick(null)}
-          />
+        <div className="sidebar-section sidebar-sessions">
+          {sessions.map((session) => (
+            <button
+              key={session.id}
+              className={`sidebar-session-btn ${session.id === activeSessionId ? "active" : ""}`}
+              onClick={() => setActiveSession(session.id)}
+              title={session.name}
+            >
+              {session.type === "local" ? <LocalIcon /> : <SshIcon />}
+            </button>
+          ))}
         </div>
       </div>
 
-      {activeMenu && <div className="sidebar-submenu">{renderSubMenu()}</div>}
+      {activeMenu === "chat" && (
+        <div className="sidebar-submenu">
+          <div className="submenu-header">Conversation Manager</div>
+          <button
+            className="submenu-item"
+            onClick={() => {
+              setActiveMenu(null);
+              onCreateSession();
+            }}
+          >
+            New Session
+          </button>
+          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
+            Chat History
+          </button>
+          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
+            Search Chats
+          </button>
+        </div>
+      )}
+
+      {activeMenu === "settings" && (
+        <div className="sidebar-submenu">
+          <div className="submenu-header">Settings</div>
+          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
+            Appearance
+          </button>
+          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
+            Terminal
+          </button>
+          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
+            Shortcuts
+          </button>
+          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
+            About
+          </button>
+        </div>
+      )}
     </div>
   );
 }
