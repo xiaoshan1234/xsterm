@@ -13,9 +13,11 @@ export default function Terminal({ sessionId }: TerminalProps) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const { writeSession, resizeSession } = useSession();
+  const pendingInput = useRef<string>("");
 
   const handleData = useCallback(
     (data: string) => {
+      pendingInput.current += data;
       writeSession(sessionId, data);
     },
     [sessionId, writeSession]
@@ -28,6 +30,7 @@ export default function Terminal({ sessionId }: TerminalProps) {
       fontSize: 14,
       fontFamily: "Menlo, Monaco, 'Courier New', monospace",
       cursorBlink: true,
+      macOptionIsMeta: true,
       theme: {
         background: "#1e1e1e",
         foreground: "#d4d4d4",
@@ -74,6 +77,32 @@ export default function Terminal({ sessionId }: TerminalProps) {
       const customEvent = event as CustomEvent<number[]>;
       const decoder = new TextDecoder();
       const text = decoder.decode(new Uint8Array(customEvent.detail));
+
+      const input = pendingInput.current;
+      pendingInput.current = "";
+
+      if (input) {
+        const inputBytes = Array.from(input).map(c => c.charCodeAt(0));
+        const textBytes = Array.from(text).map(c => c.charCodeAt(0));
+
+        if (inputBytes.length > 0 && textBytes.length >= inputBytes.length) {
+          let isEcho = true;
+          for (let i = 0; i < inputBytes.length; i++) {
+            if (inputBytes[i] !== textBytes[i]) {
+              isEcho = false;
+              break;
+            }
+          }
+          if (isEcho) {
+            const remaining = textBytes.slice(inputBytes.length);
+            if (remaining.length > 0) {
+              xterm.write(new Uint8Array(remaining));
+            }
+            return;
+          }
+        }
+      }
+
       xterm.write(text);
     };
 
