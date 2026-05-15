@@ -21,17 +21,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
 
   useEffect(() => {
-    let outputCleanup: (() => void) | null = null;
     let closedCleanup: (() => void) | null = null;
-
-    listen<[number, number[]]>("session-output", (event) => {
-      const [sessionId, data] = event.payload;
-      window.dispatchEvent(
-        new CustomEvent(`session-output-${sessionId}`, { detail: data })
-      );
-    }).then((fn) => {
-      outputCleanup = fn;
-    });
 
     listen<number>("session-closed", (event) => {
       const sessionId = event.payload;
@@ -46,7 +36,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      outputCleanup?.();
       closedCleanup?.();
     };
   }, []);

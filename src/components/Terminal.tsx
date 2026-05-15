@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { listen } from "@tauri-apps/api/event";
 import { useSession } from "../contexts/SessionContext";
 import "@xterm/xterm/css/xterm.css";
 
@@ -28,7 +29,6 @@ export default function Terminal({ sessionId }: TerminalProps) {
       fontSize: 14,
       fontFamily: "Menlo, Monaco, 'Courier New', monospace",
       cursorBlink: true,
-      macOptionIsMeta: true,
       theme: {
         background: "#1e1e1e",
         foreground: "#d4d4d4",
@@ -71,18 +71,22 @@ export default function Terminal({ sessionId }: TerminalProps) {
 
     window.addEventListener("resize", handleResize);
 
-    const handleOutput = (event: Event) => {
-      const customEvent = event as CustomEvent<number[]>;
-      const decoder = new TextDecoder();
-      const text = decoder.decode(new Uint8Array(customEvent.detail));
-      xterm.write(text);
-    };
+    let unlisten: (() => void) | null = null;
 
-    window.addEventListener(`session-output-${sessionId}`, handleOutput);
+    listen<[number, number[]]>("session-output", (event) => {
+      const [id, data] = event.payload;
+      if (id === sessionId) {
+        const decoder = new TextDecoder();
+        const text = decoder.decode(new Uint8Array(data));
+        xterm.write(text);
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      window.removeEventListener(`session-output-${sessionId}`, handleOutput);
+      unlisten?.();
       xterm.dispose();
     };
   }, [sessionId, handleData, resizeSession]);
