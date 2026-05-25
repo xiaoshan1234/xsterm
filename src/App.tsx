@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { SessionProvider, useSession } from "./contexts/SessionContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { useKeyboardShortcut } from "./hooks/useKeyboardShortcut";
 import Sidebar from "./components/Sidebar";
 import TabBar from "./components/TabBar";
 import Terminal from "./components/Terminal";
@@ -14,9 +16,51 @@ function AppContent() {
     createLocalSession,
     createSshSession,
     closeSession,
+    renameSession,
     setActiveSession,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  // Keyboard shortcuts
+  useKeyboardShortcut({
+    key: "n",
+    ctrl: true,
+    shift: true,
+    handler: () => setShowCreateDialog(true),
+  });
+
+  useKeyboardShortcut({
+    key: "Tab",
+    ctrl: true,
+    handler: () => {
+      if (sessions.length <= 1) return;
+      const currentIndex = sessions.findIndex((s) => s.id === activeSessionId);
+      const nextIndex = (currentIndex + 1) % sessions.length;
+      setActiveSession(sessions[nextIndex].id);
+    },
+  });
+
+  useKeyboardShortcut({
+    key: "Tab",
+    ctrl: true,
+    shift: true,
+    handler: () => {
+      if (sessions.length <= 1) return;
+      const currentIndex = sessions.findIndex((s) => s.id === activeSessionId);
+      const prevIndex = (currentIndex - 1 + sessions.length) % sessions.length;
+      setActiveSession(sessions[prevIndex].id);
+    },
+  });
+
+  useKeyboardShortcut({
+    key: "w",
+    ctrl: true,
+    handler: () => {
+      if (activeSessionId) {
+        closeSession(activeSessionId);
+      }
+    },
+  });
 
   const handleCreateLocal = (config: LocalSessionConfig) => {
     createLocalSession(config);
@@ -36,6 +80,7 @@ function AppContent() {
             activeId={activeSessionId}
             onSelect={setActiveSession}
             onClose={closeSession}
+            onRename={renameSession}
           />
         )}
         <div className="terminal-container">
@@ -67,7 +112,9 @@ function AppContent() {
 export default function App() {
   return (
     <SessionProvider>
-      <AppContent />
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </SessionProvider>
   );
 }

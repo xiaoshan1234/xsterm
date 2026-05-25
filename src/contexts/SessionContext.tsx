@@ -9,6 +9,7 @@ interface SessionContextType {
   createLocalSession: (config: LocalSessionConfig) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig) => Promise<Session>;
   closeSession: (id: number) => Promise<void>;
+  renameSession: (id: number, name: string) => void;
   setActiveSession: (id: number | null) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
@@ -16,9 +17,35 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | null>(null);
 
+async function persistSessions(sessions: Session[]) {
+  try {
+    await invoke("save_sessions", { sessions });
+  } catch (e) {
+    console.error("Failed to save sessions:", e);
+  }
+}
+
+async function loadSavedSessions(): Promise<Session[]> {
+  try {
+    return await invoke<Session[]>("load_sessions");
+  } catch (e) {
+    console.error("Failed to load sessions:", e);
+    return [];
+  }
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Load saved sessions on mount
+    loadSavedSessions().then((saved) => {
+      if (saved.length > 0) {
+        setSessions(saved);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     let closedCleanup: (() => void) | null = null;
@@ -42,25 +69,47 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const createLocalSession = useCallback(async (config: LocalSessionConfig): Promise<Session> => {
     const session = await invoke<Session>("create_local_session", { config });
-    setSessions((prev) => [...prev, session]);
+    setSessions((prev) => {
+      const updated = [...prev, session];
+      persistSessions(updated);
+      return updated;
+    });
     setActiveSessionId(session.id);
     return session;
   }, []);
 
   const createSshSession = useCallback(async (config: SSHSessionConfig): Promise<Session> => {
     const session = await invoke<Session>("create_ssh_session", { config });
-    setSessions((prev) => [...prev, session]);
+    setSessions((prev) => {
+      const updated = [...prev, session];
+      persistSessions(updated);
+      return updated;
+    });
     setActiveSessionId(session.id);
     return session;
   }, []);
 
   const closeSession = useCallback(async (id: number): Promise<void> => {
     await invoke("close_session", { sessionId: id });
-    setSessions((prev) => prev.filter((s) => s.id !== id));
+    setSessions((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
+      persistSessions(updated);
+      return updated;
+    });
     if (activeSessionId === id) {
       setActiveSessionId(null);
     }
   }, [activeSessionId]);
+
+  const renameSession = useCallback((id: number, name: string) => {
+    setSessions((prev) => {
+      const updated = prev.map((s) =>
+        s.id === id ? { ...s, name } : s
+      );
+      persistSessions(updated);
+      return updated;
+    });
+  }, []);
 
   const setActiveSession = useCallback((id: number | null) => {
     setActiveSessionId(id);
@@ -83,6 +132,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         createLocalSession,
         createSshSession,
         closeSession,
+        renameSession,
         setActiveSession,
         writeSession,
         resizeSession,

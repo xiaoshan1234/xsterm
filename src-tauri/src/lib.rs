@@ -3,6 +3,7 @@ mod session;
 use session::{LocalSessionConfig, SessionInfo, SessionManager, SSHSessionConfig};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
+use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
 async fn create_local_session(
@@ -62,10 +63,31 @@ fn list_sessions(
     Ok(manager.list())
 }
 
+#[tauri::command]
+async fn save_sessions(
+    sessions: Vec<SessionInfo>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let store = app.store("sessions.json").map_err(|e| e.to_string())?;
+    store.set("sessions", serde_json::to_value(sessions).map_err(|e| e.to_string())?);
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn load_sessions(app: AppHandle) -> Result<Vec<SessionInfo>, String> {
+    let store = app.store("sessions.json").map_err(|e| e.to_string())?;
+    match store.get("sessions") {
+        Some(value) => Ok(serde_json::from_value(value.clone()).map_err(|e| e.to_string())?),
+        None => Ok(vec![]),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .manage(Arc::new(Mutex::new(SessionManager::new())))
         .invoke_handler(tauri::generate_handler![
             create_local_session,
@@ -73,7 +95,9 @@ pub fn run() {
             write_session,
             resize_session,
             close_session,
-            list_sessions
+            list_sessions,
+            save_sessions,
+            load_sessions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

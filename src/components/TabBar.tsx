@@ -1,3 +1,4 @@
+import { useState, MouseEvent } from "react";
 import { Session } from "../types/session";
 
 interface TabBarProps {
@@ -5,9 +6,13 @@ interface TabBarProps {
   activeId: number | null;
   onSelect: (id: number) => void;
   onClose: (id: number) => void;
+  onRename?: (id: number, name: string) => void;
 }
 
-export default function TabBar({ sessions, activeId, onSelect, onClose }: TabBarProps) {
+export default function TabBar({ sessions, activeId, onSelect, onClose, onRename }: TabBarProps) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+
   const getIcon = (type: "local" | "ssh") => {
     return type === "local" ? (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -24,6 +29,33 @@ export default function TabBar({ sessions, activeId, onSelect, onClose }: TabBar
     );
   };
 
+  const handleMiddleClick = (e: MouseEvent, sessionId: number) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      onClose(sessionId);
+    }
+  };
+
+  const handleDoubleClick = (session: Session) => {
+    setEditingId(session.id);
+    setEditValue(session.name);
+  };
+
+  const handleEditSubmit = (sessionId: number) => {
+    if (editValue.trim() && onRename) {
+      onRename(sessionId, editValue.trim());
+    }
+    setEditingId(null);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent, sessionId: number) => {
+    if (e.key === "Enter") {
+      handleEditSubmit(sessionId);
+    } else if (e.key === "Escape") {
+      setEditingId(null);
+    }
+  };
+
   return (
     <div className="tab-bar">
       {sessions.map((session) => (
@@ -31,9 +63,24 @@ export default function TabBar({ sessions, activeId, onSelect, onClose }: TabBar
           key={session.id}
           className={`tab ${session.id === activeId ? "active" : ""}`}
           onClick={() => onSelect(session.id)}
+          onMouseDown={(e) => handleMiddleClick(e, session.id)}
+          onDoubleClick={() => handleDoubleClick(session)}
         >
           <span className="tab-icon">{getIcon(session.type)}</span>
-          <span className="tab-title">{session.name}</span>
+          {editingId === session.id ? (
+            <input
+              type="text"
+              className="tab-title-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => handleEditSubmit(session.id)}
+              onKeyDown={(e) => handleEditKeyDown(e, session.id)}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="tab-title">{session.name}</span>
+          )}
           {!session.is_connected && <span className="tab-disconnected">!</span>}
           <button
             className="tab-close"

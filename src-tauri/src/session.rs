@@ -125,8 +125,8 @@ impl SessionManager {
             c.args(["-NoLogo", "-NoProfile"]);
             c
         } else {
-            let mut c = CommandBuilder::new("/bin/bash");
-            c.arg("--login");
+            let mut c = CommandBuilder::new("bash");
+            c.args(["-c", "stty -echo 2>/dev/null; exec bash --login"]);
             c
         };
 
@@ -205,9 +205,11 @@ impl SessionManager {
         }
 
         let mut channel = ssh_session.channel_session().map_err(|e| e.to_string())?;
-        channel.request_pty("xterm", None, None).map_err(|e| format!("PTY request failed: {}", e))?;
+        channel.request_pty("xterm-256color", None, None).map_err(|e| format!("PTY request failed: {}", e))?;
 
         channel.shell().map_err(|e| format!("Shell start failed: {}", e))?;
+
+        std::thread::sleep(std::time::Duration::from_millis(200));
 
         let id = self.next_id;
         self.next_id += 1;
@@ -235,7 +237,7 @@ impl SessionManager {
         self.sessions.insert(id, session);
 
         let app_clone = app.clone();
-        let channel = match self.sessions.get(&id) {
+        let mut channel = match self.sessions.get(&id) {
             Some(Session::Ssh(s)) => s.channel.clone(),
             _ => return Err("Session not found".to_string()),
         };
