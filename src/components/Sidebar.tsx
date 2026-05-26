@@ -3,9 +3,10 @@ import { useSession } from "../contexts/SessionContext";
 
 interface SidebarProps {
   onCreateSession: () => void;
+  onToggleLogs: () => void;
 }
 
-export default function Sidebar({ onCreateSession }: SidebarProps) {
+export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
   const { sessions, activeSessionId, setActiveSession } = useSession();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
@@ -19,6 +20,16 @@ export default function Sidebar({ onCreateSession }: SidebarProps) {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+
+  const LogIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
     </svg>
   );
 
@@ -49,9 +60,16 @@ export default function Sidebar({ onCreateSession }: SidebarProps) {
           <button
             className={`sidebar-btn ${activeMenu === "chat" ? "active" : ""}`}
             onClick={() => handleMenuClick("chat")}
-            title="Conversation Manager"
+            title="Session Manager"
           >
             <ChatIcon />
+          </button>
+          <button
+            className="sidebar-btn"
+            onClick={onToggleLogs}
+            title="Toggle Logs (Ctrl+L)"
+          >
+            <LogIcon />
           </button>
           <button
             className={`sidebar-btn ${activeMenu === "settings" ? "active" : ""}`}
@@ -80,7 +98,7 @@ export default function Sidebar({ onCreateSession }: SidebarProps) {
 
       {activeMenu === "chat" && (
         <div className="sidebar-submenu">
-          <div className="submenu-header">Conversation Manager</div>
+          <div className="submenu-header">Session Manager</div>
           <button
             className="submenu-item"
             onClick={() => {
@@ -91,10 +109,10 @@ export default function Sidebar({ onCreateSession }: SidebarProps) {
             New Session
           </button>
           <button className="submenu-item" onClick={() => setActiveMenu(null)}>
-            Chat History
+            Session History
           </button>
           <button className="submenu-item" onClick={() => setActiveMenu(null)}>
-            Search Chats
+            Search Sessions
           </button>
         </div>
       )}

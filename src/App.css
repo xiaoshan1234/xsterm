@@ -434,3 +434,132 @@ html, body, #root {
 .btn-create:hover {
   background: #1177bb;
 }
+
+/* Log Panel */
+.log-panel {
+  position: fixed;
+  bottom: 0;
+  left: 48px;
+  right: 0;
+  height: 300px;
+  background: #1e1e1e;
+  border-top: 1px solid #3a3a3a;
+  z-index: 500;
+}
+
+.log-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #252526;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.log-header span {
+  color: #d4d4d4;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.log-header input {
+  padding: 4px 8px;
+  background: #3c3c3c;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 12px;
+  width: 200px;
+}
+
+.log-header input:focus {
+  outline: none;
+  border-color: #0e639c;
+}
+
+.log-header select {
+  padding: 4px 8px;
+  background: #3c3c3c;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.log-header button {
+  padding: 4px 12px;
+  background: #3c3c3c;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  color: #d4d4d4;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.log-header button:hover {
+  background: #4a4a4a;
+  color: #ffffff;
+}
+
+.log-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+}
+
+.log-entry {
+  display: flex;
+  gap: 8px;
+  padding: 2px 12px;
+  border-left: 3px solid #888;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.log-entry:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.log-time {
+  color: #808080;
+  flex-shrink: 0;
+}
+
+.log-level {
+  font-weight: 600;
+  flex-shrink: 0;
+  width: 50px;
+}
+
+.log-source {
+  color: #4fc3f7;
+  flex-shrink: 0;
+}
+
+.log-message {
+  color: #d4d4d4;
+  word-break: break-all;
+}
+
+/* Tab title input for rename */
+.tab-title-input {
+  background: #3c3c3c;
+  border: 1px solid #0e639c;
+  border-radius: 2px;
+  color: #ffffff;
+  font-size: 13px;
+  padding: 2px 4px;
+  width: 100%;
+  max-width: 150px;
+}
+
+.tab-title-input:focus {
+  outline: none;
+}

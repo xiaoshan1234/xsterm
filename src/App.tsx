@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { SessionProvider, useSession } from "./contexts/SessionContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { LoggerProvider, useLogger } from "./contexts/LoggerContext";
 import { useKeyboardShortcut } from "./hooks/useKeyboardShortcut";
 import Sidebar from "./components/Sidebar";
 import TabBar from "./components/TabBar";
 import Terminal from "./components/Terminal";
+import LogViewer from "./components/LogViewer";
 import CreateSessionDialog from "./components/CreateSessionDialog";
 import { LocalSessionConfig, SSHSessionConfig } from "./types/session";
 import "./App.css";
@@ -19,7 +21,9 @@ function AppContent() {
     renameSession,
     setActiveSession,
   } = useSession();
+  const { logs, clearLogs } = useLogger();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   // Keyboard shortcuts
   useKeyboardShortcut({
@@ -62,6 +66,12 @@ function AppContent() {
     },
   });
 
+  useKeyboardShortcut({
+    key: "l",
+    ctrl: true,
+    handler: () => setShowLogs((prev) => !prev),
+  });
+
   const handleCreateLocal = (config: LocalSessionConfig) => {
     createLocalSession(config);
   };
@@ -72,7 +82,7 @@ function AppContent() {
 
   return (
     <div className="app-container">
-      <Sidebar onCreateSession={() => setShowCreateDialog(true)} />
+      <Sidebar onCreateSession={() => setShowCreateDialog(true)} onToggleLogs={() => setShowLogs((prev) => !prev)} />
       <div className="main-area">
         {sessions.length > 0 && (
           <TabBar
@@ -98,6 +108,11 @@ function AppContent() {
             )
           ) : null}
         </div>
+        {showLogs && (
+          <div className="log-panel">
+            <LogViewer logs={logs} onClear={clearLogs} />
+          </div>
+        )}
       </div>
       <CreateSessionDialog
         isOpen={showCreateDialog}
@@ -113,7 +128,9 @@ export default function App() {
   return (
     <SessionProvider>
       <ThemeProvider>
-        <AppContent />
+        <LoggerProvider>
+          <AppContent />
+        </LoggerProvider>
       </ThemeProvider>
     </SessionProvider>
   );
