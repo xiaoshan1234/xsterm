@@ -1,11 +1,10 @@
 mod session;
 
-use session::{LocalSessionConfig, SessionInfo, SessionManager, SSHSessionConfig};
+use session::{LocalSessionConfig, RealAppBackend, SessionInfo, SessionManager, SSHSessionConfig};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State, Manager};
 use tauri_plugin_store::StoreExt;
 use std::path::PathBuf;
-use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
@@ -17,7 +16,8 @@ async fn create_local_session(
 ) -> Result<SessionInfo, String> {
     tracing::info!("Creating local session");
     let mut manager = state.lock().map_err(|e| e.to_string())?;
-    match manager.create_local(config, app) {
+    let backend = RealAppBackend::new(app);
+    match manager.create_local(config, backend) {
         Ok(info) => {
             tracing::info!("Local session created: id={}", info.id);
             Ok(info)
@@ -37,7 +37,8 @@ async fn create_ssh_session(
 ) -> Result<SessionInfo, String> {
     tracing::info!("Creating SSH session: {}@{}:{}", config.username, config.host, config.port);
     let mut manager = state.lock().map_err(|e| e.to_string())?;
-    match manager.create_ssh(config, app) {
+    let backend = RealAppBackend::new(app);
+    match manager.create_ssh(config, backend) {
         Ok(info) => {
             tracing::info!("SSH session created: id={}", info.id);
             Ok(info)
@@ -173,13 +174,11 @@ fn init_logging(log_dir: &PathBuf) {
         )
         .init();
 
-    // Keep guard alive for the lifetime of the program
     std::mem::forget(_guard);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Set up panic hook for logging
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("PANIC: {}", panic_info);
         tracing::error!("PANIC: {}", panic_info);
