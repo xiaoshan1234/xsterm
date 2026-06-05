@@ -3,6 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Session, LocalSessionConfig, SSHSessionConfig, SessionGroup } from "../types/session";
 
+interface GroupStore {
+  groups: SessionGroup[];
+  nextGroupId: number;
+}
+
 interface SessionContextType {
   sessions: Session[];
   activeSessionId: number | null;
@@ -32,9 +37,14 @@ async function persistSessions(sessions: Session[]) {
   }
 }
 
-async function persistGroups(groups: SessionGroup[]) {
+async function persistGroups(store: GroupStore) {
   try {
-    await invoke("save_groups", { groups });
+    await invoke("save_groups", {
+      store_data: {
+        groups: store.groups,
+        next_group_id: store.nextGroupId,
+      },
+    });
   } catch (e) {
     console.error("Failed to save groups:", e);
   }
@@ -49,18 +59,37 @@ async function loadSavedSessions(): Promise<Session[]> {
   }
 }
 
+async function loadSavedGroups(): Promise<GroupStore> {
+  try {
+    const result = await invoke<GroupStore>("load_groups");
+    return {
+      groups: result.groups,
+      nextGroupId: result.nextGroupId || 1,
+    };
+  } catch (e) {
+    console.error("Failed to load groups:", e);
+    return { groups: [], nextGroupId: 1 };
+  }
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [nextGroupId, setNextGroupId] = useState(1);
 
+  // Load persisted state on mount
   useEffect(() => {
-    loadSavedSessions().then((saved) => {
-      if (saved.length > 0) {
-        setSessions(saved);
-      }
-    });
+    const init = async () => {
+      const [savedSessions, savedGroups] = await Promise.all([
+        loadSavedSessions(),
+        loadSavedGroups(),
+      ]);
+      if (savedSessions.length > 0) setSessions(savedSessions);
+      setGroups(savedGroups.groups);
+      setNextGroupId(savedGroups.nextGroupId);
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -86,7 +115,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const createLocalSession = useCallback(async (config: LocalSessionConfig, save = true): Promise<Session> => {
     const session = await invoke<Session>("create_local_session", { config });
     setSessions((prev) => {
-      const updated = [...prev, session];
+      const updated: Session[] = [...prev, session];
       if (save) persistSessions(updated);
       return updated;
     });
@@ -97,7 +126,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const createSshSession = useCallback(async (config: SSHSessionConfig, save = true): Promise<Session> => {
     const session = await invoke<Session>("create_ssh_session", { config });
     setSessions((prev) => {
-      const updated = [...prev, session];
+      const updated: Session[] = [...prev, session];
       if (save) persistSessions(updated);
       return updated;
     });
@@ -132,7 +161,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setNextGroupId((prev) => prev + 1);
     setGroups((prev) => {
       const updated = [...prev, { id, name, sessionIds: [], collapsed: false }];
-      persistGroups(updated);
+      persistGroups({ groups: updated, nextGroupId: id + 1 });
       return updated;
     });
   }, [nextGroupId]);
@@ -140,50 +169,50 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const deleteGroup = useCallback((id: number) => {
     setGroups((prev) => {
       const updated = prev.filter((g) => g.id !== id);
-      persistGroups(updated);
+      persistGroups({ groups: updated, nextGroupId });
       return updated;
     });
-  }, []);
+  }, [nextGroupId]);
 
   const addToGroup = useCallback((groupId: number, sessionId: number) => {
     setGroups((prev) => {
       const updated = prev.map((g) =>
         g.id === groupId ? { ...g, sessionIds: [...g.sessionIds, sessionId] } : g
       );
-      persistGroups(updated);
+      persistGroups({ groups: updated, nextGroupId });
       return updated;
     });
-  }, []);
+  }, [nextGroupId]);
 
   const removeFromGroup = useCallback((groupId: number, sessionId: number) => {
     setGroups((prev) => {
       const updated = prev.map((g) =>
         g.id === groupId ? { ...g, sessionIds: g.sessionIds.filter((sid) => sid !== sessionId) } : g
       );
-      persistGroups(updated);
+      persistGroups({ groups: updated, nextGroupId });
       return updated;
     });
-  }, []);
+  }, [nextGroupId]);
 
   const renameGroup = useCallback((id: number, name: string) => {
     setGroups((prev) => {
       const updated = prev.map((g) =>
         g.id === id ? { ...g, name } : g
       );
-      persistGroups(updated);
+      persistGroups({ groups: updated, nextGroupId });
       return updated;
     });
-  }, []);
+  }, [nextGroupId]);
 
   const toggleGroup = useCallback((id: number) => {
     setGroups((prev) => {
       const updated = prev.map((g) =>
         g.id === id ? { ...g, collapsed: !g.collapsed } : g
       );
-      persistGroups(updated);
+      persistGroups({ groups: updated, nextGroupId });
       return updated;
     });
-  }, []);
+  }, [nextGroupId]);
 
   const setActiveSession = useCallback((id: number | null) => {
     setActiveSessionId(id);

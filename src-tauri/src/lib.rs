@@ -1,7 +1,9 @@
+mod groups;
 mod local_session;
 mod session;
 mod ssh_session;
 
+use groups::SessionGroup;
 use session::{LocalSessionConfig, RealAppBackend, SessionInfo, SessionManager, SSHSessionConfig};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State, Manager};
@@ -125,6 +127,38 @@ async fn load_sessions(app: AppHandle) -> Result<Vec<SessionInfo>, String> {
     }
 }
 
+// --- Group API Commands ---
+
+#[tauri::command]
+async fn save_groups(
+    store_data: groups::GroupStore,
+    app: AppHandle,
+) -> Result<(), String> {
+    tracing::debug!("Saving {} groups, next_id={}", store_data.groups.len(), store_data.next_group_id);
+    let store = app.store("groups.json").map_err(|e| e.to_string())?;
+    store.set("groups", serde_json::to_value(&store_data).map_err(|e| e.to_string())?);
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn load_groups(app: AppHandle) -> Result<groups::GroupStore, String> {
+    let store = app.store("groups.json").map_err(|e| e.to_string())?;
+    match store.get("groups") {
+        Some(value) => {
+            let data: groups::GroupStore = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+            tracing::debug!("Loaded {} groups, next_id={}", data.groups.len(), data.next_group_id);
+            Ok(data)
+        }
+        None => Ok(groups::GroupStore {
+            groups: vec![],
+            next_group_id: 1,
+        }),
+    }
+}
+
+// --- Logging ---
+
 #[tauri::command]
 async fn log_message(
     level: String,
@@ -205,6 +239,8 @@ pub fn run() {
             list_sessions,
             save_sessions,
             load_sessions,
+            save_groups,
+            load_groups,
             log_message
         ])
         .run(tauri::generate_context!())
