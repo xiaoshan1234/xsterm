@@ -28,3 +28,10 @@ export interface SSHSessionConfig {
 export type CreateSessionConfig =
   | { type: "local"; config: LocalSessionConfig }
   | { type: "ssh"; config: SSHSessionConfig };
+
+export interface SessionGroup {
+  id: number;
+  name: string;
+  sessionIds: number[];
+  collapsed: boolean;
+}

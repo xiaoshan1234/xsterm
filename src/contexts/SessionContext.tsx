@@ -1,15 +1,22 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Session, LocalSessionConfig, SSHSessionConfig } from "../types/session";
+import { Session, LocalSessionConfig, SSHSessionConfig, SessionGroup } from "../types/session";
 
 interface SessionContextType {
   sessions: Session[];
   activeSessionId: number | null;
+  groups: SessionGroup[];
   createLocalSession: (config: LocalSessionConfig) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig) => Promise<Session>;
   closeSession: (id: number) => Promise<void>;
+  addToGroup: (groupId: number, sessionId: number) => void;
+  removeFromGroup: (groupId: number, sessionId: number) => void;
   renameSession: (id: number, name: string) => void;
+  createGroup: (name: string) => void;
+  deleteGroup: (id: number) => void;
+  renameGroup: (id: number, name: string) => void;
+  toggleGroup: (id: number) => void;
   setActiveSession: (id: number | null) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
@@ -25,6 +32,14 @@ async function persistSessions(sessions: Session[]) {
   }
 }
 
+async function persistGroups(groups: SessionGroup[]) {
+  try {
+    await invoke("save_groups", { groups });
+  } catch (e) {
+    console.error("Failed to save groups:", e);
+  }
+}
+
 async function loadSavedSessions(): Promise<Session[]> {
   try {
     return await invoke<Session[]>("load_sessions");
@@ -37,9 +52,10 @@ async function loadSavedSessions(): Promise<Session[]> {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [groups, setGroups] = useState<SessionGroup[]>([]);
+  const [nextGroupId, setNextGroupId] = useState(1);
 
   useEffect(() => {
-    // Load saved sessions on mount
     loadSavedSessions().then((saved) => {
       if (saved.length > 0) {
         setSessions(saved);
@@ -111,6 +127,64 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const createGroup = useCallback((name: string) => {
+    const id = nextGroupId;
+    setNextGroupId((prev) => prev + 1);
+    setGroups((prev) => {
+      const updated = [...prev, { id, name, sessionIds: [], collapsed: false }];
+      persistGroups(updated);
+      return updated;
+    });
+  }, [nextGroupId]);
+
+  const deleteGroup = useCallback((id: number) => {
+    setGroups((prev) => {
+      const updated = prev.filter((g) => g.id !== id);
+      persistGroups(updated);
+      return updated;
+    });
+  }, []);
+
+  const addToGroup = useCallback((groupId: number, sessionId: number) => {
+    setGroups((prev) => {
+      const updated = prev.map((g) =>
+        g.id === groupId ? { ...g, sessionIds: [...g.sessionIds, sessionId] } : g
+      );
+      persistGroups(updated);
+      return updated;
+    });
+  }, []);
+
+  const removeFromGroup = useCallback((groupId: number, sessionId: number) => {
+    setGroups((prev) => {
+      const updated = prev.map((g) =>
+        g.id === groupId ? { ...g, sessionIds: g.sessionIds.filter((sid) => sid !== sessionId) } : g
+      );
+      persistGroups(updated);
+      return updated;
+    });
+  }, []);
+
+  const renameGroup = useCallback((id: number, name: string) => {
+    setGroups((prev) => {
+      const updated = prev.map((g) =>
+        g.id === id ? { ...g, name } : g
+      );
+      persistGroups(updated);
+      return updated;
+    });
+  }, []);
+
+  const toggleGroup = useCallback((id: number) => {
+    setGroups((prev) => {
+      const updated = prev.map((g) =>
+        g.id === id ? { ...g, collapsed: !g.collapsed } : g
+      );
+      persistGroups(updated);
+      return updated;
+    });
+  }, []);
+
   const setActiveSession = useCallback((id: number | null) => {
     setActiveSessionId(id);
   }, []);
@@ -129,10 +203,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       value={{
         sessions,
         activeSessionId,
+        groups,
         createLocalSession,
         createSshSession,
         closeSession,
+        addToGroup,
+        removeFromGroup,
         renameSession,
+        createGroup,
+        deleteGroup,
+        renameGroup,
+        toggleGroup,
         setActiveSession,
         writeSession,
         resizeSession,

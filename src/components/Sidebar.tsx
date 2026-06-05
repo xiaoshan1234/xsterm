@@ -7,7 +7,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
-  const { sessions, activeSessionId, setActiveSession } = useSession();
+  const { sessions, activeSessionId, setActiveSession, groups, createGroup, toggleGroup, closeSession } = useSession();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   const ChatIcon = () => (
@@ -46,6 +46,40 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
       <circle cx="12" cy="12" r="10" />
       <line x1="2" y1="12" x2="22" y2="12" />
       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+
+  const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+
+  const FolderIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+
+  const CloseIcon = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+
+  const PlusIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   );
 
@@ -108,12 +142,80 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
           >
             New Session
           </button>
-          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
-            Session History
-          </button>
-          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
-            Search Sessions
-          </button>
+          <div className="session-history">
+            {groups.map((group) => (
+              <div key={group.id} className="session-group">
+                <button
+                  className="session-group-header"
+                  onClick={() => toggleGroup(group.id)}
+                >
+                  <ChevronIcon expanded={!group.collapsed} />
+                  <FolderIcon />
+                  <span className="session-group-name">{group.name}</span>
+                  <span className="session-group-count">{group.sessionIds.length}</span>
+                </button>
+                {!group.collapsed && (
+                  <div className="session-group-items">
+                    {sessions
+                      .filter((s) => group.sessionIds.includes(s.id))
+                      .map((session) => (
+                        <div key={session.id} className="session-item">
+                          <span className="session-item-indent" />
+                          {session.type === "local" ? <LocalIcon /> : <SshIcon />}
+                          <span
+                            className="session-item-name"
+                            onClick={() => {
+                              setActiveSession(session.id);
+                              setActiveMenu(null);
+                            }}
+                          >
+                            {session.name}
+                          </span>
+                          <button
+                            className="session-item-close"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              closeSession(session.id);
+                            }}
+                          >
+                            <CloseIcon />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {sessions
+              .filter((s) => !groups.some((g) => g.sessionIds.includes(s.id)))
+              .map((session) => (
+                <div key={session.id} className="session-item uncategorized">
+                  {session.type === "local" ? <LocalIcon /> : <SshIcon />}
+                  <span
+                    className="session-item-name"
+                    onClick={() => {
+                      setActiveSession(session.id);
+                      setActiveMenu(null);
+                    }}
+                  >
+                    {session.name}
+                  </span>
+                  <button
+                    className="session-item-close"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeSession(session.id);
+                    }}
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
+              ))}
+            <button className="submenu-item new-group-btn" onClick={() => createGroup("New Group")}>
+              <PlusIcon />
+              New Group
+            </button>
+          </div>
         </div>
       )}
 
