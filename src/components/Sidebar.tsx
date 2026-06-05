@@ -9,6 +9,25 @@ interface SidebarProps {
 export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
   const { sessions, activeSessionId, setActiveSession, groups, createGroup, toggleGroup, closeSession } = useSession();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [groupError, setGroupError] = useState("");
+
+  const handleCreateGroup = () => {
+    setGroupError("");
+    const trimmed = newGroupName.trim();
+    if (!trimmed) {
+      setGroupError("Group name is required");
+      return;
+    }
+    if (groups.some((g) => g.name.toLowerCase() === trimmed.toLowerCase())) {
+      setGroupError("A group with this name already exists");
+      return;
+    }
+    createGroup(trimmed);
+    setNewGroupName("");
+    setShowNewGroupDialog(false);
+  };
 
   const ChatIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -203,7 +222,7 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
                 </div>
               ))}
             <div className="session-divider" />
-            <button className="submenu-item new-group-btn" onClick={() => createGroup("New Group")}>
+            <button className="submenu-item new-group-btn" onClick={() => setShowNewGroupDialog(true)}>
               <PlusIcon />
               New Group
             </button>
@@ -230,6 +249,38 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
           <button className="submenu-item" onClick={() => setActiveMenu(null)}>
             About
           </button>
+        </div>
+      )}
+      {showNewGroupDialog && (
+        <div className="dialog-overlay" onClick={() => setShowNewGroupDialog(false)}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <h2>Create Group</h2>
+              <button className="dialog-close" onClick={() => { setShowNewGroupDialog(false); setGroupError(""); }}>×</button>
+            </div>
+            {groupError && <div className="dialog-error">{groupError}</div>}
+            <div className="dialog-content">
+              <div className="form-group">
+                <label>Group Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Work, Personal"
+                  value={newGroupName}
+                  onChange={(e) => { setNewGroupName(e.target.value); setGroupError(""); }}
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="dialog-footer">
+              <button className="btn-cancel" onClick={() => setShowNewGroupDialog(false)}>
+                Cancel
+              </button>
+              <button className="btn-create" onClick={handleCreateGroup}>
+                Create
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
