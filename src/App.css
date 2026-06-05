@@ -13,8 +13,15 @@ html, body, #root {
 
 .app-container {
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100vh;
+}
+
+.content-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -25,8 +32,6 @@ html, body, #root {
   border-right: 1px solid #3a3a3a;
   display: flex;
   flex-direction: row;
-  position: relative;
-  z-index: 100;
   transition: width 0.2s ease, min-width 0.2s ease;
 }
 
@@ -152,6 +157,63 @@ html, body, #root {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  background: #252526;
+  border-bottom: 1px solid #3a3a3a;
+  height: 28px;
+  line-height: 28px;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.navbar-logo {
+  padding: 0 12px;
+  color: #d4d4d4;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+.navbar-menu {
+  display: flex;
+  gap: 4px;
+}
+
+.navbar-item {
+  padding: 4px 8px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: #d4d4d4;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+
+
+.navbar-item:hover {
+  background: #37373d;
+  color: #ffffff;
+}
+
+.navbar-item:hover::after {
+  opacity: 1;
+}
+
+.navbar-item:focus {
+  outline: 1px solid #0e639c;
+  outline-offset: -1px;
+}
+
+.navbar-item.active {
+  background: #37373d;
+  color: #ffffff;
 }
 
 .tab-bar {

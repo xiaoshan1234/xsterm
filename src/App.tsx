@@ -4,6 +4,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { LoggerProvider, useLogger } from "./contexts/LoggerContext";
 import { useKeyboardShortcut } from "./hooks/useKeyboardShortcut";
 import Sidebar from "./components/Sidebar";
+import NavBar from "./components/NavBar";
 import TabBar from "./components/TabBar";
 import Terminal from "./components/Terminal";
 import LogViewer from "./components/LogViewer";
@@ -82,9 +83,11 @@ function AppContent() {
 
   return (
     <div className="app-container">
-      <Sidebar onCreateSession={() => setShowCreateDialog(true)} onToggleLogs={() => setShowLogs((prev) => !prev)} />
-      <div className="main-area">
-        {sessions.length > 0 && (
+      <NavBar />
+      <div className="content-area">
+        <Sidebar onCreateSession={() => setShowCreateDialog(true)} onToggleLogs={() => setShowLogs((prev) => !prev)} />
+        <div className="main-area">
+          {sessions.length > 0 && (
           <TabBar
             sessions={sessions}
             activeId={activeSessionId}
@@ -113,6 +116,7 @@ function AppContent() {
             <LogViewer logs={logs} onClear={clearLogs} />
           </div>
         )}
+      </div>
       </div>
       <CreateSessionDialog
         isOpen={showCreateDialog}
