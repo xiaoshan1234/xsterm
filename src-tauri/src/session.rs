@@ -1,12 +1,18 @@
 use serde::{Deserialize, Serialize};
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use ssh2::Session as SshSession;
+use tauri::Emitter;
 use std::collections::HashMap;
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::{AppHandle, Emitter};
+
+// Re-export types from submodules for backwards compatibility
+pub use crate::local_session::{Child, LocalSession, PtyPair, PtySystem};
+pub use crate::ssh_session::{SshBackend, SshBackendImpl, SshChannel, StreamIO};
+
+pub use crate::local_session::NativePtySystem;
+pub use crate::ssh_session::SshSessionWrapper;
+
+use crate::local_session::{NativePtySystem as DefaultPtySystem, PtyPair as LocalPtyPairTrait};
 
 pub trait AppBackend: Send + Sync + Clone {
     fn emit(&self, event: &str, payload: &[u8]) -> Result<(), String>;
@@ -15,11 +21,11 @@ pub trait AppBackend: Send + Sync + Clone {
 
 #[derive(Clone)]
 pub struct RealAppBackend {
-    app: Arc<AppHandle>,
+    app: Arc<tauri::AppHandle>,
 }
 
 impl RealAppBackend {
-    pub fn new(app: AppHandle) -> Self {
+    pub fn new(app: tauri::AppHandle) -> Self {
         Self { app: Arc::new(app) }
     }
 }
@@ -33,204 +39,6 @@ impl AppBackend for RealAppBackend {
 
     fn spawn(&self, f: Box<dyn FnOnce() + Send>) {
         std::thread::spawn(f);
-    }
-}
-
-pub trait PtySystem: Send {
-    fn openpty(&self, size: PtySize) -> Result<Box<dyn PtyPair>, String>;
-}
-
-pub trait PtyPair: Send {
-    fn spawn(&mut self, cmd: CommandBuilder) -> Result<Box<dyn Child>, String>;
-    fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String>;
-    fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String>;
-}
-
-pub trait Child: Send {
-    #[allow(dead_code)]
-    fn kill(self: Box<Self>) -> Result<(), String>;
-}
-
-pub struct NativePtySystem {
-    inner: Box<dyn portable_pty::PtySystem + Send>,
-}
-
-impl NativePtySystem {
-    pub fn new() -> Self {
-        Self {
-            inner: native_pty_system(),
-        }
-    }
-}
-
-impl PtySystem for NativePtySystem {
-    fn openpty(&self, size: PtySize) -> Result<Box<dyn PtyPair>, String> {
-        let pair = self
-            .inner
-            .openpty(size)
-            .map_err(|e| e.to_string())?;
-        Ok(Box::new(NativePtyPair { inner: pair }))
-    }
-}
-
-struct NativePtyPair {
-    inner: portable_pty::PtyPair,
-}
-
-impl PtyPair for NativePtyPair {
-    fn spawn(&mut self, cmd: CommandBuilder) -> Result<Box<dyn Child>, String> {
-        let child = self.inner.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-        Ok(Box::new(NativeChild { inner: child }))
-    }
-
-    fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String> {
-        self.inner.master.take_writer().map_err(|e| e.to_string())
-    }
-
-    fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String> {
-        self.inner.master.try_clone_reader().map_err(|e| e.to_string())
-    }
-}
-
-pub struct NativeChild {
-    #[allow(dead_code)]
-    inner: Box<dyn portable_pty::Child + Send>,
-}
-
-impl Child for NativeChild {
-    fn kill(mut self: Box<Self>) -> Result<(), String> {
-        self.inner.kill().map_err(|e| e.to_string())
-    }
-}
-
-// ============================================================================
-// SSH Traits for mocking support
-// ============================================================================
-
-/// Combined Read + Write trait for SSH streams.
-/// Note: Box<dyn Read + Write> is INVALID in Rust. Only auto traits (Send, Sync)
-/// can be additional bounds in trait objects. This combined trait solves that.
-pub trait StreamIO: Read + Write + Send + Sync {}
-impl<T: Read + Write + Send + Sync> StreamIO for T {}
-
-/// SshChannel trait - for PTY/shell operations on an SSH channel
-pub trait SshChannel: Read + Write + Send {
-    fn request_pty(&mut self, term: &str, cols: u16, rows: u16) -> Result<(), String>;
-    fn shell(&mut self) -> Result<(), String>;
-    fn tcp_stream(&self) -> Box<dyn StreamIO>;
-}
-
-/// SshBackend trait - creates SSH connections
-pub trait SshBackend: Send {
-    fn connect(
-        &self,
-        host: &str,
-        port: u16,
-        auth: &SSHAuth,
-        username: &str,
-    ) -> Result<Box<dyn SshChannel + Send>, String>;
-}
-
-/// Real implementation of SshBackend using ssh2 crate
-pub struct SshBackendImpl {
-    _phantom: std::marker::PhantomData<()>,
-}
-
-impl SshBackendImpl {
-    pub fn new() -> Self {
-        Self {
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl SshBackend for SshBackendImpl {
-    fn connect(
-        &self,
-        host: &str,
-        port: u16,
-        auth: &SSHAuth,
-        username: &str,
-    ) -> Result<Box<dyn SshChannel + Send>, String> {
-        let tcp = TcpStream::connect(format!("{}:{}", host, port))
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        let mut ssh_session = SshSession::new().map_err(|e| format!("SSH session error: {}", e))?;
-        ssh_session
-            .set_tcp_stream(tcp.try_clone().map_err(|e| e.to_string())?);
-        ssh_session.handshake().map_err(|e| format!("SSH handshake failed: {}", e))?;
-
-        match auth {
-            SSHAuth::Password { password } => {
-                ssh_session
-                    .userauth_password(username, password)
-                    .map_err(|e| format!("SSH auth failed: {}", e))?;
-            }
-            SSHAuth::KeyFile { key_file, passphrase } => {
-                ssh_session
-                    .userauth_pubkey_file(
-                        username,
-                        None,
-                        std::path::Path::new(key_file),
-                        passphrase.as_deref(),
-                    )
-                    .map_err(|e| format!("SSH key auth failed: {}", e))?;
-            }
-        }
-
-        if !ssh_session.authenticated() {
-            return Err("SSH authentication failed".to_string());
-        }
-
-        let mut channel = ssh_session
-            .channel_session()
-            .map_err(|e| e.to_string())?;
-        channel
-            .request_pty("xterm", None, None)
-            .map_err(|e| format!("PTY request failed: {}", e))?;
-        channel.shell().map_err(|e| format!("Shell start failed: {}", e))?;
-
-        Ok(Box::new(SshChannelImpl {
-            channel,
-            stream: tcp,
-        }))
-    }
-}
-
-/// Concrete SshChannel implementation wrapping ssh2::Channel and TcpStream
-pub struct SshChannelImpl {
-    channel: ssh2::Channel,
-    stream: TcpStream,
-}
-
-impl SshChannel for SshChannelImpl {
-    fn request_pty(&mut self, term: &str, _cols: u16, _rows: u16) -> Result<(), String> {
-        self.channel
-            .request_pty(term, None, None)
-            .map_err(|e| e.to_string())
-    }
-
-    fn shell(&mut self) -> Result<(), String> {
-        self.channel.shell().map_err(|e| e.to_string())
-    }
-
-    fn tcp_stream(&self) -> Box<dyn StreamIO> {
-        Box::new(self.stream.try_clone().map_err(|e| e.to_string()).unwrap())
-    }
-}
-
-impl Read for SshChannelImpl {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.channel.read(buf)
-    }
-}
-
-impl Write for SshChannelImpl {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.channel.write(buf)
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.channel.flush()
     }
 }
 
@@ -282,19 +90,9 @@ pub enum SSHAuth {
     KeyFile { key_file: String, passphrase: Option<String> },
 }
 
-struct LocalSession {
-    info: SessionInfo,
-    writer: Box<dyn Write + Send>,
-}
-
-struct SshSessionWrapper {
-    info: SessionInfo,
-    channel: Arc<Mutex<Box<dyn SshChannel + Send>>>,
-}
-
 enum Session {
-    Local(LocalSession),
-    Ssh(SshSessionWrapper),
+    Local(crate::local_session::LocalSession),
+    Ssh(crate::ssh_session::SshSessionWrapper),
 }
 
 impl Session {
@@ -309,8 +107,8 @@ impl Session {
 pub struct SessionManager {
     sessions: HashMap<u32, Session>,
     next_id: u32,
-    pty_system: Box<dyn PtySystem>,
-    ssh_backend: Box<dyn SshBackend>,
+    pty_system: Box<dyn crate::local_session::PtySystem>,
+    ssh_backend: Box<dyn crate::ssh_session::SshBackend>,
 }
 
 impl SessionManager {
@@ -340,7 +138,7 @@ impl SessionManager {
 
         let mut pair = self
             .pty_system
-            .openpty(PtySize {
+            .openpty(portable_pty::PtySize {
                 rows: 24,
                 cols: 80,
                 pixel_width: 0,
@@ -349,11 +147,11 @@ impl SessionManager {
             .map_err(|e| e.to_string())?;
 
         let mut cmd = if cfg!(target_os = "windows") {
-            let mut c = CommandBuilder::new("powershell.exe");
+            let mut c = portable_pty::CommandBuilder::new("powershell.exe");
             c.args(["-NoLogo", "-NoProfile"]);
             c
         } else {
-            let mut c = CommandBuilder::new(&shell_path);
+            let mut c = portable_pty::CommandBuilder::new(&shell_path);
             if shell_path.contains("bash") {
                 c.arg("--login");
             }
@@ -380,7 +178,7 @@ impl SessionManager {
             is_connected: true,
         };
 
-        let session = Session::Local(LocalSession { info: info.clone(), writer });
+        let session = Session::Local(crate::local_session::LocalSession { info: info.clone(), writer });
         self.sessions.insert(id, session);
 
         let backend_clone = backend.clone();
@@ -435,7 +233,7 @@ impl SessionManager {
         };
 
         let channel_arc = Arc::new(Mutex::new(channel));
-        let session = Session::Ssh(SshSessionWrapper {
+        let session = Session::Ssh(crate::ssh_session::SshSessionWrapper {
             info: info.clone(),
             channel: channel_arc.clone(),
         });
@@ -507,7 +305,10 @@ impl Default for SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_session::{Child, PtyPair, PtySystem};
+    use crate::ssh_session::{SshBackend, SshChannel, StreamIO};
     use mockall::{mock, predicate::*};
+    use std::io::Read;
 
     struct MockReadReturningZero;
     impl Read for MockReadReturningZero {
@@ -528,14 +329,14 @@ mod tests {
 
     mock! {
         pub PtyPairM {
-            fn spawn(&mut self, cmd: CommandBuilder) -> Result<Box<dyn Child>, String>;
+            fn spawn(&mut self, cmd: portable_pty::CommandBuilder) -> Result<Box<dyn Child>, String>;
             fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String>;
             fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String>;
         }
     }
 
     impl PtyPair for MockPtyPairM {
-        fn spawn(&mut self, cmd: CommandBuilder) -> Result<Box<dyn Child>, String> {
+        fn spawn(&mut self, cmd: portable_pty::CommandBuilder) -> Result<Box<dyn Child>, String> {
             self.spawn(cmd)
         }
         fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String> {
@@ -560,12 +361,12 @@ mod tests {
 
     mock! {
         pub PtySystemM {
-            fn openpty(&self, size: PtySize) -> Result<Box<dyn PtyPair>, String>;
+            fn openpty(&self, size: portable_pty::PtySize) -> Result<Box<dyn PtyPair>, String>;
         }
     }
 
     impl PtySystem for MockPtySystemM {
-        fn openpty(&self, size: PtySize) -> Result<Box<dyn PtyPair>, String> {
+        fn openpty(&self, size: portable_pty::PtySize) -> Result<Box<dyn PtyPair>, String> {
             self.openpty(size)
         }
     }

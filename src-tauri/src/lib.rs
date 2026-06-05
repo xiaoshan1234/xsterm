@@ -1,4 +1,6 @@
+mod local_session;
 mod session;
+mod ssh_session;
 
 use session::{LocalSessionConfig, RealAppBackend, SessionInfo, SessionManager, SSHSessionConfig};
 use std::sync::{Arc, Mutex};
