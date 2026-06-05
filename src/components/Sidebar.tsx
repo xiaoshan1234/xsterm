@@ -133,15 +133,6 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
       {activeMenu === "chat" && (
         <div className="sidebar-submenu">
           <div className="submenu-header">Session Manager</div>
-          <button
-            className="submenu-item"
-            onClick={() => {
-              setActiveMenu(null);
-              onCreateSession();
-            }}
-          >
-            New Session
-          </button>
           <div className="session-history">
             {groups.map((group) => (
               <div key={group.id} className="session-group">
@@ -211,9 +202,14 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
                   </button>
                 </div>
               ))}
+            <div className="session-divider" />
             <button className="submenu-item new-group-btn" onClick={() => createGroup("New Group")}>
               <PlusIcon />
               New Group
+            </button>
+            <button className="submenu-item new-session-btn" onClick={onCreateSession}>
+              <PlusIcon />
+              New Session
             </button>
           </div>
         </div>

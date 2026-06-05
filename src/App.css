@@ -777,8 +777,13 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: auto;
   border-top: 1px solid #3a3a3a;
   margin-top: 8px;
   padding-top: 8px;
+}
+
+.new-session-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
