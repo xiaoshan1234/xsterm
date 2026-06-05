@@ -449,6 +449,38 @@ html, body, #root {
   font-size: 14px;
 }
 
+.form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  padding-bottom: 2px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #0e639c;
+  cursor: pointer;
+}
+
+.checkbox-group span {
+  font-size: 13px;
+  color: #d4d4d4;
+}
+
 .form-group input:focus,
 .form-group select:focus {
   outline: none;

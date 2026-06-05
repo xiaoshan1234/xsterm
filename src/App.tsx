@@ -73,13 +73,11 @@ function AppContent() {
     handler: () => setShowLogs((prev) => !prev),
   });
 
-  const handleCreateLocal = (config: LocalSessionConfig) => {
-    createLocalSession(config);
-  };
+  const handleCreateLocal = (config: LocalSessionConfig, save: boolean) =>
+    createLocalSession(config, save);
 
-  const handleCreateSsh = (config: SSHSessionConfig) => {
-    createSshSession(config);
-  };
+  const handleCreateSsh = (config: SSHSessionConfig, save: boolean) =>
+    createSshSession(config, save);
 
   return (
     <div className="app-container">

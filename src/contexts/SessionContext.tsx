@@ -7,8 +7,8 @@ interface SessionContextType {
   sessions: Session[];
   activeSessionId: number | null;
   groups: SessionGroup[];
-  createLocalSession: (config: LocalSessionConfig) => Promise<Session>;
-  createSshSession: (config: SSHSessionConfig) => Promise<Session>;
+  createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   closeSession: (id: number) => Promise<void>;
   addToGroup: (groupId: number, sessionId: number) => void;
   removeFromGroup: (groupId: number, sessionId: number) => void;
@@ -83,22 +83,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const createLocalSession = useCallback(async (config: LocalSessionConfig): Promise<Session> => {
+  const createLocalSession = useCallback(async (config: LocalSessionConfig, save = true): Promise<Session> => {
     const session = await invoke<Session>("create_local_session", { config });
     setSessions((prev) => {
       const updated = [...prev, session];
-      persistSessions(updated);
+      if (save) persistSessions(updated);
       return updated;
     });
     setActiveSessionId(session.id);
     return session;
   }, []);
 
-  const createSshSession = useCallback(async (config: SSHSessionConfig): Promise<Session> => {
+  const createSshSession = useCallback(async (config: SSHSessionConfig, save = true): Promise<Session> => {
     const session = await invoke<Session>("create_ssh_session", { config });
     setSessions((prev) => {
       const updated = [...prev, session];
-      persistSessions(updated);
+      if (save) persistSessions(updated);
       return updated;
     });
     setActiveSessionId(session.id);

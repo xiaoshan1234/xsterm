@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { LocalSessionConfig, SSHSessionConfig } from "../types/session";
+import { useState, useEffect } from "react";
+import { useSession } from "../contexts/SessionContext";
+import { LocalSessionConfig, SSHSessionConfig, Session } from "../types/session";
 
 interface CreateSessionDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateLocal: (config: LocalSessionConfig) => void;
-  onCreateSsh: (config: SSHSessionConfig) => void;
+  onCreateLocal: (config: LocalSessionConfig, save: boolean) => Promise<Session>;
+  onCreateSsh: (config: SSHSessionConfig, save: boolean) => Promise<Session>;
 }
 
 export default function CreateSessionDialog({
@@ -14,7 +15,10 @@ export default function CreateSessionDialog({
   onCreateLocal,
   onCreateSsh,
 }: CreateSessionDialogProps) {
+  const { groups, addToGroup } = useSession();
   const [tab, setTab] = useState<"local" | "ssh">("local");
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+  const [saveConfig, setSaveConfig] = useState(true);
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>({});
   const [sshConfig, setSshConfig] = useState<SSHSessionConfig>({
     host: "",
@@ -27,15 +31,35 @@ export default function CreateSessionDialog({
   });
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedGroupId(null);
+      setError("");
+      setLocalConfig({});
+      setSshConfig({
+        host: "",
+        port: 22,
+        username: "",
+        auth_type: "password",
+        password: "",
+        key_file: "",
+        passphrase: "",
+      });
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  const handleLocalCreate = () => {
+  const handleLocalCreate = async () => {
     setError("");
-    onCreateLocal(localConfig);
+    const session = await onCreateLocal(localConfig, saveConfig);
+    if (selectedGroupId !== null) {
+      addToGroup(selectedGroupId, session.id);
+    }
     onClose();
   };
 
-  const handleSshCreate = () => {
+  const handleSshCreate = async () => {
     setError("");
     if (!sshConfig.host || !sshConfig.username) {
       setError("Host and username are required");
@@ -49,7 +73,10 @@ export default function CreateSessionDialog({
       setError("Key file path is required");
       return;
     }
-    onCreateSsh(sshConfig);
+    const session = await onCreateSsh(sshConfig, saveConfig);
+    if (selectedGroupId !== null) {
+      addToGroup(selectedGroupId, session.id);
+    }
     onClose();
   };
 
@@ -80,127 +107,157 @@ export default function CreateSessionDialog({
 
         {error && <div className="dialog-error">{error}</div>}
 
-        {tab === "local" ? (
-          <div className="dialog-content">
+        <div className="dialog-content">
+          <div className="form-row">
             <div className="form-group">
-              <label>Shell</label>
+              <label>Group</label>
               <select
-                value={localConfig.shell || ""}
+                value={selectedGroupId === null ? "none" : selectedGroupId}
                 onChange={(e) =>
-                  setLocalConfig({ ...localConfig, shell: e.target.value })
+                  setSelectedGroupId(
+                    e.target.value === "none" ? null : parseInt(e.target.value)
+                  )
                 }
               >
-                <option value="">Default</option>
-                <option value="/bin/bash">Bash</option>
-                <option value="/bin/zsh">Zsh</option>
-                <option value="/bin/sh">Sh</option>
+                <option value="none">None</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
               </select>
             </div>
-            <div className="form-group">
-              <label>Initial Directory</label>
+            <label className="checkbox-group">
               <input
-                type="text"
-                placeholder="~/.zshrc or /home/user"
-                value={localConfig.cwd || ""}
-                onChange={(e) =>
-                  setLocalConfig({ ...localConfig, cwd: e.target.value })
-                }
+                type="checkbox"
+                checked={saveConfig}
+                onChange={(e) => setSaveConfig(e.target.checked)}
               />
-            </div>
+              <span>Save config</span>
+            </label>
           </div>
-        ) : (
-          <div className="dialog-content">
-            <div className="form-group">
-              <label>Host</label>
-              <input
-                type="text"
-                placeholder="example.com"
-                value={sshConfig.host}
-                onChange={(e) =>
-                  setSshConfig({ ...sshConfig, host: e.target.value })
-                }
-              />
-            </div>
-            <div className="form-group">
-              <label>Port</label>
-              <input
-                type="number"
-                placeholder="22"
-                value={sshConfig.port}
-                onChange={(e) =>
-                  setSshConfig({
-                    ...sshConfig,
-                    port: parseInt(e.target.value) || 22,
-                  })
-                }
-              />
-            </div>
-            <div className="form-group">
-              <label>Username</label>
-              <input
-                type="text"
-                placeholder="root"
-                value={sshConfig.username}
-                onChange={(e) =>
-                  setSshConfig({ ...sshConfig, username: e.target.value })
-                }
-              />
-            </div>
-            <div className="form-group">
-              <label>Authentication</label>
-              <select
-                value={sshConfig.auth_type}
-                onChange={(e) =>
-                  setSshConfig({
-                    ...sshConfig,
-                    auth_type: e.target.value as "password" | "key",
-                  })
-                }
-              >
-                <option value="password">Password</option>
-                <option value="key">Key File</option>
-              </select>
-            </div>
-            {sshConfig.auth_type === "password" ? (
+          {tab === "local" ? (
+            <>
               <div className="form-group">
-                <label>Password</label>
-                <input
-                  type="password"
-                  placeholder="********"
-                  value={sshConfig.password || ""}
+                <label>Shell</label>
+                <select
+                  value={localConfig.shell || ""}
                   onChange={(e) =>
-                    setSshConfig({ ...sshConfig, password: e.target.value })
+                    setLocalConfig({ ...localConfig, shell: e.target.value })
+                  }
+                >
+                  <option value="">Default</option>
+                  <option value="/bin/bash">Bash</option>
+                  <option value="/bin/zsh">Zsh</option>
+                  <option value="/bin/sh">Sh</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Initial Directory</label>
+                <input
+                  type="text"
+                  placeholder="~/.zshrc or /home/user"
+                  value={localConfig.cwd || ""}
+                  onChange={(e) =>
+                    setLocalConfig({ ...localConfig, cwd: e.target.value })
                   }
                 />
               </div>
-            ) : (
-              <>
+            </>
+          ) : (
+            <>
+              <div className="form-group">
+                <label>Host</label>
+                <input
+                  type="text"
+                  placeholder="example.com"
+                  value={sshConfig.host}
+                  onChange={(e) =>
+                    setSshConfig({ ...sshConfig, host: e.target.value })
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label>Port</label>
+                <input
+                  type="number"
+                  placeholder="22"
+                  value={sshConfig.port}
+                  onChange={(e) =>
+                    setSshConfig({
+                      ...sshConfig,
+                      port: parseInt(e.target.value) || 22,
+                    })
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label>Username</label>
+                <input
+                  type="text"
+                  placeholder="root"
+                  value={sshConfig.username}
+                  onChange={(e) =>
+                    setSshConfig({ ...sshConfig, username: e.target.value })
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label>Authentication</label>
+                <select
+                  value={sshConfig.auth_type}
+                  onChange={(e) =>
+                    setSshConfig({
+                      ...sshConfig,
+                      auth_type: e.target.value as "password" | "key",
+                    })
+                  }
+                >
+                  <option value="password">Password</option>
+                  <option value="key">Key File</option>
+                </select>
+              </div>
+              {sshConfig.auth_type === "password" ? (
                 <div className="form-group">
-                  <label>Key File Path</label>
-                  <input
-                    type="text"
-                    placeholder="~/.ssh/id_rsa"
-                    value={sshConfig.key_file || ""}
-                    onChange={(e) =>
-                      setSshConfig({ ...sshConfig, key_file: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Passphrase (optional)</label>
+                  <label>Password</label>
                   <input
                     type="password"
                     placeholder="********"
-                    value={sshConfig.passphrase || ""}
+                    value={sshConfig.password || ""}
                     onChange={(e) =>
-                      setSshConfig({ ...sshConfig, passphrase: e.target.value })
+                      setSshConfig({ ...sshConfig, password: e.target.value })
                     }
                   />
                 </div>
-              </>
-            )}
-          </div>
-        )}
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label>Key File Path</label>
+                    <input
+                      type="text"
+                      placeholder="~/.ssh/id_rsa"
+                      value={sshConfig.key_file || ""}
+                      onChange={(e) =>
+                        setSshConfig({ ...sshConfig, key_file: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Passphrase (optional)</label>
+                    <input
+                      type="password"
+                      placeholder="********"
+                      value={sshConfig.passphrase || ""}
+                      onChange={(e) =>
+                        setSshConfig({ ...sshConfig, passphrase: e.target.value })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
 
         <div className="dialog-footer">
           <button className="btn-cancel" onClick={onClose}>
