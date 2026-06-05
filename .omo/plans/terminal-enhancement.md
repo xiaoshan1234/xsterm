@@ -108,33 +108,33 @@
 ## Implementation Plan
 
 ### Wave 1: Echo Fix + Theme System
-- [ ] 1. Fix terminal echo (Terminal.tsx - add disableLocalEcho)
-- [ ] 2. Create ThemeContext and types
-- [ ] 3. Update Terminal to use theme context
-- [ ] 4. Add theme selector to Settings submenu
+- [x] 1. Fix terminal echo (Terminal.tsx - add disableLocalEcho) -- SSH migration to russh (Windows fix)
+- [x] 2. Create ThemeContext and types
+- [x] 3. Update Terminal to use theme context
+- [x] 4. Add theme selector to Settings submenu
 
 ### Wave 2: Session Persistence
-- [ ] 5. Add tauri-plugin-store to Cargo.toml
-- [ ] 6. Register store plugin in lib.rs
-- [ ] 7. Add save/load commands to Rust backend
-- [ ] 8. Update SessionContext to persist sessions
-- [ ] 9. Load sessions on app start
+- [x] 5. Add tauri-plugin-store to Cargo.toml (already present)
+- [x] 6. Register store plugin in lib.rs (already done)
+- [x] 7. Add save/load commands to Rust backend (already done)
+- [x] 8. Update SessionContext to persist sessions
+- [x] 9. Load sessions on app start
 
 ### Wave 3: Window Management Improvements
-- [ ] 10. Add tab rename (double-click)
-- [ ] 11. Add middle-click close
-- [ ] 12. Add keyboard navigation for tabs
+- [x] 10. Add tab rename (double-click)
+- [x] 11. Add middle-click close
+- [x] 12. Add keyboard navigation for tabs
 
 ### Wave 4: Keyboard Shortcuts
-- [ ] 13. Create KeyboardContext
-- [ ] 14. Create useShortcut hook
-- [ ] 15. Add shortcuts settings UI
-- [ ] 16. Implement default shortcuts
+- [x] 13. Create KeyboardContext
+- [x] 14. Create useShortcut hook
+- [x] 15. Add shortcuts settings UI
+- [x] 16. Implement default shortcuts
 
 ### Wave 5: Integration & Polish
-- [ ] 17. Wire up all contexts in App.tsx
-- [ ] 18. Test all features
-- [ ] 19. Build verification
+- [x] 17. Wire up all contexts in App.tsx
+- [x] 18. Test all features
+- [x] 19. Build verification
 
 ---
 

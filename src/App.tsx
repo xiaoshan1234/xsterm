@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { SessionProvider, useSession } from "./contexts/SessionContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { KeyboardProvider } from "./contexts/KeyboardContext";
 import { LoggerProvider, useLogger } from "./contexts/LoggerContext";
-import { useKeyboardShortcut } from "./hooks/useKeyboardShortcut";
+import { useShortcut } from "./hooks/useShortcut";
 import Sidebar from "./components/Sidebar";
 import NavBar from "./components/NavBar";
 import TabBar from "./components/TabBar";
@@ -27,14 +28,14 @@ function AppContent() {
   const [showLogs, setShowLogs] = useState(false);
 
   // Keyboard shortcuts
-  useKeyboardShortcut({
+  useShortcut({
     key: "n",
     ctrl: true,
     shift: true,
     handler: () => setShowCreateDialog(true),
   });
 
-  useKeyboardShortcut({
+  useShortcut({
     key: "Tab",
     ctrl: true,
     handler: () => {
@@ -45,7 +46,7 @@ function AppContent() {
     },
   });
 
-  useKeyboardShortcut({
+  useShortcut({
     key: "Tab",
     ctrl: true,
     shift: true,
@@ -57,7 +58,7 @@ function AppContent() {
     },
   });
 
-  useKeyboardShortcut({
+  useShortcut({
     key: "w",
     ctrl: true,
     handler: () => {
@@ -67,7 +68,7 @@ function AppContent() {
     },
   });
 
-  useKeyboardShortcut({
+  useShortcut({
     key: "l",
     ctrl: true,
     handler: () => setShowLogs((prev) => !prev),
@@ -130,9 +131,11 @@ export default function App() {
   return (
     <SessionProvider>
       <ThemeProvider>
-        <LoggerProvider>
-          <AppContent />
-        </LoggerProvider>
+        <KeyboardProvider>
+          <LoggerProvider>
+            <AppContent />
+          </LoggerProvider>
+        </KeyboardProvider>
       </ThemeProvider>
     </SessionProvider>
   );

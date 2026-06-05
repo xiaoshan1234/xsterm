@@ -1,26 +1,30 @@
 import { createContext, useContext, useState, ReactNode } from "react";
-import { PRESET_THEMES, AppTheme } from "../types/theme";
+import { TerminalTheme, PRESET_THEMES, THEME_KEYS } from "../types/theme";
 
 interface ThemeContextType {
-  currentTheme: AppTheme;
-  setTheme: (name: string) => void;
-  themes: AppTheme[];
+  currentTheme: TerminalTheme;
+  currentThemeKey: string;
+  setTheme: (key: string) => void;
+  themeKeys: string[];
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [currentTheme, setCurrentTheme] = useState<AppTheme>(PRESET_THEMES[0]);
+  const [currentThemeKey, setCurrentThemeKey] = useState<string>("dark");
 
-  const setTheme = (name: string) => {
-    const theme = PRESET_THEMES.find((t) => t.name === name);
-    if (theme) {
-      setCurrentTheme(theme);
+  const setTheme = (key: string) => {
+    if (PRESET_THEMES[key]) {
+      setCurrentThemeKey(key);
     }
   };
 
+  const currentTheme = PRESET_THEMES[currentThemeKey];
+
   return (
-    <ThemeContext.Provider value={{ currentTheme, setTheme, themes: PRESET_THEMES }}>
+    <ThemeContext.Provider
+      value={{ currentTheme, currentThemeKey, setTheme, themeKeys: THEME_KEYS }}
+    >
       {children}
     </ThemeContext.Provider>
   );

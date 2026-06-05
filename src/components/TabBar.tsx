@@ -1,4 +1,4 @@
-import { useState, MouseEvent } from "react";
+import { useState, MouseEvent, useEffect } from "react";
 import { Session } from "../types/session";
 
 interface TabBarProps {
@@ -12,6 +12,34 @@ interface TabBarProps {
 export default function TabBar({ sessions, activeId, onSelect, onClose, onRename }: TabBarProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || editingId !== null) return;
+      if (e.key !== "Tab") return;
+
+      e.preventDefault();
+      if (sessions.length === 0) return;
+
+      const currentIndex = sessions.findIndex((s) => s.id === activeId);
+      if (currentIndex === -1) {
+        onSelect(sessions[0].id);
+        return;
+      }
+
+      if (e.shiftKey) {
+        const prevIndex = currentIndex === 0 ? sessions.length - 1 : currentIndex - 1;
+        onSelect(sessions[prevIndex].id);
+      } else {
+        const nextIndex = currentIndex === sessions.length - 1 ? 0 : currentIndex + 1;
+        onSelect(sessions[nextIndex].id);
+      }
+    };
+
+    const container = document.querySelector(".tab-bar") as HTMLElement | null;
+    container?.addEventListener("keydown", handleKeyDown as EventListener);
+    return () => container?.removeEventListener("keydown", handleKeyDown as EventListener);
+  }, [sessions, activeId, onSelect, editingId]);
 
   const getIcon = (type: "local" | "ssh") => {
     return type === "local" ? (

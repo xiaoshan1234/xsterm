@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useSession } from "../contexts/SessionContext";
+import { useTheme } from "../contexts/ThemeContext";
+import { PRESET_THEMES } from "../types/theme";
 
 interface SidebarProps {
   onCreateSession: () => void;
@@ -8,7 +10,9 @@ interface SidebarProps {
 
 export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
   const { sessions, activeSessionId, setActiveSession, groups, createGroup, toggleGroup, closeSession } = useSession();
+  const { currentTheme, currentThemeKey, setTheme, themeKeys } = useTheme();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [expandedSettingsItem, setExpandedSettingsItem] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [groupError, setGroupError] = useState("");
@@ -237,20 +241,74 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
       {activeMenu === "settings" && (
         <div className="sidebar-submenu">
           <div className="submenu-header">Settings</div>
-          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
-            Appearance
-          </button>
-          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
-            Terminal
-          </button>
-          <button className="submenu-item" onClick={() => setActiveMenu(null)}>
-            Shortcuts
-          </button>
+          <div className="submenu-item-with-submenu">
+            <button
+              className="submenu-item"
+              onClick={() => setExpandedSettingsItem(expandedSettingsItem === "appearance" ? null : "appearance")}
+            >
+              Appearance
+              <span className="submenu-item-arrow">{expandedSettingsItem === "appearance" ? "▲" : "▼"}</span>
+            </button>
+            {expandedSettingsItem === "appearance" && (
+              <div className="submenu-nested">
+                {themeKeys.map((key) => (
+                  <button
+                    key={key}
+                    className={`submenu-item ${currentThemeKey === key ? "active" : ""}`}
+                    onClick={() => {
+                      setTheme(key);
+                      setActiveMenu(null);
+                    }}
+                  >
+                    <span
+                      className="theme-color-preview"
+                      style={{ backgroundColor: currentTheme.background, border: `1px solid ${currentTheme.foreground}` }}
+                    />
+                    {PRESET_THEMES[key].name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="submenu-item-with-submenu">
+            <button
+              className="submenu-item"
+              onClick={() => setExpandedSettingsItem(expandedSettingsItem === "shortcuts" ? null : "shortcuts")}
+            >
+              Shortcuts
+              <span className="submenu-item-arrow">{expandedSettingsItem === "shortcuts" ? "▲" : "▼"}</span>
+            </button>
+            {expandedSettingsItem === "shortcuts" && (
+              <div className="submenu-nested shortcuts-list">
+                <div className="shortcut-item">
+                  <span className="shortcut-label">New session</span>
+                  <span className="shortcut-keys">Ctrl+Shift+N</span>
+                </div>
+                <div className="shortcut-item">
+                  <span className="shortcut-label">Next tab</span>
+                  <span className="shortcut-keys">Ctrl+Tab</span>
+                </div>
+                <div className="shortcut-item">
+                  <span className="shortcut-label">Previous tab</span>
+                  <span className="shortcut-keys">Ctrl+Shift+Tab</span>
+                </div>
+                <div className="shortcut-item">
+                  <span className="shortcut-label">Close current tab</span>
+                  <span className="shortcut-keys">Ctrl+W</span>
+                </div>
+                <div className="shortcut-item">
+                  <span className="shortcut-label">Open settings</span>
+                  <span className="shortcut-keys">Ctrl+,</span>
+                </div>
+              </div>
+            )}
+          </div>
           <button className="submenu-item" onClick={() => setActiveMenu(null)}>
             About
           </button>
         </div>
       )}
+
       {showNewGroupDialog && (
         <div className="dialog-overlay" onClick={() => setShowNewGroupDialog(false)}>
           <div className="dialog" onClick={(e) => e.stopPropagation()}>

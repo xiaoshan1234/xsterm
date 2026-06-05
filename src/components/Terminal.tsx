@@ -31,7 +31,27 @@ export default function Terminal({ sessionId }: TerminalProps) {
       fontSize: 14,
       fontFamily: "Menlo, Monaco, 'Courier New', monospace",
       cursorBlink: true,
-      theme: currentTheme.terminal,
+      theme: {
+        foreground: currentTheme.foreground,
+        background: currentTheme.background,
+        cursor: currentTheme.cursor,
+        black: currentTheme.black,
+        red: currentTheme.red,
+        green: currentTheme.green,
+        yellow: currentTheme.yellow,
+        blue: currentTheme.blue,
+        magenta: currentTheme.magenta,
+        cyan: currentTheme.cyan,
+        white: currentTheme.white,
+        brightBlack: currentTheme.brightBlack,
+        brightRed: currentTheme.brightRed,
+        brightGreen: currentTheme.brightGreen,
+        brightYellow: currentTheme.brightYellow,
+        brightBlue: currentTheme.brightBlue,
+        brightMagenta: currentTheme.brightMagenta,
+        brightCyan: currentTheme.brightCyan,
+        brightWhite: currentTheme.brightWhite,
+      },
     });
 
     const fitAddon = new FitAddon();

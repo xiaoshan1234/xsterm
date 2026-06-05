@@ -20,7 +20,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 portable-pty = "0.8"
 tokio = { version = "1", features = ["full"] }
-ssh2 = { version = "0.9", features = ["vendored-openssl"] }
+tokio-util = "0.7"
+russh = "0.50.0-beta.7"
+russh-keys = "0.50.0-beta.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"

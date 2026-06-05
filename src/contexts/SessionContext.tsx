@@ -1,11 +1,21 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { load, Store } from "@tauri-apps/plugin-store";
 import { Session, LocalSessionConfig, SSHSessionConfig, SessionGroup } from "../types/session";
 
 interface GroupStore {
   groups: SessionGroup[];
   nextGroupId: number;
+}
+
+let storeInstance: Store | null = null;
+
+async function getStore(): Promise<Store> {
+  if (!storeInstance) {
+    storeInstance = await load('sessions.json', { autoSave: true, defaults: {} });
+  }
+  return storeInstance;
 }
 
 interface SessionContextType {
@@ -31,20 +41,20 @@ const SessionContext = createContext<SessionContextType | null>(null);
 
 async function persistSessions(sessions: Session[]) {
   try {
-    await invoke("save_sessions", { sessions });
+    const store = await getStore();
+    await store.set('sessions', sessions);
+    await store.save();
   } catch (e) {
     console.error("Failed to save sessions:", e);
   }
 }
 
-async function persistGroups(store: GroupStore) {
+async function persistGroups(groupsData: GroupStore) {
   try {
-    await invoke("save_groups", {
-      store_data: {
-        groups: store.groups,
-        next_group_id: store.nextGroupId,
-      },
-    });
+    const store = await getStore();
+    await store.set('groups', groupsData.groups);
+    await store.set('nextGroupId', groupsData.nextGroupId);
+    await store.save();
   } catch (e) {
     console.error("Failed to save groups:", e);
   }
@@ -52,7 +62,8 @@ async function persistGroups(store: GroupStore) {
 
 async function loadSavedSessions(): Promise<Session[]> {
   try {
-    return await invoke<Session[]>("load_sessions");
+    const store = await getStore();
+    return (await store.get<Session[]>('sessions')) || [];
   } catch (e) {
     console.error("Failed to load sessions:", e);
     return [];
@@ -61,11 +72,10 @@ async function loadSavedSessions(): Promise<Session[]> {
 
 async function loadSavedGroups(): Promise<GroupStore> {
   try {
-    const result = await invoke<GroupStore>("load_groups");
-    return {
-      groups: result.groups,
-      nextGroupId: result.nextGroupId || 1,
-    };
+    const store = await getStore();
+    const groups = await store.get<SessionGroup[]>('groups');
+    const nextGroupId = await store.get<number>('nextGroupId') || 1;
+    return { groups: groups || [], nextGroupId };
   } catch (e) {
     console.error("Failed to load groups:", e);
     return { groups: [], nextGroupId: 1 };
@@ -81,13 +91,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Load persisted state on mount
   useEffect(() => {
     const init = async () => {
-      const [savedSessions, savedGroups] = await Promise.all([
+      const [savedSessions, savedGroups, lastActive] = await Promise.all([
         loadSavedSessions(),
         loadSavedGroups(),
+        getStore().then((store) => store.get<number | null>('lastActiveSession')),
       ]);
       if (savedSessions.length > 0) setSessions(savedSessions);
       setGroups(savedGroups.groups);
       setNextGroupId(savedGroups.nextGroupId);
+      if (lastActive !== null && lastActive !== undefined) {
+        setActiveSessionId(lastActive);
+      }
     };
     init();
   }, []);
@@ -216,6 +230,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const setActiveSession = useCallback((id: number | null) => {
     setActiveSessionId(id);
+    getStore().then((store) => {
+      store.set('lastActiveSession', id);
+      store.save();
+    }).catch(console.error);
   }, []);
 
   const writeSession = useCallback(async (id: number, data: string): Promise<void> => {
