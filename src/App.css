@@ -492,11 +492,19 @@ html, body, #root {
 }
 
 .dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid #3a3a3a;
+}
+
+.dialog-footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialog-footer-buttons {
+  display: flex;
+  gap: 12px;
 }
 
 .btn-cancel {

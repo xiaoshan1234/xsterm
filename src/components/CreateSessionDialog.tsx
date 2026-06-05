@@ -108,33 +108,23 @@ export default function CreateSessionDialog({
         {error && <div className="dialog-error">{error}</div>}
 
         <div className="dialog-content">
-          <div className="form-row">
-            <div className="form-group">
-              <label>Group</label>
-              <select
-                value={selectedGroupId === null ? "none" : selectedGroupId}
-                onChange={(e) =>
-                  setSelectedGroupId(
-                    e.target.value === "none" ? null : parseInt(e.target.value)
-                  )
-                }
-              >
-                <option value="none">None</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="checkbox-group">
-              <input
-                type="checkbox"
-                checked={saveConfig}
-                onChange={(e) => setSaveConfig(e.target.checked)}
-              />
-              <span>Save config</span>
-            </label>
+          <div className="form-group">
+            <label>Group</label>
+            <select
+              value={selectedGroupId === null ? "none" : selectedGroupId}
+              onChange={(e) =>
+                setSelectedGroupId(
+                  e.target.value === "none" ? null : parseInt(e.target.value)
+                )
+              }
+            >
+              <option value="none">None</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
           </div>
           {tab === "local" ? (
             <>
@@ -260,15 +250,27 @@ export default function CreateSessionDialog({
         </div>
 
         <div className="dialog-footer">
-          <button className="btn-cancel" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-create"
-            onClick={tab === "local" ? handleLocalCreate : handleSshCreate}
-          >
-            Create
-          </button>
+          <div className="dialog-footer-content">
+            <label className="checkbox-group">
+              <input
+                type="checkbox"
+                checked={saveConfig}
+                onChange={(e) => setSaveConfig(e.target.checked)}
+              />
+              <span>Save config</span>
+            </label>
+            <div className="dialog-footer-buttons">
+              <button className="btn-cancel" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                className="btn-create"
+                onClick={tab === "local" ? handleLocalCreate : handleSshCreate}
+              >
+                Create
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
