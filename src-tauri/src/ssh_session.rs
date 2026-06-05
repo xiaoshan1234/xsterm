@@ -141,3 +141,27 @@ pub struct SshSessionWrapper {
     pub info: SessionInfo,
     pub channel: Arc<Mutex<Box<dyn SshChannel + Send>>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ssh_auth_password_serialization() {
+        let auth = SSHAuth::Password { password: "secret".to_string() };
+        let json = serde_json::to_string(&auth).unwrap();
+        assert!(json.contains("password"));
+        assert!(json.contains("secret"));
+    }
+
+    #[test]
+    fn ssh_auth_keyfile_serialization() {
+        let auth = SSHAuth::KeyFile {
+            key_file: "/path/to/key".to_string(),
+            passphrase: Some("pass".to_string()),
+        };
+        let json = serde_json::to_string(&auth).unwrap();
+        assert!(json.contains("key"));
+        assert!(json.contains("/path/to/key"));
+    }
+}

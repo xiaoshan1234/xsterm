@@ -302,11 +302,13 @@ impl Default for SessionManager {
     }
 }
 
+// ============================================================================
+// SessionManager Tests
+// ============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::local_session::{Child, PtyPair, PtySystem};
-    use crate::ssh_session::{SshBackend, SshChannel, StreamIO};
     use mockall::{mock, predicate::*};
     use std::io::Read;
 
@@ -368,6 +370,65 @@ mod tests {
     impl PtySystem for MockPtySystemM {
         fn openpty(&self, size: portable_pty::PtySize) -> Result<Box<dyn PtyPair>, String> {
             self.openpty(size)
+        }
+    }
+
+    mock! {
+        pub SshChannelM {
+            fn request_pty(&mut self, term: &str, cols: u16, rows: u16) -> Result<(), String>;
+            fn shell(&mut self) -> Result<(), String>;
+            fn tcp_stream(&self) -> Box<dyn StreamIO>;
+        }
+    }
+
+    impl Read for MockSshChannelM {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    impl Write for MockSshChannelM {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl SshChannel for MockSshChannelM {
+        fn request_pty(&mut self, term: &str, cols: u16, rows: u16) -> Result<(), String> {
+            self.request_pty(term, cols, rows)
+        }
+        fn shell(&mut self) -> Result<(), String> {
+            self.shell()
+        }
+        fn tcp_stream(&self) -> Box<dyn StreamIO> {
+            self.tcp_stream()
+        }
+    }
+
+    mock! {
+        pub SshBackendM {
+            fn connect(
+                &self,
+                host: &str,
+                port: u16,
+                auth: &SSHAuth,
+                username: &str,
+            ) -> Result<Box<dyn SshChannel + Send>, String>;
+        }
+    }
+
+    impl SshBackend for MockSshBackendM {
+        fn connect(
+            &self,
+            host: &str,
+            port: u16,
+            auth: &SSHAuth,
+            username: &str,
+        ) -> Result<Box<dyn SshChannel + Send>, String> {
+            self.connect(host, port, auth, username)
         }
     }
 
@@ -702,65 +763,6 @@ mod tests {
     }
 
     // ===== Tests for create_ssh method =====
-
-    mock! {
-        pub SshChannelM {
-            fn request_pty(&mut self, term: &str, cols: u16, rows: u16) -> Result<(), String>;
-            fn shell(&mut self) -> Result<(), String>;
-            fn tcp_stream(&self) -> Box<dyn StreamIO>;
-        }
-    }
-
-    impl Read for MockSshChannelM {
-        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-            Ok(0)
-        }
-    }
-
-    impl Write for MockSshChannelM {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl SshChannel for MockSshChannelM {
-        fn request_pty(&mut self, term: &str, cols: u16, rows: u16) -> Result<(), String> {
-            self.request_pty(term, cols, rows)
-        }
-        fn shell(&mut self) -> Result<(), String> {
-            self.shell()
-        }
-        fn tcp_stream(&self) -> Box<dyn StreamIO> {
-            self.tcp_stream()
-        }
-    }
-
-    mock! {
-        pub SshBackendM {
-            fn connect(
-                &self,
-                host: &str,
-                port: u16,
-                auth: &SSHAuth,
-                username: &str,
-            ) -> Result<Box<dyn SshChannel + Send>, String>;
-        }
-    }
-
-    impl SshBackend for MockSshBackendM {
-        fn connect(
-            &self,
-            host: &str,
-            port: u16,
-            auth: &SSHAuth,
-            username: &str,
-        ) -> Result<Box<dyn SshChannel + Send>, String> {
-            self.connect(host, port, auth, username)
-        }
-    }
 
     #[test]
     fn create_ssh_password_success() {

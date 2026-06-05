@@ -77,3 +77,20 @@ pub struct LocalSession {
     pub info: crate::session::SessionInfo,
     pub writer: Box<dyn Write + Send>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_pty_system_openpty_returns_pty_pair() {
+        let system = NativePtySystem::new();
+        let result = system.openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
+        assert!(result.is_ok());
+    }
+}
