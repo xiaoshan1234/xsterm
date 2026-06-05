@@ -2,8 +2,9 @@ use ssh2::Session as SshSession;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
-use crate::session::{SSHAuth, SessionInfo};
+use crate::session::{AppBackend, SSHAuth, SSHSessionConfig, SessionInfo, SessionType};
 
 // ============================================================================
 // SSH Traits for mocking support
@@ -140,6 +141,69 @@ impl Write for SshChannelImpl {
 pub struct SshSessionWrapper {
     pub info: SessionInfo,
     pub channel: Arc<Mutex<Box<dyn SshChannel + Send>>>,
+}
+
+pub struct SshSessionHandles;
+
+pub fn create_ssh_session(
+    ssh_backend: &dyn SshBackend,
+    config: SSHSessionConfig,
+    backend: impl AppBackend + 'static,
+    session_id: u32,
+) -> Result<SshSessionWrapper, String> {
+    let channel = ssh_backend.connect(
+        &config.host,
+        config.port,
+        &config.auth,
+        &config.username,
+    )?;
+
+    let name = format!("SSH {}@{}", config.username, config.host);
+    let host_for_info = config.host.clone();
+    let user_for_info = config.username.clone();
+
+    let info = SessionInfo {
+        id: session_id,
+        name,
+        session_type: SessionType::Ssh {
+            host: host_for_info,
+            port: config.port,
+            user: user_for_info,
+        },
+        is_connected: true,
+    };
+
+    let channel_arc = Arc::new(Mutex::new(channel));
+    let wrapper = SshSessionWrapper {
+        info,
+        channel: channel_arc.clone(),
+    };
+
+    let backend_clone = backend.clone();
+    let channel_for_thread = channel_arc.clone();
+
+    thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match channel_for_thread.lock().unwrap().read(&mut buf) {
+                Ok(0) => {
+                    let payload = serde_json::to_vec(&session_id).unwrap();
+                    let _ = backend_clone.emit("session-closed", &payload);
+                    break;
+                }
+                Ok(n) => {
+                    let data = buf[..n].to_vec();
+                    let payload = serde_json::to_vec(&(&session_id, &data[..])).unwrap();
+                    if let Err(_e) = backend_clone.emit("session-output", &payload) {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    Ok(wrapper)
 }
 
 #[cfg(test)]

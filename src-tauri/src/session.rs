@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
-use tauri::Emitter;
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::sync::Arc;
+use tauri::Emitter;
 
 // Re-export types from submodules for backwards compatibility
 pub use crate::local_session::{Child, LocalSession, PtyPair, PtySystem};
@@ -11,8 +10,6 @@ pub use crate::ssh_session::{SshBackend, SshBackendImpl, SshChannel, StreamIO};
 
 pub use crate::local_session::NativePtySystem;
 pub use crate::ssh_session::SshSessionWrapper;
-
-use crate::local_session::{NativePtySystem as DefaultPtySystem, PtyPair as LocalPtyPairTrait};
 
 pub trait AppBackend: Send + Sync + Clone {
     fn emit(&self, event: &str, payload: &[u8]) -> Result<(), String>;
@@ -122,147 +119,34 @@ impl SessionManager {
     }
 
     pub fn create_local(&mut self, config: LocalSessionConfig, backend: impl AppBackend + 'static) -> Result<SessionInfo, String> {
-        let shell_path = config.shell.unwrap_or_else(|| {
-            if cfg!(target_os = "windows") {
-                "powershell.exe".to_string()
-            } else {
-                std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
-            }
-        });
-
-        let shell_name = shell_path.split('/').last().unwrap_or(&shell_path).to_string();
-
-        let cwd = config.cwd.unwrap_or_else(|| {
-            std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
-        });
-
-        let mut pair = self
-            .pty_system
-            .openpty(portable_pty::PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| e.to_string())?;
-
-        let mut cmd = if cfg!(target_os = "windows") {
-            let mut c = portable_pty::CommandBuilder::new("powershell.exe");
-            c.args(["-NoLogo", "-NoProfile"]);
-            c
-        } else {
-            let mut c = portable_pty::CommandBuilder::new(&shell_path);
-            if shell_path.contains("bash") {
-                c.arg("--login");
-            }
-            c
-        };
-
-        cmd.cwd(&cwd);
-
-        let child = pair.spawn(cmd).map_err(|e| e.to_string())?;
-        let writer = pair.master_writer().map_err(|e| e.to_string())?;
-        let reader = pair.master_reader().map_err(|e| e.to_string())?;
-
         let id = self.next_id;
         self.next_id += 1;
 
-        let name = format!("Local ({})", shell_name);
-        let shell_for_info = shell_path.clone();
-        let cwd_for_info = cwd.clone();
-
-        let info = SessionInfo {
+        let (session, _handles) = crate::local_session::create_local_session(
+            self.pty_system.as_ref(),
+            config,
+            backend,
             id,
-            name,
-            session_type: SessionType::Local { shell: shell_for_info, cwd: cwd_for_info },
-            is_connected: true,
-        };
+        )?;
 
-        let session = Session::Local(crate::local_session::LocalSession { info: info.clone(), writer });
-        self.sessions.insert(id, session);
-
-        let backend_clone = backend.clone();
-        backend.spawn(Box::new(move || {
-            let mut reader = reader;
-            let mut buf = [0u8; 8192];
-            loop {
-                if let Ok(n) = reader.read(&mut buf) {
-                    if n == 0 {
-                        let payload = serde_json::to_vec(&id).unwrap();
-                        let _ = backend_clone.emit("session-closed", &payload);
-                        break;
-                    }
-                    let data = buf[..n].to_vec();
-                    let payload = serde_json::to_vec(&(&id, &data[..])).unwrap();
-                    if let Err(e) = backend_clone.emit("session-output", &payload) {
-                        eprintln!("Failed to emit: {}", e);
-                        break;
-                    }
-                }
-            }
-        }));
-
-        let _ = child;
+        let info = session.info.clone();
+        self.sessions.insert(id, Session::Local(session));
         Ok(info)
     }
 
     pub fn create_ssh(&mut self, config: SSHSessionConfig, backend: impl AppBackend + 'static) -> Result<SessionInfo, String> {
-        let channel = self.ssh_backend.connect(
-            &config.host,
-            config.port,
-            &config.auth,
-            &config.username,
-        )?;
-
         let id = self.next_id;
         self.next_id += 1;
 
-        let name = format!("SSH {}@{}", config.username, config.host);
-        let host_for_info = config.host.clone();
-        let user_for_info = config.username.clone();
-
-        let info = SessionInfo {
+        let wrapper = crate::ssh_session::create_ssh_session(
+            self.ssh_backend.as_ref(),
+            config,
+            backend,
             id,
-            name,
-            session_type: SessionType::Ssh {
-                host: host_for_info,
-                port: config.port,
-                user: user_for_info,
-            },
-            is_connected: true,
-        };
+        )?;
 
-        let channel_arc = Arc::new(Mutex::new(channel));
-        let session = Session::Ssh(crate::ssh_session::SshSessionWrapper {
-            info: info.clone(),
-            channel: channel_arc.clone(),
-        });
-        self.sessions.insert(id, session);
-
-        let backend_clone = backend.clone();
-        let channel_for_thread = channel_arc.clone();
-
-        thread::spawn(move || {
-            let mut buf = [0u8; 8192];
-            loop {
-                match channel_for_thread.lock().unwrap().read(&mut buf) {
-                    Ok(0) => {
-                        let payload = serde_json::to_vec(&id).unwrap();
-                        let _ = backend_clone.emit("session-closed", &payload);
-                        break;
-                    }
-                    Ok(n) => {
-                        let data = buf[..n].to_vec();
-                        let payload = serde_json::to_vec(&(&id, &data[..])).unwrap();
-                        if let Err(_e) = backend_clone.emit("session-output", &payload) {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-
+        let info = wrapper.info.clone();
+        self.sessions.insert(id, Session::Ssh(wrapper));
         Ok(info)
     }
 
@@ -636,7 +520,6 @@ mod tests {
     fn test_close_nonexistent_session_returns_ok() {
         let mut manager = SessionManager::new();
         let result = manager.close(999);
-        // Current implementation returns Ok, not Err
         assert!(result.is_ok());
     }
 
