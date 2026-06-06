@@ -79,62 +79,94 @@ impl SshBackend for RusshBackend {
         auth: &SSHAuth,
         username: &str,
     ) -> Result<Box<dyn SshChannel + Send>, String> {
-        // Create a single-threaded runtime for the async russh operations
-        let rt = Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+        // Use std::sync::mpsc for result channel - safe to recv() inside any runtime
+        let (result_tx, result_rx) = std::sync::mpsc::channel::<Result<(russh::client::Handle<ClientHandler>, russh::Channel<russh::client::Msg>), String>>();
 
-        let (handle, channel) = rt.block_on(async {
-            let config = russh::client::Config {
-                ..Default::default()
-            };
-            let config = Arc::new(config);
+        // Create tokio channels for the SSH data bridge
+        let (write_tx, write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
-            let handler = ClientHandler;
-            let mut handle = russh::client::connect(config, (host, port), handler)
-                .await
-                .map_err(|e| format!("SSH connection failed: {}", e))?;
+        // Clone data needed for the thread
+        let host = host.to_string();
+        let username = username.to_string();
+        let auth_clone = auth.clone();
 
-            // Authenticate
-            let auth_result = match auth {
-                SSHAuth::Password { password } => {
-                    handle.authenticate_password(username, password).await
+        // Spawn a thread with its own runtime - avoids runtime-in-runtime panic
+        thread::spawn(move || {
+            let rt = Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create runtime");
+
+            let result = rt.block_on(async move {
+                let config = russh::client::Config {
+                    ..Default::default()
+                };
+                let config = Arc::new(config);
+
+                let mut handle = match russh::client::connect(config, (host.as_str(), port), ClientHandler).await {
+                    Ok(h) => h,
+                    Err(e) => {
+                        return Err(format!("SSH connection failed: {}", e));
+                    }
+                };
+
+                // Authenticate
+                let auth_result = match &auth_clone {
+                    SSHAuth::Password { password } => {
+                        handle.authenticate_password(&username, password).await
+                    }
+                    SSHAuth::KeyFile { key_file, passphrase } => {
+                        let key_data = match std::fs::read_to_string(key_file) {
+                            Ok(d) => d,
+                            Err(e) => {
+                                return Err(format!("Failed to read key file: {}", e));
+                            }
+                        };
+                        let key = match decode_secret_key(&key_data, passphrase.as_deref()) {
+                            Ok(k) => k,
+                            Err(e) => {
+                                return Err(format!("Failed to decode key: {}", e));
+                            }
+                        };
+                        let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(key), None);
+                        handle.authenticate_publickey(&username, key_with_hash).await
+                    }
+                };
+
+                if !auth_result.map_err(|e| format!("SSH auth error: {}", e)).map(|r| r.success()).unwrap_or(false) {
+                    return Err("SSH authentication failed".to_string());
                 }
-                SSHAuth::KeyFile { key_file, passphrase } => {
-                    // Load the private key - SSH keys are PEM-encoded text, valid UTF-8
-                    let key_data = std::fs::read_to_string(key_file)
-                        .map_err(|e| format!("Failed to read key file: {}", e))?;
 
-                    let key = decode_secret_key(&key_data, passphrase.as_deref())
-                        .map_err(|e| format!("Failed to decode key: {}", e))?;
+                // Open channel
+                let channel = match handle.channel_open_session().await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        return Err(format!("Failed to open channel: {}", e));
+                    }
+                };
 
-                    let key_with_hash = PrivateKeyWithHashAlg::new(std::sync::Arc::new(key), None);
-                    handle.authenticate_publickey(username, key_with_hash).await
+                // Request PTY and shell
+                if let Err(e) = channel.request_pty(false, "xterm", 80, 24, 0, 0, &[]).await {
+                    return Err(format!("PTY request failed: {}", e));
                 }
-            };
 
-            if !auth_result.map_err(|e| format!("SSH auth error: {}", e))?.success() {
-                return Err("SSH authentication failed".to_string());
-            }
+                if let Err(e) = channel.request_shell(false).await {
+                    return Err(format!("Shell start failed: {}", e));
+                }
 
-            // Open a session channel
-            let channel = handle.channel_open_session().await
-                .map_err(|e| format!("Failed to open channel: {}", e))?;
+                Ok((handle, channel))
+            });
 
-            // Request PTY with proper dimensions
-            channel.request_pty(false, "xterm", 80, 24, 0, 0, &[]).await
-                .map_err(|e| format!("PTY request failed: {}", e))?;
+            let _ = result_tx.send(result);
+        });
 
-            // Start shell
-            channel.request_shell(false).await
-                .map_err(|e| format!("Shell start failed: {}", e))?;
+        // Use std::sync::mpsc::recv() - safe to call from within an async runtime
+        let (handle, channel) = result_rx
+            .recv()
+            .map_err(|_| "SSH connection thread panicked")??;
 
-            Ok((handle, channel))
-        })?;
-
-        // Create the bridged channel
-        let bridged = BridgedChannel::new(handle, channel);
+        // Create bridged channel with the channel and handle
+        let bridged = BridgedChannel::new(handle, channel, write_tx, write_rx);
 
         Ok(Box::new(bridged))
     }
@@ -145,22 +177,24 @@ impl SshBackend for RusshBackend {
 // ============================================================================
 
 struct BridgedChannel {
-    // Synchronous channels for read/write bridging
-    read_tx: mpsc::UnboundedSender<Vec<u8>>,
     read_rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
+    read_tx: Arc<Mutex<mpsc::UnboundedSender<Vec<u8>>>>,
     write_tx: Arc<Mutex<mpsc::UnboundedSender<Vec<u8>>>>,
     shutdown: Arc<tokio::sync::Mutex<bool>>,
 }
 
 impl BridgedChannel {
-    fn new(_handle: russh::client::Handle<ClientHandler>, channel: russh::Channel<russh::client::Msg>) -> Self {
+    fn new(
+        _handle: russh::client::Handle<ClientHandler>,
+        channel: russh::Channel<russh::client::Msg>,
+        write_tx: mpsc::UnboundedSender<Vec<u8>>,
+        write_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    ) -> Self {
         let (read_tx, read_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-        let (write_tx, write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let read_tx_clone = read_tx.clone();
         let shutdown = Arc::new(tokio::sync::Mutex::new(false));
 
-        // Spawn a single async task to handle both reads and writes
         let shutdown_flag = shutdown.clone();
-        let read_tx_clone = read_tx.clone();
         tokio::spawn(async move {
             let mut channel = channel;
             let mut write_rx = write_rx;
@@ -170,9 +204,7 @@ impl BridgedChannel {
                     break;
                 }
 
-                // Use tokio::select! to wait on either channel data or write requests
                 tokio::select! {
-                    // Handle incoming data from the SSH channel
                     msg = channel.wait() => {
                         match msg {
                             Some(russh::ChannelMsg::Data { data }) => {
@@ -182,7 +214,6 @@ impl BridgedChannel {
                                 }
                             }
                             Some(russh::ChannelMsg::ExtendedData { .. }) => {
-                                // Ignore extended data (stderr) for now
                             }
                             Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) | None => {
                                 let _ = read_tx_clone.send(Vec::new());
@@ -191,7 +222,6 @@ impl BridgedChannel {
                             _ => {}
                         }
                     }
-                    // Handle write requests
                     data = write_rx.recv() => {
                         match data {
                             Some(d) => {
@@ -211,8 +241,8 @@ impl BridgedChannel {
         });
 
         Self {
-            read_tx,
             read_rx: Arc::new(Mutex::new(read_rx)),
+            read_tx: Arc::new(Mutex::new(read_tx)),
             write_tx: Arc::new(Mutex::new(write_tx)),
             shutdown,
         }
