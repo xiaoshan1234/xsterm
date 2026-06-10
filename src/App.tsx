@@ -96,14 +96,20 @@ function AppContent() {
             <div className="no-session">
               <p>Click a saved session to reconnect</p>
             </div>
-          ) : activeSessionId ? (
-            sessions.map(
-              (session) =>
-                session.id === activeSessionId && (
-                  <Terminal key={session.id} sessionId={session.id} />
-                )
-            )
-          ) : null}
+          ) : (
+            sessions.map((session) => (
+              <div
+                key={session.id}
+                style={{
+                  display: session.id === activeSessionId ? "block" : "none",
+                  width: "100%",
+                  height: "100%",
+                }}
+              >
+                <Terminal sessionId={session.id} />
+              </div>
+            ))
+          )}
         </div>
         </div>
       </div>

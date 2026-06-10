@@ -11,9 +11,10 @@ interface TerminalProps {
 }
 
 export default function Terminal({ sessionId }: TerminalProps) {
-  const terminalRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const initDoneRef = useRef(false);
   const { writeSession, resizeSession } = useSession();
   const { currentTheme } = useTheme();
 
@@ -25,7 +26,8 @@ export default function Terminal({ sessionId }: TerminalProps) {
   );
 
   useEffect(() => {
-    if (!terminalRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     const xterm = new XTerm({
       fontSize: 14,
@@ -57,22 +59,32 @@ export default function Terminal({ sessionId }: TerminalProps) {
     const fitAddon = new FitAddon();
     xterm.loadAddon(fitAddon);
 
-    xterm.open(terminalRef.current);
-    fitAddon.fit();
+    xterm.open(container);
 
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
     xterm.onData(handleData);
 
-    const handleResize = () => {
-      if (fitAddonRef.current) {
+    // ResizeObserver: auto-refit when container size changes
+    // This handles both window resize and tab-switch visibility changes.
+    // fitAddon.fit() does nothing if the container has 0 dimensions (hidden tab).
+    const resizeObserver = new ResizeObserver(() => {
+      if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
         resizeSession(sessionId, xterm.rows, xterm.cols);
       }
-    };
+    });
+    resizeObserver.observe(container);
 
-    window.addEventListener("resize", handleResize);
+    // Initial fit — delayed slightly to let CSS layout settle
+    requestAnimationFrame(() => {
+      if (container.offsetWidth > 0 && container.offsetHeight > 0) {
+        fitAddon.fit();
+        resizeSession(sessionId, xterm.rows, xterm.cols);
+      }
+      initDoneRef.current = true;
+    });
 
     let unlisten: (() => void) | null = null;
 
@@ -88,11 +100,14 @@ export default function Terminal({ sessionId }: TerminalProps) {
     });
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
       unlisten?.();
       xterm.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
+      initDoneRef.current = false;
     };
   }, [sessionId, handleData, resizeSession, currentTheme]);
 
-  return <div ref={terminalRef} style={{ width: "100%", height: "100%" }} />;
+  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }
