@@ -745,6 +745,16 @@ html, body, #root {
   color: #ffffff;
 }
 
+.session-item-name.disconnected {
+  opacity: 0.5;
+  color: #888888;
+}
+
+.session-item-name.disconnected:hover {
+  color: #cccccc;
+  opacity: 0.8;
+}
+
 .session-item-close {
   width: 20px;
   height: 20px;

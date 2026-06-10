@@ -1,5 +1,6 @@
 export interface Session {
   id: number;
+  configId: string;
   name: string;
   type: "local" | "ssh";
   is_connected: boolean;
@@ -29,9 +30,17 @@ export type CreateSessionConfig =
   | { type: "local"; config: LocalSessionConfig }
   | { type: "ssh"; config: SSHSessionConfig };
 
+export interface SavedSessionConfig {
+  id: string;
+  name: string;
+  type: "local" | "ssh";
+  localConfig?: LocalSessionConfig;
+  sshConfig?: SSHSessionConfig;
+}
+
 export interface SessionGroup {
   id: number;
   name: string;
-  sessionIds: number[];
+  configIds: string[];
   collapsed: boolean;
 }

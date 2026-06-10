@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { load, Store } from "@tauri-apps/plugin-store";
-import { Session, LocalSessionConfig, SSHSessionConfig, SessionGroup } from "../types/session";
+import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup } from "../types/session";
 
 interface GroupStore {
   groups: SessionGroup[];
@@ -18,34 +18,13 @@ async function getStore(): Promise<Store> {
   return storeInstance;
 }
 
-interface SessionContextType {
-  sessions: Session[];
-  activeSessionId: number | null;
-  groups: SessionGroup[];
-  createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
-  createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
-  closeSession: (id: number) => Promise<void>;
-  addToGroup: (groupId: number, sessionId: number) => void;
-  removeFromGroup: (groupId: number, sessionId: number) => void;
-  renameSession: (id: number, name: string) => void;
-  createGroup: (name: string) => void;
-  deleteGroup: (id: number) => void;
-  renameGroup: (id: number, name: string) => void;
-  toggleGroup: (id: number) => void;
-  setActiveSession: (id: number | null) => void;
-  writeSession: (id: number, data: string) => Promise<void>;
-  resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
-}
-
-const SessionContext = createContext<SessionContextType | null>(null);
-
-async function persistSessions(sessions: Session[]) {
+async function persistConfigs(configs: SavedSessionConfig[]) {
   try {
     const store = await getStore();
-    await store.set('sessions', sessions);
+    await store.set('savedConfigs', configs);
     await store.save();
   } catch (e) {
-    console.error("Failed to save sessions:", e);
+    console.error("Failed to save configs:", e);
   }
 }
 
@@ -60,12 +39,12 @@ async function persistGroups(groupsData: GroupStore) {
   }
 }
 
-async function loadSavedSessions(): Promise<Session[]> {
+async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
   try {
     const store = await getStore();
-    return (await store.get<Session[]>('sessions')) || [];
+    return (await store.get<SavedSessionConfig[]>('savedConfigs')) || [];
   } catch (e) {
-    console.error("Failed to load sessions:", e);
+    console.error("Failed to load configs:", e);
     return [];
   }
 }
@@ -82,26 +61,50 @@ async function loadSavedGroups(): Promise<GroupStore> {
   }
 }
 
+function generateId(): string {
+  return crypto.randomUUID();
+}
+
+interface SessionContextType {
+  sessions: Session[];
+  savedConfigs: SavedSessionConfig[];
+  activeSessionId: number | null;
+  groups: SessionGroup[];
+  createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
+  connectConfig: (configId: string) => Promise<Session>;
+  removeConfig: (configId: string) => void;
+  closeSession: (id: number) => Promise<void>;
+  addToGroup: (groupId: number, configId: string) => void;
+  removeFromGroup: (groupId: number, configId: string) => void;
+  renameSession: (id: number, name: string) => void;
+  createGroup: (name: string) => void;
+  deleteGroup: (id: number) => void;
+  renameGroup: (id: number, name: string) => void;
+  toggleGroup: (id: number) => void;
+  setActiveSession: (id: number | null) => void;
+  writeSession: (id: number, data: string) => Promise<void>;
+  resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
+}
+
+const SessionContext = createContext<SessionContextType | null>(null);
+
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const [savedConfigs, setSavedConfigs] = useState<SavedSessionConfig[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [nextGroupId, setNextGroupId] = useState(1);
 
-  // Load persisted state on mount
   useEffect(() => {
     const init = async () => {
-      const [savedSessions, savedGroups, lastActive] = await Promise.all([
-        loadSavedSessions(),
+      const [configs, savedGroups] = await Promise.all([
+        loadSavedConfigs(),
         loadSavedGroups(),
-        getStore().then((store) => store.get<number | null>('lastActiveSession')),
       ]);
-      if (savedSessions.length > 0) setSessions(savedSessions);
+      setSavedConfigs(configs);
       setGroups(savedGroups.groups);
       setNextGroupId(savedGroups.nextGroupId);
-      if (lastActive !== null && lastActive !== undefined) {
-        setActiveSessionId(lastActive);
-      }
     };
     init();
   }, []);
@@ -112,9 +115,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     listen<number>("session-closed", (event) => {
       const sessionId = event.payload;
       setSessions((prev) =>
-        prev.map((s) =>
-          s.id === sessionId ? { ...s, is_connected: false } : s
-        )
+        prev.filter((s) => s.id !== sessionId)
       );
       setActiveSessionId((current) => (current === sessionId ? null : current));
     }).then((fn) => {
@@ -127,37 +128,142 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createLocalSession = useCallback(async (config: LocalSessionConfig, save = true): Promise<Session> => {
-    const session = await invoke<Session>("create_local_session", { config });
-    setSessions((prev) => {
-      const updated: Session[] = [...prev, session];
-      if (save) persistSessions(updated);
-      return updated;
-    });
+    const configId = generateId();
+    const info = await invoke<Session>("create_local_session", { config });
+
+    const name = info.name;
+    const session: Session = {
+      id: info.id,
+      configId,
+      name,
+      type: "local",
+      is_connected: info.is_connected,
+      session_type: info.session_type as Session["session_type"],
+    };
+
+    setSessions((prev) => [...prev, session]);
     setActiveSessionId(session.id);
+
+    if (save) {
+      const savedConfig: SavedSessionConfig = {
+        id: configId,
+        name,
+        type: "local",
+        localConfig: config,
+      };
+      setSavedConfigs((prev) => {
+        const updated = [...prev, savedConfig];
+        persistConfigs(updated);
+        return updated;
+      });
+    }
+
     return session;
   }, []);
 
   const createSshSession = useCallback(async (config: SSHSessionConfig, save = true): Promise<Session> => {
-    const session = await invoke<Session>("create_ssh_session", { config });
-    setSessions((prev) => {
-      const updated: Session[] = [...prev, session];
-      if (save) persistSessions(updated);
-      return updated;
-    });
+    const configId = generateId();
+    const info = await invoke<Session>("create_ssh_session", { config });
+
+    const name = info.name;
+    const session: Session = {
+      id: info.id,
+      configId,
+      name,
+      type: "ssh",
+      is_connected: info.is_connected,
+      session_type: info.session_type as Session["session_type"],
+    };
+
+    setSessions((prev) => [...prev, session]);
     setActiveSessionId(session.id);
+
+    if (save) {
+      const savedConfig: SavedSessionConfig = {
+        id: configId,
+        name,
+        type: "ssh",
+        sshConfig: config,
+      };
+      setSavedConfigs((prev) => {
+        const updated = [...prev, savedConfig];
+        persistConfigs(updated);
+        return updated;
+      });
+    }
+
     return session;
   }, []);
 
-  const closeSession = useCallback(async (id: number): Promise<void> => {
-    await invoke("close_session", { sessionId: id });
-    setSessions((prev) => {
-      const updated = prev.filter((s) => s.id !== id);
-      persistSessions(updated);
+  const connectConfig = useCallback(async (configId: string): Promise<Session> => {
+    const config = savedConfigs.find((c) => c.id === configId);
+    if (!config) throw new Error("Config not found");
+
+    const existing = sessions.find((s) => s.configId === configId);
+    if (existing) {
+      setActiveSessionId(existing.id);
+      return existing;
+    }
+
+    if (config.type === "local" && config.localConfig) {
+      const info = await invoke<Session>("create_local_session", { config: config.localConfig });
+      const session: Session = {
+        id: info.id,
+        configId,
+        name: config.name,
+        type: "local",
+        is_connected: info.is_connected,
+        session_type: info.session_type as Session["session_type"],
+      };
+      setSessions((prev) => [...prev, session]);
+      setActiveSessionId(session.id);
+      return session;
+    }
+
+    if (config.type === "ssh" && config.sshConfig) {
+      const info = await invoke<Session>("create_ssh_session", { config: config.sshConfig });
+      const session: Session = {
+        id: info.id,
+        configId,
+        name: config.name,
+        type: "ssh",
+        is_connected: info.is_connected,
+        session_type: info.session_type as Session["session_type"],
+      };
+      setSessions((prev) => [...prev, session]);
+      setActiveSessionId(session.id);
+      return session;
+    }
+
+    throw new Error("Invalid config");
+  }, [savedConfigs, sessions]);
+
+  const removeConfig = useCallback((configId: string) => {
+    setSavedConfigs((prev) => {
+      const updated = prev.filter((c) => c.id !== configId);
+      persistConfigs(updated);
       return updated;
     });
-    if (activeSessionId === id) {
-      setActiveSessionId(null);
+    setGroups((prev) => {
+      const updated = prev.map((g) => ({
+        ...g,
+        configIds: g.configIds.filter((id) => id !== configId),
+      }));
+      persistGroups({ groups: updated, nextGroupId });
+      return updated;
+    });
+    const session = sessions.find((s) => s.configId === configId);
+    if (session) {
+      invoke("close_session", { sessionId: session.id }).catch(console.error);
+      setSessions((prev) => prev.filter((s) => s.configId !== configId));
+      if (activeSessionId === session.id) setActiveSessionId(null);
     }
+  }, [sessions, activeSessionId, nextGroupId]);
+
+  const closeSession = useCallback(async (id: number): Promise<void> => {
+    await invoke("close_session", { sessionId: id });
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    if (activeSessionId === id) setActiveSessionId(null);
   }, [activeSessionId]);
 
   const renameSession = useCallback((id: number, name: string) => {
@@ -165,16 +271,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const updated = prev.map((s) =>
         s.id === id ? { ...s, name } : s
       );
-      persistSessions(updated);
       return updated;
     });
-  }, []);
+    const session = sessions.find((s) => s.id === id);
+    if (session) {
+      setSavedConfigs((prev) => {
+        const updated = prev.map((c) =>
+          c.id === session.configId ? { ...c, name } : c
+        );
+        persistConfigs(updated);
+        return updated;
+      });
+    }
+  }, [sessions]);
 
   const createGroup = useCallback((name: string) => {
     const id = nextGroupId;
     setNextGroupId((prev) => prev + 1);
     setGroups((prev) => {
-      const updated = [...prev, { id, name, sessionIds: [], collapsed: false }];
+      const updated = [...prev, { id, name, configIds: [], collapsed: false }];
       persistGroups({ groups: updated, nextGroupId: id + 1 });
       return updated;
     });
@@ -188,20 +303,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, [nextGroupId]);
 
-  const addToGroup = useCallback((groupId: number, sessionId: number) => {
+  const addToGroup = useCallback((groupId: number, configId: string) => {
     setGroups((prev) => {
       const updated = prev.map((g) =>
-        g.id === groupId ? { ...g, sessionIds: [...g.sessionIds, sessionId] } : g
+        g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g
       );
       persistGroups({ groups: updated, nextGroupId });
       return updated;
     });
   }, [nextGroupId]);
 
-  const removeFromGroup = useCallback((groupId: number, sessionId: number) => {
+  const removeFromGroup = useCallback((groupId: number, configId: string) => {
     setGroups((prev) => {
       const updated = prev.map((g) =>
-        g.id === groupId ? { ...g, sessionIds: g.sessionIds.filter((sid) => sid !== sessionId) } : g
+        g.id === groupId ? { ...g, configIds: g.configIds.filter((cid) => cid !== configId) } : g
       );
       persistGroups({ groups: updated, nextGroupId });
       return updated;
@@ -230,10 +345,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const setActiveSession = useCallback((id: number | null) => {
     setActiveSessionId(id);
-    getStore().then((store) => {
-      store.set('lastActiveSession', id);
-      store.save();
-    }).catch(console.error);
   }, []);
 
   const writeSession = useCallback(async (id: number, data: string): Promise<void> => {
@@ -250,10 +361,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <SessionContext.Provider
       value={{
         sessions,
+        savedConfigs,
         activeSessionId,
         groups,
         createLocalSession,
         createSshSession,
+        connectConfig,
+        removeConfig,
         closeSession,
         addToGroup,
         removeFromGroup,

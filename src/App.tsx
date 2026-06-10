@@ -16,6 +16,7 @@ import "./App.css";
 function AppContent() {
   const {
     sessions,
+    savedConfigs,
     activeSessionId,
     createLocalSession,
     createSshSession,
@@ -27,7 +28,6 @@ function AppContent() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
 
-  // Keyboard shortcuts
   useShortcut({
     key: "n",
     ctrl: true,
@@ -96,10 +96,14 @@ function AppContent() {
           />
         )}
         <div className="terminal-container">
-          {sessions.length === 0 ? (
+          {sessions.length === 0 && savedConfigs.length === 0 ? (
             <div className="no-session">
               <p>No active sessions</p>
               <button onClick={() => setShowCreateDialog(true)}>Create Session</button>
+            </div>
+          ) : sessions.length === 0 && savedConfigs.length > 0 ? (
+            <div className="no-session">
+              <p>Click a saved session to reconnect</p>
             </div>
           ) : activeSessionId ? (
             sessions.map(
@@ -134,7 +138,7 @@ export default function App() {
         <KeyboardProvider>
           <LoggerProvider>
             <AppContent />
-          </LoggerProvider>
+            </LoggerProvider>
         </KeyboardProvider>
       </ThemeProvider>
     </SessionProvider>

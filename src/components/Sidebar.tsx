@@ -2,20 +2,40 @@ import { useState } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { PRESET_THEMES } from "../types/theme";
+import { SavedSessionConfig } from "../types/session";
 
 interface SidebarProps {
   onCreateSession: () => void;
   onToggleLogs: () => void;
 }
 
+function getConfigIcon(type: "local" | "ssh") {
+  return type === "local" ? (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  ) : (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
 export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
-  const { sessions, activeSessionId, setActiveSession, groups, createGroup, toggleGroup, closeSession } = useSession();
+  const { sessions, savedConfigs, activeSessionId, setActiveSession, groups, connectConfig, removeConfig, createGroup, toggleGroup, closeSession } = useSession();
   const { currentTheme, currentThemeKey, setTheme, themeKeys } = useTheme();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [expandedSettingsItem, setExpandedSettingsItem] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [groupError, setGroupError] = useState("");
+
+  const isConnected = (config: SavedSessionConfig) =>
+    sessions.some((s) => s.configId === config.id);
 
   const handleCreateGroup = () => {
     setGroupError("");
@@ -31,6 +51,27 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
     createGroup(trimmed);
     setNewGroupName("");
     setShowNewGroupDialog(false);
+  };
+
+  const handleConfigClick = (config: SavedSessionConfig) => {
+    if (isConnected(config)) {
+      const session = sessions.find((s) => s.configId === config.id);
+      if (session) {
+        setActiveSession(session.id);
+        setActiveMenu(null);
+      }
+    } else {
+      connectConfig(config.id).then(() => setActiveMenu(null)).catch(console.error);
+    }
+  };
+
+  const handleConfigClose = (config: SavedSessionConfig) => {
+    if (isConnected(config)) {
+      const session = sessions.find((s) => s.configId === config.id);
+      if (session) closeSession(session.id);
+    } else {
+      removeConfig(config.id);
+    }
   };
 
   const ChatIcon = () => (
@@ -53,22 +94,6 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
       <polyline points="10 9 9 9 8 9" />
-    </svg>
-  );
-
-  const LocalIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-      <line x1="8" y1="21" x2="16" y2="21" />
-      <line x1="12" y1="17" x2="12" y2="21" />
-    </svg>
-  );
-
-  const SshIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </svg>
   );
 
@@ -147,7 +172,7 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
               onClick={() => setActiveSession(session.id)}
               title={session.name}
             >
-              {session.type === "local" ? <LocalIcon /> : <SshIcon />}
+              {getConfigIcon(session.type)}
             </button>
           ))}
         </div>
@@ -166,30 +191,27 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
                   <ChevronIcon expanded={!group.collapsed} />
                   <FolderIcon />
                   <span className="session-group-name">{group.name}</span>
-                  <span className="session-group-count">{group.sessionIds.length}</span>
+                  <span className="session-group-count">{group.configIds.length}</span>
                 </button>
                 {!group.collapsed && (
                   <div className="session-group-items">
-                    {sessions
-                      .filter((s) => group.sessionIds.includes(s.id))
-                      .map((session) => (
-                        <div key={session.id} className="session-item">
+                    {savedConfigs
+                      .filter((c) => group.configIds.includes(c.id))
+                      .map((config) => (
+                        <div key={config.id} className="session-item">
                           <span className="session-item-indent" />
-                          {session.type === "local" ? <LocalIcon /> : <SshIcon />}
+                          {getConfigIcon(config.type)}
                           <span
-                            className="session-item-name"
-                            onClick={() => {
-                              setActiveSession(session.id);
-                              setActiveMenu(null);
-                            }}
+                            className={`session-item-name ${!isConnected(config) ? "disconnected" : ""}`}
+                            onClick={() => handleConfigClick(config)}
                           >
-                            {session.name}
+                            {config.name}
                           </span>
                           <button
                             className="session-item-close"
                             onClick={(e) => {
                               e.stopPropagation();
-                              closeSession(session.id);
+                              handleConfigClose(config);
                             }}
                           >
                             <CloseIcon />
@@ -200,25 +222,22 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
                 )}
               </div>
             ))}
-            {sessions
-              .filter((s) => !groups.some((g) => g.sessionIds.includes(s.id)))
-              .map((session) => (
-                <div key={session.id} className="session-item uncategorized">
-                  {session.type === "local" ? <LocalIcon /> : <SshIcon />}
+            {savedConfigs
+              .filter((c) => !groups.some((g) => g.configIds.includes(c.id)))
+              .map((config) => (
+                <div key={config.id} className="session-item uncategorized">
+                  {getConfigIcon(config.type)}
                   <span
-                    className="session-item-name"
-                    onClick={() => {
-                      setActiveSession(session.id);
-                      setActiveMenu(null);
-                    }}
+                    className={`session-item-name ${!isConnected(config) ? "disconnected" : ""}`}
+                    onClick={() => handleConfigClick(config)}
                   >
-                    {session.name}
+                    {config.name}
                   </span>
                   <button
                     className="session-item-close"
                     onClick={(e) => {
                       e.stopPropagation();
-                      closeSession(session.id);
+                      handleConfigClose(config);
                     }}
                   >
                     <CloseIcon />

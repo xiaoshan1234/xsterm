@@ -54,7 +54,7 @@ export default function CreateSessionDialog({
     setError("");
     const session = await onCreateLocal(localConfig, saveConfig);
     if (selectedGroupId !== null) {
-      addToGroup(selectedGroupId, session.id);
+      addToGroup(selectedGroupId, session.configId);
     }
     onClose();
   };
@@ -75,7 +75,7 @@ export default function CreateSessionDialog({
     }
     const session = await onCreateSsh(sshConfig, saveConfig);
     if (selectedGroupId !== null) {
-      addToGroup(selectedGroupId, session.id);
+      addToGroup(selectedGroupId, session.configId);
     }
     onClose();
   };
