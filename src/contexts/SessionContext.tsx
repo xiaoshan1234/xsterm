@@ -237,7 +237,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const writeSession = useCallback(async (id: number, data: string): Promise<void> => {
-    const arr = Array.from(data).map((c) => c.charCodeAt(0));
+    const encoded = new TextEncoder().encode(data);
+    const arr = Array.from(encoded);
     await invoke("write_session", { sessionId: id, data: arr });
   }, []);
 

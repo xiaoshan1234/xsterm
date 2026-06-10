@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, mpsc as sync_mpsc};
 use std::thread;
 
 use russh::keys::{PublicKey, PrivateKeyWithHashAlg, decode_secret_key};
@@ -18,6 +18,14 @@ pub trait SshChannel: Read + Write + Send {
     fn tcp_stream(&self) -> Box<dyn StreamIO>;
 }
 
+/// Result of an SSH connection, containing both the channel (for trait compliance)
+/// and the direct I/O channels that bypass Mutex contention.
+pub struct SshConnectResult {
+    pub channel: Box<dyn SshChannel + Send>,
+    pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
+    pub read_rx: sync_mpsc::Receiver<Option<Vec<u8>>>,
+}
+
 pub trait SshBackend: Send {
     fn connect(
         &self,
@@ -25,7 +33,7 @@ pub trait SshBackend: Send {
         port: u16,
         auth: &SSHAuth,
         username: &str,
-    ) -> Result<Box<dyn SshChannel + Send>, String>;
+    ) -> Result<SshConnectResult, String>;
 }
 
 struct ClientHandler;
@@ -60,12 +68,12 @@ impl SshBackend for RusshBackend {
         port: u16,
         auth: &SSHAuth,
         username: &str,
-    ) -> Result<Box<dyn SshChannel + Send>, String> {
+    ) -> Result<SshConnectResult, String> {
         // std::sync::mpsc for result - safe to recv() inside any runtime
-        let (result_tx, result_rx) = std::sync::mpsc::channel::<Result<(), String>>();
-        // std::sync::mpsc for read - async loop sends, sync Read impl receives
-        let (read_tx, read_rx) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
-        // tokio::sync::mpsc for write - sync Write impl sends, async loop receives
+        let (result_tx, result_rx) = sync_mpsc::channel::<Result<(), String>>();
+        // std::sync::mpsc for read - async loop sends, blocking recv in read thread
+        let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
+        // tokio::sync::mpsc for write - sync send from Tauri, async recv in I/O loop
         let (write_tx, mut write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
         let host = host.to_string();
@@ -191,17 +199,21 @@ impl SshBackend for RusshBackend {
         // Wait for connection result (blocks briefly, then returns)
         result_rx.recv().map_err(|_| "SSH thread panicked")??;
 
-        Ok(Box::new(BridgedChannel {
-            read_rx: Mutex::new(read_rx),
+        // BridgedChannel is kept for SshChannel trait compliance during initial setup,
+        // but runtime I/O uses write_tx/read_rx directly (no Mutex contention)
+        let bridged = BridgedChannel {
+            write_tx: write_tx.clone(),
+        };
+
+        Ok(SshConnectResult {
+            channel: Box::new(bridged),
             write_tx,
-        }))
+            read_rx,
+        })
     }
 }
 
-// ...
-
 struct BridgedChannel {
-    read_rx: Mutex<std::sync::mpsc::Receiver<Option<Vec<u8>>>>,
     write_tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
@@ -220,24 +232,16 @@ impl SshChannel for BridgedChannel {
 }
 
 impl Read for BridgedChannel {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self.read_rx.lock().unwrap().try_recv() {
-            Ok(Some(data)) => {
-                let len = data.len().min(buf.len());
-                buf[..len].copy_from_slice(&data[..len]);
-                Ok(len)
-            }
-            Ok(None) => Ok(0),  // EOF
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "no data available"))
-            }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => Ok(0),
-        }
+    fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+        // Runtime reads use read_rx directly via blocking recv, not this trait method.
+        Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "use direct recv"))
     }
 }
 
 impl Write for BridgedChannel {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        // Runtime writes use write_tx directly, not this trait method.
+        // This impl is kept for trait compliance and fallback.
         if self.write_tx.send(buf.to_vec()).is_err() {
             return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Channel closed"));
         }
@@ -268,7 +272,10 @@ impl Write for DummyStream {
 
 pub struct SshSessionWrapper {
     pub info: SessionInfo,
-    pub channel: Arc<Mutex<Box<dyn SshChannel + Send>>>,
+    pub channel: Arc<std::sync::Mutex<Box<dyn SshChannel + Send>>>,
+    /// Direct write path — bypasses the Mutex entirely.
+    /// UnboundedSender is thread-safe, no lock needed for keystroke writes.
+    pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
 pub struct SshSessionHandles;
@@ -279,7 +286,7 @@ pub fn create_ssh_session(
     backend: impl AppBackend + 'static,
     session_id: u32,
 ) -> Result<SshSessionWrapper, String> {
-    let channel = ssh_backend.connect(
+    let SshConnectResult { channel, write_tx, read_rx } = ssh_backend.connect(
         &config.host,
         config.port,
         &config.auth,
@@ -301,36 +308,35 @@ pub fn create_ssh_session(
         is_connected: true,
     };
 
-    let channel_arc = Arc::new(Mutex::new(channel));
+    let channel_arc = Arc::new(std::sync::Mutex::new(channel));
     let wrapper = SshSessionWrapper {
         info,
         channel: channel_arc.clone(),
+        write_tx,
     };
 
     let backend_clone = backend.clone();
-    let channel_for_thread = channel_arc.clone();
 
+    // Read thread uses blocking recv() on read_rx — no polling, no Mutex.
+    // This eliminates the 10ms sleep overhead and Mutex contention entirely.
     thread::spawn(move || {
-        let mut buf = [0u8; 8192];
         loop {
-            match channel_for_thread.lock().unwrap().read(&mut buf) {
-                Ok(0) => {
-                    let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-closed", &payload);
-                    break;
-                }
-                Ok(n) => {
-                    let data = buf[..n].to_vec();
+            match read_rx.recv() {
+                Ok(Some(data)) => {
                     let payload = serde_json::to_vec(&(&session_id, &data[..])).unwrap();
                     if let Err(_e) = backend_clone.emit("session-output", &payload) {
                         break;
                     }
                 }
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                        std::thread::sleep(std::time::Duration::from_millis(10));
-                        continue;
-                    }
+                Ok(None) => {
+                    let payload = serde_json::to_vec(&session_id).unwrap();
+                    let _ = backend_clone.emit("session-closed", &payload);
+                    break;
+                }
+                Err(_) => {
+                    // Channel disconnected — sender (async I/O loop) dropped
+                    let payload = serde_json::to_vec(&session_id).unwrap();
+                    let _ = backend_clone.emit("session-closed", &payload);
                     break;
                 }
             }

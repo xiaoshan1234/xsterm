@@ -6,7 +6,7 @@ use tauri::Emitter;
 
 // Re-export types from submodules for backwards compatibility
 pub use crate::local_session::{Child, LocalSession, PtyPair, PtySystem};
-pub use crate::ssh_session::{SshBackend, SshBackendImpl, SshChannel, StreamIO};
+pub use crate::ssh_session::{SshBackend, SshBackendImpl, SshChannel, SshConnectResult, StreamIO};
 
 pub use crate::local_session::NativePtySystem;
 pub use crate::ssh_session::SshSessionWrapper;
@@ -158,8 +158,7 @@ impl SessionManager {
                 Ok(())
             }
             Some(Session::Ssh(s)) => {
-                s.channel.lock().unwrap().write(data).map_err(|e| e.to_string())?;
-                s.channel.lock().unwrap().flush().map_err(|e| e.to_string())?;
+                s.write_tx.send(data.to_vec()).map_err(|_| "SSH channel closed".to_string())?;
                 Ok(())
             }
             None => Err("Session not found".to_string()),
@@ -300,7 +299,7 @@ mod tests {
                 port: u16,
                 auth: &SSHAuth,
                 username: &str,
-            ) -> Result<Box<dyn SshChannel + Send>, String>;
+            ) -> Result<SshConnectResult, String>;
         }
     }
 
@@ -311,7 +310,7 @@ mod tests {
             port: u16,
             auth: &SSHAuth,
             username: &str,
-        ) -> Result<Box<dyn SshChannel + Send>, String> {
+        ) -> Result<SshConnectResult, String> {
             self.connect(host, port, auth, username)
         }
     }
@@ -651,7 +650,15 @@ mod tests {
     fn create_ssh_password_success() {
         let mut mock_ssh_backend = MockSshBackendM::new();
         mock_ssh_backend.expect_connect()
-            .returning(|_, _, _, _| Ok(Box::new(MockSshChannelM::new()) as Box<dyn SshChannel + Send>));
+            .returning(|_, _, _, _| {
+                let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+                let (_read_tx, read_rx) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
+                Ok(SshConnectResult {
+                    channel: Box::new(MockSshChannelM::new()) as Box<dyn SshChannel + Send>,
+                    write_tx,
+                    read_rx,
+                })
+            });
 
         let mock_backend = TestAppBackend::default();
 
@@ -689,7 +696,15 @@ mod tests {
     fn create_ssh_keyfile_success() {
         let mut mock_ssh_backend = MockSshBackendM::new();
         mock_ssh_backend.expect_connect()
-            .returning(|_, _, _, _| Ok(Box::new(MockSshChannelM::new()) as Box<dyn SshChannel + Send>));
+            .returning(|_, _, _, _| {
+                let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+                let (_read_tx, read_rx) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
+                Ok(SshConnectResult {
+                    channel: Box::new(MockSshChannelM::new()) as Box<dyn SshChannel + Send>,
+                    write_tx,
+                    read_rx,
+                })
+            });
 
         let mock_backend = TestAppBackend::default();
 
