@@ -2,6 +2,29 @@ import { useState, useEffect } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { LocalSessionConfig, SSHSessionConfig, Session } from "../types/session";
 
+const isWindows = navigator.userAgent.toLowerCase().includes("windows") ||
+  navigator.platform.toLowerCase().includes("win");
+
+const LOCAL_SHELLS = isWindows
+  ? [
+      { value: "", label: "Default (PowerShell)" },
+      { value: "powershell.exe", label: "PowerShell" },
+      { value: "pwsh.exe", label: "PowerShell 7" },
+      { value: "cmd.exe", label: "CMD" },
+      { value: "wsl.exe", label: "WSL (Default Distro)" },
+      { value: "wsl.exe -d Ubuntu", label: "WSL - Ubuntu" },
+      { value: "wsl.exe -d Debian", label: "WSL - Debian" },
+      { value: "wsl.exe -d Arch", label: "WSL - Arch" },
+    ]
+  : [
+      { value: "", label: "Default ($SHELL)" },
+      { value: "/bin/bash", label: "Bash" },
+      { value: "/bin/zsh", label: "Zsh" },
+      { value: "/bin/sh", label: "Sh" },
+    ];
+
+const CWD_PLACEHOLDER = isWindows ? "C:\\Users\\you or %USERPROFILE%" : "/home/user or ~";
+
 interface CreateSessionDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -133,20 +156,19 @@ export default function CreateSessionDialog({
                 <select
                   value={localConfig.shell || ""}
                   onChange={(e) =>
-                    setLocalConfig({ ...localConfig, shell: e.target.value })
+                    setLocalConfig({ ...localConfig, shell: e.target.value || undefined })
                   }
                 >
-                  <option value="">Default</option>
-                  <option value="/bin/bash">Bash</option>
-                  <option value="/bin/zsh">Zsh</option>
-                  <option value="/bin/sh">Sh</option>
+                  {LOCAL_SHELLS.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="form-group">
                 <label>Initial Directory</label>
                 <input
                   type="text"
-                  placeholder="~/.zshrc or /home/user"
+                  placeholder={CWD_PLACEHOLDER}
                   value={localConfig.cwd || ""}
                   onChange={(e) =>
                     setLocalConfig({ ...localConfig, cwd: e.target.value })

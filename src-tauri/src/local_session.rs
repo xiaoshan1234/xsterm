@@ -98,10 +98,29 @@ pub fn create_local_session(
         }
     });
 
-    let shell_name = shell_path.split('/').last().unwrap_or(&shell_path).to_string();
+    let (shell_exe, shell_extra_args) = shell_path
+        .split_once(' ')
+        .map(|(exe, rest)| (exe.to_string(), rest.split_whitespace().map(String::from).collect::<Vec<String>>()))
+        .unwrap_or((shell_path.clone(), Vec::new()));
+
+    let shell_name = shell_exe
+        .split(&['/', '\\'][..])
+        .last()
+        .unwrap_or(&shell_exe)
+        .to_string();
 
     let cwd = config.cwd.unwrap_or_else(|| {
-        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+        if cfg!(target_os = "windows") {
+            std::env::var("USERPROFILE")
+                .or_else(|_: std::env::VarError| {
+                    let drive = std::env::var("HOMEDRIVE").unwrap_or_else(|_| "C:".to_string());
+                    let path = std::env::var("HOMEPATH").unwrap_or_else(|_| "\\Users\\Default".to_string());
+                    Ok(format!("{}{}", drive, path))
+                })
+                .unwrap_or_else(|_: std::env::VarError| "C:\\".to_string())
+        } else {
+            std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+        }
     });
 
     let mut pair = pty_system
@@ -113,17 +132,17 @@ pub fn create_local_session(
         })
         .map_err(|e| e.to_string())?;
 
-    let mut cmd = if cfg!(target_os = "windows") {
-        let mut c = CommandBuilder::new("powershell.exe");
-        c.args(["-NoLogo", "-NoProfile"]);
-        c
-    } else {
-        let mut c = CommandBuilder::new(&shell_path);
-        if shell_path.contains("bash") {
-            c.arg("--login");
-        }
-        c
-    };
+    let mut cmd = CommandBuilder::new(&shell_exe);
+
+    for arg in &shell_extra_args {
+        cmd.arg(arg);
+    }
+
+    if shell_name.contains("powershell") || shell_name.contains("pwsh") {
+        cmd.arg("-NoLogo");
+    } else if shell_name == "bash" && !cfg!(target_os = "windows") {
+        cmd.arg("--login");
+    }
 
     cmd.cwd(&cwd);
 
