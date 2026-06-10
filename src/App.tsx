@@ -2,13 +2,12 @@ import { useState } from "react";
 import { SessionProvider, useSession } from "./contexts/SessionContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { KeyboardProvider } from "./contexts/KeyboardContext";
-import { LoggerProvider, useLogger } from "./contexts/LoggerContext";
+import { LoggerProvider } from "./contexts/LoggerContext";
 import { useShortcut } from "./hooks/useShortcut";
 import Sidebar from "./components/Sidebar";
 import NavBar from "./components/NavBar";
 import TabBar from "./components/TabBar";
 import Terminal from "./components/Terminal";
-import LogViewer from "./components/LogViewer";
 import CreateSessionDialog from "./components/CreateSessionDialog";
 import { LocalSessionConfig, SSHSessionConfig } from "./types/session";
 import "./App.css";
@@ -24,9 +23,7 @@ function AppContent() {
     renameSession,
     setActiveSession,
   } = useSession();
-  const { logs, clearLogs } = useLogger();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showLogs, setShowLogs] = useState(false);
 
   useShortcut({
     key: "n",
@@ -68,12 +65,6 @@ function AppContent() {
     },
   });
 
-  useShortcut({
-    key: "l",
-    ctrl: true,
-    handler: () => setShowLogs((prev) => !prev),
-  });
-
   const handleCreateLocal = (config: LocalSessionConfig, save: boolean) =>
     createLocalSession(config, save);
 
@@ -84,7 +75,7 @@ function AppContent() {
     <div className="app-container">
       <NavBar />
       <div className="content-area">
-        <Sidebar onCreateSession={() => setShowCreateDialog(true)} onToggleLogs={() => setShowLogs((prev) => !prev)} />
+        <Sidebar onCreateSession={() => setShowCreateDialog(true)} />
         <div className="main-area">
           {sessions.length > 0 && (
           <TabBar
@@ -114,12 +105,7 @@ function AppContent() {
             )
           ) : null}
         </div>
-        {showLogs && (
-          <div className="log-panel">
-            <LogViewer logs={logs} onClear={clearLogs} />
-          </div>
-        )}
-      </div>
+        </div>
       </div>
       <CreateSessionDialog
         isOpen={showCreateDialog}

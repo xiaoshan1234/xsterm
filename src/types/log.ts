@@ -6,8 +6,6 @@ export enum LogLevel {
 }
 
 export interface LogEntry {
-  id: string;
-  timestamp: Date;
   level: LogLevel;
   source: "frontend" | "backend" | "session";
   message: string;
@@ -15,7 +13,7 @@ export interface LogEntry {
 }
 
 export interface LoggerConfig {
-  maxEntries: number;
-  enableConsole: boolean;
-  enableBackend: boolean;
+  maxFileSize: number;   // MB
+  maxLogFiles: number;
+  logLevel: LogLevel;
 }

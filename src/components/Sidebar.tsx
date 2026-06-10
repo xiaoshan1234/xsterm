@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { PRESET_THEMES } from "../types/theme";
 import { SavedSessionConfig } from "../types/session";
+import { LoggerConfig, LogLevel } from "../types/log";
 
 interface SidebarProps {
   onCreateSession: () => void;
-  onToggleLogs: () => void;
 }
 
 function getConfigIcon(type: "local" | "ssh") {
@@ -25,7 +26,7 @@ function getConfigIcon(type: "local" | "ssh") {
   );
 }
 
-export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
+export default function Sidebar({ onCreateSession }: SidebarProps) {
   const { sessions, savedConfigs, activeSessionId, setActiveSession, groups, connectConfig, removeConfig, createGroup, toggleGroup, closeSession } = useSession();
   const { currentTheme, currentThemeKey, setTheme, themeKeys } = useTheme();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -33,9 +34,30 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [groupError, setGroupError] = useState("");
+  const [logConfig, setLogConfig] = useState<LoggerConfig | null>(null);
+  const [logDir, setLogDir] = useState<string>("");
 
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
+
+  useEffect(() => {
+    invoke<LoggerConfig>("get_log_config").then(setLogConfig).catch(console.error);
+    invoke<string>("get_log_dir").then(setLogDir).catch(console.error);
+  }, []);
+
+  const handleLogLevelChange = (level: string) => {
+    if (!logConfig) return;
+    const newConfig = { ...logConfig, logLevel: level as LogLevel };
+    setLogConfig(newConfig);
+    invoke("set_log_config", { config: newConfig }).catch(console.error);
+  };
+
+  const handleMaxLogSizeChange = (size: number) => {
+    if (!logConfig) return;
+    const newConfig = { ...logConfig, maxFileSize: size };
+    setLogConfig(newConfig);
+    invoke("set_log_config", { config: newConfig }).catch(console.error);
+  };
 
   const handleCreateGroup = () => {
     setGroupError("");
@@ -87,16 +109,6 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
     </svg>
   );
 
-  const LogIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
-  );
-
   const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
     <svg
       width="14"
@@ -145,13 +157,6 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
             title="Session Manager"
           >
             <ChatIcon />
-          </button>
-          <button
-            className="sidebar-btn"
-            onClick={onToggleLogs}
-            title="Toggle Logs (Ctrl+L)"
-          >
-            <LogIcon />
           </button>
           <button
             className={`sidebar-btn ${activeMenu === "settings" ? "active" : ""}`}
@@ -318,6 +323,47 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
                 <div className="shortcut-item">
                   <span className="shortcut-label">Open settings</span>
                   <span className="shortcut-keys">Ctrl+,</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="submenu-item-with-submenu">
+            <button
+              className="submenu-item"
+              onClick={() => setExpandedSettingsItem(expandedSettingsItem === "logging" ? null : "logging")}
+            >
+              Logging
+              <span className="submenu-item-arrow">{expandedSettingsItem === "logging" ? "▲" : "▼"}</span>
+            </button>
+            {expandedSettingsItem === "logging" && (
+              <div className="submenu-nested">
+                <div className="form-group">
+                  <label>Log Level</label>
+                  <select
+                    value={logConfig?.logLevel ?? "info"}
+                    onChange={(e) => handleLogLevelChange(e.target.value)}
+                  >
+                    <option value="debug">Debug</option>
+                    <option value="info">Info</option>
+                    <option value="warn">Warn</option>
+                    <option value="error">Error</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Max Log Size</label>
+                  <select
+                    value={logConfig?.maxFileSize ?? 10}
+                    onChange={(e) => handleMaxLogSizeChange(Number(e.target.value))}
+                  >
+                    <option value={5}>5MB</option>
+                    <option value={10}>10MB</option>
+                    <option value={50}>50MB</option>
+                    <option value={100}>100MB</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Log Directory</label>
+                  <div className="log-dir-display">{logDir || "Loading..."}</div>
                 </div>
               </div>
             )}
