@@ -15,6 +15,7 @@ pub trait PtyPair: Send {
     fn spawn(&mut self, cmd: CommandBuilder) -> Result<Box<dyn Child>, String>;
     fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String>;
     fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String>;
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
 }
 
 pub trait Child: Send {
@@ -61,6 +62,15 @@ impl PtyPair for NativePtyPair {
     fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String> {
         self.inner.master.try_clone_reader().map_err(|e| e.to_string())
     }
+
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
+        self.inner.master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        }).map_err(|e| e.to_string())
+    }
 }
 
 pub struct NativeChild {
@@ -81,7 +91,17 @@ pub struct LocalSession {
 }
 
 pub struct LocalSessionHandles {
+    #[allow(dead_code)]
     pub child: Box<dyn Child>,
+    /// Keep the PTY pair alive — on Windows, dropping the pair calls
+    /// ClosePseudoConsole which destroys the ConPTY and kills the session.
+    _pair: Box<dyn PtyPair>,
+}
+
+impl LocalSessionHandles {
+    pub fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
+        self._pair.resize(rows, cols)
+    }
 }
 
 pub fn create_local_session(
@@ -182,7 +202,7 @@ pub fn create_local_session(
         }
     }));
 
-    let handles = LocalSessionHandles { child };
+    let handles = LocalSessionHandles { child, _pair: pair };
 
     Ok((LocalSession { info, writer }, handles))
 }

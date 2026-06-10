@@ -88,14 +88,14 @@ pub enum SSHAuth {
 }
 
 enum Session {
-    Local(crate::local_session::LocalSession),
+    Local(crate::local_session::LocalSession, crate::local_session::LocalSessionHandles),
     Ssh(crate::ssh_session::SshSessionWrapper),
 }
 
 impl Session {
     fn info(&self) -> &SessionInfo {
         match self {
-            Session::Local(s) => &s.info,
+            Session::Local(s, _) => &s.info,
             Session::Ssh(s) => &s.info,
         }
     }
@@ -122,7 +122,7 @@ impl SessionManager {
         let id = self.next_id;
         self.next_id += 1;
 
-        let (session, _handles) = crate::local_session::create_local_session(
+        let (session, handles) = crate::local_session::create_local_session(
             self.pty_system.as_ref(),
             config,
             backend,
@@ -130,7 +130,7 @@ impl SessionManager {
         )?;
 
         let info = session.info.clone();
-        self.sessions.insert(id, Session::Local(session));
+        self.sessions.insert(id, Session::Local(session, handles));
         Ok(info)
     }
 
@@ -152,7 +152,7 @@ impl SessionManager {
 
     pub fn write(&mut self, id: u32, data: &[u8]) -> Result<(), String> {
         match self.sessions.get_mut(&id) {
-            Some(Session::Local(s)) => {
+            Some(Session::Local(s, _)) => {
                 s.writer.write_all(data).map_err(|e| e.to_string())?;
                 s.writer.flush().map_err(|e| e.to_string())?;
                 Ok(())
@@ -165,8 +165,16 @@ impl SessionManager {
         }
     }
 
-    pub fn resize(&mut self, _id: u32, _rows: u16, _cols: u16) -> Result<(), String> {
-        Ok(())
+    pub fn resize(&mut self, id: u32, rows: u16, cols: u16) -> Result<(), String> {
+        match self.sessions.get(&id) {
+            Some(Session::Local(_, handles)) => {
+                handles.resize(rows, cols)
+            }
+            Some(Session::Ssh(_)) => {
+                Ok(())
+            }
+            None => Err("Session not found".to_string()),
+        }
     }
 
     pub fn close(&mut self, id: u32) -> Result<(), String> {
@@ -217,6 +225,7 @@ mod tests {
             fn spawn(&mut self, cmd: portable_pty::CommandBuilder) -> Result<Box<dyn Child>, String>;
             fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String>;
             fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String>;
+            fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
         }
     }
 
@@ -229,6 +238,9 @@ mod tests {
         }
         fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String> {
             self.master_reader()
+        }
+        fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
+            self.resize(rows, cols)
         }
     }
 
