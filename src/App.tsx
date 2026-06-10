@@ -75,7 +75,7 @@ function AppContent() {
     <div className="app-container">
       <NavBar />
       <div className="content-area">
-        <Sidebar onCreateSession={() => setShowCreateDialog(true)} />
+        <Sidebar onCreateSession={() => setShowCreateDialog(true)} onToggleLogs={() => {}} />
         <div className="main-area">
           {sessions.length > 0 && (
           <TabBar
@@ -111,7 +111,7 @@ function AppContent() {
             ))
           )}
         </div>
-        </div>
+      </div>
       </div>
       <CreateSessionDialog
         isOpen={showCreateDialog}

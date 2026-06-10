@@ -25,19 +25,11 @@ html, body, #root {
 }
 
 .sidebar {
-  width: 48px;
-  min-width: 48px;
   height: 100%;
   background: #252526;
   border-right: 1px solid #3a3a3a;
   display: flex;
   flex-direction: row;
-  transition: width 0.2s ease, min-width 0.2s ease;
-}
-
-.sidebar.expanded {
-  width: 248px;
-  min-width: 248px;
 }
 
 .sidebar-submenu {
@@ -46,6 +38,22 @@ html, body, #root {
   border-left: 1px solid #3a3a3a;
   overflow-y: auto;
   flex: 1;
+}
+
+.sidebar-resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.sidebar-resize-handle:hover {
+  background: #0e639c;
+}
+
+.sidebar-resize-handle:active {
+  background: #1177bb;
 }
 
 .submenu-header {
