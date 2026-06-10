@@ -643,6 +643,10 @@ html, body, #root {
   background: #37373d;
 }
 
+.session-item.selected {
+  background: #37373d;
+}
+
 .session-item-indent {
   width: 20px;
   flex-shrink: 0;

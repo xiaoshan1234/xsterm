@@ -31,7 +31,7 @@ function getConfigIcon(type: "local" | "ssh") {
 }
 
 export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
-  const { sessions, savedConfigs, activeSessionId, setActiveSession, groups, connectConfig, removeConfig, createGroup, toggleGroup, closeSession } = useSession();
+  const { sessions, savedConfigs, activeSessionId, setActiveSession, groups, openFromConfig, removeConfig, createGroup, toggleGroup, closeSession } = useSession();
   const { currentTheme, currentThemeKey, setTheme, themeKeys } = useTheme();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [expandedSettingsItem, setExpandedSettingsItem] = useState<string | null>(null);
@@ -39,6 +39,7 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
   const [newGroupName, setNewGroupName] = useState("");
   const [groupError, setGroupError] = useState("");
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
@@ -63,15 +64,11 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
   };
 
   const handleConfigClick = (config: SavedSessionConfig) => {
-    if (isConnected(config)) {
-      const session = sessions.find((s) => s.configId === config.id);
-      if (session) {
-        setActiveSession(session.id);
-        setActiveMenu(null);
-      }
-    } else {
-      connectConfig(config.id).then(() => setActiveMenu(null)).catch(console.error);
-    }
+    setSelectedConfigId(config.id);
+  };
+
+  const handleConfigDoubleClick = (config: SavedSessionConfig) => {
+    openFromConfig(config.id).then(() => setActiveMenu(null)).catch(console.error);
   };
 
   const handleConfigClose = (config: SavedSessionConfig) => {
@@ -241,12 +238,16 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
                     {savedConfigs
                       .filter((c) => group.configIds.includes(c.id))
                       .map((config) => (
-                        <div key={config.id} className="session-item">
+                        <div
+                          key={config.id}
+                          className={`session-item ${selectedConfigId === config.id ? "selected" : ""}`}
+                          onClick={() => handleConfigClick(config)}
+                          onDoubleClick={() => handleConfigDoubleClick(config)}
+                        >
                           <span className="session-item-indent" />
                           {getConfigIcon(config.type)}
                           <span
                             className={`session-item-name ${!isConnected(config) ? "disconnected" : ""}`}
-                            onClick={() => handleConfigClick(config)}
                           >
                             {config.name}
                           </span>
@@ -268,11 +269,15 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
             {savedConfigs
               .filter((c) => !groups.some((g) => g.configIds.includes(c.id)))
               .map((config) => (
-                <div key={config.id} className="session-item uncategorized">
+                <div
+                  key={config.id}
+                  className={`session-item uncategorized ${selectedConfigId === config.id ? "selected" : ""}`}
+                  onClick={() => handleConfigClick(config)}
+                  onDoubleClick={() => handleConfigDoubleClick(config)}
+                >
                   {getConfigIcon(config.type)}
                   <span
                     className={`session-item-name ${!isConnected(config) ? "disconnected" : ""}`}
-                    onClick={() => handleConfigClick(config)}
                   >
                     {config.name}
                   </span>

@@ -72,7 +72,7 @@ interface SessionContextType {
   groups: SessionGroup[];
   createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
-  connectConfig: (configId: string) => Promise<Session>;
+  openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
   addToGroup: (groupId: number, configId: string) => void;
@@ -195,15 +195,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return session;
   }, []);
 
-  const connectConfig = useCallback(async (configId: string): Promise<Session> => {
+  const openFromConfig = useCallback(async (configId: string): Promise<Session> => {
     const config = savedConfigs.find((c) => c.id === configId);
     if (!config) throw new Error("Config not found");
-
-    const existing = sessions.find((s) => s.configId === configId);
-    if (existing) {
-      setActiveSessionId(existing.id);
-      return existing;
-    }
 
     if (config.type === "local" && config.localConfig) {
       const info = await invoke<Session>("create_local_session", { config: config.localConfig });
@@ -236,7 +230,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
 
     throw new Error("Invalid config");
-  }, [savedConfigs, sessions]);
+  }, [savedConfigs]);
 
   const removeConfig = useCallback((configId: string) => {
     setSavedConfigs((prev) => {
@@ -366,7 +360,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         groups,
         createLocalSession,
         createSshSession,
-        connectConfig,
+        openFromConfig,
         removeConfig,
         closeSession,
         addToGroup,
