@@ -1,68 +1,22 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { load, Store } from "@tauri-apps/plugin-store";
 import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup } from "../types/session";
-
-interface GroupStore {
-  groups: SessionGroup[];
-  nextGroupId: number;
-}
-
-let storeInstance: Store | null = null;
-
-async function getStore(): Promise<Store> {
-  if (!storeInstance) {
-    storeInstance = await load('sessions.json', { autoSave: true, defaults: {} });
-  }
-  return storeInstance;
-}
-
-async function persistConfigs(configs: SavedSessionConfig[]) {
-  try {
-    const store = await getStore();
-    await store.set('savedConfigs', configs);
-    await store.save();
-  } catch (e) {
-    console.error("Failed to save configs:", e);
-  }
-}
-
-async function persistGroups(groupsData: GroupStore) {
-  try {
-    const store = await getStore();
-    await store.set('groups', groupsData.groups);
-    await store.set('nextGroupId', groupsData.nextGroupId);
-    await store.save();
-  } catch (e) {
-    console.error("Failed to save groups:", e);
-  }
-}
-
-async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
-  try {
-    const store = await getStore();
-    return (await store.get<SavedSessionConfig[]>('savedConfigs')) || [];
-  } catch (e) {
-    console.error("Failed to load configs:", e);
-    return [];
-  }
-}
-
-async function loadSavedGroups(): Promise<GroupStore> {
-  try {
-    const store = await getStore();
-    const groups = await store.get<SessionGroup[]>('groups');
-    const nextGroupId = await store.get<number>('nextGroupId') || 1;
-    return { groups: groups || [], nextGroupId };
-  } catch (e) {
-    console.error("Failed to load groups:", e);
-    return { groups: [], nextGroupId: 1 };
-  }
-}
+import * as sessionService from "../services/sessionService";
+import * as sessionStorage from "../services/sessionStorage";
 
 function generateId(): string {
   return crypto.randomUUID();
+}
+
+function buildFrontendSession(info: sessionService.SessionInfo, configId: string, type: Session["type"]): Session {
+  return {
+    id: info.id,
+    configId,
+    name: info.name,
+    type,
+    is_connected: info.is_connected,
+    session_type: info.session_type,
+  };
 }
 
 interface SessionContextType {
@@ -99,8 +53,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const init = async () => {
       const [configs, savedGroups] = await Promise.all([
-        loadSavedConfigs(),
-        loadSavedGroups(),
+        sessionStorage.loadSavedConfigs(),
+        sessionStorage.loadSavedGroups(),
       ]);
       setSavedConfigs(configs);
       setGroups(savedGroups.groups);
@@ -114,9 +68,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     listen<number>("session-closed", (event) => {
       const sessionId = event.payload;
-      setSessions((prev) =>
-        prev.filter((s) => s.id !== sessionId)
-      );
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       setActiveSessionId((current) => (current === sessionId ? null : current));
     }).then((fn) => {
       closedCleanup = fn;
@@ -127,228 +79,178 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const createLocalSession = useCallback(async (config: LocalSessionConfig, save = true): Promise<Session> => {
-    const configId = generateId();
-    const info = await invoke<Session>("create_local_session", { config });
-
-    const name = info.name;
-    const session: Session = {
-      id: info.id,
-      configId,
-      name,
-      type: "local",
-      is_connected: info.is_connected,
-      session_type: info.session_type as Session["session_type"],
-    };
-
-    setSessions((prev) => [...prev, session]);
-    setActiveSessionId(session.id);
-
-    if (save) {
-      const savedConfig: SavedSessionConfig = {
-        id: configId,
-        name,
-        type: "local",
-        localConfig: config,
-      };
-      setSavedConfigs((prev) => {
-        const updated = [...prev, savedConfig];
-        persistConfigs(updated);
-        return updated;
-      });
-    }
-
-    return session;
-  }, []);
-
-  const createSshSession = useCallback(async (config: SSHSessionConfig, save = true): Promise<Session> => {
-    const configId = generateId();
-    const info = await invoke<Session>("create_ssh_session", { config });
-
-    const name = info.name;
-    const session: Session = {
-      id: info.id,
-      configId,
-      name,
-      type: "ssh",
-      is_connected: info.is_connected,
-      session_type: info.session_type as Session["session_type"],
-    };
-
-    setSessions((prev) => [...prev, session]);
-    setActiveSessionId(session.id);
-
-    if (save) {
-      const savedConfig: SavedSessionConfig = {
-        id: configId,
-        name,
-        type: "ssh",
-        sshConfig: config,
-      };
-      setSavedConfigs((prev) => {
-        const updated = [...prev, savedConfig];
-        persistConfigs(updated);
-        return updated;
-      });
-    }
-
-    return session;
-  }, []);
-
-  const openFromConfig = useCallback(async (configId: string): Promise<Session> => {
-    const config = savedConfigs.find((c) => c.id === configId);
-    if (!config) throw new Error("Config not found");
-
-    if (config.type === "local" && config.localConfig) {
-      const info = await invoke<Session>("create_local_session", { config: config.localConfig });
-      const session: Session = {
-        id: info.id,
-        configId,
-        name: config.name,
-        type: "local",
-        is_connected: info.is_connected,
-        session_type: info.session_type as Session["session_type"],
-      };
-      setSessions((prev) => [...prev, session]);
-      setActiveSessionId(session.id);
-      return session;
-    }
-
-    if (config.type === "ssh" && config.sshConfig) {
-      const info = await invoke<Session>("create_ssh_session", { config: config.sshConfig });
-      const session: Session = {
-        id: info.id,
-        configId,
-        name: config.name,
-        type: "ssh",
-        is_connected: info.is_connected,
-        session_type: info.session_type as Session["session_type"],
-      };
-      setSessions((prev) => [...prev, session]);
-      setActiveSessionId(session.id);
-      return session;
-    }
-
-    throw new Error("Invalid config");
-  }, [savedConfigs]);
-
-  const removeConfig = useCallback((configId: string) => {
+  const updateConfigs = useCallback((updater: (prev: SavedSessionConfig[]) => SavedSessionConfig[]) => {
     setSavedConfigs((prev) => {
-      const updated = prev.filter((c) => c.id !== configId);
-      persistConfigs(updated);
+      const updated = updater(prev);
+      sessionStorage.persistConfigs(updated);
       return updated;
     });
+  }, []);
+
+  const updateGroups = useCallback((updater: (prev: SessionGroup[]) => SessionGroup[], nextId?: number) => {
     setGroups((prev) => {
-      const updated = prev.map((g) => ({
-        ...g,
-        configIds: g.configIds.filter((id) => id !== configId),
-      }));
-      persistGroups({ groups: updated, nextGroupId });
+      const updated = updater(prev);
+      sessionStorage.persistGroups({ groups: updated, nextGroupId: nextId ?? nextGroupId });
       return updated;
     });
-    const session = sessions.find((s) => s.configId === configId);
-    if (session) {
-      invoke("close_session", { sessionId: session.id }).catch(console.error);
-      setSessions((prev) => prev.filter((s) => s.configId !== configId));
-      if (activeSessionId === session.id) setActiveSessionId(null);
-    }
-  }, [sessions, activeSessionId, nextGroupId]);
+  }, [nextGroupId]);
+
+  const createAndActivateSession = useCallback(
+    async (
+      type: Session["type"],
+      create: () => Promise<sessionService.SessionInfo>,
+      config: LocalSessionConfig | SSHSessionConfig,
+      save: boolean
+    ): Promise<Session> => {
+      const configId = generateId();
+      const info = await create();
+      const session = buildFrontendSession(info, configId, type);
+
+      setSessions((prev) => [...prev, session]);
+      setActiveSessionId(session.id);
+
+      if (save) {
+        const savedConfig: SavedSessionConfig =
+          type === "local"
+            ? { id: configId, name: info.name, type: "local", localConfig: config as LocalSessionConfig }
+            : { id: configId, name: info.name, type: "ssh", sshConfig: config as SSHSessionConfig };
+        updateConfigs((prev) => [...prev, savedConfig]);
+      }
+
+      return session;
+    },
+    [updateConfigs]
+  );
+
+  const createLocalSession = useCallback(
+    async (config: LocalSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save);
+    },
+    [createAndActivateSession]
+  );
+
+  const createSshSession = useCallback(
+    async (config: SSHSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save);
+    },
+    [createAndActivateSession]
+  );
+
+  const openFromConfig = useCallback(
+    async (configId: string): Promise<Session> => {
+      const config = savedConfigs.find((c) => c.id === configId);
+      if (!config) throw new Error("Config not found");
+
+      if (config.type === "local" && config.localConfig) {
+        const info = await sessionService.createLocal(config.localConfig);
+        const session = buildFrontendSession(info, configId, "local");
+        setSessions((prev) => [...prev, session]);
+        setActiveSessionId(session.id);
+        return session;
+      }
+
+      if (config.type === "ssh" && config.sshConfig) {
+        const info = await sessionService.createSsh(config.sshConfig);
+        const session = buildFrontendSession(info, configId, "ssh");
+        setSessions((prev) => [...prev, session]);
+        setActiveSessionId(session.id);
+        return session;
+      }
+
+      throw new Error("Invalid config");
+    },
+    [savedConfigs]
+  );
+
+  const removeConfig = useCallback(
+    (configId: string) => {
+      updateConfigs((prev) => prev.filter((c) => c.id !== configId));
+      updateGroups((prev) => prev.map((g) => ({ ...g, configIds: g.configIds.filter((id) => id !== configId) })));
+      const session = sessions.find((s) => s.configId === configId);
+      if (session) {
+        sessionService.closeSession(session.id).catch(console.error);
+        setSessions((prev) => prev.filter((s) => s.configId !== configId));
+        if (activeSessionId === session.id) setActiveSessionId(null);
+      }
+    },
+    [updateConfigs, updateGroups, sessions, activeSessionId]
+  );
 
   const closeSession = useCallback(async (id: number): Promise<void> => {
-    await invoke("close_session", { sessionId: id });
+    await sessionService.closeSession(id);
     setSessions((prev) => prev.filter((s) => s.id !== id));
-    if (activeSessionId === id) setActiveSessionId(null);
-  }, [activeSessionId]);
+    setActiveSessionId((current) => (current === id ? null : current));
+  }, []);
 
-  const renameSession = useCallback((id: number, name: string) => {
-    setSessions((prev) => {
-      const updated = prev.map((s) =>
-        s.id === id ? { ...s, name } : s
+  const renameSession = useCallback(
+    (id: number, name: string) => {
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
+      const session = sessions.find((s) => s.id === id);
+      if (session) {
+        updateConfigs((prev) => prev.map((c) => (c.id === session.configId ? { ...c, name } : c)));
+      }
+    },
+    [updateConfigs, sessions]
+  );
+
+  const createGroup = useCallback(
+    (name: string) => {
+      const id = nextGroupId;
+      setNextGroupId((prev) => prev + 1);
+      updateGroups((prev) => [...prev, { id, name, configIds: [], collapsed: false }], id + 1);
+    },
+    [nextGroupId, updateGroups]
+  );
+
+  const deleteGroup = useCallback(
+    (id: number) => {
+      updateGroups((prev) => prev.filter((g) => g.id !== id));
+    },
+    [updateGroups]
+  );
+
+  const addToGroup = useCallback(
+    (groupId: number, configId: string) => {
+      updateGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g))
       );
-      return updated;
-    });
-    const session = sessions.find((s) => s.id === id);
-    if (session) {
-      setSavedConfigs((prev) => {
-        const updated = prev.map((c) =>
-          c.id === session.configId ? { ...c, name } : c
-        );
-        persistConfigs(updated);
-        return updated;
-      });
-    }
-  }, [sessions]);
+    },
+    [updateGroups]
+  );
 
-  const createGroup = useCallback((name: string) => {
-    const id = nextGroupId;
-    setNextGroupId((prev) => prev + 1);
-    setGroups((prev) => {
-      const updated = [...prev, { id, name, configIds: [], collapsed: false }];
-      persistGroups({ groups: updated, nextGroupId: id + 1 });
-      return updated;
-    });
-  }, [nextGroupId]);
-
-  const deleteGroup = useCallback((id: number) => {
-    setGroups((prev) => {
-      const updated = prev.filter((g) => g.id !== id);
-      persistGroups({ groups: updated, nextGroupId });
-      return updated;
-    });
-  }, [nextGroupId]);
-
-  const addToGroup = useCallback((groupId: number, configId: string) => {
-    setGroups((prev) => {
-      const updated = prev.map((g) =>
-        g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g
+  const removeFromGroup = useCallback(
+    (groupId: number, configId: string) => {
+      updateGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, configIds: g.configIds.filter((cid) => cid !== configId) } : g))
       );
-      persistGroups({ groups: updated, nextGroupId });
-      return updated;
-    });
-  }, [nextGroupId]);
+    },
+    [updateGroups]
+  );
 
-  const removeFromGroup = useCallback((groupId: number, configId: string) => {
-    setGroups((prev) => {
-      const updated = prev.map((g) =>
-        g.id === groupId ? { ...g, configIds: g.configIds.filter((cid) => cid !== configId) } : g
-      );
-      persistGroups({ groups: updated, nextGroupId });
-      return updated;
-    });
-  }, [nextGroupId]);
+  const renameGroup = useCallback(
+    (id: number, name: string) => {
+      updateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name } : g)));
+    },
+    [updateGroups]
+  );
 
-  const renameGroup = useCallback((id: number, name: string) => {
-    setGroups((prev) => {
-      const updated = prev.map((g) =>
-        g.id === id ? { ...g, name } : g
-      );
-      persistGroups({ groups: updated, nextGroupId });
-      return updated;
-    });
-  }, [nextGroupId]);
-
-  const toggleGroup = useCallback((id: number) => {
-    setGroups((prev) => {
-      const updated = prev.map((g) =>
-        g.id === id ? { ...g, collapsed: !g.collapsed } : g
-      );
-      persistGroups({ groups: updated, nextGroupId });
-      return updated;
-    });
-  }, [nextGroupId]);
+  const toggleGroup = useCallback(
+    (id: number) => {
+      updateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)));
+    },
+    [updateGroups]
+  );
 
   const setActiveSession = useCallback((id: number | null) => {
     setActiveSessionId(id);
   }, []);
 
   const writeSession = useCallback(async (id: number, data: string): Promise<void> => {
-    const encoded = new TextEncoder().encode(data);
-    const arr = Array.from(encoded);
-    await invoke("write_session", { sessionId: id, data: arr });
+    await sessionService.writeSession(id, data);
   }, []);
 
   const resizeSession = useCallback(async (id: number, rows: number, cols: number): Promise<void> => {
-    await invoke("resize_session", { sessionId: id, rows, cols });
+    await sessionService.resizeSession(id, rows, cols);
   }, []);
 
   return (

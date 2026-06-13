@@ -11,26 +11,29 @@ interface LoggerContextType {
 
 const LoggerContext = createContext<LoggerContextType | null>(null);
 
+function consoleLog(level: LogLevel, prefix: string, message: string, data?: unknown) {
+  const args = data === undefined ? [prefix, message] : [prefix, message, data];
+  switch (level) {
+    case LogLevel.DEBUG:
+      console.debug(...args);
+      break;
+    case LogLevel.INFO:
+      console.info(...args);
+      break;
+    case LogLevel.WARN:
+      console.warn(...args);
+      break;
+    case LogLevel.ERROR:
+      console.error(...args);
+      break;
+  }
+}
+
 export function LoggerProvider({ children }: { children: ReactNode }) {
   const log = useCallback((level: LogLevel, source: string, message: string, data?: unknown) => {
-    // Console output for developer debugging
     const prefix = `[${source}]`;
-    switch (level) {
-      case LogLevel.DEBUG:
-        console.debug(prefix, message, data ?? "");
-        break;
-      case LogLevel.INFO:
-        console.info(prefix, message, data ?? "");
-        break;
-      case LogLevel.WARN:
-        console.warn(prefix, message, data ?? "");
-        break;
-      case LogLevel.ERROR:
-        console.error(prefix, message, data ?? "");
-        break;
-    }
+    consoleLog(level, prefix, message, data);
 
-    // Send to backend
     invoke("log_message", {
       level: level.toUpperCase(),
       source,

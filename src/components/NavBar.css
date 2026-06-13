@@ -1,0 +1,48 @@
+@import "../styles/global.css";
+@import "../styles/layout.css";
+
+.navbar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  height: 28px;
+  line-height: 28px;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.navbar-logo {
+  padding: 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+.navbar-menu {
+  display: flex;
+  gap: 4px;
+}
+
+.navbar-item {
+  padding: 4px 8px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.navbar-item:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.navbar-item:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}

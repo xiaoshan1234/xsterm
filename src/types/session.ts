@@ -26,10 +26,6 @@ export interface SSHSessionConfig {
   passphrase?: string;
 }
 
-export type CreateSessionConfig =
-  | { type: "local"; config: LocalSessionConfig }
-  | { type: "ssh"; config: SSHSessionConfig };
-
 export interface SavedSessionConfig {
   id: string;
   name: string;

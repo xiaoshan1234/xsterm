@@ -1,29 +1,21 @@
-import { useState } from "react";
+import "./NavBar.css";
 
 interface NavBarProps {
   onMenuAction?: (menu: string) => void;
 }
 
+const MENU_ITEMS = ["File", "Edit", "View", "Terminal", "Help"];
+
 export default function NavBar({ onMenuAction }: NavBarProps) {
-  const menuItems = ["File", "Edit", "View", "Terminal", "Help"];
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
-
-  const handleClick = (menu: string) => {
-    setActiveMenu(menu);
-    if (onMenuAction) {
-      onMenuAction(menu);
-    }
-  };
-
   return (
     <div className="navbar">
       <div className="navbar-logo">XSTerm</div>
       <div className="navbar-menu">
-        {menuItems.map((item) => (
+        {MENU_ITEMS.map((item) => (
           <button
             key={item}
-            className={`navbar-item${activeMenu === item ? " active" : ""}`}
-            onClick={() => handleClick(item)}
+            className="navbar-item"
+            onClick={() => onMenuAction?.(item)}
           >
             {item}
           </button>
