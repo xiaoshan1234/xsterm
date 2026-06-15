@@ -6,6 +6,7 @@ interface CommandSendPanelProps {
   sessions: Session[];
   activeSessionId: number | null;
   writeSession: (id: number, data: string) => Promise<void>;
+  style?: React.CSSProperties;
 }
 
 type SendMode = "text" | "hex";
@@ -16,6 +17,7 @@ export default function CommandSendPanel({
   sessions,
   activeSessionId,
   writeSession,
+  style,
 }: CommandSendPanelProps) {
   const [input, setInput] = useState("");
   const [sendMode, setSendMode] = useState<SendMode>("text");
@@ -160,30 +162,23 @@ export default function CommandSendPanel({
 
   if (collapsed) {
     return (
-      <div className="command-send-panel command-send-panel--collapsed">
+      <div className="command-send-panel command-send-panel--collapsed" style={style}>
         <button
           className="panel-toggle"
           onClick={() => setCollapsed(false)}
           title="展开"
         >
-          ⬆
+          ⬇
         </button>
       </div>
     );
   }
 
   return (
-    <div className="command-send-panel">
-      <div className="panel-row">
-        <textarea
-          className="panel-textarea"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="输入命令或 Hex 数据..."
-          rows={2}
-        />
-        <div className="panel-actions">
-          <button className="btn btn--primary" onClick={handleSend}>
+    <div className="command-send-panel" style={style}>
+      <div className="panel-row panel-controls">
+        <div className="control-group">
+          <button className="btn btn--primary panel-send" onClick={handleSend}>
             发送
           </button>
           {isRunning ? (
@@ -201,16 +196,8 @@ export default function CommandSendPanel({
           <button className="btn btn--secondary" onClick={() => adjustCount(-1)}>
             −
           </button>
-          <button
-            className="btn btn--secondary panel-close"
-            onClick={() => setCollapsed(true)}
-          >
-            ✕
-          </button>
         </div>
-      </div>
 
-      <div className="panel-row panel-controls">
         <div className="control-group">
           <label className="radio-label">
             <input
@@ -309,6 +296,23 @@ export default function CommandSendPanel({
         </div>
 
         {hexError && <span className="hex-error">{hexError}</span>}
+
+        <button
+          className="btn btn--secondary panel-close"
+          onClick={() => setCollapsed(true)}
+          title="折叠"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="panel-row panel-editor">
+        <textarea
+          className="panel-textarea"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="输入命令或 Hex 数据..."
+        />
       </div>
     </div>
   );

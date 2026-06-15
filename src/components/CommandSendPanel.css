@@ -1,11 +1,12 @@
 .command-send-panel {
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
-  padding: 8px 12px;
+  padding: 6px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 80px;
+  overflow: hidden;
 }
 
 .command-send-panel--collapsed {
@@ -33,11 +34,37 @@
 .panel-row {
   display: flex;
   gap: 8px;
-  align-items: flex-start;
+  align-items: center;
+}
+
+.panel-controls {
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-controls .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.panel-send {
+  min-width: 48px;
+}
+
+.panel-close {
+  margin-left: auto;
+}
+
+.panel-editor {
+  flex: 1;
+  min-height: 0;
 }
 
 .panel-textarea {
   flex: 1;
+  width: 100%;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -46,7 +73,8 @@
   font-size: 13px;
   padding: 8px;
   resize: none;
-  min-height: 60px;
+  min-height: 0;
+  height: 100%;
 }
 
 .panel-textarea:focus {
@@ -58,36 +86,16 @@
   color: var(--text-muted);
 }
 
-.panel-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.panel-actions .btn {
-  padding: 8px 12px;
-  font-size: 13px;
-}
-
-.panel-close {
-  margin-left: 4px;
-}
-
-.panel-controls {
-  flex-wrap: wrap;
-  align-items: center;
-}
-
 .control-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .radio-label {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   cursor: pointer;
   font-size: 12px;
   color: var(--text-secondary);
@@ -113,8 +121,8 @@
 
 .input-label input[type="number"],
 .input-label select {
-  width: 60px;
-  padding: 4px 6px;
+  width: 56px;
+  padding: 3px 5px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -140,9 +148,9 @@
 
 .hex-error {
   color: var(--error);
-  font-size: 12px;
-  padding: 4px 8px;
+  font-size: 11px;
+  padding: 2px 6px;
   background: var(--error-bg);
   border-radius: 4px;
-  margin-left: auto;
+  white-space: nowrap;
 }

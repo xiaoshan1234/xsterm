@@ -32,6 +32,18 @@
   min-height: 100px;
 }
 
+.panel-resize-handle {
+  height: 6px;
+  background: var(--border-color);
+  cursor: ns-resize;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.panel-resize-handle:hover {
+  background: var(--accent);
+}
+
 .terminal-pane {
   position: absolute;
   inset: 0;
