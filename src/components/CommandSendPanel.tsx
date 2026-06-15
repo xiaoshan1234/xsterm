@@ -12,6 +12,7 @@ interface CommandSendPanelProps {
 type SendMode = "text" | "hex";
 type SplitMode = "line" | "character";
 type TargetMode = "current" | "all" | number;
+type RunState = "idle" | "running" | "paused";
 
 export default function CommandSendPanel({
   sessions,
@@ -25,12 +26,21 @@ export default function CommandSendPanel({
   const [count, setCount] = useState(1);
   const [interval, setIntervalSec] = useState(1.0);
   const [target, setTarget] = useState<TargetMode>("current");
-  const [isRunning, setIsRunning] = useState(false);
+  const [runState, setRunState] = useState<RunState>("idle");
   const [hexError, setHexError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
 
   const stopRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+
+  // Execution position refs so resume/continue can pick up where we left off.
+  const chunkIndexRef = useRef(0);
+  const repetitionRef = useRef(0);
+  const chunksRef = useRef<string[]>([]);
+  const chunkToLineIndexRef = useRef<number[]>([]);
 
   const getTargetSessions = useCallback((): number[] => {
     if (target === "current") {
@@ -42,122 +52,250 @@ export default function CommandSendPanel({
     return [target as number];
   }, [target, activeSessionId, sessions]);
 
-  const parseChunks = useCallback((): string[] => {
+  const parseChunks = useCallback((): { chunks: string[]; chunkToLineIndex: number[] } => {
     setHexError(null);
 
     if (!input.trim()) {
-      return [];
+      return { chunks: [], chunkToLineIndex: [] };
     }
 
     if (sendMode === "hex") {
       const hexStr = input.replace(/\s+/g, "");
       if (hexStr.length % 2 !== 0) {
         setHexError("Hex input must have even number of characters");
-        return [];
+        return { chunks: [], chunkToLineIndex: [] };
       }
       const validHex = /^[0-9a-fA-F]*$/;
       if (!validHex.test(hexStr)) {
         setHexError("Invalid hex characters detected");
-        return [];
+        return { chunks: [], chunkToLineIndex: [] };
       }
       const chunks: string[] = [];
       for (let i = 0; i < hexStr.length; i += 2) {
         const byte = parseInt(hexStr.substring(i, i + 2), 16);
         chunks.push(String.fromCharCode(byte));
       }
-      return chunks;
+      return { chunks, chunkToLineIndex: [] };
     }
 
     if (splitMode === "line") {
       const lines = input.split("\n");
-      return lines.filter((line) => line.length > 0);
+      const chunks: string[] = [];
+      const chunkToLineIndex: number[] = [];
+      lines.forEach((line, lineIndex) => {
+        if (line.length > 0) {
+          chunks.push(line);
+          chunkToLineIndex.push(lineIndex);
+        }
+      });
+      return { chunks, chunkToLineIndex };
     }
 
     // split by character
-    return input.split("").filter((c) => c.length > 0);
+    return { chunks: input.split("").filter((c) => c.length > 0), chunkToLineIndex: [] };
   }, [input, sendMode, splitMode]);
 
-  const sendChunks = useCallback(async () => {
-    const chunks = parseChunks();
+  const currentLineIndex = useCallback((): number | null => {
+    const idx = chunkIndexRef.current;
+    if (idx < 0 || idx >= chunkToLineIndexRef.current.length) return null;
+    return chunkToLineIndexRef.current[idx];
+  }, []);
+
+  const clearTimer = useCallback(() => {
+    if (intervalRef.current) {
+      clearTimeout(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const resetExecution = useCallback(() => {
+    clearTimer();
+    stopRef.current = true;
+    chunkIndexRef.current = 0;
+    repetitionRef.current = 0;
+    chunksRef.current = [];
+    chunkToLineIndexRef.current = [];
+    setRunState("idle");
+  }, [clearTimer]);
+
+  const runNext = useCallback(() => {
+    if (stopRef.current) return;
+
+    const chunks = chunksRef.current;
+    const chunkToLineIndex = chunkToLineIndexRef.current;
+
+    if (repetitionRef.current >= count || chunks.length === 0) {
+      resetExecution();
+      return;
+    }
+
+    const chunkIndex = chunkIndexRef.current;
+    const chunk = chunks[chunkIndex];
+
+    // In line mode, check for breakpoints before sending.
+    if (splitMode === "line" && chunkToLineIndex.length > 0) {
+      const lineIndex = chunkToLineIndex[chunkIndex];
+      if (breakpoints.has(lineIndex)) {
+        setRunState("paused");
+        return;
+      }
+    }
+
+    // For line mode in text, append \r\n
+    const dataToSend =
+      sendMode === "text" && splitMode === "line" ? chunk + "\r\n" : chunk;
+
+    const sessionIds = getTargetSessions();
+    sessionIds.forEach((id) => {
+      writeSession(id, dataToSend).catch(console.error);
+    });
+
+    chunkIndexRef.current++;
+    if (chunkIndexRef.current >= chunks.length) {
+      chunkIndexRef.current = 0;
+      repetitionRef.current++;
+    }
+
+    if (stopRef.current) return;
+
+    if (repetitionRef.current >= count) {
+      resetExecution();
+      return;
+    }
+
+    if (interval > 0) {
+      intervalRef.current = setTimeout(runNext, interval * 1000);
+    } else {
+      // No interval, run synchronously but still yield to UI
+      intervalRef.current = setTimeout(runNext, 0);
+    }
+  }, [breakpoints, count, getTargetSessions, interval, resetExecution, sendMode, splitMode, writeSession]);
+
+  const startExecution = useCallback(() => {
+    const { chunks, chunkToLineIndex } = parseChunks();
     if (chunks.length === 0) return;
 
     const sessionIds = getTargetSessions();
     if (sessionIds.length === 0) return;
 
-    let repetition = 0;
-    let chunkIndex = 0;
-
+    chunksRef.current = chunks;
+    chunkToLineIndexRef.current = chunkToLineIndex;
+    chunkIndexRef.current = 0;
+    repetitionRef.current = 0;
     stopRef.current = false;
 
-    const runNext = () => {
-      if (stopRef.current) return;
-
-      if (repetition >= count) {
-        setIsRunning(false);
-        return;
-      }
-
-      const chunk = chunks[chunkIndex];
-
-      // For line mode in text, append \r\n
-      const dataToSend =
-        sendMode === "text" && splitMode === "line" ? chunk + "\r\n" : chunk;
-
-      sessionIds.forEach((id) => {
-        writeSession(id, dataToSend).catch(console.error);
-      });
-
-      chunkIndex++;
-      if (chunkIndex >= chunks.length) {
-        chunkIndex = 0;
-        repetition++;
-      }
-
-      if (interval > 0) {
-        intervalRef.current = setTimeout(runNext, interval * 1000);
-      } else {
-        // No interval, run synchronously but still yield to UI
-        setTimeout(runNext, 0);
-      }
-    };
-
-    setIsRunning(true);
+    setRunState("running");
     runNext();
-  }, [parseChunks, getTargetSessions, count, interval, sendMode, splitMode, writeSession]);
+  }, [parseChunks, getTargetSessions, runNext]);
 
   const handleSend = useCallback(() => {
-    stopRef.current = true;
-    if (intervalRef.current) {
-      clearTimeout(intervalRef.current);
-      intervalRef.current = null;
-    }
-    sendChunks();
-  }, [sendChunks]);
+    resetExecution();
+    startExecution();
+  }, [resetExecution, startExecution]);
 
   const handleStop = useCallback(() => {
-    stopRef.current = true;
-    if (intervalRef.current) {
-      clearTimeout(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsRunning(false);
-  }, []);
+    resetExecution();
+  }, [resetExecution]);
 
   const handlePlay = useCallback(() => {
-    handleStop();
-    sendChunks();
-  }, [handleStop, sendChunks]);
+    resetExecution();
+    startExecution();
+  }, [resetExecution, startExecution]);
+
+  const handleContinue = useCallback(() => {
+    if (runState !== "paused") return;
+
+    const chunks = chunksRef.current;
+    const chunkIndex = chunkIndexRef.current;
+
+    if (chunkIndex >= chunks.length || chunks.length === 0) {
+      resetExecution();
+      return;
+    }
+
+    const chunk = chunks[chunkIndex];
+    const dataToSend =
+      sendMode === "text" && splitMode === "line" ? chunk + "\r\n" : chunk;
+
+    const sessionIds = getTargetSessions();
+    sessionIds.forEach((id) => {
+      writeSession(id, dataToSend).catch(console.error);
+    });
+
+    chunkIndexRef.current++;
+    if (chunkIndexRef.current >= chunks.length) {
+      chunkIndexRef.current = 0;
+      repetitionRef.current++;
+    }
+
+    if (repetitionRef.current >= count) {
+      resetExecution();
+      return;
+    }
+
+    setRunState("running");
+    stopRef.current = false;
+
+    if (interval > 0) {
+      intervalRef.current = setTimeout(runNext, interval * 1000);
+    } else {
+      intervalRef.current = setTimeout(runNext, 0);
+    }
+  }, [count, getTargetSessions, interval, resetExecution, runNext, runState, sendMode, splitMode, writeSession]);
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearTimeout(intervalRef.current);
-      }
+      clearTimer();
     };
-  }, []);
+  }, [clearTimer]);
 
   const adjustCount = (delta: number) => {
     setCount((prev) => Math.max(1, prev + delta));
+  };
+
+  const toggleBreakpoint = (lineIndex: number) => {
+    setBreakpoints((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineIndex)) {
+        next.delete(lineIndex);
+      } else {
+        next.add(lineIndex);
+      }
+      return next;
+    });
+  };
+
+  const syncScroll = () => {
+    if (textareaRef.current && gutterRef.current) {
+      gutterRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  };
+
+  const lines = input.split("\n");
+  const activeLineIndex = currentLineIndex();
+
+  const renderGutter = () => {
+    return (
+      <div className="panel-gutter" ref={gutterRef}>
+        {lines.map((_, lineIndex) => {
+          const hasBreakpoint = breakpoints.has(lineIndex);
+          const isActive = activeLineIndex === lineIndex && runState !== "idle";
+          return (
+            <div
+              key={lineIndex}
+              className={`panel-gutter-line ${isActive ? "panel-gutter-line--active" : ""}`}
+              onClick={() => toggleBreakpoint(lineIndex)}
+              title={hasBreakpoint ? "移除断点" : "添加断点"}
+            >
+              <span className="panel-breakpoint">
+                {hasBreakpoint ? "●" : ""}
+              </span>
+              <span className="panel-line-number">{lineIndex + 1}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   if (collapsed) {
@@ -181,9 +319,13 @@ export default function CommandSendPanel({
           <button className="btn btn--primary panel-send" onClick={handleSend}>
             发送
           </button>
-          {isRunning ? (
+          {runState === "running" ? (
             <button className="btn btn--secondary" onClick={handleStop}>
               ■
+            </button>
+          ) : runState === "paused" ? (
+            <button className="btn btn--secondary panel-continue" onClick={handleContinue}>
+              继续
             </button>
           ) : (
             <button className="btn btn--secondary" onClick={handlePlay}>
@@ -307,11 +449,15 @@ export default function CommandSendPanel({
       </div>
 
       <div className="panel-row panel-editor">
+        {renderGutter()}
         <textarea
+          ref={textareaRef}
           className="panel-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="输入命令或 Hex 数据..."
+          onScroll={syncScroll}
+          placeholder="输入命令或 Hex 数据，点击行号设置断点..."
+          spellCheck={false}
         />
       </div>
     </div>

@@ -53,6 +53,17 @@
   min-width: 48px;
 }
 
+.panel-continue {
+  min-width: 48px;
+  background: var(--success-bg, rgba(34, 197, 94, 0.15));
+  color: var(--success, #22c55e);
+}
+
+.panel-continue:hover {
+  background: var(--success, #22c55e);
+  color: var(--bg-primary, #ffffff);
+}
+
 .panel-close {
   margin-left: auto;
 }
@@ -60,6 +71,62 @@
 .panel-editor {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.panel-gutter {
+  width: 48px;
+  min-width: 48px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 8px 0;
+  overflow: hidden;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-gutter-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 8px;
+  height: 1.4em;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.panel-gutter-line:hover {
+  background: var(--bg-hover);
+}
+
+.panel-gutter-line--active {
+  background: var(--accent-bg, rgba(59, 130, 246, 0.15));
+}
+
+.panel-breakpoint {
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--error, #ef4444);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.panel-line-number {
+  min-width: 18px;
+  text-align: right;
 }
 
 .panel-textarea {
@@ -67,10 +134,11 @@
   width: 100%;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 0 4px 4px 0;
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 13px;
+  line-height: 1.4;
   padding: 8px;
   resize: none;
   min-height: 0;
