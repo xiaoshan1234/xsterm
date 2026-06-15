@@ -7,6 +7,7 @@ import TabBar from "./TabBar";
 import { TerminalContainer } from "./TerminalContainer";
 import { EmptyState } from "./EmptyState";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
+import CommandSendPanel from "./CommandSendPanel";
 
 export default function AppLayout() {
   const {
@@ -18,6 +19,7 @@ export default function AppLayout() {
     closeSession,
     renameSession,
     setActiveSession,
+    writeSession,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
@@ -51,6 +53,13 @@ export default function AppLayout() {
             />
           ) : (
             <TerminalContainer sessions={sessions} activeSessionId={activeSessionId} />
+          )}
+          {sessions.length > 0 && (
+            <CommandSendPanel
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              writeSession={writeSession}
+            />
           )}
         </div>
       </div>

@@ -1,0 +1,148 @@
+.command-send-panel {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 80px;
+}
+
+.command-send-panel--collapsed {
+  min-height: auto;
+  padding: 4px 12px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.panel-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+}
+
+.panel-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.panel-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.panel-textarea {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 8px;
+  resize: none;
+  min-height: 60px;
+}
+
+.panel-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.panel-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.panel-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.panel-actions .btn {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.panel-close {
+  margin-left: 4px;
+}
+
+.panel-controls {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.radio-label span {
+  white-space: nowrap;
+}
+
+.input-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.input-label input[type="number"],
+.input-label select {
+  width: 60px;
+  padding: 4px 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.input-label input[type="number"]:focus,
+.input-label select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input-label select {
+  width: auto;
+  min-width: 80px;
+}
+
+.unit {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.hex-error {
+  color: var(--error);
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--error-bg);
+  border-radius: 4px;
+  margin-left: auto;
+}
