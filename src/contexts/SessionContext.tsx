@@ -31,10 +31,12 @@ interface SessionContextType {
   closeSession: (id: number) => Promise<void>;
   addToGroup: (groupId: number, configId: string) => void;
   removeFromGroup: (groupId: number, configId: string) => void;
+  moveConfigToGroup: (configId: string, groupId: number | null) => void;
   renameSession: (id: number, name: string) => void;
   createGroup: (name: string) => void;
   deleteGroup: (id: number) => void;
   renameGroup: (id: number, name: string) => void;
+  updateConfig: (config: SavedSessionConfig) => void;
   toggleGroup: (id: number) => void;
   setActiveSession: (id: number | null) => void;
   writeSession: (id: number, data: string) => Promise<void>;
@@ -227,6 +229,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [updateGroups]
   );
 
+  const moveConfigToGroup = useCallback(
+    (configId: string, groupId: number | null) => {
+      updateGroups((prev) =>
+        prev.map((g) => ({
+          ...g,
+          configIds: g.configIds.filter((id) => id !== configId),
+        }))
+      );
+      if (groupId !== null) {
+        updateGroups((prev) =>
+          prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g))
+        );
+      }
+    },
+    [updateGroups]
+  );
+
   const renameGroup = useCallback(
     (id: number, name: string) => {
       updateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name } : g)));
@@ -239,6 +258,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       updateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)));
     },
     [updateGroups]
+  );
+
+  const updateConfig = useCallback(
+    (config: SavedSessionConfig) => {
+      updateConfigs((prev) => prev.map((c) => (c.id === config.id ? config : c)));
+    },
+    [updateConfigs]
   );
 
   const setActiveSession = useCallback((id: number | null) => {
@@ -267,10 +293,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         closeSession,
         addToGroup,
         removeFromGroup,
+        moveConfigToGroup,
         renameSession,
         createGroup,
         deleteGroup,
         renameGroup,
+        updateConfig,
         toggleGroup,
         setActiveSession,
         writeSession,

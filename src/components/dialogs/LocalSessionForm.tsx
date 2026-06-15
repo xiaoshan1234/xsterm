@@ -28,12 +28,15 @@ const CWD_PLACEHOLDER = isWindows ? "C:\\Users\\you or %USERPROFILE%" : "/home/u
 interface LocalSessionFormProps {
   config: LocalSessionConfig;
   onChange: (config: LocalSessionConfig) => void;
+  mode?: "create" | "edit";
 }
 
-export function LocalSessionForm({ config, onChange }: LocalSessionFormProps) {
+export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSessionFormProps) {
   useEffect(() => {
-    onChange({});
-  }, []);
+    if (mode === "create") {
+      onChange({});
+    }
+  }, [mode]);
 
   return (
     <>

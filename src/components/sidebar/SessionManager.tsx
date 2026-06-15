@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useSession } from "../../contexts/SessionContext";
-import { SavedSessionConfig } from "../../types/session";
+import { SavedSessionConfig, SessionGroup } from "../../types/session";
 import { LocalSessionIcon, SshSessionIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
+import { ContextMenu } from "../ui/ContextMenu";
+import { EditGroupDialog } from "../dialogs/EditGroupDialog";
+import { EditSessionDialog } from "../dialogs/EditSessionDialog";
 
 interface SessionManagerProps {
   width: number;
@@ -20,11 +23,21 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
     createGroup,
     toggleGroup,
     closeSession,
+    renameGroup,
+    deleteGroup,
+    updateConfig,
+    moveConfigToGroup,
   } = useSession();
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [groupError, setGroupError] = useState("");
+
+  const [editingGroup, setEditingGroup] = useState<SessionGroup | null>(null);
+  const [editingSession, setEditingSession] = useState<SavedSessionConfig | null>(null);
+  const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
+  const [dragOverUncategorized, setDragOverUncategorized] = useState(false);
 
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
@@ -53,14 +66,76 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
     openFromConfig(config.id).catch(console.error);
   };
 
-  const handleConfigClose = (config: SavedSessionConfig, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const removeOrCloseConfig = (config: SavedSessionConfig) => {
     if (isConnected(config)) {
       const session = sessions.find((s) => s.configId === config.id);
       if (session) closeSession(session.id);
     } else {
       removeConfig(config.id);
     }
+  };
+
+  const handleConfigClose = (config: SavedSessionConfig, e: React.MouseEvent) => {
+    e.stopPropagation();
+    removeOrCloseConfig(config);
+  };
+
+  const getConfigGroupId = (configId: string): number | null => {
+    const group = groups.find((g) => g.configIds.includes(configId));
+    return group ? group.id : null;
+  };
+
+  const handleEditSession = (config: SavedSessionConfig) => {
+    setEditingSession(config);
+    setEditingSessionGroupId(getConfigGroupId(config.id));
+  };
+
+  const handleSessionSave = (config: SavedSessionConfig, groupId: number | null) => {
+    updateConfig(config);
+    moveConfigToGroup(config.id, groupId);
+  };
+
+  const handleDragStart = (e: React.DragEvent, configId: string) => {
+    e.dataTransfer.setData("text/x-session-config-id", configId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleGroupDragOver = (e: React.DragEvent, groupId: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverGroupId(groupId);
+  };
+
+  const handleGroupDragLeave = () => {
+    setDragOverGroupId(null);
+  };
+
+  const handleGroupDrop = (e: React.DragEvent, groupId: number) => {
+    e.preventDefault();
+    const configId = e.dataTransfer.getData("text/x-session-config-id");
+    if (configId) {
+      moveConfigToGroup(configId, groupId);
+    }
+    setDragOverGroupId(null);
+  };
+
+  const handleUncategorizedDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverUncategorized(true);
+  };
+
+  const handleUncategorizedDragLeave = () => {
+    setDragOverUncategorized(false);
+  };
+
+  const handleUncategorizedDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const configId = e.dataTransfer.getData("text/x-session-config-id");
+    if (configId) {
+      moveConfigToGroup(configId, null);
+    }
+    setDragOverUncategorized(false);
   };
 
   const uncategorized = savedConfigs.filter(
@@ -72,25 +147,53 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
       <div className="submenu-header">Session Manager</div>
       <div className="session-history">
         {groups.map((group) => (
-          <div key={group.id} className="session-group">
-            <button className="session-group-header" onClick={() => toggleGroup(group.id)}>
-              <span
-                className="session-group-chevron"
-                style={{ transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)" }}
+          <div
+            key={group.id}
+            className={`session-group ${dragOverGroupId === group.id ? "drag-over" : ""}`}
+            onDragOver={(e) => handleGroupDragOver(e, group.id)}
+            onDragLeave={handleGroupDragLeave}
+            onDrop={(e) => handleGroupDrop(e, group.id)}
+          >
+            <ContextMenu
+              items={[
+                { label: "Edit", onClick: () => setEditingGroup(group) },
+                { label: "Delete", onClick: () => deleteGroup(group.id), danger: true },
+              ]}
+              onOpen={() => setSelectedConfigId(null)}
+            >
+              <button
+                className="session-group-header"
+                onClick={() => toggleGroup(group.id)}
               >
-                <ChevronIcon size={14} />
-              </span>
-              <FolderIcon size={14} />
-              <span className="session-group-name">{group.name}</span>
-              <span className="session-group-count">{group.configIds.length}</span>
-            </button>
+                <span
+                  className="session-group-chevron"
+                  style={{ transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)" }}
+                >
+                  <ChevronIcon size={14} />
+                </span>
+                <FolderIcon size={14} />
+                <span className="session-group-name">{group.name}</span>
+                <span className="session-group-count">{group.configIds.length}</span>
+              </button>
+            </ContextMenu>
             {!group.collapsed && (
               <div className="session-group-items">
                 {savedConfigs
                   .filter((c) => group.configIds.includes(c.id))
                   .map((config) => (
+                <ContextMenu
+                  key={config.id}
+                  items={[
+                    { label: "Edit", onClick: () => handleEditSession(config) },
+                    { label: "Remove", onClick: () => removeOrCloseConfig(config), danger: true },
+                  ]}
+                  onOpen={() => handleConfigClick(config)}
+                >
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, config.id)}
+                  >
                     <SessionItem
-                      key={config.id}
                       config={config}
                       selected={selectedConfigId === config.id}
                       connected={isConnected(config)}
@@ -99,23 +202,45 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
                       onDoubleClick={() => handleConfigDoubleClick(config)}
                       onClose={(e) => handleConfigClose(config, e)}
                     />
+                  </div>
+                </ContextMenu>
                   ))}
               </div>
             )}
           </div>
         ))}
-        {uncategorized.map((config) => (
-          <SessionItem
-            key={config.id}
-            config={config}
-            selected={selectedConfigId === config.id}
-            connected={isConnected(config)}
-            uncategorized
-            onClick={() => handleConfigClick(config)}
-            onDoubleClick={() => handleConfigDoubleClick(config)}
-            onClose={(e) => handleConfigClose(config, e)}
-          />
-        ))}
+        <div
+          className={`session-uncategorized ${dragOverUncategorized ? "drag-over" : ""}`}
+          onDragOver={handleUncategorizedDragOver}
+          onDragLeave={handleUncategorizedDragLeave}
+          onDrop={handleUncategorizedDrop}
+        >
+          {uncategorized.map((config) => (
+            <ContextMenu
+              key={config.id}
+              items={[
+                { label: "Edit", onClick: () => handleEditSession(config) },
+                { label: "Remove", onClick: () => removeOrCloseConfig(config), danger: true },
+              ]}
+              onOpen={() => handleConfigClick(config)}
+            >
+              <div
+                draggable
+                onDragStart={(e) => handleDragStart(e, config.id)}
+              >
+                <SessionItem
+                  config={config}
+                  selected={selectedConfigId === config.id}
+                  connected={isConnected(config)}
+                  uncategorized
+                  onClick={() => handleConfigClick(config)}
+                  onDoubleClick={() => handleConfigDoubleClick(config)}
+                  onClose={(e) => handleConfigClose(config, e)}
+                />
+              </div>
+            </ContextMenu>
+          ))}
+        </div>
         <div className="session-divider" />
         <button className="submenu-item new-group-btn" onClick={() => setShowNewGroupDialog(true)}>
           <PlusIcon size={14} />
@@ -151,6 +276,27 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
           />
         </FormField>
       </Dialog>
+
+      {editingGroup && (
+        <EditGroupDialog
+          isOpen={true}
+          onClose={() => setEditingGroup(null)}
+          group={editingGroup}
+          groups={groups}
+          onSave={(id, name) => renameGroup(id, name)}
+        />
+      )}
+
+      {editingSession && (
+        <EditSessionDialog
+          isOpen={true}
+          onClose={() => setEditingSession(null)}
+          config={editingSession}
+          groups={groups}
+          groupId={editingSessionGroupId}
+          onSave={handleSessionSave}
+        />
+      )}
     </div>
   );
 }

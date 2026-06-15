@@ -16,12 +16,15 @@ interface SshSessionFormProps {
   config: SSHSessionConfig;
   onChange: (config: SSHSessionConfig) => void;
   onError: (error: string) => void;
+  mode?: "create" | "edit";
 }
 
-export function SshSessionForm({ config, onChange }: SshSessionFormProps) {
+export function SshSessionForm({ config, onChange, mode = "create" }: SshSessionFormProps) {
   useEffect(() => {
-    onChange(DEFAULT_SSH_CONFIG);
-  }, []);
+    if (mode === "create") {
+      onChange(DEFAULT_SSH_CONFIG);
+    }
+  }, [mode]);
 
   return (
     <>
