@@ -265,12 +265,6 @@ export default function CommandSendPanel({
     });
   };
 
-  const syncScroll = () => {
-    if (textareaRef.current && gutterRef.current) {
-      gutterRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  };
-
   const lines = input.split("\n");
   const activeLineIndex = currentLineIndex();
 
@@ -455,7 +449,6 @@ export default function CommandSendPanel({
           className="panel-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onScroll={syncScroll}
           placeholder="输入命令或 Hex 数据，点击行号设置断点..."
           spellCheck={false}
         />

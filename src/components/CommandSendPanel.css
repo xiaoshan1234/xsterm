@@ -73,7 +73,8 @@
   min-height: 0;
   display: flex;
   flex-direction: row;
-  overflow: hidden;
+  align-items: flex-start;
+  overflow: auto;
 }
 
 .panel-gutter {
@@ -86,12 +87,12 @@
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 20px;
   padding: 8px 0;
-  overflow: hidden;
   user-select: none;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .panel-gutter-line {
@@ -100,9 +101,11 @@
   justify-content: flex-end;
   gap: 4px;
   padding: 0 8px;
-  height: 1.4em;
+  height: 20px;
+  line-height: 20px;
   cursor: pointer;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .panel-gutter-line:hover {
@@ -138,11 +141,13 @@
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 20px;
   padding: 8px;
   resize: none;
-  min-height: 0;
-  height: 100%;
+  min-height: 100%;
+  height: auto;
+  overflow: hidden;
+  white-space: pre;
 }
 
 .panel-textarea:focus {
