@@ -27,6 +27,7 @@ export default function AppLayout() {
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_PANEL_HEIGHT);
+  const [sendPanelCollapsed, setSendPanelCollapsed] = useState(true);
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
 
@@ -71,6 +72,16 @@ export default function AppLayout() {
     };
   }, []);
 
+  const handleSendPanelToggle = useCallback((collapsed: boolean) => {
+    setSendPanelCollapsed(collapsed);
+    if (!collapsed && mainAreaRef.current) {
+      const rect = mainAreaRef.current.getBoundingClientRect();
+      const tabBarHeight = 0;
+      const availableHeight = rect.height - tabBarHeight;
+      setPanelHeight(Math.max(MIN_PANEL_HEIGHT, availableHeight * 0.25));
+    }
+  }, []);
+
   return (
     <div className="app-container">
       <NavBar />
@@ -97,16 +108,19 @@ export default function AppLayout() {
           ) : (
             <>
               <TerminalContainer sessions={sessions} activeSessionId={activeSessionId} />
-              <div
-                className="panel-resize-handle"
-                onMouseDown={handleMouseDown}
-                title="拖拽调整高度"
-              />
+              {!sendPanelCollapsed && (
+                <div
+                  className="panel-resize-handle"
+                  onMouseDown={handleMouseDown}
+                  title="拖拽调整高度"
+                />
+              )}
               <CommandSendPanel
                 sessions={sessions}
                 activeSessionId={activeSessionId}
                 writeSession={writeSession}
-                style={{ height: panelHeight }}
+                style={{ height: sendPanelCollapsed ? "auto" : panelHeight }}
+                onToggle={handleSendPanelToggle}
               />
             </>
           )}

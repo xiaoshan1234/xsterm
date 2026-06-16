@@ -7,6 +7,7 @@ interface CommandSendPanelProps {
   activeSessionId: number | null;
   writeSession: (id: number, data: string) => Promise<void>;
   style?: React.CSSProperties;
+  onToggle?: (collapsed: boolean) => void;
 }
 
 type SendMode = "text" | "hex";
@@ -19,6 +20,7 @@ export default function CommandSendPanel({
   activeSessionId,
   writeSession,
   style,
+  onToggle,
 }: CommandSendPanelProps) {
   const [input, setInput] = useState("");
   const [sendMode, setSendMode] = useState<SendMode>("text");
@@ -28,7 +30,7 @@ export default function CommandSendPanel({
   const [target, setTarget] = useState<TargetMode>("current");
   const [runState, setRunState] = useState<RunState>("idle");
   const [hexError, setHexError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
 
   const stopRef = useRef(false);
@@ -297,10 +299,13 @@ export default function CommandSendPanel({
       <div className="command-send-panel command-send-panel--collapsed" style={style}>
         <button
           className="panel-toggle"
-          onClick={() => setCollapsed(false)}
+          onClick={() => {
+            setCollapsed(false);
+            onToggle?.(false);
+          }}
           title="展开"
         >
-          ⬇
+          ▲
         </button>
       </div>
     );
@@ -435,7 +440,10 @@ export default function CommandSendPanel({
 
         <button
           className="btn btn--secondary panel-close"
-          onClick={() => setCollapsed(true)}
+          onClick={() => {
+            setCollapsed(true);
+            onToggle?.(true);
+          }}
           title="折叠"
         >
           ✕
