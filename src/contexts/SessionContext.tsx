@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup } from "../types/session";
 import * as sessionService from "../services/sessionService";
@@ -6,6 +6,14 @@ import * as sessionStorage from "../services/sessionStorage";
 
 function generateId(): string {
   return crypto.randomUUID();
+}
+
+function getAdjacentSessionId(sessions: Session[], closedId: number): number | null {
+  const index = sessions.findIndex((s) => s.id === closedId);
+  if (index < 0) return null;
+  if (index > 0) return sessions[index - 1].id;
+  const next = sessions[index + 1];
+  return next ? next.id : null;
 }
 
 function buildFrontendSession(info: sessionService.SessionInfo, configId: string, type: Session["type"]): Session {
@@ -51,6 +59,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [nextGroupId, setNextGroupId] = useState(1);
+  const sessionsRef = useRef(sessions);
+
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
 
   useEffect(() => {
     const init = async () => {
@@ -71,7 +84,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     listen<number>("session-closed", (event) => {
       const sessionId = event.payload;
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      setActiveSessionId((current) => (current === sessionId ? null : current));
+      setActiveSessionId((current) =>
+        current === sessionId ? getAdjacentSessionId(sessionsRef.current, sessionId) : current
+      );
     }).then((fn) => {
       closedCleanup = fn;
     });
@@ -172,17 +187,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (session) {
         sessionService.closeSession(session.id).catch(console.error);
         setSessions((prev) => prev.filter((s) => s.configId !== configId));
-        if (activeSessionId === session.id) setActiveSessionId(null);
+        setActiveSessionId((current) =>
+          current === session.id ? getAdjacentSessionId(sessions, session.id) : current
+        );
       }
     },
-    [updateConfigs, updateGroups, sessions, activeSessionId]
+    [updateConfigs, updateGroups, sessions]
   );
 
   const closeSession = useCallback(async (id: number): Promise<void> => {
     await sessionService.closeSession(id);
     setSessions((prev) => prev.filter((s) => s.id !== id));
-    setActiveSessionId((current) => (current === id ? null : current));
-  }, []);
+    setActiveSessionId((current) =>
+      current === id ? getAdjacentSessionId(sessions, id) : current
+    );
+  }, [sessions]);
 
   const renameSession = useCallback(
     (id: number, name: string) => {
