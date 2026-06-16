@@ -20,6 +20,7 @@ export default function AppLayout() {
     activeSessionId,
     createLocalSession,
     createSshSession,
+    createTmuxSession,
     closeSession,
     renameSession,
     setActiveSession,
@@ -131,6 +132,7 @@ export default function AppLayout() {
         onClose={() => setShowCreateDialog(false)}
         onCreateLocal={createLocalSession}
         onCreateSsh={createSshSession}
+        onCreateTmux={createTmuxSession}
       />
     </div>
   );

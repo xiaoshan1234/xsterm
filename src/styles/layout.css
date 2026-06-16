@@ -55,3 +55,26 @@
 .terminal-pane--active {
   display: block;
 }
+
+.tmux-pane {
+  display: none;
+  flex-direction: column;
+}
+
+.tmux-pane.terminal-pane--active {
+  display: flex;
+}
+
+.tmux-pane-grid {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.terminal-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+}

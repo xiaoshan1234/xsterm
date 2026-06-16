@@ -2,27 +2,32 @@ import { useEffect, useRef, useCallback } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
-import { useSession } from "../contexts/SessionContext";
+import { useSession, registerTmuxPaneOutputHandler } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
   sessionId: number;
+  paneId?: string;
 }
 
-export default function Terminal({ sessionId }: TerminalProps) {
+export default function Terminal({ sessionId, paneId }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initDoneRef = useRef(false);
-  const { writeSession, resizeSession } = useSession();
+  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane } = useSession();
   const { currentTheme } = useTheme();
 
   const handleData = useCallback(
     (data: string) => {
-      writeSession(sessionId, data);
+      if (paneId) {
+        sendKeysToTmuxPane(sessionId, paneId, data);
+      } else {
+        writeSession(sessionId, data);
+      }
     },
-    [sessionId, writeSession]
+    [sessionId, paneId, writeSession, sendKeysToTmuxPane]
   );
 
   useEffect(() => {
@@ -66,38 +71,50 @@ export default function Terminal({ sessionId }: TerminalProps) {
 
     xterm.onData(handleData);
 
-    // ResizeObserver: auto-refit when container size changes
-    // This handles both window resize and tab-switch visibility changes.
-    // fitAddon.fit() does nothing if the container has 0 dimensions (hidden tab).
     const resizeObserver = new ResizeObserver(() => {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
-        resizeSession(sessionId, xterm.rows, xterm.cols);
+        if (paneId) {
+          resizeTmuxPane(sessionId, paneId, xterm.rows, xterm.cols);
+        } else {
+          resizeSession(sessionId, xterm.rows, xterm.cols);
+        }
       }
     });
     resizeObserver.observe(container);
 
-    // Initial fit — delayed slightly to let CSS layout settle
     requestAnimationFrame(() => {
       if (container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddon.fit();
-        resizeSession(sessionId, xterm.rows, xterm.cols);
+        if (paneId) {
+          resizeTmuxPane(sessionId, paneId, xterm.rows, xterm.cols);
+        } else {
+          resizeSession(sessionId, xterm.rows, xterm.cols);
+        }
       }
       initDoneRef.current = true;
     });
 
     let unlisten: (() => void) | null = null;
 
-    listen<[number, number[]]>("session-output", (event) => {
-      const [id, data] = event.payload;
-      if (id === sessionId) {
+    if (paneId) {
+      const unregister = registerTmuxPaneOutputHandler(paneId, (data) => {
         const decoder = new TextDecoder();
-        const text = decoder.decode(new Uint8Array(data));
-        xterm.write(text);
-      }
-    }).then((fn) => {
-      unlisten = fn;
-    });
+        xterm.write(decoder.decode(data));
+      });
+      unlisten = unregister;
+    } else {
+      listen<[number, number[]]>("session-output", (event) => {
+        const [id, data] = event.payload;
+        if (id === sessionId) {
+          const decoder = new TextDecoder();
+          const text = decoder.decode(new Uint8Array(data));
+          xterm.write(text);
+        }
+      }).then((fn) => {
+        unlisten = fn;
+      });
+    }
 
     return () => {
       resizeObserver.disconnect();
@@ -107,7 +124,7 @@ export default function Terminal({ sessionId }: TerminalProps) {
       fitAddonRef.current = null;
       initDoneRef.current = false;
     };
-  }, [sessionId, handleData, resizeSession, currentTheme]);
+  }, [sessionId, paneId, handleData, resizeSession, resizeTmuxPane, currentTheme]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

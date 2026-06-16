@@ -4,13 +4,16 @@ use std::io::Write;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
 use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo};
+use crate::tmux::session::{create_tmux_session, TmuxSession, TmuxSessionHandles};
+use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, TmuxSessionConfig};
+use crate::tmux::commands::{resize_pane, send_keys};
 use crate::services::local_session::create_local_session;
 
-/// Internal enum representing an active session, either local or SSH.
+/// Internal enum representing an active session, either local, SSH, or tmux.
 enum Session {
     Local(LocalSession, LocalSessionHandles),
     Ssh(SshSessionWrapper),
+    Tmux(TmuxSession, #[allow(dead_code)] TmuxSessionHandles),
 }
 
 impl Session {
@@ -18,6 +21,7 @@ impl Session {
         match self {
             Session::Local(s, _) => &s.info,
             Session::Ssh(s) => &s.info,
+            Session::Tmux(s, _) => &s.info,
         }
     }
 }
@@ -61,6 +65,26 @@ impl SessionManager {
         Ok(info)
     }
 
+    /// Create a new tmux control mode session.
+    pub fn create_tmux(
+        &mut self,
+        config: TmuxSessionConfig,
+        backend: impl AppBackend + 'static,
+    ) -> Result<SessionInfo, String> {
+        let id = self.allocate_session_id();
+
+        let (session, handles) = create_tmux_session(
+            self.pty_system.as_ref(),
+            config,
+            backend,
+            id,
+        )?;
+
+        let info = session.info.clone();
+        self.sessions.insert(id, Session::Tmux(session, handles));
+        Ok(info)
+    }
+
     /// Create a new SSH session.
     pub fn create_ssh(
         &mut self,
@@ -94,6 +118,10 @@ impl SessionManager {
                     .map_err(|_| format!("SSH channel closed for session {}", id))?;
                 Ok(())
             }
+            Some(Session::Tmux(_, _)) => Err(format!(
+                "Session {} is a tmux session; use write_tmux_command instead",
+                id
+            )),
             None => Err(format!("Session {} not found", id)),
         }
     }
@@ -103,8 +131,47 @@ impl SessionManager {
         match self.sessions.get(&id) {
             Some(Session::Local(_, handles)) => handles.resize(rows, cols),
             Some(Session::Ssh(_)) => Ok(()),
+            Some(Session::Tmux(_, _)) => Err(format!(
+                "Session {} is a tmux session; use resize_tmux_pane instead",
+                id
+            )),
             None => Err(format!("Session {} not found", id)),
         }
+    }
+
+    /// Write a tmux control mode command to the session with the given `id`.
+    pub fn write_tmux_command(&mut self, id: u32, command: &str) -> Result<(), String> {
+        match self.sessions.get_mut(&id) {
+            Some(Session::Tmux(session, _)) => session.write_command(command),
+            Some(_) => Err(format!(
+                "Session {} is not a tmux session",
+                id
+            )),
+            None => Err(format!("Session {} not found", id)),
+        }
+    }
+
+    /// Send a tmux resize-pane command for the given pane.
+    pub fn resize_tmux_pane(
+        &mut self,
+        id: u32,
+        pane_id: &str,
+        rows: u16,
+        cols: u16,
+    ) -> Result<(), String> {
+        let command = resize_pane(pane_id, rows, cols);
+        self.write_tmux_command(id, &command)
+    }
+
+    /// Send a tmux send-keys command for the given pane.
+    pub fn send_keys_to_tmux_pane(
+        &mut self,
+        id: u32,
+        pane_id: &str,
+        keys: &str,
+    ) -> Result<(), String> {
+        let command = send_keys(pane_id, keys);
+        self.write_tmux_command(id, &command)
     }
 
     /// Close and remove the session with the given `id`.
@@ -284,7 +351,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
 
         assert!(result.is_ok());
         let info = result.unwrap();
@@ -300,7 +367,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None },
+            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None },
             mock_backend,
         );
 
@@ -317,7 +384,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()) },
+            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()), args: None },
             mock_backend,
         );
 
@@ -336,7 +403,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PTY open failed");
@@ -357,7 +424,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -379,7 +446,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
         assert!(result.is_ok());
 
         let close_result = manager.close(result.unwrap().id);
@@ -393,7 +460,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -415,7 +482,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
         assert!(result.is_ok());
 
         assert_eq!(manager.list().len(), 1);
@@ -428,7 +495,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
         assert!(result.is_ok());
         let info = result.unwrap();
 

@@ -1,6 +1,46 @@
 # Refactoring Progress Log
 
-## 2026-06-13
-- Assessed codebase and documented findings in `findings.md`.
-- Created `task_plan.md` with 6-phase refactoring plan.
-- Next: proceed with Phase 1 (consolidate utilities) unless scope is adjusted.
+## 2026-06-16
+- 调研 tmux `-CC` 控制模式协议、iTerm2 实现、Rust 现有库（par-term-emu-core-rust / par-term-tmux）。
+- 评估 xsterm 前后端架构，确定解析层放在 Rust 后端、状态/UI 层放在前端。
+- 创建 `tmux_cc_plan.md` 详细实施计划。
+- 更新 `findings.md` 追加 tmux 相关调研结论。
+- 完成 Phase 1（Rust 后端基础设施）：
+  - 新增 `src-tauri/src/tmux/` 模块（parser、commands、state、session）。
+  - 扩展 `models/session.rs` 添加 `SessionType::Tmux` 和 `TmuxSessionConfig`。
+  - 扩展 `SessionManager` 支持 tmux 创建/命令写入/resize/send-keys。
+  - 新增 Tauri 命令：`create_tmux_session`、`write_tmux_command`、`resize_tmux_pane`、`send_keys_to_tmux_pane`。
+  - 新增事件：`tmux-pane-output`、`tmux-control-event`。
+  - `cargo check` 和 `cargo test` 全部通过。
+- 修复 pre-existing 测试编译错误：给 `LocalSessionConfig.args` 加 `#[serde(default)]` 并补齐测试中的字段。
+- 完成 Phase 2（前端类型与状态）：
+  - 扩展 `src/types/session.ts`：Session type 增加 `"tmux"`，新增 TmuxPane/TmuxWindow/TmuxSessionState/TmuxState/TmuxControlEvent。
+  - 新增 `src/services/tmuxService.ts`：封装 4 个 tmux invoke 调用。
+  - 扩展 `SessionContext`：维护 `tmuxState`，监听 `tmux-pane-output` 和 `tmux-control-event`，提供 `createTmuxSession` / `writeTmuxCommand` / `resizeTmuxPane` / `sendKeysToTmuxPane` / `setActiveTmuxWindow`。
+  - 扩展 `Terminal` 组件：支持 `paneId` prop，在 tmux pane 上通过 `sendKeysToTmuxPane` 发送输入、通过 `registerTmuxPaneOutputHandler` 接收输出、通过 `resizeTmuxPane` 调整大小。
+  - 新增 `TmuxSessionIcon` 图标，更新 `SidebarToolbar` 支持 tmux 类型。
+  - `npm run build` 通过。
+- 完成 Phase 3（前端 UI 改造）：
+  - 新增 `TmuxWindowTabs` 组件：在 tmux session 内显示 window 子标签，点击切换 active window（发送 `select-window`）。
+  - 新增 `TmuxLayoutGrid` 组件：解析 tmux layout string（checksum + 递归 cell 树），按百分比绝对定位渲染 pane。
+  - 改造 `TerminalContainer`：普通 session 保持原有堆叠渲染；tmux session 渲染 window tabs + active window 的 pane grid。
+  - 新增 `TmuxSessionForm` 组件；改造 `CreateSessionDialog` 增加 tmux 选项卡。
+  - 更新 `AppLayout` 把 `createTmuxSession` 传给 dialog。
+  - 新增/更新 CSS：`TmuxWindowTabs.css`、`TmuxLayoutGrid.css`、扩展 `styles/layout.css`。
+  - `npm run build` 通过。
+- 完成 Phase 4（用户输入与流控）：
+  - 后端 `spawn_control_forwarder` 维护 `paused_panes` 集合，收到 `%pause` 时暂停对应 pane 输出，收到 `%continue` 时恢复。
+  - 收到 `%session-changed` 时向后端发射 `tmux-request-sync` 事件，前端监听该事件并发送 `list-windows` 命令获取完整状态。
+  - 前端收到 `SessionChanged` 时自动请求 `list-windows`。
+  - 修复 `WindowActivated` 状态更新逻辑和 `WindowAdded` 的兜底刷新。
+  - 修复 `TmuxLayoutGrid` parser 缺失 `findMatchingClose` 函数的问题。
+  - `npm run build`、`cargo check`、`cargo test` 全部通过。
+- 完成 Phase 5（高级功能）：
+  - 扩展 `tmuxService.ts`：新增 `createTmuxWindow`、`closeTmuxWindow`、`closeTmuxPane`、`renameTmuxWindow`、`attachTmuxSession`。
+  - 扩展 `SessionContext`：暴露 `createTmuxWindow`、`closeTmuxWindow`、`closeTmuxPane`。
+  - 改造 `TmuxWindowTabs`：新增 "+" 按钮创建 window，每个 tab 显示关闭按钮（首次点击确认，再次点击执行）。
+  - 改造 `TmuxLayoutGrid`：每个 pane 显示标题栏和关闭按钮。
+  - 改造 `TerminalContainer`：传递 window/pane 管理回调到 tabs 和 grid。
+  - 改造 `TmuxSessionForm`：`attach-session` 模式下标签提示为 "Target session"。
+  - `npm run build`、`cargo check`、`cargo test` 全部通过。
+- 当前状态：tmux `-CC` 控制模式基础功能已完整实现并编译通过。尚未进行实际运行环境的手动测试。

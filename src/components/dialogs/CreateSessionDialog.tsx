@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useSession } from "../../contexts/SessionContext";
-import { LocalSessionConfig, SSHSessionConfig, Session } from "../../types/session";
+import { LocalSessionConfig, SSHSessionConfig, TmuxSessionConfig, Session } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
+import { TmuxSessionForm } from "./TmuxSessionForm";
 import "./CreateSessionDialog.css";
 
 interface CreateSessionDialogProps {
@@ -12,6 +13,7 @@ interface CreateSessionDialogProps {
   onClose: () => void;
   onCreateLocal: (config: LocalSessionConfig, save: boolean) => Promise<Session>;
   onCreateSsh: (config: SSHSessionConfig, save: boolean) => Promise<Session>;
+  onCreateTmux: (config: TmuxSessionConfig, save: boolean) => Promise<Session>;
 }
 
 export default function CreateSessionDialog({
@@ -19,9 +21,10 @@ export default function CreateSessionDialog({
   onClose,
   onCreateLocal,
   onCreateSsh,
+  onCreateTmux,
 }: CreateSessionDialogProps) {
   const { groups, addToGroup } = useSession();
-  const [tab, setTab] = useState<"local" | "ssh">("local");
+  const [tab, setTab] = useState<"local" | "ssh" | "tmux">("local");
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [saveConfig, setSaveConfig] = useState(true);
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>({});
@@ -33,6 +36,9 @@ export default function CreateSessionDialog({
     password: "",
     key_file: "",
     passphrase: "",
+  });
+  const [tmuxConfig, setTmuxConfig] = useState<TmuxSessionConfig>({
+    command: "new-session",
   });
   const [error, setError] = useState("");
 
@@ -50,6 +56,7 @@ export default function CreateSessionDialog({
         key_file: "",
         passphrase: "",
       });
+      setTmuxConfig({ command: "new-session" });
     }
   }, [isOpen]);
 
@@ -59,13 +66,15 @@ export default function CreateSessionDialog({
 
     if (tab === "local") {
       session = await onCreateLocal(localConfig, saveConfig);
-    } else {
+    } else if (tab === "ssh") {
       const validationError = validateSshConfig(sshConfig);
       if (validationError) {
         setError(validationError);
         return;
       }
       session = await onCreateSsh(sshConfig, saveConfig);
+    } else {
+      session = await onCreateTmux(tmuxConfig, saveConfig);
     }
 
     if (selectedGroupId !== null) {
@@ -106,6 +115,12 @@ export default function CreateSessionDialog({
         >
           SSH
         </button>
+        <button
+          className={`dialog-tab ${tab === "tmux" ? "active" : ""}`}
+          onClick={() => setTab("tmux")}
+        >
+          tmux
+        </button>
       </div>
 
       {error && <div className="dialog-error">{error}</div>}
@@ -128,8 +143,10 @@ export default function CreateSessionDialog({
 
       {tab === "local" ? (
         <LocalSessionForm config={localConfig} onChange={setLocalConfig} />
-      ) : (
+      ) : tab === "ssh" ? (
         <SshSessionForm config={sshConfig} onChange={setSshConfig} onError={setError} />
+      ) : (
+        <TmuxSessionForm config={tmuxConfig} onChange={setTmuxConfig} />
       )}
     </Dialog>
   );
