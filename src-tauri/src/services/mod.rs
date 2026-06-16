@@ -1,3 +1,2 @@
-pub mod local_session;
-pub mod session_manager;
-pub mod ssh_session;
+pub(crate) mod local_session;
+pub(crate) mod session_manager;

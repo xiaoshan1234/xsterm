@@ -5,6 +5,7 @@ use crate::infrastructure::app_backend::RealAppBackend;
 use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo};
 use crate::services::session_manager::SessionManager;
 
+/// Create a new local shell session.
 #[tauri::command]
 pub async fn create_local_session(
     config: LocalSessionConfig,
@@ -12,51 +13,52 @@ pub async fn create_local_session(
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     tracing::info!("Creating local session");
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
     let backend = RealAppBackend::new(app);
-    match manager.create_local(config, backend) {
-        Ok(info) => {
+    with_manager(state, |manager| manager.create_local(config, backend))
+        .inspect(|info| {
             tracing::info!("Local session created: id={}", info.id);
-            Ok(info)
-        }
-        Err(e) => {
+        })
+        .map_err(|e| {
             tracing::error!("Failed to create local session: {}", e);
-            Err(e)
-        }
-    }
+            e
+        })
 }
 
+/// Create a new SSH session.
 #[tauri::command]
 pub async fn create_ssh_session(
     config: SSHSessionConfig,
     state: State<'_, Arc<Mutex<SessionManager>>>,
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
-    tracing::info!("Creating SSH session: {}@{}:{}", config.username, config.host, config.port);
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
+    tracing::info!(
+        "Creating SSH session: {}@{}:{}",
+        config.username,
+        config.host,
+        config.port
+    );
     let backend = RealAppBackend::new(app);
-    match manager.create_ssh(config, backend) {
-        Ok(info) => {
+    with_manager(state, |manager| manager.create_ssh(config, backend))
+        .inspect(|info| {
             tracing::info!("SSH session created: id={}", info.id);
-            Ok(info)
-        }
-        Err(e) => {
+        })
+        .map_err(|e| {
             tracing::error!("Failed to create SSH session: {}", e);
-            Err(e)
-        }
-    }
+            e
+        })
 }
 
+/// Write input data to an existing session.
 #[tauri::command]
 pub async fn write_session(
     session_id: u32,
     data: Vec<u8>,
     state: State<'_, Arc<Mutex<SessionManager>>>,
 ) -> Result<(), String> {
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
-    manager.write(session_id, &data)
+    with_manager(state, |manager| manager.write(session_id, &data))
 }
 
+/// Resize the PTY of an existing session.
 #[tauri::command]
 pub async fn resize_session(
     session_id: u32,
@@ -64,33 +66,42 @@ pub async fn resize_session(
     cols: u16,
     state: State<'_, Arc<Mutex<SessionManager>>>,
 ) -> Result<(), String> {
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
-    manager.resize(session_id, rows, cols)
+    with_manager(state, |manager| manager.resize(session_id, rows, cols))
 }
 
+/// Close an existing session.
 #[tauri::command]
 pub async fn close_session(
     session_id: u32,
     state: State<'_, Arc<Mutex<SessionManager>>>,
 ) -> Result<(), String> {
     tracing::info!("Closing session: id={}", session_id);
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
-    match manager.close(session_id) {
-        Ok(()) => {
+    with_manager(state, |manager| manager.close(session_id))
+        .map(|()| {
             tracing::info!("Session closed: id={}", session_id);
-            Ok(())
-        }
-        Err(e) => {
+        })
+        .map_err(|e| {
             tracing::error!("Failed to close session {}: {}", session_id, e);
-            Err(e)
-        }
-    }
+            e
+        })
 }
 
+/// List metadata for all active sessions.
 #[tauri::command]
 pub fn list_sessions(
     state: State<'_, Arc<Mutex<SessionManager>>>,
 ) -> Result<Vec<SessionInfo>, String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    Ok(manager.list())
+    with_manager(state, |manager| Ok(manager.list()))
+}
+
+/// Helper to lock the session manager and execute an operation.
+fn with_manager<F, T>(
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+    f: F,
+) -> Result<T, String>
+where
+    F: FnOnce(&mut SessionManager) -> Result<T, String>,
+{
+    let mut manager = state.lock().map_err(|e| e.to_string())?;
+    f(&mut manager)
 }

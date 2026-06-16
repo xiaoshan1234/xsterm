@@ -1,6 +1,6 @@
-pub mod logging;
-pub mod persistence;
-pub mod session;
+pub(crate) mod logging;
+pub(crate) mod persistence;
+pub(crate) mod session;
 
 pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     tauri::generate_handler![

@@ -3,10 +3,11 @@ use std::io::Write;
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
-use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl};
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshSessionWrapper};
+use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
+use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo};
 use crate::services::local_session::create_local_session;
 
+/// Internal enum representing an active session, either local or SSH.
 enum Session {
     Local(LocalSession, LocalSessionHandles),
     Ssh(SshSessionWrapper),
@@ -21,6 +22,7 @@ impl Session {
     }
 }
 
+/// Manages the lifecycle of all terminal sessions.
 pub struct SessionManager {
     sessions: HashMap<u32, Session>,
     next_id: u32,
@@ -29,6 +31,7 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
+    /// Create a new session manager with default platform backends.
     pub fn new() -> Self {
         Self {
             sessions: HashMap::new(),
@@ -38,13 +41,13 @@ impl SessionManager {
         }
     }
 
+    /// Create a new local shell session.
     pub fn create_local(
         &mut self,
         config: LocalSessionConfig,
         backend: impl AppBackend + 'static,
     ) -> Result<SessionInfo, String> {
-        let id = self.next_id;
-        self.next_id += 1;
+        let id = self.allocate_session_id();
 
         let (session, handles) = create_local_session(
             self.pty_system.as_ref(),
@@ -58,13 +61,13 @@ impl SessionManager {
         Ok(info)
     }
 
+    /// Create a new SSH session.
     pub fn create_ssh(
         &mut self,
         config: SSHSessionConfig,
         backend: impl AppBackend + 'static,
     ) -> Result<SessionInfo, String> {
-        let id = self.next_id;
-        self.next_id += 1;
+        let id = self.allocate_session_id();
 
         let wrapper = infra_create_ssh(
             self.ssh_backend.as_ref(),
@@ -78,6 +81,7 @@ impl SessionManager {
         Ok(info)
     }
 
+    /// Write input data to the session with the given `id`.
     pub fn write(&mut self, id: u32, data: &[u8]) -> Result<(), String> {
         match self.sessions.get_mut(&id) {
             Some(Session::Local(s, _)) => {
@@ -86,28 +90,39 @@ impl SessionManager {
                 Ok(())
             }
             Some(Session::Ssh(s)) => {
-                s.write_tx.send(data.to_vec()).map_err(|_| "SSH channel closed".to_string())?;
+                s.write_tx.send(data.to_vec())
+                    .map_err(|_| format!("SSH channel closed for session {}", id))?;
                 Ok(())
             }
-            None => Err("Session not found".to_string()),
+            None => Err(format!("Session {} not found", id)),
         }
     }
 
+    /// Resize the PTY of the session with the given `id`.
     pub fn resize(&mut self, id: u32, rows: u16, cols: u16) -> Result<(), String> {
         match self.sessions.get(&id) {
             Some(Session::Local(_, handles)) => handles.resize(rows, cols),
             Some(Session::Ssh(_)) => Ok(()),
-            None => Err("Session not found".to_string()),
+            None => Err(format!("Session {} not found", id)),
         }
     }
 
+    /// Close and remove the session with the given `id`.
     pub fn close(&mut self, id: u32) -> Result<(), String> {
         self.sessions.remove(&id);
         Ok(())
     }
 
+    /// Return metadata for all active sessions.
     pub fn list(&self) -> Vec<SessionInfo> {
         self.sessions.values().map(|s| s.info().clone()).collect()
+    }
+
+    /// Allocate the next unique session id.
+    fn allocate_session_id(&mut self) -> u32 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
     }
 }
 
@@ -119,10 +134,12 @@ impl Default for SessionManager {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::boxed_local)]
+
     use super::*;
     use crate::infrastructure::pty::{Child, PtyPair};
-    use crate::infrastructure::ssh::{SshBackend, SshChannel};
-    use crate::models::session::{SSHAuth, SessionType, SshConnectResult};
+    use crate::infrastructure::ssh::{SshBackend, SshChannel, SshConnectResult};
+    use crate::models::session::{SSHAuth, SessionType};
     use mockall::{mock, predicate::*};
     use std::io::{Read, Write};
     use std::sync::mpsc as sync_mpsc;
@@ -330,7 +347,7 @@ mod tests {
         let mut manager = SessionManager::new();
         let result = manager.write(999, b"test");
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Session not found");
+        assert_eq!(result.unwrap_err(), "Session 999 not found");
     }
 
     #[test]

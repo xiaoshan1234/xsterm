@@ -4,6 +4,18 @@ use tauri_plugin_store::StoreExt;
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
+use crate::error::StringError;
+
+/// Default maximum size of a single log file in megabytes.
+const DEFAULT_MAX_FILE_SIZE_MB: u64 = 10;
+/// Default number of retained log files.
+const DEFAULT_MAX_LOG_FILES: usize = 5;
+/// Default log level filter.
+const DEFAULT_LOG_LEVEL: &str = "info";
+/// Conversion factor from megabytes to bytes.
+const BYTES_PER_MB: u64 = 1024 * 1024;
+
+/// User-configurable logging settings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogConfig {
@@ -15,13 +27,15 @@ pub struct LogConfig {
 impl Default for LogConfig {
     fn default() -> Self {
         Self {
-            max_file_size: 10,
-            max_log_files: 5,
-            log_level: "info".to_string(),
+            max_file_size: DEFAULT_MAX_FILE_SIZE_MB,
+            max_log_files: DEFAULT_MAX_LOG_FILES,
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
         }
     }
 }
 
+/// Remove oldest `.log` files in `log_dir` until the total size is below the
+/// `max_total_size_mb` threshold.
 pub fn cleanup_old_logs(log_dir: &Path, max_total_size_mb: u64) {
     let Ok(entries) = std::fs::read_dir(log_dir) else {
         return;
@@ -29,7 +43,7 @@ pub fn cleanup_old_logs(log_dir: &Path, max_total_size_mb: u64) {
 
     let mut log_files: Vec<_> = entries
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "log"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "log"))
         .filter_map(|e| {
             let metadata = e.metadata().ok()?;
             let size = metadata.len();
@@ -40,7 +54,7 @@ pub fn cleanup_old_logs(log_dir: &Path, max_total_size_mb: u64) {
 
     log_files.sort_by_key(|(_, _, modified)| *modified);
 
-    let max_size_bytes = max_total_size_mb * 1024 * 1024;
+    let max_size_bytes = max_total_size_mb * BYTES_PER_MB;
     let mut total_size: u64 = log_files.iter().map(|(_, size, _)| size).sum();
 
     for (path, size, _) in log_files {
@@ -53,6 +67,10 @@ pub fn cleanup_old_logs(log_dir: &Path, max_total_size_mb: u64) {
     }
 }
 
+/// Initialize the global tracing subscriber with a rolling file appender and
+/// stderr output.
+///
+/// Returns a reload handle that can be used to change the log level at runtime.
 pub fn init_logging(
     log_dir: &Path,
     config: &LogConfig,
@@ -91,15 +109,19 @@ pub fn init_logging(
         )
         .init();
 
+    // Intentionally leak the non-blocking writer guard so the writer stays alive
+    // for the entire application lifetime. Dropping it would flush and shutdown
+    // the appender prematurely.
     std::mem::forget(_guard);
     reload_handle
 }
 
+/// Load the log configuration from the application store.
 pub fn get_log_config_impl(app: &AppHandle) -> Result<LogConfig, String> {
-    let store = app.store("log_config.json").map_err(|e| e.to_string())?;
+    let store = app.store("log_config.json").map_err_string()?;
     match store.get("config") {
         Some(value) => {
-            let config: LogConfig = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+            let config: LogConfig = serde_json::from_value(value.clone()).map_err_string()?;
             Ok(config)
         }
         None => Ok(LogConfig::default()),

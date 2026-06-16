@@ -1,2 +1,2 @@
-pub mod group;
-pub mod session;
+pub(crate) mod group;
+pub(crate) mod session;

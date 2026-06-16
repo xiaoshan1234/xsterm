@@ -1,3 +1,3 @@
-pub mod app_backend;
-pub mod pty;
-pub mod ssh;
+pub(crate) mod app_backend;
+pub(crate) mod pty;
+pub(crate) mod ssh;
