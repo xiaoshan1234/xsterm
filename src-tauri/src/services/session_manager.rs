@@ -477,7 +477,7 @@ mod tests {
         assert!(result.is_ok());
         let info = result.unwrap();
         assert!(info.is_connected);
-        assert_eq!(info.name, "SSH testuser@localhost");
+        assert_eq!(info.name, "testuser@localhost");
         match info.session_type {
             SessionType::Ssh { host, port, user } => {
                 assert_eq!(host, "localhost");
@@ -525,7 +525,7 @@ mod tests {
         assert!(result.is_ok());
         let info = result.unwrap();
         assert!(info.is_connected);
-        assert_eq!(info.name, "SSH admin@example.com");
+        assert_eq!(info.name, "admin@example.com");
         match info.session_type {
             SessionType::Ssh { host, port, user } => {
                 assert_eq!(host, "example.com");

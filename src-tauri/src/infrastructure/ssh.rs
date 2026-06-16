@@ -291,7 +291,7 @@ pub fn create_ssh_session(
 
     let info = SessionInfo {
         id: session_id,
-        name: format!("SSH {}@{}", config.username, config.host),
+        name: format!("{}@{}", config.username, config.host),
         session_type: SessionType::Ssh {
             host: config.host,
             port: config.port,

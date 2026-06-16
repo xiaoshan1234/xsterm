@@ -49,7 +49,7 @@ pub fn create_local_session(
 
     let info = SessionInfo {
         id: session_id,
-        name: format!("Local ({})", shell_name),
+        name: shell_name,
         session_type: SessionType::Local { shell: shell_path, cwd },
         is_connected: true,
     };
