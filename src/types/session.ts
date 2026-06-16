@@ -14,6 +14,7 @@ export type SessionType =
 export interface LocalSessionConfig {
   shell?: string;
   cwd?: string;
+  args?: string[];
 }
 
 export interface SSHSessionConfig {

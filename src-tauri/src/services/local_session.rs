@@ -41,6 +41,11 @@ pub fn create_local_session(
         cmd.arg(arg);
     }
     apply_shell_flags(&mut cmd, &shell_name);
+    if let Some(args) = config.args {
+        for arg in args {
+            cmd.arg(&arg);
+        }
+    }
     cmd.cwd(&cwd);
 
     let child = pair.spawn(cmd).map_err_string()?;

@@ -29,6 +29,7 @@ pub struct LocalSessionConfig {
     pub shell: Option<String>,
     /// Optional working directory. Falls back to the user's home directory.
     pub cwd: Option<String>,
+    pub args: Option<Vec<String>>,
 }
 
 /// Configuration for creating an SSH session.

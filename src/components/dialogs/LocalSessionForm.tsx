@@ -58,6 +58,18 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
           onChange={(e) => onChange({ ...config, cwd: e.target.value })}
         />
       </FormField>
+      <FormField label="Arguments">
+        <input
+          type="text"
+          placeholder="--cd /home/user (space separated)"
+          value={config.args?.join(" ") || ""}
+          onChange={(e) => {
+            const value = e.target.value;
+            const args = value.trim() ? value.split(/\s+/) : undefined;
+            onChange({ ...config, args });
+          }}
+        />
+      </FormField>
     </>
   );
 }
