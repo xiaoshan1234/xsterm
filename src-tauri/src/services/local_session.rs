@@ -25,7 +25,9 @@ pub fn create_local_session(
         .map(|(exe, rest)| {
             (
                 exe.to_string(),
-                rest.split_whitespace().map(String::from).collect::<Vec<String>>(),
+                rest.split_whitespace()
+                    .map(String::from)
+                    .collect::<Vec<String>>(),
             )
         })
         .unwrap_or((shell_path.clone(), Vec::new()));
@@ -36,12 +38,18 @@ pub fn create_local_session(
         .unwrap_or(&shell_exe)
         .to_string();
 
+    let is_wsl =
+        shell_name.eq_ignore_ascii_case("wsl") || shell_name.eq_ignore_ascii_case("wsl.exe");
+
     let cwd = config.cwd.unwrap_or_else(|| {
-        if cfg!(target_os = "windows") {
+        if is_wsl {
+            "~".to_string()
+        } else if cfg!(target_os = "windows") {
             std::env::var("USERPROFILE")
                 .or_else(|_: std::env::VarError| {
                     let drive = std::env::var("HOMEDRIVE").unwrap_or_else(|_| "C:".to_string());
-                    let path = std::env::var("HOMEPATH").unwrap_or_else(|_| "\\Users\\Default".to_string());
+                    let path = std::env::var("HOMEPATH")
+                        .unwrap_or_else(|_| "\\Users\\Default".to_string());
                     Ok(format!("{}{}", drive, path))
                 })
                 .unwrap_or_else(|_: std::env::VarError| "C:\\".to_string())
@@ -71,7 +79,12 @@ pub fn create_local_session(
         cmd.arg("--login");
     }
 
-    cmd.cwd(&cwd);
+    if is_wsl {
+        cmd.arg("--cd");
+        cmd.arg(&cwd);
+    } else {
+        cmd.cwd(&cwd);
+    }
 
     let child = pair.spawn(cmd).map_err(|e| e.to_string())?;
     let writer = pair.master_writer().map_err(|e| e.to_string())?;
@@ -80,7 +93,10 @@ pub fn create_local_session(
     let info = SessionInfo {
         id: session_id,
         name: format!("Local ({})", shell_name),
-        session_type: SessionType::Local { shell: shell_path, cwd },
+        session_type: SessionType::Local {
+            shell: shell_path,
+            cwd,
+        },
         is_connected: true,
     };
 

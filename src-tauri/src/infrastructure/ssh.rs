@@ -7,7 +7,9 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 
 use crate::infrastructure::app_backend::AppBackend;
-use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo, SessionType, SshConnectResult, SshSessionWrapper};
+use crate::models::session::{
+    SSHAuth, SSHSessionConfig, SessionInfo, SessionType, SshConnectResult, SshSessionWrapper,
+};
 
 pub trait SshChannel: Send {}
 
@@ -190,8 +192,11 @@ pub fn create_ssh_session(
     backend: impl AppBackend + 'static,
     session_id: u32,
 ) -> Result<SshSessionWrapper, String> {
-    let SshConnectResult { channel, write_tx, read_rx } =
-        ssh_backend.connect(&config.host, config.port, &config.auth, &config.username)?;
+    let SshConnectResult {
+        channel,
+        write_tx,
+        read_rx,
+    } = ssh_backend.connect(&config.host, config.port, &config.auth, &config.username)?;
 
     let info = SessionInfo {
         id: session_id,
@@ -205,26 +210,21 @@ pub fn create_ssh_session(
     };
 
     let _channel = Arc::new(std::sync::Mutex::new(channel));
-    let wrapper = SshSessionWrapper {
-        info,
-        write_tx,
-    };
+    let wrapper = SshSessionWrapper { info, write_tx };
 
     let backend_clone = backend.clone();
-    thread::spawn(move || {
-        loop {
-            match read_rx.recv() {
-                Ok(Some(data)) => {
-                    let payload = serde_json::to_vec(&(&session_id, &data[..])).unwrap();
-                    if let Err(_e) = backend_clone.emit("session-output", &payload) {
-                        break;
-                    }
-                }
-                Ok(None) | Err(_) => {
-                    let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-closed", &payload);
+    thread::spawn(move || loop {
+        match read_rx.recv() {
+            Ok(Some(data)) => {
+                let payload = serde_json::to_vec(&(&session_id, &data[..])).unwrap();
+                if let Err(_e) = backend_clone.emit("session-output", &payload) {
                     break;
                 }
+            }
+            Ok(None) | Err(_) => {
+                let payload = serde_json::to_vec(&session_id).unwrap();
+                let _ = backend_clone.emit("session-closed", &payload);
+                break;
             }
         }
     });

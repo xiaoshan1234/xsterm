@@ -3,8 +3,12 @@ use std::io::Write;
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
-use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl};
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshSessionWrapper};
+use crate::infrastructure::ssh::{
+    create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl,
+};
+use crate::models::session::{
+    LocalSessionConfig, SSHSessionConfig, SessionInfo, SshSessionWrapper,
+};
 use crate::services::local_session::create_local_session;
 
 enum Session {
@@ -46,12 +50,8 @@ impl SessionManager {
         let id = self.next_id;
         self.next_id += 1;
 
-        let (session, handles) = create_local_session(
-            self.pty_system.as_ref(),
-            config,
-            backend,
-            id,
-        )?;
+        let (session, handles) =
+            create_local_session(self.pty_system.as_ref(), config, backend, id)?;
 
         let info = session.info.clone();
         self.sessions.insert(id, Session::Local(session, handles));
@@ -66,12 +66,7 @@ impl SessionManager {
         let id = self.next_id;
         self.next_id += 1;
 
-        let wrapper = infra_create_ssh(
-            self.ssh_backend.as_ref(),
-            config,
-            backend,
-            id,
-        )?;
+        let wrapper = infra_create_ssh(self.ssh_backend.as_ref(), config, backend, id)?;
 
         let info = wrapper.info.clone();
         self.sessions.insert(id, Session::Ssh(wrapper));
@@ -86,7 +81,9 @@ impl SessionManager {
                 Ok(())
             }
             Some(Session::Ssh(s)) => {
-                s.write_tx.send(data.to_vec()).map_err(|_| "SSH channel closed".to_string())?;
+                s.write_tx
+                    .send(data.to_vec())
+                    .map_err(|_| "SSH channel closed".to_string())?;
                 Ok(())
             }
             None => Err("Session not found".to_string()),
@@ -229,7 +226,9 @@ mod tests {
 
     impl Default for TestAppBackend {
         fn default() -> Self {
-            Self { emit_result: Ok(()) }
+            Self {
+                emit_result: Ok(()),
+            }
         }
     }
 
@@ -252,9 +251,12 @@ mod tests {
     fn expect_openpty(mock_pty_system: &mut MockPtySystemM) {
         mock_pty_system.expect_openpty().returning(|_| {
             let mut pair = MockPtyPairM::new();
-            pair.expect_spawn().returning(|_| Ok(Box::new(MockChildM::new())));
-            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_spawn()
+                .returning(|_| Ok(Box::new(MockChildM::new())));
+            pair.expect_master_writer()
+                .returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader()
+                .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
         });
@@ -267,7 +269,13 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+            },
+            mock_backend,
+        );
 
         assert!(result.is_ok());
         let info = result.unwrap();
@@ -283,7 +291,10 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None },
+            LocalSessionConfig {
+                shell: Some("/usr/bin/zsh".to_string()),
+                cwd: None,
+            },
             mock_backend,
         );
 
@@ -300,7 +311,10 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()) },
+            LocalSessionConfig {
+                shell: None,
+                cwd: Some("/tmp".to_string()),
+            },
             mock_backend,
         );
 
@@ -313,13 +327,83 @@ mod tests {
     }
 
     #[test]
-    fn create_local_when_pty_open_fails_returns_err() {
+    fn create_local_wsl_session_uses_cd_argument_for_cwd() {
         let mut mock_pty_system = MockPtySystemM::new();
-        mock_pty_system.expect_openpty().returning(|_| Err("PTY open failed".to_string()));
+        let captured_argv = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let captured_cwd = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let argv_clone = captured_argv.clone();
+        let cwd_clone = captured_cwd.clone();
+        mock_pty_system.expect_openpty().returning(move |_| {
+            let mut pair = MockPtyPairM::new();
+            let argv_clone = argv_clone.clone();
+            let cwd_clone = cwd_clone.clone();
+            pair.expect_spawn().returning(move |cmd| {
+                *argv_clone.lock().unwrap() = Some(cmd.get_argv().clone());
+                *cwd_clone.lock().unwrap() = cmd.get_cwd().cloned();
+                Ok(Box::new(MockChildM::new()))
+            });
+            pair.expect_master_writer()
+                .returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader()
+                .returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_resize().returning(|_, _| Ok(()));
+            Ok(Box::new(pair))
+        });
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: Some("wsl.exe -d Ubuntu".to_string()),
+                cwd: Some("~".to_string()),
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        assert!(info.name.contains("wsl"));
+        let argv = captured_argv
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("spawn should be called");
+        assert!(
+            argv.iter().any(|a| a == "--cd"),
+            "argv should contain --cd: {:?}",
+            argv
+        );
+        assert!(
+            argv.iter().any(|a| a == "~"),
+            "argv should contain ~: {:?}",
+            argv
+        );
+        assert!(
+            argv.windows(2).any(|w| w[0] == "--cd" && w[1] == "~"),
+            "--cd should be followed by ~"
+        );
+        assert!(
+            captured_cwd.lock().unwrap().is_none(),
+            "cwd should not be set on CommandBuilder for WSL"
+        );
+    }
+
+    #[test]
+    fn create_local_when_pty_open_fails_returns_err() {
+        let mut mock_pty_system = MockPtySystemM::new();
+        mock_pty_system
+            .expect_openpty()
+            .returning(|_| Err("PTY open failed".to_string()));
+        let mock_backend = TestAppBackend::default();
+        let mut manager = build_mock_manager(mock_pty_system);
+
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+            },
+            mock_backend,
+        );
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PTY open failed");
@@ -340,7 +424,13 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+            },
+            mock_backend,
+        );
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -362,7 +452,13 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+            },
+            mock_backend,
+        );
         assert!(result.is_ok());
 
         let close_result = manager.close(result.unwrap().id);
@@ -376,7 +472,13 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+            },
+            mock_backend,
+        );
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -398,7 +500,13 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+            },
+            mock_backend,
+        );
         assert!(result.is_ok());
 
         assert_eq!(manager.list().len(), 1);
@@ -411,7 +519,13 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None }, mock_backend);
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+            },
+            mock_backend,
+        );
         assert!(result.is_ok());
         let info = result.unwrap();
 
@@ -452,7 +566,9 @@ mod tests {
                 host: "localhost".to_string(),
                 port: 22,
                 username: "testuser".to_string(),
-                auth: SSHAuth::Password { password: "testpass".to_string() },
+                auth: SSHAuth::Password {
+                    password: "testpass".to_string(),
+                },
             },
             mock_backend,
         );
@@ -522,7 +638,9 @@ mod tests {
     #[test]
     fn create_ssh_connection_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| Err("Failed to connect".to_string()));
+        mock_ssh_backend
+            .expect_connect()
+            .returning(|_, _, _, _| Err("Failed to connect".to_string()));
         let mock_backend = TestAppBackend::default();
         let mut manager = SessionManager {
             sessions: HashMap::new(),
@@ -536,7 +654,9 @@ mod tests {
                 host: "invalid-host".to_string(),
                 port: 22,
                 username: "user".to_string(),
-                auth: SSHAuth::Password { password: "pass".to_string() },
+                auth: SSHAuth::Password {
+                    password: "pass".to_string(),
+                },
             },
             mock_backend,
         );
@@ -548,7 +668,9 @@ mod tests {
     #[test]
     fn create_ssh_auth_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| Err("SSH auth failed".to_string()));
+        mock_ssh_backend
+            .expect_connect()
+            .returning(|_, _, _, _| Err("SSH auth failed".to_string()));
         let mock_backend = TestAppBackend::default();
         let mut manager = SessionManager {
             sessions: HashMap::new(),

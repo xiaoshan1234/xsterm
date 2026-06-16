@@ -32,7 +32,12 @@ pub async fn create_ssh_session(
     state: State<'_, Arc<Mutex<SessionManager>>>,
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
-    tracing::info!("Creating SSH session: {}@{}:{}", config.username, config.host, config.port);
+    tracing::info!(
+        "Creating SSH session: {}@{}:{}",
+        config.username,
+        config.host,
+        config.port
+    );
     let mut manager = state.lock().map_err(|e| e.to_string())?;
     let backend = RealAppBackend::new(app);
     match manager.create_ssh(config, backend) {

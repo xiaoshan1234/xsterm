@@ -25,7 +25,9 @@ pub struct NativePtySystem {
 
 impl NativePtySystem {
     pub fn new() -> Self {
-        Self { inner: native_pty_system() }
+        Self {
+            inner: native_pty_system(),
+        }
     }
 }
 
@@ -42,7 +44,11 @@ struct NativePtyPair {
 
 impl PtyPair for NativePtyPair {
     fn spawn(&mut self, cmd: CommandBuilder) -> Result<Box<dyn Child>, String> {
-        let child = self.inner.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+        let child = self
+            .inner
+            .slave
+            .spawn_command(cmd)
+            .map_err(|e| e.to_string())?;
         Ok(Box::new(NativeChild { inner: child }))
     }
 
@@ -51,16 +57,22 @@ impl PtyPair for NativePtyPair {
     }
 
     fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String> {
-        self.inner.master.try_clone_reader().map_err(|e| e.to_string())
+        self.inner
+            .master
+            .try_clone_reader()
+            .map_err(|e| e.to_string())
     }
 
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
-        self.inner.master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        }).map_err(|e| e.to_string())
+        self.inner
+            .master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| e.to_string())
     }
 }
 

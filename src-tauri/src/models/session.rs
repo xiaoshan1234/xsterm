@@ -6,7 +6,11 @@ pub enum SessionType {
     #[serde(rename = "local")]
     Local { shell: String, cwd: String },
     #[serde(rename = "ssh")]
-    Ssh { host: String, port: u16, user: String },
+    Ssh {
+        host: String,
+        port: u16,
+        user: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +42,10 @@ pub enum SSHAuth {
     #[serde(rename = "password")]
     Password { password: String },
     #[serde(rename = "key")]
-    KeyFile { key_file: String, passphrase: Option<String> },
+    KeyFile {
+        key_file: String,
+        passphrase: Option<String>,
+    },
 }
 
 /// Result of an SSH connection, containing both the channel (for trait compliance)

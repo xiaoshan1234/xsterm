@@ -20,7 +20,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
-            let log_dir = app.handle().path().app_log_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let log_dir = app
+                .handle()
+                .path()
+                .app_log_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
             let config = get_log_config_impl(app.handle())?;
             cleanup_old_logs(&log_dir, config.max_file_size * config.max_log_files as u64);
             let reload_handle = init_logging(&log_dir, &config);

@@ -1,8 +1,8 @@
 use std::path::Path;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
-use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,7 +99,8 @@ pub fn get_log_config_impl(app: &AppHandle) -> Result<LogConfig, String> {
     let store = app.store("log_config.json").map_err(|e| e.to_string())?;
     match store.get("config") {
         Some(value) => {
-            let config: LogConfig = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+            let config: LogConfig =
+                serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
             Ok(config)
         }
         None => Ok(LogConfig::default()),

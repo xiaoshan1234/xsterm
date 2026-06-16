@@ -12,14 +12,15 @@ pub struct RealAppBackend {
 
 impl RealAppBackend {
     pub fn new(app: AppHandle) -> Self {
-        Self { app: std::sync::Arc::new(app) }
+        Self {
+            app: std::sync::Arc::new(app),
+        }
     }
 }
 
 impl AppBackend for RealAppBackend {
     fn emit(&self, event: &str, payload: &[u8]) -> Result<(), String> {
-        let json: serde_json::Value = serde_json::from_slice(payload)
-            .map_err(|e| e.to_string())?;
+        let json: serde_json::Value = serde_json::from_slice(payload).map_err(|e| e.to_string())?;
         self.app.emit(event, json).map_err(|e| e.to_string())
     }
 
