@@ -76,6 +76,17 @@ export const CloseIcon = icon("0 0 24 24", (
   </>
 ));
 
+export const MinimizeIcon = icon("0 0 24 24", <line x1="5" y1="12" x2="19" y2="12" />);
+
+export const MaximizeIcon = icon("0 0 24 24", <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />);
+
+export const RestoreIcon = icon("0 0 24 24", (
+  <>
+    <rect x="5" y="9" width="14" height="10" rx="2" ry="2" />
+    <path d="M8 9V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
+  </>
+));
+
 export const ChevronIcon = icon("0 0 24 24", (
   <polyline points="9 18 15 12 9 6" />
 ));

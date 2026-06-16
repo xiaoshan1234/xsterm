@@ -10,6 +10,9 @@
   line-height: 28px;
   flex-shrink: 0;
   width: 100%;
+  user-select: none;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 
 .navbar-logo {
@@ -33,6 +36,8 @@
 .navbar-menu {
   display: flex;
   gap: 4px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .navbar-item {
@@ -54,4 +59,47 @@
 .navbar-item:focus {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
+}
+
+.navbar-drag-region {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.navbar-window-controls {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.window-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.window-control:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.window-control--close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.window-control:focus {
+  outline: none;
 }
