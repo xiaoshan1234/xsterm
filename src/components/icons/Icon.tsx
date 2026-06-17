@@ -13,6 +13,8 @@ function icon(viewBox: string, path: React.ReactNode) {
         fill="none"
         stroke="currentColor"
         strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
         className={className}
       >
         {path}
@@ -31,18 +33,31 @@ export const LocalSessionIcon = icon("0 0 24 24", (
 
 export const SshSessionIcon = icon("0 0 24 24", (
   <>
-    <circle cx="12" cy="12" r="10" />
-    <line x1="2" y1="12" x2="22" y2="12" />
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    <rect x="2" y="2" width="20" height="20" rx="2" />
+    <path d="M16 12h-8" />
+    <path d="M13 9l3 3-3 3" />
   </>
 ));
 
 export const TmuxSessionIcon = icon("0 0 24 24", (
   <>
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-    <line x1="8" y1="8" x2="16" y2="8" />
-    <line x1="8" y1="12" x2="16" y2="12" />
-    <line x1="8" y1="16" x2="12" y2="16" />
+    <rect x="2" y="2" width="20" height="20" rx="2" />
+    <path d="M17 12H7" />
+    <path d="M14 9l3 3-3 3" />
+    <path d="M10 15l-3-3 3-3" />
+  </>
+));
+
+export const SshTmuxSessionIcon = icon("0 0 24 24", (
+  <>
+    <rect x="2" y="2" width="9" height="9" rx="1" ry="1" />
+    <rect x="13" y="2" width="9" height="9" rx="1" ry="1" />
+    <rect x="2" y="13" width="9" height="9" rx="1" ry="1" />
+    <rect x="13" y="13" width="9" height="9" rx="1" ry="1" />
+    <line x1="11" y1="5.5" x2="13" y2="5.5" />
+    <line x1="11" y1="16.5" x2="13" y2="16.5" />
+    <line x1="5.5" y1="11" x2="5.5" y2="13" />
+    <line x1="16.5" y1="11" x2="16.5" y2="13" />
   </>
 ));
 
