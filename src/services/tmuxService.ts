@@ -17,6 +17,10 @@ export interface SshTmuxSessionConfig {
   tmux: TmuxSessionConfig;
 }
 
+export function quoteTmuxString(value: string): string {
+  return value.replace(/"/g, '\\"');
+}
+
 export async function createTmux(config: TmuxSessionConfig): Promise<SessionInfo> {
   return invoke<SessionInfo>("create_tmux_session", { config });
 }
@@ -47,7 +51,7 @@ export async function sendKeysToTmuxPane(
 }
 
 export async function createTmuxWindow(sessionId: number, name?: string): Promise<void> {
-  const command = name ? `new-window -n "${name.replace(/"/g, '\\"')}"\n` : "new-window\n";
+  const command = name ? `new-window -n "${quoteTmuxString(name)}"\n` : "new-window\n";
   await writeTmuxCommand(sessionId, command);
 }
 
@@ -66,7 +70,7 @@ export async function renameTmuxWindow(
 ): Promise<void> {
   await writeTmuxCommand(
     sessionId,
-    `rename-window -t ${windowId} "${name.replace(/"/g, '\\"')}"\n`
+    `rename-window -t ${windowId} "${quoteTmuxString(name)}"\n`
   );
 }
 

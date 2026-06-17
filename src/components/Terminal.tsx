@@ -6,6 +6,10 @@ import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import "@xterm/xterm/css/xterm.css";
 
+function decodeOutput(data: number[]): string {
+  return new TextDecoder().decode(new Uint8Array(data));
+}
+
 interface TerminalProps {
   sessionId: number;
   paneId?: string;
@@ -108,8 +112,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
         const [id, output] = event.payload;
         if (id === sessionId && output.paneId === paneId) {
-          const decoder = new TextDecoder();
-          const text = decoder.decode(new Uint8Array(output.data));
+          const text = decodeOutput(output.data);
           console.log(`[${instanceId}] pane output received:`, JSON.stringify(text.slice(0, 50)));
           xterm.write(text);
         }
@@ -120,8 +123,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       listen<[number, number[]]>("session-output", (event) => {
         const [id, data] = event.payload;
         if (id === sessionId) {
-          const decoder = new TextDecoder();
-          const text = decoder.decode(new Uint8Array(data));
+          const text = decodeOutput(data);
           xterm.write(text);
         }
       }).then((fn) => {

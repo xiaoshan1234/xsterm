@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::parser::{PaneListEntry, WindowListEntry};
+
 /// A tmux pane (`%N`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +102,32 @@ pub struct TmuxPaneListEntry {
     pub height: u16,
 }
 
+impl From<WindowListEntry> for TmuxWindowListEntry {
+    fn from(w: WindowListEntry) -> Self {
+        TmuxWindowListEntry {
+            window_id: w.window_id,
+            session_id: w.session_id,
+            name: w.name,
+            active: w.active,
+            layout: w.layout,
+        }
+    }
+}
+
+impl From<PaneListEntry> for TmuxPaneListEntry {
+    fn from(p: PaneListEntry) -> Self {
+        TmuxPaneListEntry {
+            pane_id: p.pane_id,
+            window_id: p.window_id,
+            session_id: p.session_id,
+            title: p.title,
+            active: p.active,
+            width: p.width,
+            height: p.height,
+        }
+    }
+}
+
 /// Output event for a single pane. Emitted separately from control events so
 /// that the frontend can route it directly to the matching xterm.js instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,31 +146,6 @@ pub struct TmuxStateSnapshot {
     pub session: TmuxSession,
     pub windows: Vec<TmuxWindow>,
     pub panes: Vec<TmuxPane>,
-}
-
-/// Result of parsing a `list-panes` line from tmux.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
-pub(crate) struct ParsedPaneInfo {
-    pub id: String,
-    pub session_id: String,
-    pub window_id: String,
-    pub title: String,
-    pub is_active: bool,
-    pub width: u16,
-    pub height: u16,
-}
-
-/// Result of parsing a `list-windows` line from tmux.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
-pub(crate) struct ParsedWindowInfo {
-    pub id: String,
-    pub session_id: String,
-    pub name: String,
-    pub active_pane_id: String,
-    pub layout: String,
-    pub is_active: bool,
 }
 
 #[cfg(test)]

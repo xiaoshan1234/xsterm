@@ -14,7 +14,7 @@ use crate::infrastructure::ssh::{SshBackend, SshChannel, SshConnectResult};
 use crate::models::session::{SessionInfo, SessionType, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::tmux::commands::{build_tmux_argv, list_windows};
 use crate::tmux::parser::{TmuxControlParser, TmuxMessage};
-use crate::tmux::state::{TmuxControlEvent, TmuxPaneListEntry, TmuxPaneOutput, TmuxWindowListEntry};
+use crate::tmux::state::{TmuxControlEvent, TmuxPaneOutput};
 
 const TMUX_READ_BUFFER_SIZE: usize = 8192;
 
@@ -384,16 +384,7 @@ fn handle_message<B: AppBackend>(
                 backend,
                 session_id,
                 TmuxControlEvent::WindowList {
-                    windows: windows
-                        .into_iter()
-                        .map(|w| TmuxWindowListEntry {
-                            window_id: w.window_id,
-                            session_id: w.session_id,
-                            name: w.name,
-                            active: w.active,
-                            layout: w.layout,
-                        })
-                        .collect(),
+                    windows: windows.into_iter().map(Into::into).collect(),
                 },
             );
         }
@@ -402,18 +393,7 @@ fn handle_message<B: AppBackend>(
                 backend,
                 session_id,
                 TmuxControlEvent::PaneList {
-                    panes: panes
-                        .into_iter()
-                        .map(|p| TmuxPaneListEntry {
-                            pane_id: p.pane_id,
-                            window_id: p.window_id,
-                            session_id: p.session_id,
-                            title: p.title,
-                            active: p.active,
-                            width: p.width,
-                            height: p.height,
-                        })
-                        .collect(),
+                    panes: panes.into_iter().map(Into::into).collect(),
                 },
             );
         }
@@ -512,17 +492,26 @@ fn request_state_sync<B: AppBackend>(backend: &B, session_id: u32, tmux_session_
     }
 }
 
+fn emit_event<B: AppBackend, T: serde::Serialize>(
+    backend: &B,
+    event_name: &str,
+    session_id: u32,
+    payload: &T,
+) {
+    let wrapped = (session_id, payload);
+    if let Err(e) = backend.emit(event_name, &serde_json::to_vec(&wrapped).unwrap()) {
+        tracing::error!("Failed to emit {}: {}", event_name, e);
+    }
+}
+
 fn emit_pane_output<B: AppBackend>(
     backend: &B,
     session_id: u32,
     pane_id: String,
     data: Vec<u8>,
 ) {
-    let payload = TmuxPaneOutput { pane_id, data };
-    let wrapped = (session_id, payload);
-    if let Err(e) = backend.emit("tmux-pane-output", &serde_json::to_vec(&wrapped).unwrap()) {
-        tracing::error!("Failed to emit tmux pane output: {}", e);
-    }
+    let output = TmuxPaneOutput { pane_id, data };
+    emit_event(backend, "tmux-pane-output", session_id, &output);
 }
 
 fn emit_control_event<B: AppBackend>(
@@ -530,17 +519,11 @@ fn emit_control_event<B: AppBackend>(
     session_id: u32,
     event: TmuxControlEvent,
 ) {
-    let wrapped = (session_id, event);
-    if let Err(e) = backend.emit("tmux-control-event", &serde_json::to_vec(&wrapped).unwrap()) {
-        tracing::error!("Failed to emit tmux control event: {}", e);
-    }
+    emit_event(backend, "tmux-control-event", session_id, &event);
 }
 
 fn emit_closed<B: AppBackend>(backend: &B, session_id: u32) {
-    let payload = serde_json::to_vec(&session_id).unwrap();
-    if let Err(e) = backend.emit("session-closed", &payload) {
-        tracing::error!("Failed to emit session closed: {}", e);
-    }
+    emit_event(backend, "session-closed", session_id, &session_id);
 }
 
 #[cfg(test)]

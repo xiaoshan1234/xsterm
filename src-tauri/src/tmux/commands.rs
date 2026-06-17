@@ -22,25 +22,15 @@ pub fn build_tmux_argv(command: &str, target: Option<&str>) -> Vec<String> {
 
     match args[0].as_str() {
         "new-session" => {
-            if !args.contains(&"-A".to_string()) {
-                args.push("-A".to_string());
-            }
-            if !args.contains(&"-D".to_string()) {
-                args.push("-D".to_string());
-            }
+            add_flag_if_missing(&mut args, "-A");
+            add_flag_if_missing(&mut args, "-D");
             if let Some(t) = target {
-                if !args.contains(&"-s".to_string()) {
-                    args.push("-s".to_string());
-                    args.push(t.to_string());
-                }
+                add_flag_with_value(&mut args, "-s", t);
             }
         }
         "attach-session" => {
             if let Some(t) = target {
-                if !args.contains(&"-t".to_string()) {
-                    args.push("-t".to_string());
-                    args.push(t.to_string());
-                }
+                add_flag_with_value(&mut args, "-t", t);
             }
         }
         _ => {
@@ -51,6 +41,19 @@ pub fn build_tmux_argv(command: &str, target: Option<&str>) -> Vec<String> {
     }
 
     args
+}
+
+fn add_flag_if_missing(args: &mut Vec<String>, flag: &str) {
+    if !args.contains(&flag.to_string()) {
+        args.push(flag.to_string());
+    }
+}
+
+fn add_flag_with_value(args: &mut Vec<String>, flag: &str, value: &str) {
+    if !args.contains(&flag.to_string()) {
+        args.push(flag.to_string());
+        args.push(value.to_string());
+    }
 }
 
 /// Create a new tmux session and enter control mode.
