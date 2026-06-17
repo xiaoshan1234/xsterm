@@ -10,7 +10,7 @@ use serde_json;
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{Child, PtyPair, PtySystem};
-use crate::infrastructure::ssh::{SshBackend, SshConnectResult};
+use crate::infrastructure::ssh::{SshBackend, SshChannel, SshConnectResult};
 use crate::models::session::{SessionInfo, SessionType, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::tmux::commands::{build_tmux_argv, list_windows};
 use crate::tmux::parser::{TmuxControlParser, TmuxMessage};
@@ -24,6 +24,8 @@ pub struct TmuxSession {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     #[allow(dead_code)]
     exited: Arc<AtomicBool>,
+    #[allow(dead_code)]
+    _ssh_channel: Option<Box<dyn SshChannel + Send>>,
 }
 
 /// Keeps the tmux child process and PTY pair alive for the session lifetime.
@@ -112,6 +114,7 @@ pub fn create_tmux_session(
             info,
             writer,
             exited,
+            _ssh_channel: None,
         },
         handles,
     ))
@@ -167,8 +170,10 @@ pub fn create_ssh_tmux_session(
     session_id: u32,
 ) -> Result<TmuxSession, String> {
     let command = build_tmux_command(&config.tmux);
+    tracing::info!("tmux session {} SSH tmux command: {}", session_id, command);
+
     let SshConnectResult {
-        channel: _channel,
+        channel,
         write_tx,
         read_rx,
     } = ssh_backend.connect_exec(
@@ -177,7 +182,13 @@ pub fn create_ssh_tmux_session(
         &config.ssh.auth,
         &config.ssh.username,
         &command,
-    )?;
+    )
+    .map_err(|e| {
+        tracing::error!("tmux session {} SSH connect_exec failed: {}", session_id, e);
+        e
+    })?;
+
+    tracing::info!("tmux session {} SSH connect_exec succeeded", session_id);
 
     let writer = Arc::new(Mutex::new(Box::new(ChannelWriter { tx: write_tx }) as Box<dyn Write + Send>));
     let reader = Box::new(ChannelReader {
@@ -217,9 +228,12 @@ pub fn create_ssh_tmux_session(
         std::thread::sleep(std::time::Duration::from_millis(500));
         if let Ok(mut w) = writer_for_sync.lock() {
             let cmd = list_windows("$0");
+            tracing::info!("tmux session {} main-thread sync writing: {:?}", session_id, cmd.trim());
             let _ = w.write_all(cmd.as_bytes());
             let _ = w.flush();
             tracing::info!("tmux session {} main-thread sync sent: {}", session_id, cmd.trim());
+        } else {
+            tracing::error!("tmux session {} failed to lock writer for sync", session_id);
         }
     });
 
@@ -227,6 +241,7 @@ pub fn create_ssh_tmux_session(
         info,
         writer,
         exited,
+        _ssh_channel: Some(channel),
     })
 }
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ChatIcon, SettingsIcon, LogIcon, LocalSessionIcon, SshSessionIcon, TmuxSessionIcon } from "../icons/Icon";
+import { ChatIcon, SettingsIcon, LogIcon, LocalSessionIcon, SshSessionIcon, TmuxSessionIcon, SshTmuxSessionIcon } from "../icons/Icon";
 
 export type SidebarMenu = "chat" | "settings";
 
@@ -61,8 +61,10 @@ export function SidebarToolbar({
               <LocalSessionIcon size={14} />
             ) : session.type === "ssh" ? (
               <SshSessionIcon size={14} />
-            ) : (
+            ) : session.type === "tmux" ? (
               <TmuxSessionIcon size={14} />
+            ) : (
+              <SshTmuxSessionIcon size={14} />
             )}
           </button>
         ))}

@@ -1,16 +1,28 @@
 import { useState } from "react";
-import { SshTmuxSessionConfig } from "../../types/session";
+import { SavedSessionConfig, SSHSessionConfig, SshTmuxSessionConfig } from "../../types/session";
 import { FormField } from "../ui/FormField";
 
 interface TmuxSessionFormProps {
   config: SshTmuxSessionConfig;
   onChange: (config: SshTmuxSessionConfig) => void;
+  savedSshConfigs: SavedSessionConfig[];
 }
 
-export function TmuxSessionForm({ config, onChange }: TmuxSessionFormProps) {
-  const [connectionType, setConnectionType] = useState<"local" | "ssh">(
+function getSshFromSaved(saved: SavedSessionConfig | undefined): SSHSessionConfig | undefined {
+  if (saved?.type === "ssh") {
+    return saved.sshConfig;
+  }
+  if (saved?.type === "ssh_tmux") {
+    return saved.sshTmuxConfig?.ssh;
+  }
+  return undefined;
+}
+
+export function TmuxSessionForm({ config, onChange, savedSshConfigs }: TmuxSessionFormProps) {
+  const [connectionType, setConnectionType] = useState<"local" | "ssh" | "saved">(
     config.ssh ? "ssh" : "local"
   );
+  const [selectedSshConfigId, setSelectedSshConfigId] = useState<string>("");
 
   const updateTmux = (tmux: SshTmuxSessionConfig["tmux"]) => {
     onChange({ ...config, tmux });
@@ -20,11 +32,34 @@ export function TmuxSessionForm({ config, onChange }: TmuxSessionFormProps) {
     onChange({ ...config, ssh });
   };
 
-  const setType = (type: "local" | "ssh") => {
+  const applySavedSshConfig = (configId: string) => {
+    setSelectedSshConfigId(configId);
+    const saved = savedSshConfigs.find((c) => c.id === configId);
+    const sshConfig = getSshFromSaved(saved);
+    if (sshConfig) {
+      onChange({ ...config, ssh: sshConfig });
+    } else if (configId === "") {
+      const { ssh: _, ...rest } = config;
+      onChange(rest as SshTmuxSessionConfig);
+    }
+  };
+
+  const setType = (type: "local" | "ssh" | "saved") => {
     setConnectionType(type);
+    setSelectedSshConfigId("");
     if (type === "local") {
       const { ssh: _, ...rest } = config;
       onChange(rest as SshTmuxSessionConfig);
+    } else if (type === "saved") {
+      const first = savedSshConfigs[0];
+      const firstSsh = getSshFromSaved(first);
+      if (first && firstSsh) {
+        setSelectedSshConfigId(first.id);
+        onChange({ ...config, ssh: firstSsh });
+      } else {
+        const { ssh: _, ...rest } = config;
+        onChange(rest as SshTmuxSessionConfig);
+      }
     } else {
       onChange({
         ...config,
@@ -46,11 +81,23 @@ export function TmuxSessionForm({ config, onChange }: TmuxSessionFormProps) {
   return (
     <div className="tmux-session-form">
       <FormField label="Connection">
-        <select value={connectionType} onChange={(e) => setType(e.target.value as "local" | "ssh")}>
+        <select value={connectionType} onChange={(e) => setType(e.target.value as "local" | "ssh" | "saved")}>
           <option value="local">Local tmux</option>
-          <option value="ssh">SSH tmux</option>
+          <option value="saved">Saved SSH tmux</option>
+          <option value="ssh">Manual SSH tmux</option>
         </select>
       </FormField>
+
+      {connectionType === "saved" && (
+        <FormField label="Saved SSH session">
+          <select value={selectedSshConfigId} onChange={(e) => applySavedSshConfig(e.target.value)}>
+            <option value="">Select a saved SSH session...</option>
+            {savedSshConfigs.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </FormField>
+      )}
 
       {connectionType === "ssh" && ssh && (
         <>
@@ -146,8 +193,29 @@ export function TmuxSessionForm({ config, onChange }: TmuxSessionFormProps) {
   );
 }
 
-export function validateSshTmuxConfig(config: SshTmuxSessionConfig): string | null {
+function sshConfigsEqual(a: SSHSessionConfig, b: SSHSessionConfig): boolean {
+  return (
+    a.host === b.host &&
+    (a.port ?? 22) === (b.port ?? 22) &&
+    a.username === b.username &&
+    a.auth_type === b.auth_type &&
+    a.password === b.password &&
+    a.key_file === b.key_file &&
+    a.passphrase === b.passphrase
+  );
+}
+
+export function validateSshTmuxConfig(config: SshTmuxSessionConfig, savedSshConfigs: SavedSessionConfig[] = []): string | null {
   if (config.ssh) {
+    const saved = savedSshConfigs.find(
+      (c) => {
+        const savedSsh = getSshFromSaved(c);
+        return savedSsh && sshConfigsEqual(savedSsh, config.ssh!);
+      }
+    );
+    if (saved) {
+      return null;
+    }
     if (!config.ssh.host.trim()) return "Host is required";
     if (!config.ssh.username.trim()) return "Username is required";
     if (config.ssh.auth_type === "password" && !config.ssh.password) {

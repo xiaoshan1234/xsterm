@@ -191,7 +191,7 @@ async fn run_ssh_session(
     let pty_size = default_pty_size();
     channel
         .request_pty(
-            false,
+            true,
             DEFAULT_TERMINAL_TYPE,
             u32::from(pty_size.cols),
             u32::from(pty_size.rows),
@@ -203,20 +203,23 @@ async fn run_ssh_session(
         .map_err(|e| format!("SSH PTY request failed: {}", e))?;
 
     if let Some(command) = command {
+        tracing::info!("SSH exec command: {}", command);
         channel
-            .exec(false, command)
+            .exec(true, command)
             .await
             .map_err(|e| format!("SSH exec failed: {}", e))?;
     } else {
         channel
-            .request_shell(false)
+            .request_shell(true)
             .await
             .map_err(|e| format!("SSH shell request failed: {}", e))?;
     }
 
     result_tx.send(Ok(())).ok();
+    tracing::info!("SSH session established, entering data loop");
 
     run_data_loop(&mut handle, &mut channel, read_tx, write_rx).await;
+    tracing::info!("SSH data loop ended");
     Ok(())
 }
 
@@ -275,9 +278,18 @@ async fn run_data_loop(
                     Some(russh::ChannelMsg::ExtendedData { data, .. }) => {
                         read_tx.send(Some(data.as_ref().to_vec())).ok();
                     }
-                    Some(russh::ChannelMsg::Eof)
-                    | Some(russh::ChannelMsg::Close)
-                    | None => {
+                    Some(russh::ChannelMsg::Eof) => {
+                        tracing::info!("SSH channel received EOF");
+                        read_tx.send(None).ok();
+                        break;
+                    }
+                    Some(russh::ChannelMsg::Close) => {
+                        tracing::info!("SSH channel received Close");
+                        read_tx.send(None).ok();
+                        break;
+                    }
+                    None => {
+                        tracing::info!("SSH channel wait returned None");
                         read_tx.send(None).ok();
                         break;
                     }
@@ -288,10 +300,14 @@ async fn run_data_loop(
                 match data {
                     Some(d) => {
                         if handle.data(channel_id, CryptoVec::from_slice(&d)).await.is_err() {
+                            tracing::error!("SSH channel data send failed");
                             break;
                         }
                     }
-                    None => break,
+                    None => {
+                        tracing::info!("SSH write channel closed");
+                        break;
+                    }
                 }
             }
         }

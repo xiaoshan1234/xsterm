@@ -23,7 +23,10 @@ export default function CreateSessionDialog({
   onCreateSsh,
   onCreateTmux,
 }: CreateSessionDialogProps) {
-  const { groups, addToGroup } = useSession();
+  const { groups, savedConfigs, addToGroup } = useSession();
+  const savedSshConfigs = savedConfigs.filter(
+    (c) => c.type === "ssh" || c.type === "ssh_tmux"
+  );
   const [tab, setTab] = useState<"local" | "ssh" | "tmux">("local");
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [saveConfig, setSaveConfig] = useState(true);
@@ -64,28 +67,33 @@ export default function CreateSessionDialog({
     setError("");
     let session: Session;
 
-    if (tab === "local") {
-      session = await onCreateLocal(localConfig, saveConfig);
-    } else if (tab === "ssh") {
-      const validationError = validateSshConfig(sshConfig);
-      if (validationError) {
-        setError(validationError);
-        return;
+    try {
+      if (tab === "local") {
+        session = await onCreateLocal(localConfig, saveConfig);
+      } else if (tab === "ssh") {
+        const validationError = validateSshConfig(sshConfig);
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+        session = await onCreateSsh(sshConfig, saveConfig);
+      } else {
+        const validationError = validateSshTmuxConfig(tmuxConfig, savedSshConfigs);
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+        session = await onCreateTmux(tmuxConfig, saveConfig);
       }
-      session = await onCreateSsh(sshConfig, saveConfig);
-    } else {
-      const validationError = validateSshTmuxConfig(tmuxConfig);
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
-      session = await onCreateTmux(tmuxConfig, saveConfig);
-    }
 
-    if (selectedGroupId !== null) {
-      addToGroup(selectedGroupId, session.configId);
+      if (selectedGroupId !== null) {
+        addToGroup(selectedGroupId, session.configId);
+      }
+      onClose();
+    } catch (err) {
+      console.error("Failed to create session:", err);
+      setError(err instanceof Error ? err.message : String(err));
     }
-    onClose();
   };
 
   const footer = (
@@ -151,7 +159,7 @@ export default function CreateSessionDialog({
       ) : tab === "ssh" ? (
         <SshSessionForm config={sshConfig} onChange={setSshConfig} onError={setError} />
       ) : (
-        <TmuxSessionForm config={tmuxConfig} onChange={setTmuxConfig} />
+        <TmuxSessionForm config={tmuxConfig} onChange={setTmuxConfig} savedSshConfigs={savedSshConfigs} />
       )}
     </Dialog>
   );

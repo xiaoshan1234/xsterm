@@ -1,6 +1,6 @@
 import { MouseEvent, useState } from "react";
 import { Session } from "../types/session";
-import { LocalSessionIcon, SshSessionIcon, CloseIcon } from "./icons/Icon";
+import { LocalSessionIcon, SshSessionIcon, TmuxSessionIcon, SshTmuxSessionIcon, CloseIcon } from "./icons/Icon";
 import "./TabBar.css";
 
 interface TabBarProps {
@@ -53,7 +53,15 @@ export default function TabBar({ sessions, activeId, onSelect, onClose, onRename
           onDoubleClick={() => handleDoubleClick(session)}
         >
           <span className="tab-icon">
-            {session.type === "local" ? <LocalSessionIcon size={14} /> : <SshSessionIcon size={14} />}
+            {session.type === "local" ? (
+              <LocalSessionIcon size={14} />
+            ) : session.type === "ssh" ? (
+              <SshSessionIcon size={14} />
+            ) : session.type === "tmux" ? (
+              <TmuxSessionIcon size={14} />
+            ) : (
+              <SshTmuxSessionIcon size={14} />
+            )}
           </span>
           {editingId === session.id ? (
             <input

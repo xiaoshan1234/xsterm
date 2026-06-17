@@ -29,9 +29,7 @@ pub enum SessionType {
 /// Configuration for creating a tmux control mode session over SSH.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshTmuxSessionConfig {
-    #[serde(flatten)]
     pub ssh: SSHSessionConfig,
-    #[serde(flatten)]
     pub tmux: TmuxSessionConfig,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
