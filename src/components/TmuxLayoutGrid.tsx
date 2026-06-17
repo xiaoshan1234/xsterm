@@ -20,6 +20,7 @@ interface TmuxLayoutGridProps {
 export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLayoutGridProps) {
   const cells = parseTmuxLayout(layout);
   const paneMap = new Map(panes.map((p) => [p.id, p]));
+  console.log("TmuxLayoutGrid cells:", cells.length, "paneIds:", cells.map((c) => c.paneId).join(","));
 
   return (
     <div className="tmux-layout-grid" style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -40,7 +41,10 @@ export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLa
               }}
             >
               <div className="tmux-pane-header">
-                <span className="tmux-pane-title">{pane?.title || cell.paneId}</span>
+                <span className="tmux-pane-title">
+                  {pane?.inCopyMode && <span className="tmux-copy-mode-indicator">[COPY] </span>}
+                  {pane?.title || cell.paneId}
+                </span>
                 {onClosePane && (
                   <button
                     className="tmux-pane-close"

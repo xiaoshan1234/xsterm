@@ -4,8 +4,8 @@ use std::io::Write;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
 use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
-use crate::tmux::session::{create_tmux_session, TmuxSession, TmuxSessionHandles};
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, TmuxSessionConfig};
+use crate::tmux::session::{create_ssh_tmux_session, create_tmux_session, TmuxSession, TmuxSessionHandles};
+use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::tmux::commands::{resize_pane, send_keys};
 use crate::services::local_session::create_local_session;
 
@@ -14,6 +14,7 @@ enum Session {
     Local(LocalSession, LocalSessionHandles),
     Ssh(SshSessionWrapper),
     Tmux(TmuxSession, #[allow(dead_code)] TmuxSessionHandles),
+    SshTmux(TmuxSession),
 }
 
 impl Session {
@@ -22,6 +23,7 @@ impl Session {
             Session::Local(s, _) => &s.info,
             Session::Ssh(s) => &s.info,
             Session::Tmux(s, _) => &s.info,
+            Session::SshTmux(s) => &s.info,
         }
     }
 }
@@ -105,6 +107,25 @@ impl SessionManager {
         Ok(info)
     }
 
+    pub fn create_ssh_tmux(
+        &mut self,
+        config: SshTmuxSessionConfig,
+        backend: impl AppBackend + 'static,
+    ) -> Result<SessionInfo, String> {
+        let id = self.allocate_session_id();
+
+        let session = create_ssh_tmux_session(
+            self.ssh_backend.as_ref(),
+            config,
+            backend,
+            id,
+        )?;
+
+        let info = session.info.clone();
+        self.sessions.insert(id, Session::SshTmux(session));
+        Ok(info)
+    }
+
     /// Write input data to the session with the given `id`.
     pub fn write(&mut self, id: u32, data: &[u8]) -> Result<(), String> {
         match self.sessions.get_mut(&id) {
@@ -118,7 +139,7 @@ impl SessionManager {
                     .map_err(|_| format!("SSH channel closed for session {}", id))?;
                 Ok(())
             }
-            Some(Session::Tmux(_, _)) => Err(format!(
+            Some(Session::Tmux(_, _)) | Some(Session::SshTmux(_)) => Err(format!(
                 "Session {} is a tmux session; use write_tmux_command instead",
                 id
             )),
@@ -131,7 +152,7 @@ impl SessionManager {
         match self.sessions.get(&id) {
             Some(Session::Local(_, handles)) => handles.resize(rows, cols),
             Some(Session::Ssh(_)) => Ok(()),
-            Some(Session::Tmux(_, _)) => Err(format!(
+            Some(Session::Tmux(_, _)) | Some(Session::SshTmux(_)) => Err(format!(
                 "Session {} is a tmux session; use resize_tmux_pane instead",
                 id
             )),
@@ -142,11 +163,10 @@ impl SessionManager {
     /// Write a tmux control mode command to the session with the given `id`.
     pub fn write_tmux_command(&mut self, id: u32, command: &str) -> Result<(), String> {
         match self.sessions.get_mut(&id) {
-            Some(Session::Tmux(session, _)) => session.write_command(command),
-            Some(_) => Err(format!(
-                "Session {} is not a tmux session",
-                id
-            )),
+            Some(Session::Tmux(session, _)) | Some(Session::SshTmux(session)) => {
+                session.write_command(command)
+            }
+            Some(_) => Err(format!("Session {} is not a tmux session", id)),
             None => Err(format!("Session {} not found", id)),
         }
     }
@@ -262,6 +282,9 @@ mod tests {
         fn kill(self: Box<Self>) -> Result<(), String> {
             self.kill()
         }
+        fn try_wait(&mut self) -> Result<Option<portable_pty::ExitStatus>, String> {
+            Ok(None)
+        }
     }
 
     mock! {
@@ -291,6 +314,14 @@ mod tests {
                 auth: &SSHAuth,
                 username: &str,
             ) -> Result<SshConnectResult, String>;
+            fn connect_exec(
+                &self,
+                host: &str,
+                port: u16,
+                auth: &SSHAuth,
+                username: &str,
+                command: &str,
+            ) -> Result<SshConnectResult, String>;
         }
     }
 
@@ -303,6 +334,17 @@ mod tests {
             username: &str,
         ) -> Result<SshConnectResult, String> {
             self.connect(host, port, auth, username)
+        }
+
+        fn connect_exec(
+            &self,
+            host: &str,
+            port: u16,
+            auth: &SSHAuth,
+            username: &str,
+            command: &str,
+        ) -> Result<SshConnectResult, String> {
+            self.connect_exec(host, port, auth, username, command)
         }
     }
 

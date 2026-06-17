@@ -45,6 +45,31 @@ pub enum TmuxMessage {
         success: bool,
         lines: Vec<String>,
     },
+    /// Parsed output of a `list-windows` command response.
+    WindowList(Vec<WindowListEntry>),
+    /// Parsed output of a `list-panes` command response.
+    PaneList(Vec<PaneListEntry>),
+    Unknown { raw: String },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowListEntry {
+    pub window_id: String,
+    pub session_id: String,
+    pub name: String,
+    pub active: bool,
+    pub layout: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaneListEntry {
+    pub pane_id: String,
+    pub window_id: String,
+    pub session_id: String,
+    pub title: String,
+    pub active: bool,
+    pub width: u16,
+    pub height: u16,
 }
 
 /// Incremental parser for the tmux control mode byte stream.
@@ -53,6 +78,7 @@ pub struct TmuxControlParser {
     buffer: Vec<u8>,
     pending_response: Option<PendingResponse>,
     pending_dcs_messages: VecDeque<TmuxMessage>,
+    in_dcs: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -64,8 +90,12 @@ struct PendingResponse {
 }
 
 impl TmuxControlParser {
-    /// DCS introducer used by tmux `-CC` mode: `ESC P 1000p tmux;`.
-    const DCS_START: &'static [u8] = b"\x1bP1000p tmux;";
+    /// DCS introducer used by tmux `-CC` mode: `ESC P 1000p`.
+    ///
+    /// The control client emits this unterminated DCS at the start of the
+    /// connection; each subsequent control line is sent inside the DCS string
+    /// until an `ST` (`ESC \`) terminator is emitted on exit.
+    const DCS_START: &'static [u8] = b"\x1bP1000p";
     /// DCS terminator: `ST` (`ESC \`).
     const DCS_END: &'static [u8] = b"\x1b\\";
 
@@ -79,10 +109,12 @@ impl TmuxControlParser {
         self.buffer.extend_from_slice(data);
         let mut messages = Vec::new();
 
-        while !self.buffer.is_empty() {
+        loop {
+            let prev_len = self.buffer.len();
             if let Some(message) = self.try_parse_one() {
                 messages.push(message);
-            } else {
+            }
+            if self.buffer.len() == prev_len {
                 break;
             }
         }
@@ -97,26 +129,104 @@ impl TmuxControlParser {
             return Some(message);
         }
 
-        // 1. DCS-wrapped block (-CC mode). Check first because DCS blocks
-        // contain \r\n sequences that must not be interpreted as plain lines.
-        if let Some(block) = self.take_dcs_block() {
-            let block_messages = self.parse_dcs_block(&block);
-            if !block_messages.is_empty() {
-                self.pending_dcs_messages = block_messages.into();
-                return self.pending_dcs_messages.pop_front();
-            }
+        // In -CC mode tmux emits an unterminated DCS introducer and keeps
+        // sending control lines inside the DCS until the client exits and the
+        // ST terminator is sent. Strip the introducer/terminator and parse
+        // the enclosed lines as ordinary control lines.
+        if !self.in_dcs && self.buffer.starts_with(Self::DCS_START) {
+            self.buffer.drain(..Self::DCS_START.len());
+            self.in_dcs = true;
         }
 
-        // 2. Plain control line outside DCS (used by -C mode without wrapping).
+        if self.in_dcs {
+            if self.buffer.starts_with(Self::DCS_END) {
+                self.buffer.drain(..Self::DCS_END.len());
+                self.in_dcs = false;
+                return self.try_parse_one();
+            }
+
+            if let Some(line) = self.take_line() {
+                if line.is_empty() {
+                    return self.try_parse_one();
+                }
+                return self.handle_control_line(&line);
+            }
+
+            return None;
+        }
+
+        // Plain control line outside DCS (used by -C mode without wrapping).
         if let Some(line) = self.take_line() {
             if !line.is_empty() {
-                return Some(self.parse_control_line(&line));
+                return self.handle_control_line(&line);
             }
-            // Empty line: keep going; may appear between messages.
             return self.try_parse_one();
         }
 
         None
+    }
+
+    fn handle_control_line(&mut self, line: &str) -> Option<TmuxMessage> {
+        let message = self.parse_control_line(line);
+
+        if let TmuxMessage::Notification { name, args, .. } = &message {
+            if name == "begin" && args.len() >= 3 {
+                let timestamp = args[0].parse().unwrap_or(0);
+                let cmd_num = args[1].parse().unwrap_or(0);
+                let flags = args[2].parse().unwrap_or(0);
+                tracing::info!(
+                    "tmux begin response: cmd_num={} flags={}",
+                    cmd_num,
+                    flags
+                );
+                self.pending_response = Some(PendingResponse {
+                    timestamp,
+                    cmd_num,
+                    flags,
+                    lines: Vec::new(),
+                });
+                return None;
+            }
+
+            if name == "end" && args.len() >= 3 {
+                if let Some(pending) = self.pending_response.take() {
+                    tracing::info!(
+                        "tmux end response: cmd_num={} lines={}",
+                        pending.cmd_num,
+                        pending.lines.len()
+                    );
+                    let response = TmuxMessage::CommandResponse {
+                        timestamp: pending.timestamp,
+                        cmd_num: pending.cmd_num,
+                        flags: pending.flags,
+                        success: true,
+                        lines: pending.lines,
+                    };
+                    return Some(classify_command_response(response));
+                }
+                return None;
+            }
+
+            if name == "error" && args.len() >= 3 {
+                if let Some(pending) = self.pending_response.take() {
+                    return Some(TmuxMessage::CommandResponse {
+                        timestamp: pending.timestamp,
+                        cmd_num: pending.cmd_num,
+                        flags: pending.flags,
+                        success: false,
+                        lines: pending.lines,
+                    });
+                }
+                return None;
+            }
+        }
+
+        if let Some(pending) = self.pending_response.as_mut() {
+            pending.lines.push(line.to_string());
+            return None;
+        }
+
+        Some(message)
     }
 
     /// Take a complete line from the buffer, if one exists.
@@ -139,100 +249,10 @@ impl TmuxControlParser {
         }
     }
 
-    /// Extract a DCS-wrapped block if the buffer contains a complete one.
-    fn take_dcs_block(&mut self) -> Option<Vec<u8>> {
-        let start = self
-            .buffer
-            .windows(Self::DCS_START.len())
-            .position(|w| w == Self::DCS_START)?;
-        let after_start = start + Self::DCS_START.len();
-
-        let end = self.buffer[after_start..]
-            .windows(Self::DCS_END.len())
-            .position(|w| w == Self::DCS_END)?;
-        let end_abs = after_start + end;
-
-        let block = self.buffer.drain(after_start..end_abs).collect::<Vec<u8>>();
-        // Remove the DCS introducer and terminator.
-        self.buffer.drain(..start);
-        self.buffer.drain(..Self::DCS_END.len());
-        Some(block)
-    }
-
     /// Parse the content of a DCS block, which is a sequence of control lines.
-    fn parse_dcs_block(&mut self, block: &[u8]) -> Vec<TmuxMessage> {
-        let mut messages = Vec::new();
-
-        // Split the block into lines. Tmux uses \n to terminate lines; some
-        // paths include an additional \r before it.
-        let lines: Vec<&[u8]> = block
-            .split(|&b| b == b'\n')
-            .map(|l| l.strip_suffix(b"\r").unwrap_or(l))
-            .collect();
-
-        for line_bytes in lines {
-            if line_bytes.is_empty() {
-                continue;
-            }
-            let line = String::from_utf8_lossy(line_bytes).into_owned();
-            let message = self.parse_control_line(&line);
-
-            // If this is part of a command response block, absorb subsequent
-            // lines until we hit %end or %error.
-            if let TmuxMessage::Notification { name, args, .. } = &message {
-                if name == "begin" && args.len() >= 3 {
-                    let timestamp = args[0].parse().unwrap_or(0);
-                    let cmd_num = args[1].parse().unwrap_or(0);
-                    let flags = args[2].parse().unwrap_or(0);
-                    self.pending_response = Some(PendingResponse {
-                        timestamp,
-                        cmd_num,
-                        flags,
-                        lines: Vec::new(),
-                    });
-                    continue;
-                }
-
-                if name == "end" && args.len() >= 3 {
-                    if let Some(pending) = self.pending_response.take() {
-                        messages.push(TmuxMessage::CommandResponse {
-                            timestamp: pending.timestamp,
-                            cmd_num: pending.cmd_num,
-                            flags: pending.flags,
-                            success: true,
-                            lines: pending.lines,
-                        });
-                    }
-                    continue;
-                }
-
-                if name == "error" && args.len() >= 3 {
-                    if let Some(pending) = self.pending_response.take() {
-                        messages.push(TmuxMessage::CommandResponse {
-                            timestamp: pending.timestamp,
-                            cmd_num: pending.cmd_num,
-                            flags: pending.flags,
-                            success: false,
-                            lines: pending.lines,
-                        });
-                    }
-                    continue;
-                }
-            }
-
-            if self.pending_response.is_some() {
-                self.pending_response
-                    .as_mut()
-                    .unwrap()
-                    .lines
-                    .push(line);
-                continue;
-            }
-
-            messages.push(message);
-        }
-
-        messages
+    #[allow(dead_code)]
+    fn parse_dcs_block(&mut self, _block: &[u8]) -> Vec<TmuxMessage> {
+        Vec::new()
     }
 
     /// Parse a single control-mode line into a structured message.
@@ -256,10 +276,7 @@ impl TmuxControlParser {
             };
         }
 
-        // Anything else is treated as a notification without the leading `%`.
-        TmuxMessage::Notification {
-            name: String::new(),
-            args: vec![line.to_string()],
+        TmuxMessage::Unknown {
             raw: line.to_string(),
         }
     }
@@ -346,6 +363,64 @@ fn unescape_tmux_output(input: &str) -> Vec<u8> {
     result
 }
 
+fn classify_command_response(message: TmuxMessage) -> TmuxMessage {
+    if let TmuxMessage::CommandResponse {
+        success: true,
+        lines,
+        ..
+    } = &message
+    {
+        if let Some(first) = lines.first() {
+            let parts: Vec<&str> = first.split('\t').collect();
+            if parts.len() >= 7 && parts[0].starts_with('$') && parts[2].starts_with('%') {
+                return parse_pane_list(lines);
+            }
+            if parts.len() >= 5 && parts[0].starts_with('$') && parts[1].starts_with('@') {
+                return parse_window_list(lines);
+            }
+        }
+    }
+    message
+}
+
+fn parse_window_list(lines: &[String]) -> TmuxMessage {
+    let mut entries = Vec::new();
+    for line in lines {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 5 {
+            continue;
+        }
+        entries.push(WindowListEntry {
+            session_id: parts[0].to_string(),
+            window_id: parts[1].to_string(),
+            active: parts[2] == "1",
+            layout: parts[3].to_string(),
+            name: parts[4].to_string(),
+        });
+    }
+    TmuxMessage::WindowList(entries)
+}
+
+fn parse_pane_list(lines: &[String]) -> TmuxMessage {
+    let mut entries = Vec::new();
+    for line in lines {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 7 {
+            continue;
+        }
+        entries.push(PaneListEntry {
+            session_id: parts[0].to_string(),
+            window_id: parts[1].to_string(),
+            pane_id: parts[2].to_string(),
+            active: parts[3] == "1",
+            width: parts[4].parse().unwrap_or(0),
+            height: parts[5].parse().unwrap_or(0),
+            title: parts[6].to_string(),
+        });
+    }
+    TmuxMessage::PaneList(entries)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,7 +442,7 @@ mod tests {
 
     #[test]
     fn parses_dcs_wrapped_block() {
-        let block = b"\x1bP1000p tmux;%output %0 hi\r\n%window-add @0\r\n\x1b\\";
+        let block = b"\x1bP1000p%output %0 hi\r\n%window-add @0\r\n\x1b\\";
         let mut parser = TmuxControlParser::new();
         let msgs = parser.parse(block);
         assert_eq!(msgs.len(), 2);
@@ -389,8 +464,32 @@ mod tests {
     }
 
     #[test]
+    fn parses_streaming_dcs_session() {
+        let mut parser = TmuxControlParser::new();
+        let msgs = parser.parse(b"\x1bP1000p%begin 0 1 0\r\n%output %0 hi\r\n%end 0 1 0\r\n");
+        assert_eq!(msgs.len(), 1);
+        assert!(
+            matches!(&msgs[0], TmuxMessage::CommandResponse { cmd_num: 1, success: true, lines, .. } if lines == &["%output %0 hi"]),
+            "expected CommandResponse containing output line, got {:?}",
+            msgs[0]
+        );
+    }
+
+    #[test]
+    fn parses_dcs_terminator_then_plain_line() {
+        let mut parser = TmuxControlParser::new();
+        let msgs = parser.parse(b"\x1bP1000p%exit\r\n\x1b\\");
+        assert_eq!(msgs.len(), 1);
+        assert!(
+            matches!(&msgs[0], TmuxMessage::Notification { name, .. } if name == "exit"),
+            "expected exit notification, got {:?}",
+            msgs[0]
+        );
+    }
+
+    #[test]
     fn parses_command_response_block() {
-        let block = b"\x1bP1000p tmux;%begin 123 1 0\r\n0: bash\r\n%end 123 1 0\r\n\x1b\\";
+        let block = b"\x1bP1000p%begin 123 1 0\r\n0: bash\r\n%end 123 1 0\r\n\x1b\\";
         let mut parser = TmuxControlParser::new();
         let msgs = parser.parse(block);
         assert_eq!(msgs.len(), 1);
@@ -404,5 +503,49 @@ mod tests {
                 lines: vec!["0: bash".to_string()],
             }
         );
+    }
+
+    #[test]
+    fn parses_list_windows_response() {
+        let block = b"\x1bP1000p%begin 0 1 0\r\n$0\t@0\t1\tc080,80x24,0,0,0\tbash\r\n$0\t@1\t0\tc080,80x24,0,0,1\tvim\r\n%end 0 1 0\r\n\x1b\\";
+        let mut parser = TmuxControlParser::new();
+        let msgs = parser.parse(block);
+        assert_eq!(msgs.len(), 1);
+
+        if let TmuxMessage::WindowList(entries) = &msgs[0] {
+            assert_eq!(entries.len(), 2);
+            assert_eq!(entries[0].window_id, "@0");
+            assert_eq!(entries[0].session_id, "$0");
+            assert_eq!(entries[0].name, "bash");
+            assert!(entries[0].active);
+            assert_eq!(entries[0].layout, "c080,80x24,0,0,0");
+            assert_eq!(entries[1].window_id, "@1");
+            assert_eq!(entries[1].name, "vim");
+            assert!(!entries[1].active);
+        } else {
+            panic!("expected WindowList, got {:?}", msgs[0]);
+        }
+    }
+
+    #[test]
+    fn parses_list_panes_response() {
+        let block = b"\x1bP1000p%begin 0 1 0\r\n$0\t@0\t%0\t1\t80\t24\tbash\r\n$0\t@0\t%1\t0\t80\t24\tvim\r\n%end 0 1 0\r\n\x1b\\";
+        let mut parser = TmuxControlParser::new();
+        let msgs = parser.parse(block);
+        assert_eq!(msgs.len(), 1);
+
+        if let TmuxMessage::PaneList(entries) = &msgs[0] {
+            assert_eq!(entries.len(), 2);
+            assert_eq!(entries[0].pane_id, "%0");
+            assert_eq!(entries[0].window_id, "@0");
+            assert_eq!(entries[0].session_id, "$0");
+            assert_eq!(entries[0].width, 80);
+            assert_eq!(entries[0].height, 24);
+            assert!(entries[0].active);
+            assert_eq!(entries[1].pane_id, "%1");
+            assert!(!entries[1].active);
+        } else {
+            panic!("expected PaneList, got {:?}", msgs[0]);
+        }
     }
 }

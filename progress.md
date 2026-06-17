@@ -43,4 +43,38 @@
   - 改造 `TerminalContainer`：传递 window/pane 管理回调到 tabs 和 grid。
   - 改造 `TmuxSessionForm`：`attach-session` 模式下标签提示为 "Target session"。
   - `npm run build`、`cargo check`、`cargo test` 全部通过。
-- 当前状态：tmux `-CC` 控制模式基础功能已完整实现并编译通过。尚未进行实际运行环境的手动测试。
+- 修复 list-windows / list-panes 命令格式不一致：
+  - 前端 `SessionContext` 原来发送默认格式 `list-windows` / `list-panes`，后端解析器已改为只识别 tab 分隔格式，导致列表响应无法解析为结构化事件。
+  - `tmuxService.ts` 新增 `listWindows` / `listPanes` 辅助函数，使用与后端一致的 `-F` tab 分隔格式。
+  - `SessionContext` 改用上述辅助函数请求 window/pane 列表。
+  - `npm run build`、`cargo test` 全部通过。
+- 当前状态：tmux `-CC` 控制模式基础功能、状态同步、错误处理、复制模式指示均已实现并编译通过。尚未进行实际运行环境的手动测试，也未实现 SSH 上运行 tmux。
+- 实现 SSH tmux 支持：
+  - `models/session.rs` 新增 `SessionType::SshTmux` 与 `SshTmuxSessionConfig`。
+  - `infrastructure/ssh.rs` 扩展 `SshBackend` trait，新增 `connect_exec` 方法；`run_ssh_session` 支持请求 PTY 后执行远程命令。
+  - `tmux/session.rs` 抽离通用 control mode forwarder，新增 `ChannelReader` / `ChannelWriter` 适配 SSH 通道，新增 `create_ssh_tmux_session` 在远程主机上运行 `tmux -CC`。
+  - `services/session_manager.rs` 新增 `Session::SshTmux` 与 `create_ssh_tmux`，复用 tmux 命令/resize/send-keys 路径。
+  - `commands/session.rs` 与 `commands/mod.rs` 注册 `create_ssh_tmux_session` Tauri 命令。
+  - 前端类型扩展 `ssh_tmux`，`TmuxSessionForm` 增加 Local/SSH 连接切换与 SSH 凭据表单，`CreateSessionDialog` 与 `SessionContext` 根据配置分发到本地或 SSH tmux 创建，`TerminalContainer` 对 `ssh_tmux` 使用 tmux UI。
+  - `npm run build`、`cargo test` 全部通过。
+- 当前状态：tmux `-CC` 本地与 SSH 控制模式、状态同步、错误处理、复制模式指示均已实现并编译通过。尚未进行实际运行环境的手动测试。
+- 完成 list-windows / list-panes 命令响应解析：
+  - `commands.rs` 改用 `-F` tab 分隔机器可读格式输出 session/window/pane 元数据。
+  - `parser.rs` 新增 `WindowList` / `PaneList` 消息类型与解析函数，并自动把对应 `CommandResponse` 分类为结构化消息。
+  - `state.rs` 新增 `TmuxWindowListEntry` / `TmuxPaneListEntry` 及 `WindowList` / `PaneList` 控制事件。
+  - `session.rs` 将解析后的列表事件通过 `tmux-control-event` 发送给前端。
+  - `src/types/session.ts` 与 `SessionContext.tsx` 处理 `WindowList` / `PaneList`，补全/刷新 tmux 状态树。
+  - 新增 Rust 单元测试覆盖 tab 分隔列表解析。
+  - 修复状态同步硬编码问题：
+  - `session.rs` 的 `request_state_sync` 现在接收实际 tmux session id，不再硬编码 `$0`/`@0`。
+  - 收到 `WindowList` 后，前端自动为每个 window 发送 `list-panes -t <window_id>` 补全 pane 元数据。
+  - 新增 tmux 命令失败错误处理：
+  - `state.rs` 的 `TmuxControlEvent` 增加 `CommandError` 变体。
+  - `session.rs` 在 `CommandResponse` 失败时向前端发送 `CommandError` 事件。
+  - 前端类型与 `SessionContext` 处理 `CommandError` 并输出到控制台。
+  - 完成复制模式（copy-mode）UI 指示：
+  - `TmuxPane` 增加 `inCopyMode` / `in_copy_mode` 字段。
+  - 后端维护 `copy_mode_panes` 集合，收到 `%pane-mode-changed` 时切换状态并发送实际布尔值。
+  - `SessionContext` 处理 `PaneModeChanged` 更新 pane 状态。
+  - `TmuxLayoutGrid` 在 pane 标题栏显示 `[COPY]` 指示器并添加对应样式。
+  - `npm run build`、`cargo test` 全部通过。

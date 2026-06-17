@@ -35,6 +35,12 @@
   text-overflow: ellipsis;
 }
 
+.tmux-copy-mode-indicator {
+  color: var(--accent, #0d6efd);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
 .tmux-pane-close {
   padding: 0 4px;
   border: none;

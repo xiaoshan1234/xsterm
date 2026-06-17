@@ -29,6 +29,15 @@ pub trait SshBackend: Send {
         auth: &SSHAuth,
         username: &str,
     ) -> Result<SshConnectResult, String>;
+
+    fn connect_exec(
+        &self,
+        host: &str,
+        port: u16,
+        auth: &SSHAuth,
+        username: &str,
+        command: &str,
+    ) -> Result<SshConnectResult, String>;
 }
 
 /// Result of an SSH connection, containing both the channel (for trait compliance)
@@ -80,7 +89,18 @@ impl SshBackend for RusshBackend {
         auth: &SSHAuth,
         username: &str,
     ) -> Result<SshConnectResult, String> {
-        connect_ssh(host, port, auth, username)
+        connect_ssh(host, port, auth, username, None)
+    }
+
+    fn connect_exec(
+        &self,
+        host: &str,
+        port: u16,
+        auth: &SSHAuth,
+        username: &str,
+        command: &str,
+    ) -> Result<SshConnectResult, String> {
+        connect_ssh(host, port, auth, username, Some(command))
     }
 }
 
@@ -93,6 +113,7 @@ fn connect_ssh(
     port: u16,
     auth: &SSHAuth,
     username: &str,
+    command: Option<&str>,
 ) -> Result<SshConnectResult, String> {
     let (result_tx, result_rx) = sync_mpsc::channel::<Result<(), String>>();
     let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
@@ -101,6 +122,7 @@ fn connect_ssh(
     let host = host.to_string();
     let username = username.to_string();
     let auth_clone = auth.clone();
+    let command = command.map(|c| c.to_string());
 
     thread::spawn(move || {
         let rt = Builder::new_current_thread()
@@ -114,14 +136,13 @@ fn connect_ssh(
                 port,
                 &username,
                 &auth_clone,
+                command.as_deref(),
                 &result_tx,
                 &read_tx,
                 &mut write_rx,
             )
             .await;
 
-            // If the handshake failed, the error has already been sent.
-            // Otherwise this future ends when the SSH session closes.
             let _ = result;
         });
     });
@@ -139,11 +160,13 @@ fn connect_ssh(
 
 /// Run the full SSH session lifecycle: connect, authenticate, request PTY/shell,
 /// then forward data until the channel closes.
+#[allow(clippy::too_many_arguments)]
 async fn run_ssh_session(
     host: &str,
     port: u16,
     username: &str,
     auth: &SSHAuth,
+    command: Option<&str>,
     result_tx: &sync_mpsc::Sender<Result<(), String>>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
@@ -179,12 +202,18 @@ async fn run_ssh_session(
         .await
         .map_err(|e| format!("SSH PTY request failed: {}", e))?;
 
-    channel
-        .request_shell(false)
-        .await
-        .map_err(|e| format!("SSH shell request failed: {}", e))?;
+    if let Some(command) = command {
+        channel
+            .exec(false, command)
+            .await
+            .map_err(|e| format!("SSH exec failed: {}", e))?;
+    } else {
+        channel
+            .request_shell(false)
+            .await
+            .map_err(|e| format!("SSH shell request failed: {}", e))?;
+    }
 
-    // Handshake complete: notify the caller so it can return the channels.
     result_tx.send(Ok(())).ok();
 
     run_data_loop(&mut handle, &mut channel, read_tx, write_rx).await;

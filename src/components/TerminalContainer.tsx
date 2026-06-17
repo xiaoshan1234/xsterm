@@ -25,7 +25,7 @@ export function TerminalContainer({ sessions, activeSessionId }: TerminalContain
       {sessions.map((session) => {
         const isActive = session.id === activeSessionId;
 
-        if (session.type === "tmux") {
+        if (session.type === "tmux" || session.type === "ssh_tmux") {
           const tmuxSessionId = String(session.id);
           const tmuxSession = tmuxState.sessions.get(tmuxSessionId);
           const windows = tmuxSession?.windows

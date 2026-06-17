@@ -15,9 +15,25 @@ pub enum SessionType {
     /// A session connected to a tmux server in control mode.
     #[serde(rename = "tmux")]
     Tmux { socket: Option<String>, command: String },
+
+    #[serde(rename = "ssh_tmux")]
+    SshTmux {
+        host: String,
+        port: u16,
+        user: String,
+        socket: Option<String>,
+        command: String,
+    },
 }
 
-/// Configuration for creating a tmux control mode session.
+/// Configuration for creating a tmux control mode session over SSH.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SshTmuxSessionConfig {
+    #[serde(flatten)]
+    pub ssh: SSHSessionConfig,
+    #[serde(flatten)]
+    pub tmux: TmuxSessionConfig,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TmuxSessionConfig {
     /// Optional human-readable name for the xsterm session tab.

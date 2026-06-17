@@ -6,7 +6,7 @@ export type SidebarMenu = "chat" | "settings";
 interface SidebarToolbarProps {
   activeMenu: SidebarMenu | null;
   onMenuClick: (menu: SidebarMenu) => void;
-  sessions: { id: number; type: "local" | "ssh" | "tmux"; name: string }[];
+  sessions: { id: number; type: "local" | "ssh" | "tmux" | "ssh_tmux"; name: string }[];
   activeSessionId: number | null;
   onSelectSession: (id: number) => void;
   onToggleLogs: () => void;

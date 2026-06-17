@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// A tmux pane (`%N`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TmuxPane {
     pub id: String,
     pub session_id: String,
@@ -11,12 +12,14 @@ pub struct TmuxPane {
     pub title: String,
     pub is_active: bool,
     pub is_paused: bool,
+    pub in_copy_mode: bool,
     pub width: u16,
     pub height: u16,
 }
 
 /// A tmux window (`@N`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TmuxWindow {
     pub id: String,
     pub session_id: String,
@@ -30,6 +33,7 @@ pub struct TmuxWindow {
 /// A tmux session (`$N`).
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TmuxSession {
     pub id: String,
     pub name: String,
@@ -39,7 +43,7 @@ pub struct TmuxSession {
 
 /// Events emitted to the frontend when tmux control state changes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all_fields = "camelCase")]
 pub enum TmuxControlEvent {
     /// The active tmux session for this client changed.
     SessionChanged { session_id: String, name: String },
@@ -67,15 +71,39 @@ pub enum TmuxControlEvent {
     PanePaused { pane_id: String },
     /// Flow control: pane output resumed.
     PaneContinued { pane_id: String },
-    /// Client detached.
+    WindowList { windows: Vec<TmuxWindowListEntry> },
+    PaneList { panes: Vec<TmuxPaneListEntry> },
+    CommandError { cmd_num: u64, message: String },
     Exit { reason: Option<String> },
-    /// Catch-all for notifications not yet modeled explicitly.
     Unknown { raw: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TmuxWindowListEntry {
+    pub window_id: String,
+    pub session_id: String,
+    pub name: String,
+    pub active: bool,
+    pub layout: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TmuxPaneListEntry {
+    pub pane_id: String,
+    pub window_id: String,
+    pub session_id: String,
+    pub title: String,
+    pub active: bool,
+    pub width: u16,
+    pub height: u16,
 }
 
 /// Output event for a single pane. Emitted separately from control events so
 /// that the frontend can route it directly to the matching xterm.js instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TmuxPaneOutput {
     pub pane_id: String,
     pub data: Vec<u8>,
@@ -85,6 +113,7 @@ pub struct TmuxPaneOutput {
 /// after initial synchronization.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TmuxStateSnapshot {
     pub session: TmuxSession,
     pub windows: Vec<TmuxWindow>,
@@ -114,4 +143,58 @@ pub(crate) struct ParsedWindowInfo {
     pub active_pane_id: String,
     pub layout: String,
     pub is_active: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn window_list_serializes_to_camel_case() {
+        let event = TmuxControlEvent::WindowList {
+            windows: vec![TmuxWindowListEntry {
+                window_id: "@0".to_string(),
+                session_id: "$0".to_string(),
+                name: "bash".to_string(),
+                active: true,
+                layout: "c080,80x24,0,0,0".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"windowId\""), "expected camelCase windowId in {}", json);
+        assert!(json.contains("\"sessionId\""), "expected camelCase sessionId in {}", json);
+        assert!(!json.contains("\"window_id\""), "snake_case should not appear in {}", json);
+    }
+
+    #[test]
+    fn pane_list_serializes_to_camel_case() {
+        let event = TmuxControlEvent::PaneList {
+            panes: vec![TmuxPaneListEntry {
+                pane_id: "%0".to_string(),
+                window_id: "@0".to_string(),
+                session_id: "$0".to_string(),
+                title: "bash".to_string(),
+                active: true,
+                width: 80,
+                height: 24,
+            }],
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"paneId\""), "expected camelCase paneId in {}", json);
+        assert!(json.contains("\"windowId\""), "expected camelCase windowId in {}", json);
+        assert!(json.contains("\"sessionId\""), "expected camelCase sessionId in {}", json);
+        assert!(!json.contains("\"pane_id\""), "snake_case should not appear in {}", json);
+    }
+
+    #[test]
+    fn pane_output_serializes_to_camel_case() {
+        let output = TmuxPaneOutput {
+            pane_id: "%0".to_string(),
+            data: vec![1, 2, 3],
+        };
+        let json = serde_json::to_string(&output).unwrap();
+        assert!(json.contains("\"paneId\""), "expected camelCase paneId in {}", json);
+        assert!(!json.contains("\"pane_id\""), "snake_case should not appear in {}", json);
+    }
 }

@@ -7,6 +7,7 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::create_local_session,
         session::create_ssh_session,
         session::create_tmux_session,
+        session::create_ssh_tmux_session,
         session::write_session,
         session::resize_session,
         session::close_session,

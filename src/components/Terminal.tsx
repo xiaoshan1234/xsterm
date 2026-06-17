@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
-import { useSession, registerTmuxPaneOutputHandler } from "../contexts/SessionContext";
+import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import "@xterm/xterm/css/xterm.css";
 
@@ -19,8 +19,11 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
   const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane } = useSession();
   const { currentTheme } = useTheme();
 
+  const terminalInstanceId = useRef(`term-${sessionId}-${paneId ?? "local"}-${Math.random().toString(36).slice(2, 8)}`);
+
   const handleData = useCallback(
     (data: string) => {
+      console.log(`[${terminalInstanceId.current}] onData:`, JSON.stringify(data));
       if (paneId) {
         sendKeysToTmuxPane(sessionId, paneId, data);
       } else {
@@ -31,6 +34,9 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
   );
 
   useEffect(() => {
+    const instanceId = terminalInstanceId.current;
+    console.log(`[${instanceId}] Terminal mount`);
+
     const container = containerRef.current;
     if (!container) return;
 
@@ -70,6 +76,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     fitAddonRef.current = fitAddon;
 
     xterm.onData(handleData);
+    console.log(`[${instanceId}] onData registered`);
 
     const resizeObserver = new ResizeObserver(() => {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
@@ -98,11 +105,17 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     let unlisten: (() => void) | null = null;
 
     if (paneId) {
-      const unregister = registerTmuxPaneOutputHandler(paneId, (data) => {
-        const decoder = new TextDecoder();
-        xterm.write(decoder.decode(data));
+      listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
+        const [id, output] = event.payload;
+        if (id === sessionId && output.paneId === paneId) {
+          const decoder = new TextDecoder();
+          const text = decoder.decode(new Uint8Array(output.data));
+          console.log(`[${instanceId}] pane output received:`, JSON.stringify(text.slice(0, 50)));
+          xterm.write(text);
+        }
+      }).then((fn) => {
+        unlisten = fn;
       });
-      unlisten = unregister;
     } else {
       listen<[number, number[]]>("session-output", (event) => {
         const [id, data] = event.payload;
@@ -117,6 +130,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     }
 
     return () => {
+      console.log(`[${instanceId}] Terminal unmount`);
       resizeObserver.disconnect();
       unlisten?.();
       xterm.dispose();

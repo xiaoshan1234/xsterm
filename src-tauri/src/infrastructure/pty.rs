@@ -23,11 +23,9 @@ pub trait PtyPair: Send {
 
 /// A spawned child process attached to a PTY.
 pub trait Child: Send {
-    /// Terminate the child process.
-    ///
-    /// Currently unused directly, but part of the abstraction API.
     #[allow(dead_code)]
     fn kill(self: Box<Self>) -> Result<(), String>;
+    fn try_wait(&mut self) -> Result<Option<portable_pty::ExitStatus>, String>;
 }
 
 /// Platform-native PTY system implementation backed by `portable-pty`.
@@ -86,6 +84,10 @@ pub struct NativeChild {
 impl Child for NativeChild {
     fn kill(mut self: Box<Self>) -> Result<(), String> {
         self.inner.kill().map_err_string()
+    }
+
+    fn try_wait(&mut self) -> Result<Option<portable_pty::ExitStatus>, String> {
+        portable_pty::Child::try_wait(&mut *self.inner).map_err_string()
     }
 }
 

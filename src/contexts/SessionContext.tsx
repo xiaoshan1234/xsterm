@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Session, LocalSessionConfig, SSHSessionConfig, TmuxSessionConfig, SavedSessionConfig, SessionGroup, TmuxState, TmuxControlEvent, TmuxWindow, TmuxPane } from "../types/session";
+import { Session, LocalSessionConfig, SSHSessionConfig, TmuxSessionConfig, SshTmuxSessionConfig, SavedSessionConfig, SessionGroup, TmuxState, TmuxControlEvent, TmuxWindow, TmuxPane } from "../types/session";
 import * as sessionService from "../services/sessionService";
 import * as tmuxService from "../services/tmuxService";
 import * as sessionStorage from "../services/sessionStorage";
@@ -34,29 +34,33 @@ function applyTmuxControlEvent(
 
   switch (event.type) {
     case "SessionChanged": {
-      let session = next.sessions.get(event.sessionId);
+      let session = next.sessions.get(_sessionId);
       if (!session) {
-        session = { id: event.sessionId, name: event.name, windows: [] };
-        next.sessions.set(event.sessionId, session);
+        session = {
+          id: _sessionId,
+          tmuxSessionId: event.sessionId,
+          name: event.name,
+          windows: [],
+        };
+        next.sessions.set(_sessionId, session);
       }
       session.name = event.name;
+      session.tmuxSessionId = event.sessionId;
       break;
     }
     case "SessionRenamed": {
-      for (const session of next.sessions.values()) {
-        if (session.id.startsWith("$")) {
-          session.name = event.name;
-        }
-      }
+      const session = next.sessions.get(_sessionId);
+      if (session) session.name = event.name;
       break;
     }
     case "WindowAdded": {
       const window: TmuxWindow = {
         ...event.window,
+        sessionId: _sessionId,
         panes: [...event.window.panes],
       };
       next.windows.set(window.id, window);
-      const session = next.sessions.get(window.sessionId);
+      const session = next.sessions.get(_sessionId);
       if (session && !session.windows.includes(window.id)) {
         session.windows.push(window.id);
       }
@@ -64,7 +68,7 @@ function applyTmuxControlEvent(
         // The window arrived before its session metadata; request a refresh.
         tmuxService
           .writeTmuxCommand(
-            Number.parseInt(window.sessionId, 10) || 0,
+            Number.parseInt(_sessionId, 10) || 0,
             `list-sessions\n`
           )
           .catch(console.error);
@@ -109,7 +113,7 @@ function applyTmuxControlEvent(
       break;
     }
     case "PaneAdded": {
-      const pane: TmuxPane = { ...event.pane };
+      const pane: TmuxPane = { ...event.pane, sessionId: _sessionId };
       next.panes.set(pane.id, pane);
       const window = next.windows.get(pane.windowId);
       if (window && !window.panes.includes(pane.id)) {
@@ -134,7 +138,8 @@ function applyTmuxControlEvent(
       break;
     }
     case "PaneModeChanged": {
-      // Currently a no-op; could be used to show copy-mode indicator.
+      const pane = next.panes.get(event.paneId);
+      if (pane) pane.inCopyMode = event.inCopyMode;
       break;
     }
     case "PanePaused": {
@@ -147,6 +152,94 @@ function applyTmuxControlEvent(
       if (pane) pane.isPaused = false;
       break;
     }
+    case "WindowList": {
+      for (const entry of event.windows) {
+        let session = next.sessions.get(_sessionId);
+        if (!session) {
+          session = {
+            id: _sessionId,
+            tmuxSessionId: entry.sessionId,
+            name: "",
+            windows: [],
+          };
+          next.sessions.set(_sessionId, session);
+        }
+        if (!session.windows.includes(entry.windowId)) {
+          session.windows.push(entry.windowId);
+        }
+
+        const existing = next.windows.get(entry.windowId);
+        next.windows.set(entry.windowId, {
+          id: entry.windowId,
+          sessionId: _sessionId,
+          name: entry.name,
+          layout: entry.layout,
+          panes: existing?.panes ?? [],
+          isActive: entry.active,
+        });
+
+        if (entry.active) {
+          session.activeWindowId = entry.windowId;
+        }
+      }
+
+      setTimeout(() => {
+        for (const entry of event.windows) {
+          tmuxService
+            .listPanes(Number.parseInt(_sessionId, 10) || 0, entry.windowId)
+            .catch(console.error);
+        }
+      }, 0);
+      break;
+    }
+    case "PaneList": {
+      for (const entry of event.panes) {
+        let session = next.sessions.get(_sessionId);
+        if (!session) {
+          session = {
+            id: _sessionId,
+            tmuxSessionId: entry.sessionId,
+            name: "",
+            windows: [],
+          };
+          next.sessions.set(_sessionId, session);
+        }
+        let window = next.windows.get(entry.windowId);
+        if (!window) {
+          window = {
+            id: entry.windowId,
+            sessionId: _sessionId,
+            name: "",
+            layout: "",
+            panes: [],
+            isActive: false,
+          };
+          next.windows.set(entry.windowId, window);
+          if (!session.windows.includes(entry.windowId)) {
+            session.windows.push(entry.windowId);
+          }
+        }
+        if (!window.panes.includes(entry.paneId)) {
+          window.panes.push(entry.paneId);
+        }
+        next.panes.set(entry.paneId, {
+          id: entry.paneId,
+          sessionId: _sessionId,
+          windowId: entry.windowId,
+          title: entry.title,
+          isActive: entry.active,
+          isPaused: next.panes.get(entry.paneId)?.isPaused ?? false,
+          inCopyMode: next.panes.get(entry.paneId)?.inCopyMode ?? false,
+          width: entry.width,
+          height: entry.height,
+        });
+      }
+      break;
+    }
+    case "CommandError": {
+      console.error(`tmux command ${event.cmdNum} failed: ${event.message}`);
+      break;
+    }
     case "Exit": {
       // Session closure is handled by the session-closed event.
       break;
@@ -157,16 +250,6 @@ function applyTmuxControlEvent(
   }
 
   return next;
-}
-
-const paneOutputHandlers = new Map<string, (data: Uint8Array) => void>();
-
-export function registerTmuxPaneOutputHandler(
-  paneId: string,
-  handler: (data: Uint8Array) => void
-): () => void {
-  paneOutputHandlers.set(paneId, handler);
-  return () => paneOutputHandlers.delete(paneId);
 }
 
 function buildFrontendSession(info: sessionService.SessionInfo, configId: string, type: Session["type"]): Session {
@@ -187,7 +270,7 @@ interface SessionContextType {
   groups: SessionGroup[];
   createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
-  createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Session>;
+  createTmuxSession: (config: SshTmuxSessionConfig, save?: boolean) => Promise<Session>;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -248,9 +331,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    let closedCleanup: (() => void) | null = null;
-    let paneOutputCleanup: (() => void) | null = null;
-    let controlEventCleanup: (() => void) | null = null;
+    const cleanups: (() => void)[] = [];
 
     listen<number>("session-closed", (event) => {
       const sessionId = event.payload;
@@ -277,50 +358,39 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
         return next;
       });
-    }).then((fn) => {
-      closedCleanup = fn;
-    });
+    }).then((fn) => cleanups.push(fn));
 
     listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
       const [sessionId, output] = event.payload;
       const paneId = output.paneId;
-      const data = new Uint8Array(output.data);
       const tmuxSessionId = String(sessionId);
       setTmuxState((prev) => {
         const next = cloneTmuxState(prev);
         const pane = next.panes.get(paneId);
         if (pane && pane.sessionId === tmuxSessionId) {
-          paneOutputHandlers.get(paneId)?.(data);
+          // pane output is now handled directly by Terminal.tsx listeners.
         }
         return next;
       });
-    }).then((fn) => {
-      paneOutputCleanup = fn;
-    });
+    }).then((fn) => cleanups.push(fn));
 
     listen<[number, string]>("tmux-request-sync", (event) => {
       const [sessionId, command] = event.payload;
       tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
-    }).then((fn) => {
-      controlEventCleanup = fn;
-    });
+    }).then((fn) => cleanups.push(fn));
 
     listen<[number, TmuxControlEvent]>("tmux-control-event", (event) => {
       const [sessionId, controlEvent] = event.payload;
       setTmuxState((prev) => applyTmuxControlEvent(prev, String(sessionId), controlEvent));
       if (controlEvent.type === "SessionChanged") {
         tmuxService
-          .writeTmuxCommand(sessionId, `list-windows -t ${controlEvent.sessionId}\n`)
+          .listWindows(sessionId, controlEvent.sessionId)
           .catch(console.error);
       }
-    }).then((fn) => {
-      controlEventCleanup = fn;
-    });
+    }).then((fn) => cleanups.push(fn));
 
     return () => {
-      closedCleanup?.();
-      paneOutputCleanup?.();
-      controlEventCleanup?.();
+      cleanups.forEach((cleanup) => cleanup());
     };
   }, []);
 
@@ -344,7 +414,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (
       type: Session["type"],
       create: () => Promise<sessionService.SessionInfo>,
-      config: LocalSessionConfig | SSHSessionConfig | TmuxSessionConfig,
+      config: LocalSessionConfig | SSHSessionConfig | TmuxSessionConfig | SshTmuxSessionConfig,
       save: boolean
     ): Promise<Session> => {
       const configId = generateId();
@@ -360,7 +430,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             ? { id: configId, name: info.name, type: "local", localConfig: config as LocalSessionConfig }
             : type === "ssh"
             ? { id: configId, name: info.name, type: "ssh", sshConfig: config as SSHSessionConfig }
-            : { id: configId, name: info.name, type: "tmux", tmuxConfig: config as TmuxSessionConfig };
+            : type === "tmux"
+            ? { id: configId, name: info.name, type: "tmux", tmuxConfig: config as TmuxSessionConfig }
+            : { id: configId, name: info.name, type: "ssh_tmux", sshTmuxConfig: config as SshTmuxSessionConfig };
         updateConfigs((prev) => [...prev, savedConfig]);
       }
 
@@ -384,8 +456,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const createTmuxSession = useCallback(
-    async (config: TmuxSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("tmux", () => tmuxService.createTmux(config), config, save);
+    async (config: SshTmuxSessionConfig, save = true): Promise<Session> => {
+      const session = await (config.ssh
+        ? createAndActivateSession(
+            "ssh_tmux",
+            () => tmuxService.createSshTmuxSession(config),
+            config,
+            save
+          )
+        : createAndActivateSession(
+            "tmux",
+            () => tmuxService.createTmux(config.tmux),
+            config,
+            save
+          ));
+
+      setTimeout(() => {
+        tmuxService.listSessions(session.id).catch(console.error);
+      }, 500);
+
+      return session;
     },
     [createAndActivateSession]
   );
@@ -414,6 +504,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (config.type === "tmux" && config.tmuxConfig) {
         const info = await tmuxService.createTmux(config.tmuxConfig);
         const session = buildFrontendSession(info, configId, "tmux");
+        setSessions((prev) => [...prev, session]);
+        setActiveSessionId(session.id);
+        return session;
+      }
+
+      if (config.type === "ssh_tmux" && config.sshTmuxConfig) {
+        const info = await tmuxService.createSshTmuxSession(config.sshTmuxConfig);
+        const session = buildFrontendSession(info, configId, "ssh_tmux");
         setSessions((prev) => [...prev, session]);
         setActiveSessionId(session.id);
         return session;
@@ -537,7 +635,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const writeSession = useCallback(async (id: number, data: string): Promise<void> => {
     const session = sessions.find((s) => s.id === id);
-    if (session?.type === "tmux") {
+    if (session?.type === "tmux" || session?.type === "ssh_tmux") {
       throw new Error("Use sendKeysToTmuxPane for tmux sessions");
     }
     await sessionService.writeSession(id, data);
@@ -545,7 +643,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const resizeSession = useCallback(async (id: number, rows: number, cols: number): Promise<void> => {
     const session = sessions.find((s) => s.id === id);
-    if (session?.type === "tmux") {
+    if (session?.type === "tmux" || session?.type === "ssh_tmux") {
       throw new Error("Use resizeTmuxPane for tmux sessions");
     }
     await sessionService.resizeSession(id, rows, cols);

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
 
 use crate::infrastructure::app_backend::RealAppBackend;
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, TmuxSessionConfig};
+use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::services::session_manager::SessionManager;
 
 /// Create a new local shell session.
@@ -109,6 +109,29 @@ pub async fn create_tmux_session(
         })
         .map_err(|e| {
             tracing::error!("Failed to create tmux session: {}", e);
+            e
+        })
+}
+
+#[tauri::command]
+pub async fn create_ssh_tmux_session(
+    config: SshTmuxSessionConfig,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+    app: AppHandle,
+) -> Result<SessionInfo, String> {
+    tracing::info!(
+        "Creating SSH tmux session: {}@{}:{}",
+        config.ssh.username,
+        config.ssh.host,
+        config.ssh.port
+    );
+    let backend = RealAppBackend::new(app);
+    with_manager(state, |manager| manager.create_ssh_tmux(config, backend))
+        .inspect(|info| {
+            tracing::info!("SSH tmux session created: id={}", info.id);
+        })
+        .map_err(|e| {
+            tracing::error!("Failed to create SSH tmux session: {}", e);
             e
         })
 }

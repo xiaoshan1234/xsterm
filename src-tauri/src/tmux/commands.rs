@@ -8,6 +8,51 @@
 /// Command number used for requests that do not need a response.
 pub const NO_CMD_NUM: u64 = 0;
 
+/// Build the argv for the initial tmux control mode invocation.
+///
+/// `tmux -CC` is always prepended by the caller; this function returns only
+/// the subcommand and its flags. For `new-session` we add `-A -D` so the
+/// control client creates the session (or attaches if it exists) and stays
+/// attached. For `attach-session` we map the optional target with `-t`.
+pub fn build_tmux_argv(command: &str, target: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> = command.split_whitespace().map(String::from).collect();
+    if args.is_empty() {
+        args.push("new-session".to_string());
+    }
+
+    match args[0].as_str() {
+        "new-session" => {
+            if !args.contains(&"-A".to_string()) {
+                args.push("-A".to_string());
+            }
+            if !args.contains(&"-D".to_string()) {
+                args.push("-D".to_string());
+            }
+            if let Some(t) = target {
+                if !args.contains(&"-s".to_string()) {
+                    args.push("-s".to_string());
+                    args.push(t.to_string());
+                }
+            }
+        }
+        "attach-session" => {
+            if let Some(t) = target {
+                if !args.contains(&"-t".to_string()) {
+                    args.push("-t".to_string());
+                    args.push(t.to_string());
+                }
+            }
+        }
+        _ => {
+            if let Some(t) = target {
+                args.push(t.to_string());
+            }
+        }
+    }
+
+    args
+}
+
 /// Create a new tmux session and enter control mode.
 pub fn new_session(name: Option<&str>) -> String {
     match name {
@@ -24,7 +69,7 @@ pub fn attach_session(name: &str) -> String {
 /// Send literal keys to a pane.
 pub fn send_keys(pane_id: &str, keys: &str) -> String {
     format!(
-        "send-keys -t {} {}\n",
+        "send-keys -t {} \"{}\"\n",
         pane_id,
         escape_tmux_keys(keys)
     )
@@ -43,14 +88,18 @@ pub fn list_sessions() -> String {
     "list-sessions\n".to_string()
 }
 
-/// List windows in a session.
 pub fn list_windows(session_id: &str) -> String {
-    format!("list-windows -t {}\n", session_id)
+    format!(
+        "list-windows -t {} -F '#{{session_id}}\t#{{window_id}}\t#{{window_active}}\t#{{window_layout}}\t#{{window_name}}'\n",
+        session_id
+    )
 }
 
-/// List panes in a window.
 pub fn list_panes(window_id: &str) -> String {
-    format!("list-panes -t {}\n", window_id)
+    format!(
+        "list-panes -t {} -F '#{{session_id}}\t#{{window_id}}\t#{{pane_id}}\t#{{pane_active}}\t#{{pane_width}}\t#{{pane_height}}\t#{{pane_title}}'\n",
+        window_id
+    )
 }
 
 /// Request the current layout of a window.
@@ -92,12 +141,31 @@ pub fn set_pause_after(seconds: u64) -> String {
 /// such as `C-c`, `Enter`, `Tab`. For ordinary text we pass the characters
 /// through mostly unchanged, but backslashes and quotes are doubled.
 fn escape_tmux_keys(keys: &str) -> String {
-    keys.chars()
-        .flat_map(|c| match c {
-            '\\' | '"' => vec![c, c],
-            _ => vec![c],
-        })
-        .collect()
+    let mut result = String::with_capacity(keys.len());
+    let mut chars = keys.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' | '"' => {
+                result.push(c);
+                result.push(c);
+            }
+            '\r' => {
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                if !result.ends_with("Enter") {
+                    result.push_str("Enter");
+                }
+            }
+            '\n' => {
+                if !result.ends_with("Enter") {
+                    result.push_str("Enter");
+                }
+            }
+            _ => result.push(c),
+        }
+    }
+    result
 }
 
 /// Quote an argument that may contain spaces for tmux `-t` targets.
@@ -115,7 +183,27 @@ mod tests {
 
     #[test]
     fn send_keys_simple_text() {
-        assert_eq!(send_keys("%0", "hello"), "send-keys -t %0 hello\n");
+        assert_eq!(send_keys("%0", "hello"), "send-keys -t %0 \"hello\"\n");
+    }
+
+    #[test]
+    fn send_keys_with_space() {
+        assert_eq!(send_keys("%0", "hello world"), "send-keys -t %0 \"hello world\"\n");
+    }
+
+    #[test]
+    fn send_keys_enter() {
+        assert_eq!(send_keys("%0", "\r"), "send-keys -t %0 \"Enter\"\n");
+        assert_eq!(send_keys("%0", "\n"), "send-keys -t %0 \"Enter\"\n");
+        assert_eq!(send_keys("%0", "\r\n"), "send-keys -t %0 \"Enter\"\n");
+    }
+
+    #[test]
+    fn send_keys_mixed_with_enter() {
+        assert_eq!(
+            send_keys("%0", "hello\rworld"),
+            "send-keys -t %0 \"helloEnterworld\"\n"
+        );
     }
 
     #[test]
@@ -132,5 +220,29 @@ mod tests {
             new_session(Some("my session")),
             "new-session -s \"my session\"\n"
         );
+    }
+
+    #[test]
+    fn build_tmux_argv_new_session_adds_attach_flags() {
+        let args = build_tmux_argv("new-session", Some("foo"));
+        assert_eq!(args, vec!["new-session", "-A", "-D", "-s", "foo"]);
+    }
+
+    #[test]
+    fn build_tmux_argv_new_session_without_target() {
+        let args = build_tmux_argv("new-session", None);
+        assert_eq!(args, vec!["new-session", "-A", "-D"]);
+    }
+
+    #[test]
+    fn build_tmux_argv_attach_session_maps_target() {
+        let args = build_tmux_argv("attach-session", Some("foo"));
+        assert_eq!(args, vec!["attach-session", "-t", "foo"]);
+    }
+
+    #[test]
+    fn build_tmux_argv_does_not_duplicate_flags() {
+        let args = build_tmux_argv("new-session -A -D -s foo", Some("foo"));
+        assert_eq!(args, vec!["new-session", "-A", "-D", "-s", "foo"]);
     }
 }

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { TmuxSessionConfig } from "../types/session";
+import { TmuxSessionConfig, SSHSessionConfig } from "../types/session";
 import { SessionInfo } from "./sessionService";
 
 export interface TmuxPaneOutput {
@@ -12,8 +12,17 @@ export interface TmuxControlEventWrapper {
   [key: string]: unknown;
 }
 
+export interface SshTmuxSessionConfig {
+  ssh?: SSHSessionConfig;
+  tmux: TmuxSessionConfig;
+}
+
 export async function createTmux(config: TmuxSessionConfig): Promise<SessionInfo> {
   return invoke<SessionInfo>("create_tmux_session", { config });
+}
+
+export async function createSshTmuxSession(config: SshTmuxSessionConfig): Promise<SessionInfo> {
+  return invoke<SessionInfo>("create_ssh_tmux_session", { config });
 }
 
 export async function writeTmuxCommand(sessionId: number, command: string): Promise<void> {
@@ -65,4 +74,20 @@ export async function attachTmuxSession(
   config: TmuxSessionConfig & { target: string }
 ): Promise<SessionInfo> {
   return createTmux({ ...config, command: "attach-session" });
+}
+
+export async function listWindows(sessionId: number, tmuxSessionId: string): Promise<void> {
+  const command =
+    `list-windows -t ${tmuxSessionId} -F '#{session_id}\t#{window_id}\t#{window_active}\t#{window_layout}\t#{window_name}'\n`;
+  await writeTmuxCommand(sessionId, command);
+}
+
+export async function listSessions(sessionId: number): Promise<void> {
+  await writeTmuxCommand(sessionId, "list-sessions -F '#{session_id}\t#{session_name}'\n");
+}
+
+export async function listPanes(sessionId: number, windowId: string): Promise<void> {
+  const command =
+    `list-panes -t ${windowId} -F '#{session_id}\t#{window_id}\t#{pane_id}\t#{pane_active}\t#{pane_width}\t#{pane_height}\t#{pane_title}'\n`;
+  await writeTmuxCommand(sessionId, command);
 }

@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useSession } from "../../contexts/SessionContext";
-import { LocalSessionConfig, SSHSessionConfig, TmuxSessionConfig, Session } from "../../types/session";
+import { LocalSessionConfig, SSHSessionConfig, SshTmuxSessionConfig, Session } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
-import { TmuxSessionForm } from "./TmuxSessionForm";
+import { TmuxSessionForm, validateSshTmuxConfig } from "./TmuxSessionForm";
 import "./CreateSessionDialog.css";
 
 interface CreateSessionDialogProps {
@@ -13,7 +13,7 @@ interface CreateSessionDialogProps {
   onClose: () => void;
   onCreateLocal: (config: LocalSessionConfig, save: boolean) => Promise<Session>;
   onCreateSsh: (config: SSHSessionConfig, save: boolean) => Promise<Session>;
-  onCreateTmux: (config: TmuxSessionConfig, save: boolean) => Promise<Session>;
+  onCreateTmux: (config: SshTmuxSessionConfig, save: boolean) => Promise<Session>;
 }
 
 export default function CreateSessionDialog({
@@ -37,8 +37,8 @@ export default function CreateSessionDialog({
     key_file: "",
     passphrase: "",
   });
-  const [tmuxConfig, setTmuxConfig] = useState<TmuxSessionConfig>({
-    command: "new-session",
+  const [tmuxConfig, setTmuxConfig] = useState<SshTmuxSessionConfig>({
+    tmux: { command: "new-session" },
   });
   const [error, setError] = useState("");
 
@@ -56,7 +56,7 @@ export default function CreateSessionDialog({
         key_file: "",
         passphrase: "",
       });
-      setTmuxConfig({ command: "new-session" });
+      setTmuxConfig({ tmux: { command: "new-session" } });
     }
   }, [isOpen]);
 
@@ -74,6 +74,11 @@ export default function CreateSessionDialog({
       }
       session = await onCreateSsh(sshConfig, saveConfig);
     } else {
+      const validationError = validateSshTmuxConfig(tmuxConfig);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
       session = await onCreateTmux(tmuxConfig, saveConfig);
     }
 
