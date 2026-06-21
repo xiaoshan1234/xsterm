@@ -153,6 +153,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           .listWindows(sessionId, controlEvent.sessionId)
           .catch(console.error);
       }
+      if (controlEvent.type === "WindowClosed" && activeTmuxWindowId === controlEvent.windowId) {
+        setActiveTmuxWindowId(null);
+      }
     }).then((fn) => cleanups.push(fn));
 
     return () => {
