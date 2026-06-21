@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { PlusIcon, CloseIcon } from "./icons/Icon";
 import { TmuxWindow } from "../types/session";
 import "./TmuxWindowTabs.css";
@@ -18,16 +17,10 @@ export function TmuxWindowTabs({
   onCreate,
   onClose,
 }: TmuxWindowTabsProps) {
-  const [closingId, setClosingId] = useState<string | null>(null);
-
-  const handleClose = (e: React.MouseEvent, windowId: string) => {
+  const handleClose = (e: React.MouseEvent, windowId: string, windowName: string) => {
     e.stopPropagation();
-    if (closingId === windowId) {
+    if (window.confirm(`Close window "${windowName || windowId}"?`)) {
       onClose(windowId);
-      setClosingId(null);
-    } else {
-      setClosingId(windowId);
-      setTimeout(() => setClosingId((current) => (current === windowId ? null : current)), 2000);
     }
   };
 
@@ -42,9 +35,9 @@ export function TmuxWindowTabs({
         >
           <span className="tmux-window-tab__name">{window.name || window.id}</span>
           <span
-            className={`tmux-window-tab__close ${closingId === window.id ? "confirm" : ""}`}
-            onClick={(e) => handleClose(e, window.id)}
-            title={closingId === window.id ? "Click again to close" : "Close window"}
+            className="tmux-window-tab__close"
+            onClick={(e) => handleClose(e, window.id, window.name)}
+            title="Close window"
           >
             <CloseIcon size={10} />
           </span>

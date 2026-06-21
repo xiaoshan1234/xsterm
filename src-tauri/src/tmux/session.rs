@@ -451,6 +451,32 @@ fn handle_notification<B: AppBackend>(
                 name: args[1].clone(),
             }
         }
+        "window-add" if !args.is_empty() => {
+            request_state_sync(backend, session_id, "$0");
+            TmuxControlEvent::Unknown { raw: raw.to_string() }
+        }
+        "window-closed" if !args.is_empty() => TmuxControlEvent::WindowClosed {
+            window_id: args[0].clone(),
+        },
+        "window-renamed" if args.len() >= 2 => TmuxControlEvent::WindowRenamed {
+            window_id: args[0].clone(),
+            name: args[1].clone(),
+        },
+        "layout-changed" if args.len() >= 2 => TmuxControlEvent::LayoutChanged {
+            window_id: args[0].clone(),
+            layout: args[1].clone(),
+        },
+        "pane-added" if !args.is_empty() => {
+            request_state_sync(backend, session_id, "$0");
+            TmuxControlEvent::Unknown { raw: raw.to_string() }
+        }
+        "pane-closed" if !args.is_empty() => TmuxControlEvent::PaneClosed {
+            pane_id: args[0].clone(),
+        },
+        "pane-title-changed" if args.len() >= 2 => TmuxControlEvent::PaneTitleChanged {
+            pane_id: args[0].clone(),
+            title: args[1..].join(" "),
+        },
         "pane-mode-changed" if !args.is_empty() => {
             let pane_id = args[0].clone();
             let in_copy_mode = if let Ok(mut set) = copy_mode_panes.lock() {
