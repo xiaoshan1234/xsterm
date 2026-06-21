@@ -69,6 +69,14 @@ export function applyTmuxControlEvent(
         const session = next.sessions.get(window.sessionId);
         if (session) {
           session.windows = session.windows.filter((id) => id !== event.windowId);
+          if (session.activeWindowId === event.windowId) {
+            session.activeWindowId = session.windows[0];
+            for (const [wid, w] of next.windows) {
+              if (w.sessionId === window.sessionId) {
+                w.isActive = wid === session.activeWindowId;
+              }
+            }
+          }
         }
         for (const paneId of window.panes) {
           next.panes.delete(paneId);

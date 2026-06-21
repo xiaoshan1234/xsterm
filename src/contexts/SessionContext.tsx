@@ -56,7 +56,7 @@ interface SessionContextType {
   resizeTmuxPane: (id: number, paneId: string, rows: number, cols: number) => Promise<void>;
   sendKeysToTmuxPane: (id: number, paneId: string, keys: string) => Promise<void>;
   tmuxState: TmuxState;
-  activeTmuxWindowId: string | null;
+  activeTmuxWindowIds: Map<number, string>;
   setActiveTmuxWindow: (sessionId: number, windowId: string) => void;
   createTmuxWindow: (sessionId: number, name?: string) => Promise<void>;
   closeTmuxWindow: (sessionId: number, windowId: string) => Promise<void>;
@@ -76,7 +76,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     windows: new Map(),
     panes: new Map(),
   });
-  const [activeTmuxWindowId, setActiveTmuxWindowId] = useState<string | null>(null);
+  const [activeTmuxWindowIds, setActiveTmuxWindowIds] = useState<Map<number, string>>(new Map());
   const sessionsRef = useRef(sessions);
 
   useEffect(() => {
@@ -147,14 +147,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     listen<[number, TmuxControlEvent]>("tmux-control-event", (event) => {
       const [sessionId, controlEvent] = event.payload;
+      const sessionIdKey = sessionId;
       setTmuxState((prev) => applyTmuxControlEvent(prev, String(sessionId), controlEvent));
       if (controlEvent.type === "SessionChanged") {
         tmuxService
           .listWindows(sessionId, controlEvent.sessionId)
           .catch(console.error);
       }
-      if (controlEvent.type === "WindowClosed" && activeTmuxWindowId === controlEvent.windowId) {
-        setActiveTmuxWindowId(null);
+      if (controlEvent.type === "WindowClosed") {
+        setActiveTmuxWindowIds((prev) => {
+          const next = new Map(prev);
+          const activeId = next.get(sessionIdKey);
+          if (activeId === controlEvent.windowId) {
+            next.delete(sessionIdKey);
+          }
+          return next;
+        });
+      }
+      if (controlEvent.type === "WindowActivated") {
+        setActiveTmuxWindowIds((prev) => {
+          const next = new Map(prev);
+          next.set(sessionIdKey, controlEvent.windowId);
+          return next;
+        });
       }
     }).then((fn) => cleanups.push(fn));
 
@@ -443,7 +458,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setActiveTmuxWindow = useCallback((sessionId: number, windowId: string) => {
-    setActiveTmuxWindowId(windowId);
+    setActiveTmuxWindowIds((prev) => {
+      const next = new Map(prev);
+      next.set(sessionId, windowId);
+      return next;
+    });
     const tmuxSessionId = String(sessionId);
     const command = `select-window -t ${windowId}\n`;
     tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
@@ -491,7 +510,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         resizeTmuxPane,
         sendKeysToTmuxPane,
         tmuxState,
-        activeTmuxWindowId,
+        activeTmuxWindowIds,
         setActiveTmuxWindow,
         createTmuxWindow,
         closeTmuxWindow,

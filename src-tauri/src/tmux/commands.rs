@@ -92,10 +92,14 @@ pub fn list_sessions() -> String {
 }
 
 pub fn list_windows(session_id: &str) -> String {
-    format!(
-        "list-windows -t {} -F '#{{session_id}}\t#{{window_id}}\t#{{window_active}}\t#{{window_layout}}\t#{{window_name}}'\n",
-        session_id
-    )
+    if session_id.is_empty() {
+        "list-windows -F '#{session_id}\t#{window_id}\t#{window_active}\t#{window_layout}\t#{window_name}'\n".to_string()
+    } else {
+        format!(
+            "list-windows -t {} -F '#{{session_id}}\t#{{window_id}}\t#{{window_active}}\t#{{window_layout}}\t#{{window_name}}'\n",
+            session_id
+        )
+    }
 }
 
 pub fn list_panes(window_id: &str) -> String {
@@ -130,7 +134,7 @@ pub fn kill_session(session_id: &str) -> String {
 
 /// Refresh a paused pane by acknowledging its output.
 pub fn refresh_client_pane(pane_id: &str) -> String {
-    format!("refresh-client -A {}:\n", pane_id)
+    format!("refresh-client -A {}:continue\n", pane_id)
 }
 
 /// Enable or disable pause-after flow control.
@@ -148,10 +152,8 @@ fn escape_tmux_keys(keys: &str) -> String {
     let mut chars = keys.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
-            '\\' | '"' => {
-                result.push(c);
-                result.push(c);
-            }
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
             '\r' => {
                 if chars.peek() == Some(&'\n') {
                     chars.next();

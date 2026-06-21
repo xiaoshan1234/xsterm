@@ -6,17 +6,17 @@ interface TmuxSessionViewProps {
   session: Session;
   isActive: boolean;
   tmuxState: TmuxState;
-  activeTmuxWindowId: string | null;
+  activeTmuxWindowIds: Map<number, string>;
   setActiveTmuxWindow: (sessionId: number, windowId: string) => void;
   createTmuxWindow: (sessionId: number) => Promise<void>;
   closeTmuxWindow: (sessionId: number, windowId: string) => Promise<void>;
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
 }
 
-function getActiveWindow(windows: TmuxWindow[], activeTmuxWindowId: string | null): TmuxWindow | undefined {
+function getActiveWindow(windows: TmuxWindow[], activeWindowId: string | undefined): TmuxWindow | undefined {
   return (
     windows.find((w) =>
-      activeTmuxWindowId ? w.id === activeTmuxWindowId : w.isActive
+      activeWindowId ? w.id === activeWindowId : w.isActive
     ) ?? windows[0]
   );
 }
@@ -25,7 +25,7 @@ export function TmuxSessionView({
   session,
   isActive,
   tmuxState,
-  activeTmuxWindowId,
+  activeTmuxWindowIds,
   setActiveTmuxWindow,
   createTmuxWindow,
   closeTmuxWindow,
@@ -37,7 +37,7 @@ export function TmuxSessionView({
     tmuxSession?.windows
       .map((wid) => tmuxState.windows.get(wid))
       .filter((w): w is NonNullable<typeof w> => Boolean(w)) ?? [];
-  const activeWindow = getActiveWindow(windows, activeTmuxWindowId);
+  const activeWindow = getActiveWindow(windows, activeTmuxWindowIds.get(session.id));
 
   return (
     <div

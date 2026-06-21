@@ -445,17 +445,24 @@ fn handle_notification<B: AppBackend>(
             TmuxControlEvent::PaneContinued { pane_id }
         }
         "session-changed" if args.len() >= 2 => {
-            request_state_sync(backend, session_id, &args[0]);
+            request_state_sync(backend, session_id, "");
             TmuxControlEvent::SessionChanged {
                 session_id: args[0].clone(),
                 name: args[1].clone(),
             }
         }
         "window-add" if !args.is_empty() => {
-            request_state_sync(backend, session_id, "$0");
+            request_state_sync(backend, session_id, "");
             TmuxControlEvent::Unknown { raw: raw.to_string() }
         }
-        "window-close" if !args.is_empty() => TmuxControlEvent::WindowClosed {
+        "unlinked-window-add" if !args.is_empty() => TmuxControlEvent::Unknown { raw: raw.to_string() },
+        "window-close" if !args.is_empty() => {
+            request_state_sync(backend, session_id, "");
+            TmuxControlEvent::WindowClosed {
+                window_id: args[0].clone(),
+            }
+        }
+        "unlinked-window-close" if !args.is_empty() => TmuxControlEvent::WindowClosed {
             window_id: args[0].clone(),
         },
         "window-renamed" if args.len() >= 2 => TmuxControlEvent::WindowRenamed {
@@ -466,8 +473,11 @@ fn handle_notification<B: AppBackend>(
             window_id: args[0].clone(),
             layout: args[1].clone(),
         },
+        "window-pane-changed" if args.len() >= 2 => TmuxControlEvent::WindowActivated {
+            window_id: args[0].clone(),
+        },
         "pane-add" if !args.is_empty() => {
-            request_state_sync(backend, session_id, "$0");
+            request_state_sync(backend, session_id, "");
             TmuxControlEvent::Unknown { raw: raw.to_string() }
         }
         "pane-close" if !args.is_empty() => TmuxControlEvent::PaneClosed {

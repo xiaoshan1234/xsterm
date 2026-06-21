@@ -12,7 +12,7 @@ interface TerminalContainerProps {
 export function TerminalContainer({ sessions, activeSessionId }: TerminalContainerProps) {
   const {
     tmuxState,
-    activeTmuxWindowId,
+    activeTmuxWindowIds,
     setActiveTmuxWindow,
     createTmuxWindow,
     closeTmuxWindow,
@@ -31,7 +31,7 @@ export function TerminalContainer({ sessions, activeSessionId }: TerminalContain
               session={session}
               isActive={isActive}
               tmuxState={tmuxState}
-              activeTmuxWindowId={activeTmuxWindowId}
+              activeTmuxWindowIds={activeTmuxWindowIds}
               setActiveTmuxWindow={setActiveTmuxWindow}
               createTmuxWindow={createTmuxWindow}
               closeTmuxWindow={closeTmuxWindow}
