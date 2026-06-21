@@ -172,12 +172,12 @@ export function TmuxSessionForm({ config, onChange, savedSshConfigs }: TmuxSessi
         </select>
       </FormField>
 
-      <FormField label={config.tmux.command === "attach-session" ? "Target session" : "Session name / target"}>
+      <FormField label={config.tmux.command === "attach-session" ? "Target session" : "Session name *"}>
         <input
           type="text"
           value={config.tmux.target ?? ""}
           onChange={(e) => updateTmux({ ...config.tmux, target: e.target.value || undefined })}
-          placeholder={config.tmux.command === "attach-session" ? "Session name to attach" : "Optional session name"}
+          placeholder={config.tmux.command === "attach-session" ? "Session name to attach" : "Required session name"}
         />
       </FormField>
 
@@ -224,6 +224,9 @@ export function validateSshTmuxConfig(config: SshTmuxSessionConfig, savedSshConf
     if (config.ssh.auth_type === "key" && !config.ssh.key_file) {
       return "Key file is required";
     }
+  }
+  if (config.tmux.command === "new-session" && !config.tmux.target?.trim()) {
+    return "Session name is required";
   }
   return null;
 }

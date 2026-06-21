@@ -57,6 +57,9 @@ export function applyTmuxControlEvent(
           )
           .catch(console.error);
       }
+      tmuxService
+        .listPanes(Number.parseInt(_sessionId, 10) || 0, window.id)
+        .catch(console.error);
       break;
     }
     case "WindowClosed": {
