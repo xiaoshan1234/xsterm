@@ -83,23 +83,18 @@ impl TmuxSession {
             writer.flush().map_err(|e| e.to_string())?;
         }
 
-        match rx.recv_timeout(timeout) {
-            Ok(lines) => {
-                let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
-                pending.remove(&cmd_num);
-                Ok(lines)
-            }
+        let result = match rx.recv_timeout(timeout) {
+            Ok(lines) => Ok(lines),
             Err(sync_mpsc::RecvTimeoutError::Timeout) => {
-                let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
-                pending.remove(&cmd_num);
                 Err(format!("timeout waiting for tmux command {}", cmd_num))
             }
             Err(sync_mpsc::RecvTimeoutError::Disconnected) => {
-                let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
-                pending.remove(&cmd_num);
                 Err("tmux control forwarder disconnected".to_string())
             }
-        }
+        };
+        let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
+        pending.remove(&cmd_num);
+        result
     }
 
     #[allow(dead_code)]
