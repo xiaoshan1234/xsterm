@@ -53,8 +53,8 @@ export async function sendKeysToTmuxPane(
 export async function captureTmuxPane(
   sessionId: number,
   paneId: string
-): Promise<string[]> {
-  return invoke<string[]>("capture_tmux_pane", { sessionId, paneId });
+): Promise<void> {
+  await invoke("capture_tmux_pane", { sessionId, paneId });
 }
 
 export async function createTmuxWindow(sessionId: number, name?: string): Promise<void> {

@@ -7,6 +7,7 @@ use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBack
 use crate::tmux::session::{create_ssh_tmux_session, create_tmux_session, TmuxSession, TmuxSessionHandles};
 use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::tmux::commands::{capture_pane, resize_pane, send_keys};
+use crate::tmux::session::PendingCommandAction;
 use crate::services::local_session::create_local_session;
 
 /// Internal enum representing an active session, either local, SSH, or tmux.
@@ -194,16 +195,21 @@ impl SessionManager {
         self.write_tmux_command(id, &command)
     }
 
-    /// Capture the current contents of a tmux pane synchronously.
     pub fn capture_tmux_pane(
         &mut self,
         id: u32,
         pane_id: &str,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<(), String> {
         match self.sessions.get(&id) {
             Some(Session::Tmux(session, _)) | Some(Session::SshTmux(session)) => {
-                let command = capture_pane(pane_id, None, true);
-                session.write_command_sync(&command, std::time::Duration::from_secs(5))
+                const CAPTURE_HISTORY_LINES: usize = 250;
+                let command = capture_pane(pane_id, Some(CAPTURE_HISTORY_LINES), true);
+                session.write_command_async(
+                    &command,
+                    PendingCommandAction::CapturePane {
+                        pane_id: pane_id.to_string(),
+                    },
+                )
             }
             Some(_) => Err(format!("Session {} is not a tmux session", id)),
             None => Err(format!("Session {} not found", id)),

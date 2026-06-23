@@ -137,13 +137,12 @@ pub fn refresh_client_pane(pane_id: &str) -> String {
     format!("refresh-client -A {}:continue\n", pane_id)
 }
 
-/// Capture the visible contents of a pane.
-pub fn capture_pane(pane_id: &str, start_line: Option<usize>, escape_sequences: bool) -> String {
+pub fn capture_pane(pane_id: &str, history: Option<usize>, escape_sequences: bool) -> String {
     let mut cmd = format!("capture-pane -t {}", pane_id);
     if escape_sequences {
         cmd.push_str(" -e");
     }
-    if let Some(n) = start_line {
+    if let Some(n) = history {
         cmd.push_str(&format!(" -S -{}", n));
     }
     cmd.push_str(" -p\n");

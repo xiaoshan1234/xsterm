@@ -18,8 +18,15 @@ use crate::tmux::state::{TmuxControlEvent, TmuxPaneOutput};
 
 const TMUX_READ_BUFFER_SIZE: usize = 8192;
 
-/// Shared map of command numbers waiting for their `%end` response.
-pub type PendingCommands = Arc<Mutex<HashMap<u64, sync_mpsc::Sender<Vec<String>>>>>;
+/// What should happen when a numbered command response arrives.
+#[derive(Clone)]
+pub enum PendingCommandAction {
+    #[allow(dead_code)]
+    Sync(sync_mpsc::Sender<Vec<String>>),
+    CapturePane { pane_id: String },
+}
+
+pub type PendingCommands = Arc<Mutex<HashMap<u64, PendingCommandAction>>>;
 
 /// Active tmux control mode session metadata and write handle.
 pub struct TmuxSession {
@@ -50,10 +57,7 @@ impl TmuxSession {
     }
 
     /// Send a command with a unique command number and wait for tmux to acknowledge it.
-    ///
-    /// This blocks the caller until the matching `%end <num>` response is received by
-    /// the control forwarder. It is intended for short, synchronous queries such as
-    /// `capture-pane -p`.
+    #[allow(dead_code)]
     pub fn write_command_sync(
         &self,
         command_without_num: &str,
@@ -66,7 +70,7 @@ impl TmuxSession {
         let (tx, rx) = sync_mpsc::channel();
         {
             let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
-            pending.insert(cmd_num, tx);
+            pending.insert(cmd_num, PendingCommandAction::Sync(tx));
         }
 
         let full_command = format!("%{} {}", cmd_num, command_without_num);
@@ -95,6 +99,33 @@ impl TmuxSession {
         let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
         pending.remove(&cmd_num);
         result
+    }
+
+    pub fn write_command_async(
+        &self,
+        command_without_num: &str,
+        action: PendingCommandAction,
+    ) -> Result<(), String> {
+        let cmd_num = self
+            .next_cmd_num
+            .fetch_add(1, Ordering::SeqCst)
+            .max(1);
+        {
+            let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
+            pending.insert(cmd_num, action);
+        }
+
+        let full_command = format!("%{} {}", cmd_num, command_without_num);
+        tracing::info!(
+            "tmux session {} write async command: {:?}",
+            self.info.id,
+            full_command.trim()
+        );
+        let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
+        writer
+            .write_all(full_command.as_bytes())
+            .map_err(|e| e.to_string())?;
+        writer.flush().map_err(|e| e.to_string())
     }
 
     #[allow(dead_code)]
@@ -474,8 +505,23 @@ fn handle_message<B: AppBackend>(
         } => {
             let routed = if cmd_num > 0 {
                 if let Ok(mut pending) = pending_commands.lock() {
-                    if let Some(sender) = pending.remove(&cmd_num) {
-                        let _ = sender.send(lines.clone());
+                    if let Some(action) = pending.remove(&cmd_num) {
+                        match action {
+                            PendingCommandAction::Sync(sender) => {
+                                let _ = sender.send(lines.clone());
+                            }
+                            PendingCommandAction::CapturePane { pane_id } => {
+                                if success {
+                                    let text = lines.join("\r\n") + "\r\n";
+                                    emit_pane_output(
+                                        backend,
+                                        session_id,
+                                        pane_id,
+                                        text.into_bytes(),
+                                    );
+                                }
+                            }
+                        }
                         true
                     } else {
                         false

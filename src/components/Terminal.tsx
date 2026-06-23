@@ -20,7 +20,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initDoneRef = useRef(false);
-  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane } = useSession();
+  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane } = useSession();
   const { currentTheme } = useTheme();
 
   const terminalInstanceId = useRef(`term-${sessionId}-${paneId ?? "local"}-${Math.random().toString(36).slice(2, 8)}`);
@@ -118,6 +118,9 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
         }
       }).then((fn) => {
         unlisten = fn;
+        captureTmuxPane(sessionId, paneId).catch((err) => {
+          console.warn(`[${instanceId}] capture-pane failed:`, err);
+        });
       });
     } else {
       listen<[number, number[]]>("session-output", (event) => {
@@ -140,7 +143,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       fitAddonRef.current = null;
       initDoneRef.current = false;
     };
-  }, [sessionId, paneId, handleData, resizeSession, resizeTmuxPane, currentTheme]);
+  }, [sessionId, paneId, handleData, resizeSession, resizeTmuxPane, currentTheme, captureTmuxPane]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }
