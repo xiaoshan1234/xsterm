@@ -51,7 +51,7 @@ export function TmuxSessionView({
         onCreate={() => createTmuxWindow(session.id)}
         onClose={(windowId) => closeTmuxWindow(session.id, windowId)}
       />
-      <div className="tmux-pane-grid">
+      <div className="tmux-pane-grid" style={{ position: "relative" }}>
         {windows.length === 0 ? (
           <div className="terminal-empty">No active window</div>
         ) : (
@@ -63,7 +63,12 @@ export function TmuxSessionView({
             return (
               <div
                 key={window.id}
-                style={{ display: isWindowActive ? "contents" : "none" }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  visibility: isWindowActive ? "visible" : "hidden",
+                  pointerEvents: isWindowActive ? "auto" : "none",
+                }}
               >
                 <TmuxLayoutGrid
                   sessionId={session.id}

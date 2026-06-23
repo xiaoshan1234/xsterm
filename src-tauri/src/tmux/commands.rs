@@ -137,6 +137,19 @@ pub fn refresh_client_pane(pane_id: &str) -> String {
     format!("refresh-client -A {}:continue\n", pane_id)
 }
 
+/// Capture the visible contents of a pane.
+pub fn capture_pane(pane_id: &str, start_line: Option<usize>, escape_sequences: bool) -> String {
+    let mut cmd = format!("capture-pane -t {}", pane_id);
+    if escape_sequences {
+        cmd.push_str(" -e");
+    }
+    if let Some(n) = start_line {
+        cmd.push_str(&format!(" -S -{}", n));
+    }
+    cmd.push_str(" -p\n");
+    cmd
+}
+
 /// Enable or disable pause-after flow control.
 pub fn set_pause_after(seconds: u64) -> String {
     format!("refresh-client -p {}\n", seconds)

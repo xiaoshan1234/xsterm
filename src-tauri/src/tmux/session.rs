@@ -1,8 +1,8 @@
 //! Tmux control mode session lifecycle and I/O forwarding.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc as sync_mpsc, Arc, Mutex};
 
 use serde_json;
@@ -18,10 +18,15 @@ use crate::tmux::state::{TmuxControlEvent, TmuxPaneOutput};
 
 const TMUX_READ_BUFFER_SIZE: usize = 8192;
 
+/// Shared map of command numbers waiting for their `%end` response.
+pub type PendingCommands = Arc<Mutex<HashMap<u64, sync_mpsc::Sender<Vec<String>>>>>;
+
 /// Active tmux control mode session metadata and write handle.
 pub struct TmuxSession {
     pub info: SessionInfo,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    next_cmd_num: Arc<AtomicU64>,
+    pending_commands: PendingCommands,
     #[allow(dead_code)]
     exited: Arc<AtomicBool>,
     #[allow(dead_code)]
@@ -42,6 +47,59 @@ impl TmuxSession {
             .write_all(command.as_bytes())
             .map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())
+    }
+
+    /// Send a command with a unique command number and wait for tmux to acknowledge it.
+    ///
+    /// This blocks the caller until the matching `%end <num>` response is received by
+    /// the control forwarder. It is intended for short, synchronous queries such as
+    /// `capture-pane -p`.
+    pub fn write_command_sync(
+        &self,
+        command_without_num: &str,
+        timeout: std::time::Duration,
+    ) -> Result<Vec<String>, String> {
+        let cmd_num = self
+            .next_cmd_num
+            .fetch_add(1, Ordering::SeqCst)
+            .max(1);
+        let (tx, rx) = sync_mpsc::channel();
+        {
+            let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
+            pending.insert(cmd_num, tx);
+        }
+
+        let full_command = format!("%{} {}", cmd_num, command_without_num);
+        tracing::info!(
+            "tmux session {} write sync command: {:?}",
+            self.info.id,
+            full_command.trim()
+        );
+        {
+            let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
+            writer
+                .write_all(full_command.as_bytes())
+                .map_err(|e| e.to_string())?;
+            writer.flush().map_err(|e| e.to_string())?;
+        }
+
+        match rx.recv_timeout(timeout) {
+            Ok(lines) => {
+                let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
+                pending.remove(&cmd_num);
+                Ok(lines)
+            }
+            Err(sync_mpsc::RecvTimeoutError::Timeout) => {
+                let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
+                pending.remove(&cmd_num);
+                Err(format!("timeout waiting for tmux command {}", cmd_num))
+            }
+            Err(sync_mpsc::RecvTimeoutError::Disconnected) => {
+                let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
+                pending.remove(&cmd_num);
+                Err("tmux control forwarder disconnected".to_string())
+            }
+        }
     }
 
     #[allow(dead_code)]
@@ -95,13 +153,16 @@ pub fn create_tmux_session(
     };
 
     let exited = Arc::new(AtomicBool::new(false));
+    let pending_commands: PendingCommands = Arc::new(Mutex::new(HashMap::new()));
     let child_for_forwarder: Arc<Mutex<Box<dyn Child>>> = Arc::new(Mutex::new(child));
+    let pending_commands_for_forwarder = Arc::clone(&pending_commands);
     spawn_control_forwarder(
         reader,
         backend,
         session_id,
         Arc::clone(&exited),
         Some(Arc::clone(&child_for_forwarder)),
+        pending_commands_for_forwarder,
     );
 
     let handles = TmuxSessionHandles {
@@ -113,6 +174,8 @@ pub fn create_tmux_session(
         TmuxSession {
             info,
             writer,
+            next_cmd_num: Arc::new(AtomicU64::new(1)),
+            pending_commands,
             exited,
             _ssh_channel: None,
         },
@@ -215,12 +278,15 @@ pub fn create_ssh_tmux_session(
     };
 
     let exited = Arc::new(AtomicBool::new(false));
+    let pending_commands: PendingCommands = Arc::new(Mutex::new(HashMap::new()));
+    let pending_commands_for_forwarder = Arc::clone(&pending_commands);
     spawn_control_forwarder(
         reader,
         backend,
         session_id,
         Arc::clone(&exited),
         None,
+        pending_commands_for_forwarder,
     );
 
     let writer_for_sync = Arc::clone(&writer);
@@ -240,6 +306,8 @@ pub fn create_ssh_tmux_session(
     Ok(TmuxSession {
         info,
         writer,
+        next_cmd_num: Arc::new(AtomicU64::new(1)),
+        pending_commands: Arc::new(Mutex::new(HashMap::new())),
         exited,
         _ssh_channel: Some(channel),
     })
@@ -261,12 +329,14 @@ pub fn spawn_control_forwarder(
     session_id: u32,
     exited: Arc<AtomicBool>,
     child: Option<Arc<Mutex<Box<dyn Child>>>>,
+    pending_commands: PendingCommands,
 ) {
     let paused_panes: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let copy_mode_panes: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let backend_clone = backend.clone();
     let paused_panes_clone = Arc::clone(&paused_panes);
     let copy_mode_panes_clone = Arc::clone(&copy_mode_panes);
+    let pending_commands_clone = Arc::clone(&pending_commands);
     backend.spawn(Box::new(move || {
         let mut parser = TmuxControlParser::new();
         let mut buf = [0u8; TMUX_READ_BUFFER_SIZE];
@@ -319,6 +389,7 @@ pub fn spawn_control_forwarder(
                             &exited,
                             &paused_panes_clone,
                             &copy_mode_panes_clone,
+                            &pending_commands_clone,
                         );
                     }
                 }
@@ -339,6 +410,7 @@ pub fn spawn_control_forwarder(
                 &exited,
                 &paused_panes_clone,
                 &copy_mode_panes_clone,
+                &pending_commands_clone,
             );
         }
 
@@ -346,6 +418,7 @@ pub fn spawn_control_forwarder(
     }));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_message<B: AppBackend>(
     backend: &B,
     session_id: u32,
@@ -354,6 +427,7 @@ fn handle_message<B: AppBackend>(
     exited: &Arc<AtomicBool>,
     paused_panes: &Arc<Mutex<HashSet<String>>>,
     copy_mode_panes: &Arc<Mutex<HashSet<String>>>,
+    pending_commands: &PendingCommands,
 ) {
     tracing::info!("tmux session {} handle message {:?}", session_id, message);
     match message {
@@ -403,7 +477,22 @@ fn handle_message<B: AppBackend>(
             lines,
             ..
         } => {
-            if !success {
+            let routed = if cmd_num > 0 {
+                if let Ok(mut pending) = pending_commands.lock() {
+                    if let Some(sender) = pending.remove(&cmd_num) {
+                        let _ = sender.send(lines.clone());
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if !success && !routed {
                 let message = lines.join("\n");
                 emit_control_event(
                     backend,

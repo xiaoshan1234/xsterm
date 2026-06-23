@@ -55,6 +55,7 @@ interface SessionContextType {
   writeTmuxCommand: (id: number, command: string) => Promise<void>;
   resizeTmuxPane: (id: number, paneId: string, rows: number, cols: number) => Promise<void>;
   sendKeysToTmuxPane: (id: number, paneId: string, keys: string) => Promise<void>;
+  captureTmuxPane: (id: number, paneId: string) => Promise<string[]>;
   tmuxState: TmuxState;
   activeTmuxWindowIds: Map<number, string>;
   setActiveTmuxWindow: (sessionId: number, windowId: string) => void;
@@ -445,6 +446,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await tmuxService.sendKeysToTmuxPane(id, paneId, keys);
   }, []);
 
+  const captureTmuxPane = useCallback(async (id: number, paneId: string): Promise<string[]> => {
+    return tmuxService.captureTmuxPane(id, paneId);
+  }, []);
+
   const createTmuxWindow = useCallback(async (sessionId: number, name?: string): Promise<void> => {
     await tmuxService.createTmuxWindow(sessionId, name);
   }, []);
@@ -509,6 +514,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         writeTmuxCommand,
         resizeTmuxPane,
         sendKeysToTmuxPane,
+        captureTmuxPane,
         tmuxState,
         activeTmuxWindowIds,
         setActiveTmuxWindow,

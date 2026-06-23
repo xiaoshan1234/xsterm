@@ -50,6 +50,13 @@ export async function sendKeysToTmuxPane(
   await invoke("send_keys_to_tmux_pane", { sessionId, paneId, keys });
 }
 
+export async function captureTmuxPane(
+  sessionId: number,
+  paneId: string
+): Promise<string[]> {
+  return invoke<string[]>("capture_tmux_pane", { sessionId, paneId });
+}
+
 export async function createTmuxWindow(sessionId: number, name?: string): Promise<void> {
   const command = name ? `new-window -n "${quoteTmuxString(name)}"\n` : "new-window\n";
   await writeTmuxCommand(sessionId, command);

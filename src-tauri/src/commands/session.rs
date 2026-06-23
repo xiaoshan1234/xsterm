@@ -169,6 +169,16 @@ pub async fn send_keys_to_tmux_pane(
     with_manager(state, |manager| manager.send_keys_to_tmux_pane(session_id, &pane_id, &keys))
 }
 
+/// Capture the visible contents of a tmux pane.
+#[tauri::command]
+pub async fn capture_tmux_pane(
+    session_id: u32,
+    pane_id: String,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+) -> Result<Vec<String>, String> {
+    with_manager(state, |manager| manager.capture_tmux_pane(session_id, &pane_id))
+}
+
 /// Helper to lock the session manager and execute an operation.
 fn with_manager<F, T>(
     state: State<'_, Arc<Mutex<SessionManager>>>,
