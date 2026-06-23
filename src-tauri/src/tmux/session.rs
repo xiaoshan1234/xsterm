@@ -1,9 +1,10 @@
 //! Tmux control mode session lifecycle and I/O forwarding.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet, VecDeque};
 use std::io::{self, Read, Write};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc as sync_mpsc, Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc as sync_mpsc;
+use std::sync::{Arc, Mutex};
 
 use serde_json;
 
@@ -18,22 +19,13 @@ use crate::tmux::state::{TmuxControlEvent, TmuxPaneOutput};
 
 const TMUX_READ_BUFFER_SIZE: usize = 8192;
 
-/// What should happen when a numbered command response arrives.
-#[derive(Clone)]
-pub enum PendingCommandAction {
-    #[allow(dead_code)]
-    Sync(sync_mpsc::Sender<Vec<String>>),
-    CapturePane { pane_id: String },
-}
-
-pub type PendingCommands = Arc<Mutex<HashMap<u64, PendingCommandAction>>>;
+pub type CapturePaneQueue = Arc<Mutex<VecDeque<String>>>;
 
 /// Active tmux control mode session metadata and write handle.
 pub struct TmuxSession {
     pub info: SessionInfo,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
-    next_cmd_num: Arc<AtomicU64>,
-    pending_commands: PendingCommands,
+    capture_queue: CapturePaneQueue,
     #[allow(dead_code)]
     exited: Arc<AtomicBool>,
     #[allow(dead_code)]
@@ -56,74 +48,24 @@ impl TmuxSession {
         writer.flush().map_err(|e| e.to_string())
     }
 
-    /// Send a command with a unique command number and wait for tmux to acknowledge it.
-    #[allow(dead_code)]
-    pub fn write_command_sync(
+    pub fn request_capture_pane(
         &self,
-        command_without_num: &str,
-        timeout: std::time::Duration,
-    ) -> Result<Vec<String>, String> {
-        let cmd_num = self
-            .next_cmd_num
-            .fetch_add(1, Ordering::SeqCst)
-            .max(1);
-        let (tx, rx) = sync_mpsc::channel();
-        {
-            let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
-            pending.insert(cmd_num, PendingCommandAction::Sync(tx));
-        }
-
-        let full_command = format!("%{} {}", cmd_num, command_without_num);
-        tracing::info!(
-            "tmux session {} write sync command: {:?}",
-            self.info.id,
-            full_command.trim()
-        );
-        {
-            let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
-            writer
-                .write_all(full_command.as_bytes())
-                .map_err(|e| e.to_string())?;
-            writer.flush().map_err(|e| e.to_string())?;
-        }
-
-        let result = match rx.recv_timeout(timeout) {
-            Ok(lines) => Ok(lines),
-            Err(sync_mpsc::RecvTimeoutError::Timeout) => {
-                Err(format!("timeout waiting for tmux command {}", cmd_num))
-            }
-            Err(sync_mpsc::RecvTimeoutError::Disconnected) => {
-                Err("tmux control forwarder disconnected".to_string())
-            }
-        };
-        let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
-        pending.remove(&cmd_num);
-        result
-    }
-
-    pub fn write_command_async(
-        &self,
-        command_without_num: &str,
-        action: PendingCommandAction,
+        pane_id: &str,
+        history: usize,
     ) -> Result<(), String> {
-        let cmd_num = self
-            .next_cmd_num
-            .fetch_add(1, Ordering::SeqCst)
-            .max(1);
         {
-            let mut pending = self.pending_commands.lock().map_err(|e| e.to_string())?;
-            pending.insert(cmd_num, action);
+            let mut queue = self.capture_queue.lock().map_err(|e| e.to_string())?;
+            queue.push_back(pane_id.to_string());
         }
-
-        let full_command = format!("%{} {}", cmd_num, command_without_num);
+        let command = crate::tmux::commands::capture_pane(pane_id, Some(history), true);
         tracing::info!(
-            "tmux session {} write async command: {:?}",
+            "tmux session {} request capture-pane: {:?}",
             self.info.id,
-            full_command.trim()
+            command.trim()
         );
         let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
         writer
-            .write_all(full_command.as_bytes())
+            .write_all(command.as_bytes())
             .map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())
     }
@@ -179,16 +121,16 @@ pub fn create_tmux_session(
     };
 
     let exited = Arc::new(AtomicBool::new(false));
-    let pending_commands: PendingCommands = Arc::new(Mutex::new(HashMap::new()));
+    let capture_queue: CapturePaneQueue = Arc::new(Mutex::new(VecDeque::new()));
     let child_for_forwarder: Arc<Mutex<Box<dyn Child>>> = Arc::new(Mutex::new(child));
-    let pending_commands_for_forwarder = Arc::clone(&pending_commands);
+    let capture_queue_for_forwarder = Arc::clone(&capture_queue);
     spawn_control_forwarder(
         reader,
         backend,
         session_id,
         Arc::clone(&exited),
         Some(Arc::clone(&child_for_forwarder)),
-        pending_commands_for_forwarder,
+        capture_queue_for_forwarder,
     );
 
     let handles = TmuxSessionHandles {
@@ -200,8 +142,7 @@ pub fn create_tmux_session(
         TmuxSession {
             info,
             writer,
-            next_cmd_num: Arc::new(AtomicU64::new(1)),
-            pending_commands,
+            capture_queue,
             exited,
             _ssh_channel: None,
         },
@@ -304,15 +245,15 @@ pub fn create_ssh_tmux_session(
     };
 
     let exited = Arc::new(AtomicBool::new(false));
-    let pending_commands: PendingCommands = Arc::new(Mutex::new(HashMap::new()));
-    let pending_commands_for_forwarder = Arc::clone(&pending_commands);
+    let capture_queue: CapturePaneQueue = Arc::new(Mutex::new(VecDeque::new()));
+    let capture_queue_for_forwarder = Arc::clone(&capture_queue);
     spawn_control_forwarder(
         reader,
         backend,
         session_id,
         Arc::clone(&exited),
         None,
-        pending_commands_for_forwarder,
+        capture_queue_for_forwarder,
     );
 
     let writer_for_sync = Arc::clone(&writer);
@@ -332,8 +273,7 @@ pub fn create_ssh_tmux_session(
     Ok(TmuxSession {
         info,
         writer,
-        next_cmd_num: Arc::new(AtomicU64::new(1)),
-        pending_commands: Arc::new(Mutex::new(HashMap::new())),
+        capture_queue,
         exited,
         _ssh_channel: Some(channel),
     })
@@ -355,16 +295,19 @@ pub fn spawn_control_forwarder(
     session_id: u32,
     exited: Arc<AtomicBool>,
     child: Option<Arc<Mutex<Box<dyn Child>>>>,
-    pending_commands: PendingCommands,
+    capture_queue: CapturePaneQueue,
 ) {
     let paused_panes: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let copy_mode_panes: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let backend_clone = backend.clone();
     let paused_panes_clone = Arc::clone(&paused_panes);
     let copy_mode_panes_clone = Arc::clone(&copy_mode_panes);
-    let pending_commands_clone = Arc::clone(&pending_commands);
+    let capture_queue_clone = Arc::clone(&capture_queue);
     backend.spawn(Box::new(move || {
-        let mut parser = TmuxControlParser::new();
+        let classifier_queue = Arc::clone(&capture_queue_clone);
+        let mut parser = TmuxControlParser::with_classifier(move || {
+            classifier_queue.lock().ok()?.pop_front()
+        });
         let mut buf = [0u8; TMUX_READ_BUFFER_SIZE];
         let mut last_child_check = std::time::Instant::now();
 
@@ -415,7 +358,6 @@ pub fn spawn_control_forwarder(
                             &exited,
                             &paused_panes_clone,
                             &copy_mode_panes_clone,
-                            &pending_commands_clone,
                         );
                     }
                 }
@@ -436,7 +378,6 @@ pub fn spawn_control_forwarder(
                 &exited,
                 &paused_panes_clone,
                 &copy_mode_panes_clone,
-                &pending_commands_clone,
             );
         }
 
@@ -453,7 +394,6 @@ fn handle_message<B: AppBackend>(
     exited: &Arc<AtomicBool>,
     paused_panes: &Arc<Mutex<HashSet<String>>>,
     copy_mode_panes: &Arc<Mutex<HashSet<String>>>,
-    pending_commands: &PendingCommands,
 ) {
     tracing::info!("tmux session {} handle message {:?}", session_id, message);
     match message {
@@ -497,48 +437,23 @@ fn handle_message<B: AppBackend>(
                 },
             );
         }
+        TmuxMessage::CapturedPaneOutput { pane_id, lines } => {
+            if !lines.is_empty() {
+                let text = lines.join("\r\n") + "\r\n";
+                emit_pane_output(backend, session_id, pane_id, text.into_bytes());
+            }
+        }
         TmuxMessage::CommandResponse {
-            cmd_num,
             success,
             lines,
             ..
         } => {
-            let routed = if cmd_num > 0 {
-                if let Ok(mut pending) = pending_commands.lock() {
-                    if let Some(action) = pending.remove(&cmd_num) {
-                        match action {
-                            PendingCommandAction::Sync(sender) => {
-                                let _ = sender.send(lines.clone());
-                            }
-                            PendingCommandAction::CapturePane { pane_id } => {
-                                if success {
-                                    let text = lines.join("\r\n") + "\r\n";
-                                    emit_pane_output(
-                                        backend,
-                                        session_id,
-                                        pane_id,
-                                        text.into_bytes(),
-                                    );
-                                }
-                            }
-                        }
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            if !success && !routed {
+            if !success {
                 let message = lines.join("\n");
                 emit_control_event(
                     backend,
                     session_id,
-                    TmuxControlEvent::CommandError { cmd_num, message },
+                    TmuxControlEvent::CommandError { cmd_num: 0, message },
                 );
             }
         }
@@ -692,10 +607,10 @@ fn emit_closed<B: AppBackend>(backend: &B, session_id: u32) {
     emit_event(backend, "session-closed", session_id, &session_id);
 }
 
-#[cfg(test)]
-mod integration_tests {
-    use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    #[cfg(test)]
+    mod integration_tests {
+        use std::sync::{Arc, Mutex};
+        use std::time::Duration;
 
     use super::*;
     use crate::infrastructure::app_backend::AppBackend;

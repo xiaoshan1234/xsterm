@@ -45,6 +45,10 @@ pub enum TmuxMessage {
         success: bool,
         lines: Vec<String>,
     },
+    CapturedPaneOutput {
+        pane_id: String,
+        lines: Vec<String>,
+    },
     /// Parsed output of a `list-windows` command response.
     WindowList(Vec<WindowListEntry>),
     /// Parsed output of a `list-panes` command response.
@@ -73,12 +77,37 @@ pub struct PaneListEntry {
 }
 
 /// Incremental parser for the tmux control mode byte stream.
-#[derive(Debug, Default)]
 pub struct TmuxControlParser {
     buffer: Vec<u8>,
     pending_response: Option<PendingResponse>,
     pending_dcs_messages: VecDeque<TmuxMessage>,
     in_dcs: bool,
+    response_classifier: Option<Box<dyn FnMut() -> Option<String> + Send>>,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for TmuxControlParser {
+    fn default() -> Self {
+        Self {
+            buffer: Vec::new(),
+            pending_response: None,
+            pending_dcs_messages: VecDeque::new(),
+            in_dcs: false,
+            response_classifier: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for TmuxControlParser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TmuxControlParser")
+            .field("buffer_len", &self.buffer.len())
+            .field("pending_response", &self.pending_response)
+            .field("pending_dcs_messages", &self.pending_dcs_messages)
+            .field("in_dcs", &self.in_dcs)
+            .field("has_classifier", &self.response_classifier.is_some())
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +116,7 @@ struct PendingResponse {
     cmd_num: u64,
     flags: u64,
     lines: Vec<String>,
+    capture_pane_id: Option<String>,
 }
 
 impl TmuxControlParser {
@@ -100,8 +130,24 @@ impl TmuxControlParser {
     const DCS_END: &'static [u8] = b"\x1b\\";
 
     /// Create a new parser with an empty buffer.
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a parser that classifies command responses as captured pane output.
+    ///
+    /// The classifier is invoked when a `%begin` line is seen; if it returns
+    /// `Some(pane_id)`, the lines between `%begin` and `%end` are emitted as
+    /// `TmuxMessage::CapturedPaneOutput` instead of a generic command response.
+    pub fn with_classifier<F>(classifier: F) -> Self
+    where
+        F: FnMut() -> Option<String> + Send + 'static,
+    {
+        Self {
+            response_classifier: Some(Box::new(classifier)),
+            ..Self::default()
+        }
     }
 
     /// Feed more bytes into the parser and return any complete messages.
@@ -179,11 +225,16 @@ impl TmuxControlParser {
                     cmd_num,
                     flags
                 );
+                let capture_pane_id = self
+                    .response_classifier
+                    .as_mut()
+                    .and_then(|c| c());
                 self.pending_response = Some(PendingResponse {
                     timestamp,
                     cmd_num,
                     flags,
                     lines: Vec::new(),
+                    capture_pane_id,
                 });
                 return None;
             }
@@ -195,6 +246,12 @@ impl TmuxControlParser {
                         pending.cmd_num,
                         pending.lines.len()
                     );
+                    if let Some(pane_id) = pending.capture_pane_id {
+                        return Some(TmuxMessage::CapturedPaneOutput {
+                            pane_id,
+                            lines: pending.lines,
+                        });
+                    }
                     let response = TmuxMessage::CommandResponse {
                         timestamp: pending.timestamp,
                         cmd_num: pending.cmd_num,
@@ -209,6 +266,9 @@ impl TmuxControlParser {
 
             if name == "error" && args.len() >= 3 {
                 if let Some(pending) = self.pending_response.take() {
+                    if pending.capture_pane_id.is_some() {
+                        return None;
+                    }
                     return Some(TmuxMessage::CommandResponse {
                         timestamp: pending.timestamp,
                         cmd_num: pending.cmd_num,

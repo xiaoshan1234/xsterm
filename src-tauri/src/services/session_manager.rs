@@ -6,8 +6,7 @@ use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySys
 use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
 use crate::tmux::session::{create_ssh_tmux_session, create_tmux_session, TmuxSession, TmuxSessionHandles};
 use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
-use crate::tmux::commands::{capture_pane, resize_pane, send_keys};
-use crate::tmux::session::PendingCommandAction;
+use crate::tmux::commands::{resize_pane, send_keys};
 use crate::services::local_session::create_local_session;
 
 /// Internal enum representing an active session, either local, SSH, or tmux.
@@ -203,13 +202,7 @@ impl SessionManager {
         match self.sessions.get(&id) {
             Some(Session::Tmux(session, _)) | Some(Session::SshTmux(session)) => {
                 const CAPTURE_HISTORY_LINES: usize = 250;
-                let command = capture_pane(pane_id, Some(CAPTURE_HISTORY_LINES), true);
-                session.write_command_async(
-                    &command,
-                    PendingCommandAction::CapturePane {
-                        pane_id: pane_id.to_string(),
-                    },
-                )
+                session.request_capture_pane(pane_id, CAPTURE_HISTORY_LINES)
             }
             Some(_) => Err(format!("Session {} is not a tmux session", id)),
             None => Err(format!("Session {} not found", id)),
