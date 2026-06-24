@@ -4,8 +4,14 @@
 
 | 二级分类 | 三级分类 | 需求描述 | 开发状态 | 存在 Bug | 是否有人跟踪 |
 |---|---|---|---|---|---|
-| 本地会话 | 本地 session | 支持本地 session | 待开发 | 否 | 否 |
-| 本地会话 | 本地 shell 支持 | 支持 windows:powershell、wsl、wsl:bash、sh | 待开发 | 否 | 否 |
+| 本地会话 | windows：powershell | 普通用户模式 | 待开发 | 否 | 否 |
+| 本地会话 | windows：powershell-admin | 管理员模式 | 待开发 | 否 | 否 |
+| 本地会话 | windows：cmd | 普通用户模式 | 待开发 | 否 | 否 |
+| 本地会话 | windows：cmd-admin | 管理员模式 | 待开发 | 否 | 否 |
+| 本地会话 | windows：wsl | 支持 debian/ubuntu 等 | 待开发 | 否 | 否 |
+| 本地会话 | windows：custom | 自定义，例如git-bash | 待开发 | 否 | 否 |
+| 本地会话 | linux:bash |  | 待开发 | 否 | 否 |
+| 本地会话 | linux:custom |  | 待开发 | 否 | 否 |
 | 本地会话 | 配置持久化 | 本地会话配置持久化 | 待开发 | 否 | 否 |
 
 ## SSH 会话
