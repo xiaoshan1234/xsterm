@@ -152,7 +152,11 @@ impl SessionManager {
         match self.sessions.get(&id) {
             Some(Session::Local(_, handles)) => handles.resize(rows, cols),
             Some(Session::Ssh(ssh)) => {
-                ssh.resize_tx.send((cols, rows)).map_err(|_| "SSH session resize channel closed".to_string())
+                if let Some(resize_tx) = &ssh.resize_tx {
+                    resize_tx.send((cols, rows)).map_err(|_| "SSH session resize channel closed".to_string())
+                } else {
+                    Ok(())
+                }
             }
             Some(Session::Tmux(_, _)) | Some(Session::SshTmux(_)) => Err(format!(
                 "Session {} is a tmux session; use resize_tmux_pane instead",
