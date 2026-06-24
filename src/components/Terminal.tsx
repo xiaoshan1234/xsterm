@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
 import "@xterm/xterm/css/xterm.css";
 
 function decodeOutput(data: number[]): string {
@@ -33,6 +34,24 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     },
     [sessionId, paneId, writeSession, sendKeysToTmuxPane]
   );
+
+  const contextMenuItems: ContextMenuItem[] = [
+    {
+      label: "全选 (Select All)",
+      onClick: () => {
+        xtermRef.current?.selectAll();
+      },
+    },
+    {
+      label: "复制 (Copy)",
+      onClick: async () => {
+        const selection = xtermRef.current?.getSelection();
+        if (selection) {
+          await navigator.clipboard.writeText(selection).catch(() => {});
+        }
+      },
+    },
+  ];
 
   useEffect(() => {
     const container = containerRef.current;
@@ -135,5 +154,9 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     };
   }, [sessionId, paneId, handleData, resizeSession, resizeTmuxPane, currentTheme, captureTmuxPane]);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+  return (
+    <ContextMenu items={contextMenuItems}>
+      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+    </ContextMenu>
+  );
 }
