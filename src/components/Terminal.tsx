@@ -103,7 +103,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
 
     xterm.onData(handleData);
 
-    const resizeObserver = new ResizeObserver(() => {
+    const fitAndResize = () => {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
         if (paneId) {
@@ -112,19 +112,20 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
           resizeSession(sessionId, xterm.rows, xterm.cols);
         }
       }
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (initDoneRef.current) {
+        fitAndResize();
+      }
     });
     resizeObserver.observe(container);
 
     requestAnimationFrame(() => {
-      if (container.offsetWidth > 0 && container.offsetHeight > 0) {
-        fitAddon.fit();
-        if (paneId) {
-          resizeTmuxPane(sessionId, paneId, xterm.rows, xterm.cols);
-        } else {
-          resizeSession(sessionId, xterm.rows, xterm.cols);
-        }
-      }
+      fitAndResize();
       initDoneRef.current = true;
+      setTimeout(fitAndResize, 300);
+      setTimeout(fitAndResize, 800);
     });
 
     let unlisten: (() => void) | null = null;
@@ -165,7 +166,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
 
   return (
     <ContextMenu items={contextMenuItems}>
-      <div ref={containerRef} style={{ width: "100%", flex: 1, minHeight: 0 }} />
+      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
     </ContextMenu>
   );
 }

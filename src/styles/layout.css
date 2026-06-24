@@ -58,6 +58,13 @@
   flex-direction: column;
 }
 
+.terminal-pane--active:not(.tmux-pane) > * {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .tmux-pane {
   display: none;
   flex-direction: column;
