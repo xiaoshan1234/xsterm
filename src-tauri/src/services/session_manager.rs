@@ -151,7 +151,9 @@ impl SessionManager {
     pub fn resize(&mut self, id: u32, rows: u16, cols: u16) -> Result<(), String> {
         match self.sessions.get(&id) {
             Some(Session::Local(_, handles)) => handles.resize(rows, cols),
-            Some(Session::Ssh(_)) => Ok(()),
+            Some(Session::Ssh(ssh)) => {
+                ssh.resize_tx.send((cols, rows)).map_err(|_| "SSH session resize channel closed".to_string())
+            }
             Some(Session::Tmux(_, _)) | Some(Session::SshTmux(_)) => Err(format!(
                 "Session {} is a tmux session; use resize_tmux_pane instead",
                 id

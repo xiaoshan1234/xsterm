@@ -46,12 +46,14 @@ pub struct SshConnectResult {
     pub channel: Box<dyn SshChannel + Send>,
     pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub read_rx: sync_mpsc::Receiver<Option<Vec<u8>>>,
+    pub resize_tx: mpsc::UnboundedSender<(u16, u16)>,
 }
 
 /// Holds the metadata and write channel for an established SSH session.
 pub struct SshSessionWrapper {
     pub info: SessionInfo,
     pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
+    pub resize_tx: mpsc::UnboundedSender<(u16, u16)>,
 }
 
 /// russh client handler that accepts any server host key.
@@ -118,6 +120,7 @@ fn connect_ssh(
     let (result_tx, result_rx) = sync_mpsc::channel::<Result<(), String>>();
     let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
     let (write_tx, mut write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let (resize_tx, resize_rx) = mpsc::unbounded_channel::<(u16, u16)>();
 
     let host = host.to_string();
     let username = username.to_string();
@@ -140,6 +143,7 @@ fn connect_ssh(
                 &result_tx,
                 &read_tx,
                 &mut write_rx,
+                resize_rx,
             )
             .await;
 
@@ -155,6 +159,7 @@ fn connect_ssh(
         channel: Box::new(BridgedChannel),
         write_tx,
         read_rx,
+        resize_tx,
     })
 }
 
@@ -170,6 +175,7 @@ async fn run_ssh_session(
     result_tx: &sync_mpsc::Sender<Result<(), String>>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
+    resize_rx: mpsc::UnboundedReceiver<(u16, u16)>,
 ) -> Result<(), String> {
     let config = Arc::new(russh::client::Config {
         ..Default::default()
@@ -218,7 +224,7 @@ async fn run_ssh_session(
     result_tx.send(Ok(())).ok();
     tracing::info!("SSH session established, entering data loop");
 
-    run_data_loop(&mut handle, &mut channel, read_tx, write_rx).await;
+    run_data_loop(&mut handle, &mut channel, read_tx, write_rx, resize_rx).await;
     tracing::info!("SSH data loop ended");
     Ok(())
 }
@@ -266,6 +272,7 @@ async fn run_data_loop(
     channel: &mut russh::Channel<russh::client::Msg>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
+    mut resize_rx: mpsc::UnboundedReceiver<(u16, u16)>,
 ) {
     let channel_id = channel.id();
     loop {
@@ -310,6 +317,19 @@ async fn run_data_loop(
                     }
                 }
             }
+            resize = resize_rx.recv() => {
+                match resize {
+                    Some((cols, rows)) => {
+                        if channel.window_change(u32::from(cols), u32::from(rows), 0, 0).await.is_ok() {
+                            tracing::info!("SSH PTY resized to {}x{}", cols, rows);
+                        }
+                    }
+                    None => {
+                        tracing::info!("SSH resize channel closed");
+                        break;
+                    }
+                }
+            }
         }
     }
 }
@@ -327,7 +347,7 @@ pub fn create_ssh_session(
     backend: impl AppBackend + 'static,
     session_id: u32,
 ) -> Result<SshSessionWrapper, String> {
-    let SshConnectResult { channel: _channel, write_tx, read_rx } =
+    let SshConnectResult { channel: _channel, write_tx, read_rx, resize_tx } =
         ssh_backend.connect(&config.host, config.port, &config.auth, &config.username)?;
 
     // Keep the channel alive for the lifetime of the session. It is never used
@@ -345,7 +365,7 @@ pub fn create_ssh_session(
         is_connected: true,
     };
 
-    let wrapper = SshSessionWrapper { info, write_tx };
+    let wrapper = SshSessionWrapper { info, write_tx, resize_tx };
 
     let backend_clone = backend.clone();
     thread::spawn(move || {

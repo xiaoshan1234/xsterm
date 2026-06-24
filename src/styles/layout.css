@@ -29,7 +29,8 @@
   overflow: hidden;
   background: var(--bg-primary);
   position: relative;
-  min-height: 100px;
+  min-height: 0;
+  height: 100%;
 }
 
 .panel-resize-handle {
@@ -53,7 +54,8 @@
 }
 
 .terminal-pane--active {
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 
 .tmux-pane {

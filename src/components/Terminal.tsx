@@ -165,7 +165,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
 
   return (
     <ContextMenu items={contextMenuItems}>
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      <div ref={containerRef} style={{ width: "100%", flex: 1, minHeight: 0 }} />
     </ContextMenu>
   );
 }

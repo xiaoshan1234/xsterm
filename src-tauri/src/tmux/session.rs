@@ -156,6 +156,7 @@ pub fn create_ssh_tmux_session(
         channel,
         write_tx,
         read_rx,
+        resize_tx: _,
     } = ssh_backend
         .connect_exec(
             &config.ssh.host,
