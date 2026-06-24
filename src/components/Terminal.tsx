@@ -21,7 +21,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initDoneRef = useRef(false);
-  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane } = useSession();
+  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, splitTmuxPane } = useSession();
   const { currentTheme } = useTheme();
 
   const handleData = useCallback(
@@ -52,6 +52,15 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       },
     },
   ];
+
+  if (paneId) {
+    contextMenuItems.push({
+      label: "水平拆分 (Split H)",
+      onClick: () => {
+        splitTmuxPane(sessionId, paneId, "h");
+      },
+    });
+  }
 
   useEffect(() => {
     const container = containerRef.current;

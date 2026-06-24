@@ -102,3 +102,8 @@ export async function listPanes(sessionId: number, windowId: string): Promise<vo
     `list-panes -t ${windowId} -F '#{session_id}\t#{window_id}\t#{pane_id}\t#{pane_active}\t#{pane_width}\t#{pane_height}\t#{pane_title}'\n`;
   await writeTmuxCommand(sessionId, command);
 }
+
+export async function splitTmuxPane(sessionId: number, paneId: string, direction: "h" | "v" = "h"): Promise<void> {
+  const flag = direction === "h" ? "-h" : "-v";
+  await writeTmuxCommand(sessionId, `split-window ${flag} -t ${paneId}\n`);
+}
