@@ -80,6 +80,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
   const [activeTmuxWindowIds, setActiveTmuxWindowIds] = useState<Map<number, string>>(new Map());
   const sessionsRef = useRef(sessions);
+  const establishingSessionsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -103,6 +104,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     listen<number>("session-closed", (event) => {
       const sessionId = event.payload;
+      establishingSessionsRef.current.delete(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       setActiveSessionId((current) =>
         current === sessionId ? getAdjacentSessionId(sessionsRef.current, sessionId) : current
@@ -143,6 +145,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const sessionIdKey = sessionId;
       setTmuxState((prev) => applyTmuxControlEvent(prev, String(sessionId), controlEvent));
       if (controlEvent.type === "SessionChanged") {
+        establishingSessionsRef.current.delete(sessionId);
         tmuxService
           .listWindows(sessionId, controlEvent.sessionId)
           .catch(console.error);
@@ -163,6 +166,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           next.set(sessionIdKey, controlEvent.windowId);
           return next;
         });
+      }
+      if (controlEvent.type === "CommandError") {
+        if (establishingSessionsRef.current.has(sessionId)) {
+          establishingSessionsRef.current.delete(sessionId);
+          sessionService.closeSession(sessionId).catch(console.error);
+          setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+          setActiveSessionId((current) =>
+            current === sessionId ? getAdjacentSessionId(sessionsRef.current, sessionId) : current
+          );
+          alert(`Tmux session failed: ${controlEvent.message}`);
+        }
       }
     }).then((fn) => cleanups.push(fn));
 
@@ -248,6 +262,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             save
           ));
 
+      establishingSessionsRef.current.add(session.id);
+
       setTimeout(() => {
         tmuxService.listSessions(session.id).catch(console.error);
       }, 500);
@@ -281,6 +297,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (config.type === "tmux" && config.tmuxConfig) {
         const info = await tmuxService.createTmux(config.tmuxConfig);
         const session = buildFrontendSession(info, configId, "tmux");
+        establishingSessionsRef.current.add(session.id);
         setSessions((prev) => [...prev, session]);
         setActiveSessionId(session.id);
         return session;
@@ -289,6 +306,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (config.type === "ssh_tmux" && config.sshTmuxConfig) {
         const info = await tmuxService.createSshTmuxSession(config.sshTmuxConfig);
         const session = buildFrontendSession(info, configId, "ssh_tmux");
+        establishingSessionsRef.current.add(session.id);
         setSessions((prev) => [...prev, session]);
         setActiveSessionId(session.id);
         return session;

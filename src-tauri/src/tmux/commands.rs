@@ -11,9 +11,9 @@ pub const NO_CMD_NUM: u64 = 0;
 /// Build the argv for the initial tmux control mode invocation.
 ///
 /// `tmux -CC` is always prepended by the caller; this function returns only
-/// the subcommand and its flags. For `new-session` we add `-A -D` so the
-/// control client creates the session (or attaches if it exists) and stays
-/// attached. For `attach-session` we map the optional target with `-t`.
+/// the subcommand and its flags. For both `new-session` and `attach-session`
+/// we use `new-session -A -D -s <name>` so the control client attaches to an
+/// existing session or creates it if it does not exist.
 pub fn build_tmux_argv(command: &str, target: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> = command.split_whitespace().map(String::from).collect();
     if args.is_empty() {
@@ -21,16 +21,11 @@ pub fn build_tmux_argv(command: &str, target: Option<&str>) -> Vec<String> {
     }
 
     match args[0].as_str() {
-        "new-session" => {
+        "new-session" | "attach-session" => {
             add_flag_if_missing(&mut args, "-A");
             add_flag_if_missing(&mut args, "-D");
             if let Some(t) = target {
                 add_flag_with_value(&mut args, "-s", t);
-            }
-        }
-        "attach-session" => {
-            if let Some(t) = target {
-                add_flag_with_value(&mut args, "-t", t);
             }
         }
         _ => {
@@ -252,9 +247,9 @@ mod tests {
     }
 
     #[test]
-    fn build_tmux_argv_attach_session_maps_target() {
+    fn build_tmux_argv_attach_session_uses_new_session_with_attach_flags() {
         let args = build_tmux_argv("attach-session", Some("foo"));
-        assert_eq!(args, vec!["attach-session", "-t", "foo"]);
+        assert_eq!(args, vec!["new-session", "-A", "-D", "-s", "foo"]);
     }
 
     #[test]
