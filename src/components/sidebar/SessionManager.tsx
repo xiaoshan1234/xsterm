@@ -11,9 +11,10 @@ import { EditSessionDialog } from "../dialogs/EditSessionDialog";
 interface SessionManagerProps {
   width: number;
   onCreateSession: () => void;
+  onCreateSessionWithGroup: (groupId: number) => void;
 }
 
-export function SessionManager({ width, onCreateSession }: SessionManagerProps) {
+export function SessionManager({ width, onCreateSession, onCreateSessionWithGroup }: SessionManagerProps) {
   const {
     sessions,
     savedConfigs,
@@ -132,6 +133,7 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
           >
             <ContextMenu
               items={[
+                { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
                 { label: "Edit", onClick: () => setEditingGroup(group) },
                 { label: "Delete", onClick: () => deleteGroup(group.id), danger: true },
               ]}

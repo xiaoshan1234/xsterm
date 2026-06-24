@@ -11,10 +11,11 @@ const DEFAULT_SUBMENU_WIDTH = 200;
 
 interface SidebarProps {
   onCreateSession: () => void;
+  onCreateSessionWithGroup: (groupId: number) => void;
   onToggleLogs: () => void;
 }
 
-export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
+export default function Sidebar({ onCreateSession, onCreateSessionWithGroup, onToggleLogs }: SidebarProps) {
   const [activeMenu, setActiveMenu] = useState<"chat" | "settings" | null>(null);
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
 
@@ -36,7 +37,7 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
         onToggleLogs={onToggleLogs}
       />
 
-      {activeMenu === "chat" && <SessionManager width={submenuWidth} onCreateSession={onCreateSession} />}
+      {activeMenu === "chat" && <SessionManager width={submenuWidth} onCreateSession={onCreateSession} onCreateSessionWithGroup={onCreateSessionWithGroup} />}
       {activeMenu === "settings" && <SettingsPanel onClose={() => setActiveMenu(null)} />}
 
       {activeMenu && (

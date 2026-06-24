@@ -27,6 +27,7 @@ export default function AppLayout() {
     writeSession,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_PANEL_HEIGHT);
   const [sendPanelCollapsed, setSendPanelCollapsed] = useState(true);
   const mainAreaRef = useRef<HTMLDivElement>(null);
@@ -88,7 +89,8 @@ export default function AppLayout() {
       <NavBar />
       <div className="content-area">
         <Sidebar
-          onCreateSession={() => setShowCreateDialog(true)}
+          onCreateSession={() => { setCreateSessionGroupId(null); setShowCreateDialog(true); }}
+          onCreateSessionWithGroup={(groupId) => { setCreateSessionGroupId(groupId); setShowCreateDialog(true); }}
           onToggleLogs={() => {}}
         />
         <div className="main-area" ref={mainAreaRef}>
@@ -133,6 +135,7 @@ export default function AppLayout() {
         onCreateLocal={createLocalSession}
         onCreateSsh={createSshSession}
         onCreateTmux={createTmuxSession}
+        initialGroupId={createSessionGroupId}
       />
     </div>
   );
