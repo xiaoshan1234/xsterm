@@ -162,22 +162,12 @@ export function TmuxSessionForm({ config, onChange, savedSshConfigs }: TmuxSessi
         </>
       )}
 
-      <FormField label="Command">
-        <select
-          value={config.tmux.command}
-          onChange={(e) => updateTmux({ ...config.tmux, command: e.target.value })}
-        >
-          <option value="new-session">new-session</option>
-          <option value="attach-session">attach-session</option>
-        </select>
-      </FormField>
-
-      <FormField label={config.tmux.command === "attach-session" ? "Target session" : "Session name *"}>
+      <FormField label="Session name *">
         <input
           type="text"
           value={config.tmux.target ?? ""}
           onChange={(e) => updateTmux({ ...config.tmux, target: e.target.value || undefined })}
-          placeholder={config.tmux.command === "attach-session" ? "Session name to attach" : "Required session name"}
+          placeholder="Required session name"
         />
       </FormField>
 
@@ -225,7 +215,7 @@ export function validateSshTmuxConfig(config: SshTmuxSessionConfig, savedSshConf
       return "Key file is required";
     }
   }
-  if (config.tmux.command === "new-session" && !config.tmux.target?.trim()) {
+  if (!config.tmux.target?.trim()) {
     return "Session name is required";
   }
   return null;
