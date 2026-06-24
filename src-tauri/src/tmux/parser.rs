@@ -56,6 +56,8 @@ pub enum TmuxMessage {
     Unknown { raw: String },
 }
 
+pub type ResponseClassifier = Option<Box<dyn FnMut() -> Option<String> + Send>>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowListEntry {
     pub window_id: String,
@@ -82,7 +84,7 @@ pub struct TmuxControlParser {
     pending_response: Option<PendingResponse>,
     pending_dcs_messages: VecDeque<TmuxMessage>,
     in_dcs: bool,
-    response_classifier: Option<Box<dyn FnMut() -> Option<String> + Send>>,
+    response_classifier: ResponseClassifier,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -135,11 +137,6 @@ impl TmuxControlParser {
         Self::default()
     }
 
-    /// Create a parser that classifies command responses as captured pane output.
-    ///
-    /// The classifier is invoked when a `%begin` line is seen; if it returns
-    /// `Some(pane_id)`, the lines between `%begin` and `%end` are emitted as
-    /// `TmuxMessage::CapturedPaneOutput` instead of a generic command response.
     pub fn with_classifier<F>(classifier: F) -> Self
     where
         F: FnMut() -> Option<String> + Send + 'static,
@@ -151,6 +148,9 @@ impl TmuxControlParser {
     }
 
     /// Feed more bytes into the parser and return any complete messages.
+    ///
+    /// Iterates until the buffer stops shrinking, so a single `parse` call can
+    /// produce many messages.
     pub fn parse(&mut self, data: &[u8]) -> Vec<TmuxMessage> {
         self.buffer.extend_from_slice(data);
         let mut messages = Vec::new();
@@ -220,7 +220,7 @@ impl TmuxControlParser {
                 let timestamp = args[0].parse().unwrap_or(0);
                 let cmd_num = args[1].parse().unwrap_or(0);
                 let flags = args[2].parse().unwrap_or(0);
-                tracing::info!(
+                tracing::trace!(
                     "tmux begin response: cmd_num={} flags={}",
                     cmd_num,
                     flags
@@ -241,7 +241,7 @@ impl TmuxControlParser {
 
             if name == "end" && args.len() >= 3 {
                 if let Some(pending) = self.pending_response.take() {
-                    tracing::info!(
+                    tracing::trace!(
                         "tmux end response: cmd_num={} lines={}",
                         pending.cmd_num,
                         pending.lines.len()
@@ -290,29 +290,16 @@ impl TmuxControlParser {
     }
 
     /// Take a complete line from the buffer, if one exists.
-    ///
-    /// Tmux uses `\n` to terminate control lines; some paths include an
-    /// additional `\r` before it. Both `\n` and `\r\n` are accepted.
     fn take_line(&mut self) -> Option<String> {
-        if let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
-            let mut line_bytes = self.buffer.drain(..pos).collect::<Vec<u8>>();
-            self.buffer.drain(..1); // drop \n
+        let pos = self.buffer.iter().position(|&b| b == b'\n')?;
+        let mut line_bytes: Vec<u8> = self.buffer.drain(..pos).collect();
+        self.buffer.drain(..1); // drop \n
 
-            // Strip a single trailing \r if present.
-            if line_bytes.last() == Some(&b'\r') {
-                line_bytes.pop();
-            }
-
-            Some(String::from_utf8_lossy(&line_bytes).into_owned())
-        } else {
-            None
+        if line_bytes.last() == Some(&b'\r') {
+            line_bytes.pop();
         }
-    }
 
-    /// Parse the content of a DCS block, which is a sequence of control lines.
-    #[allow(dead_code)]
-    fn parse_dcs_block(&mut self, _block: &[u8]) -> Vec<TmuxMessage> {
-        Vec::new()
+        Some(String::from_utf8_lossy(&line_bytes).into_owned())
     }
 
     /// Parse a single control-mode line into a structured message.
@@ -346,8 +333,6 @@ impl TmuxControlParser {
     pub fn flush(&mut self) -> Vec<TmuxMessage> {
         let mut messages = Vec::new();
 
-        // If there is a complete line remaining (without trailing \r\n),
-        // process it.
         if !self.buffer.is_empty() && !self.buffer.ends_with(b"\r") {
             let line = String::from_utf8_lossy(&self.buffer).into_owned();
             self.buffer.clear();
@@ -356,7 +341,6 @@ impl TmuxControlParser {
             }
         }
 
-        // Any pending command response is lost/unfinished; emit it as an error.
         if let Some(pending) = self.pending_response.take() {
             messages.push(TmuxMessage::CommandResponse {
                 timestamp: pending.timestamp,

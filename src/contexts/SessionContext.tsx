@@ -127,18 +127,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
     }).then((fn) => cleanups.push(fn));
 
-    listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
-      const [sessionId, output] = event.payload;
-      const paneId = output.paneId;
-      const tmuxSessionId = String(sessionId);
-      setTmuxState((prev) => {
-        const next = cloneTmuxState(prev);
-        const pane = next.panes.get(paneId);
-        if (pane && pane.sessionId === tmuxSessionId) {
-          // pane output is now handled directly by Terminal.tsx listeners.
-        }
-        return next;
-      });
+    listen<[number, { paneId: string; data: number[] }]>('tmux-pane-output', () => {
+      // Output bytes are delivered directly to Terminal.tsx listeners per pane.
+      // No React state update is needed here.
     }).then((fn) => cleanups.push(fn));
 
     listen<[number, string]>("tmux-request-sync", (event) => {

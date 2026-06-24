@@ -55,11 +55,11 @@ export function applyTmuxControlEvent(
             Number.parseInt(_sessionId, 10) || 0,
             `list-sessions\n`
           )
-          .catch(console.error);
+          .catch(() => {});
       }
       tmuxService
         .listPanes(Number.parseInt(_sessionId, 10) || 0, window.id)
-        .catch(console.error);
+        .catch(() => {});
       break;
     }
     case "WindowClosed": {
@@ -182,7 +182,7 @@ export function applyTmuxControlEvent(
         for (const entry of event.windows) {
           tmuxService
             .listPanes(Number.parseInt(_sessionId, 10) || 0, entry.windowId)
-            .catch(console.error);
+            .catch(() => {});
         }
       }, 0);
       break;

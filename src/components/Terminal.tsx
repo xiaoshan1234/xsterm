@@ -23,11 +23,8 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
   const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane } = useSession();
   const { currentTheme } = useTheme();
 
-  const terminalInstanceId = useRef(`term-${sessionId}-${paneId ?? "local"}-${Math.random().toString(36).slice(2, 8)}`);
-
   const handleData = useCallback(
     (data: string) => {
-      console.log(`[${terminalInstanceId.current}] onData:`, JSON.stringify(data));
       if (paneId) {
         sendKeysToTmuxPane(sessionId, paneId, data);
       } else {
@@ -38,9 +35,6 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
   );
 
   useEffect(() => {
-    const instanceId = terminalInstanceId.current;
-    console.log(`[${instanceId}] Terminal mount`);
-
     const container = containerRef.current;
     if (!container) return;
 
@@ -80,7 +74,6 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     fitAddonRef.current = fitAddon;
 
     xterm.onData(handleData);
-    console.log(`[${instanceId}] onData registered`);
 
     const resizeObserver = new ResizeObserver(() => {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
@@ -112,14 +105,12 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
         const [id, output] = event.payload;
         if (id === sessionId && output.paneId === paneId) {
-          const text = decodeOutput(output.data);
-          console.log(`[${instanceId}] pane output received:`, JSON.stringify(text.slice(0, 50)));
-          xterm.write(text);
+          xterm.write(decodeOutput(output.data));
         }
       }).then((fn) => {
         unlisten = fn;
-        captureTmuxPane(sessionId, paneId).catch((err) => {
-          console.warn(`[${instanceId}] capture-pane failed:`, err);
+        captureTmuxPane(sessionId, paneId).catch(() => {
+          // Capture failures are surfaced via tmux-control-event CommandError.
         });
       });
     } else {
@@ -135,7 +126,6 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     }
 
     return () => {
-      console.log(`[${instanceId}] Terminal unmount`);
       resizeObserver.disconnect();
       unlisten?.();
       xterm.dispose();
