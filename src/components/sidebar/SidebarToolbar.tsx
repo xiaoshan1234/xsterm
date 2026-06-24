@@ -1,24 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ChatIcon, SettingsIcon, LogIcon, LocalSessionIcon, SshSessionIcon, TmuxSessionIcon, SshTmuxSessionIcon } from "../icons/Icon";
+import { ChatIcon, SettingsIcon, LogIcon } from "../icons/Icon";
 
 export type SidebarMenu = "chat" | "settings";
 
 interface SidebarToolbarProps {
   activeMenu: SidebarMenu | null;
   onMenuClick: (menu: SidebarMenu) => void;
-  sessions: { id: number; type: "local" | "ssh" | "tmux" | "ssh_tmux"; name: string }[];
-  activeSessionId: number | null;
-  onSelectSession: (id: number) => void;
   onToggleLogs: () => void;
-  onCreateSession: () => void;
 }
 
 export function SidebarToolbar({
   activeMenu,
   onMenuClick,
-  sessions,
-  activeSessionId,
-  onSelectSession,
   onToggleLogs,
 }: SidebarToolbarProps) {
   return (
@@ -38,6 +31,8 @@ export function SidebarToolbar({
         >
           <LogIcon />
         </button>
+      </div>
+      <div className="sidebar-section sidebar-section-bottom">
         <button
           className={`sidebar-btn ${activeMenu === "settings" ? "active" : ""}`}
           onClick={() => onMenuClick("settings")}
@@ -45,29 +40,6 @@ export function SidebarToolbar({
         >
           <SettingsIcon />
         </button>
-      </div>
-
-      <div className="sidebar-divider" />
-
-      <div className="sidebar-section sidebar-sessions">
-        {sessions.map((session) => (
-          <button
-            key={session.id}
-            className={`sidebar-session-btn ${session.id === activeSessionId ? "active" : ""}`}
-            onClick={() => onSelectSession(session.id)}
-            title={session.name}
-          >
-            {session.type === "local" ? (
-              <LocalSessionIcon size={14} />
-            ) : session.type === "ssh" ? (
-              <SshSessionIcon size={14} />
-            ) : session.type === "tmux" ? (
-              <TmuxSessionIcon size={14} />
-            ) : (
-              <SshTmuxSessionIcon size={14} />
-            )}
-          </button>
-        ))}
       </div>
     </div>
   );

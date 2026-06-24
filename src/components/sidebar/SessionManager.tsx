@@ -37,7 +37,6 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
   const [editingSession, setEditingSession] = useState<SavedSessionConfig | null>(null);
   const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
-  const [dragOverUncategorized, setDragOverUncategorized] = useState(false);
 
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
@@ -119,29 +118,6 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
     setDragOverGroupId(null);
   };
 
-  const handleUncategorizedDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverUncategorized(true);
-  };
-
-  const handleUncategorizedDragLeave = () => {
-    setDragOverUncategorized(false);
-  };
-
-  const handleUncategorizedDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const configId = e.dataTransfer.getData("text/x-session-config-id");
-    if (configId) {
-      moveConfigToGroup(configId, null);
-    }
-    setDragOverUncategorized(false);
-  };
-
-  const uncategorized = savedConfigs.filter(
-    (c) => !groups.some((g) => g.configIds.includes(c.id))
-  );
-
   return (
     <div className="sidebar-submenu" style={{ width }}>
       <div className="submenu-header">Session Manager</div>
@@ -209,44 +185,13 @@ export function SessionManager({ width, onCreateSession }: SessionManagerProps) 
             )}
           </div>
         ))}
-        <div
-          className={`session-uncategorized ${dragOverUncategorized ? "drag-over" : ""}`}
-          onDragOver={handleUncategorizedDragOver}
-          onDragLeave={handleUncategorizedDragLeave}
-          onDrop={handleUncategorizedDrop}
-        >
-          {uncategorized.map((config) => (
-            <ContextMenu
-              key={config.id}
-              items={[
-                { label: "Edit", onClick: () => handleEditSession(config) },
-                { label: "Remove", onClick: () => removeOrCloseConfig(config), danger: true },
-              ]}
-              onOpen={() => handleConfigClick(config)}
-            >
-              <div
-                draggable
-                onDragStart={(e) => handleDragStart(e, config.id)}
-              >
-                <SessionItem
-                  config={config}
-                  selected={selectedConfigId === config.id}
-                  connected={isConnected(config)}
-                  uncategorized
-                  onClick={() => handleConfigClick(config)}
-                  onDoubleClick={() => handleConfigDoubleClick(config)}
-                  onClose={(e) => handleConfigClose(config, e)}
-                />
-              </div>
-            </ContextMenu>
-          ))}
-        </div>
-        <div className="session-divider" />
-        <button className="submenu-item new-group-btn" onClick={() => setShowNewGroupDialog(true)}>
+      </div>
+      <div className="session-actions">
+        <button className="submenu-item" onClick={() => setShowNewGroupDialog(true)}>
           <PlusIcon size={14} />
           New Group
         </button>
-        <button className="submenu-item new-session-btn" onClick={onCreateSession}>
+        <button className="submenu-item" onClick={onCreateSession}>
           <PlusIcon size={14} />
           New Session
         </button>
@@ -306,7 +251,6 @@ interface SessionItemProps {
   selected: boolean;
   connected: boolean;
   indented?: boolean;
-  uncategorized?: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
   onClose: (e: React.MouseEvent) => void;
@@ -317,14 +261,13 @@ function SessionItem({
   selected,
   connected,
   indented,
-  uncategorized,
   onClick,
   onDoubleClick,
   onClose,
 }: SessionItemProps) {
   return (
     <div
-      className={`session-item ${selected ? "selected" : ""} ${uncategorized ? "uncategorized" : ""}`}
+      className={`session-item ${selected ? "selected" : ""}`}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >

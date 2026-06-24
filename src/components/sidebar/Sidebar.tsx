@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { useSession } from "../../contexts/SessionContext";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
 import { SettingsPanel } from "./SettingsPanel";
@@ -16,7 +15,6 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps) {
-  const { sessions, activeSessionId, setActiveSession } = useSession();
   const [activeMenu, setActiveMenu] = useState<"chat" | "settings" | null>(null);
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
 
@@ -35,11 +33,7 @@ export default function Sidebar({ onCreateSession, onToggleLogs }: SidebarProps)
       <SidebarToolbar
         activeMenu={activeMenu}
         onMenuClick={handleMenuClick}
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={setActiveSession}
         onToggleLogs={onToggleLogs}
-        onCreateSession={onCreateSession}
       />
 
       {activeMenu === "chat" && <SessionManager width={submenuWidth} onCreateSession={onCreateSession} />}
