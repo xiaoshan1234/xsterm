@@ -24,15 +24,29 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
   const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, splitTmuxPane } = useSession();
   const { currentTheme } = useTheme();
 
+  const writeSessionRef = useRef(writeSession);
+  const resizeSessionRef = useRef(resizeSession);
+  const sendKeysToTmuxPaneRef = useRef(sendKeysToTmuxPane);
+  const resizeTmuxPaneRef = useRef(resizeTmuxPane);
+  const captureTmuxPaneRef = useRef(captureTmuxPane);
+
+  useEffect(() => {
+    writeSessionRef.current = writeSession;
+    resizeSessionRef.current = resizeSession;
+    sendKeysToTmuxPaneRef.current = sendKeysToTmuxPane;
+    resizeTmuxPaneRef.current = resizeTmuxPane;
+    captureTmuxPaneRef.current = captureTmuxPane;
+  }, [writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane]);
+
   const handleData = useCallback(
     (data: string) => {
       if (paneId) {
-        sendKeysToTmuxPane(sessionId, paneId, data);
+        sendKeysToTmuxPaneRef.current(sessionId, paneId, data);
       } else {
-        writeSession(sessionId, data);
+        writeSessionRef.current(sessionId, data);
       }
     },
-    [sessionId, paneId, writeSession, sendKeysToTmuxPane]
+    [sessionId, paneId]
   );
 
   const contextMenuItems: ContextMenuItem[] = [
@@ -107,9 +121,9 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
         if (paneId) {
-          resizeTmuxPane(sessionId, paneId, xterm.rows, xterm.cols);
+          resizeTmuxPaneRef.current(sessionId, paneId, xterm.rows, xterm.cols);
         } else {
-          resizeSession(sessionId, xterm.rows, xterm.cols);
+          resizeSessionRef.current(sessionId, xterm.rows, xterm.cols);
         }
       }
     };
@@ -138,7 +152,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
         }
       }).then((fn) => {
         unlisten = fn;
-        captureTmuxPane(sessionId, paneId).catch(() => {
+        captureTmuxPaneRef.current(sessionId, paneId).catch(() => {
           // Capture failures are surfaced via tmux-control-event CommandError.
         });
       });
@@ -162,7 +176,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       fitAddonRef.current = null;
       initDoneRef.current = false;
     };
-  }, [sessionId, paneId, handleData, resizeSession, resizeTmuxPane, currentTheme, captureTmuxPane]);
+  }, [sessionId, paneId, handleData, currentTheme]);
 
   return (
     <ContextMenu items={contextMenuItems}>
