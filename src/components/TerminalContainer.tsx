@@ -45,7 +45,7 @@ export function TerminalContainer({ sessions, activeSessionId }: TerminalContain
             key={session.id}
             className={`terminal-pane ${isActive ? "terminal-pane--active" : ""}`}
           >
-            <Terminal sessionId={session.id} />
+            <Terminal sessionId={session.id} sessionType={session.type} />
           </div>
         );
       })}

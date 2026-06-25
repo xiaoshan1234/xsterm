@@ -126,7 +126,17 @@ impl SessionManager {
         Ok(info)
     }
 
-    /// Write input data to the session with the given `id`.
+    /// Return a clone of the SSH config for the session with the given `id`.
+    pub fn get_ssh_config(&self,
+        id: u32,
+    ) -> Result<SSHSessionConfig, String> {
+        match self.sessions.get(&id) {
+            Some(Session::Ssh(ssh)) => Ok(ssh.config.clone()),
+            Some(_) => Err(format!("Session {} is not an SSH session", id)),
+            None => Err(format!("Session {} not found", id)),
+        }
+    }
+
     pub fn write(&mut self, id: u32, data: &[u8]) -> Result<(), String> {
         match self.sessions.get_mut(&id) {
             Some(Session::Local(s, _)) => {

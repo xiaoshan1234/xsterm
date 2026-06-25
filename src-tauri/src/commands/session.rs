@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
 
 use crate::infrastructure::app_backend::RealAppBackend;
+use crate::infrastructure::ssh::upload_file_via_ssh;
 use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::services::session_manager::SessionManager;
 
@@ -176,6 +177,41 @@ pub async fn capture_tmux_pane(
     state: State<'_, Arc<Mutex<SessionManager>>>,
 ) -> Result<(), String> {
     with_manager(state, |manager| manager.capture_tmux_pane(session_id, &pane_id))
+}
+
+/// Upload an image file to the SSH server for the given session and return the
+/// remote path where it was stored.
+#[tauri::command]
+pub async fn upload_image_to_ssh_session(
+    session_id: u32,
+    filename: String,
+    data: Vec<u8>,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+) -> Result<String, String> {
+    let config = {
+        let manager = state.lock().map_err(|e| e.to_string())?;
+        manager.get_ssh_config(session_id)?
+    };
+
+    let extension = std::path::Path::new(&filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png");
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+    let remote_path = format!("/tmp/paste_image_{}.{}", timestamp, extension);
+
+    tracing::info!(
+        "Uploading image to SSH session {}: {} bytes to {}",
+        session_id,
+        data.len(),
+        remote_path
+    );
+
+    upload_file_via_ssh(&config, &remote_path, data).await?;
+    Ok(remote_path)
 }
 
 /// Helper to lock the session manager and execute an operation.
