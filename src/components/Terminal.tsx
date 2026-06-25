@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { uploadImageToSshSession } from "../services/sessionService";
+import { readImage } from "@tauri-apps/plugin-clipboard-manager";
 import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
 import "@xterm/xterm/css/xterm.css";
 
@@ -53,11 +54,24 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
+      console.log("[xsterm] paste event fired", {
+        sessionType,
+        paneId,
+        target: e.target?.constructor?.name,
+        hasItems: !!e.clipboardData?.items,
+        itemCount: e.clipboardData?.items?.length ?? 0,
+        hasFiles: !!e.clipboardData?.files,
+        fileCount: e.clipboardData?.files?.length ?? 0,
+        types: e.clipboardData ? Array.from(e.clipboardData.types) : [],
+      });
+
       if (sessionType !== "ssh" || paneId) return;
 
       const target = e.target as Node | null;
       const container = containerRef.current;
-      if (!container || !target || !container.contains(target)) return;
+      const contains = container && target ? container.contains(target) : false;
+      console.log("[xsterm] paste focus check", { container: !!container, target: !!target, contains });
+      if (!container || !target || !contains) return;
 
       const collectImages = (items?: DataTransferItemList | null, files?: FileList | null): File[] => {
         const result: File[] = [];
@@ -81,20 +95,17 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
 
       let imageItems = collectImages(e.clipboardData?.items, e.clipboardData?.files);
 
-      if (imageItems.length === 0 && navigator.clipboard && navigator.clipboard.read) {
+      if (imageItems.length === 0) {
+        console.log("[xsterm] no image in clipboardData, trying Tauri readImage");
         try {
-          const clipboardItems = await navigator.clipboard.read();
-          for (const clipboardItem of clipboardItems) {
-            for (const type of clipboardItem.types) {
-              if (type.startsWith("image/")) {
-                const blob = await clipboardItem.getType(type);
-                const extension = type.split("/").pop() || "png";
-                imageItems.push(new File([blob], `paste_image.${extension}`, { type }));
-              }
-            }
+          const img = await readImage();
+          if (img) {
+            const blob = new Blob([await img.rgba()], { type: "image/png" });
+            imageItems.push(new File([blob], "paste_image.png", { type: "image/png" }));
+            console.log("[xsterm] readImage returned image", img);
           }
         } catch (clipboardErr) {
-          console.log("[xsterm] navigator.clipboard.read failed:", clipboardErr);
+          console.log("[xsterm] readImage failed:", clipboardErr);
         }
       }
 
