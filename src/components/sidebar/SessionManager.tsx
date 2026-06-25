@@ -241,6 +241,7 @@ export function SessionManager({ width, onCreateSession, onCreateSessionWithGrou
           config={editingSession}
           groups={groups}
           groupId={editingSessionGroupId}
+          savedSshConfigs={savedConfigs.filter((c) => c.type === "ssh" || c.type === "ssh_tmux")}
           onSave={handleSessionSave}
         />
       )}
