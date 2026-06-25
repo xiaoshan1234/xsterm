@@ -6,7 +6,7 @@ use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySys
 use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
 use crate::tmux::session::{create_ssh_tmux_session, create_tmux_session, TmuxSession, TmuxSessionHandles};
 use crate::models::session::{build_remote_image_path, LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
-use crate::tmux::commands::{resize_pane, send_keys};
+use crate::tmux::commands::{resize_window_for_pane, send_keys};
 use crate::services::local_session::create_local_session;
 
 /// Internal enum representing an active session, either local, SSH, or tmux.
@@ -187,7 +187,7 @@ impl SessionManager {
         }
     }
 
-    /// Send a tmux resize-pane command for the given pane.
+    /// Send a tmux resize-window command so the pane's window matches the terminal.
     pub fn resize_tmux_pane(
         &mut self,
         id: u32,
@@ -195,7 +195,7 @@ impl SessionManager {
         rows: u16,
         cols: u16,
     ) -> Result<(), String> {
-        let command = resize_pane(pane_id, rows, cols);
+        let command = resize_window_for_pane(pane_id, rows, cols);
         self.write_tmux_command(id, &command)
     }
 

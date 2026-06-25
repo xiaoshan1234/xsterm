@@ -22,6 +22,7 @@ pub fn build_tmux_argv(command: &str, target: Option<&str>) -> Vec<String> {
 
     match args[0].as_str() {
         "new-session" | "attach-session" => {
+            args[0] = "new-session".to_string();
             add_flag_if_missing(&mut args, "-A");
             add_flag_if_missing(&mut args, "-D");
             if let Some(t) = target {
@@ -73,12 +74,9 @@ pub fn send_keys(pane_id: &str, keys: &str) -> String {
     )
 }
 
-/// Resize a pane to the given dimensions.
-pub fn resize_pane(pane_id: &str, rows: u16, cols: u16) -> String {
-    format!(
-        "resize-pane -t {} -x {} -y {}\n",
-        pane_id, cols, rows
-    )
+/// Resize the tmux window containing the pane to the given dimensions.
+pub fn resize_window_for_pane(pane_id: &str, rows: u16, cols: u16) -> String {
+    format!("resize-window -t {} -x {} -y {}\n", pane_id, cols, rows)
 }
 
 /// List sessions.
@@ -219,10 +217,10 @@ mod tests {
     }
 
     #[test]
-    fn resize_pane_format() {
+    fn resize_window_for_pane_format() {
         assert_eq!(
-            resize_pane("%3", 24, 80),
-            "resize-pane -t %3 -x 80 -y 24\n"
+            resize_window_for_pane("%3", 24, 80),
+            "resize-window -t %3 -x 80 -y 24\n"
         );
     }
 
