@@ -55,31 +55,64 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     async (e: ClipboardEvent) => {
       if (sessionType !== "ssh" || paneId) return;
 
-      const items = e.clipboardData?.items;
-      if (!items) return;
+      const target = e.target as Node | null;
+      const container = containerRef.current;
+      if (!container || !target || !container.contains(target)) return;
 
-      const imageItems: { file: File; type: string }[] = [];
-      for (const item of items) {
-        if (item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) {
-            imageItems.push({ file, type: item.type });
+      const collectImages = (items?: DataTransferItemList | null, files?: FileList | null): File[] => {
+        const result: File[] = [];
+        if (items) {
+          for (const item of items) {
+            if (item.type.startsWith("image/")) {
+              const file = item.getAsFile();
+              if (file) result.push(file);
+            }
           }
+        }
+        if (result.length === 0 && files) {
+          for (const file of files) {
+            if (file.type.startsWith("image/")) {
+              result.push(file);
+            }
+          }
+        }
+        return result;
+      };
+
+      let imageItems = collectImages(e.clipboardData?.items, e.clipboardData?.files);
+
+      if (imageItems.length === 0 && navigator.clipboard && navigator.clipboard.read) {
+        try {
+          const clipboardItems = await navigator.clipboard.read();
+          for (const clipboardItem of clipboardItems) {
+            for (const type of clipboardItem.types) {
+              if (type.startsWith("image/")) {
+                const blob = await clipboardItem.getType(type);
+                const extension = type.split("/").pop() || "png";
+                imageItems.push(new File([blob], `paste_image.${extension}`, { type }));
+              }
+            }
+          }
+        } catch (clipboardErr) {
+          console.log("[xsterm] navigator.clipboard.read failed:", clipboardErr);
         }
       }
 
       if (imageItems.length === 0) return;
 
       e.preventDefault();
+      console.log("[xsterm] Pasting image(s) in SSH session:", imageItems.map((f) => f.name));
 
-      for (const { file } of imageItems) {
+      for (const file of imageItems) {
         try {
           const buffer = await file.arrayBuffer();
           const bytes = Array.from(new Uint8Array(buffer));
+          console.log(`[xsterm] Uploading ${file.name} (${bytes.length} bytes)`);
           const remotePath = await uploadImageToSshSession(sessionId, file.name, bytes);
+          console.log(`[xsterm] Uploaded to ${remotePath}`);
           writeSessionRef.current(sessionId, remotePath);
         } catch (err) {
-          console.error("Failed to upload pasted image:", err);
+          console.error("[xsterm] Failed to upload pasted image:", err);
         }
       }
     },
@@ -153,7 +186,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     fitAddonRef.current = fitAddon;
 
     xterm.onData(handleData);
-    container.addEventListener("paste", handlePaste);
+    document.addEventListener("paste", handlePaste, true);
 
     const fitAndResize = () => {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
@@ -208,7 +241,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
 
     return () => {
       resizeObserver.disconnect();
-      container.removeEventListener("paste", handlePaste);
+      document.removeEventListener("paste", handlePaste, true);
       unlisten?.();
       xterm.dispose();
       xtermRef.current = null;

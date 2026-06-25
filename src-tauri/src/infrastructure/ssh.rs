@@ -450,6 +450,8 @@ pub async fn upload_file_via_ssh(
         }
     }
 
+    let _ = channel.close().await;
+
     Ok(())
 }
 
