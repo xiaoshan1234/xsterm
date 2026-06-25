@@ -390,12 +390,15 @@ struct BridgedChannel;
 
 impl SshChannel for BridgedChannel {}
 
-/// Upload `data` to `remote_path` on the server identified by `config` using a
-/// fresh SSH exec channel (`cat > remote_path`).
-pub async fn upload_file_via_ssh(
+/// Execute an SSH command that receives `stdin_data` and waits for its exit status.
+///
+/// Establishes a fresh SSH connection, authenticates, opens a session channel,
+/// runs `command`, sends `stdin_data` to stdin, signals EOF, and returns when the
+/// remote process exits. Returns `Ok(())` only if `exit_status == 0`.
+async fn exec_ssh_command(
     config: &SSHSessionConfig,
-    remote_path: &str,
-    data: Vec<u8>,
+    command: &str,
+    stdin_data: Vec<u8>,
 ) -> Result<(), String> {
     let ssh_config = Arc::new(russh::client::Config {
         ..Default::default()
@@ -414,30 +417,31 @@ pub async fn upload_file_via_ssh(
     let mut channel = handle
         .channel_open_session()
         .await
-        .map_err(|e| format!("Failed to open SSH upload channel: {}", e))?;
+        .map_err(|e| format!("Failed to open SSH session channel: {}", e))?;
 
-    let command = format!("cat > {}", remote_path);
     channel
         .exec(true, command)
         .await
-        .map_err(|e| format!("SSH exec failed for upload: {}", e))?;
+        .map_err(|e| format!("SSH exec failed: {}", e))?;
 
-    channel
-        .data(&data[..])
-        .await
-        .map_err(|e| format!("Failed to send file data: {}", e))?;
+    if !stdin_data.is_empty() {
+        channel
+            .data(&stdin_data[..])
+            .await
+            .map_err(|e| format!("Failed to send stdin data: {}", e))?;
+    }
 
     channel
         .eof()
         .await
-        .map_err(|e| format!("Failed to close upload channel stdin: {}", e))?;
+        .map_err(|e| format!("Failed to close stdin: {}", e))?;
 
     loop {
         match channel.wait().await {
             Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
                 if exit_status != 0 {
                     return Err(format!(
-                        "Remote upload command exited with status {}",
+                        "Remote command exited with status {}",
                         exit_status
                     ));
                 }
@@ -451,8 +455,18 @@ pub async fn upload_file_via_ssh(
     }
 
     let _ = channel.close().await;
-
     Ok(())
+}
+
+/// Upload `data` to `remote_path` on the server identified by `config` using a
+/// fresh SSH exec channel (`cat > remote_path`).
+pub async fn upload_file_via_ssh(
+    config: &SSHSessionConfig,
+    remote_path: &str,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    let command = format!("cat > {}", remote_path);
+    exec_ssh_command(config, &command, data).await
 }
 
 /// Create an SSH session and start a thread that forwards channel output to the

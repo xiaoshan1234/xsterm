@@ -3,9 +3,9 @@ use std::io::Write;
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
-use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
+use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
 use crate::tmux::session::{create_ssh_tmux_session, create_tmux_session, TmuxSession, TmuxSessionHandles};
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
+use crate::models::session::{build_remote_image_path, LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::tmux::commands::{resize_pane, send_keys};
 use crate::services::local_session::create_local_session;
 
@@ -223,6 +223,33 @@ impl SessionManager {
             Some(_) => Err(format!("Session {} is not a tmux session", id)),
             None => Err(format!("Session {} not found", id)),
         }
+    }
+
+    pub fn upload_image(
+        &mut self,
+        id: u32,
+        filename: &str,
+        data: Vec<u8>,
+    ) -> Result<String, String> {
+        let config = self.get_ssh_config(id)?;
+        let remote_path = build_remote_image_path(filename)?;
+
+        tracing::info!(
+            "Uploading image to SSH session {}: {} bytes to {}",
+            id,
+            data.len(),
+            remote_path
+        );
+
+        let remote_path_clone = remote_path.clone();
+        let config_clone = config.clone();
+        drop(config);
+
+        let rt = tokio::runtime::Runtime::new()
+            .map_err(|e| format!("Failed to create runtime for image upload: {}", e))?;
+        rt.block_on(upload_file_via_ssh(&config_clone, &remote_path_clone, data))?;
+
+        Ok(remote_path)
     }
 
     /// Close and remove the session with the given `id`.
@@ -593,6 +620,7 @@ mod tests {
                 channel: Box::new(MockSshChannelM::new()),
                 write_tx,
                 read_rx,
+                resize_tx: None,
             })
         });
 
@@ -638,6 +666,7 @@ mod tests {
                 channel: Box::new(MockSshChannelM::new()),
                 write_tx,
                 read_rx,
+                resize_tx: None,
             })
         });
 

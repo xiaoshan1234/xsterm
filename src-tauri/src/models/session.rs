@@ -86,3 +86,19 @@ pub enum SSHAuth {
     #[serde(rename = "key")]
     KeyFile { key_file: String, passphrase: Option<String> },
 }
+
+/// Build a remote path for an uploaded image file.
+///
+/// The path is `/tmp/paste_image_<timestamp>.<ext>` where `<ext>` is extracted
+/// from `filename` (defaults to `png` if no extension is present).
+pub fn build_remote_image_path(filename: &str) -> Result<String, String> {
+    let extension = std::path::Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png");
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+    Ok(format!("/tmp/paste_image_{}.{}", timestamp, extension))
+}

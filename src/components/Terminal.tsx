@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { uploadImageToSshSession } from "../services/sessionService";
-import { readImage } from "@tauri-apps/plugin-clipboard-manager";
+import { getClipboardImages } from "../utils/clipboard";
 import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
 import "@xterm/xterm/css/xterm.css";
 
@@ -54,73 +54,22 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
-      console.log("[xsterm] paste event fired", {
-        sessionType,
-        paneId,
-        target: e.target?.constructor?.name,
-        hasItems: !!e.clipboardData?.items,
-        itemCount: e.clipboardData?.items?.length ?? 0,
-        hasFiles: !!e.clipboardData?.files,
-        fileCount: e.clipboardData?.files?.length ?? 0,
-        types: e.clipboardData ? Array.from(e.clipboardData.types) : [],
-      });
-
       if (sessionType !== "ssh" || paneId) return;
 
       const target = e.target as Node | null;
       const container = containerRef.current;
-      const contains = container && target ? container.contains(target) : false;
-      console.log("[xsterm] paste focus check", { container: !!container, target: !!target, contains });
-      if (!container || !target || !contains) return;
+      if (!container || !target || !container.contains(target)) return;
 
-      const collectImages = (items?: DataTransferItemList | null, files?: FileList | null): File[] => {
-        const result: File[] = [];
-        if (items) {
-          for (const item of items) {
-            if (item.type.startsWith("image/")) {
-              const file = item.getAsFile();
-              if (file) result.push(file);
-            }
-          }
-        }
-        if (result.length === 0 && files) {
-          for (const file of files) {
-            if (file.type.startsWith("image/")) {
-              result.push(file);
-            }
-          }
-        }
-        return result;
-      };
-
-      let imageItems = collectImages(e.clipboardData?.items, e.clipboardData?.files);
-
-      if (imageItems.length === 0) {
-        console.log("[xsterm] no image in clipboardData, trying Tauri readImage");
-        try {
-          const img = await readImage();
-          if (img) {
-            const blob = new Blob([await img.rgba()], { type: "image/png" });
-            imageItems.push(new File([blob], "paste_image.png", { type: "image/png" }));
-            console.log("[xsterm] readImage returned image", img);
-          }
-        } catch (clipboardErr) {
-          console.log("[xsterm] readImage failed:", clipboardErr);
-        }
-      }
-
+      const imageItems = await getClipboardImages(e);
       if (imageItems.length === 0) return;
 
       e.preventDefault();
-      console.log("[xsterm] Pasting image(s) in SSH session:", imageItems.map((f) => f.name));
 
       for (const file of imageItems) {
         try {
           const buffer = await file.arrayBuffer();
           const bytes = Array.from(new Uint8Array(buffer));
-          console.log(`[xsterm] Uploading ${file.name} (${bytes.length} bytes)`);
           const remotePath = await uploadImageToSshSession(sessionId, file.name, bytes);
-          console.log(`[xsterm] Uploaded to ${remotePath}`);
           writeSessionRef.current(sessionId, remotePath);
         } catch (err) {
           console.error("[xsterm] Failed to upload pasted image:", err);
