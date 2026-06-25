@@ -29,3 +29,11 @@ export async function resizeSession(id: number, rows: number, cols: number): Pro
 export async function closeSession(id: number): Promise<void> {
   await invoke("close_session", { sessionId: id });
 }
+
+export async function uploadImageToSshSession(
+  id: number,
+  filename: string,
+  data: number[]
+): Promise<string> {
+  return invoke<string>("upload_image_to_ssh_session", { sessionId: id, filename, data });
+}

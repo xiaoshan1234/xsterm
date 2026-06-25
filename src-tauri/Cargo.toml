@@ -27,6 +27,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt", "registry"] }
 tracing-appender = "0.2"
 chrono = "0.4"
+tauri-plugin-clipboard-manager = "2"
 
 [dev-dependencies]
 mockall = "0.12"

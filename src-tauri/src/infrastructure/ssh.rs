@@ -54,6 +54,7 @@ pub struct SshSessionWrapper {
     pub info: SessionInfo,
     pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub resize_tx: Option<mpsc::UnboundedSender<(u16, u16)>>,
+    pub config: SSHSessionConfig,
 }
 
 /// russh client handler that accepts any server host key.
@@ -389,6 +390,85 @@ struct BridgedChannel;
 
 impl SshChannel for BridgedChannel {}
 
+/// Execute an SSH command that receives `stdin_data` and waits for its exit status.
+///
+/// Establishes a fresh SSH connection, authenticates, opens a session channel,
+/// runs `command`, sends `stdin_data` to stdin, signals EOF, and returns when the
+/// remote process exits. Returns `Ok(())` only if `exit_status == 0`.
+async fn exec_ssh_command(
+    config: &SSHSessionConfig,
+    command: &str,
+    stdin_data: Vec<u8>,
+) -> Result<(), String> {
+    let ssh_config = Arc::new(russh::client::Config {
+        ..Default::default()
+    });
+
+    let mut handle = russh::client::connect(
+        ssh_config,
+        (config.host.clone(), config.port),
+        ClientHandler,
+    )
+    .await
+    .map_err(|e| format!("SSH connection to {}:{} failed: {}", config.host, config.port, e))?;
+
+    authenticate(&mut handle, &config.username, &config.auth).await?;
+
+    let mut channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|e| format!("Failed to open SSH session channel: {}", e))?;
+
+    channel
+        .exec(true, command)
+        .await
+        .map_err(|e| format!("SSH exec failed: {}", e))?;
+
+    if !stdin_data.is_empty() {
+        channel
+            .data(&stdin_data[..])
+            .await
+            .map_err(|e| format!("Failed to send stdin data: {}", e))?;
+    }
+
+    channel
+        .eof()
+        .await
+        .map_err(|e| format!("Failed to close stdin: {}", e))?;
+
+    loop {
+        match channel.wait().await {
+            Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
+                if exit_status != 0 {
+                    return Err(format!(
+                        "Remote command exited with status {}",
+                        exit_status
+                    ));
+                }
+                break;
+            }
+            Some(russh::ChannelMsg::Close)
+            | Some(russh::ChannelMsg::Eof)
+            | None => break,
+            _ => {}
+        }
+    }
+
+    let _ = channel.close().await;
+    Ok(())
+}
+
+/// Upload `data` to `remote_path` on the server identified by `config` using a
+/// fresh SSH exec channel (`cat > remote_path`).
+pub async fn upload_file_via_ssh(
+    config: &SSHSessionConfig,
+    remote_path: &str,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    let command = format!("cat > {}", remote_path);
+    exec_ssh_command(config, &command, data).await
+}
+
 /// Create an SSH session and start a thread that forwards channel output to the
 /// frontend.
 pub fn create_ssh_session(
@@ -404,18 +484,22 @@ pub fn create_ssh_session(
     // directly because reads/writes go through the dedicated channels above.
     let _channel = Arc::new(std::sync::Mutex::new(_channel));
 
+    let host = config.host.clone();
+    let port = config.port;
+    let username = config.username.clone();
+
     let info = SessionInfo {
         id: session_id,
-        name: format!("{}@{}", config.username, config.host),
+        name: format!("{}@{}", username, host),
         session_type: SessionType::Ssh {
-            host: config.host,
-            port: config.port,
-            user: config.username,
+            host,
+            port,
+            user: username,
         },
         is_connected: true,
     };
 
-    let wrapper = SshSessionWrapper { info, write_tx, resize_tx };
+    let wrapper = SshSessionWrapper { info, write_tx, resize_tx, config };
 
     let backend_clone = backend.clone();
     thread::spawn(move || {

@@ -4,6 +4,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { uploadImageToSshSession } from "../services/sessionService";
+import { getClipboardImages } from "../utils/clipboard";
 import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
 import "@xterm/xterm/css/xterm.css";
 
@@ -13,10 +15,11 @@ function decodeOutput(data: number[]): string {
 
 interface TerminalProps {
   sessionId: number;
+  sessionType?: "local" | "ssh";
   paneId?: string;
 }
 
-export default function Terminal({ sessionId, paneId }: TerminalProps) {
+export default function Terminal({ sessionId, sessionType, paneId }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -47,6 +50,33 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
       }
     },
     [sessionId, paneId]
+  );
+
+  const handlePaste = useCallback(
+    async (e: ClipboardEvent) => {
+      if (sessionType !== "ssh" || paneId) return;
+
+      const target = e.target as Node | null;
+      const container = containerRef.current;
+      if (!container || !target || !container.contains(target)) return;
+
+      const imageItems = await getClipboardImages(e);
+      if (imageItems.length === 0) return;
+
+      e.preventDefault();
+
+      for (const file of imageItems) {
+        try {
+          const buffer = await file.arrayBuffer();
+          const bytes = Array.from(new Uint8Array(buffer));
+          const remotePath = await uploadImageToSshSession(sessionId, file.name, bytes);
+          writeSessionRef.current(sessionId, remotePath);
+        } catch (err) {
+          console.error("[xsterm] Failed to upload pasted image:", err);
+        }
+      }
+    },
+    [sessionId, sessionType, paneId]
   );
 
   const contextMenuItems: ContextMenuItem[] = [
@@ -116,6 +146,7 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
     fitAddonRef.current = fitAddon;
 
     xterm.onData(handleData);
+    document.addEventListener("paste", handlePaste, true);
 
     const fitAndResize = () => {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
@@ -170,13 +201,14 @@ export default function Terminal({ sessionId, paneId }: TerminalProps) {
 
     return () => {
       resizeObserver.disconnect();
+      document.removeEventListener("paste", handlePaste, true);
       unlisten?.();
       xterm.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
       initDoneRef.current = false;
     };
-  }, [sessionId, paneId, handleData, currentTheme]);
+  }, [sessionId, paneId, handleData, handlePaste, currentTheme]);
 
   return (
     <ContextMenu items={contextMenuItems}>

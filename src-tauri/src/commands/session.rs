@@ -178,6 +178,18 @@ pub async fn capture_tmux_pane(
     with_manager(state, |manager| manager.capture_tmux_pane(session_id, &pane_id))
 }
 
+/// Upload an image file to the SSH server for the given session and return the
+/// remote path where it was stored.
+#[tauri::command]
+pub fn upload_image_to_ssh_session(
+    session_id: u32,
+    filename: String,
+    data: Vec<u8>,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+) -> Result<String, String> {
+    with_manager(state, |manager| manager.upload_image(session_id, &filename, data))
+}
+
 /// Helper to lock the session manager and execute an operation.
 fn with_manager<F, T>(
     state: State<'_, Arc<Mutex<SessionManager>>>,

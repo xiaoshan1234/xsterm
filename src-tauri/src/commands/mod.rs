@@ -16,6 +16,7 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::resize_tmux_pane,
         session::send_keys_to_tmux_pane,
         session::capture_tmux_pane,
+        session::upload_image_to_ssh_session,
         persistence::save_sessions,
         persistence::load_sessions,
         persistence::save_groups,
