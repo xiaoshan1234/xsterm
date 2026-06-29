@@ -7,9 +7,8 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 
 use crate::error::StringError;
-use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::default_pty_size;
-use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo, SessionType};
+use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo};
 
 /// Default terminal type requested for SSH PTY sessions.
 const DEFAULT_TERMINAL_TYPE: &str = "xterm";
@@ -271,6 +270,63 @@ async fn authenticate(
     Ok(())
 }
 
+/// Process a message received from the SSH channel. Returns `true` when the
+/// data loop should terminate.
+async fn handle_channel_msg(
+    msg: Option<russh::ChannelMsg>,
+    read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
+) -> bool {
+    match msg {
+        Some(russh::ChannelMsg::Data { data }) => {
+            read_tx.send(Some(data.as_ref().to_vec())).ok();
+            false
+        }
+        Some(russh::ChannelMsg::ExtendedData { data, .. }) => {
+            read_tx.send(Some(data.as_ref().to_vec())).ok();
+            false
+        }
+        Some(russh::ChannelMsg::Eof) => {
+            tracing::info!("SSH channel received EOF");
+            read_tx.send(None).ok();
+            true
+        }
+        Some(russh::ChannelMsg::Close) => {
+            tracing::info!("SSH channel received Close");
+            read_tx.send(None).ok();
+            true
+        }
+        None => {
+            tracing::info!("SSH channel wait returned None");
+            read_tx.send(None).ok();
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Forward data from the local write channel to the SSH channel. Returns `true`
+/// when the data loop should terminate.
+async fn forward_write_data(
+    handle: &mut russh::client::Handle<ClientHandler>,
+    channel_id: russh::ChannelId,
+    data: Option<Vec<u8>>,
+) -> bool {
+    match data {
+        Some(d) => {
+            if handle.data(channel_id, CryptoVec::from_slice(&d)).await.is_err() {
+                tracing::error!("SSH channel data send failed");
+                true
+            } else {
+                false
+            }
+        }
+        None => {
+            tracing::info!("SSH write channel closed");
+            true
+        }
+    }
+}
+
 /// Forward data between the SSH channel and the local I/O channels until the
 /// session ends.
 async fn run_data_loop(
@@ -282,102 +338,27 @@ async fn run_data_loop(
 ) {
     let channel_id = channel.id();
     loop {
-        if let Some(ref mut rx) = resize_rx {
-            tokio::select! {
-                msg = channel.wait() => {
-                    match msg {
-                        Some(russh::ChannelMsg::Data { data }) => {
-                            read_tx.send(Some(data.as_ref().to_vec())).ok();
-                        }
-                        Some(russh::ChannelMsg::ExtendedData { data, .. }) => {
-                            read_tx.send(Some(data.as_ref().to_vec())).ok();
-                        }
-                        Some(russh::ChannelMsg::Eof) => {
-                            tracing::info!("SSH channel received EOF");
-                            read_tx.send(None).ok();
-                            break;
-                        }
-                        Some(russh::ChannelMsg::Close) => {
-                            tracing::info!("SSH channel received Close");
-                            read_tx.send(None).ok();
-                            break;
-                        }
-                        None => {
-                            tracing::info!("SSH channel wait returned None");
-                            read_tx.send(None).ok();
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                data = write_rx.recv() => {
-                    match data {
-                        Some(d) => {
-                            if handle.data(channel_id, CryptoVec::from_slice(&d)).await.is_err() {
-                                tracing::error!("SSH channel data send failed");
-                                break;
-                            }
-                        }
-                        None => {
-                            tracing::info!("SSH write channel closed");
-                            break;
-                        }
-                    }
-                }
-                resize = rx.recv() => {
-                    match resize {
-                        Some((cols, rows)) => {
-                            if channel.window_change(u32::from(cols), u32::from(rows), 0, 0).await.is_ok() {
-                                tracing::info!("SSH PTY resized to {}x{}", cols, rows);
-                            }
-                        }
-                        None => {
-                            tracing::info!("SSH resize channel closed");
-                            resize_rx = None;
-                        }
-                    }
+        tokio::select! {
+            msg = channel.wait() => {
+                if handle_channel_msg(msg, read_tx).await {
+                    break;
                 }
             }
-        } else {
-            tokio::select! {
-                msg = channel.wait() => {
-                    match msg {
-                        Some(russh::ChannelMsg::Data { data }) => {
-                            read_tx.send(Some(data.as_ref().to_vec())).ok();
-                        }
-                        Some(russh::ChannelMsg::ExtendedData { data, .. }) => {
-                            read_tx.send(Some(data.as_ref().to_vec())).ok();
-                        }
-                        Some(russh::ChannelMsg::Eof) => {
-                            tracing::info!("SSH channel received EOF");
-                            read_tx.send(None).ok();
-                            break;
-                        }
-                        Some(russh::ChannelMsg::Close) => {
-                            tracing::info!("SSH channel received Close");
-                            read_tx.send(None).ok();
-                            break;
-                        }
-                        None => {
-                            tracing::info!("SSH channel wait returned None");
-                            read_tx.send(None).ok();
-                            break;
-                        }
-                        _ => {}
-                    }
+            data = write_rx.recv() => {
+                if forward_write_data(handle, channel_id, data).await {
+                    break;
                 }
-                data = write_rx.recv() => {
-                    match data {
-                        Some(d) => {
-                            if handle.data(channel_id, CryptoVec::from_slice(&d)).await.is_err() {
-                                tracing::error!("SSH channel data send failed");
-                                break;
-                            }
+            }
+            resize = resize_rx.as_mut().unwrap().recv(), if resize_rx.is_some() => {
+                match resize {
+                    Some((cols, rows)) => {
+                        if channel.window_change(u32::from(cols), u32::from(rows), 0, 0).await.is_ok() {
+                            tracing::info!("SSH PTY resized to {}x{}", cols, rows);
                         }
-                        None => {
-                            tracing::info!("SSH write channel closed");
-                            break;
-                        }
+                    }
+                    None => {
+                        tracing::info!("SSH resize channel closed");
+                        resize_rx = None;
                     }
                 }
             }
@@ -467,61 +448,6 @@ pub async fn upload_file_via_ssh(
 ) -> Result<(), String> {
     let command = format!("cat > {}", remote_path);
     exec_ssh_command(config, &command, data).await
-}
-
-/// Create an SSH session and start a thread that forwards channel output to the
-/// frontend.
-pub fn create_ssh_session(
-    ssh_backend: &dyn SshBackend,
-    config: SSHSessionConfig,
-    backend: impl AppBackend + 'static,
-    session_id: u32,
-) -> Result<SshSessionWrapper, String> {
-    let SshConnectResult { channel: _channel, write_tx, read_rx, resize_tx } =
-        ssh_backend.connect(&config.host, config.port, &config.auth, &config.username)?;
-
-    // Keep the channel alive for the lifetime of the session. It is never used
-    // directly because reads/writes go through the dedicated channels above.
-    let _channel = Arc::new(std::sync::Mutex::new(_channel));
-
-    let host = config.host.clone();
-    let port = config.port;
-    let username = config.username.clone();
-
-    let info = SessionInfo {
-        id: session_id,
-        name: format!("{}@{}", username, host),
-        session_type: SessionType::Ssh {
-            host,
-            port,
-            user: username,
-        },
-        is_connected: true,
-    };
-
-    let wrapper = SshSessionWrapper { info, write_tx, resize_tx, config };
-
-    let backend_clone = backend.clone();
-    thread::spawn(move || {
-        loop {
-            match read_rx.recv() {
-                Ok(Some(data)) => {
-                    let payload = serde_json::to_vec(&(session_id, &data[..])).unwrap();
-                    if let Err(e) = backend_clone.emit("session-output", &payload) {
-                        eprintln!("Failed to emit SSH output for session {}: {}", session_id, e);
-                        break;
-                    }
-                }
-                Ok(None) | Err(_) => {
-                    let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-closed", &payload);
-                    break;
-                }
-            }
-        }
-    });
-
-    Ok(wrapper)
 }
 
 pub use RusshBackend as SshBackendImpl;

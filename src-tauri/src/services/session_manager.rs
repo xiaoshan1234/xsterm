@@ -3,7 +3,8 @@ use std::io::Write;
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
-use crate::infrastructure::ssh::{create_ssh_session as infra_create_ssh, upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
+use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
+use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
 use crate::tmux::session::{create_ssh_tmux_session, create_tmux_session, TmuxSession, TmuxSessionHandles};
 use crate::models::session::{build_remote_image_path, LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::tmux::commands::{resize_window_for_pane, send_keys};
