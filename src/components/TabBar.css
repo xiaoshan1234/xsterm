@@ -1,7 +1,6 @@
 .tab-bar {
   display: flex;
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
   min-height: 36px;
   overflow-x: auto;
 }
@@ -28,11 +27,14 @@
   max-width: 200px;
   height: 36px;
   background: var(--bg-tertiary);
-  border-right: 1px solid var(--border-color);
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s;
+}
+
+.tab:not(:last-child) {
+  border-right: 1px solid var(--border-color);
 }
 
 .tab:hover {
@@ -112,4 +114,12 @@
 
 .tab-title-input:focus {
   outline: none;
+}
+
+.tab-settings-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-color);
+  margin: 6px 0;
+  flex-shrink: 0;
 }

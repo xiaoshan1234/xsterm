@@ -176,10 +176,14 @@ export default function TabBar({
         <div className="tab-drop-indicator" />
       )}
       {showSettingsTab && (
-        <div
-          className={`tab settings-tab ${activeView === "settings" ? "active" : ""}`}
-          onClick={onSelectSettings}
-        >
+        <>
+          {sessions.length > 0 && (
+            <div className="tab-settings-divider" />
+          )}
+          <div
+            className={`tab settings-tab ${activeView === "settings" ? "active" : ""}`}
+            onClick={onSelectSettings}
+          >
           <span className="tab-icon">
             <SettingsIcon size={14} />
           </span>
@@ -193,7 +197,8 @@ export default function TabBar({
           >
             <CloseIcon size={12} />
           </button>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
