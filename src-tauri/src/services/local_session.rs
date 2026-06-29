@@ -92,12 +92,12 @@ fn parse_shell_command(shell_path: &str) -> (String, Vec<String>) {
         .unwrap_or_else(|| (shell_path.to_string(), Vec::new()))
 }
 
-/// Extract the file name component from a shell path.
 fn extract_shell_name(shell_exe: &str) -> String {
     shell_exe
         .split(['/', '\\'])
         .next_back()
         .unwrap_or(shell_exe)
+        .trim_end_matches(".exe")
         .to_string()
 }
 
