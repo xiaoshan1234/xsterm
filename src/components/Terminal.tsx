@@ -161,6 +161,26 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
       },
     });
 
+    xterm.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") return true;
+      if (event.ctrlKey && (event.key === "n" || event.key === "N") && event.shiftKey) {
+        return false;
+      }
+      if (event.ctrlKey && event.key === "Tab") {
+        return false;
+      }
+      if (event.ctrlKey && (event.key === "w" || event.key === "W")) {
+        return false;
+      }
+      if (event.ctrlKey && (event.key === "l" || event.key === "L")) {
+        return false;
+      }
+      if (event.ctrlKey && (event.key === ",")) {
+        return false;
+      }
+      return true;
+    });
+
     const fitAddon = new FitAddon();
     xterm.loadAddon(fitAddon);
 

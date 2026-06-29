@@ -94,3 +94,8 @@
 - Fix: added a short deduplication guard in `Terminal.tsx` `handleData` that ignores identical input within 30ms.
 - Also hardened the `session-output` / `tmux-pane-output` listener cleanup so async listener registration is properly torn down if the effect unmounts before `listen()` resolves.
 - Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Fix app shortcuts blocked by xterm)
+- Issue: global app shortcuts (Ctrl+Shift+N, Ctrl+Tab, Ctrl+W, Ctrl+L, Ctrl+,) worked only when focus was outside the terminal; they were swallowed by xterm.js when the terminal was focused.
+- Fix: added `attachCustomKeyEventHandler` to the xterm instance in `Terminal.tsx`. It returns `false` for the app-level shortcuts so the browser's window `keydown` listener can handle them, while letting all other keys pass through to xterm normally.
+- Verified `npm run build` passes with zero TypeScript errors.
