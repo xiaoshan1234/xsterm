@@ -1,4 +1,4 @@
-import { MouseEvent, useState, useRef, DragEvent, Fragment } from "react";
+import { MouseEvent, useState, useRef, useMemo, DragEvent, Fragment } from "react";
 import { Session } from "../types/session";
 import {
   LocalSessionIcon,
@@ -40,6 +40,38 @@ export default function TabBar({
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const displayNames = useMemo(() => {
+    const configIdToIds = new Map<string, number[]>();
+    sessions.forEach((session) => {
+      const ids = configIdToIds.get(session.configId) || [];
+      ids.push(session.id);
+      configIdToIds.set(session.configId, ids);
+    });
+
+    const configIdToOrdinal = new Map<string, Map<number, number>>();
+    configIdToIds.forEach((ids, configId) => {
+      if (ids.length <= 1) return;
+      const sortedIds = [...ids].sort((a, b) => a - b);
+      const ordinalMap = new Map<number, number>();
+      sortedIds.forEach((id, index) => {
+        ordinalMap.set(id, index + 1);
+      });
+      configIdToOrdinal.set(configId, ordinalMap);
+    });
+
+    const result = new Map<number, string>();
+    sessions.forEach((session) => {
+      const ordinalMap = configIdToOrdinal.get(session.configId);
+      const ordinal = ordinalMap?.get(session.id);
+      if (ordinal !== undefined) {
+        result.set(session.id, `${session.name}:${ordinal}`);
+      } else {
+        result.set(session.id, session.name);
+      }
+    });
+    return result;
+  }, [sessions]);
 
   const handleMiddleClick = (e: MouseEvent, sessionId: number) => {
     if (e.button === 1) {
@@ -156,7 +188,7 @@ export default function TabBar({
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-              <span className="tab-title">{session.name}</span>
+              <span className="tab-title">{displayNames.get(session.id) ?? session.name}</span>
             )}
             {!session.is_connected && <span className="tab-disconnected">!</span>}
             <button
