@@ -13,10 +13,10 @@ use std::time::Duration;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::ssh::{SshBackend, SshConnectResult};
 use crate::models::session::{SessionInfo, SessionType, SshTmuxSessionConfig};
-use crate::tmux::channel_io::{build_tmux_command, CapturePaneQueue, ChannelReader, ChannelWriter};
-use crate::tmux::commands::list_windows;
-use crate::tmux::forwarder::spawn_control_forwarder;
-use crate::tmux::session::TmuxSession;
+use crate::services::tmux::channel_io::{build_tmux_command, CapturePaneQueue, ChannelReader, ChannelWriter};
+use crate::services::tmux::commands::list_windows;
+use crate::services::tmux::forwarder::spawn_control_forwarder;
+use crate::services::tmux::session::TmuxSession;
 
 /// Create a new tmux control mode session backed by an SSH exec channel.
 pub fn create_ssh_tmux_session(

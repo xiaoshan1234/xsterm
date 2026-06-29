@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use crate::infrastructure::pty::Child;
 use crate::infrastructure::ssh::SshChannel;
 use crate::models::session::SessionInfo;
-use crate::tmux::channel_io::CapturePaneQueue;
+use crate::services::tmux::channel_io::CapturePaneQueue;
 
 pub use local::create_tmux_session;
 pub use ssh::create_ssh_tmux_session;
@@ -57,7 +57,7 @@ impl TmuxSession {
             let mut queue = self.capture_queue.lock().map_err(|e| e.to_string())?;
             queue.push_back(pane_id.to_string());
         }
-        let command = crate::tmux::commands::capture_pane(pane_id, Some(history), true);
+        let command = crate::services::tmux::commands::capture_pane(pane_id, Some(history), true);
         tracing::debug!(
             "tmux session {} request capture-pane: {:?} exited={}",
             self.info.id,
@@ -86,8 +86,8 @@ mod integration_tests {
     use crate::infrastructure::app_backend::AppBackend;
     use crate::infrastructure::pty::NativePtySystem;
     use crate::models::session::TmuxSessionConfig;
-    use crate::tmux::commands::{list_panes, list_windows};
-    use crate::tmux::state::TmuxControlEvent;
+    use crate::services::tmux::commands::{list_panes, list_windows};
+    use crate::services::tmux::state::TmuxControlEvent;
 
     type EventLog = Vec<(String, Vec<u8>)>;
 

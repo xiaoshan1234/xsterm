@@ -61,7 +61,7 @@ pub fn create_local_session(
 
     spawn_output_forwarder(reader, backend, session_id);
 
-    let handles = LocalSessionHandles { child, _pair: pair };
+    let handles = LocalSessionHandles { child: Some(child), _pair: pair };
 
     Ok((LocalSession { info, writer }, handles))
 }

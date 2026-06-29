@@ -13,7 +13,6 @@ mod infrastructure;
 mod logging_setup;
 mod models;
 mod services;
-mod tmux;
 
 use logging_setup::{cleanup_old_logs, get_log_config_impl, init_logging};
 use services::session_manager::SessionManager;

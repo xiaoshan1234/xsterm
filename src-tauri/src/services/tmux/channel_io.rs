@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::models::session::TmuxSessionConfig;
-use crate::tmux::commands::build_tmux_argv;
+use crate::services::tmux::commands::build_tmux_argv;
 
 /// Queue used to pair outgoing `capture-pane` commands with their responses.
 ///

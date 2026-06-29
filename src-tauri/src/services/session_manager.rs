@@ -5,9 +5,8 @@ use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
 use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
 use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
-use crate::tmux::session::{create_ssh_tmux_session, create_tmux_session, TmuxSession, TmuxSessionHandles};
+use crate::services::tmux::{create_ssh_tmux_session, create_tmux_session, resize_window_for_pane, send_keys, TmuxSession, TmuxSessionHandles};
 use crate::models::session::{build_remote_image_path, LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
-use crate::tmux::commands::{resize_window_for_pane, send_keys};
 use crate::services::local_session::create_local_session;
 
 /// Internal enum representing an active session, either local, SSH, or tmux.
@@ -25,6 +24,20 @@ impl Session {
             Session::Ssh(s) => &s.info,
             Session::Tmux(s, _) => &s.info,
             Session::SshTmux(s) => &s.info,
+        }
+    }
+
+    fn close(self) -> Result<(), String> {
+        match self {
+            Session::Local(_session, mut handles) => {
+                if let Some(child) = handles.child.take() {
+                    child.kill()?;
+                }
+                Ok(())
+            }
+            Session::Ssh(_wrapper) => Ok(()),
+            Session::Tmux(_session, _handles) => Ok(()),
+            Session::SshTmux(_session) => Ok(()),
         }
     }
 }
@@ -63,9 +76,7 @@ impl SessionManager {
             id,
         )?;
 
-        let info = session.info.clone();
-        self.sessions.insert(id, Session::Local(session, handles));
-        Ok(info)
+        Ok(self.insert_session(id, Session::Local(session, handles)))
     }
 
     /// Create a new tmux control mode session.
@@ -83,9 +94,7 @@ impl SessionManager {
             id,
         )?;
 
-        let info = session.info.clone();
-        self.sessions.insert(id, Session::Tmux(session, handles));
-        Ok(info)
+        Ok(self.insert_session(id, Session::Tmux(session, handles)))
     }
 
     /// Create a new SSH session.
@@ -103,11 +112,10 @@ impl SessionManager {
             id,
         )?;
 
-        let info = wrapper.info.clone();
-        self.sessions.insert(id, Session::Ssh(wrapper));
-        Ok(info)
+        Ok(self.insert_session(id, Session::Ssh(wrapper)))
     }
 
+    /// Create a new tmux control mode session on a remote host over SSH.
     pub fn create_ssh_tmux(
         &mut self,
         config: SshTmuxSessionConfig,
@@ -122,9 +130,14 @@ impl SessionManager {
             id,
         )?;
 
-        let info = session.info.clone();
-        self.sessions.insert(id, Session::SshTmux(session));
-        Ok(info)
+        Ok(self.insert_session(id, Session::SshTmux(session)))
+    }
+
+    /// Insert a newly created session into the manager and return its metadata.
+    fn insert_session(&mut self, id: u32, session: Session) -> SessionInfo {
+        let info = session.info().clone();
+        self.sessions.insert(id, session);
+        info
     }
 
     /// Return a clone of the SSH config for the session with the given `id`.
@@ -138,6 +151,7 @@ impl SessionManager {
         }
     }
 
+    /// Write input data to an existing session.
     pub fn write(&mut self, id: u32, data: &[u8]) -> Result<(), String> {
         match self.sessions.get_mut(&id) {
             Some(Session::Local(s, _)) => {
@@ -211,6 +225,7 @@ impl SessionManager {
         self.write_tmux_command(id, &command)
     }
 
+    /// Request a recent history capture of a tmux pane.
     pub fn capture_tmux_pane(
         &mut self,
         id: u32,
@@ -226,6 +241,8 @@ impl SessionManager {
         }
     }
 
+    /// Upload an image file to the SSH server for the given session and return
+    /// the remote path where it was stored.
     pub fn upload_image(
         &mut self,
         id: u32,
@@ -255,7 +272,9 @@ impl SessionManager {
 
     /// Close and remove the session with the given `id`.
     pub fn close(&mut self, id: u32) -> Result<(), String> {
-        self.sessions.remove(&id);
+        if let Some(session) = self.sessions.remove(&id) {
+            session.close()?;
+        }
         Ok(())
     }
 
@@ -437,7 +456,11 @@ mod tests {
     fn expect_openpty(mock_pty_system: &mut MockPtySystemM) {
         mock_pty_system.expect_openpty().returning(|_| {
             let mut pair = MockPtyPairM::new();
-            pair.expect_spawn().returning(|_| Ok(Box::new(MockChildM::new())));
+            pair.expect_spawn().returning(|_| {
+                let mut child = MockChildM::new();
+                child.expect_kill().times(0..).returning(|| Ok(()));
+                Ok(Box::new(child))
+            });
             pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
             pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));

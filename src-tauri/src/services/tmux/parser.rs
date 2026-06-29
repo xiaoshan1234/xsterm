@@ -235,10 +235,8 @@ impl TmuxControlParser {
             return Some(message);
         }
 
-        if !self.in_dcs {
-            if self.consume_dcs_introducer() {
-                self.in_dcs = true;
-            }
+        if !self.in_dcs && self.consume_dcs_introducer() {
+            self.in_dcs = true;
         }
 
         if self.in_dcs {

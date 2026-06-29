@@ -113,6 +113,7 @@ pub async fn create_tmux_session(
         })
 }
 
+/// Create a new tmux control mode session on a remote host over SSH.
 #[tauri::command]
 pub async fn create_ssh_tmux_session(
     config: SshTmuxSessionConfig,
@@ -169,6 +170,7 @@ pub async fn send_keys_to_tmux_pane(
     with_manager(state, |manager| manager.send_keys_to_tmux_pane(session_id, &pane_id, &keys))
 }
 
+/// Request a recent history capture of a tmux pane.
 #[tauri::command]
 pub async fn capture_tmux_pane(
     session_id: u32,

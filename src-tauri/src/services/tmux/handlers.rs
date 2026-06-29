@@ -9,13 +9,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::infrastructure::app_backend::AppBackend;
-use crate::tmux::events::{
+use crate::services::tmux::events::{
     emit_captured_pane_output, emit_command_error, emit_control_event, emit_pane_list,
     emit_pane_output, emit_window_list,
 };
-use crate::tmux::notification::map_notification;
-use crate::tmux::parser::TmuxMessage;
-use crate::tmux::state_tracker::StateTracker;
+use crate::services::tmux::notification::map_notification;
+use crate::services::tmux::parser::TmuxMessage;
+use crate::services::tmux::state_tracker::StateTracker;
 
 /// Backwards-compatible alias for the state tracker used by the forwarder.
 pub type DispatchState = StateTracker;

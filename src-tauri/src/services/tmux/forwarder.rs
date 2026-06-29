@@ -13,10 +13,10 @@ use std::time::{Duration, Instant};
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::Child;
-use crate::tmux::channel_io::CapturePaneQueue;
-use crate::tmux::events::emit_closed;
-use crate::tmux::handlers::{handle_message, DispatchState};
-use crate::tmux::parser::TmuxControlParser;
+use crate::services::tmux::channel_io::CapturePaneQueue;
+use crate::services::tmux::events::emit_closed;
+use crate::services::tmux::handlers::{handle_message, DispatchState};
+use crate::services::tmux::parser::TmuxControlParser;
 
 const TMUX_READ_BUFFER_SIZE: usize = 8192;
 const CHILD_CHECK_INTERVAL: Duration = Duration::from_secs(1);

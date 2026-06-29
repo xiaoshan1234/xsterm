@@ -10,9 +10,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::infrastructure::app_backend::AppBackend;
-use crate::tmux::commands::list_windows;
-use crate::tmux::state::TmuxControlEvent;
-use crate::tmux::state_tracker::StateTracker;
+use crate::services::tmux::commands::list_windows;
+use crate::services::tmux::state::TmuxControlEvent;
+use crate::services::tmux::state_tracker::StateTracker;
 
 /// Convert a tmux notification into a control event.
 ///

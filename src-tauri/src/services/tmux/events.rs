@@ -5,8 +5,8 @@
 //! output, control notifications, list results, and session closure.
 
 use crate::infrastructure::app_backend::AppBackend;
-use crate::tmux::parser::{PaneListEntry, WindowListEntry};
-use crate::tmux::state::{TmuxControlEvent, TmuxPaneOutput};
+use crate::services::tmux::parser::{PaneListEntry, WindowListEntry};
+use crate::services::tmux::state::{TmuxControlEvent, TmuxPaneOutput};
 
 /// Serialize and emit an event to the frontend.
 fn emit_event<B: AppBackend, T: serde::Serialize>(

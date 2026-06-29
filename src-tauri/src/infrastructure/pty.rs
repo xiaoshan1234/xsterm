@@ -100,8 +100,10 @@ pub struct LocalSession {
 /// Handles that must be kept alive for the lifetime of a local session.
 pub struct LocalSessionHandles {
     /// The spawned child process. Kept alive to keep the session running.
-    #[allow(dead_code)]
-    pub child: Box<dyn Child>,
+    ///
+    /// Stored as `Option` so that [`SessionManager::close`] can take ownership
+    /// of the child and explicitly kill it.
+    pub child: Option<Box<dyn Child>>,
     /// Keep the PTY pair alive — on Windows, dropping the pair calls
     /// `ClosePseudoConsole` which destroys the ConPTY and kills the session.
     pub _pair: Box<dyn PtyPair>,

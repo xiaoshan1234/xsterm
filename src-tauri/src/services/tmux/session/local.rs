@@ -12,10 +12,10 @@ use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{Child, PtySystem};
 use crate::models::session::{SessionInfo, SessionType, TmuxSessionConfig};
-use crate::tmux::channel_io::CapturePaneQueue;
-use crate::tmux::commands::build_tmux_argv;
-use crate::tmux::forwarder::spawn_control_forwarder;
-use crate::tmux::session::{TmuxSession, TmuxSessionHandles};
+use crate::services::tmux::channel_io::CapturePaneQueue;
+use crate::services::tmux::commands::build_tmux_argv;
+use crate::services::tmux::forwarder::spawn_control_forwarder;
+use crate::services::tmux::session::{TmuxSession, TmuxSessionHandles};
 
 const TMUX_BINARY: &str = "tmux";
 const CONTROL_MODE_FLAG: &str = "-CC";
