@@ -13,6 +13,11 @@ function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
 }
 
+interface PendingWrite {
+  text: string;
+  resolve: () => void;
+}
+
 interface TerminalProps {
   sessionId: number;
   sessionType?: "local" | "ssh";
@@ -114,6 +119,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
       fontSize: 14,
       fontFamily: "Menlo, Monaco, 'Courier New', monospace",
       cursorBlink: true,
+      screenReaderMode: false,
       theme: {
         foreground: currentTheme.foreground,
         background: currentTheme.background,
@@ -174,12 +180,36 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     });
 
     let unlisten: (() => void) | null = null;
+    let rafId: number | null = null;
+    let writeQueue: PendingWrite[] = [];
+
+    const flushWrites = () => {
+      rafId = null;
+      if (writeQueue.length === 0 || !xtermRef.current) return;
+      const pending = writeQueue;
+      writeQueue = [];
+      const text = pending.map((w) => w.text).join("");
+      xtermRef.current.write(text, () => {
+        for (const w of pending) {
+          w.resolve();
+        }
+      });
+    };
+
+    const queueWrite = (text: string): Promise<void> => {
+      return new Promise((resolve) => {
+        writeQueue.push({ text, resolve });
+        if (rafId === null) {
+          rafId = requestAnimationFrame(flushWrites);
+        }
+      });
+    };
 
     if (paneId) {
       listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
         const [id, output] = event.payload;
         if (id === sessionId && output.paneId === paneId) {
-          xterm.write(decodeOutput(output.data));
+          queueWrite(decodeOutput(output.data));
         }
       }).then((fn) => {
         unlisten = fn;
@@ -191,8 +221,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
       listen<[number, number[]]>("session-output", (event) => {
         const [id, data] = event.payload;
         if (id === sessionId) {
-          const text = decodeOutput(data);
-          xterm.write(text);
+          queueWrite(decodeOutput(data));
         }
       }).then((fn) => {
         unlisten = fn;
@@ -203,6 +232,10 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
       resizeObserver.disconnect();
       document.removeEventListener("paste", handlePaste, true);
       unlisten?.();
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        xterm.write(writeQueue.map((w) => w.text).join(""));
+      }
       xterm.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
