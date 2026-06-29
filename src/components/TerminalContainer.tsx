@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Session } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import Terminal from "./Terminal";
@@ -19,9 +20,16 @@ export function TerminalContainer({ sessions, activeSessionId }: TerminalContain
     closeTmuxPane,
   } = useSession();
 
+  // Keep pane DOM order stable by session ID so React doesn't remount/reorder
+  // xterm instances when the session tab order changes.
+  const stableSessions = useMemo(
+    () => [...sessions].sort((a, b) => a.id - b.id),
+    [sessions]
+  );
+
   return (
     <div className="terminal-container">
-      {sessions.map((session) => {
+      {stableSessions.map((session) => {
         const isActive = session.id === activeSessionId;
 
         if (session.type === "tmux" || session.type === "ssh_tmux") {

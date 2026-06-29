@@ -95,7 +95,17 @@
 - Also hardened the `session-output` / `tmux-pane-output` listener cleanup so async listener registration is properly torn down if the effect unmounts before `listen()` resolves.
 - Verified `npm run build` passes with zero TypeScript errors.
 
-## 2026-06-29 (Fix app shortcuts blocked by xterm)
-- Issue: global app shortcuts (Ctrl+Shift+N, Ctrl+Tab, Ctrl+W, Ctrl+L, Ctrl+,) worked only when focus was outside the terminal; they were swallowed by xterm.js when the terminal was focused.
-- Fix: added `attachCustomKeyEventHandler` to the xterm instance in `Terminal.tsx`. It returns `false` for the app-level shortcuts so the browser's window `keydown` listener can handle them, while letting all other keys pass through to xterm normally.
+## 2026-06-29 (Drag-and-drop session tab reordering)
+- Implemented native HTML5 drag-and-drop reordering for session tabs in `TabBar.tsx`.
+- Added `onReorder` prop to `TabBar`; wired `reorderSessions` from `SessionContext` through `AppLayout`.
+- Added `reorderSessions(fromIndex, toIndex)` to `SessionContext` to reorder the `sessions` array immutably.
+- Session tabs are now draggable; the Settings tab remains non-draggable and stays at the far right.
+- Added visual feedback via `.tab.dragging` opacity and a `.tab-drop-indicator` line positioned from mouse coordinates.
+- Preserved existing tab interactions: select, close button, middle-click close, and double-click rename.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Fix tab reorder losing session history)
+- Issue: dragging or switching tabs caused the terminal's historical content to disappear.
+- Root cause: `reorderSessions` inserted the moved session at the raw drop index, which was off by one when dragging forward, causing React to mis-identify components and remount terminal instances.
+- Fix: adjusted the target index in `SessionContext.reorderSessions` by subtracting one when `toIndex > fromIndex` to account for the removed item.
 - Verified `npm run build` passes with zero TypeScript errors.

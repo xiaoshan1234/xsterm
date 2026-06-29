@@ -54,27 +54,6 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     captureTmuxPaneRef.current = captureTmuxPane;
   }, [writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane]);
 
-  const handleData = useCallback(
-    (data: string) => {
-      const now = Date.now();
-      const last = lastDataRef.current;
-      if (last && last.text === data && now - last.time < 30) {
-        return;
-      }
-      lastDataRef.current = { text: data, time: now };
-
-      if (localEchoEnabledRef.current) {
-        xtermRef.current?.write(data);
-      }
-      if (paneId) {
-        sendKeysToTmuxPaneRef.current(sessionId, paneId, data);
-      } else {
-        writeSessionRef.current(sessionId, data);
-      }
-    },
-    [sessionId, paneId]
-  );
-
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
       if (sessionType !== "ssh" || paneId) return;
@@ -175,10 +154,28 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
       if (event.ctrlKey && (event.key === "l" || event.key === "L")) {
         return false;
       }
-      if (event.ctrlKey && (event.key === ",")) {
+      if (event.ctrlKey && event.key === ",") {
         return false;
       }
       return true;
+    });
+
+    xterm.onData((data) => {
+      const now = Date.now();
+      const last = lastDataRef.current;
+      if (last && last.text === data && now - last.time < 30) {
+        return;
+      }
+      lastDataRef.current = { text: data, time: now };
+
+      if (localEchoEnabledRef.current) {
+        xterm.write(data);
+      }
+      if (paneId) {
+        sendKeysToTmuxPaneRef.current(sessionId, paneId, data);
+      } else {
+        writeSessionRef.current(sessionId, data);
+      }
     });
 
     const fitAddon = new FitAddon();
@@ -189,7 +186,6 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    xterm.onData(handleData);
     document.addEventListener("paste", handlePaste, true);
 
     const fitAndResize = () => {
@@ -287,7 +283,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
       fitAddonRef.current = null;
       initDoneRef.current = false;
     };
-  }, [sessionId, paneId, handleData, handlePaste, currentTheme]);
+  }, [sessionId, paneId, handlePaste, currentTheme]);
 
   return (
     <ContextMenu items={contextMenuItems}>

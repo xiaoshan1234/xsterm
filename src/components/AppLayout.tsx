@@ -26,6 +26,7 @@ export default function AppLayout() {
     renameSession,
     setActiveSession,
     writeSession,
+    reorderSessions,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
@@ -127,6 +128,7 @@ export default function AppLayout() {
             }}
             onClose={closeSession}
             onRename={renameSession}
+            onReorder={reorderSessions}
             onSelectSettings={() => {
               setActiveView("settings");
               setSidebarPanel("settings");

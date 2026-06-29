@@ -49,6 +49,7 @@ interface SessionContextType {
   removeFromGroup: (groupId: number, configId: string) => void;
   moveConfigToGroup: (configId: string, groupId: number | null) => void;
   renameSession: (id: number, name: string) => void;
+  reorderSessions: (fromIndex: number, toIndex: number) => void;
   createGroup: (name: string) => void;
   deleteGroup: (id: number) => void;
   renameGroup: (id: number, name: string) => void;
@@ -395,6 +396,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [updateConfigs, sessions]
   );
 
+  const reorderSessions = useCallback((fromIndex: number, toIndex: number) => {
+    if (fromIndex < 0 || fromIndex >= sessions.length || toIndex < 0 || toIndex > sessions.length || fromIndex === toIndex) {
+      return;
+    }
+    if (toIndex > fromIndex) {
+      toIndex -= 1;
+    }
+    setSessions((prev) => {
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      return updated;
+    });
+  }, [sessions]);
+
   const createGroup = useCallback(
     (name: string) => {
       const id = nextGroupId;
@@ -567,6 +583,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         removeFromGroup,
         moveConfigToGroup,
         renameSession,
+        reorderSessions,
         createGroup,
         deleteGroup,
         renameGroup,

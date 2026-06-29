@@ -84,6 +84,17 @@
   color: var(--text-primary);
 }
 
+.tab.dragging {
+  opacity: 0.4;
+}
+
+.tab-drop-indicator {
+  width: 2px;
+  height: 36px;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
 .tab-title-input {
   background: #3c3c3c;
   border: 1px solid var(--accent);
