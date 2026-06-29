@@ -1,3 +1,9 @@
+//! Event emission helpers for tmux control mode.
+//!
+//! This thin layer serializes tmux-related Rust types into JSON payloads and
+//! emits them through the [`AppBackend`] so the frontend can react to pane
+//! output, control notifications, list results, and session closure.
+
 use crate::infrastructure::app_backend::AppBackend;
 use crate::tmux::parser::{PaneListEntry, WindowListEntry};
 use crate::tmux::state::{TmuxControlEvent, TmuxPaneOutput};
@@ -25,11 +31,7 @@ pub fn emit_pane_output<B: AppBackend>(
     emit_event(backend, "tmux-pane-output", session_id, &output);
 }
 
-pub fn emit_control_event<B: AppBackend>(
-    backend: &B,
-    session_id: u32,
-    event: TmuxControlEvent,
-) {
+pub fn emit_control_event<B: AppBackend>(backend: &B, session_id: u32, event: TmuxControlEvent) {
     emit_event(backend, "tmux-control-event", session_id, &event);
 }
 
@@ -57,7 +59,10 @@ pub fn emit_command_error<B: AppBackend>(backend: &B, session_id: u32, lines: Ve
     emit_control_event(
         backend,
         session_id,
-        TmuxControlEvent::CommandError { cmd_num: 0, message },
+        TmuxControlEvent::CommandError {
+            cmd_num: 0,
+            message,
+        },
     );
 }
 
@@ -76,11 +81,7 @@ pub fn emit_window_list<B: AppBackend>(
     );
 }
 
-pub fn emit_pane_list<B: AppBackend>(
-    backend: &B,
-    session_id: u32,
-    panes: Vec<PaneListEntry>,
-) {
+pub fn emit_pane_list<B: AppBackend>(backend: &B, session_id: u32, panes: Vec<PaneListEntry>) {
     emit_control_event(
         backend,
         session_id,
@@ -89,5 +90,3 @@ pub fn emit_pane_list<B: AppBackend>(
         },
     );
 }
-
-

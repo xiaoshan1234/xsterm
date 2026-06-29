@@ -1,4 +1,8 @@
 //! Data models for tmux control mode state.
+//!
+//! This module defines the frontend-facing state tree (session, window, pane)
+//! and the control events that drive it. All serializable types use camelCase
+//! field names so they match the TypeScript consumer without extra mapping.
 
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +37,10 @@ pub struct TmuxWindow {
 }
 
 /// A tmux session (`$N`).
+///
+/// Part of the frontend-facing state tree; kept available for serialization
+/// even though the backend currently emits incremental events instead of
+/// full snapshots.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -48,36 +56,78 @@ pub struct TmuxSession {
 #[serde(tag = "type", rename_all_fields = "camelCase")]
 pub enum TmuxControlEvent {
     /// The active tmux session for this client changed.
-    SessionChanged { session_id: String, name: String },
+    SessionChanged {
+        session_id: String,
+        name: String,
+    },
     /// The current tmux session was renamed.
-    SessionRenamed { name: String },
+    SessionRenamed {
+        name: String,
+    },
     /// A new window was created.
-    WindowAdded { window: TmuxWindow },
+    WindowAdded {
+        window: TmuxWindow,
+    },
     /// A window was closed.
-    WindowClosed { window_id: String },
+    WindowClosed {
+        window_id: String,
+    },
     /// A window was renamed.
-    WindowRenamed { window_id: String, name: String },
+    WindowRenamed {
+        window_id: String,
+        name: String,
+    },
     /// The active window changed.
-    WindowActivated { window_id: String },
+    WindowActivated {
+        window_id: String,
+    },
     /// Window layout changed.
-    LayoutChanged { window_id: String, layout: String },
+    LayoutChanged {
+        window_id: String,
+        layout: String,
+    },
     /// A new pane appeared.
-    PaneAdded { pane: TmuxPane },
+    PaneAdded {
+        pane: TmuxPane,
+    },
     /// A pane was closed.
-    PaneClosed { pane_id: String },
+    PaneClosed {
+        pane_id: String,
+    },
     /// Pane title changed.
-    PaneTitleChanged { pane_id: String, title: String },
+    PaneTitleChanged {
+        pane_id: String,
+        title: String,
+    },
     /// Pane entered or left copy/scroll mode.
-    PaneModeChanged { pane_id: String, in_copy_mode: bool },
+    PaneModeChanged {
+        pane_id: String,
+        in_copy_mode: bool,
+    },
     /// Flow control: pane output paused.
-    PanePaused { pane_id: String },
+    PanePaused {
+        pane_id: String,
+    },
     /// Flow control: pane output resumed.
-    PaneContinued { pane_id: String },
-    WindowList { windows: Vec<TmuxWindowListEntry> },
-    PaneList { panes: Vec<TmuxPaneListEntry> },
-    CommandError { cmd_num: u64, message: String },
-    Exit { reason: Option<String> },
-    Unknown { raw: String },
+    PaneContinued {
+        pane_id: String,
+    },
+    WindowList {
+        windows: Vec<TmuxWindowListEntry>,
+    },
+    PaneList {
+        panes: Vec<TmuxPaneListEntry>,
+    },
+    CommandError {
+        cmd_num: u64,
+        message: String,
+    },
+    Exit {
+        reason: Option<String>,
+    },
+    Unknown {
+        raw: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,9 +215,21 @@ mod tests {
             }],
         };
         let json = serde_json::to_string(&event).unwrap();
-        assert!(json.contains("\"windowId\""), "expected camelCase windowId in {}", json);
-        assert!(json.contains("\"sessionId\""), "expected camelCase sessionId in {}", json);
-        assert!(!json.contains("\"window_id\""), "snake_case should not appear in {}", json);
+        assert!(
+            json.contains("\"windowId\""),
+            "expected camelCase windowId in {}",
+            json
+        );
+        assert!(
+            json.contains("\"sessionId\""),
+            "expected camelCase sessionId in {}",
+            json
+        );
+        assert!(
+            !json.contains("\"window_id\""),
+            "snake_case should not appear in {}",
+            json
+        );
     }
 
     #[test]
@@ -184,10 +246,26 @@ mod tests {
             }],
         };
         let json = serde_json::to_string(&event).unwrap();
-        assert!(json.contains("\"paneId\""), "expected camelCase paneId in {}", json);
-        assert!(json.contains("\"windowId\""), "expected camelCase windowId in {}", json);
-        assert!(json.contains("\"sessionId\""), "expected camelCase sessionId in {}", json);
-        assert!(!json.contains("\"pane_id\""), "snake_case should not appear in {}", json);
+        assert!(
+            json.contains("\"paneId\""),
+            "expected camelCase paneId in {}",
+            json
+        );
+        assert!(
+            json.contains("\"windowId\""),
+            "expected camelCase windowId in {}",
+            json
+        );
+        assert!(
+            json.contains("\"sessionId\""),
+            "expected camelCase sessionId in {}",
+            json
+        );
+        assert!(
+            !json.contains("\"pane_id\""),
+            "snake_case should not appear in {}",
+            json
+        );
     }
 
     #[test]
@@ -197,7 +275,75 @@ mod tests {
             data: vec![1, 2, 3],
         };
         let json = serde_json::to_string(&output).unwrap();
-        assert!(json.contains("\"paneId\""), "expected camelCase paneId in {}", json);
-        assert!(!json.contains("\"pane_id\""), "snake_case should not appear in {}", json);
+        assert!(
+            json.contains("\"paneId\""),
+            "expected camelCase paneId in {}",
+            json
+        );
+        assert!(
+            !json.contains("\"pane_id\""),
+            "snake_case should not appear in {}",
+            json
+        );
+    }
+
+    // The following tests exercise public state types that are not yet
+    // consumed elsewhere in the crate. They keep the API surface intact and
+    // prevent dead-code warnings.
+
+    #[test]
+    fn tmux_session_serializes_to_camel_case() {
+        let session = TmuxSession {
+            id: "$0".to_string(),
+            name: "main".to_string(),
+            active_window_id: Some("@0".to_string()),
+            windows: vec!["@0".to_string()],
+        };
+        let json = serde_json::to_string(&session).unwrap();
+        assert!(
+            json.contains("\"activeWindowId\""),
+            "expected camelCase activeWindowId in {}",
+            json
+        );
+        assert!(
+            !json.contains("\"active_window_id\""),
+            "snake_case should not appear in {}",
+            json
+        );
+    }
+
+    #[test]
+    fn tmux_state_snapshot_serializes_to_camel_case() {
+        let snapshot = TmuxStateSnapshot {
+            session: TmuxSession {
+                id: "$0".to_string(),
+                name: "main".to_string(),
+                ..Default::default()
+            },
+            windows: vec![TmuxWindow {
+                id: "@0".to_string(),
+                ..Default::default()
+            }],
+            panes: vec![TmuxPane {
+                id: "%0".to_string(),
+                ..Default::default()
+            }],
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        assert!(
+            json.contains("\"activeWindowId\""),
+            "expected camelCase activeWindowId in {}",
+            json
+        );
+        assert!(
+            json.contains("\"activePaneId\""),
+            "expected camelCase activePaneId in {}",
+            json
+        );
+        assert!(
+            json.contains("\"inCopyMode\""),
+            "expected camelCase inCopyMode in {}",
+            json
+        );
     }
 }

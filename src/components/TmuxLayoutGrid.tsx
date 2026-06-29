@@ -1,4 +1,4 @@
-import { TmuxPane } from "../types/session";
+import { TmuxPane } from "../types/tmux";
 import Terminal from "./Terminal";
 import "./TmuxLayoutGrid.css";
 

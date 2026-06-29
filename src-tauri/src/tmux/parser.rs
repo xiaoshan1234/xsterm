@@ -1,31 +1,43 @@
 //! Parser for the tmux control mode protocol (`-C` / `-CC`).
 //!
 //! The control mode protocol is line-based. In `-CC` mode the server wraps
-//! control output in a DCS sequence:
+//! control output in a DCS (Device Control String) sequence:
 //!
 //! ```text
 //! ESC P 1000p tmux; <line>\r\n <line>\r\n ... ESC \
 //! ```
 //!
-//! Lines that are not wrapped in DCS are ordinary terminal output and are
-//! forwarded unchanged (this can happen when the client is started in `-C`
-//! mode without the second `C`).
+//! `ESC P 1000p` is the DCS introducer, `ESC \` is the DCS terminator (ST).
+//! tmux keeps the DCS open for the lifetime of the control client, sending
+//! each protocol line inside the DCS string. This parser strips the wrapper
+//! and emits structured messages.
+//!
+//! Lines that are not wrapped in DCS are ordinary terminal output or control
+//! lines without wrapping (this can happen when the client is started in `-C`
+//! mode without the second `C`). They are forwarded/parsed unchanged.
 //!
 //! `%output` and `%extended-output` carry arbitrary pane data which has been
-//! octal-escaped by tmux. All other lines are UTF-8 text notifications or
-//! command response blocks.
+//! octal-escaped by tmux (e.g. `\134` for a backslash). All other lines are
+//! UTF-8 text notifications or command response blocks.
+//!
+//! Command responses are bracketed by `%begin <timestamp> <cmd_num> <flags>`
+//! and `%end <timestamp> <cmd_num> <flags>` (or `%error` on failure). The
+//! lines between them are the textual response. The parser classifies some
+//! common list responses (`list-windows`, `list-panes`) into structured
+//! variants of [`TmuxMessage`].
 
 use std::collections::VecDeque;
+
+// ===================================================================
+// Message types
+// ===================================================================
 
 /// A parsed message from the tmux control stream.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TmuxMessage {
     /// Raw terminal output for a pane. The data has already been unescaped.
-    Output {
-        pane_id: String,
-        data: Vec<u8>,
-    },
-    /// Extended output includes latency metadata.
+    Output { pane_id: String, data: Vec<u8> },
+    /// Extended output includes latency metadata (`age_ms`).
     ExtendedOutput {
         pane_id: String,
         age_ms: u64,
@@ -45,19 +57,26 @@ pub enum TmuxMessage {
         success: bool,
         lines: Vec<String>,
     },
-    CapturedPaneOutput {
-        pane_id: String,
-        lines: Vec<String>,
-    },
+    /// Text captured by `capture-pane` for a specific pane.
+    CapturedPaneOutput { pane_id: String, lines: Vec<String> },
     /// Parsed output of a `list-windows` command response.
     WindowList(Vec<WindowListEntry>),
     /// Parsed output of a `list-panes` command response.
     PaneList(Vec<PaneListEntry>),
+    /// A line that does not match any known protocol pattern.
     Unknown { raw: String },
 }
 
+/// Factory for classifying the next pending command response.
+///
+/// Tmux control mode does not support client-assigned command ids, so when
+/// we issue a command whose response needs special handling (e.g. `capture-pane`)
+/// we register this callback. It is invoked when `%begin` arrives and returns
+/// an optional pane id that tells the parser to treat the response as captured
+/// pane output.
 pub type ResponseClassifier = Option<Box<dyn FnMut() -> Option<String> + Send>>;
 
+/// One row from a `list-windows -F` tab-separated response.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowListEntry {
     pub window_id: String,
@@ -67,6 +86,7 @@ pub struct WindowListEntry {
     pub layout: String,
 }
 
+/// One row from a `list-panes -F` tab-separated response.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaneListEntry {
     pub pane_id: String,
@@ -78,6 +98,10 @@ pub struct PaneListEntry {
     pub height: u16,
 }
 
+// ===================================================================
+// Parser state
+// ===================================================================
+
 /// Incremental parser for the tmux control mode byte stream.
 pub struct TmuxControlParser {
     buffer: Vec<u8>,
@@ -87,16 +111,18 @@ pub struct TmuxControlParser {
     response_classifier: ResponseClassifier,
 }
 
-#[allow(clippy::derivable_impls)]
+#[derive(Debug, Clone)]
+struct PendingResponse {
+    timestamp: u64,
+    cmd_num: u64,
+    flags: u64,
+    lines: Vec<String>,
+    capture_pane_id: Option<String>,
+}
+
 impl Default for TmuxControlParser {
     fn default() -> Self {
-        Self {
-            buffer: Vec::new(),
-            pending_response: None,
-            pending_dcs_messages: VecDeque::new(),
-            in_dcs: false,
-            response_classifier: None,
-        }
+        Self::new()
     }
 }
 
@@ -112,15 +138,6 @@ impl std::fmt::Debug for TmuxControlParser {
     }
 }
 
-#[derive(Debug, Clone)]
-struct PendingResponse {
-    timestamp: u64,
-    cmd_num: u64,
-    flags: u64,
-    lines: Vec<String>,
-    capture_pane_id: Option<String>,
-}
-
 impl TmuxControlParser {
     /// DCS introducer used by tmux `-CC` mode: `ESC P 1000p`.
     ///
@@ -128,15 +145,25 @@ impl TmuxControlParser {
     /// connection; each subsequent control line is sent inside the DCS string
     /// until an `ST` (`ESC \`) terminator is emitted on exit.
     const DCS_START: &'static [u8] = b"\x1bP1000p";
+
     /// DCS terminator: `ST` (`ESC \`).
     const DCS_END: &'static [u8] = b"\x1b\\";
 
+    /// Minimum number of arguments expected after `%begin` / `%end` / `%error`.
+    const RESPONSE_HEADER_ARG_COUNT: usize = 3;
+
     /// Create a new parser with an empty buffer.
-    #[allow(dead_code)]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            buffer: Vec::new(),
+            pending_response: None,
+            pending_dcs_messages: VecDeque::new(),
+            in_dcs: false,
+            response_classifier: None,
+        }
     }
 
+    /// Create a parser that uses `classifier` to identify special responses.
     pub fn with_classifier<F>(classifier: F) -> Self
     where
         F: FnMut() -> Option<String> + Send + 'static,
@@ -146,6 +173,10 @@ impl TmuxControlParser {
             ..Self::default()
         }
     }
+
+    // ===============================================================
+    // Public API
+    // ===============================================================
 
     /// Feed more bytes into the parser and return any complete messages.
     ///
@@ -168,128 +199,102 @@ impl TmuxControlParser {
         messages
     }
 
+    /// Flush any remaining buffered data, returning messages that can be
+    /// produced without waiting for more input.
+    pub fn flush(&mut self) -> Vec<TmuxMessage> {
+        let mut messages = Vec::new();
+
+        if !self.buffer.is_empty() && !self.buffer.ends_with(b"\r") {
+            let line = String::from_utf8_lossy(&self.buffer).into_owned();
+            self.buffer.clear();
+            if !line.is_empty() {
+                messages.push(self.parse_control_line(&line));
+            }
+        }
+
+        if let Some(pending) = self.pending_response.take() {
+            messages.push(TmuxMessage::CommandResponse {
+                timestamp: pending.timestamp,
+                cmd_num: pending.cmd_num,
+                flags: pending.flags,
+                success: false,
+                lines: pending.lines,
+            });
+        }
+
+        messages
+    }
+
+    // ===============================================================
+    // Main parse loop
+    // ===============================================================
+
     /// Attempt to parse a single message from the head of the buffer.
     fn try_parse_one(&mut self) -> Option<TmuxMessage> {
-        // Return any messages produced from a previous DCS block first.
         if let Some(message) = self.pending_dcs_messages.pop_front() {
             return Some(message);
         }
 
-        // In -CC mode tmux emits an unterminated DCS introducer and keeps
-        // sending control lines inside the DCS until the client exits and the
-        // ST terminator is sent. Strip the introducer/terminator and parse
-        // the enclosed lines as ordinary control lines.
-        if !self.in_dcs && self.buffer.starts_with(Self::DCS_START) {
-            self.buffer.drain(..Self::DCS_START.len());
-            self.in_dcs = true;
+        if !self.in_dcs {
+            if self.consume_dcs_introducer() {
+                self.in_dcs = true;
+            }
         }
 
         if self.in_dcs {
-            if self.buffer.starts_with(Self::DCS_END) {
-                self.buffer.drain(..Self::DCS_END.len());
+            if self.consume_dcs_terminator() {
                 self.in_dcs = false;
                 return self.try_parse_one();
             }
 
-            if let Some(line) = self.take_line() {
-                if line.is_empty() {
-                    return self.try_parse_one();
-                }
-                return self.handle_control_line(&line);
+            let line = self.take_line()?;
+            if line.is_empty() {
+                return self.try_parse_one();
             }
-
-            return None;
+            return self.handle_control_line(&line);
         }
 
         // Plain control line outside DCS (used by -C mode without wrapping).
-        if let Some(line) = self.take_line() {
-            if !line.is_empty() {
-                return self.handle_control_line(&line);
-            }
+        let line = self.take_line()?;
+        if line.is_empty() {
             return self.try_parse_one();
         }
-
-        None
+        self.handle_control_line(&line)
     }
 
-    fn handle_control_line(&mut self, line: &str) -> Option<TmuxMessage> {
-        let message = self.parse_control_line(line);
+    // ===============================================================
+    // DCS wrapper handling
+    // ===============================================================
 
-        if let TmuxMessage::Notification { name, args, .. } = &message {
-            if name == "begin" && args.len() >= 3 {
-                let timestamp = args[0].parse().unwrap_or(0);
-                let cmd_num = args[1].parse().unwrap_or(0);
-                let flags = args[2].parse().unwrap_or(0);
-                tracing::trace!(
-                    "tmux begin response: cmd_num={} flags={}",
-                    cmd_num,
-                    flags
-                );
-                let capture_pane_id = self
-                    .response_classifier
-                    .as_mut()
-                    .and_then(|c| c());
-                self.pending_response = Some(PendingResponse {
-                    timestamp,
-                    cmd_num,
-                    flags,
-                    lines: Vec::new(),
-                    capture_pane_id,
-                });
-                return None;
-            }
-
-            if name == "end" && args.len() >= 3 {
-                if let Some(pending) = self.pending_response.take() {
-                    tracing::trace!(
-                        "tmux end response: cmd_num={} lines={}",
-                        pending.cmd_num,
-                        pending.lines.len()
-                    );
-                    if let Some(pane_id) = pending.capture_pane_id {
-                        return Some(TmuxMessage::CapturedPaneOutput {
-                            pane_id,
-                            lines: pending.lines,
-                        });
-                    }
-                    let response = TmuxMessage::CommandResponse {
-                        timestamp: pending.timestamp,
-                        cmd_num: pending.cmd_num,
-                        flags: pending.flags,
-                        success: true,
-                        lines: pending.lines,
-                    };
-                    return Some(classify_command_response(response));
-                }
-                return None;
-            }
-
-            if name == "error" && args.len() >= 3 {
-                if let Some(pending) = self.pending_response.take() {
-                    if pending.capture_pane_id.is_some() {
-                        return None;
-                    }
-                    return Some(TmuxMessage::CommandResponse {
-                        timestamp: pending.timestamp,
-                        cmd_num: pending.cmd_num,
-                        flags: pending.flags,
-                        success: false,
-                        lines: pending.lines,
-                    });
-                }
-                return None;
-            }
+    /// If the buffer begins with the DCS introducer, consume it.
+    fn consume_dcs_introducer(&mut self) -> bool {
+        if self.buffer.starts_with(Self::DCS_START) {
+            self.buffer.drain(..Self::DCS_START.len());
+            true
+        } else {
+            false
         }
-
-        if let Some(pending) = self.pending_response.as_mut() {
-            pending.lines.push(line.to_string());
-            return None;
-        }
-
-        Some(message)
     }
+
+    /// If the buffer begins with the DCS terminator, consume it.
+    fn consume_dcs_terminator(&mut self) -> bool {
+        if self.buffer.starts_with(Self::DCS_END) {
+            self.buffer.drain(..Self::DCS_END.len());
+            true
+        } else {
+            false
+        }
+    }
+
+    // ===============================================================
+    // Line extraction
+    // ===============================================================
 
     /// Take a complete line from the buffer, if one exists.
+    ///
+    /// Strips the trailing newline (and carriage return if present). The line
+    /// is returned as a lossy UTF-8 string because protocol lines are text,
+    /// while `%output` payload is unescaped separately into raw bytes.
     fn take_line(&mut self) -> Option<String> {
         let pos = self.buffer.iter().position(|&b| b == b'\n')?;
         let mut line_bytes: Vec<u8> = self.buffer.drain(..pos).collect();
@@ -300,6 +305,29 @@ impl TmuxControlParser {
         }
 
         Some(String::from_utf8_lossy(&line_bytes).into_owned())
+    }
+
+    // ===============================================================
+    // Control-line dispatch
+    // ===============================================================
+
+    /// Parse a single control-mode line and integrate it with the current
+    /// command response state.
+    fn handle_control_line(&mut self, line: &str) -> Option<TmuxMessage> {
+        let message = self.parse_control_line(line);
+
+        if let TmuxMessage::Notification { name, args, .. } = &message {
+            if let Some(response_message) = self.handle_response_notification(name, args) {
+                return response_message;
+            }
+        }
+
+        if let Some(pending) = self.pending_response.as_mut() {
+            pending.lines.push(line.to_string());
+            return None;
+        }
+
+        Some(message)
     }
 
     /// Parse a single control-mode line into a structured message.
@@ -328,34 +356,104 @@ impl TmuxControlParser {
         }
     }
 
-    /// Flush any remaining buffered data, returning messages that can be
-    /// produced without waiting for more input.
-    pub fn flush(&mut self) -> Vec<TmuxMessage> {
-        let mut messages = Vec::new();
+    // ===============================================================
+    // Command response block handling
+    // ===============================================================
 
-        if !self.buffer.is_empty() && !self.buffer.ends_with(b"\r") {
-            let line = String::from_utf8_lossy(&self.buffer).into_owned();
-            self.buffer.clear();
-            if !line.is_empty() {
-                messages.push(self.parse_control_line(&line));
+    /// Handle `%begin`, `%end`, and `%error` notifications that delimit a
+    /// command response block.
+    ///
+    /// Returns `Some(message)` when a block completes, otherwise `None`.
+    fn handle_response_notification(
+        &mut self,
+        name: &str,
+        args: &[String],
+    ) -> Option<Option<TmuxMessage>> {
+        match name {
+            "begin" if args.len() >= Self::RESPONSE_HEADER_ARG_COUNT => {
+                self.start_command_response(args);
+                Some(None)
             }
+            "end" if args.len() >= Self::RESPONSE_HEADER_ARG_COUNT => {
+                Some(self.finish_command_response())
+            }
+            "error" if args.len() >= Self::RESPONSE_HEADER_ARG_COUNT => {
+                Some(self.abort_command_response())
+            }
+            _ => None,
         }
+    }
 
-        if let Some(pending) = self.pending_response.take() {
-            messages.push(TmuxMessage::CommandResponse {
-                timestamp: pending.timestamp,
-                cmd_num: pending.cmd_num,
-                flags: pending.flags,
-                success: false,
+    fn start_command_response(&mut self, args: &[String]) {
+        let timestamp = args[0].parse().unwrap_or(0);
+        let cmd_num = args[1].parse().unwrap_or(0);
+        let flags = args[2].parse().unwrap_or(0);
+
+        tracing::trace!("tmux begin response: cmd_num={} flags={}", cmd_num, flags);
+
+        let capture_pane_id = self.response_classifier.as_mut().and_then(|c| c());
+
+        self.pending_response = Some(PendingResponse {
+            timestamp,
+            cmd_num,
+            flags,
+            lines: Vec::new(),
+            capture_pane_id,
+        });
+    }
+
+    fn finish_command_response(&mut self) -> Option<TmuxMessage> {
+        let pending = self.pending_response.take()?;
+
+        tracing::trace!(
+            "tmux end response: cmd_num={} lines={}",
+            pending.cmd_num,
+            pending.lines.len()
+        );
+
+        if let Some(pane_id) = pending.capture_pane_id {
+            return Some(TmuxMessage::CapturedPaneOutput {
+                pane_id,
                 lines: pending.lines,
             });
         }
 
-        messages
+        let response = TmuxMessage::CommandResponse {
+            timestamp: pending.timestamp,
+            cmd_num: pending.cmd_num,
+            flags: pending.flags,
+            success: true,
+            lines: pending.lines,
+        };
+
+        Some(classify_command_response(response))
+    }
+
+    fn abort_command_response(&mut self) -> Option<TmuxMessage> {
+        let pending = self.pending_response.take()?;
+
+        if pending.capture_pane_id.is_some() {
+            return None;
+        }
+
+        Some(TmuxMessage::CommandResponse {
+            timestamp: pending.timestamp,
+            cmd_num: pending.cmd_num,
+            flags: pending.flags,
+            success: false,
+            lines: pending.lines,
+        })
     }
 }
 
+// ===================================================================
+// Output-line parsing
+// ===================================================================
+
 /// Parse `%output` or `%extended-output` payload.
+///
+/// `%output` format: `%<pane_id> <octal_escaped_data>`
+/// `%extended-output` format: `%<pane_id> <age_ms> : <octal_escaped_data>`
 fn parse_output_line(rest: &str, extended: bool) -> TmuxMessage {
     let mut parts = rest.splitn(2, ' ');
     let pane_id = parts.next().unwrap_or("").to_string();
@@ -383,19 +481,31 @@ fn parse_output_line(rest: &str, extended: bool) -> TmuxMessage {
     }
 }
 
+// ===================================================================
+// Octal unescaping
+// ===================================================================
+
 /// Convert tmux octal escape sequences (`\134`) back into raw bytes.
+///
+/// Tmux escapes arbitrary pane bytes as three-digit octal values preceded by a
+/// backslash. For example, a backslash (`0x5c`) becomes `\134` and a newline
+/// (`0x0a`) becomes `\012`. This function is intentionally permissive: an
+/// invalid or incomplete escape is copied literally.
 fn unescape_tmux_output(input: &str) -> Vec<u8> {
     let mut result = Vec::with_capacity(input.len());
     let bytes = input.as_bytes();
     let mut i = 0;
 
+    // An octal escape is a backslash followed by exactly three octal digits.
+    const OCTAL_ESCAPE_LEN: usize = 4;
+
     while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 4 <= bytes.len() {
-            let octal = &bytes[i + 1..i + 4];
+        if bytes[i] == b'\\' && i + OCTAL_ESCAPE_LEN <= bytes.len() {
+            let octal = &bytes[i + 1..i + OCTAL_ESCAPE_LEN];
             if let Ok(s) = std::str::from_utf8(octal) {
                 if let Ok(value) = u8::from_str_radix(s, 8) {
                     result.push(value);
-                    i += 4;
+                    i += OCTAL_ESCAPE_LEN;
                     continue;
                 }
             }
@@ -407,23 +517,55 @@ fn unescape_tmux_output(input: &str) -> Vec<u8> {
     result
 }
 
+// ===================================================================
+// Command response classification
+// ===================================================================
+
+/// Columns expected in a `list-panes -F` tab-separated response.
+///
+/// Format: `#{session_id}\t#{window_id}\t#{pane_id}\t#{pane_active}\t#{pane_width}\t#{pane_height}\t#{pane_title}`
+const PANE_LIST_MIN_COLUMNS: usize = 7;
+
+/// Columns expected in a `list-windows -F` tab-separated response.
+///
+/// Format: `#{session_id}\t#{window_id}\t#{window_active}\t#{window_layout}\t#{window_name}`
+const WINDOW_LIST_MIN_COLUMNS: usize = 5;
+
+/// Inspect a successful command response and convert known list formats into
+/// structured [`TmuxMessage`] variants.
 fn classify_command_response(message: TmuxMessage) -> TmuxMessage {
-    if let TmuxMessage::CommandResponse {
+    let TmuxMessage::CommandResponse {
         success: true,
         lines,
         ..
     } = &message
+    else {
+        return message;
+    };
+
+    let Some(first) = lines.first() else {
+        return message;
+    };
+
+    let parts: Vec<&str> = first.split('\t').collect();
+
+    // Pane rows start with a session id (`$N`) and have the pane id (`%N`) in
+    // the third column; window rows start with a session id and have the
+    // window id (`@N`) in the second column.
+    if parts.len() >= PANE_LIST_MIN_COLUMNS
+        && parts[0].starts_with('$')
+        && parts[2].starts_with('%')
     {
-        if let Some(first) = lines.first() {
-            let parts: Vec<&str> = first.split('\t').collect();
-            if parts.len() >= 7 && parts[0].starts_with('$') && parts[2].starts_with('%') {
-                return parse_pane_list(lines);
-            }
-            if parts.len() >= 5 && parts[0].starts_with('$') && parts[1].starts_with('@') {
-                return parse_window_list(lines);
-            }
-        }
+        return parse_pane_list(lines);
     }
+
+    if parts.len() >= WINDOW_LIST_MIN_COLUMNS
+        && parts[0].starts_with('$')
+        && parts[1].starts_with('@')
+    {
+        return parse_window_list(lines);
+    }
+
     message
 }
 
@@ -431,7 +573,7 @@ fn parse_window_list(lines: &[String]) -> TmuxMessage {
     let mut entries = Vec::new();
     for line in lines {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 5 {
+        if parts.len() < WINDOW_LIST_MIN_COLUMNS {
             continue;
         }
         entries.push(WindowListEntry {
@@ -449,7 +591,7 @@ fn parse_pane_list(lines: &[String]) -> TmuxMessage {
     let mut entries = Vec::new();
     for line in lines {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 7 {
+        if parts.len() < PANE_LIST_MIN_COLUMNS {
             continue;
         }
         entries.push(PaneListEntry {
@@ -464,6 +606,10 @@ fn parse_pane_list(lines: &[String]) -> TmuxMessage {
     }
     TmuxMessage::PaneList(entries)
 }
+
+// ===================================================================
+// Tests
+// ===================================================================
 
 #[cfg(test)]
 mod tests {

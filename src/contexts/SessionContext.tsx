@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Session, LocalSessionConfig, SSHSessionConfig, TmuxSessionConfig, SshTmuxSessionConfig, SavedSessionConfig, SessionGroup, TmuxState, TmuxControlEvent } from "../types/session";
+import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup } from "../types/session";
+import { TmuxState, TmuxControlEvent, SshTmuxSessionConfig, TmuxSessionConfig } from "../types/tmux";
 import * as sessionService from "../services/sessionService";
 import * as tmuxService from "../services/tmuxService";
 import * as sessionStorage from "../services/sessionStorage";

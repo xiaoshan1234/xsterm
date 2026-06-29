@@ -1,5 +1,5 @@
 import { PlusIcon, CloseIcon } from "./icons/Icon";
-import { TmuxWindow } from "../types/session";
+import { TmuxWindow } from "../types/tmux";
 import "./TmuxWindowTabs.css";
 
 interface TmuxWindowTabsProps {

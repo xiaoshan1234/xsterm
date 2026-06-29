@@ -1,21 +1,24 @@
-//! Tmux control mode session lifecycle and I/O forwarding.
+//! Tmux control mode session lifecycle and shared I/O.
+//!
+//! This module defines the [`TmuxSession`] handle used by both local PTY and
+//! SSH exec-channel sessions. Creation helpers live in the `local` and `ssh`
+//! submodules and are re-exported here for callers; shared write methods live
+//! on [`TmuxSession`] itself.
+
+mod local;
+mod ssh;
 
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
-use crate::error::StringError;
-use crate::infrastructure::app_backend::AppBackend;
-use crate::infrastructure::pty::{Child, PtyPair, PtySystem};
-use crate::infrastructure::ssh::{SshBackend, SshChannel, SshConnectResult};
-use crate::models::session::{SessionInfo, SessionType, SshTmuxSessionConfig, TmuxSessionConfig};
-use crate::tmux::channel_io::{
-    build_tmux_command, CapturePaneQueue, ChannelReader, ChannelWriter,
-};
-use crate::tmux::commands::{build_tmux_argv, list_windows};
-use crate::tmux::forwarder::spawn_control_forwarder;
+use crate::infrastructure::pty::Child;
+use crate::infrastructure::ssh::SshChannel;
+use crate::models::session::SessionInfo;
+use crate::tmux::channel_io::CapturePaneQueue;
+
+pub use local::create_tmux_session;
+pub use ssh::create_ssh_tmux_session;
 
 /// Active tmux control mode session metadata and write handle.
 pub struct TmuxSession {
@@ -29,33 +32,17 @@ pub struct TmuxSession {
 /// Keeps the tmux child process and PTY pair alive for the session lifetime.
 pub struct TmuxSessionHandles {
     _child: Arc<Mutex<Box<dyn Child>>>,
-    _pair: Box<dyn PtyPair>,
+    _pair: Box<dyn crate::infrastructure::pty::PtyPair>,
 }
 
 impl TmuxSession {
+    /// Write a raw command string to the tmux control mode stdin.
     pub fn write_command(&mut self, command: &str) -> Result<(), String> {
-        tracing::debug!("tmux session {} write command: {:?}", self.info.id, command);
-        let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
-        writer
-            .write_all(command.as_bytes())
-            .map_err(|e| e.to_string())?;
-        writer.flush().map_err(|e| e.to_string())
-    }
-
-    /// Request an asynchronous capture of a pane's recent history.
-    pub fn request_capture_pane(&self,
-        pane_id: &str,
-        history: usize,
-    ) -> Result<(), String> {
-        {
-            let mut queue = self.capture_queue.lock().map_err(|e| e.to_string())?;
-            queue.push_back(pane_id.to_string());
-        }
-        let command = crate::tmux::commands::capture_pane(pane_id, Some(history), true);
         tracing::debug!(
-            "tmux session {} request capture-pane: {:?}",
+            "tmux session {} write command: {:?} exited={}",
             self.info.id,
-            command.trim()
+            command,
+            self.is_exited()
         );
         let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
         writer
@@ -64,171 +51,30 @@ impl TmuxSession {
         writer.flush().map_err(|e| e.to_string())
     }
 
-    #[allow(dead_code)]
+    /// Request an asynchronous capture of a pane's recent history.
+    pub fn request_capture_pane(&self, pane_id: &str, history: usize) -> Result<(), String> {
+        {
+            let mut queue = self.capture_queue.lock().map_err(|e| e.to_string())?;
+            queue.push_back(pane_id.to_string());
+        }
+        let command = crate::tmux::commands::capture_pane(pane_id, Some(history), true);
+        tracing::debug!(
+            "tmux session {} request capture-pane: {:?} exited={}",
+            self.info.id,
+            command.trim(),
+            self.is_exited()
+        );
+        let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
+        writer
+            .write_all(command.as_bytes())
+            .map_err(|e| e.to_string())?;
+        writer.flush().map_err(|e| e.to_string())
+    }
+
+    /// Returns `true` if the forwarder has observed an `%exit` notification.
     pub fn is_exited(&self) -> bool {
         self.exited.load(Ordering::Relaxed)
     }
-}
-
-/// Create a new tmux control mode session backed by a local PTY.
-pub fn create_tmux_session(
-    pty_system: &dyn PtySystem,
-    config: TmuxSessionConfig,
-    backend: impl AppBackend + 'static,
-    session_id: u32,
-) -> Result<(TmuxSession, TmuxSessionHandles), String> {
-    let mut pair = pty_system
-        .openpty(crate::infrastructure::pty::default_pty_size())
-        .map_err_string()?;
-
-    let mut cmd = portable_pty::CommandBuilder::new("tmux");
-    cmd.arg("-CC");
-
-    if let Some(socket) = &config.socket {
-        cmd.arg("-L");
-        cmd.arg(socket);
-    }
-
-    let argv = build_tmux_argv(&config.command, config.target.as_deref());
-    for arg in &argv {
-        cmd.arg(arg);
-    }
-
-    tracing::info!("tmux session {} spawn argv: tmux -CC {}", session_id, argv.join(" "));
-
-    let child = pair.spawn(cmd).map_err_string()?;
-    tracing::info!("tmux session {} child spawned", session_id);
-
-    let writer = Arc::new(Mutex::new(pair.master_writer().map_err_string()?));
-    let reader = pair.master_reader().map_err_string()?;
-
-    let info = SessionInfo {
-        id: session_id,
-        name: config.name.clone().unwrap_or_else(|| "tmux".to_string()),
-        session_type: SessionType::Tmux {
-            socket: config.socket.clone(),
-            command: config.command.clone(),
-        },
-        is_connected: true,
-    };
-
-    let exited = Arc::new(AtomicBool::new(false));
-    let capture_queue: CapturePaneQueue = Arc::new(Mutex::new(std::collections::VecDeque::new()));
-    let child_for_forwarder: Arc<Mutex<Box<dyn Child>>> = Arc::new(Mutex::new(child));
-
-    spawn_control_forwarder(
-        reader,
-        backend,
-        session_id,
-        Arc::clone(&exited),
-        Some(Arc::clone(&child_for_forwarder)),
-        Arc::clone(&capture_queue),
-    );
-
-    let handles = TmuxSessionHandles {
-        _child: child_for_forwarder,
-        _pair: pair,
-    };
-
-    Ok((
-        TmuxSession {
-            info,
-            writer,
-            capture_queue,
-            exited,
-            _ssh_channel: None,
-        },
-        handles,
-    ))
-}
-
-/// Create a new tmux control mode session backed by an SSH exec channel.
-pub fn create_ssh_tmux_session(
-    ssh_backend: &dyn SshBackend,
-    config: SshTmuxSessionConfig,
-    backend: impl AppBackend + 'static,
-    session_id: u32,
-) -> Result<TmuxSession, String> {
-    let command = build_tmux_command(&config.tmux);
-    tracing::info!("tmux session {} SSH tmux command: {}", session_id, command);
-
-    let SshConnectResult {
-        channel,
-        write_tx,
-        read_rx,
-        resize_tx: _,
-    } = ssh_backend
-        .connect_exec(
-            &config.ssh.host,
-            config.ssh.port,
-            &config.ssh.auth,
-            &config.ssh.username,
-            &command,
-        )
-        .map_err(|e| {
-            tracing::error!("tmux session {} SSH connect_exec failed: {}", session_id, e);
-            e
-        })?;
-
-    tracing::info!("tmux session {} SSH connect_exec succeeded", session_id);
-
-    let writer = Arc::new(Mutex::new(Box::new(ChannelWriter::new(write_tx)) as Box<dyn Write + Send>));
-    let reader = Box::new(ChannelReader::new(read_rx));
-
-    let info = SessionInfo {
-        id: session_id,
-        name: config
-            .tmux
-            .name
-            .clone()
-            .unwrap_or_else(|| format!("{}@{}", config.ssh.username, config.ssh.host)),
-        session_type: SessionType::SshTmux {
-            host: config.ssh.host,
-            port: config.ssh.port,
-            user: config.ssh.username,
-            socket: config.tmux.socket.clone(),
-            command: config.tmux.command.clone(),
-        },
-        is_connected: true,
-    };
-
-    let exited = Arc::new(AtomicBool::new(false));
-    let capture_queue: CapturePaneQueue = Arc::new(Mutex::new(std::collections::VecDeque::new()));
-
-    spawn_control_forwarder(
-        reader,
-        backend,
-        session_id,
-        Arc::clone(&exited),
-        None,
-        Arc::clone(&capture_queue),
-    );
-
-    schedule_initial_sync(writer.clone(), session_id);
-
-    Ok(TmuxSession {
-        info,
-        writer,
-        capture_queue,
-        exited,
-        _ssh_channel: Some(channel),
-    })
-}
-
-/// Ask tmux for the window list after a short delay, giving attach time to settle.
-fn schedule_initial_sync(writer: Arc<Mutex<Box<dyn Write + Send>>>, session_id: u32) {
-    thread::spawn(move || {
-        thread::sleep(Duration::from_millis(500));
-        if let Ok(mut w) = writer.lock() {
-            let cmd = list_windows("$0");
-            tracing::debug!("tmux session {} initial sync writing: {:?}", session_id, cmd.trim());
-            let _ = w.write_all(cmd.as_bytes());
-            let _ = w.flush();
-            tracing::debug!("tmux session {} initial sync sent: {}", session_id, cmd.trim());
-        } else {
-            tracing::error!("tmux session {} failed to lock writer for sync", session_id);
-        }
-    });
 }
 
 #[cfg(test)]
@@ -240,7 +86,7 @@ mod integration_tests {
     use crate::infrastructure::app_backend::AppBackend;
     use crate::infrastructure::pty::NativePtySystem;
     use crate::models::session::TmuxSessionConfig;
-    use crate::tmux::commands::list_panes;
+    use crate::tmux::commands::{list_panes, list_windows};
     use crate::tmux::state::TmuxControlEvent;
 
     type EventLog = Vec<(String, Vec<u8>)>;
@@ -252,7 +98,10 @@ mod integration_tests {
 
     impl AppBackend for TestBackend {
         fn emit(&self, event: &str, payload: &[u8]) -> Result<(), String> {
-            self.events.lock().unwrap().push((event.to_string(), payload.to_vec()));
+            self.events
+                .lock()
+                .unwrap()
+                .push((event.to_string(), payload.to_vec()));
             Ok(())
         }
 
@@ -263,7 +112,11 @@ mod integration_tests {
 
     #[test]
     fn real_tmux_session_emits_window_list() {
-        if std::process::Command::new("tmux").arg("-V").output().is_err() {
+        if std::process::Command::new("tmux")
+            .arg("-V")
+            .output()
+            .is_err()
+        {
             eprintln!("tmux not installed, skipping integration test");
             return;
         }
@@ -302,7 +155,11 @@ mod integration_tests {
         let control_events: Vec<TmuxControlEvent> = events
             .iter()
             .filter(|(name, _)| name == "tmux-control-event")
-            .map(|(_, payload)| serde_json::from_slice::<(u32, TmuxControlEvent)>(payload).unwrap().1)
+            .map(|(_, payload)| {
+                serde_json::from_slice::<(u32, TmuxControlEvent)>(payload)
+                    .unwrap()
+                    .1
+            })
             .collect();
 
         let has_active_window = control_events.iter().any(|e| match e {

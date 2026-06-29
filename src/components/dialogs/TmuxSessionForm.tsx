@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { SavedSessionConfig, SSHSessionConfig, SshTmuxSessionConfig } from "../../types/session";
+import { SavedSessionConfig, SSHSessionConfig } from "../../types/session";
+import { SshTmuxSessionConfig } from "../../types/tmux";
 import { FormField } from "../ui/FormField";
 
 interface TmuxSessionFormProps {

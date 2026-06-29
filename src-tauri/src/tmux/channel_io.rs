@@ -1,7 +1,23 @@
+//! Synchronous I/O adapters for tmux control mode transports.
+//!
+//! Tmux control mode reads and writes a plain byte stream. On a local PTY
+//! those bytes come from a file-like master; on an SSH connection they flow
+//! through async tokio channels. This module provides:
+//!
+//! - [`CapturePaneQueue`]: a FIFO used to correlate `capture-pane` commands
+//!   with their response blocks because tmux does not accept client-assigned
+//!   command ids.
+//! - [`ChannelWriter`]: a synchronous `Write` adapter over an async tokio
+//!   unbounded sender.
+//! - [`ChannelReader`]: a synchronous `Read` adapter over a std mpsc receiver,
+//!   with internal buffering for chunk-sized reads.
+//! - [`build_tmux_command`]: assemble the full `tmux -CC ...` shell command
+//!   used for SSH exec channels.
+
+use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::sync::mpsc as sync_mpsc;
 use std::sync::{Arc, Mutex};
-use std::collections::VecDeque;
 
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -14,7 +30,6 @@ use crate::tmux::commands::build_tmux_argv;
 /// rely on FIFO order: every `capture-pane` request pushes its target pane id
 /// here, and the parser pops it when the corresponding `%begin` arrives.
 pub type CapturePaneQueue = Arc<Mutex<VecDeque<String>>>;
-
 
 /// Sync `Write` adapter on top of an async tokio mpsc sender.
 ///
@@ -72,7 +87,12 @@ impl Read for ChannelReader {
                     self.pos = 0;
                 }
                 Ok(None) => return Ok(0),
-                Err(_) => return Err(io::Error::new(io::ErrorKind::BrokenPipe, "SSH channel closed")),
+                Err(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        "SSH channel closed",
+                    ))
+                }
             }
         }
         let remaining = &self.buffer[self.pos..];

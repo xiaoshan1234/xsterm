@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "../../contexts/SessionContext";
-import { LocalSessionConfig, SSHSessionConfig, SshTmuxSessionConfig, Session } from "../../types/session";
+import { LocalSessionConfig, SSHSessionConfig, Session } from "../../types/session";
+import { SshTmuxSessionConfig } from "../../types/tmux";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { LocalSessionForm } from "./LocalSessionForm";

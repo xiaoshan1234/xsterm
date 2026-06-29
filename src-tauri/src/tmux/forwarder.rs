@@ -1,3 +1,11 @@
+//! Background forwarding thread for tmux control mode output.
+//!
+//! `spawn_control_forwarder` runs on a dedicated thread (spawned through
+//! [`AppBackend`]) and repeatedly reads bytes from the tmux transport. It
+//! feeds those bytes to [`TmuxControlParser`] and dispatches each parsed
+//! message to [`handle_message`]. When the transport closes or the local tmux
+//! child exits, it emits `session-closed` and marks the session as exited.
+
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -6,9 +14,9 @@ use std::time::{Duration, Instant};
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::Child;
 use crate::tmux::channel_io::CapturePaneQueue;
+use crate::tmux::events::emit_closed;
 use crate::tmux::handlers::{handle_message, DispatchState};
 use crate::tmux::parser::TmuxControlParser;
-use crate::tmux::events::emit_closed;
 
 const TMUX_READ_BUFFER_SIZE: usize = 8192;
 const CHILD_CHECK_INTERVAL: Duration = Duration::from_secs(1);
@@ -30,9 +38,8 @@ pub fn spawn_control_forwarder(
 
     backend.spawn(Box::new(move || {
         let classifier_queue = Arc::clone(&capture_queue_clone);
-        let mut parser = TmuxControlParser::with_classifier(move || {
-            classifier_queue.lock().ok()?.pop_front()
-        });
+        let mut parser =
+            TmuxControlParser::with_classifier(move || classifier_queue.lock().ok()?.pop_front());
         let mut buf = [0u8; TMUX_READ_BUFFER_SIZE];
         let mut last_child_check = Instant::now();
 
@@ -54,13 +61,7 @@ pub fn spawn_control_forwarder(
                     tracing::trace!("tmux session {} read {} bytes", session_id, n);
                     for message in parser.parse(&buf[..n]) {
                         tracing::trace!("tmux session {} parsed {:?}", session_id, message);
-                        handle_message(
-                            &backend_clone,
-                            session_id,
-                            message,
-                            &state_clone,
-                            &exited,
-                        );
+                        handle_message(&backend_clone, session_id, message, &state_clone, &exited);
                     }
                 }
                 Err(e) => {
@@ -72,13 +73,7 @@ pub fn spawn_control_forwarder(
         }
 
         for message in parser.flush() {
-            handle_message(
-                &backend_clone,
-                session_id,
-                message,
-                &state_clone,
-                &exited,
-            );
+            handle_message(&backend_clone, session_id, message, &state_clone, &exited);
         }
 
         exited.store(true, Ordering::Relaxed);
@@ -103,13 +98,14 @@ fn check_child_status<B: AppBackend>(
     }
     *last_check = Instant::now();
 
-    let status = child_ref
-        .lock()
-        .ok()
-        .and_then(|mut c| c.try_wait().ok()?);
+    let status = child_ref.lock().ok().and_then(|mut c| c.try_wait().ok()?);
 
     if let Some(status) = status {
-        tracing::info!("tmux session {} child exited with status {:?}", session_id, status);
+        tracing::info!(
+            "tmux session {} child exited with status {:?}",
+            session_id,
+            status
+        );
         emit_closed(backend, session_id);
         exited.store(true, Ordering::Relaxed);
         true

@@ -78,3 +78,59 @@
   - `SessionContext` 处理 `PaneModeChanged` 更新 pane 状态。
   - `TmuxLayoutGrid` 在 pane 标题栏显示 `[COPY]` 指示器并添加对应样式。
   - `npm run build`、`cargo test` 全部通过。
+
+## 2026-06-29 (Current Task: tmux Refactor - TypeScript Frontend)
+- User request: refactor tmux-related TypeScript code, add necessary comments, improve readability, enforce code layering.
+- Scope: TypeScript frontend tmux code (`src/services/tmuxService.ts`, `src/contexts/tmuxStateReducer.ts`, `src/types/session.ts` and consumers).
+- Constraint: behavior must remain unchanged; pure cleanup/layering pass.
+- Created `src/types/tmux.ts` containing all tmux-specific types (`TmuxPane`, `TmuxWindow`, `TmuxSessionState`, `TmuxState`, `TmuxWindowListEntry`, `TmuxPaneListEntry`, `TmuxControlEvent`, `TmuxSessionConfig`, `SshTmuxSessionConfig`) with module-level and state-tree JSDoc comments.
+- Updated `src/types/session.ts` to import and re-export tmux types for backwards compatibility.
+- Refactored `src/contexts/tmuxStateReducer.ts`:
+  - Renamed `_sessionId` parameter to `sessionId`.
+  - Extracted each `switch` case into a small private handler (`handleSessionChanged`, `handleWindowAdded`, `handleWindowClosed`, etc.).
+  - Added file-level comments explaining the tmux state tree and event application conventions.
+  - Kept `applyTmuxControlEvent` as the public dispatcher.
+- Refactored `src/services/tmuxService.ts`:
+  - Grouped exports with section comments: Helpers, Lifecycle, Window/pane management, Queries, Low-level commands.
+  - Added JSDoc comments to public functions.
+  - Removed duplicate `SshTmuxSessionConfig` definition; imported from `src/types/tmux.ts`.
+  - Switched tmux type imports to `src/types/tmux.ts`.
+- Updated consumers to import tmux types directly from `src/types/tmux.ts`:
+  - `src/contexts/SessionContext.tsx`
+  - `src/components/TmuxWindowTabs.tsx`
+  - `src/components/TmuxLayoutGrid.tsx`
+  - `src/components/TmuxSessionView.tsx`
+  - `src/components/dialogs/TmuxSessionForm.tsx`
+  - `src/components/dialogs/CreateSessionDialog.tsx`
+  - `src/components/dialogs/EditSessionDialog.tsx`
+- Verified `npm run build` passes (`tsc && vite build`) with zero TypeScript errors.
+- No runtime behavior, UI behavior, or backend protocol shapes changed.
+
+## 2026-06-29 (Rust tmux module refactor completed)
+- Refactored `src-tauri/src/tmux/parser.rs`:
+  - Added detailed module-level docs describing DCS wrapping, octal escapes, and command response blocks.
+  - Split `try_parse_one` / `handle_control_line` into smaller helpers: DCS introducer/terminator consumption, line taking, response block start/finish/abort, output-line parsing.
+  - Extracted named constants for DCS sequences, octal escape length, and list column counts.
+  - Preserved all 7 existing parser tests.
+- Refactored `src-tauri/src/tmux/handlers.rs`:
+  - Split notification name-to-event mapping into new `notification.rs`.
+  - Split pause/copy-mode state tracking into new `state_tracker.rs` with a `StateTracker` struct and methods.
+  - Kept `handlers.rs` as a thin dispatcher that routes parsed messages to events.
+  - Preserved the `DispatchState` type alias for backward compatibility.
+- Refactored `src-tauri/src/tmux/session.rs`:
+  - Moved local PTY creation into `session/local.rs`.
+  - Moved SSH exec-channel creation and initial sync scheduling into `session/ssh.rs`.
+  - Kept shared `TmuxSession` struct and write methods in `session.rs`.
+  - Re-exported `create_tmux_session` and `create_ssh_tmux_session` so consumers are unchanged.
+  - Preserved the integration test in `session.rs`.
+- Refactored `src-tauri/src/tmux/commands.rs`:
+  - Removed blanket `#![allow(dead_code)]`; grouped commands into Session/Window/Pane/Query/Flow-control sections.
+  - Added module-level docs and section comments.
+  - Added format tests for every command builder to keep the vocabulary alive and cargo clean.
+  - Preserved all public functions and existing test assertions.
+- Added file-level documentation to `channel_io.rs`, `events.rs`, `forwarder.rs`, `state.rs`, and `state_tracker.rs`.
+- Removed unnecessary `#[allow(dead_code)]` attributes from most items; retained targeted allows on the unused frontend-facing state models (`TmuxSession`, `TmuxStateSnapshot`) because they are part of the public JSON schema vocabulary.
+- Verification:
+  - `cargo check -p xsterm` is clean (0 warnings).
+  - `cargo test -p xsterm` passes all 51 tests (34 tmux-specific, 17 other).
+  - No external Tauri command signatures, event names, or JSON payload shapes were changed.

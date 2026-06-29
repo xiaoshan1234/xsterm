@@ -1,4 +1,5 @@
-import { Session, TmuxState, TmuxWindow } from "../types/session";
+import { Session } from "../types/session";
+import { TmuxState, TmuxWindow } from "../types/tmux";
 import { TmuxWindowTabs } from "./TmuxWindowTabs";
 import { TmuxLayoutGrid } from "./TmuxLayoutGrid";
 
