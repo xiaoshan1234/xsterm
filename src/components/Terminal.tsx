@@ -29,8 +29,16 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initDoneRef = useRef(false);
-  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, splitTmuxPane } = useSession();
+  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, splitTmuxPane, getEffectiveLocalEcho } = useSession();
   const { currentTheme } = useTheme();
+  const localEchoEnabled = getEffectiveLocalEcho(sessionId);
+
+  const localEchoEnabledRef = useRef(localEchoEnabled);
+  const lastDataRef = useRef<{ text: string; time: number } | null>(null);
+
+  useEffect(() => {
+    localEchoEnabledRef.current = localEchoEnabled;
+  }, [localEchoEnabled]);
 
   const writeSessionRef = useRef(writeSession);
   const resizeSessionRef = useRef(resizeSession);
@@ -48,6 +56,16 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
 
   const handleData = useCallback(
     (data: string) => {
+      const now = Date.now();
+      const last = lastDataRef.current;
+      if (last && last.text === data && now - last.time < 30) {
+        return;
+      }
+      lastDataRef.current = { text: data, time: now };
+
+      if (localEchoEnabledRef.current) {
+        xtermRef.current?.write(data);
+      }
       if (paneId) {
         sendKeysToTmuxPaneRef.current(sessionId, paneId, data);
       } else {
@@ -180,6 +198,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     });
 
     let unlisten: (() => void) | null = null;
+    let listenerActive = true;
     let rafId: number | null = null;
     let writeQueue: PendingWrite[] = [];
 
@@ -206,29 +225,36 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     };
 
     if (paneId) {
-      listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
+      listen<[number, { paneId: string; data: number[] }]>('tmux-pane-output', (event) => {
         const [id, output] = event.payload;
         if (id === sessionId && output.paneId === paneId) {
           queueWrite(decodeOutput(output.data));
         }
       }).then((fn) => {
-        unlisten = fn;
-        captureTmuxPaneRef.current(sessionId, paneId).catch(() => {
-          // Capture failures are surfaced via tmux-control-event CommandError.
-        });
+        if (listenerActive) {
+          unlisten = fn;
+          captureTmuxPaneRef.current(sessionId, paneId).catch(() => {});
+        } else {
+          fn();
+        }
       });
     } else {
-      listen<[number, number[]]>("session-output", (event) => {
+      listen<[number, number[]]>('session-output', (event) => {
         const [id, data] = event.payload;
         if (id === sessionId) {
           queueWrite(decodeOutput(data));
         }
       }).then((fn) => {
-        unlisten = fn;
+        if (listenerActive) {
+          unlisten = fn;
+        } else {
+          fn();
+        }
       });
     }
 
     return () => {
+      listenerActive = false;
       resizeObserver.disconnect();
       document.removeEventListener("paste", handlePaste, true);
       unlisten?.();

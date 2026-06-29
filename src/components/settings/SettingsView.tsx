@@ -1,4 +1,5 @@
 import { useTheme } from "../../contexts/ThemeContext";
+import { useSession } from "../../contexts/SessionContext";
 import { PRESET_THEMES } from "../../types/theme";
 import "./SettingsView.css";
 
@@ -18,6 +19,7 @@ interface SettingsViewProps {
 
 export function SettingsView({ activeCategory = "appearance" }: SettingsViewProps) {
   const { currentTheme, currentThemeKey, setTheme, themeKeys } = useTheme();
+  const { globalLocalEcho, setGlobalLocalEcho } = useSession();
 
   return (
     <div className="settings-view">
@@ -48,6 +50,20 @@ export function SettingsView({ activeCategory = "appearance" }: SettingsViewProp
                   ))}
                 </select>
               </div>
+            </div>
+            <div className="settings-toggle-field">
+              <label className="settings-toggle" htmlFor="global-local-echo">
+                <input
+                  id="global-local-echo"
+                  type="checkbox"
+                  checked={globalLocalEcho}
+                  onChange={(e) => setGlobalLocalEcho(e.target.checked)}
+                />
+                <span className="settings-toggle-label">Global local echo</span>
+              </label>
+              <p className="settings-toggle-hint">
+                Show typed characters locally before the remote echo arrives. Per-session overrides will take priority.
+              </p>
             </div>
           </div>
         )}

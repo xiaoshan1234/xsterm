@@ -66,3 +66,31 @@
 - Removed `setSidebarPanel(null)` from `onCloseSettings` in `AppLayout.tsx`.
 - Now closing the Settings tab only hides the tab and switches the main view back to terminal; the Settings subsidebar remains open.
 - Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Global local echo toggle)
+- User requested: add a global local-echo switch in Settings to avoid doubled characters when the remote already echoes input.
+- Added `globalLocalEcho` state to `SessionContext`, persisted via Tauri store (`settings.json`).
+- Added `getEffectiveLocalEcho(sessionId)` to the context; returns per-session override if present, otherwise the global value.
+- Updated `Terminal.tsx` `handleData` to write typed characters to the terminal immediately when local echo is enabled.
+- Added a "Global local echo" checkbox in `SettingsView` under Appearance.
+- Left the per-session override map (`sessionLocalEchoOverrides`) in place for future per-session toggles.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Fix local echo stale closure)
+- Issue: local echo state read inside `Terminal.tsx` `handleData` was stale because `handleData` was memoized without updating when `localEchoEnabled` changed.
+- Replaced direct `localEchoEnabled` read in `handleData` with a ref (`localEchoEnabledRef`) that is updated on every state change.
+- This ensures the toggle takes effect immediately for existing terminal instances without recreating them.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Fix local echo always showing double)
+- Issue: even with local echo off, typed characters appeared twice (remote echo + something else).
+- Root cause: the memoized `handleData` callback was still registered on xterm from the initial render, so it captured the initial `localEchoEnabledRef` value and never updated.
+- Fix: removed the separate `handleData` callback and registered xterm's `onData` handler inline inside the effect. It reads the latest ref value directly and writes to xterm only when local echo is enabled.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Deduplicate xterm onData events)
+- Issue: typing one character showed 2 chars when local echo was off and 3 chars when on.
+- Root cause: on the current Tauri webview, xterm.js fires `onData` twice for a single keystroke (both keydown and keypress paths), causing each character to be sent to the backend twice and echoed back twice.
+- Fix: added a short deduplication guard in `Terminal.tsx` `handleData` that ignores identical input within 30ms.
+- Also hardened the `session-output` / `tmux-pane-output` listener cleanup so async listener registration is properly torn down if the effect unmounts before `listen()` resolves.
+- Verified `npm run build` passes with zero TypeScript errors.

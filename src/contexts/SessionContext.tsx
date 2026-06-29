@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
+import { load } from "@tauri-apps/plugin-store";
 import { listen } from "@tauri-apps/api/event";
 import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup } from "../types/session";
 import { TmuxState, TmuxControlEvent, SshTmuxSessionConfig, TmuxSessionConfig } from "../types/tmux";
@@ -35,6 +36,9 @@ interface SessionContextType {
   savedConfigs: SavedSessionConfig[];
   activeSessionId: number | null;
   groups: SessionGroup[];
+  globalLocalEcho: boolean;
+  setGlobalLocalEcho: (enabled: boolean) => void;
+  getEffectiveLocalEcho: (sessionId: number) => boolean;
   createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createTmuxSession: (config: SshTmuxSessionConfig, save?: boolean) => Promise<Session>;
@@ -74,6 +78,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [nextGroupId, setNextGroupId] = useState(1);
+  const [globalLocalEcho, setGlobalLocalEcho] = useState(false);
+  const [sessionLocalEchoOverrides] = useState<Map<number, boolean>>(new Map());
   const [tmuxState, setTmuxState] = useState<TmuxState>({
     sessions: new Map(),
     windows: new Map(),
@@ -96,9 +102,45 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSavedConfigs(configs);
       setGroups(savedGroups.groups);
       setNextGroupId(savedGroups.nextGroupId);
+
+      try {
+        const store = await load("settings.json", { autoSave: true, defaults: {} });
+        const savedGlobalEcho = await store.get<boolean>("globalLocalEcho");
+        if (savedGlobalEcho !== null && savedGlobalEcho !== undefined) {
+          setGlobalLocalEcho(savedGlobalEcho);
+        }
+      } catch (e) {
+        console.error("Failed to load global settings:", e);
+      }
     };
     init();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const persist = async () => {
+      try {
+        const store = await load("settings.json", { autoSave: true, defaults: {} });
+        if (!cancelled) {
+          await store.set("globalLocalEcho", globalLocalEcho);
+          await store.save();
+        }
+      } catch (e) {
+        console.error("Failed to save global settings:", e);
+      }
+    };
+    persist();
+    return () => {
+      cancelled = true;
+    };
+  }, [globalLocalEcho]);
+
+  const getEffectiveLocalEcho = useCallback((sessionId: number) => {
+    if (sessionLocalEchoOverrides.has(sessionId)) {
+      return sessionLocalEchoOverrides.get(sessionId)!;
+    }
+    return globalLocalEcho;
+  }, [sessionLocalEchoOverrides, globalLocalEcho]);
 
   useEffect(() => {
     const cleanups: (() => void)[] = [];
@@ -437,6 +479,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await sessionService.writeSession(id, data);
   }, [sessions]);
 
+  const setGlobalLocalEchoPersisted = useCallback((enabled: boolean) => {
+    setGlobalLocalEcho(enabled);
+  }, []);
+
   const resizeSession = useCallback(async (id: number, rows: number, cols: number): Promise<void> => {
     const session = sessions.find((s) => s.id === id);
     if (session?.type === "tmux" || session?.type === "ssh_tmux") {
@@ -508,6 +554,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         savedConfigs,
         activeSessionId,
         groups,
+        globalLocalEcho,
+        setGlobalLocalEcho: setGlobalLocalEchoPersisted,
+        getEffectiveLocalEcho,
         createLocalSession,
         createSshSession,
         createTmuxSession,
