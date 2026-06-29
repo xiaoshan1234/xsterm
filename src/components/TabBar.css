@@ -6,6 +6,10 @@
   overflow-x: auto;
 }
 
+.tab-bar:empty {
+  display: none;
+}
+
 .tab-bar::-webkit-scrollbar {
   height: 4px;
 }

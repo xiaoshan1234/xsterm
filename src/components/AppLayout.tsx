@@ -117,27 +117,29 @@ export default function AppLayout() {
           }}
         />
         <div className="main-area" ref={mainAreaRef}>
-          <TabBar
-            sessions={sessions}
-            activeId={activeSessionId}
-            activeView={activeView}
-            showSettingsTab={settingsTabVisible}
-            onSelect={(id) => {
-              setActiveView("terminal");
-              setActiveSession(id);
-            }}
-            onClose={closeSession}
-            onRename={renameSession}
-            onReorder={reorderSessions}
-            onSelectSettings={() => {
-              setActiveView("settings");
-              setSidebarPanel("settings");
-            }}
-            onCloseSettings={() => {
-              setSettingsTabVisible(false);
-              setActiveView("terminal");
-            }}
-          />
+          {(sessions.length > 0 || settingsTabVisible) && (
+            <TabBar
+              sessions={sessions}
+              activeId={activeSessionId}
+              activeView={activeView}
+              showSettingsTab={settingsTabVisible}
+              onSelect={(id) => {
+                setActiveView("terminal");
+                setActiveSession(id);
+              }}
+              onClose={closeSession}
+              onRename={renameSession}
+              onReorder={reorderSessions}
+              onSelectSettings={() => {
+                setActiveView("settings");
+                setSidebarPanel("settings");
+              }}
+              onCloseSettings={() => {
+                setSettingsTabVisible(false);
+                setActiveView("terminal");
+              }}
+            />
+          )}
           {activeView === "settings" ? (
             <SettingsView activeCategory={activeSettingsCategory} />
           ) : sessions.length === 0 ? (
