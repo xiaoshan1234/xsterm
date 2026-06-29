@@ -6,6 +6,7 @@ import Sidebar from "./sidebar/Sidebar";
 import TabBar from "./TabBar";
 import { TerminalContainer } from "./TerminalContainer";
 import { EmptyState } from "./EmptyState";
+import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import CommandSendPanel from "./CommandSendPanel";
 
@@ -30,6 +31,10 @@ export default function AppLayout() {
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_PANEL_HEIGHT);
   const [sendPanelCollapsed, setSendPanelCollapsed] = useState(true);
+  const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
+  const [settingsTabVisible, setSettingsTabVisible] = useState(false);
+  const [activeSettingsCategory, setActiveSettingsCategory] = useState<"appearance" | "shortcuts" | "about">("appearance");
+  const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | null>(null);
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
 
@@ -92,18 +97,48 @@ export default function AppLayout() {
           onCreateSession={() => { setCreateSessionGroupId(null); setShowCreateDialog(true); }}
           onCreateSessionWithGroup={(groupId) => { setCreateSessionGroupId(groupId); setShowCreateDialog(true); }}
           onToggleLogs={() => {}}
+          sidebarPanel={sidebarPanel}
+          onSidebarPanelChange={(panel) => {
+            setSidebarPanel(panel);
+            if (panel === "settings") {
+              setSettingsTabVisible(true);
+              setActiveView("settings");
+            } else if (panel === "chat") {
+              setActiveView("terminal");
+            }
+          }}
+          activeSettingsCategory={activeSettingsCategory}
+          onSelectSettingsCategory={(category) => {
+            setActiveSettingsCategory(category);
+            setActiveView("settings");
+            setSettingsTabVisible(true);
+            setSidebarPanel("settings");
+          }}
         />
         <div className="main-area" ref={mainAreaRef}>
-          {sessions.length > 0 && (
-            <TabBar
-              sessions={sessions}
-              activeId={activeSessionId}
-              onSelect={setActiveSession}
-              onClose={closeSession}
-              onRename={renameSession}
-            />
-          )}
-          {sessions.length === 0 ? (
+          <TabBar
+            sessions={sessions}
+            activeId={activeSessionId}
+            activeView={activeView}
+            showSettingsTab={settingsTabVisible}
+            onSelect={(id) => {
+              setActiveView("terminal");
+              setActiveSession(id);
+            }}
+            onClose={closeSession}
+            onRename={renameSession}
+            onSelectSettings={() => {
+              setActiveView("settings");
+              setSidebarPanel("settings");
+            }}
+            onCloseSettings={() => {
+              setSettingsTabVisible(false);
+              setActiveView("terminal");
+            }}
+          />
+          {activeView === "settings" ? (
+            <SettingsView activeCategory={activeSettingsCategory} />
+          ) : sessions.length === 0 ? (
             <EmptyState
               onCreateSession={() => setShowCreateDialog(true)}
               hasSavedConfigs={savedConfigs.length > 0}

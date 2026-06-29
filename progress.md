@@ -1,136 +1,68 @@
-# Refactoring Progress Log
+# Settings Refactor Progress Log
 
-## 2026-06-16
-- 调研 tmux `-CC` 控制模式协议、iTerm2 实现、Rust 现有库（par-term-emu-core-rust / par-term-tmux）。
-- 评估 xsterm 前后端架构，确定解析层放在 Rust 后端、状态/UI 层放在前端。
-- 创建 `tmux_cc_plan.md` 详细实施计划。
-- 更新 `findings.md` 追加 tmux 相关调研结论。
-- 完成 Phase 1（Rust 后端基础设施）：
-  - 新增 `src-tauri/src/tmux/` 模块（parser、commands、state、session）。
-  - 扩展 `models/session.rs` 添加 `SessionType::Tmux` 和 `TmuxSessionConfig`。
-  - 扩展 `SessionManager` 支持 tmux 创建/命令写入/resize/send-keys。
-  - 新增 Tauri 命令：`create_tmux_session`、`write_tmux_command`、`resize_tmux_pane`、`send_keys_to_tmux_pane`。
-  - 新增事件：`tmux-pane-output`、`tmux-control-event`。
-  - `cargo check` 和 `cargo test` 全部通过。
-- 修复 pre-existing 测试编译错误：给 `LocalSessionConfig.args` 加 `#[serde(default)]` 并补齐测试中的字段。
-- 完成 Phase 2（前端类型与状态）：
-  - 扩展 `src/types/session.ts`：Session type 增加 `"tmux"`，新增 TmuxPane/TmuxWindow/TmuxSessionState/TmuxState/TmuxControlEvent。
-  - 新增 `src/services/tmuxService.ts`：封装 4 个 tmux invoke 调用。
-  - 扩展 `SessionContext`：维护 `tmuxState`，监听 `tmux-pane-output` 和 `tmux-control-event`，提供 `createTmuxSession` / `writeTmuxCommand` / `resizeTmuxPane` / `sendKeysToTmuxPane` / `setActiveTmuxWindow`。
-  - 扩展 `Terminal` 组件：支持 `paneId` prop，在 tmux pane 上通过 `sendKeysToTmuxPane` 发送输入、通过 `registerTmuxPaneOutputHandler` 接收输出、通过 `resizeTmuxPane` 调整大小。
-  - 新增 `TmuxSessionIcon` 图标，更新 `SidebarToolbar` 支持 tmux 类型。
-  - `npm run build` 通过。
-- 完成 Phase 3（前端 UI 改造）：
-  - 新增 `TmuxWindowTabs` 组件：在 tmux session 内显示 window 子标签，点击切换 active window（发送 `select-window`）。
-  - 新增 `TmuxLayoutGrid` 组件：解析 tmux layout string（checksum + 递归 cell 树），按百分比绝对定位渲染 pane。
-  - 改造 `TerminalContainer`：普通 session 保持原有堆叠渲染；tmux session 渲染 window tabs + active window 的 pane grid。
-  - 新增 `TmuxSessionForm` 组件；改造 `CreateSessionDialog` 增加 tmux 选项卡。
-  - 更新 `AppLayout` 把 `createTmuxSession` 传给 dialog。
-  - 新增/更新 CSS：`TmuxWindowTabs.css`、`TmuxLayoutGrid.css`、扩展 `styles/layout.css`。
-  - `npm run build` 通过。
-- 完成 Phase 4（用户输入与流控）：
-  - 后端 `spawn_control_forwarder` 维护 `paused_panes` 集合，收到 `%pause` 时暂停对应 pane 输出，收到 `%continue` 时恢复。
-  - 收到 `%session-changed` 时向后端发射 `tmux-request-sync` 事件，前端监听该事件并发送 `list-windows` 命令获取完整状态。
-  - 前端收到 `SessionChanged` 时自动请求 `list-windows`。
-  - 修复 `WindowActivated` 状态更新逻辑和 `WindowAdded` 的兜底刷新。
-  - 修复 `TmuxLayoutGrid` parser 缺失 `findMatchingClose` 函数的问题。
-  - `npm run build`、`cargo check`、`cargo test` 全部通过。
-- 完成 Phase 5（高级功能）：
-  - 扩展 `tmuxService.ts`：新增 `createTmuxWindow`、`closeTmuxWindow`、`closeTmuxPane`、`renameTmuxWindow`、`attachTmuxSession`。
-  - 扩展 `SessionContext`：暴露 `createTmuxWindow`、`closeTmuxWindow`、`closeTmuxPane`。
-  - 改造 `TmuxWindowTabs`：新增 "+" 按钮创建 window，每个 tab 显示关闭按钮（首次点击确认，再次点击执行）。
-  - 改造 `TmuxLayoutGrid`：每个 pane 显示标题栏和关闭按钮。
-  - 改造 `TerminalContainer`：传递 window/pane 管理回调到 tabs 和 grid。
-  - 改造 `TmuxSessionForm`：`attach-session` 模式下标签提示为 "Target session"。
-  - `npm run build`、`cargo check`、`cargo test` 全部通过。
-- 修复 list-windows / list-panes 命令格式不一致：
-  - 前端 `SessionContext` 原来发送默认格式 `list-windows` / `list-panes`，后端解析器已改为只识别 tab 分隔格式，导致列表响应无法解析为结构化事件。
-  - `tmuxService.ts` 新增 `listWindows` / `listPanes` 辅助函数，使用与后端一致的 `-F` tab 分隔格式。
-  - `SessionContext` 改用上述辅助函数请求 window/pane 列表。
-  - `npm run build`、`cargo test` 全部通过。
-- 当前状态：tmux `-CC` 控制模式基础功能、状态同步、错误处理、复制模式指示均已实现并编译通过。尚未进行实际运行环境的手动测试，也未实现 SSH 上运行 tmux。
-- 实现 SSH tmux 支持：
-  - `models/session.rs` 新增 `SessionType::SshTmux` 与 `SshTmuxSessionConfig`。
-  - `infrastructure/ssh.rs` 扩展 `SshBackend` trait，新增 `connect_exec` 方法；`run_ssh_session` 支持请求 PTY 后执行远程命令。
-  - `tmux/session.rs` 抽离通用 control mode forwarder，新增 `ChannelReader` / `ChannelWriter` 适配 SSH 通道，新增 `create_ssh_tmux_session` 在远程主机上运行 `tmux -CC`。
-  - `services/session_manager.rs` 新增 `Session::SshTmux` 与 `create_ssh_tmux`，复用 tmux 命令/resize/send-keys 路径。
-  - `commands/session.rs` 与 `commands/mod.rs` 注册 `create_ssh_tmux_session` Tauri 命令。
-  - 前端类型扩展 `ssh_tmux`，`TmuxSessionForm` 增加 Local/SSH 连接切换与 SSH 凭据表单，`CreateSessionDialog` 与 `SessionContext` 根据配置分发到本地或 SSH tmux 创建，`TerminalContainer` 对 `ssh_tmux` 使用 tmux UI。
-  - `npm run build`、`cargo test` 全部通过。
-- 当前状态：tmux `-CC` 本地与 SSH 控制模式、状态同步、错误处理、复制模式指示均已实现并编译通过。尚未进行实际运行环境的手动测试。
-- 完成 list-windows / list-panes 命令响应解析：
-  - `commands.rs` 改用 `-F` tab 分隔机器可读格式输出 session/window/pane 元数据。
-  - `parser.rs` 新增 `WindowList` / `PaneList` 消息类型与解析函数，并自动把对应 `CommandResponse` 分类为结构化消息。
-  - `state.rs` 新增 `TmuxWindowListEntry` / `TmuxPaneListEntry` 及 `WindowList` / `PaneList` 控制事件。
-  - `session.rs` 将解析后的列表事件通过 `tmux-control-event` 发送给前端。
-  - `src/types/session.ts` 与 `SessionContext.tsx` 处理 `WindowList` / `PaneList`，补全/刷新 tmux 状态树。
-  - 新增 Rust 单元测试覆盖 tab 分隔列表解析。
-  - 修复状态同步硬编码问题：
-  - `session.rs` 的 `request_state_sync` 现在接收实际 tmux session id，不再硬编码 `$0`/`@0`。
-  - 收到 `WindowList` 后，前端自动为每个 window 发送 `list-panes -t <window_id>` 补全 pane 元数据。
-  - 新增 tmux 命令失败错误处理：
-  - `state.rs` 的 `TmuxControlEvent` 增加 `CommandError` 变体。
-  - `session.rs` 在 `CommandResponse` 失败时向前端发送 `CommandError` 事件。
-  - 前端类型与 `SessionContext` 处理 `CommandError` 并输出到控制台。
-  - 完成复制模式（copy-mode）UI 指示：
-  - `TmuxPane` 增加 `inCopyMode` / `in_copy_mode` 字段。
-  - 后端维护 `copy_mode_panes` 集合，收到 `%pane-mode-changed` 时切换状态并发送实际布尔值。
-  - `SessionContext` 处理 `PaneModeChanged` 更新 pane 状态。
-  - `TmuxLayoutGrid` 在 pane 标题栏显示 `[COPY]` 指示器并添加对应样式。
-  - `npm run build`、`cargo test` 全部通过。
+## 2026-06-29
+- Received request to refactor settings into a tab page with secondary toolbar directory index.
+- Inventoried relevant components: `SettingsPanel.tsx`, `TabBar.tsx`, `Sidebar.tsx`, `SidebarToolbar.tsx`, `AppLayout.tsx`, `SessionContext.tsx`, theme/icons.
+- Created `task_plan.md`, `findings.md` with proposed architecture.
+- Decision: use `activeView: 'terminal' | 'settings'` in `AppLayout` instead of overloading `activeSessionId`.
+- Implementation complete:
+  - Added `SettingsView` component (`src/components/settings/SettingsView.tsx` + `.css`) with left directory index (Appearance, Shortcuts, About).
+  - Added persistent Settings tab to `TabBar` using `SettingsIcon`; tab cannot be closed or renamed.
+  - Updated `AppLayout` to switch between terminal view and Settings view via `activeView` state.
+  - Removed Settings button/menu from `SidebarToolbar` and `Sidebar`; deleted `SettingsPanel.tsx`.
+  - `npm run build` passes with zero TypeScript errors.
+- Verification: manually reviewed changed files; build confirmed clean.
 
-## 2026-06-29 (Current Task: tmux Refactor - TypeScript Frontend)
-- User request: refactor tmux-related TypeScript code, add necessary comments, improve readability, enforce code layering.
-- Scope: TypeScript frontend tmux code (`src/services/tmuxService.ts`, `src/contexts/tmuxStateReducer.ts`, `src/types/session.ts` and consumers).
-- Constraint: behavior must remain unchanged; pure cleanup/layering pass.
-- Created `src/types/tmux.ts` containing all tmux-specific types (`TmuxPane`, `TmuxWindow`, `TmuxSessionState`, `TmuxState`, `TmuxWindowListEntry`, `TmuxPaneListEntry`, `TmuxControlEvent`, `TmuxSessionConfig`, `SshTmuxSessionConfig`) with module-level and state-tree JSDoc comments.
-- Updated `src/types/session.ts` to import and re-export tmux types for backwards compatibility.
-- Refactored `src/contexts/tmuxStateReducer.ts`:
-  - Renamed `_sessionId` parameter to `sessionId`.
-  - Extracted each `switch` case into a small private handler (`handleSessionChanged`, `handleWindowAdded`, `handleWindowClosed`, etc.).
-  - Added file-level comments explaining the tmux state tree and event application conventions.
-  - Kept `applyTmuxControlEvent` as the public dispatcher.
-- Refactored `src/services/tmuxService.ts`:
-  - Grouped exports with section comments: Helpers, Lifecycle, Window/pane management, Queries, Low-level commands.
-  - Added JSDoc comments to public functions.
-  - Removed duplicate `SshTmuxSessionConfig` definition; imported from `src/types/tmux.ts`.
-  - Switched tmux type imports to `src/types/tmux.ts`.
-- Updated consumers to import tmux types directly from `src/types/tmux.ts`:
-  - `src/contexts/SessionContext.tsx`
-  - `src/components/TmuxWindowTabs.tsx`
-  - `src/components/TmuxLayoutGrid.tsx`
-  - `src/components/TmuxSessionView.tsx`
-  - `src/components/dialogs/TmuxSessionForm.tsx`
-  - `src/components/dialogs/CreateSessionDialog.tsx`
-  - `src/components/dialogs/EditSessionDialog.tsx`
-- Verified `npm run build` passes (`tsc && vite build`) with zero TypeScript errors.
-- No runtime behavior, UI behavior, or backend protocol shapes changed.
+## 2026-06-29 (Settings tab visibility update)
+- User requested: restore original Settings button and keep Settings tab hidden by default; only show after clicking Settings button.
+- Implementation changes:
+  - Restored Settings button in `SidebarToolbar` (bottom section).
+  - Added `settingsActive` prop to `Sidebar` so the Settings button highlights while Settings is open.
+  - `Sidebar` now routes Settings button click to `onOpenSettings` callback instead of toggling a submenu.
+  - `AppLayout` tracks `settingsTabVisible` state (default `false`); clicking Settings button sets it to `true` and switches to settings view.
+  - `TabBar` receives `showSettingsTab` and `onCloseSettings`; Settings tab is conditionally rendered and has a close button.
+  - Closing the Settings tab hides it and returns to terminal view.
+- Verified `npm run build` passes with zero TypeScript errors.
 
-## 2026-06-29 (Rust tmux module refactor completed)
-- Refactored `src-tauri/src/tmux/parser.rs`:
-  - Added detailed module-level docs describing DCS wrapping, octal escapes, and command response blocks.
-  - Split `try_parse_one` / `handle_control_line` into smaller helpers: DCS introducer/terminator consumption, line taking, response block start/finish/abort, output-line parsing.
-  - Extracted named constants for DCS sequences, octal escape length, and list column counts.
-  - Preserved all 7 existing parser tests.
-- Refactored `src-tauri/src/tmux/handlers.rs`:
-  - Split notification name-to-event mapping into new `notification.rs`.
-  - Split pause/copy-mode state tracking into new `state_tracker.rs` with a `StateTracker` struct and methods.
-  - Kept `handlers.rs` as a thin dispatcher that routes parsed messages to events.
-  - Preserved the `DispatchState` type alias for backward compatibility.
-- Refactored `src-tauri/src/tmux/session.rs`:
-  - Moved local PTY creation into `session/local.rs`.
-  - Moved SSH exec-channel creation and initial sync scheduling into `session/ssh.rs`.
-  - Kept shared `TmuxSession` struct and write methods in `session.rs`.
-  - Re-exported `create_tmux_session` and `create_ssh_tmux_session` so consumers are unchanged.
-  - Preserved the integration test in `session.rs`.
-- Refactored `src-tauri/src/tmux/commands.rs`:
-  - Removed blanket `#![allow(dead_code)]`; grouped commands into Session/Window/Pane/Query/Flow-control sections.
-  - Added module-level docs and section comments.
-  - Added format tests for every command builder to keep the vocabulary alive and cargo clean.
-  - Preserved all public functions and existing test assertions.
-- Added file-level documentation to `channel_io.rs`, `events.rs`, `forwarder.rs`, `state.rs`, and `state_tracker.rs`.
-- Removed unnecessary `#[allow(dead_code)]` attributes from most items; retained targeted allows on the unused frontend-facing state models (`TmuxSession`, `TmuxStateSnapshot`) because they are part of the public JSON schema vocabulary.
-- Verification:
-  - `cargo check -p xsterm` is clean (0 warnings).
-  - `cargo test -p xsterm` passes all 51 tests (34 tmux-specific, 17 other).
-  - No external Tauri command signatures, event names, or JSON payload shapes were changed.
+## 2026-06-29 (Remove settings directory index)
+- User requested removing the left-side settings directory index (`settings-index`).
+- Updated `SettingsView.tsx` to render Appearance, Shortcuts, and About sections vertically in a single scrollable content area.
+- Removed `settings-index` and `settings-index-item` styles from `SettingsView.css`.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Decouple settings from subsidebar state)
+- User requested: opening Settings page should not affect the subsidebar (Session Manager) state.
+- Changed `Sidebar` so that Settings activation is purely visual (button highlight) and does not change `activeMenu` state.
+- `activeMenu` now only tracks the actual subsidebar panel (`chat`); Settings button highlight is driven by the `settingsActive` prop passed from `AppLayout`.
+- Removed the `useEffect` that used to sync `activeMenu` with `settingsActive`, and stopped setting `"settings"` into `activeMenu` state.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Theme selector dropdown)
+- User requested: replace the theme button list with a dropdown select.
+- Updated `SettingsView.tsx` Appearance section to use a native `<select>` dropdown.
+- Added a small theme color preview circle next to the dropdown.
+- Replaced `.settings-theme-list` / `.settings-theme-item` styles with `.settings-theme-field` / `.settings-theme-select-wrapper` / `.settings-theme-select` styles.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Settings subsidebar index)
+- User requested: when clicking Settings button, the subsidebar should switch to display the Settings category index.
+- Updated `Sidebar.tsx` to render a Settings submenu (Appearance, Shortcuts, About) when `settingsActive` is true.
+- Added `activeSettingsCategory` and `onSelectSettingsCategory` props to `Sidebar`.
+- Updated `AppLayout.tsx` to track `activeSettingsCategory` state and pass it down.
+- Updated `SettingsView.tsx` to accept `activeCategory` prop and render only the selected category.
+- Clicking a category in the subsidebar switches the Settings view accordingly.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Toolbar toggles subsidebar)
+- User requested: clicking a toolbar button opens its corresponding subsidebar; if already open, closes it; if a different subsidebar is open, switches to the new one.
+- Replaced separate `settingsActive` / `activeMenu` state with a single `sidebarPanel` state in `AppLayout` (`"chat" | "settings" | null`).
+- Updated `Sidebar` to receive `sidebarPanel` and `onSidebarPanelChange` props; toolbar clicks now toggle/switch the panel directly.
+- Updated `SidebarToolbar` so both Chat and Settings buttons use the same `onMenuClick` toggle behavior.
+- Closing the Settings tab now also clears `sidebarPanel`.
+- Verified `npm run build` passes with zero TypeScript errors.
+
+## 2026-06-29 (Tab close does not close subsidebar)
+- User requested: closing the Settings tab should not close the subsidebar.
+- Removed `setSidebarPanel(null)` from `onCloseSettings` in `AppLayout.tsx`.
+- Now closing the Settings tab only hides the tab and switches the main view back to terminal; the Settings subsidebar remains open.
+- Verified `npm run build` passes with zero TypeScript errors.

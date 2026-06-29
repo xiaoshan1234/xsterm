@@ -1,17 +1,38 @@
 import { MouseEvent, useState } from "react";
 import { Session } from "../types/session";
-import { LocalSessionIcon, SshSessionIcon, TmuxSessionIcon, SshTmuxSessionIcon, CloseIcon } from "./icons/Icon";
+import {
+  LocalSessionIcon,
+  SshSessionIcon,
+  TmuxSessionIcon,
+  SshTmuxSessionIcon,
+  CloseIcon,
+  SettingsIcon,
+} from "./icons/Icon";
 import "./TabBar.css";
 
 interface TabBarProps {
   sessions: Session[];
   activeId: number | null;
+  activeView: "terminal" | "settings";
+  showSettingsTab: boolean;
   onSelect: (id: number) => void;
   onClose: (id: number) => void;
   onRename?: (id: number, name: string) => void;
+  onSelectSettings: () => void;
+  onCloseSettings?: () => void;
 }
 
-export default function TabBar({ sessions, activeId, onSelect, onClose, onRename }: TabBarProps) {
+export default function TabBar({
+  sessions,
+  activeId,
+  activeView,
+  showSettingsTab,
+  onSelect,
+  onClose,
+  onRename,
+  onSelectSettings,
+  onCloseSettings,
+}: TabBarProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -89,6 +110,26 @@ export default function TabBar({ sessions, activeId, onSelect, onClose, onRename
           </button>
         </div>
       ))}
+      {showSettingsTab && (
+        <div
+          className={`tab settings-tab ${activeView === "settings" ? "active" : ""}`}
+          onClick={onSelectSettings}
+        >
+          <span className="tab-icon">
+            <SettingsIcon size={14} />
+          </span>
+          <span className="tab-title">Settings</span>
+          <button
+            className="tab-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCloseSettings?.();
+            }}
+          >
+            <CloseIcon size={12} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

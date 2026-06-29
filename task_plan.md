@@ -1,7 +1,7 @@
-# Task Plan: Refactor tmux Code for Readability and Layering
+# Task Plan: Refactor Settings into a Tab Page with Directory Index
 
 ## Goal
-Refactor the existing tmux control mode integration (Rust backend + TypeScript frontend) to improve readability, add necessary comments, and enforce clearer code layering without changing external behavior.
+Refactor the settings UI so that Settings becomes a tab in the main tab bar, and the settings page uses a left-side secondary toolbar as a directory index for categories. The Settings tab is hidden by default and only appears after clicking the Settings button in the sidebar.
 
 ## Current Phase
 Phase 2
@@ -9,52 +9,46 @@ Phase 2
 ## Phases
 
 ### Phase 1: Requirements & Discovery
-- [x] Inventory all tmux-related source files
-- [x] Read current Rust backend tmux module (`src-tauri/src/tmux/`)
-- [x] Read current frontend tmux service, reducer, and types
-- [x] Document findings in findings.md
+- [x] Inventory settings, tab bar, sidebar, and layout components
+- [x] Read current `SettingsPanel.tsx`, `TabBar.tsx`, `Sidebar.tsx`, `SidebarToolbar.tsx`, `AppLayout.tsx`
+- [x] Document findings and design decisions
 - **Status:** complete
 
-### Phase 2: Planning & Structure
-- [x] Define target module layering for Rust tmux code
-- [x] Define target module layering for TypeScript tmux code
-- [x] Identify files to split/refactor and files to only annotate
-- [x] Document decisions with rationale
+### Phase 2: Implementation
+- [x] Add conditional Settings tab to `TabBar` (hidden by default)
+- [x] Create `SettingsView` component with left directory index and category content
+- [x] Update `AppLayout` to switch between terminal view and settings view
+- [x] Restore Settings button in `SidebarToolbar` / `Sidebar`
+- [x] Remove left-side settings directory index; render all categories vertically
+- [x] Update `SettingsView.tsx` and `SettingsView.css` accordingly
+- [x] Delete or repurpose `SettingsPanel.tsx`
 - **Status:** complete
 
-### Phase 3: Implementation
-- [x] Refactor Rust backend tmux module for clarity and layering
-- [x] Refactor TypeScript tmux types/state/service for clarity
-- [x] Add necessary comments throughout
-- [x] Run `cargo check` / `cargo test` after Rust changes
-- [x] Run `npm run build` after TypeScript changes
+### Phase 3: Verification
+- [x] Run `npm run build` and ensure zero TypeScript errors
+- [x] Check for visual regressions in tab bar and sidebar
+- [x] Document verification results in `progress.md`
 - **Status:** complete
 
-### Phase 4: Testing & Verification
-- [x] Verify all Rust tests pass
-- [x] Verify frontend build passes
-- [x] Verify no functional regressions via static checks
-- [x] Document test results in progress.md
+### Phase 4: Delivery
+- [x] Summarize changes
+- [x] Deliver to user
 - **Status:** complete
-
-### Phase 5: Delivery
-- [ ] Review all changed files
-- [ ] Summarize refactor scope and file layout
-- [ ] Deliver to user
-- **Status:** pending
 
 ## Key Questions
-1. Should we keep behavior 100% unchanged during this refactor? (Yes - pure cleanup/layering pass)
-2. Which layer boundaries make sense for tmux? (Protocol/Transport/State/Event; Types/Service/State/UI)
-3. Are there existing tests that lock behavior? (Yes - parser/commands/state tests; integration test in session.rs)
+1. Should the Settings tab always be visible? (No - hidden by default, shown after clicking sidebar Settings button)
+2. What categories should the directory index include? (Appearance, Shortcuts, About - matching current settings)
+3. Should the existing sidebar Settings button be removed? (No - restored as the trigger to show the Settings tab)
 
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| Keep behavior identical | User asked for readability/layering, not feature changes |
-| Split large files by responsibility | Improves navigation and single-responsibility |
-| Add module/file-level comments first | Highest ROI for readability |
-| Preserve all existing tests | Acts as regression safety net |
+| Settings tab hidden by default | User wants Settings tab page only shown after clicking Settings button |
+| Sidebar Settings button restored | User explicitly asked to restore the original Settings button |
+| Clicking Settings button shows tab + switches view | Provides clear navigation feedback |
+| Left secondary toolbar as directory index | User explicitly wants secondary toolbar as category index |
+| Reuse existing Appearance/Shortcuts/About content | Keep behavior unchanged, only change navigation shell |
+| `activeView` state in AppLayout | Cleaner than overloading `activeSessionId` with string sentinel |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -62,6 +56,7 @@ Phase 2
 |       |         |            |
 
 ## Notes
-- Rust tmux module currently has 8 files but parser/handlers/session are doing multiple things.
-- Frontend `tmuxStateReducer.ts` is one large switch; splitting into per-event handlers improves readability.
-- `types/session.ts` mixes tmux types with generic session types; extracting tmux types improves layering.
+- Current settings lives in `src/components/settings/SettingsView.tsx` as a tab page.
+- Tab bar currently renders sessions + persistent Settings tab; needs to conditionally render Settings tab.
+- Sidebar toolbar currently has Chat and Logs buttons; Settings button needs to be restored.
+

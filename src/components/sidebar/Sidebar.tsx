@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
-import { SidebarToolbar } from "./SidebarToolbar";
+import { SidebarToolbar, SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
-import { SettingsPanel } from "./SettingsPanel";
 import "./Sidebar.css";
 
 const TOOLBAR_WIDTH = 48;
@@ -9,38 +8,77 @@ const MIN_SUBMENU_WIDTH = 140;
 const MAX_SUBMENU_WIDTH = 400;
 const DEFAULT_SUBMENU_WIDTH = 200;
 
+type SettingsCategory = "appearance" | "shortcuts" | "about";
+
 interface SidebarProps {
   onCreateSession: () => void;
   onCreateSessionWithGroup: (groupId: number) => void;
   onToggleLogs: () => void;
+  sidebarPanel: SidebarMenu | null;
+  onSidebarPanelChange: (panel: SidebarMenu | null) => void;
+  activeSettingsCategory?: SettingsCategory;
+  onSelectSettingsCategory?: (category: SettingsCategory) => void;
 }
 
-export default function Sidebar({ onCreateSession, onCreateSessionWithGroup, onToggleLogs }: SidebarProps) {
-  const [activeMenu, setActiveMenu] = useState<"chat" | "settings" | null>(null);
+const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
+  { key: "appearance", label: "Appearance" },
+  { key: "shortcuts", label: "Shortcuts" },
+  { key: "about", label: "About" },
+];
+
+export default function Sidebar({
+  onCreateSession,
+  onCreateSessionWithGroup,
+  onToggleLogs,
+  sidebarPanel,
+  onSidebarPanelChange,
+  activeSettingsCategory = "appearance",
+  onSelectSettingsCategory,
+}: SidebarProps) {
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
 
-  const handleMenuClick = (menu: "chat" | "settings") => {
-    setActiveMenu(activeMenu === menu ? null : menu);
+  const handleMenuClick = (menu: SidebarMenu) => {
+    onSidebarPanelChange(sidebarPanel === menu ? null : menu);
   };
 
   const handleResize = useCallback((newWidth: number) => {
     setSubmenuWidth(Math.max(MIN_SUBMENU_WIDTH, Math.min(MAX_SUBMENU_WIDTH, newWidth)));
   }, []);
 
-  const sidebarWidth = activeMenu ? TOOLBAR_WIDTH + submenuWidth : TOOLBAR_WIDTH;
+  const sidebarWidth = sidebarPanel ? TOOLBAR_WIDTH + submenuWidth : TOOLBAR_WIDTH;
 
   return (
     <div className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
       <SidebarToolbar
-        activeMenu={activeMenu}
+        activeMenu={sidebarPanel}
         onMenuClick={handleMenuClick}
         onToggleLogs={onToggleLogs}
       />
 
-      {activeMenu === "chat" && <SessionManager width={submenuWidth} onCreateSession={onCreateSession} onCreateSessionWithGroup={onCreateSessionWithGroup} />}
-      {activeMenu === "settings" && <SettingsPanel onClose={() => setActiveMenu(null)} />}
+      {sidebarPanel === "chat" && (
+        <SessionManager
+          width={submenuWidth}
+          onCreateSession={onCreateSession}
+          onCreateSessionWithGroup={onCreateSessionWithGroup}
+        />
+      )}
 
-      {activeMenu && (
+      {sidebarPanel === "settings" && (
+        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
+          <div className="submenu-header">Settings</div>
+          {SETTINGS_CATEGORIES.map((category) => (
+            <button
+              key={category.key}
+              className={`submenu-item ${activeSettingsCategory === category.key ? "active" : ""}`}
+              onClick={() => onSelectSettingsCategory?.(category.key)}
+            >
+              {category.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {sidebarPanel && (
         <div
           className="sidebar-resize-handle"
           onMouseDown={(e) => {
