@@ -29,12 +29,21 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initDoneRef = useRef(false);
-  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, splitTmuxPane, getEffectiveLocalEcho } = useSession();
+  const { sessions, activeSessionIds, focusedPane, setFocusedPane, writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, splitTmuxPane, getEffectiveLocalEcho } = useSession();
   const { currentTheme } = useTheme();
   const localEchoEnabled = getEffectiveLocalEcho(sessionId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
   const lastDataRef = useRef<{ text: string; time: number } | null>(null);
+
+  const session = sessions.find((s) => s.id === sessionId);
+  const pane = session?.pane ?? 1;
+  const isFocused = focusedPane === pane && activeSessionIds.get(pane) === sessionId;
+
+  const isFocusedRef = useRef(isFocused);
+  useEffect(() => {
+    isFocusedRef.current = isFocused;
+  }, [isFocused]);
 
   useEffect(() => {
     localEchoEnabledRef.current = localEchoEnabled;
@@ -53,6 +62,10 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     resizeTmuxPaneRef.current = resizeTmuxPane;
     captureTmuxPaneRef.current = captureTmuxPane;
   }, [writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane]);
+
+  const handlePaneFocus = useCallback(() => {
+    setFocusedPane(pane);
+  }, [setFocusedPane, pane]);
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
@@ -161,6 +174,8 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     });
 
     xterm.onData((data) => {
+      if (!isFocusedRef.current) return;
+
       const now = Date.now();
       const last = lastDataRef.current;
       if (last && last.text === data && now - last.time < 30) {
@@ -241,7 +256,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     };
 
     if (paneId) {
-      listen<[number, { paneId: string; data: number[] }]>('tmux-pane-output', (event) => {
+      listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
         const [id, output] = event.payload;
         if (id === sessionId && output.paneId === paneId) {
           queueWrite(decodeOutput(output.data));
@@ -255,7 +270,7 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
         }
       });
     } else {
-      listen<[number, number[]]>('session-output', (event) => {
+      listen<[number, number[]]>("session-output", (event) => {
         const [id, data] = event.payload;
         if (id === sessionId) {
           queueWrite(decodeOutput(data));
@@ -285,9 +300,23 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     };
   }, [sessionId, paneId, handlePaste, currentTheme]);
 
+  useEffect(() => {
+    const xterm = xtermRef.current;
+    if (!xterm) return;
+    if (isFocused) {
+      xterm.focus();
+    } else {
+      xterm.blur();
+    }
+  }, [isFocused]);
+
   return (
     <ContextMenu items={contextMenuItems}>
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      <div
+        ref={containerRef}
+        style={{ width: "100%", height: "100%" }}
+        onMouseDown={handlePaneFocus}
+      />
     </ContextMenu>
   );
 }

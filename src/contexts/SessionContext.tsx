@@ -55,7 +55,8 @@ function buildFrontendSession(info: sessionService.SessionInfo, configId: string
 interface SessionContextType {
   sessions: Session[];
   savedConfigs: SavedSessionConfig[];
-  activeSessionId: number | null;
+  activeSessionIds: Map<SessionPane, number>;
+  focusedPane: SessionPane;
   groups: SessionGroup[];
   sessionPanes: Map<number, SessionPane>;
   paneLayout: PaneLayout;
@@ -79,7 +80,8 @@ interface SessionContextType {
   renameGroup: (id: number, name: string) => void;
   updateConfig: (config: SavedSessionConfig) => void;
   toggleGroup: (id: number) => void;
-  setActiveSession: (id: number | null) => void;
+  setActiveSession: (pane: SessionPane, id: number | null) => void;
+  setFocusedPane: (pane: SessionPane) => void;
   moveSessionToPane: (sessionId: number, pane: SessionPane) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
@@ -101,7 +103,8 @@ const SessionContext = createContext<SessionContextType | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [savedConfigs, setSavedConfigs] = useState<SavedSessionConfig[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [activeSessionIds, setActiveSessionIds] = useState<Map<SessionPane, number>>(new Map());
+  const [focusedPane, setFocusedPaneState] = useState<SessionPane>(1);
   const [sessionPanes, setSessionPanes] = useState<Map<number, SessionPane>>(new Map());
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [nextGroupId, setNextGroupId] = useState(1);
@@ -115,7 +118,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
   const [activeTmuxWindowIds, setActiveTmuxWindowIds] = useState<Map<number, string>>(new Map());
   const sessionsRef = useRef(sessions);
-  const activeSessionIdRef = useRef(activeSessionId);
+  const activeSessionIdsRef = useRef(activeSessionIds);
   const sessionPanesRef = useRef(sessionPanes);
   const establishingSessionsRef = useRef<Set<number>>(new Set());
 
@@ -124,8 +127,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [sessions]);
 
   useEffect(() => {
-    activeSessionIdRef.current = activeSessionId;
-  }, [activeSessionId]);
+    activeSessionIdsRef.current = activeSessionIds;
+  }, [activeSessionIds]);
 
   useEffect(() => {
     sessionPanesRef.current = sessionPanes;
@@ -180,18 +183,66 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return globalLocalEcho;
   }, [sessionLocalEchoOverrides, globalLocalEcho]);
 
-  const setActiveSession = useCallback((id: number | null) => {
-    setActiveSessionId(id);
+  const setActiveSession = useCallback((pane: SessionPane, id: number | null) => {
+    setActiveSessionIds((prev) => {
+      const next = new Map(prev);
+      if (id === null) {
+        next.delete(pane);
+      } else {
+        next.set(pane, id);
+      }
+      return next;
+    });
+  }, []);
+
+  const setFocusedPane = useCallback((pane: SessionPane) => {
+    setFocusedPaneState(pane);
+  }, []);
+
+  const updateActiveSessionAfterClose = useCallback((closedSessionId: number, pane: SessionPane, currentSessions: Session[]) => {
+    setActiveSessionIds((prev) => {
+      const next = new Map(prev);
+      if (next.get(pane) === closedSessionId) {
+        const adjacent = getAdjacentSessionId(currentSessions, closedSessionId, pane);
+        if (adjacent !== null) {
+          next.set(pane, adjacent);
+        } else {
+          next.delete(pane);
+        }
+      }
+      return next;
+    });
   }, []);
 
   const moveSessionToPane = useCallback((sessionId: number, pane: SessionPane) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const sourcePane = session.pane ?? 1;
+    if (sourcePane === pane) return;
+
     setSessionPanes((prev) => {
       const next = new Map(prev);
       next.set(sessionId, pane);
       return next;
     });
     setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, pane } : s)));
-  }, []);
+
+    setActiveSessionIds((prev) => {
+      const next = new Map(prev);
+      if (next.get(sourcePane) === sessionId) {
+        const adjacent = getAdjacentSessionId(sessions, sessionId, sourcePane);
+        if (adjacent !== null) {
+          next.set(sourcePane, adjacent);
+        } else {
+          next.delete(sourcePane);
+        }
+      }
+      next.set(pane, sessionId);
+      return next;
+    });
+
+    setFocusedPane(pane);
+  }, [sessions]);
 
   const setPaneLayout = useCallback((layout: PaneLayout) => {
     const visiblePanes = getVisiblePanes(layout);
@@ -212,7 +263,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
-  }, []);
+    setActiveSessionIds((prev) => {
+      const next = new Map(prev);
+      for (const pane of prev.keys()) {
+        if (!visiblePanes.includes(pane)) {
+          next.delete(pane);
+        }
+      }
+      for (const pane of visiblePanes) {
+        const activeId = next.get(pane);
+        const activeSession = sessions.find((s) => s.id === activeId && (s.pane ?? 1) === pane);
+        if (!activeSession) {
+          const firstInPane = sessions.find((s) => (s.pane ?? 1) === pane);
+          if (firstInPane) {
+            next.set(pane, firstInPane.id);
+          } else {
+            next.delete(pane);
+          }
+        }
+      }
+      return next;
+    });
+    setFocusedPaneState((current) => (visiblePanes.includes(current) ? current : firstVisible));
+  }, [sessions]);
 
   useEffect(() => {
     const cleanups: (() => void)[] = [];
@@ -228,11 +301,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         next.delete(sessionId);
         return next;
       });
-      const nextActive =
-        activeSessionIdRef.current === sessionId
-          ? getAdjacentSessionId(sessionsRef.current, sessionId, closedPane)
-          : activeSessionIdRef.current;
-      setActiveSession(nextActive);
+      updateActiveSessionAfterClose(sessionId, closedPane, sessionsRef.current);
       setTmuxState((prev) => {
         const next = cloneTmuxState(prev);
         for (const [_, state] of next.sessions) {
@@ -254,7 +323,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
     }).then((fn) => cleanups.push(fn));
 
-    listen<[number, { paneId: string; data: number[] }]>('tmux-pane-output', () => {
+    listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", () => {
       // Output bytes are delivered directly to Terminal.tsx listeners per pane.
       // No React state update is needed here.
     }).then((fn) => cleanups.push(fn));
@@ -298,11 +367,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           const failedSession = sessionsRef.current.find((s) => s.id === sessionId);
           const failedPane = failedSession ? (failedSession.pane ?? 1) : 1;
           setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-          const nextActive =
-            activeSessionIdRef.current === sessionId
-              ? getAdjacentSessionId(sessionsRef.current, sessionId, failedPane)
-              : activeSessionIdRef.current;
-          setActiveSession(nextActive);
+          updateActiveSessionAfterClose(sessionId, failedPane, sessionsRef.current);
           setSessionPanes((prev) => {
             const next = new Map(prev);
             next.delete(sessionId);
@@ -316,7 +381,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       cleanups.forEach((cleanup) => cleanup());
     };
-  }, [setActiveSession]);
+  }, [updateActiveSessionAfterClose]);
 
   const updateConfigs = useCallback((updater: (prev: SavedSessionConfig[]) => SavedSessionConfig[]) => {
     setSavedConfigs((prev) => {
@@ -352,7 +417,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         next.set(session.id, pane);
         return next;
       });
-      setActiveSession(session.id);
+      setActiveSession(pane, session.id);
+      setFocusedPane(pane);
 
       if (save) {
         const savedConfig: SavedSessionConfig =
@@ -368,7 +434,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       return session;
     },
-    [updateConfigs, setActiveSession]
+    [updateConfigs, setActiveSession, setFocusedPane, paneLayout]
   );
 
   const createLocalSession = useCallback(
@@ -427,7 +493,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           next.set(session.id, defaultPane);
           return next;
         });
-        setActiveSession(session.id);
+        setActiveSession(defaultPane, session.id);
+        setFocusedPane(defaultPane);
         return session;
       }
 
@@ -440,7 +507,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           next.set(session.id, defaultPane);
           return next;
         });
-        setActiveSession(session.id);
+        setActiveSession(defaultPane, session.id);
+        setFocusedPane(defaultPane);
         return session;
       }
 
@@ -454,7 +522,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           next.set(session.id, defaultPane);
           return next;
         });
-        setActiveSession(session.id);
+        setActiveSession(defaultPane, session.id);
+        setFocusedPane(defaultPane);
         return session;
       }
 
@@ -468,13 +537,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           next.set(session.id, defaultPane);
           return next;
         });
-        setActiveSession(session.id);
+        setActiveSession(defaultPane, session.id);
+        setFocusedPane(defaultPane);
         return session;
       }
 
       throw new Error("Invalid config");
     },
-    [savedConfigs, setActiveSession, paneLayout]
+    [savedConfigs, setActiveSession, setFocusedPane, paneLayout]
   );
 
   const removeConfig = useCallback(
@@ -490,12 +560,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           next.delete(session.id);
           return next;
         });
-        setActiveSessionId((current) =>
-          current === session.id ? getAdjacentSessionId(sessions, session.id, session.pane ?? 1) : current
-        );
+        updateActiveSessionAfterClose(session.id, session.pane ?? 1, sessions);
       }
     },
-    [updateConfigs, updateGroups, sessions]
+    [updateConfigs, updateGroups, sessions, updateActiveSessionAfterClose]
   );
 
   const closeSession = useCallback(async (id: number): Promise<void> => {
@@ -508,10 +576,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       next.delete(id);
       return next;
     });
-    setActiveSessionId((current) =>
-      current === id ? getAdjacentSessionId(sessions, id, pane) : current
-    );
-  }, [sessions]);
+    updateActiveSessionAfterClose(id, pane, sessions);
+  }, [sessions, updateActiveSessionAfterClose]);
 
   const renameSession = useCallback(
     (id: number, name: string) => {
@@ -700,7 +766,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       value={{
         sessions,
         savedConfigs,
-        activeSessionId,
+        activeSessionIds,
+        focusedPane,
         groups,
         sessionPanes,
         paneLayout,
@@ -725,6 +792,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         updateConfig,
         toggleGroup,
         setActiveSession,
+        setFocusedPane,
         moveSessionToPane,
         writeSession,
         resizeSession,

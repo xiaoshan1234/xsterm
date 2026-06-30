@@ -19,6 +19,7 @@ interface TabBarProps {
   pane?: SessionPane;
   visiblePanes?: SessionPane[];
   onSelect: (id: number) => void;
+  onFocusPane?: () => void;
   onClose: (id: number) => void;
   onRename?: (id: number, name: string) => void;
   onSelectSettings: () => void;
@@ -35,6 +36,7 @@ export default function TabBar({
   pane,
   visiblePanes,
   onSelect,
+  onFocusPane,
   onClose,
   onRename,
   onSelectSettings,
@@ -173,7 +175,10 @@ export default function TabBar({
           session.id === draggedId ? "dragging" : ""
         }`}
         draggable={onReorder !== undefined}
-        onClick={() => onSelect(session.id)}
+        onClick={() => {
+          onSelect(session.id);
+          onFocusPane?.();
+        }}
         onMouseDown={(e) => handleMiddleClick(e, session.id)}
         onDoubleClick={() => handleDoubleClick(session)}
         onDragStart={(e) => handleDragStart(e, session)}

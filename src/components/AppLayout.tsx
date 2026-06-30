@@ -17,7 +17,8 @@ export default function AppLayout() {
   const {
     sessions,
     savedConfigs,
-    activeSessionId,
+    activeSessionIds,
+    focusedPane,
     paneLayout,
     setPaneLayout,
     createLocalSession,
@@ -25,7 +26,6 @@ export default function AppLayout() {
     createTmuxSession,
     closeSession,
     renameSession,
-    setActiveSession,
     writeSession,
     reorderSessionsInPane,
     moveSessionToPane,
@@ -39,6 +39,8 @@ export default function AppLayout() {
   const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | null>(null);
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
+
+  const focusedActiveSessionId = activeSessionIds.get(focusedPane) ?? null;
 
   useAppShortcuts({
     onCreateSession: () => setShowCreateDialog(true),
@@ -129,9 +131,7 @@ export default function AppLayout() {
             <>
               <PaneGrid
                 sessions={sessions}
-                activeSessionId={activeSessionId}
                 paneLayout={paneLayout}
-                onSelect={setActiveSession}
                 onClose={closeSession}
                 onRename={renameSession}
                 onReorder={reorderSessionsInPane}
@@ -146,7 +146,7 @@ export default function AppLayout() {
               )}
               <CommandSendPanel
                 sessions={sessions}
-                activeSessionId={activeSessionId}
+                activeSessionId={focusedActiveSessionId}
                 writeSession={writeSession}
                 style={{ height: sendPanelCollapsed ? "auto" : panelHeight }}
                 onToggle={handleSendPanelToggle}

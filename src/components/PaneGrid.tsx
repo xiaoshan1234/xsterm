@@ -1,17 +1,14 @@
 import { useMemo, useRef, useCallback, useState, useEffect, type CSSProperties } from "react";
 import { Session, SessionPane, PaneLayout } from "../types/session";
-import { getVisiblePanes } from "../contexts/SessionContext";
+import { getVisiblePanes, useSession } from "../contexts/SessionContext";
 import TabBar from "./TabBar";
 import Terminal from "./Terminal";
 import { TmuxSessionView } from "./TmuxSessionView";
-import { useSession } from "../contexts/SessionContext";
 import "../styles/layout.css";
 
 interface PaneGridProps {
   sessions: Session[];
-  activeSessionId: number | null;
   paneLayout: PaneLayout;
-  onSelect: (id: number) => void;
   onClose: (id: number) => void;
   onRename: (id: number, name: string) => void;
   onReorder: (pane: SessionPane, fromIndex: number, toIndex: number) => void;
@@ -78,14 +75,13 @@ function getPanePlacement(pane: SessionPane, layout: PaneLayout) {
 
 export default function PaneGrid({
   sessions,
-  activeSessionId,
   paneLayout,
-  onSelect,
   onClose,
   onRename,
   onReorder,
   onMoveToPane,
 }: PaneGridProps) {
+  const { activeSessionIds, focusedPane, setActiveSession, setFocusedPane } = useSession();
   const gridRef = useRef<HTMLDivElement>(null);
   const [colSize, setColSize] = useState(50);
   const [rowSize, setRowSize] = useState(50);
@@ -104,6 +100,20 @@ export default function PaneGrid({
     }
     return map;
   }, [sessions, visiblePanes]);
+
+  const handlePaneClick = useCallback(
+    (pane: SessionPane) => {
+      setFocusedPane(pane);
+    },
+    [setFocusedPane]
+  );
+
+  const handleSelectSession = useCallback(
+    (pane: SessionPane, id: number) => {
+      setActiveSession(pane, id);
+    },
+    [setActiveSession]
+  );
 
   const handleColResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -189,16 +199,23 @@ export default function PaneGrid({
     <div className="pane-grid" ref={gridRef} style={gridStyle}>
       {visiblePanes.map((pane) => {
         const placement = getPanePlacement(pane, paneLayout);
+        const paneActiveId = activeSessionIds.get(pane) ?? null;
         return (
-          <div key={pane} className="pane" style={{ gridColumn: placement.gridColumn, gridRow: placement.gridRow }}>
+          <div
+            key={pane}
+            className={`pane ${focusedPane === pane ? "pane--focused" : ""}`}
+            style={{ gridColumn: placement.gridColumn, gridRow: placement.gridRow }}
+            onClick={() => handlePaneClick(pane)}
+          >
             <TabBar
               sessions={sessionsByPane.get(pane) ?? []}
-              activeId={activeSessionId}
+              activeId={paneActiveId}
               activeView="terminal"
               showSettingsTab={false}
               pane={pane}
               visiblePanes={visiblePanes}
-              onSelect={onSelect}
+              onSelect={(id) => handleSelectSession(pane, id)}
+              onFocusPane={() => setFocusedPane(pane)}
               onClose={onClose}
               onRename={onRename}
               onSelectSettings={() => {}}
@@ -206,7 +223,7 @@ export default function PaneGrid({
               onMoveToPane={onMoveToPane}
             />
             <div className="pane-content">
-              <PaneContent pane={pane} sessions={sessionsByPane.get(pane) ?? []} activeSessionId={activeSessionId} />
+              <PaneContent pane={pane} sessions={sessionsByPane.get(pane) ?? []} activeSessionId={paneActiveId} />
             </div>
           </div>
         );

@@ -8,7 +8,7 @@ export function useAppShortcuts({
   onCreateSession: () => void;
   onToggleLogs: () => void;
 }) {
-  const { sessions, activeSessionId, setActiveSession, closeSession } = useSession();
+  const { sessions, activeSessionIds, focusedPane, setActiveSession, closeSession } = useSession();
 
   useShortcuts([
     { key: "n", ctrl: true, shift: true, handler: onCreateSession },
@@ -16,10 +16,12 @@ export function useAppShortcuts({
       key: "Tab",
       ctrl: true,
       handler: () => {
-        if (sessions.length <= 1) return;
-        const currentIndex = sessions.findIndex((s) => s.id === activeSessionId);
-        const nextIndex = (currentIndex + 1) % sessions.length;
-        setActiveSession(sessions[nextIndex].id);
+        const paneSessions = sessions.filter((s) => (s.pane ?? 1) === focusedPane);
+        if (paneSessions.length <= 1) return;
+        const currentId = activeSessionIds.get(focusedPane) ?? null;
+        const currentIndex = paneSessions.findIndex((s) => s.id === currentId);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % paneSessions.length : 0;
+        setActiveSession(focusedPane, paneSessions[nextIndex].id);
       },
     },
     {
@@ -27,18 +29,23 @@ export function useAppShortcuts({
       ctrl: true,
       shift: true,
       handler: () => {
-        if (sessions.length <= 1) return;
-        const currentIndex = sessions.findIndex((s) => s.id === activeSessionId);
-        const prevIndex = (currentIndex - 1 + sessions.length) % sessions.length;
-        setActiveSession(sessions[prevIndex].id);
+        const paneSessions = sessions.filter((s) => (s.pane ?? 1) === focusedPane);
+        if (paneSessions.length <= 1) return;
+        const currentId = activeSessionIds.get(focusedPane) ?? null;
+        const currentIndex = paneSessions.findIndex((s) => s.id === currentId);
+        const prevIndex = currentIndex >= 0
+          ? (currentIndex - 1 + paneSessions.length) % paneSessions.length
+          : paneSessions.length - 1;
+        setActiveSession(focusedPane, paneSessions[prevIndex].id);
       },
     },
     {
       key: "w",
       ctrl: true,
       handler: () => {
-        if (activeSessionId !== null) {
-          closeSession(activeSessionId);
+        const activeId = activeSessionIds.get(focusedPane);
+        if (activeId !== undefined) {
+          closeSession(activeId);
         }
       },
     },
