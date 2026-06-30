@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { load } from "@tauri-apps/plugin-store";
 import { listen } from "@tauri-apps/api/event";
-import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup, SessionPane } from "../types/session";
+import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup, SessionPane, PaneLayout } from "../types/session";
 import { TmuxState, TmuxControlEvent, SshTmuxSessionConfig, TmuxSessionConfig } from "../types/tmux";
 import * as sessionService from "../services/sessionService";
 import * as tmuxService from "../services/tmuxService";
@@ -10,6 +10,25 @@ import { applyTmuxControlEvent, cloneTmuxState } from "./tmuxStateReducer";
 
 function generateId(): string {
   return crypto.randomUUID();
+}
+
+export function getVisiblePanes(layout: PaneLayout): SessionPane[] {
+  switch (layout) {
+    case "1":
+      return [1];
+    case "2-v":
+    case "2-h":
+      return [1, 2];
+    case "3-left-big":
+    case "3-right-big":
+    case "3-top-big":
+    case "3-bottom-big":
+      return [1, 2, 3];
+    case "4":
+      return [1, 2, 3, 4];
+    default:
+      return [1];
+  }
 }
 
 function getAdjacentSessionId(sessions: Session[], closedId: number, pane: SessionPane): number | null {
@@ -39,6 +58,8 @@ interface SessionContextType {
   activeSessionId: number | null;
   groups: SessionGroup[];
   sessionPanes: Map<number, SessionPane>;
+  paneLayout: PaneLayout;
+  setPaneLayout: (layout: PaneLayout) => void;
   globalLocalEcho: boolean;
   setGlobalLocalEcho: (enabled: boolean) => void;
   getEffectiveLocalEcho: (sessionId: number) => boolean;
@@ -84,6 +105,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessionPanes, setSessionPanes] = useState<Map<number, SessionPane>>(new Map());
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [nextGroupId, setNextGroupId] = useState(1);
+  const [paneLayout, setPaneLayoutState] = useState<PaneLayout>("1");
   const [globalLocalEcho, setGlobalLocalEcho] = useState(false);
   const [sessionLocalEchoOverrides] = useState<Map<number, boolean>>(new Map());
   const [tmuxState, setTmuxState] = useState<TmuxState>({
@@ -169,6 +191,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return next;
     });
     setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, pane } : s)));
+  }, []);
+
+  const setPaneLayout = useCallback((layout: PaneLayout) => {
+    const visiblePanes = getVisiblePanes(layout);
+    const firstVisible = visiblePanes[0];
+    setPaneLayoutState(layout);
+    setSessions((prev) =>
+      prev.map((s) => {
+        const currentPane = s.pane ?? 1;
+        return visiblePanes.includes(currentPane) ? s : { ...s, pane: firstVisible };
+      })
+    );
+    setSessionPanes((prev) => {
+      const next = new Map(prev);
+      for (const [id, pane] of next) {
+        if (!visiblePanes.includes(pane)) {
+          next.set(id, firstVisible);
+        }
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -297,7 +340,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       create: () => Promise<sessionService.SessionInfo>,
       config: LocalSessionConfig | SSHSessionConfig | TmuxSessionConfig | SshTmuxSessionConfig,
       save: boolean,
-      pane: SessionPane = 1
+      pane: SessionPane = getVisiblePanes(paneLayout)[0]
     ): Promise<Session> => {
       const configId = generateId();
       const info = await create();
@@ -373,14 +416,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (configId: string): Promise<Session> => {
       const config = savedConfigs.find((c) => c.id === configId);
       if (!config) throw new Error("Config not found");
+      const defaultPane = getVisiblePanes(paneLayout)[0];
 
       if (config.type === "local" && config.localConfig) {
         const info = await sessionService.createLocal(config.localConfig);
-        const session = buildFrontendSession(info, configId, "local", 1);
+        const session = buildFrontendSession(info, configId, "local", defaultPane);
         setSessions((prev) => [...prev, session]);
         setSessionPanes((prev) => {
           const next = new Map(prev);
-          next.set(session.id, 1);
+          next.set(session.id, defaultPane);
           return next;
         });
         setActiveSession(session.id);
@@ -389,11 +433,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       if (config.type === "ssh" && config.sshConfig) {
         const info = await sessionService.createSsh(config.sshConfig);
-        const session = buildFrontendSession(info, configId, "ssh", 1);
+        const session = buildFrontendSession(info, configId, "ssh", defaultPane);
         setSessions((prev) => [...prev, session]);
         setSessionPanes((prev) => {
           const next = new Map(prev);
-          next.set(session.id, 1);
+          next.set(session.id, defaultPane);
           return next;
         });
         setActiveSession(session.id);
@@ -402,12 +446,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       if (config.type === "tmux" && config.tmuxConfig) {
         const info = await tmuxService.createTmux(config.tmuxConfig);
-        const session = buildFrontendSession(info, configId, "tmux", 1);
+        const session = buildFrontendSession(info, configId, "tmux", defaultPane);
         establishingSessionsRef.current.add(session.id);
         setSessions((prev) => [...prev, session]);
         setSessionPanes((prev) => {
           const next = new Map(prev);
-          next.set(session.id, 1);
+          next.set(session.id, defaultPane);
           return next;
         });
         setActiveSession(session.id);
@@ -416,12 +460,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       if (config.type === "ssh_tmux" && config.sshTmuxConfig) {
         const info = await tmuxService.createSshTmuxSession(config.sshTmuxConfig);
-        const session = buildFrontendSession(info, configId, "ssh_tmux", 1);
+        const session = buildFrontendSession(info, configId, "ssh_tmux", defaultPane);
         establishingSessionsRef.current.add(session.id);
         setSessions((prev) => [...prev, session]);
         setSessionPanes((prev) => {
           const next = new Map(prev);
-          next.set(session.id, 1);
+          next.set(session.id, defaultPane);
           return next;
         });
         setActiveSession(session.id);
@@ -430,7 +474,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       throw new Error("Invalid config");
     },
-    [savedConfigs, setActiveSession]
+    [savedConfigs, setActiveSession, paneLayout]
   );
 
   const removeConfig = useCallback(
@@ -659,6 +703,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         activeSessionId,
         groups,
         sessionPanes,
+        paneLayout,
+        setPaneLayout,
         globalLocalEcho,
         setGlobalLocalEcho: setGlobalLocalEchoPersisted,
         getEffectiveLocalEcho,

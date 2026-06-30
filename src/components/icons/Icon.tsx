@@ -82,6 +82,15 @@ export const LogIcon = icon("0 0 24 24", (
   </>
 ));
 
+export const LayoutIcon = icon("0 0 24 24", (
+  <>
+    <rect x="3" y="3" width="7" height="7" rx="1" ry="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" ry="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" ry="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" ry="1" />
+  </>
+));
+
 export const FolderIcon = icon("0 0 24 24", (
   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
 ));

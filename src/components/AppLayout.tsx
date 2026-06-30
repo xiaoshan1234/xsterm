@@ -18,6 +18,8 @@ export default function AppLayout() {
     sessions,
     savedConfigs,
     activeSessionId,
+    paneLayout,
+    setPaneLayout,
     createLocalSession,
     createSshSession,
     createTmuxSession,
@@ -112,6 +114,8 @@ export default function AppLayout() {
             setActiveView("settings");
             setSidebarPanel("settings");
           }}
+          paneLayout={paneLayout}
+          onPaneLayoutChange={setPaneLayout}
         />
         <div className="main-area" ref={mainAreaRef}>
           {activeView === "settings" ? (
@@ -126,6 +130,7 @@ export default function AppLayout() {
               <PaneGrid
                 sessions={sessions}
                 activeSessionId={activeSessionId}
+                paneLayout={paneLayout}
                 onSelect={setActiveSession}
                 onClose={closeSession}
                 onRename={renameSession}

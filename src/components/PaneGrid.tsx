@@ -1,5 +1,6 @@
-import { useMemo, useRef, useCallback, useState, useEffect } from "react";
-import { Session, SessionPane } from "../types/session";
+import { useMemo, useRef, useCallback, useState, useEffect, type CSSProperties } from "react";
+import { Session, SessionPane, PaneLayout } from "../types/session";
+import { getVisiblePanes } from "../contexts/SessionContext";
 import TabBar from "./TabBar";
 import Terminal from "./Terminal";
 import { TmuxSessionView } from "./TmuxSessionView";
@@ -9,6 +10,7 @@ import "../styles/layout.css";
 interface PaneGridProps {
   sessions: Session[];
   activeSessionId: number | null;
+  paneLayout: PaneLayout;
   onSelect: (id: number) => void;
   onClose: (id: number) => void;
   onRename: (id: number, name: string) => void;
@@ -16,11 +18,68 @@ interface PaneGridProps {
   onMoveToPane: (sessionId: number, pane: SessionPane) => void;
 }
 
-const PANES: SessionPane[] = [1, 2, 3, 4];
+function getGridStyle(layout: PaneLayout, colSize: number, rowSize: number) {
+  switch (layout) {
+    case "1":
+      return { gridTemplateColumns: "1fr", gridTemplateRows: "1fr" };
+    case "2-v":
+      return { gridTemplateColumns: `${colSize}% ${100 - colSize}%`, gridTemplateRows: "1fr" };
+    case "2-h":
+      return { gridTemplateColumns: "1fr", gridTemplateRows: `${rowSize}% ${100 - rowSize}%` };
+    case "3-left-big":
+    case "3-right-big":
+    case "3-top-big":
+    case "3-bottom-big":
+    case "4":
+      return {
+        gridTemplateColumns: `${colSize}% ${100 - colSize}%`,
+        gridTemplateRows: `${rowSize}% ${100 - rowSize}%`,
+      };
+    default:
+      return { gridTemplateColumns: "1fr", gridTemplateRows: "1fr" };
+  }
+}
+
+function getPanePlacement(pane: SessionPane, layout: PaneLayout) {
+  switch (layout) {
+    case "1":
+      return { gridColumn: "1 / 2" as const, gridRow: "1 / 2" as const };
+    case "2-v":
+      return pane === 1
+        ? { gridColumn: "1 / 2" as const, gridRow: "1 / 2" as const }
+        : { gridColumn: "2 / 3" as const, gridRow: "1 / 2" as const };
+    case "2-h":
+      return pane === 1
+        ? { gridColumn: "1 / 2" as const, gridRow: "1 / 2" as const }
+        : { gridColumn: "1 / 2" as const, gridRow: "2 / 3" as const };
+    case "3-left-big":
+      if (pane === 1) return { gridColumn: "1 / 2" as const, gridRow: "1 / 3" as const };
+      if (pane === 2) return { gridColumn: "2 / 3" as const, gridRow: "1 / 2" as const };
+      return { gridColumn: "2 / 3" as const, gridRow: "2 / 3" as const };
+    case "3-right-big":
+      if (pane === 1) return { gridColumn: "1 / 2" as const, gridRow: "1 / 2" as const };
+      if (pane === 2) return { gridColumn: "1 / 2" as const, gridRow: "2 / 3" as const };
+      return { gridColumn: "2 / 3" as const, gridRow: "1 / 3" as const };
+    case "3-top-big":
+      if (pane === 1) return { gridColumn: "1 / 3" as const, gridRow: "1 / 2" as const };
+      if (pane === 2) return { gridColumn: "1 / 2" as const, gridRow: "2 / 3" as const };
+      return { gridColumn: "2 / 3" as const, gridRow: "2 / 3" as const };
+    case "3-bottom-big":
+      if (pane === 1) return { gridColumn: "1 / 2" as const, gridRow: "1 / 2" as const };
+      if (pane === 2) return { gridColumn: "2 / 3" as const, gridRow: "1 / 2" as const };
+      return { gridColumn: "1 / 3" as const, gridRow: "2 / 3" as const };
+    case "4":
+      if (pane === 1) return { gridColumn: "1 / 2" as const, gridRow: "1 / 2" as const };
+      if (pane === 2) return { gridColumn: "2 / 3" as const, gridRow: "1 / 2" as const };
+      if (pane === 3) return { gridColumn: "1 / 2" as const, gridRow: "2 / 3" as const };
+      return { gridColumn: "2 / 3" as const, gridRow: "2 / 3" as const };
+  }
+}
 
 export default function PaneGrid({
   sessions,
   activeSessionId,
+  paneLayout,
   onSelect,
   onClose,
   onRename,
@@ -33,16 +92,18 @@ export default function PaneGrid({
   const isDraggingColRef = useRef(false);
   const isDraggingRowRef = useRef(false);
 
+  const visiblePanes = useMemo(() => getVisiblePanes(paneLayout), [paneLayout]);
+
   const sessionsByPane = useMemo(() => {
     const map = new Map<SessionPane, Session[]>();
-    for (const pane of PANES) {
+    for (const pane of visiblePanes) {
       map.set(
         pane,
         sessions.filter((s) => (s.pane ?? 1) === pane)
       );
     }
     return map;
-  }, [sessions]);
+  }, [sessions, visiblePanes]);
 
   const handleColResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -58,22 +119,25 @@ export default function PaneGrid({
     document.body.style.userSelect = "none";
   }, []);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!gridRef.current) return;
-    const rect = gridRef.current.getBoundingClientRect();
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!gridRef.current) return;
+      const rect = gridRef.current.getBoundingClientRect();
 
-    if (isDraggingColRef.current) {
-      const x = e.clientX - rect.left;
-      const pct = Math.max(10, Math.min(90, (x / rect.width) * 100));
-      setColSize(pct);
-    }
+      if (isDraggingColRef.current) {
+        const x = e.clientX - rect.left;
+        const pct = Math.max(10, Math.min(90, (x / rect.width) * 100));
+        setColSize(pct);
+      }
 
-    if (isDraggingRowRef.current) {
-      const y = e.clientY - rect.top;
-      const pct = Math.max(10, Math.min(90, (y / rect.height) * 100));
-      setRowSize(pct);
-    }
-  }, []);
+      if (isDraggingRowRef.current) {
+        const y = e.clientY - rect.top;
+        const pct = Math.max(10, Math.min(90, (y / rect.height) * 100));
+        setRowSize(pct);
+      }
+    },
+    []
+  );
 
   const handleMouseUp = useCallback(() => {
     isDraggingColRef.current = false;
@@ -91,47 +155,78 @@ export default function PaneGrid({
     };
   }, [handleMouseMove, handleMouseUp]);
 
+  const gridStyle = getGridStyle(paneLayout, colSize, rowSize);
+  const showColHandle =
+    paneLayout === "2-v" ||
+    paneLayout === "3-left-big" ||
+    paneLayout === "3-right-big" ||
+    paneLayout === "3-top-big" ||
+    paneLayout === "3-bottom-big" ||
+    paneLayout === "4";
+  const showRowHandle =
+    paneLayout === "2-h" ||
+    paneLayout === "3-left-big" ||
+    paneLayout === "3-right-big" ||
+    paneLayout === "3-top-big" ||
+    paneLayout === "3-bottom-big" ||
+    paneLayout === "4";
+
+  let colHandleStyle: CSSProperties = { left: `${colSize}%` };
+  if (paneLayout === "3-top-big") {
+    colHandleStyle = { left: `${colSize}%`, top: `${rowSize}%`, bottom: 0 };
+  } else if (paneLayout === "3-bottom-big") {
+    colHandleStyle = { left: `${colSize}%`, top: 0, bottom: `${100 - rowSize}%` };
+  }
+
+  let rowHandleStyle: CSSProperties = { top: `${rowSize}%` };
+  if (paneLayout === "3-left-big") {
+    rowHandleStyle = { top: `${rowSize}%`, left: `${colSize}%`, right: 0 };
+  } else if (paneLayout === "3-right-big") {
+    rowHandleStyle = { top: `${rowSize}%`, left: 0, right: `${100 - colSize}%` };
+  }
+
   return (
-    <div
-      className="pane-grid"
-      ref={gridRef}
-      style={{
-        gridTemplateColumns: `${colSize}% ${100 - colSize}%`,
-        gridTemplateRows: `${rowSize}% ${100 - rowSize}%`,
-      }}
-    >
-      {PANES.map((pane) => (
-        <div key={pane} className="pane">
-          <TabBar
-            sessions={sessionsByPane.get(pane) ?? []}
-            activeId={activeSessionId}
-            activeView="terminal"
-            showSettingsTab={false}
-            pane={pane}
-            onSelect={onSelect}
-            onClose={onClose}
-            onRename={onRename}
-            onSelectSettings={() => {}}
-            onReorder={(fromIndex, toIndex) => onReorder(pane, fromIndex, toIndex)}
-            onMoveToPane={onMoveToPane}
-          />
-          <div className="pane-content">
-            <PaneContent pane={pane} sessions={sessionsByPane.get(pane) ?? []} activeSessionId={activeSessionId} />
+    <div className="pane-grid" ref={gridRef} style={gridStyle}>
+      {visiblePanes.map((pane) => {
+        const placement = getPanePlacement(pane, paneLayout);
+        return (
+          <div key={pane} className="pane" style={{ gridColumn: placement.gridColumn, gridRow: placement.gridRow }}>
+            <TabBar
+              sessions={sessionsByPane.get(pane) ?? []}
+              activeId={activeSessionId}
+              activeView="terminal"
+              showSettingsTab={false}
+              pane={pane}
+              visiblePanes={visiblePanes}
+              onSelect={onSelect}
+              onClose={onClose}
+              onRename={onRename}
+              onSelectSettings={() => {}}
+              onReorder={(fromIndex, toIndex) => onReorder(pane, fromIndex, toIndex)}
+              onMoveToPane={onMoveToPane}
+            />
+            <div className="pane-content">
+              <PaneContent pane={pane} sessions={sessionsByPane.get(pane) ?? []} activeSessionId={activeSessionId} />
+            </div>
           </div>
-        </div>
-      ))}
-      <div
-        className="pane-resize-handle pane-resize-handle--col"
-        style={{ left: `${colSize}%` }}
-        onMouseDown={handleColResizeStart}
-        title="拖拽调整列宽"
-      />
-      <div
-        className="pane-resize-handle pane-resize-handle--row"
-        style={{ top: `${rowSize}%` }}
-        onMouseDown={handleRowResizeStart}
-        title="拖拽调整行高"
-      />
+        );
+      })}
+      {showColHandle && (
+        <div
+          className="pane-resize-handle pane-resize-handle--col"
+          style={colHandleStyle}
+          onMouseDown={handleColResizeStart}
+          title="拖拽调整列宽"
+        />
+      )}
+      {showRowHandle && (
+        <div
+          className="pane-resize-handle pane-resize-handle--row"
+          style={rowHandleStyle}
+          onMouseDown={handleRowResizeStart}
+          title="拖拽调整行高"
+        />
+      )}
     </div>
   );
 }

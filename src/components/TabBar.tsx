@@ -17,6 +17,7 @@ interface TabBarProps {
   activeView: "terminal" | "settings";
   showSettingsTab: boolean;
   pane?: SessionPane;
+  visiblePanes?: SessionPane[];
   onSelect: (id: number) => void;
   onClose: (id: number) => void;
   onRename?: (id: number, name: string) => void;
@@ -32,6 +33,7 @@ export default function TabBar({
   activeView,
   showSettingsTab,
   pane,
+  visiblePanes,
   onSelect,
   onClose,
   onRename,
@@ -152,8 +154,8 @@ export default function TabBar({
   const renderTab = (session: Session, index: number) => {
     const paneItems: ContextMenuItem[] = [];
     if (onMoveToPane) {
-      const panes: SessionPane[] = [1, 2, 3, 4];
-      for (const targetPane of panes) {
+      const allowedPanes = visiblePanes ?? ([1, 2, 3, 4] as SessionPane[]);
+      for (const targetPane of allowedPanes) {
         if (targetPane === (session.pane ?? 1)) continue;
         paneItems.push({
           label: `移动到 Pane ${targetPane}`,

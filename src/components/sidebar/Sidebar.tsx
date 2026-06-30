@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { SidebarToolbar, SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
+import { PaneLayout } from "../../types/session";
 import "./Sidebar.css";
 
 const TOOLBAR_WIDTH = 48;
@@ -18,6 +19,8 @@ interface SidebarProps {
   onSidebarPanelChange: (panel: SidebarMenu | null) => void;
   activeSettingsCategory?: SettingsCategory;
   onSelectSettingsCategory?: (category: SettingsCategory) => void;
+  paneLayout: PaneLayout;
+  onPaneLayoutChange: (layout: PaneLayout) => void;
 }
 
 const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
@@ -25,6 +28,67 @@ const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
   { key: "shortcuts", label: "Shortcuts" },
   { key: "about", label: "About" },
 ];
+
+const LAYOUTS: { value: PaneLayout; label: string }[] = [
+  { value: "1", label: "1" },
+  { value: "2-v", label: "1 | 2" },
+  { value: "2-h", label: "1 / 2" },
+  { value: "3-left-big", label: "big left" },
+  { value: "3-right-big", label: "big right" },
+  { value: "3-top-big", label: "big top" },
+  { value: "3-bottom-big", label: "big bottom" },
+  { value: "4", label: "2×2" },
+];
+
+function LayoutPreview({ layout }: { layout: PaneLayout }) {
+  const boxes: { x: number; y: number; w: number; h: number }[] = [];
+  switch (layout) {
+    case "1":
+      boxes.push({ x: 2, y: 2, w: 20, h: 20 });
+      break;
+    case "2-v":
+      boxes.push({ x: 2, y: 2, w: 9, h: 20 });
+      boxes.push({ x: 13, y: 2, w: 9, h: 20 });
+      break;
+    case "2-h":
+      boxes.push({ x: 2, y: 2, w: 20, h: 9 });
+      boxes.push({ x: 2, y: 13, w: 20, h: 9 });
+      break;
+    case "3-left-big":
+      boxes.push({ x: 2, y: 2, w: 9, h: 20 });
+      boxes.push({ x: 13, y: 2, w: 9, h: 9 });
+      boxes.push({ x: 13, y: 13, w: 9, h: 9 });
+      break;
+    case "3-right-big":
+      boxes.push({ x: 2, y: 2, w: 9, h: 9 });
+      boxes.push({ x: 2, y: 13, w: 9, h: 9 });
+      boxes.push({ x: 13, y: 2, w: 9, h: 20 });
+      break;
+    case "3-top-big":
+      boxes.push({ x: 2, y: 2, w: 20, h: 9 });
+      boxes.push({ x: 2, y: 13, w: 9, h: 9 });
+      boxes.push({ x: 13, y: 13, w: 9, h: 9 });
+      break;
+    case "3-bottom-big":
+      boxes.push({ x: 2, y: 2, w: 9, h: 9 });
+      boxes.push({ x: 13, y: 2, w: 9, h: 9 });
+      boxes.push({ x: 2, y: 13, w: 20, h: 9 });
+      break;
+    case "4":
+      boxes.push({ x: 2, y: 2, w: 9, h: 9 });
+      boxes.push({ x: 13, y: 2, w: 9, h: 9 });
+      boxes.push({ x: 2, y: 13, w: 9, h: 9 });
+      boxes.push({ x: 13, y: 13, w: 9, h: 9 });
+      break;
+  }
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" className="layout-preview">
+      {boxes.map((box, i) => (
+        <rect key={i} x={box.x} y={box.y} width={box.w} height={box.h} rx="1" ry="1" />
+      ))}
+    </svg>
+  );
+}
 
 export default function Sidebar({
   onCreateSession,
@@ -34,11 +98,23 @@ export default function Sidebar({
   onSidebarPanelChange,
   activeSettingsCategory = "appearance",
   onSelectSettingsCategory,
+  paneLayout,
+  onPaneLayoutChange,
 }: SidebarProps) {
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
+  const [layoutPopoverOpen, setLayoutPopoverOpen] = useState(false);
 
   const handleMenuClick = (menu: SidebarMenu) => {
     onSidebarPanelChange(sidebarPanel === menu ? null : menu);
+  };
+
+  const handleLayoutClick = () => {
+    setLayoutPopoverOpen((prev) => !prev);
+  };
+
+  const handleSelectLayout = (layout: PaneLayout) => {
+    onPaneLayoutChange(layout);
+    setLayoutPopoverOpen(false);
   };
 
   const handleResize = useCallback((newWidth: number) => {
@@ -53,6 +129,8 @@ export default function Sidebar({
         activeMenu={sidebarPanel}
         onMenuClick={handleMenuClick}
         onToggleLogs={onToggleLogs}
+        layoutActive={layoutPopoverOpen}
+        onLayoutClick={handleLayoutClick}
       />
 
       {sidebarPanel === "chat" && (
@@ -75,6 +153,25 @@ export default function Sidebar({
               {category.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {layoutPopoverOpen && (
+        <div className="layout-popover">
+          <div className="layout-popover-title">Layout</div>
+          <div className="layout-options">
+            {LAYOUTS.map((layout) => (
+              <button
+                key={layout.value}
+                className={`layout-option ${paneLayout === layout.value ? "active" : ""}`}
+                onClick={() => handleSelectLayout(layout.value)}
+                title={layout.label}
+              >
+                <LayoutPreview layout={layout.value} />
+                <span className="layout-option-label">{layout.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

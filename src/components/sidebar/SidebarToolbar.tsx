@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ChatIcon, SettingsIcon, LogIcon } from "../icons/Icon";
+import { ChatIcon, SettingsIcon, LogIcon, LayoutIcon } from "../icons/Icon";
 
 export type SidebarMenu = "chat" | "settings";
 
@@ -7,12 +7,16 @@ interface SidebarToolbarProps {
   activeMenu: SidebarMenu | null;
   onMenuClick: (menu: SidebarMenu) => void;
   onToggleLogs: () => void;
+  layoutActive?: boolean;
+  onLayoutClick: () => void;
 }
 
 export function SidebarToolbar({
   activeMenu,
   onMenuClick,
   onToggleLogs,
+  layoutActive,
+  onLayoutClick,
 }: SidebarToolbarProps) {
   return (
     <div className="sidebar-toolbar">
@@ -33,6 +37,13 @@ export function SidebarToolbar({
         </button>
       </div>
       <div className="sidebar-section sidebar-section-bottom">
+        <button
+          className={`sidebar-btn ${layoutActive ? "active" : ""}`}
+          onClick={onLayoutClick}
+          title="Pane Layout"
+        >
+          <LayoutIcon />
+        </button>
         <button
           className={`sidebar-btn ${activeMenu === "settings" ? "active" : ""}`}
           onClick={() => onMenuClick("settings")}

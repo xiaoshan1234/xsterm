@@ -1,6 +1,7 @@
 import type { TmuxSessionConfig, SshTmuxSessionConfig } from "./tmux";
 
 export type SessionPane = 1 | 2 | 3 | 4;
+export type PaneLayout = "1" | "2-v" | "2-h" | "3-left-big" | "3-right-big" | "3-top-big" | "3-bottom-big" | "4";
 
 export interface Session {
   id: number;
