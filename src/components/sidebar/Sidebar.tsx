@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
+import { SavedWorkspace, Workspace } from "../../types/session";
 import { SidebarToolbar, SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
+import { WorkspaceManager } from "./WorkspaceManager";
 import "./Sidebar.css";
 
 const TOOLBAR_WIDTH = 48;
@@ -18,6 +20,10 @@ interface SidebarProps {
   onSidebarPanelChange: (panel: SidebarMenu | null) => void;
   activeSettingsCategory?: SettingsCategory;
   onSelectSettingsCategory?: (category: SettingsCategory) => void;
+  savedWorkspaces: SavedWorkspace[];
+  loadWorkspace: (id: string) => Promise<Workspace>;
+  deleteSavedWorkspace: (id: string) => void;
+  renameSavedWorkspace: (id: string, name: string) => void;
 }
 
 const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
@@ -34,6 +40,10 @@ export default function Sidebar({
   onSidebarPanelChange,
   activeSettingsCategory = "appearance",
   onSelectSettingsCategory,
+  savedWorkspaces,
+  loadWorkspace,
+  deleteSavedWorkspace,
+  renameSavedWorkspace,
 }: SidebarProps) {
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
 
@@ -56,11 +66,23 @@ export default function Sidebar({
       />
 
       {sidebarPanel === "chat" && (
-        <SessionManager
-          width={submenuWidth}
-          onCreateSession={onCreateSession}
-          onCreateSessionWithGroup={onCreateSessionWithGroup}
-        />
+        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
+          <SessionManager
+            onCreateSession={onCreateSession}
+            onCreateSessionWithGroup={onCreateSessionWithGroup}
+          />
+        </div>
+      )}
+
+      {sidebarPanel === "workspace" && (
+        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
+          <WorkspaceManager
+            savedWorkspaces={savedWorkspaces}
+            loadWorkspace={loadWorkspace}
+            deleteSavedWorkspace={deleteSavedWorkspace}
+            renameSavedWorkspace={renameSavedWorkspace}
+          />
+        </div>
       )}
 
       {sidebarPanel === "settings" && (

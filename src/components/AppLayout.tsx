@@ -4,12 +4,12 @@ import { PaneNode } from "../types/session";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
+import TabBar from "./TabBar";
 import { WorkspaceContainer } from "./WorkspaceContainer";
 import { EmptyState } from "./EmptyState";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import CommandSendPanel from "./CommandSendPanel";
-import TabBar from "./TabBar";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
 import "../styles/pane.css";
 
@@ -23,6 +23,7 @@ export default function AppLayout() {
     activeWorkspaceId,
     sessions,
     savedConfigs,
+    savedWorkspaces,
     setActiveWorkspace,
     closeWorkspace,
     saveWorkspace,
@@ -30,6 +31,9 @@ export default function AppLayout() {
     createSshSession,
     createTmuxSession,
     writeSession,
+    loadWorkspace,
+    deleteSavedWorkspace,
+    renameSavedWorkspace,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
@@ -37,7 +41,7 @@ export default function AppLayout() {
   const [sendPanelCollapsed, setSendPanelCollapsed] = useState(true);
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<"appearance" | "shortcuts" | "about">("appearance");
-  const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | null>(null);
+  const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | null>(null);
   const [saveWorkspaceId, setSaveWorkspaceId] = useState<string | null>(null);
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
@@ -135,7 +139,7 @@ export default function AppLayout() {
             setSidebarPanel(panel);
             if (panel === "settings") {
               setActiveView("settings");
-            } else if (panel === "chat") {
+            } else {
               setActiveView("terminal");
             }
           }}
@@ -145,6 +149,10 @@ export default function AppLayout() {
             setActiveView("settings");
             setSidebarPanel("settings");
           }}
+          savedWorkspaces={savedWorkspaces}
+          loadWorkspace={loadWorkspace}
+          deleteSavedWorkspace={deleteSavedWorkspace}
+          renameSavedWorkspace={renameSavedWorkspace}
         />
         <div className="main-area" ref={mainAreaRef}>
           {activeView === "settings" ? (
@@ -158,6 +166,7 @@ export default function AppLayout() {
             <>
               <TabBar
                 workspaces={workspaces}
+                sessions={sessions}
                 activeWorkspaceId={activeWorkspaceId}
                 onSelect={setActiveWorkspace}
                 onClose={closeWorkspace}

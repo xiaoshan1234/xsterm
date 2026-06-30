@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ChatIcon, SettingsIcon, LogIcon } from "../icons/Icon";
+import { ChatIcon, SettingsIcon, LogIcon, WorkspaceIcon } from "../icons/Icon";
 
-export type SidebarMenu = "chat" | "settings";
+export type SidebarMenu = "chat" | "settings" | "workspace";
 
 interface SidebarToolbarProps {
   activeMenu: SidebarMenu | null;
@@ -23,6 +23,13 @@ export function SidebarToolbar({
           title="Session Manager"
         >
           <ChatIcon />
+        </button>
+        <button
+          className={`sidebar-btn ${activeMenu === "workspace" ? "active" : ""}`}
+          onClick={() => onMenuClick("workspace")}
+          title="Workspaces"
+        >
+          <WorkspaceIcon />
         </button>
         <button
           className="sidebar-btn"
