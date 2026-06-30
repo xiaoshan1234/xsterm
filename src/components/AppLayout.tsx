@@ -1,13 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useSession } from "../contexts/SessionContext";
+import { PaneNode } from "../types/session";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
-import PaneGrid from "./PaneGrid";
+import { WorkspaceContainer } from "./WorkspaceContainer";
 import { EmptyState } from "./EmptyState";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import CommandSendPanel from "./CommandSendPanel";
+import TabBar from "./TabBar";
+import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
+import "../styles/pane.css";
 
 const DEFAULT_PANEL_HEIGHT = 140;
 const MIN_PANEL_HEIGHT = 80;
@@ -15,20 +19,17 @@ const MIN_TERMINAL_HEIGHT = 100;
 
 export default function AppLayout() {
   const {
+    workspaces,
+    activeWorkspaceId,
     sessions,
     savedConfigs,
-    activeSessionIds,
-    focusedPane,
-    paneLayout,
-    setPaneLayout,
+    setActiveWorkspace,
+    closeWorkspace,
+    saveWorkspace,
     createLocalSession,
     createSshSession,
     createTmuxSession,
-    closeSession,
-    renameSession,
     writeSession,
-    reorderSessionsInPane,
-    moveSessionToPane,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
@@ -37,10 +38,11 @@ export default function AppLayout() {
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<"appearance" | "shortcuts" | "about">("appearance");
   const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | null>(null);
+  const [saveWorkspaceId, setSaveWorkspaceId] = useState<string | null>(null);
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
 
-  const focusedActiveSessionId = activeSessionIds.get(focusedPane) ?? null;
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
   useAppShortcuts({
     onCreateSession: () => setShowCreateDialog(true),
@@ -59,9 +61,8 @@ export default function AppLayout() {
       if (!isDraggingRef.current || !mainAreaRef.current) return;
 
       const rect = mainAreaRef.current.getBoundingClientRect();
-      const tabBarHeight = 0; // TabBar is part of main-area flow
-      const availableHeight = rect.height - tabBarHeight;
-      const relativeYFromBottom = availableHeight - (e.clientY - rect.top - tabBarHeight);
+      const availableHeight = rect.height;
+      const relativeYFromBottom = availableHeight - (e.clientY - rect.top);
       const newHeight = Math.max(
         MIN_PANEL_HEIGHT,
         Math.min(availableHeight - MIN_TERMINAL_HEIGHT, relativeYFromBottom)
@@ -87,11 +88,39 @@ export default function AppLayout() {
     setSendPanelCollapsed(collapsed);
     if (!collapsed && mainAreaRef.current) {
       const rect = mainAreaRef.current.getBoundingClientRect();
-      const tabBarHeight = 0;
-      const availableHeight = rect.height - tabBarHeight;
+      const availableHeight = rect.height;
       setPanelHeight(Math.max(MIN_PANEL_HEIGHT, availableHeight * 0.25));
     }
   }, []);
+
+  const handleSaveWorkspace = useCallback(
+    (name: string) => {
+      if (saveWorkspaceId) {
+        saveWorkspace(saveWorkspaceId, name);
+        setSaveWorkspaceId(null);
+      }
+    },
+    [saveWorkspaceId, saveWorkspace]
+  );
+
+  const activeSessionId = activeWorkspace
+    ? (() => {
+        const findActiveSession = (node: typeof activeWorkspace.rootPane): number | null => {
+          if (node.type === "leaf") return node.sessionId ?? null;
+          for (const child of node.children ?? []) {
+            const found = findActiveSession(child);
+            if (found !== null) return found;
+          }
+          return null;
+        };
+        return activeWorkspace.activePaneId
+          ? (() => {
+              const node = findPane(activeWorkspace.rootPane, activeWorkspace.activePaneId);
+              return node?.sessionId ?? findActiveSession(activeWorkspace.rootPane);
+            })()
+          : findActiveSession(activeWorkspace.rootPane);
+      })()
+    : null;
 
   return (
     <div className="app-container">
@@ -116,27 +145,32 @@ export default function AppLayout() {
             setActiveView("settings");
             setSidebarPanel("settings");
           }}
-          paneLayout={paneLayout}
-          onPaneLayoutChange={setPaneLayout}
         />
         <div className="main-area" ref={mainAreaRef}>
           {activeView === "settings" ? (
             <SettingsView activeCategory={activeSettingsCategory} />
-          ) : sessions.length === 0 ? (
+          ) : workspaces.length === 0 ? (
             <EmptyState
               onCreateSession={() => setShowCreateDialog(true)}
               hasSavedConfigs={savedConfigs.length > 0}
             />
           ) : (
             <>
-              <PaneGrid
-                sessions={sessions}
-                paneLayout={paneLayout}
-                onClose={closeSession}
-                onRename={renameSession}
-                onReorder={reorderSessionsInPane}
-                onMoveToPane={moveSessionToPane}
+              <TabBar
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelect={setActiveWorkspace}
+                onClose={closeWorkspace}
+                onSave={(id) => setSaveWorkspaceId(id)}
               />
+              {activeWorkspace ? (
+                <WorkspaceContainer workspace={activeWorkspace} />
+              ) : (
+                <EmptyState
+                  onCreateSession={() => setShowCreateDialog(true)}
+                  hasSavedConfigs={savedConfigs.length > 0}
+                />
+              )}
               {!sendPanelCollapsed && (
                 <div
                   className="panel-resize-handle"
@@ -146,7 +180,7 @@ export default function AppLayout() {
               )}
               <CommandSendPanel
                 sessions={sessions}
-                activeSessionId={focusedActiveSessionId}
+                activeSessionId={activeSessionId}
                 writeSession={writeSession}
                 style={{ height: sendPanelCollapsed ? "auto" : panelHeight }}
                 onToggle={handleSendPanelToggle}
@@ -163,6 +197,23 @@ export default function AppLayout() {
         onCreateTmux={createTmuxSession}
         initialGroupId={createSessionGroupId}
       />
+      <SaveWorkspaceDialog
+        isOpen={saveWorkspaceId !== null}
+        onClose={() => setSaveWorkspaceId(null)}
+        onSave={handleSaveWorkspace}
+        defaultName={activeWorkspace?.name ?? "My Workspace"}
+      />
     </div>
   );
+}
+
+function findPane(root: PaneNode, id: string): PaneNode | null {
+  if (root.id === id) return root;
+  if (root.children) {
+    for (const child of root.children) {
+      const found = findPane(child, id);
+      if (found) return found;
+    }
+  }
+  return null;
 }

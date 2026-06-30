@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSession } from "../../contexts/SessionContext";
-import { SavedSessionConfig, SessionGroup } from "../../types/session";
+import { SavedSessionConfig, SessionGroup, SavedWorkspace } from "../../types/session";
 import { LocalSessionIcon, SshSessionIcon, TmuxSessionIcon, SshTmuxSessionIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
@@ -18,6 +18,7 @@ export function SessionManager({ width, onCreateSession, onCreateSessionWithGrou
   const {
     sessions,
     savedConfigs,
+    savedWorkspaces,
     groups,
     openFromConfig,
     removeConfig,
@@ -28,6 +29,9 @@ export function SessionManager({ width, onCreateSession, onCreateSessionWithGrou
     deleteGroup,
     updateConfig,
     moveConfigToGroup,
+    loadWorkspace,
+    deleteSavedWorkspace,
+    renameSavedWorkspace,
   } = useSession();
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
@@ -38,6 +42,8 @@ export function SessionManager({ width, onCreateSession, onCreateSessionWithGrou
   const [editingSession, setEditingSession] = useState<SavedSessionConfig | null>(null);
   const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
+  const [renamingWorkspace, setRenamingWorkspace] = useState<SavedWorkspace | null>(null);
+  const [renameWorkspaceValue, setRenameWorkspaceValue] = useState("");
 
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
@@ -119,6 +125,23 @@ export function SessionManager({ width, onCreateSession, onCreateSessionWithGrou
     setDragOverGroupId(null);
   };
 
+  const handleLoadWorkspace = (workspace: SavedWorkspace) => {
+    loadWorkspace(workspace.id).catch(console.error);
+  };
+
+  const handleStartRenameWorkspace = (workspace: SavedWorkspace) => {
+    setRenamingWorkspace(workspace);
+    setRenameWorkspaceValue(workspace.name);
+  };
+
+  const handleRenameWorkspaceSubmit = () => {
+    const trimmed = renameWorkspaceValue.trim();
+    if (renamingWorkspace && trimmed) {
+      renameSavedWorkspace(renamingWorkspace.id, trimmed);
+    }
+    setRenamingWorkspace(null);
+  };
+
   return (
     <div className="sidebar-submenu" style={{ width }}>
       <div className="submenu-header">Session Manager</div>
@@ -188,6 +211,29 @@ export function SessionManager({ width, onCreateSession, onCreateSessionWithGrou
           </div>
         ))}
       </div>
+
+      {savedWorkspaces.length > 0 && (
+        <>
+          <div className="submenu-header">Saved Workspaces</div>
+          <div className="session-history">
+            {savedWorkspaces.map((workspace) => (
+              <ContextMenu
+                key={workspace.id}
+                items={[
+                  { label: "Load", onClick: () => handleLoadWorkspace(workspace) },
+                  { label: "Rename", onClick: () => handleStartRenameWorkspace(workspace) },
+                  { label: "Delete", onClick: () => deleteSavedWorkspace(workspace.id), danger: true },
+                ]}
+              >
+                <div className="session-item" onDoubleClick={() => handleLoadWorkspace(workspace)}>
+                  <span className="session-item-name">{workspace.name}</span>
+                </div>
+              </ContextMenu>
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="session-actions">
         <button className="submenu-item" onClick={() => setShowNewGroupDialog(true)}>
           <PlusIcon size={14} />
@@ -223,6 +269,31 @@ export function SessionManager({ width, onCreateSession, onCreateSessionWithGrou
           />
         </FormField>
       </Dialog>
+
+      {renamingWorkspace && (
+        <Dialog
+          isOpen={true}
+          onClose={() => setRenamingWorkspace(null)}
+          title="Rename Workspace"
+          size="small"
+          footer={
+            <div className="dialog-footer-buttons">
+              <button className="btn btn--secondary" onClick={() => setRenamingWorkspace(null)}>Cancel</button>
+              <button className="btn btn--primary" onClick={handleRenameWorkspaceSubmit}>Rename</button>
+            </div>
+          }
+        >
+          <FormField label="Workspace Name">
+            <input
+              type="text"
+              value={renameWorkspaceValue}
+              onChange={(e) => setRenameWorkspaceValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleRenameWorkspaceSubmit()}
+              autoFocus
+            />
+          </FormField>
+        </Dialog>
+      )}
 
       {editingGroup && (
         <EditGroupDialog

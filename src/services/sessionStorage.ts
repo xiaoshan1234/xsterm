@@ -1,5 +1,5 @@
 import { load, Store } from "@tauri-apps/plugin-store";
-import { SavedSessionConfig, SessionGroup } from "../types/session";
+import { SavedSessionConfig, SavedWorkspace, SessionGroup } from "../types/session";
 
 interface GroupStore {
   groups: SessionGroup[];
@@ -55,5 +55,37 @@ export async function persistGroups(groupsData: GroupStore): Promise<void> {
     await store.save();
   } catch (e) {
     console.error("Failed to save groups:", e);
+  }
+}
+
+export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
+  try {
+    const store = await getStore();
+    return (await store.get<SavedWorkspace[]>("savedWorkspaces")) || [];
+  } catch (e) {
+    console.error("Failed to load workspaces:", e);
+    return [];
+  }
+}
+
+export async function persistWorkspaces(workspaces: SavedWorkspace[]): Promise<void> {
+  try {
+    const store = await getStore();
+    await store.set("savedWorkspaces", workspaces);
+    await store.save();
+  } catch (e) {
+    console.error("Failed to save workspaces:", e);
+  }
+}
+
+export async function deleteSavedWorkspace(id: string): Promise<void> {
+  try {
+    const store = await getStore();
+    const workspaces = (await store.get<SavedWorkspace[]>("savedWorkspaces")) || [];
+    const updated = workspaces.filter((w) => w.id !== id);
+    await store.set("savedWorkspaces", updated);
+    await store.save();
+  } catch (e) {
+    console.error("Failed to delete workspace:", e);
   }
 }

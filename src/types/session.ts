@@ -1,7 +1,29 @@
 import type { TmuxSessionConfig, SshTmuxSessionConfig } from "./tmux";
 
-export type SessionPane = 1 | 2 | 3 | 4;
-export type PaneLayout = "1" | "2-v" | "2-h" | "3-left-big" | "3-right-big" | "3-top-big" | "3-bottom-big" | "4";
+export type SplitDirection = "horizontal" | "vertical";
+
+export interface PaneNode {
+  id: string;
+  type: "leaf" | "split";
+  direction?: SplitDirection;
+  size: number;
+  children?: PaneNode[];
+  sessionId?: number;
+  configId?: string;
+}
+
+export interface SavedWorkspace {
+  id: string;
+  name: string;
+  rootPane: PaneNode;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  rootPane: PaneNode;
+  activePaneId: string | null;
+}
 
 export interface Session {
   id: number;
@@ -10,7 +32,6 @@ export interface Session {
   type: "local" | "ssh" | "tmux" | "ssh_tmux";
   is_connected: boolean;
   session_type: SessionType;
-  pane?: SessionPane;
 }
 
 export type SessionType =

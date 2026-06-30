@@ -8,7 +8,7 @@ export function useAppShortcuts({
   onCreateSession: () => void;
   onToggleLogs: () => void;
 }) {
-  const { sessions, activeSessionIds, focusedPane, setActiveSession, closeSession } = useSession();
+  const { workspaces, activeWorkspaceId, setActivePane, closeSession } = useSession();
 
   useShortcuts([
     { key: "n", ctrl: true, shift: true, handler: onCreateSession },
@@ -16,12 +16,15 @@ export function useAppShortcuts({
       key: "Tab",
       ctrl: true,
       handler: () => {
-        const paneSessions = sessions.filter((s) => (s.pane ?? 1) === focusedPane);
-        if (paneSessions.length <= 1) return;
-        const currentId = activeSessionIds.get(focusedPane) ?? null;
-        const currentIndex = paneSessions.findIndex((s) => s.id === currentId);
-        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % paneSessions.length : 0;
-        setActiveSession(focusedPane, paneSessions[nextIndex].id);
+        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+        if (!workspace) return;
+        const leafIds = collectLeafIds(workspace.rootPane);
+        if (leafIds.length <= 1) return;
+        const currentIndex = workspace.activePaneId
+          ? leafIds.indexOf(workspace.activePaneId)
+          : -1;
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % leafIds.length : 0;
+        setActivePane(workspace.id, leafIds[nextIndex]);
       },
     },
     {
@@ -29,23 +32,28 @@ export function useAppShortcuts({
       ctrl: true,
       shift: true,
       handler: () => {
-        const paneSessions = sessions.filter((s) => (s.pane ?? 1) === focusedPane);
-        if (paneSessions.length <= 1) return;
-        const currentId = activeSessionIds.get(focusedPane) ?? null;
-        const currentIndex = paneSessions.findIndex((s) => s.id === currentId);
+        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+        if (!workspace) return;
+        const leafIds = collectLeafIds(workspace.rootPane);
+        if (leafIds.length <= 1) return;
+        const currentIndex = workspace.activePaneId
+          ? leafIds.indexOf(workspace.activePaneId)
+          : -1;
         const prevIndex = currentIndex >= 0
-          ? (currentIndex - 1 + paneSessions.length) % paneSessions.length
-          : paneSessions.length - 1;
-        setActiveSession(focusedPane, paneSessions[prevIndex].id);
+          ? (currentIndex - 1 + leafIds.length) % leafIds.length
+          : leafIds.length - 1;
+        setActivePane(workspace.id, leafIds[prevIndex]);
       },
     },
     {
       key: "w",
       ctrl: true,
       handler: () => {
-        const activeId = activeSessionIds.get(focusedPane);
-        if (activeId !== undefined) {
-          closeSession(activeId);
+        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+        if (!workspace || !workspace.activePaneId) return;
+        const pane = findPane(workspace.rootPane, workspace.activePaneId);
+        if (pane?.sessionId !== undefined) {
+          closeSession(pane.sessionId);
         }
       },
     },
@@ -55,4 +63,28 @@ export function useAppShortcuts({
       handler: onToggleLogs,
     },
   ]);
+}
+
+function collectLeafIds(root: import("../types/session").PaneNode): string[] {
+  const ids: string[] = [];
+  const traverse = (node: import("../types/session").PaneNode) => {
+    if (node.type === "leaf") {
+      ids.push(node.id);
+      return;
+    }
+    node.children?.forEach(traverse);
+  };
+  traverse(root);
+  return ids;
+}
+
+function findPane(root: import("../types/session").PaneNode, id: string): import("../types/session").PaneNode | null {
+  if (root.id === id) return root;
+  if (root.children) {
+    for (const child of root.children) {
+      const found = findPane(child, id);
+      if (found) return found;
+    }
+  }
+  return null;
 }

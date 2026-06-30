@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { load } from "@tauri-apps/plugin-store";
 import { listen } from "@tauri-apps/api/event";
-import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup, SessionPane, PaneLayout } from "../types/session";
+import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup, Workspace, SavedWorkspace, PaneNode, SplitDirection } from "../types/session";
 import { TmuxState, TmuxControlEvent, SshTmuxSessionConfig, TmuxSessionConfig } from "../types/tmux";
 import * as sessionService from "../services/sessionService";
 import * as tmuxService from "../services/tmuxService";
@@ -12,35 +12,94 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-export function getVisiblePanes(layout: PaneLayout): SessionPane[] {
-  switch (layout) {
-    case "1":
-      return [1];
-    case "2-v":
-    case "2-h":
-      return [1, 2];
-    case "3-left-big":
-    case "3-right-big":
-    case "3-top-big":
-    case "3-bottom-big":
-      return [1, 2, 3];
-    case "4":
-      return [1, 2, 3, 4];
-    default:
-      return [1];
+function createLeafPane(size: number, sessionId?: number, configId?: string): PaneNode {
+  return {
+    id: generateId(),
+    type: "leaf",
+    size,
+    sessionId,
+    configId,
+  };
+}
+
+function createSplitNode(direction: SplitDirection, first: PaneNode, second: PaneNode): PaneNode {
+  return {
+    id: generateId(),
+    type: "split",
+    direction,
+    size: first.size + second.size,
+    children: [first, second],
+  };
+}
+
+function findPaneNode(root: PaneNode, id: string): PaneNode | null {
+  if (root.id === id) return root;
+  if (root.children) {
+    for (const child of root.children) {
+      const found = findPaneNode(child, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function mapPaneTree(root: PaneNode, mapper: (node: PaneNode) => PaneNode): PaneNode {
+  const mapped = mapper(root);
+  if (mapped.children) {
+    return { ...mapped, children: mapped.children.map((child) => mapPaneTree(child, mapper)) };
+  }
+  return mapped;
+}
+
+function forEachPane(root: PaneNode, callback: (node: PaneNode) => void): void {
+  callback(root);
+  if (root.children) {
+    root.children.forEach((child) => forEachPane(child, callback));
   }
 }
 
-function getAdjacentSessionId(sessions: Session[], closedId: number, pane: SessionPane): number | null {
-  const paneSessions = sessions.filter((s) => (s.pane ?? 1) === pane);
-  const index = paneSessions.findIndex((s) => s.id === closedId);
-  if (index < 0) return null;
-  if (index > 0) return paneSessions[index - 1].id;
-  const next = paneSessions[index + 1];
-  return next ? next.id : null;
+function getLeafPaneIds(root: PaneNode): string[] {
+  const ids: string[] = [];
+  forEachPane(root, (node) => {
+    if (node.type === "leaf") {
+      ids.push(node.id);
+    }
+  });
+  return ids;
 }
 
-function buildFrontendSession(info: sessionService.SessionInfo, configId: string, type: Session["type"], pane: SessionPane = 1): Session {
+function removeSessionFromPaneTree(root: PaneNode, sessionId: number): PaneNode {
+  return mapPaneTree(root, (node) => {
+    if (node.type === "leaf" && node.sessionId === sessionId) {
+      return { ...node, sessionId: undefined };
+    }
+    return node;
+  });
+}
+
+function collapseEmptySplits(root: PaneNode): PaneNode {
+  if (root.type === "leaf") return root;
+  const collapsedChildren = root.children?.map(collapseEmptySplits) ?? [];
+  if (collapsedChildren.every((child) => child.type === "leaf" && child.sessionId === undefined)) {
+    return createLeafPane(root.size);
+  }
+  return { ...root, children: collapsedChildren };
+}
+
+function removeSessionAndCollapse(root: PaneNode, sessionId: number): PaneNode {
+  return collapseEmptySplits(removeSessionFromPaneTree(root, sessionId));
+}
+
+function replacePaneNode(root: PaneNode, targetId: string, replacement: PaneNode): PaneNode {
+  if (root.id === targetId) return replacement;
+  if (!root.children) return root;
+  return {
+    ...root,
+    children: root.children.map((child) => replacePaneNode(child, targetId, replacement)),
+  };
+}
+
+function buildFrontendSession(info: sessionService.SessionInfo, configId: string, type: Session["type"]): Session {
   return {
     id: info.id,
     configId,
@@ -48,19 +107,16 @@ function buildFrontendSession(info: sessionService.SessionInfo, configId: string
     type,
     is_connected: info.is_connected,
     session_type: info.session_type,
-    pane,
   };
 }
 
 interface SessionContextType {
   sessions: Session[];
   savedConfigs: SavedSessionConfig[];
-  activeSessionIds: Map<SessionPane, number>;
-  focusedPane: SessionPane;
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  savedWorkspaces: SavedWorkspace[];
   groups: SessionGroup[];
-  sessionPanes: Map<number, SessionPane>;
-  paneLayout: PaneLayout;
-  setPaneLayout: (layout: PaneLayout) => void;
   globalLocalEcho: boolean;
   setGlobalLocalEcho: (enabled: boolean) => void;
   getEffectiveLocalEcho: (sessionId: number) => boolean;
@@ -74,15 +130,11 @@ interface SessionContextType {
   removeFromGroup: (groupId: number, configId: string) => void;
   moveConfigToGroup: (configId: string, groupId: number | null) => void;
   renameSession: (id: number, name: string) => void;
-  reorderSessionsInPane: (pane: SessionPane, fromIndex: number, toIndex: number) => void;
   createGroup: (name: string) => void;
   deleteGroup: (id: number) => void;
   renameGroup: (id: number, name: string) => void;
   updateConfig: (config: SavedSessionConfig) => void;
   toggleGroup: (id: number) => void;
-  setActiveSession: (pane: SessionPane, id: number | null) => void;
-  setFocusedPane: (pane: SessionPane) => void;
-  moveSessionToPane: (sessionId: number, pane: SessionPane) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
   writeTmuxCommand: (id: number, command: string) => Promise<void>;
@@ -96,6 +148,18 @@ interface SessionContextType {
   createTmuxWindow: (sessionId: number, name?: string) => Promise<void>;
   closeTmuxWindow: (sessionId: number, windowId: string) => Promise<void>;
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
+  createWorkspaceFromSession: (sessionId: number, name?: string) => Workspace;
+  createWorkspaceFromSavedConfig: (configId: string, name?: string) => Promise<Workspace>;
+  createSessionFromSavedConfig: (configId: string) => Promise<Session>;
+  splitPane: (workspaceId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;
+  updateWorkspacePaneTree: (workspaceId: string, updater: (root: PaneNode) => PaneNode) => void;
+  setActivePane: (workspaceId: string, paneId: string) => void;
+  setActiveWorkspace: (workspaceId: string) => void;
+  saveWorkspace: (workspaceId: string, name: string) => void;
+  loadWorkspace: (savedWorkspaceId: string) => Promise<Workspace>;
+  closeWorkspace: (workspaceId: string) => void;
+  deleteSavedWorkspace: (id: string) => void;
+  renameSavedWorkspace: (id: string, name: string) => void;
 }
 
 const SessionContext = createContext<SessionContextType | null>(null);
@@ -103,12 +167,11 @@ const SessionContext = createContext<SessionContextType | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [savedConfigs, setSavedConfigs] = useState<SavedSessionConfig[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionIds, setActiveSessionIds] = useState<Map<SessionPane, number>>(new Map());
-  const [focusedPane, setFocusedPaneState] = useState<SessionPane>(1);
-  const [sessionPanes, setSessionPanes] = useState<Map<number, SessionPane>>(new Map());
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [savedWorkspaces, setSavedWorkspaces] = useState<SavedWorkspace[]>([]);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [nextGroupId, setNextGroupId] = useState(1);
-  const [paneLayout, setPaneLayoutState] = useState<PaneLayout>("1");
   const [globalLocalEcho, setGlobalLocalEcho] = useState(false);
   const [sessionLocalEchoOverrides] = useState<Map<number, boolean>>(new Map());
   const [tmuxState, setTmuxState] = useState<TmuxState>({
@@ -118,31 +181,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
   const [activeTmuxWindowIds, setActiveTmuxWindowIds] = useState<Map<number, string>>(new Map());
   const sessionsRef = useRef(sessions);
-  const activeSessionIdsRef = useRef(activeSessionIds);
-  const sessionPanesRef = useRef(sessionPanes);
+  const workspacesRef = useRef(workspaces);
   const establishingSessionsRef = useRef<Set<number>>(new Set());
+  const tmuxListTimeoutsRef = useRef<Map<number, number>>(new Map());
 
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
 
   useEffect(() => {
-    activeSessionIdsRef.current = activeSessionIds;
-  }, [activeSessionIds]);
-
-  useEffect(() => {
-    sessionPanesRef.current = sessionPanes;
-  }, [sessionPanes]);
+    workspacesRef.current = workspaces;
+  }, [workspaces]);
 
   useEffect(() => {
     const init = async () => {
-      const [configs, savedGroups] = await Promise.all([
+      const [configs, savedGroups, workspacesData] = await Promise.all([
         sessionStorage.loadSavedConfigs(),
         sessionStorage.loadSavedGroups(),
+        sessionStorage.loadSavedWorkspaces(),
       ]);
       setSavedConfigs(configs);
       setGroups(savedGroups.groups);
       setNextGroupId(savedGroups.nextGroupId);
+      setSavedWorkspaces(workspacesData);
 
       try {
         const store = await load("settings.json", { autoSave: true, defaults: {} });
@@ -183,205 +244,211 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return globalLocalEcho;
   }, [sessionLocalEchoOverrides, globalLocalEcho]);
 
-  const setActiveSession = useCallback((pane: SessionPane, id: number | null) => {
-    setActiveSessionIds((prev) => {
-      const next = new Map(prev);
-      if (id === null) {
-        next.delete(pane);
-      } else {
-        next.set(pane, id);
-      }
-      return next;
-    });
+  const persistSavedWorkspaces = useCallback((workspacesData: SavedWorkspace[]) => {
+    sessionStorage.persistWorkspaces(workspacesData);
   }, []);
 
-  const setFocusedPane = useCallback((pane: SessionPane) => {
-    setFocusedPaneState(pane);
-  }, []);
+  const openFromConfigInternal = useCallback(async (configId: string): Promise<Session> => {
+    const config = savedConfigs.find((c) => c.id === configId);
+    if (!config) throw new Error("Config not found");
 
-  const updateActiveSessionAfterClose = useCallback((closedSessionId: number, pane: SessionPane, currentSessions: Session[]) => {
-    setActiveSessionIds((prev) => {
-      const next = new Map(prev);
-      if (next.get(pane) === closedSessionId) {
-        const adjacent = getAdjacentSessionId(currentSessions, closedSessionId, pane);
-        if (adjacent !== null) {
-          next.set(pane, adjacent);
-        } else {
-          next.delete(pane);
-        }
-      }
-      return next;
-    });
-  }, []);
+    let info: sessionService.SessionInfo;
+    let type: Session["type"];
 
-  const moveSessionToPane = useCallback((sessionId: number, pane: SessionPane) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) return;
-    const sourcePane = session.pane ?? 1;
-    if (sourcePane === pane) return;
+    if (config.type === "local" && config.localConfig) {
+      info = await sessionService.createLocal(config.localConfig);
+      type = "local";
+    } else if (config.type === "ssh" && config.sshConfig) {
+      info = await sessionService.createSsh(config.sshConfig);
+      type = "ssh";
+    } else if (config.type === "tmux" && config.tmuxConfig) {
+      info = await tmuxService.createTmux(config.tmuxConfig);
+      type = "tmux";
+      establishingSessionsRef.current.add(info.id);
+    } else if (config.type === "ssh_tmux" && config.sshTmuxConfig) {
+      info = await tmuxService.createSshTmuxSession(config.sshTmuxConfig);
+      type = "ssh_tmux";
+      establishingSessionsRef.current.add(info.id);
+    } else {
+      throw new Error("Invalid config");
+    }
 
-    setSessionPanes((prev) => {
-      const next = new Map(prev);
-      next.set(sessionId, pane);
-      return next;
-    });
-    setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, pane } : s)));
+    const session = buildFrontendSession(info, configId, type);
+    setSessions((prev) => [...prev, session]);
 
-    setActiveSessionIds((prev) => {
-      const next = new Map(prev);
-      if (next.get(sourcePane) === sessionId) {
-        const adjacent = getAdjacentSessionId(sessions, sessionId, sourcePane);
-        if (adjacent !== null) {
-          next.set(sourcePane, adjacent);
-        } else {
-          next.delete(sourcePane);
-        }
-      }
-      next.set(pane, sessionId);
-      return next;
-    });
+    if (type === "tmux" || type === "ssh_tmux") {
+      const timeoutId = setTimeout(() => {
+        tmuxListTimeoutsRef.current.delete(session.id);
+        tmuxService.listSessions(session.id).catch(console.error);
+      }, 500);
+      tmuxListTimeoutsRef.current.set(session.id, timeoutId);
+    }
 
-    setFocusedPane(pane);
-  }, [sessions]);
+    return session;
+  }, [savedConfigs]);
 
-  const setPaneLayout = useCallback((layout: PaneLayout) => {
-    const visiblePanes = getVisiblePanes(layout);
-    const firstVisible = visiblePanes[0];
-    setPaneLayoutState(layout);
-    setSessions((prev) =>
-      prev.map((s) => {
-        const currentPane = s.pane ?? 1;
-        return visiblePanes.includes(currentPane) ? s : { ...s, pane: firstVisible };
-      })
-    );
-    setSessionPanes((prev) => {
-      const next = new Map(prev);
-      for (const [id, pane] of next) {
-        if (!visiblePanes.includes(pane)) {
-          next.set(id, firstVisible);
-        }
-      }
-      return next;
-    });
-    setActiveSessionIds((prev) => {
-      const next = new Map(prev);
-      for (const pane of prev.keys()) {
-        if (!visiblePanes.includes(pane)) {
-          next.delete(pane);
-        }
-      }
-      for (const pane of visiblePanes) {
-        const activeId = next.get(pane);
-        const activeSession = sessions.find((s) => s.id === activeId && (s.pane ?? 1) === pane);
-        if (!activeSession) {
-          const firstInPane = sessions.find((s) => (s.pane ?? 1) === pane);
-          if (firstInPane) {
-            next.set(pane, firstInPane.id);
-          } else {
-            next.delete(pane);
-          }
-        }
-      }
-      return next;
-    });
-    setFocusedPaneState((current) => (visiblePanes.includes(current) ? current : firstVisible));
-  }, [sessions]);
-
-  useEffect(() => {
-    const cleanups: (() => void)[] = [];
-
-    listen<number>("session-closed", (event) => {
-      const sessionId = event.payload;
-      establishingSessionsRef.current.delete(sessionId);
-      const closedSession = sessionsRef.current.find((s) => s.id === sessionId);
-      const closedPane = closedSession ? (closedSession.pane ?? 1) : 1;
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      setSessionPanes((prev) => {
-        const next = new Map(prev);
-        next.delete(sessionId);
-        return next;
-      });
-      updateActiveSessionAfterClose(sessionId, closedPane, sessionsRef.current);
-      setTmuxState((prev) => {
-        const next = cloneTmuxState(prev);
-        for (const [_, state] of next.sessions) {
-          if (state.windows.some((wid) => next.windows.get(wid)?.sessionId === String(sessionId))) {
-            next.sessions.delete(state.id);
-          }
-        }
-        for (const [wid, window] of next.windows) {
-          if (window.sessionId === String(sessionId)) {
-            next.windows.delete(wid);
-          }
-        }
-        for (const [pid, pane] of next.panes) {
-          if (pane.sessionId === String(sessionId)) {
-            next.panes.delete(pid);
-          }
-        }
-        return next;
-      });
-    }).then((fn) => cleanups.push(fn));
-
-    listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", () => {
-      // Output bytes are delivered directly to Terminal.tsx listeners per pane.
-      // No React state update is needed here.
-    }).then((fn) => cleanups.push(fn));
-
-    listen<[number, string]>("tmux-request-sync", (event) => {
-      const [sessionId, command] = event.payload;
-      tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
-    }).then((fn) => cleanups.push(fn));
-
-    listen<[number, TmuxControlEvent]>("tmux-control-event", (event) => {
-      const [sessionId, controlEvent] = event.payload;
-      const sessionIdKey = sessionId;
-      setTmuxState((prev) => applyTmuxControlEvent(prev, String(sessionId), controlEvent));
-      if (controlEvent.type === "SessionChanged") {
-        establishingSessionsRef.current.delete(sessionId);
-        tmuxService
-          .listWindows(sessionId, controlEvent.sessionId)
-          .catch(console.error);
-      }
-      if (controlEvent.type === "WindowClosed") {
-        setActiveTmuxWindowIds((prev) => {
-          const next = new Map(prev);
-          const activeId = next.get(sessionIdKey);
-          if (activeId === controlEvent.windowId) {
-            next.delete(sessionIdKey);
-          }
-          return next;
-        });
-      }
-      if (controlEvent.type === "WindowActivated") {
-        setActiveTmuxWindowIds((prev) => {
-          const next = new Map(prev);
-          next.set(sessionIdKey, controlEvent.windowId);
-          return next;
-        });
-      }
-      if (controlEvent.type === "CommandError") {
-        if (establishingSessionsRef.current.has(sessionId)) {
-          establishingSessionsRef.current.delete(sessionId);
-          sessionService.closeSession(sessionId).catch(console.error);
-          const failedSession = sessionsRef.current.find((s) => s.id === sessionId);
-          const failedPane = failedSession ? (failedSession.pane ?? 1) : 1;
-          setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-          updateActiveSessionAfterClose(sessionId, failedPane, sessionsRef.current);
-          setSessionPanes((prev) => {
-            const next = new Map(prev);
-            next.delete(sessionId);
-            return next;
-          });
-          alert(`Tmux session failed: ${controlEvent.message}`);
-        }
-      }
-    }).then((fn) => cleanups.push(fn));
-
-    return () => {
-      cleanups.forEach((cleanup) => cleanup());
+  const createWorkspaceFromSession = useCallback((sessionId: number, name?: string): Workspace => {
+    const session = sessionsRef.current.find((s) => s.id === sessionId);
+    const workspace: Workspace = {
+      id: generateId(),
+      name: name ?? session?.name ?? "Workspace",
+      rootPane: createLeafPane(100, sessionId, session?.configId),
+      activePaneId: null,
     };
-  }, [updateActiveSessionAfterClose]);
+    workspace.activePaneId = workspace.rootPane.id;
+    setWorkspaces((prev) => [...prev, workspace]);
+    setActiveWorkspaceId(workspace.id);
+    return workspace;
+  }, []);
+
+  const createSessionFromSavedConfig = useCallback(async (configId: string): Promise<Session> => {
+    return openFromConfigInternal(configId);
+  }, [openFromConfigInternal]);
+
+  const createWorkspaceFromSavedConfig = useCallback(async (configId: string, name?: string): Promise<Workspace> => {
+    const config = savedConfigs.find((c) => c.id === configId);
+    if (!config) throw new Error("Config not found");
+
+    const session = await createSessionFromSavedConfig(configId);
+    return createWorkspaceFromSession(session.id, name ?? config.name);
+  }, [savedConfigs, createSessionFromSavedConfig, createWorkspaceFromSession]);
+
+  const setActiveWorkspace = useCallback((workspaceId: string) => {
+    setActiveWorkspaceId(workspaceId);
+  }, []);
+
+  const setActivePane = useCallback((workspaceId: string, paneId: string) => {
+    setWorkspaces((prev) =>
+      prev.map((workspace) =>
+        workspace.id === workspaceId ? { ...workspace, activePaneId: paneId } : workspace
+      )
+    );
+  }, []);
+
+  const splitPane = useCallback((workspaceId: string, paneId: string, direction: SplitDirection, sessionId?: number) => {
+    setWorkspaces((prev) => {
+      const workspace = prev.find((w) => w.id === workspaceId);
+      if (!workspace) return prev;
+
+      const target = findPaneNode(workspace.rootPane, paneId);
+      if (!target || target.type !== "leaf") return prev;
+
+      const session = sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
+      const halfSize = target.size / 2;
+      const originalPane: PaneNode = { ...target, size: halfSize };
+      const newPane = createLeafPane(halfSize, sessionId, session?.configId);
+      const splitNode = createSplitNode(direction, originalPane, newPane);
+      const newRoot = replacePaneNode(workspace.rootPane, paneId, splitNode);
+
+      return prev.map((w) =>
+        w.id === workspaceId
+          ? { ...workspace, rootPane: newRoot, activePaneId: newPane.id }
+          : w
+      );
+    });
+  }, []);
+
+  const updateWorkspacePaneTree = useCallback((workspaceId: string, updater: (root: PaneNode) => PaneNode) => {
+    setWorkspaces((prev) =>
+      prev.map((workspace) =>
+        workspace.id === workspaceId ? { ...workspace, rootPane: updater(workspace.rootPane) } : workspace
+      )
+    );
+  }, []);
+
+  const closeWorkspace = useCallback((workspaceId: string) => {
+    setWorkspaces((prev) => prev.filter((w) => w.id !== workspaceId));
+    setActiveWorkspaceId((current) => {
+      if (current !== workspaceId) return current;
+      const currentWorkspaces = workspacesRef.current;
+      const closedIndex = currentWorkspaces.findIndex((w) => w.id === workspaceId);
+      const remaining = currentWorkspaces.filter((w) => w.id !== workspaceId);
+      const fallback = remaining[closedIndex - 1] ?? remaining[closedIndex] ?? remaining[remaining.length - 1] ?? null;
+      return fallback?.id ?? null;
+    });
+  }, []);
+
+  const saveWorkspace = useCallback((workspaceId: string, name: string) => {
+    const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+
+    const savedWorkspace: SavedWorkspace = {
+      id: generateId(),
+      name: name.trim() || workspace.name,
+      rootPane: structuredClone(workspace.rootPane),
+    };
+
+    setSavedWorkspaces((prev) => {
+      const updated = [...prev, savedWorkspace];
+      persistSavedWorkspaces(updated);
+      return updated;
+    });
+  }, [persistSavedWorkspaces]);
+
+  const loadWorkspace = useCallback(async (savedWorkspaceId: string): Promise<Workspace> => {
+    const saved = savedWorkspaces.find((w) => w.id === savedWorkspaceId);
+    if (!saved) throw new Error("Saved workspace not found");
+
+    const configIdToSession = new Map<string, Session>();
+
+    const buildTree = async (node: PaneNode): Promise<PaneNode> => {
+      if (node.type === "leaf") {
+        if (node.sessionId !== undefined) {
+          return { ...node, id: generateId() };
+        }
+        const configId = node.configId;
+        if (configId) {
+          let session = configIdToSession.get(configId);
+          if (!session) {
+            try {
+              session = await openFromConfigInternal(configId);
+              configIdToSession.set(configId, session);
+            } catch (e) {
+              console.error("Failed to recreate session for workspace:", e);
+            }
+          }
+          return createLeafPane(node.size, session?.id, configId);
+        }
+        return { ...createLeafPane(node.size), id: generateId() };
+      }
+      const children = await Promise.all((node.children ?? []).map((child) => buildTree(child)));
+      return {
+        id: generateId(),
+        type: "split",
+        direction: node.direction,
+        size: node.size,
+        children,
+      };
+    };
+
+    const rootPane = await buildTree(saved.rootPane);
+    const workspace: Workspace = {
+      id: generateId(),
+      name: saved.name,
+      rootPane,
+      activePaneId: getLeafPaneIds(rootPane)[0] ?? null,
+    };
+
+    setWorkspaces((prev) => [...prev, workspace]);
+    setActiveWorkspaceId(workspace.id);
+    return workspace;
+  }, [savedWorkspaces, openFromConfigInternal]);
+
+  const deleteSavedWorkspace = useCallback((id: string) => {
+    setSavedWorkspaces((prev) => {
+      const updated = prev.filter((w) => w.id !== id);
+      persistSavedWorkspaces(updated);
+      return updated;
+    });
+  }, [persistSavedWorkspaces]);
+
+  const renameSavedWorkspace = useCallback((id: string, name: string) => {
+    setSavedWorkspaces((prev) => {
+      const updated = prev.map((w) => (w.id === id ? { ...w, name } : w));
+      persistSavedWorkspaces(updated);
+      return updated;
+    });
+  }, [persistSavedWorkspaces]);
 
   const updateConfigs = useCallback((updater: (prev: SavedSessionConfig[]) => SavedSessionConfig[]) => {
     setSavedConfigs((prev) => {
@@ -404,21 +471,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       type: Session["type"],
       create: () => Promise<sessionService.SessionInfo>,
       config: LocalSessionConfig | SSHSessionConfig | TmuxSessionConfig | SshTmuxSessionConfig,
-      save: boolean,
-      pane: SessionPane = getVisiblePanes(paneLayout)[0]
+      save: boolean
     ): Promise<Session> => {
       const configId = generateId();
       const info = await create();
-      const session = buildFrontendSession(info, configId, type, pane);
+      const session = buildFrontendSession(info, configId, type);
 
       setSessions((prev) => [...prev, session]);
-      setSessionPanes((prev) => {
-        const next = new Map(prev);
-        next.set(session.id, pane);
-        return next;
-      });
-      setActiveSession(pane, session.id);
-      setFocusedPane(pane);
 
       if (save) {
         const savedConfig: SavedSessionConfig =
@@ -432,9 +491,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         updateConfigs((prev) => [...prev, savedConfig]);
       }
 
+      createWorkspaceFromSession(session.id, session.name);
       return session;
     },
-    [updateConfigs, setActiveSession, setFocusedPane, paneLayout]
+    [updateConfigs, createWorkspaceFromSession]
   );
 
   const createLocalSession = useCallback(
@@ -463,15 +523,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         : createAndActivateSession(
             "tmux",
             () => tmuxService.createTmux(config.tmux),
-            config,
+            config.tmux,
             save
           ));
 
       establishingSessionsRef.current.add(session.id);
 
-      setTimeout(() => {
+      const existingTimeout = tmuxListTimeoutsRef.current.get(session.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      const timeoutId = setTimeout(() => {
+        tmuxListTimeoutsRef.current.delete(session.id);
         tmuxService.listSessions(session.id).catch(console.error);
       }, 500);
+      tmuxListTimeoutsRef.current.set(session.id, timeoutId);
 
       return session;
     },
@@ -480,104 +547,53 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const openFromConfig = useCallback(
     async (configId: string): Promise<Session> => {
-      const config = savedConfigs.find((c) => c.id === configId);
-      if (!config) throw new Error("Config not found");
-      const defaultPane = getVisiblePanes(paneLayout)[0];
-
-      if (config.type === "local" && config.localConfig) {
-        const info = await sessionService.createLocal(config.localConfig);
-        const session = buildFrontendSession(info, configId, "local", defaultPane);
-        setSessions((prev) => [...prev, session]);
-        setSessionPanes((prev) => {
-          const next = new Map(prev);
-          next.set(session.id, defaultPane);
-          return next;
-        });
-        setActiveSession(defaultPane, session.id);
-        setFocusedPane(defaultPane);
-        return session;
-      }
-
-      if (config.type === "ssh" && config.sshConfig) {
-        const info = await sessionService.createSsh(config.sshConfig);
-        const session = buildFrontendSession(info, configId, "ssh", defaultPane);
-        setSessions((prev) => [...prev, session]);
-        setSessionPanes((prev) => {
-          const next = new Map(prev);
-          next.set(session.id, defaultPane);
-          return next;
-        });
-        setActiveSession(defaultPane, session.id);
-        setFocusedPane(defaultPane);
-        return session;
-      }
-
-      if (config.type === "tmux" && config.tmuxConfig) {
-        const info = await tmuxService.createTmux(config.tmuxConfig);
-        const session = buildFrontendSession(info, configId, "tmux", defaultPane);
-        establishingSessionsRef.current.add(session.id);
-        setSessions((prev) => [...prev, session]);
-        setSessionPanes((prev) => {
-          const next = new Map(prev);
-          next.set(session.id, defaultPane);
-          return next;
-        });
-        setActiveSession(defaultPane, session.id);
-        setFocusedPane(defaultPane);
-        return session;
-      }
-
-      if (config.type === "ssh_tmux" && config.sshTmuxConfig) {
-        const info = await tmuxService.createSshTmuxSession(config.sshTmuxConfig);
-        const session = buildFrontendSession(info, configId, "ssh_tmux", defaultPane);
-        establishingSessionsRef.current.add(session.id);
-        setSessions((prev) => [...prev, session]);
-        setSessionPanes((prev) => {
-          const next = new Map(prev);
-          next.set(session.id, defaultPane);
-          return next;
-        });
-        setActiveSession(defaultPane, session.id);
-        setFocusedPane(defaultPane);
-        return session;
-      }
-
-      throw new Error("Invalid config");
+      const session = await openFromConfigInternal(configId);
+      createWorkspaceFromSession(session.id, session.name);
+      return session;
     },
-    [savedConfigs, setActiveSession, setFocusedPane, paneLayout]
+    [openFromConfigInternal, createWorkspaceFromSession]
   );
 
   const removeConfig = useCallback(
     (configId: string) => {
       updateConfigs((prev) => prev.filter((c) => c.id !== configId));
       updateGroups((prev) => prev.map((g) => ({ ...g, configIds: g.configIds.filter((id) => id !== configId) })));
-      const session = sessions.find((s) => s.configId === configId);
+      const session = sessionsRef.current.find((s) => s.configId === configId);
       if (session) {
         sessionService.closeSession(session.id).catch(console.error);
         setSessions((prev) => prev.filter((s) => s.configId !== configId));
-        setSessionPanes((prev) => {
-          const next = new Map(prev);
-          next.delete(session.id);
-          return next;
-        });
-        updateActiveSessionAfterClose(session.id, session.pane ?? 1, sessions);
+        setWorkspaces((prev) =>
+          prev.map((workspace) => {
+            const newRoot = removeSessionAndCollapse(workspace.rootPane, session.id);
+            const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
+              ? workspace.activePaneId
+              : (getLeafPaneIds(newRoot)[0] ?? null);
+            return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
+          })
+        );
       }
     },
-    [updateConfigs, updateGroups, sessions, updateActiveSessionAfterClose]
+    [updateConfigs, updateGroups]
   );
 
   const closeSession = useCallback(async (id: number): Promise<void> => {
     await sessionService.closeSession(id);
-    const session = sessions.find((s) => s.id === id);
-    const pane = session?.pane ?? 1;
+    const timeoutId = tmuxListTimeoutsRef.current.get(id);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+      tmuxListTimeoutsRef.current.delete(id);
+    }
     setSessions((prev) => prev.filter((s) => s.id !== id));
-    setSessionPanes((prev) => {
-      const next = new Map(prev);
-      next.delete(id);
-      return next;
-    });
-    updateActiveSessionAfterClose(id, pane, sessions);
-  }, [sessions, updateActiveSessionAfterClose]);
+    setWorkspaces((prev) =>
+      prev.map((workspace) => {
+        const newRoot = removeSessionAndCollapse(workspace.rootPane, id);
+        const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
+          ? workspace.activePaneId
+          : (getLeafPaneIds(newRoot)[0] ?? null);
+        return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
+      })
+    );
+  }, []);
 
   const renameSession = useCallback(
     (id: number, name: string) => {
@@ -589,29 +605,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     [updateConfigs, sessions]
   );
-
-  const reorderSessionsInPane = useCallback((pane: SessionPane, fromIndex: number, toIndex: number) => {
-    const paneSessions = sessions.filter((s) => (s.pane ?? 1) === pane);
-    if (fromIndex < 0 || fromIndex >= paneSessions.length || toIndex < 0 || toIndex > paneSessions.length || fromIndex === toIndex) {
-      return;
-    }
-    let adjustedTo = toIndex;
-    if (adjustedTo > fromIndex) {
-      adjustedTo -= 1;
-    }
-    const movedSession = paneSessions[fromIndex];
-    const orderedPaneIds = paneSessions.map((s) => s.id);
-    orderedPaneIds.splice(fromIndex, 1);
-    orderedPaneIds.splice(adjustedTo, 0, movedSession.id);
-
-    setSessions((prev) => {
-      const otherSessions = prev.filter((s) => (s.pane ?? 1) !== pane);
-      const reorderedPaneSessions = orderedPaneIds
-        .map((id) => prev.find((s) => s.id === id))
-        .filter((s): s is Session => Boolean(s));
-      return [...otherSessions, ...reorderedPaneSessions];
-    });
-  }, [sessions]);
 
   const createGroup = useCallback(
     (name: string) => {
@@ -761,17 +754,134 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const unlisteners: (() => void)[] = [];
+
+    (async () => {
+      const unlistenSessionClosed = await listen<number>("session-closed", (event) => {
+        const sessionId = event.payload;
+        const timeoutId = tmuxListTimeoutsRef.current.get(sessionId);
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+          tmuxListTimeoutsRef.current.delete(sessionId);
+        }
+        establishingSessionsRef.current.delete(sessionId);
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        setWorkspaces((prev) =>
+          prev.map((workspace) => {
+            const newRoot = removeSessionAndCollapse(workspace.rootPane, sessionId);
+            const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
+              ? workspace.activePaneId
+              : (getLeafPaneIds(newRoot)[0] ?? null);
+            return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
+          })
+        );
+        setTmuxState((prev) => {
+          const next = cloneTmuxState(prev);
+          for (const [_, state] of next.sessions) {
+            if (state.windows.some((wid) => next.windows.get(wid)?.sessionId === String(sessionId))) {
+              next.sessions.delete(state.id);
+            }
+          }
+          for (const [wid, window] of next.windows) {
+            if (window.sessionId === String(sessionId)) {
+              next.windows.delete(wid);
+            }
+          }
+          for (const [pid, pane] of next.panes) {
+            if (pane.sessionId === String(sessionId)) {
+              next.panes.delete(pid);
+            }
+          }
+          return next;
+        });
+      });
+      if (!cancelled) unlisteners.push(unlistenSessionClosed);
+      else unlistenSessionClosed();
+
+      const unlistenTmuxPaneOutput = await listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", () => {
+        // Output bytes are delivered directly to Terminal.tsx listeners per pane.
+        // No React state update is needed here.
+      });
+      if (!cancelled) unlisteners.push(unlistenTmuxPaneOutput);
+      else unlistenTmuxPaneOutput();
+
+      const unlistenTmuxRequestSync = await listen<[number, string]>("tmux-request-sync", (event) => {
+        const [sessionId, command] = event.payload;
+        tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
+      });
+      if (!cancelled) unlisteners.push(unlistenTmuxRequestSync);
+      else unlistenTmuxRequestSync();
+
+      const unlistenTmuxControlEvent = await listen<[number, TmuxControlEvent]>("tmux-control-event", (event) => {
+        const [sessionId, controlEvent] = event.payload;
+        const sessionIdKey = sessionId;
+        setTmuxState((prev) => applyTmuxControlEvent(prev, String(sessionId), controlEvent));
+        if (controlEvent.type === "SessionChanged") {
+          establishingSessionsRef.current.delete(sessionId);
+          tmuxService
+            .listWindows(sessionId, controlEvent.sessionId)
+            .catch(console.error);
+        }
+        if (controlEvent.type === "WindowClosed") {
+          setActiveTmuxWindowIds((prev) => {
+            const next = new Map(prev);
+            const activeId = next.get(sessionIdKey);
+            if (activeId === controlEvent.windowId) {
+              next.delete(sessionIdKey);
+            }
+            return next;
+          });
+        }
+        if (controlEvent.type === "WindowActivated") {
+          setActiveTmuxWindowIds((prev) => {
+            const next = new Map(prev);
+            next.set(sessionIdKey, controlEvent.windowId);
+            return next;
+          });
+        }
+        if (controlEvent.type === "CommandError") {
+          if (establishingSessionsRef.current.has(sessionId)) {
+            establishingSessionsRef.current.delete(sessionId);
+            sessionService.closeSession(sessionId).catch(console.error);
+            setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+            setWorkspaces((prev) =>
+              prev.map((workspace) => {
+                const newRoot = removeSessionAndCollapse(workspace.rootPane, sessionId);
+                const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
+                  ? workspace.activePaneId
+                  : (getLeafPaneIds(newRoot)[0] ?? null);
+                return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
+              })
+            );
+            alert(`Tmux session failed: ${controlEvent.message}`);
+          }
+        }
+      });
+      if (!cancelled) unlisteners.push(unlistenTmuxControlEvent);
+      else unlistenTmuxControlEvent();
+    })();
+
+    return () => {
+      cancelled = true;
+      unlisteners.forEach((cleanup) => cleanup());
+      for (const timeoutId of tmuxListTimeoutsRef.current.values()) {
+        clearTimeout(timeoutId);
+      }
+      tmuxListTimeoutsRef.current.clear();
+    };
+  }, []);
+
   return (
     <SessionContext.Provider
       value={{
         sessions,
         savedConfigs,
-        activeSessionIds,
-        focusedPane,
+        workspaces,
+        activeWorkspaceId,
+        savedWorkspaces,
         groups,
-        sessionPanes,
-        paneLayout,
-        setPaneLayout,
         globalLocalEcho,
         setGlobalLocalEcho: setGlobalLocalEchoPersisted,
         getEffectiveLocalEcho,
@@ -785,15 +895,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         removeFromGroup,
         moveConfigToGroup,
         renameSession,
-        reorderSessionsInPane,
         createGroup,
         deleteGroup,
         renameGroup,
         updateConfig,
         toggleGroup,
-        setActiveSession,
-        setFocusedPane,
-        moveSessionToPane,
         writeSession,
         resizeSession,
         writeTmuxCommand,
@@ -807,6 +913,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         createTmuxWindow,
         closeTmuxWindow,
         closeTmuxPane,
+        createWorkspaceFromSession,
+        createWorkspaceFromSavedConfig,
+        createSessionFromSavedConfig,
+        splitPane,
+        updateWorkspacePaneTree,
+        setActivePane,
+        setActiveWorkspace,
+        saveWorkspace,
+        loadWorkspace,
+        closeWorkspace,
+        deleteSavedWorkspace,
+        renameSavedWorkspace,
       }}
     >
       {children}

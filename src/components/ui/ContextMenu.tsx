@@ -1,4 +1,12 @@
-import { useState, useEffect, useRef, ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  ReactNode,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import "./ContextMenu.css";
 
 export interface ContextMenuItem {
@@ -7,25 +15,53 @@ export interface ContextMenuItem {
   danger?: boolean;
 }
 
+export interface ContextMenuRef {
+  open: (x: number, y: number) => void;
+  close: () => void;
+}
+
 interface ContextMenuProps {
   items: ContextMenuItem[];
   children: ReactNode;
   onOpen?: () => void;
 }
 
-export function ContextMenu({ items, children, onOpen }: ContextMenuProps) {
+export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function ContextMenu(
+  { items, children, onOpen },
+  ref
+) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const openMenu = useCallback(
+    (x: number, y: number) => {
+      const safeX = Math.min(Math.max(x, 0), window.innerWidth - 180);
+      const safeY = Math.min(Math.max(y, 0), window.innerHeight - items.length * 36 - 16);
+      setPosition({ x: safeX, y: safeY });
+      setIsOpen(true);
+      onOpen?.();
+    },
+    [items.length, onOpen]
+  );
+
+  const closeMenu = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: openMenu,
+      close: closeMenu,
+    }),
+    [openMenu, closeMenu]
+  );
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const x = Math.min(e.clientX, window.innerWidth - 180);
-    const y = Math.min(e.clientY, window.innerHeight - items.length * 36 - 16);
-    setPosition({ x, y });
-    setIsOpen(true);
-    onOpen?.();
+    openMenu(e.clientX, e.clientY);
   };
 
   const handleItemClick = (item: ContextMenuItem) => {
@@ -79,4 +115,4 @@ export function ContextMenu({ items, children, onOpen }: ContextMenuProps) {
       )}
     </>
   );
-}
+});

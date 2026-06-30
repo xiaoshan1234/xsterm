@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
@@ -6,7 +6,6 @@ import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { uploadImageToSshSession } from "../services/sessionService";
 import { getClipboardImages } from "../utils/clipboard";
-import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
 import "@xterm/xterm/css/xterm.css";
 
 function decodeOutput(data: number[]): string {
@@ -22,28 +21,35 @@ interface TerminalProps {
   sessionId: number;
   sessionType?: "local" | "ssh";
   paneId?: string;
+  isActive?: boolean;
+  onFocus?: () => void;
 }
 
-export default function Terminal({ sessionId, sessionType, paneId }: TerminalProps) {
+export interface TerminalRef {
+  selectAll: () => void;
+  copySelection: () => Promise<void>;
+}
+
+const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
+  { sessionId, sessionType, paneId, isActive = true, onFocus },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initDoneRef = useRef(false);
-  const { sessions, activeSessionIds, focusedPane, setFocusedPane, writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, splitTmuxPane, getEffectiveLocalEcho } = useSession();
+  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, getEffectiveLocalEcho } = useSession();
   const { currentTheme } = useTheme();
   const localEchoEnabled = getEffectiveLocalEcho(sessionId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
   const lastDataRef = useRef<{ text: string; time: number } | null>(null);
 
-  const session = sessions.find((s) => s.id === sessionId);
-  const pane = session?.pane ?? 1;
-  const isFocused = focusedPane === pane && activeSessionIds.get(pane) === sessionId;
+  const isFocusedRef = useRef(isActive);
 
-  const isFocusedRef = useRef(isFocused);
   useEffect(() => {
-    isFocusedRef.current = isFocused;
-  }, [isFocused]);
+    isFocusedRef.current = isActive;
+  }, [isActive]);
 
   useEffect(() => {
     localEchoEnabledRef.current = localEchoEnabled;
@@ -62,10 +68,6 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     resizeTmuxPaneRef.current = resizeTmuxPane;
     captureTmuxPaneRef.current = captureTmuxPane;
   }, [writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane]);
-
-  const handlePaneFocus = useCallback(() => {
-    setFocusedPane(pane);
-  }, [setFocusedPane, pane]);
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
@@ -93,33 +95,6 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     },
     [sessionId, sessionType, paneId]
   );
-
-  const contextMenuItems: ContextMenuItem[] = [
-    {
-      label: "全选 (Select All)",
-      onClick: () => {
-        xtermRef.current?.selectAll();
-      },
-    },
-    {
-      label: "复制 (Copy)",
-      onClick: async () => {
-        const selection = xtermRef.current?.getSelection();
-        if (selection) {
-          await navigator.clipboard.writeText(selection).catch(() => {});
-        }
-      },
-    },
-  ];
-
-  if (paneId) {
-    contextMenuItems.push({
-      label: "水平拆分 (Split H)",
-      onClick: () => {
-        splitTmuxPane(sessionId, paneId, "h");
-      },
-    });
-  }
 
   useEffect(() => {
     const container = containerRef.current;
@@ -300,23 +275,39 @@ export default function Terminal({ sessionId, sessionType, paneId }: TerminalPro
     };
   }, [sessionId, paneId, handlePaste, currentTheme]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      selectAll: () => {
+        xtermRef.current?.selectAll();
+      },
+      copySelection: async () => {
+        const selection = xtermRef.current?.getSelection();
+        if (selection) {
+          await navigator.clipboard.writeText(selection).catch(() => {});
+        }
+      },
+    }),
+    []
+  );
+
   useEffect(() => {
     const xterm = xtermRef.current;
     if (!xterm) return;
-    if (isFocused) {
+    if (isActive) {
       xterm.focus();
     } else {
       xterm.blur();
     }
-  }, [isFocused]);
+  }, [isActive]);
 
   return (
-    <ContextMenu items={contextMenuItems}>
-      <div
-        ref={containerRef}
-        style={{ width: "100%", height: "100%" }}
-        onMouseDown={handlePaneFocus}
-      />
-    </ContextMenu>
+    <div
+      ref={containerRef}
+      style={{ width: "100%", height: "100%" }}
+      onMouseDown={onFocus}
+    />
   );
-}
+});
+
+export default Terminal;
