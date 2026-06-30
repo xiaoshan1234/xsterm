@@ -31,6 +31,8 @@
   position: relative;
   min-height: 0;
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-resize-handle {
@@ -46,16 +48,16 @@
 }
 
 .terminal-pane {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   display: none;
+  flex-direction: column;
 }
 
 .terminal-pane--active {
   display: flex;
-  flex-direction: column;
 }
 
 .terminal-pane--active:not(.tmux-pane) > * {
@@ -87,4 +89,93 @@
   justify-content: center;
   height: 100%;
   color: var(--text-secondary);
+}
+
+.pane-grid {
+  display: grid;
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--bg-primary);
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.pane:nth-child(2) {
+  border-right: none;
+}
+
+.pane:nth-child(3) {
+  border-bottom: none;
+}
+
+.pane:nth-child(4) {
+  border-right: none;
+  border-bottom: none;
+}
+
+.pane .tab-bar {
+  flex-shrink: 0;
+}
+
+.pane-content {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.pane-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  gap: 8px;
+}
+
+.pane-empty-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pane-resize-handle {
+  position: absolute;
+  background: var(--border-color);
+  transition: background 0.15s;
+  z-index: 10;
+}
+
+.pane-resize-handle:hover {
+  background: var(--accent);
+}
+
+.pane-resize-handle--col {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 6px;
+  cursor: col-resize;
+  transform: translateX(-50%);
+}
+
+.pane-resize-handle--row {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  cursor: row-resize;
+  transform: translateY(-50%);
 }

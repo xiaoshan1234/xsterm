@@ -1,5 +1,7 @@
 import type { TmuxSessionConfig, SshTmuxSessionConfig } from "./tmux";
 
+export type SessionPane = 1 | 2 | 3 | 4;
+
 export interface Session {
   id: number;
   configId: string;
@@ -7,6 +9,7 @@ export interface Session {
   type: "local" | "ssh" | "tmux" | "ssh_tmux";
   is_connected: boolean;
   session_type: SessionType;
+  pane?: SessionPane;
 }
 
 export type SessionType =

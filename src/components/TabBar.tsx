@@ -1,5 +1,5 @@
 import { MouseEvent, useState, useRef, useMemo, DragEvent, Fragment } from "react";
-import { Session } from "../types/session";
+import { Session, SessionPane } from "../types/session";
 import {
   LocalSessionIcon,
   SshSessionIcon,
@@ -8,6 +8,7 @@ import {
   CloseIcon,
   SettingsIcon,
 } from "./icons/Icon";
+import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
 import "./TabBar.css";
 
 interface TabBarProps {
@@ -15,12 +16,14 @@ interface TabBarProps {
   activeId: number | null;
   activeView: "terminal" | "settings";
   showSettingsTab: boolean;
+  pane?: SessionPane;
   onSelect: (id: number) => void;
   onClose: (id: number) => void;
   onRename?: (id: number, name: string) => void;
   onSelectSettings: () => void;
   onCloseSettings?: () => void;
   onReorder?: (fromIndex: number, toIndex: number) => void;
+  onMoveToPane?: (sessionId: number, pane: SessionPane) => void;
 }
 
 export default function TabBar({
@@ -28,12 +31,14 @@ export default function TabBar({
   activeId,
   activeView,
   showSettingsTab,
+  pane,
   onSelect,
   onClose,
   onRename,
   onSelectSettings,
   onCloseSettings,
   onReorder,
+  onMoveToPane,
 }: TabBarProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -144,66 +149,90 @@ export default function TabBar({
     setDragOverIndex(null);
   };
 
-  return (
-    <div className="tab-bar" onDragOver={handleDragOver} onDrop={handleDrop}>
-      {sessions.map((session, index) => (
-        <Fragment key={session.id}>
-          {dragOverIndex === index && draggedId !== null && (
-            <div className="tab-drop-indicator" />
+  const renderTab = (session: Session, index: number) => {
+    const paneItems: ContextMenuItem[] = [];
+    if (onMoveToPane) {
+      const panes: SessionPane[] = [1, 2, 3, 4];
+      for (const targetPane of panes) {
+        if (targetPane === (session.pane ?? 1)) continue;
+        paneItems.push({
+          label: `移动到 Pane ${targetPane}`,
+          onClick: () => onMoveToPane(session.id, targetPane),
+        });
+      }
+    }
+
+    const tab = (
+      <div
+        ref={(el) => {
+          tabRefs.current[index] = el;
+        }}
+        className={`tab ${session.id === activeId ? "active" : ""} ${
+          session.id === draggedId ? "dragging" : ""
+        }`}
+        draggable={onReorder !== undefined}
+        onClick={() => onSelect(session.id)}
+        onMouseDown={(e) => handleMiddleClick(e, session.id)}
+        onDoubleClick={() => handleDoubleClick(session)}
+        onDragStart={(e) => handleDragStart(e, session)}
+        onDragEnd={handleDragEnd}
+      >
+        <span className="tab-icon">
+          {session.type === "local" ? (
+            <LocalSessionIcon size={14} />
+          ) : session.type === "ssh" ? (
+            <SshSessionIcon size={14} />
+          ) : session.type === "tmux" ? (
+            <TmuxSessionIcon size={14} />
+          ) : (
+            <SshTmuxSessionIcon size={14} />
           )}
-          <div
-            ref={(el) => {
-              tabRefs.current[index] = el;
-            }}
-            className={`tab ${session.id === activeId ? "active" : ""} ${
-              session.id === draggedId ? "dragging" : ""
-            }`}
-            draggable={onReorder !== undefined}
-            onClick={() => onSelect(session.id)}
-            onMouseDown={(e) => handleMiddleClick(e, session.id)}
-            onDoubleClick={() => handleDoubleClick(session)}
-            onDragStart={(e) => handleDragStart(e, session)}
-            onDragEnd={handleDragEnd}
-          >
-            <span className="tab-icon">
-              {session.type === "local" ? (
-                <LocalSessionIcon size={14} />
-              ) : session.type === "ssh" ? (
-                <SshSessionIcon size={14} />
-              ) : session.type === "tmux" ? (
-                <TmuxSessionIcon size={14} />
-              ) : (
-                <SshTmuxSessionIcon size={14} />
-              )}
-            </span>
-            {editingId === session.id ? (
-              <input
-                type="text"
-                className="tab-title-input"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={() => handleEditSubmit(session.id)}
-                onKeyDown={(e) => handleEditKeyDown(e, session.id)}
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="tab-title">{displayNames.get(session.id) ?? session.name}</span>
-            )}
-            {!session.is_connected && <span className="tab-disconnected">!</span>}
-            <button
-              className="tab-close"
-              draggable={false}
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose(session.id);
-              }}
-            >
-              <CloseIcon size={12} />
-            </button>
-          </div>
-        </Fragment>
-      ))}
+        </span>
+        {editingId === session.id ? (
+          <input
+            type="text"
+            className="tab-title-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => handleEditSubmit(session.id)}
+            onKeyDown={(e) => handleEditKeyDown(e, session.id)}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="tab-title">{displayNames.get(session.id) ?? session.name}</span>
+        )}
+        {!session.is_connected && <span className="tab-disconnected">!</span>}
+        <button
+          className="tab-close"
+          draggable={false}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose(session.id);
+          }}
+        >
+          <CloseIcon size={12} />
+        </button>
+      </div>
+    );
+
+    return (
+      <Fragment key={session.id}>
+        {dragOverIndex === index && draggedId !== null && (
+          <div className="tab-drop-indicator" />
+        )}
+        {paneItems.length > 0 ? (
+          <ContextMenu items={paneItems}>{tab}</ContextMenu>
+        ) : (
+          tab
+        )}
+      </Fragment>
+    );
+  };
+
+  return (
+    <div className="tab-bar" data-pane={pane} onDragOver={handleDragOver} onDrop={handleDrop}>
+      {sessions.map((session, index) => renderTab(session, index))}
       {dragOverIndex === sessions.length && draggedId !== null && (
         <div className="tab-drop-indicator" />
       )}
