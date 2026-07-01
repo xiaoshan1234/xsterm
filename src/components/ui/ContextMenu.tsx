@@ -25,10 +25,11 @@ interface ContextMenuProps {
   items: ContextMenuItem[];
   children: ReactNode;
   onOpen?: () => void;
+  className?: string;
 }
 
 export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function ContextMenu(
-  { items, children, onOpen },
+  { items, children, onOpen, className },
   ref
 ) {
   const [isOpen, setIsOpen] = useState(false);
@@ -96,7 +97,7 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
 
   return (
     <>
-      <div onContextMenu={handleContextMenu}>{children}</div>
+      <div onContextMenu={handleContextMenu} className={className}>{children}</div>
       {isOpen && (
         <div
           ref={menuRef}

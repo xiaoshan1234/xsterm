@@ -167,13 +167,12 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
 
   return (
     <>
-      <div className="pane-leaf">
-        <ContextMenu ref={contextMenuRef} items={contextMenuItems}>
-          <div
-            className={`workspace-pane ${isActive ? "workspace-pane--active" : ""}`}
-            onMouseDown={onActivate}
-            onContextMenuCapture={handleContextMenuCapture}
-          >
+      <ContextMenu ref={contextMenuRef} items={contextMenuItems} className="pane-leaf">
+        <div
+          className={`workspace-pane ${isActive ? "workspace-pane--active" : ""}`}
+          onMouseDown={onActivate}
+          onContextMenuCapture={handleContextMenuCapture}
+        >
             {session ? (
               session.type === "tmux" || session.type === "ssh_tmux" ? (
                 <div className="workspace-pane-content" onMouseDown={onActivate}>
@@ -199,7 +198,6 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
             )}
           </div>
         </ContextMenu>
-      </div>
       <SelectSessionDialog
         isOpen={showSessionDialog}
         onClose={() => {
