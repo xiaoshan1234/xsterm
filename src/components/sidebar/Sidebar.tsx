@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { SavedWorkspace, Workspace } from "../../types/session";
 import { SidebarToolbar, SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
@@ -46,6 +46,21 @@ export default function Sidebar({
   renameSavedWorkspace,
 }: SidebarProps) {
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
+  const dragHandlersRef = useRef<
+    { move: (e: MouseEvent) => void; up: () => void } | null
+  >(null);
+
+  useEffect(() => {
+    return () => {
+      if (dragHandlersRef.current) {
+        document.removeEventListener("mousemove", dragHandlersRef.current.move);
+        document.removeEventListener("mouseup", dragHandlersRef.current.up);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        dragHandlersRef.current = null;
+      }
+    };
+  }, []);
 
   const handleMenuClick = (menu: SidebarMenu) => {
     onSidebarPanelChange(sidebarPanel === menu ? null : menu);
@@ -121,8 +136,10 @@ export default function Sidebar({
               document.removeEventListener("mouseup", handleMouseUp);
               document.body.style.cursor = "";
               document.body.style.userSelect = "";
+              dragHandlersRef.current = null;
             };
 
+            dragHandlersRef.current = { move: handleMouseMove, up: handleMouseUp };
             document.addEventListener("mousemove", handleMouseMove);
             document.addEventListener("mouseup", handleMouseUp);
           }}

@@ -25,9 +25,14 @@ export default function NavBar({ onMenuAction }: NavBarProps) {
     updateState();
 
     let unlisten: (() => void) | undefined;
-    appWindow.onResized?.(() => updateState()).then((fn) => {
-      unlisten = fn;
-    });
+    appWindow
+      .onResized(() => updateState())
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {
+        // ignore when running outside Tauri
+      });
 
     return () => {
       unlisten?.();

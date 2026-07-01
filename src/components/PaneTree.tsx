@@ -63,6 +63,9 @@ function SplitNode({
   const children = node.children ?? [];
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
+  const dragHandlersRef = useRef<
+    { move: (e: MouseEvent) => void; up: () => void } | null
+  >(null);
 
   const handleResizeStart = useCallback(
     (e: ReactMouseEvent, childIndex: number) => {
@@ -109,8 +112,10 @@ function SplitNode({
         document.body.style.userSelect = "";
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        dragHandlersRef.current = null;
       };
 
+      dragHandlersRef.current = { move: handleMouseMove, up: handleMouseUp };
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     },
@@ -122,6 +127,11 @@ function SplitNode({
       isDraggingRef.current = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      if (dragHandlersRef.current) {
+        window.removeEventListener("mousemove", dragHandlersRef.current.move);
+        window.removeEventListener("mouseup", dragHandlersRef.current.up);
+        dragHandlersRef.current = null;
+      }
     };
   }, []);
 

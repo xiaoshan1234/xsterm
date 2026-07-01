@@ -20,17 +20,19 @@ interface TmuxLayoutGridProps {
 export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLayoutGridProps) {
   const cells = parseTmuxLayout(layout);
   const paneMap = new Map(panes.map((p) => [p.id, p]));
-  console.log("TmuxLayoutGrid cells:", cells.length, "paneIds:", cells.map((c) => c.paneId).join(","));
 
   return (
     <div className="tmux-layout-grid" style={{ position: "relative", width: "100%", height: "100%" }}>
       {cells
         .filter((cell) => cell.paneId && paneMap.has(cell.paneId))
         .map((cell) => {
-          const pane = paneMap.get(cell.paneId!);
+          const paneId = cell.paneId;
+          if (!paneId) return null;
+          const pane = paneMap.get(paneId);
+          if (!pane) return null;
           return (
             <div
-              key={cell.paneId}
+              key={paneId}
               className="tmux-layout-cell"
               style={{
                 position: "absolute",
@@ -42,13 +44,13 @@ export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLa
             >
               <div className="tmux-pane-header">
                 <span className="tmux-pane-title">
-                  {pane?.inCopyMode && <span className="tmux-copy-mode-indicator">[COPY] </span>}
-                  {pane?.title || cell.paneId}
+                  {pane.inCopyMode && <span className="tmux-copy-mode-indicator">[COPY] </span>}
+                  {pane.title || paneId}
                 </span>
                 {onClosePane && (
                   <button
                     className="tmux-pane-close"
-                    onClick={() => onClosePane(cell.paneId!)}
+                    onClick={() => onClosePane(paneId)}
                     title="Close pane"
                   >
                     ×

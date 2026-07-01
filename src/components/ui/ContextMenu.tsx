@@ -10,6 +10,7 @@ import {
 import "./ContextMenu.css";
 
 export interface ContextMenuItem {
+  id?: string;
   label: string;
   onClick: () => void;
   danger?: boolean;
@@ -104,7 +105,7 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
         >
           {items.map((item, index) => (
             <button
-              key={index}
+              key={item.id ?? item.label ?? index}
               className={`context-menu-item ${item.danger ? "context-menu-item--danger" : ""}`}
               onClick={() => handleItemClick(item)}
             >

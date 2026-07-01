@@ -4,12 +4,37 @@ import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { TerminalTheme } from "../types/theme";
 import { uploadImageToSshSession } from "../services/sessionService";
 import { getClipboardImages } from "../utils/clipboard";
 import "@xterm/xterm/css/xterm.css";
 
 function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
+}
+
+function themeToXtermTheme(theme: TerminalTheme) {
+  return {
+    foreground: theme.foreground,
+    background: theme.background,
+    cursor: theme.cursor,
+    black: theme.black,
+    red: theme.red,
+    green: theme.green,
+    yellow: theme.yellow,
+    blue: theme.blue,
+    magenta: theme.magenta,
+    cyan: theme.cyan,
+    white: theme.white,
+    brightBlack: theme.brightBlack,
+    brightRed: theme.brightRed,
+    brightGreen: theme.brightGreen,
+    brightYellow: theme.brightYellow,
+    brightBlue: theme.brightBlue,
+    brightMagenta: theme.brightMagenta,
+    brightCyan: theme.brightCyan,
+    brightWhite: theme.brightWhite,
+  };
 }
 
 interface PendingWrite {
@@ -105,27 +130,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       fontFamily: "Menlo, Monaco, 'Courier New', monospace",
       cursorBlink: true,
       screenReaderMode: false,
-      theme: {
-        foreground: currentTheme.foreground,
-        background: currentTheme.background,
-        cursor: currentTheme.cursor,
-        black: currentTheme.black,
-        red: currentTheme.red,
-        green: currentTheme.green,
-        yellow: currentTheme.yellow,
-        blue: currentTheme.blue,
-        magenta: currentTheme.magenta,
-        cyan: currentTheme.cyan,
-        white: currentTheme.white,
-        brightBlack: currentTheme.brightBlack,
-        brightRed: currentTheme.brightRed,
-        brightGreen: currentTheme.brightGreen,
-        brightYellow: currentTheme.brightYellow,
-        brightBlue: currentTheme.brightBlue,
-        brightMagenta: currentTheme.brightMagenta,
-        brightCyan: currentTheme.brightCyan,
-        brightWhite: currentTheme.brightWhite,
-      },
+      theme: themeToXtermTheme(currentTheme),
     });
 
     xterm.attachCustomKeyEventHandler((event) => {
@@ -196,11 +201,13 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     });
     resizeObserver.observe(container);
 
-    requestAnimationFrame(() => {
+    const timeoutIds: number[] = [];
+
+    const initRafId = requestAnimationFrame(() => {
       fitAndResize();
       initDoneRef.current = true;
-      setTimeout(fitAndResize, 300);
-      setTimeout(fitAndResize, 800);
+      timeoutIds.push(window.setTimeout(fitAndResize, 300));
+      timeoutIds.push(window.setTimeout(fitAndResize, 800));
     });
 
     let unlisten: (() => void) | null = null;
@@ -236,27 +243,41 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         if (id === sessionId && output.paneId === paneId) {
           queueWrite(decodeOutput(output.data));
         }
-      }).then((fn) => {
-        if (listenerActive) {
-          unlisten = fn;
-          captureTmuxPaneRef.current(sessionId, paneId).catch(() => {});
-        } else {
-          fn();
-        }
-      });
+      })
+        .then((fn) => {
+          if (listenerActive && xtermRef.current) {
+            unlisten = fn;
+            captureTmuxPaneRef.current(sessionId, paneId).catch((err) => {
+              console.error("[xsterm] Failed to capture tmux pane:", err);
+            });
+          } else {
+            fn();
+          }
+        })
+        .catch((err) => {
+          if (listenerActive) {
+            console.error("[xsterm] Failed to listen tmux-pane-output:", err);
+          }
+        });
     } else {
       listen<[number, number[]]>("session-output", (event) => {
         const [id, data] = event.payload;
         if (id === sessionId) {
           queueWrite(decodeOutput(data));
         }
-      }).then((fn) => {
-        if (listenerActive) {
-          unlisten = fn;
-        } else {
-          fn();
-        }
-      });
+      })
+        .then((fn) => {
+          if (listenerActive && xtermRef.current) {
+            unlisten = fn;
+          } else {
+            fn();
+          }
+        })
+        .catch((err) => {
+          if (listenerActive) {
+            console.error("[xsterm] Failed to listen session-output:", err);
+          }
+        });
     }
 
     return () => {
@@ -264,16 +285,26 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       resizeObserver.disconnect();
       document.removeEventListener("paste", handlePaste, true);
       unlisten?.();
+      if (initRafId !== null) {
+        cancelAnimationFrame(initRafId);
+      }
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
         xterm.write(writeQueue.map((w) => w.text).join(""));
       }
+      timeoutIds.forEach((id) => clearTimeout(id));
       xterm.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
       initDoneRef.current = false;
     };
-  }, [sessionId, paneId, handlePaste, currentTheme]);
+  }, [sessionId, paneId, handlePaste]);
+
+  useEffect(() => {
+    const xterm = xtermRef.current;
+    if (!xterm) return;
+    xterm.options.theme = themeToXtermTheme(currentTheme);
+  }, [currentTheme]);
 
   useImperativeHandle(
     ref,

@@ -40,8 +40,7 @@ export function TmuxSessionForm({ config, onChange, savedSshConfigs }: TmuxSessi
     if (sshConfig) {
       onChange({ ...config, ssh: sshConfig });
     } else if (configId === "") {
-      const { ssh: _, ...rest } = config;
-      onChange(rest as SshTmuxSessionConfig);
+      onChange({ tmux: config.tmux });
     }
   };
 
@@ -49,8 +48,7 @@ export function TmuxSessionForm({ config, onChange, savedSshConfigs }: TmuxSessi
     setConnectionType(type);
     setSelectedSshConfigId("");
     if (type === "local") {
-      const { ssh: _, ...rest } = config;
-      onChange(rest as SshTmuxSessionConfig);
+      onChange({ tmux: config.tmux });
     } else if (type === "saved") {
       const first = savedSshConfigs[0];
       const firstSsh = getSshFromSaved(first);
@@ -58,8 +56,7 @@ export function TmuxSessionForm({ config, onChange, savedSshConfigs }: TmuxSessi
         setSelectedSshConfigId(first.id);
         onChange({ ...config, ssh: firstSsh });
       } else {
-        const { ssh: _, ...rest } = config;
-        onChange(rest as SshTmuxSessionConfig);
+        onChange({ tmux: config.tmux });
       }
     } else {
       onChange({

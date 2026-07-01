@@ -23,8 +23,9 @@ export function cloneTmuxState(state: TmuxState): TmuxState {
  *   string), not the tmux `$N` session id.
  * - Events may arrive before their parent session/window metadata, so handlers
  *   lazily create placeholder parents and request a server-side refresh.
- * - Each handler mutates the `next` state produced by `cloneTmuxState`; the
- *   dispatcher returns the updated tree to React.
+ * - Each handler updates the `next` state produced by `cloneTmuxState` by
+ *   replacing the session/window/pane objects it touches; the dispatcher
+ *   returns the updated tree to React.
  */
 export function applyTmuxControlEvent(
   state: TmuxState,
@@ -101,18 +102,21 @@ function handleSessionChanged(
   sessionId: string,
   event: Extract<TmuxControlEvent, { type: "SessionChanged" }>
 ) {
-  let session = next.sessions.get(sessionId);
+  const session = next.sessions.get(sessionId);
   if (!session) {
-    session = {
+    next.sessions.set(sessionId, {
       id: sessionId,
       tmuxSessionId: event.sessionId,
       name: event.name,
       windows: [],
-    };
-    next.sessions.set(sessionId, session);
+    });
+    return;
   }
-  session.name = event.name;
-  session.tmuxSessionId = event.sessionId;
+  next.sessions.set(sessionId, {
+    ...session,
+    name: event.name,
+    tmuxSessionId: event.sessionId,
+  });
 }
 
 function handleSessionRenamed(
@@ -121,7 +125,8 @@ function handleSessionRenamed(
   event: Extract<TmuxControlEvent, { type: "SessionRenamed" }>
 ) {
   const session = next.sessions.get(sessionId);
-  if (session) session.name = event.name;
+  if (!session) return;
+  next.sessions.set(sessionId, { ...session, name: event.name });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -142,7 +147,10 @@ function handleWindowAdded(
 
   const session = next.sessions.get(sessionId);
   if (session && !session.windows.includes(window.id)) {
-    session.windows.push(window.id);
+    next.sessions.set(sessionId, {
+      ...session,
+      windows: [...session.windows, window.id],
+    });
   }
 
   if (!session) {
@@ -168,13 +176,24 @@ function handleWindowClosed(
 
   const session = next.sessions.get(window.sessionId);
   if (session) {
-    session.windows = session.windows.filter((id) => id !== event.windowId);
-    if (session.activeWindowId === event.windowId) {
-      session.activeWindowId = session.windows[0];
-      for (const [wid, w] of next.windows) {
-        if (w.sessionId === window.sessionId) {
-          w.isActive = wid === session.activeWindowId;
-        }
+    const remainingWindows = session.windows.filter((id) => id !== event.windowId);
+    const activeWindowId =
+      session.activeWindowId === event.windowId
+        ? remainingWindows[0]
+        : session.activeWindowId;
+
+    next.sessions.set(window.sessionId, {
+      ...session,
+      windows: remainingWindows,
+      activeWindowId,
+    });
+
+    for (const [wid, w] of next.windows) {
+      if (w.sessionId === window.sessionId) {
+        next.windows.set(wid, {
+          ...w,
+          isActive: wid === activeWindowId,
+        });
       }
     }
   }
@@ -189,7 +208,8 @@ function handleWindowRenamed(
   event: Extract<TmuxControlEvent, { type: "WindowRenamed" }>
 ) {
   const window = next.windows.get(event.windowId);
-  if (window) window.name = event.name;
+  if (!window) return;
+  next.windows.set(event.windowId, { ...window, name: event.name });
 }
 
 function handleWindowActivated(
@@ -201,12 +221,17 @@ function handleWindowActivated(
 
   for (const [wid, w] of next.windows) {
     if (w.sessionId === window.sessionId) {
-      w.isActive = wid === window.id;
+      next.windows.set(wid, { ...w, isActive: wid === window.id });
     }
   }
 
   const session = next.sessions.get(window.sessionId);
-  if (session) session.activeWindowId = window.id;
+  if (session) {
+    next.sessions.set(window.sessionId, {
+      ...session,
+      activeWindowId: window.id,
+    });
+  }
 }
 
 function handleLayoutChanged(
@@ -214,7 +239,8 @@ function handleLayoutChanged(
   event: Extract<TmuxControlEvent, { type: "LayoutChanged" }>
 ) {
   const window = next.windows.get(event.windowId);
-  if (window) window.layout = event.layout;
+  if (!window) return;
+  next.windows.set(event.windowId, { ...window, layout: event.layout });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -231,7 +257,10 @@ function handlePaneAdded(
 
   const window = next.windows.get(pane.windowId);
   if (window && !window.panes.includes(pane.id)) {
-    window.panes.push(pane.id);
+    next.windows.set(pane.windowId, {
+      ...window,
+      panes: [...window.panes, pane.id],
+    });
   }
 }
 
@@ -246,7 +275,10 @@ function handlePaneClosed(
 
   const window = next.windows.get(pane.windowId);
   if (window) {
-    window.panes = window.panes.filter((id) => id !== event.paneId);
+    next.windows.set(pane.windowId, {
+      ...window,
+      panes: window.panes.filter((id) => id !== event.paneId),
+    });
   }
 }
 
@@ -255,7 +287,8 @@ function handlePaneTitleChanged(
   event: Extract<TmuxControlEvent, { type: "PaneTitleChanged" }>
 ) {
   const pane = next.panes.get(event.paneId);
-  if (pane) pane.title = event.title;
+  if (!pane) return;
+  next.panes.set(event.paneId, { ...pane, title: event.title });
 }
 
 function handlePaneModeChanged(
@@ -263,7 +296,8 @@ function handlePaneModeChanged(
   event: Extract<TmuxControlEvent, { type: "PaneModeChanged" }>
 ) {
   const pane = next.panes.get(event.paneId);
-  if (pane) pane.inCopyMode = event.inCopyMode;
+  if (!pane) return;
+  next.panes.set(event.paneId, { ...pane, inCopyMode: event.inCopyMode });
 }
 
 function handlePanePaused(
@@ -271,7 +305,8 @@ function handlePanePaused(
   event: Extract<TmuxControlEvent, { type: "PanePaused" }>
 ) {
   const pane = next.panes.get(event.paneId);
-  if (pane) pane.isPaused = true;
+  if (!pane) return;
+  next.panes.set(event.paneId, { ...pane, isPaused: true });
 }
 
 function handlePaneContinued(
@@ -279,7 +314,8 @@ function handlePaneContinued(
   event: Extract<TmuxControlEvent, { type: "PaneContinued" }>
 ) {
   const pane = next.panes.get(event.paneId);
-  if (pane) pane.isPaused = false;
+  if (!pane) return;
+  next.panes.set(event.paneId, { ...pane, isPaused: false });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -303,7 +339,10 @@ function handleWindowList(
       next.sessions.set(sessionId, session);
     }
     if (!session.windows.includes(entry.windowId)) {
-      session.windows.push(entry.windowId);
+      next.sessions.set(sessionId, {
+        ...session,
+        windows: [...session.windows, entry.windowId],
+      });
     }
 
     const existing = next.windows.get(entry.windowId);
@@ -317,7 +356,13 @@ function handleWindowList(
     });
 
     if (entry.active) {
-      session.activeWindowId = entry.windowId;
+      const updatedSession = next.sessions.get(sessionId);
+      if (updatedSession) {
+        next.sessions.set(sessionId, {
+          ...updatedSession,
+          activeWindowId: entry.windowId,
+        });
+      }
     }
   }
 
@@ -359,12 +404,18 @@ function handlePaneList(
       };
       next.windows.set(entry.windowId, window);
       if (!session.windows.includes(entry.windowId)) {
-        session.windows.push(entry.windowId);
+        next.sessions.set(sessionId, {
+          ...session,
+          windows: [...session.windows, entry.windowId],
+        });
       }
     }
 
     if (!window.panes.includes(entry.paneId)) {
-      window.panes.push(entry.paneId);
+      next.windows.set(entry.windowId, {
+        ...window,
+        panes: [...window.panes, entry.paneId],
+      });
     }
 
     const existingPane = next.panes.get(entry.paneId);

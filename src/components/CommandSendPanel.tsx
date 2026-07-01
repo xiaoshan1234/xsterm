@@ -54,6 +54,25 @@ export default function CommandSendPanel({
     return [target as number];
   }, [target, activeSessionId, sessions]);
 
+  // Refs for mutable execution parameters to avoid stale closures in timer callbacks.
+  const breakpointsRef = useRef(breakpoints);
+  const countRef = useRef(count);
+  const intervalValueRef = useRef(interval);
+  const sendModeRef = useRef(sendMode);
+  const splitModeRef = useRef(splitMode);
+  const writeSessionRef = useRef(writeSession);
+  const getTargetSessionsRef = useRef(getTargetSessions);
+
+  useEffect(() => {
+    breakpointsRef.current = breakpoints;
+    countRef.current = count;
+    intervalValueRef.current = interval;
+    sendModeRef.current = sendMode;
+    splitModeRef.current = splitMode;
+    writeSessionRef.current = writeSession;
+    getTargetSessionsRef.current = getTargetSessions;
+  });
+
   const parseChunks = useCallback((): { chunks: string[]; chunkToLineIndex: number[] } => {
     setHexError(null);
 
@@ -126,7 +145,7 @@ export default function CommandSendPanel({
     const chunks = chunksRef.current;
     const chunkToLineIndex = chunkToLineIndexRef.current;
 
-    if (repetitionRef.current >= count || chunks.length === 0) {
+    if (repetitionRef.current >= countRef.current || chunks.length === 0) {
       resetExecution();
       return;
     }
@@ -135,9 +154,9 @@ export default function CommandSendPanel({
     const chunk = chunks[chunkIndex];
 
     // In line mode, check for breakpoints before sending.
-    if (splitMode === "line" && chunkToLineIndex.length > 0) {
+    if (splitModeRef.current === "line" && chunkToLineIndex.length > 0) {
       const lineIndex = chunkToLineIndex[chunkIndex];
-      if (breakpoints.has(lineIndex)) {
+      if (breakpointsRef.current.has(lineIndex)) {
         setRunState("paused");
         return;
       }
@@ -145,11 +164,11 @@ export default function CommandSendPanel({
 
     // For line mode in text, append \r\n
     const dataToSend =
-      sendMode === "text" && splitMode === "line" ? chunk + "\r\n" : chunk;
+      sendModeRef.current === "text" && splitModeRef.current === "line" ? chunk + "\r\n" : chunk;
 
-    const sessionIds = getTargetSessions();
+    const sessionIds = getTargetSessionsRef.current();
     sessionIds.forEach((id) => {
-      writeSession(id, dataToSend).catch(console.error);
+      writeSessionRef.current(id, dataToSend).catch(console.error);
     });
 
     chunkIndexRef.current++;
@@ -160,18 +179,19 @@ export default function CommandSendPanel({
 
     if (stopRef.current) return;
 
-    if (repetitionRef.current >= count) {
+    if (repetitionRef.current >= countRef.current) {
       resetExecution();
       return;
     }
 
-    if (interval > 0) {
-      intervalRef.current = setTimeout(runNext, interval * 1000);
+    const currentInterval = intervalValueRef.current;
+    if (currentInterval > 0) {
+      intervalRef.current = setTimeout(runNext, currentInterval * 1000);
     } else {
       // No interval, run synchronously but still yield to UI
       intervalRef.current = setTimeout(runNext, 0);
     }
-  }, [breakpoints, count, getTargetSessions, interval, resetExecution, sendMode, splitMode, writeSession]);
+  }, [resetExecution]);
 
   const startExecution = useCallback(() => {
     const { chunks, chunkToLineIndex } = parseChunks();
@@ -273,16 +293,17 @@ export default function CommandSendPanel({
   const renderGutter = () => {
     return (
       <div className="panel-gutter" ref={gutterRef}>
-        {lines.map((_, lineIndex) => {
-          const hasBreakpoint = breakpoints.has(lineIndex);
-          const isActive = activeLineIndex === lineIndex && runState !== "idle";
-          return (
-            <div
-              key={lineIndex}
-              className={`panel-gutter-line ${isActive ? "panel-gutter-line--active" : ""}`}
-              onClick={() => toggleBreakpoint(lineIndex)}
-              title={hasBreakpoint ? "移除断点" : "添加断点"}
-            >
+          {lines.map((_, lineIndex) => {
+            const hasBreakpoint = breakpoints.has(lineIndex);
+            const isActive = activeLineIndex === lineIndex && runState !== "idle";
+            return (
+              <div
+                // Line numbers are the stable identifier for gutter rows.
+                key={lineIndex}
+                className={`panel-gutter-line ${isActive ? "panel-gutter-line--active" : ""}`}
+                onClick={() => toggleBreakpoint(lineIndex)}
+                title={hasBreakpoint ? "移除断点" : "添加断点"}
+              >
               <span className="panel-breakpoint">
                 {hasBreakpoint ? "●" : ""}
               </span>

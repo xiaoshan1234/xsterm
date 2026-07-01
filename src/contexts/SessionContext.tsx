@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
-import { load } from "@tauri-apps/plugin-store";
 import { listen } from "@tauri-apps/api/event";
 import { Session, LocalSessionConfig, SSHSessionConfig, SavedSessionConfig, SessionGroup, Workspace, SavedWorkspace, PaneNode, SplitDirection } from "../types/session";
 import { TmuxState, TmuxControlEvent, SshTmuxSessionConfig, TmuxSessionConfig } from "../types/tmux";
@@ -206,7 +205,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSavedWorkspaces(workspacesData);
 
       try {
-        const store = await load("settings.json", { autoSave: true, defaults: {} });
+        const store = await sessionStorage.getSettingsStore();
         const savedGlobalEcho = await store.get<boolean>("globalLocalEcho");
         if (savedGlobalEcho !== null && savedGlobalEcho !== undefined) {
           setGlobalLocalEcho(savedGlobalEcho);
@@ -222,7 +221,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const persist = async () => {
       try {
-        const store = await load("settings.json", { autoSave: true, defaults: {} });
+        const store = await sessionStorage.getSettingsStore();
         if (!cancelled) {
           await store.set("globalLocalEcho", globalLocalEcho);
           await store.save();
@@ -391,6 +390,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     const configIdToSession = new Map<string, Session>();
 
+    const rollback = async () => {
+      const sessionsToClose = [...configIdToSession.values()];
+      const idsToClose = new Set(sessionsToClose.map((s) => s.id));
+      await Promise.all(
+        sessionsToClose.map((session) =>
+          sessionService
+            .closeSession(session.id)
+            .catch((e) => console.error("Failed to close session during workspace rollback:", e))
+        )
+      );
+      for (const id of idsToClose) {
+        establishingSessionsRef.current.delete(id);
+        const timeoutId = tmuxListTimeoutsRef.current.get(id);
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+          tmuxListTimeoutsRef.current.delete(id);
+        }
+      }
+      if (idsToClose.size > 0) {
+        setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
+      }
+    };
+
     const buildTree = async (node: PaneNode): Promise<PaneNode> => {
       if (node.type === "leaf") {
         if (node.sessionId !== undefined) {
@@ -405,9 +427,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
               configIdToSession.set(configId, session);
             } catch (e) {
               console.error("Failed to recreate session for workspace:", e);
+              await rollback();
+              throw e;
             }
           }
-          return createLeafPane(node.size, session?.id, configId);
+          return createLeafPane(node.size, session.id, configId);
         }
         return { ...createLeafPane(node.size), id: generateId() };
       }
@@ -480,14 +504,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSessions((prev) => [...prev, session]);
 
       if (save) {
-        const savedConfig: SavedSessionConfig =
-          type === "local"
-            ? { id: configId, name: info.name, type: "local", localConfig: config as LocalSessionConfig }
-            : type === "ssh"
-            ? { id: configId, name: info.name, type: "ssh", sshConfig: config as SSHSessionConfig }
-            : type === "tmux"
-            ? { id: configId, name: info.name, type: "tmux", tmuxConfig: config as TmuxSessionConfig }
-            : { id: configId, name: info.name, type: "ssh_tmux", sshTmuxConfig: config as SshTmuxSessionConfig };
+        let savedConfig: SavedSessionConfig;
+        if (type === "local") {
+          const localConfig = config as LocalSessionConfig;
+          savedConfig = { id: configId, name: info.name, type: "local", localConfig };
+        } else if (type === "ssh") {
+          const sshConfig = config as SSHSessionConfig;
+          savedConfig = { id: configId, name: info.name, type: "ssh", sshConfig };
+        } else if (type === "tmux") {
+          const tmuxConfig = config as TmuxSessionConfig;
+          savedConfig = { id: configId, name: info.name, type: "tmux", tmuxConfig };
+        } else {
+          const sshTmuxConfig = config as SshTmuxSessionConfig;
+          savedConfig = { id: configId, name: info.name, type: "ssh_tmux", sshTmuxConfig };
+        }
         updateConfigs((prev) => [...prev, savedConfig]);
       }
 
@@ -577,33 +607,38 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const closeSession = useCallback(async (id: number): Promise<void> => {
-    await sessionService.closeSession(id);
-    const timeoutId = tmuxListTimeoutsRef.current.get(id);
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
-      tmuxListTimeoutsRef.current.delete(id);
+    try {
+      await sessionService.closeSession(id);
+    } catch (e) {
+      console.error("Failed to close session backend:", e);
+    } finally {
+      const timeoutId = tmuxListTimeoutsRef.current.get(id);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+        tmuxListTimeoutsRef.current.delete(id);
+      }
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      setWorkspaces((prev) =>
+        prev.map((workspace) => {
+          const newRoot = removeSessionAndCollapse(workspace.rootPane, id);
+          const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
+            ? workspace.activePaneId
+            : (getLeafPaneIds(newRoot)[0] ?? null);
+          return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
+        })
+      );
     }
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-    setWorkspaces((prev) =>
-      prev.map((workspace) => {
-        const newRoot = removeSessionAndCollapse(workspace.rootPane, id);
-        const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
-          ? workspace.activePaneId
-          : (getLeafPaneIds(newRoot)[0] ?? null);
-        return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
-      })
-    );
   }, []);
 
   const renameSession = useCallback(
     (id: number, name: string) => {
       setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
-      const session = sessions.find((s) => s.id === id);
+      const session = sessionsRef.current.find((s) => s.id === id);
       if (session) {
         updateConfigs((prev) => prev.map((c) => (c.id === session.configId ? { ...c, name } : c)));
       }
     },
-    [updateConfigs, sessions]
+    [updateConfigs]
   );
 
   const createGroup = useCallback(
@@ -679,24 +714,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const writeSession = useCallback(async (id: number, data: string): Promise<void> => {
-    const session = sessions.find((s) => s.id === id);
+    const session = sessionsRef.current.find((s) => s.id === id);
     if (session?.type === "tmux" || session?.type === "ssh_tmux") {
       throw new Error("Use sendKeysToTmuxPane for tmux sessions");
     }
     await sessionService.writeSession(id, data);
-  }, [sessions]);
+  }, []);
 
   const setGlobalLocalEchoPersisted = useCallback((enabled: boolean) => {
     setGlobalLocalEcho(enabled);
   }, []);
 
   const resizeSession = useCallback(async (id: number, rows: number, cols: number): Promise<void> => {
-    const session = sessions.find((s) => s.id === id);
+    const session = sessionsRef.current.find((s) => s.id === id);
     if (session?.type === "tmux" || session?.type === "ssh_tmux") {
       throw new Error("Use resizeTmuxPane for tmux sessions");
     }
     await sessionService.resizeSession(id, rows, cols);
-  }, [sessions]);
+  }, []);
 
   const writeTmuxCommand = useCallback(async (id: number, command: string): Promise<void> => {
     await tmuxService.writeTmuxCommand(id, command);
@@ -796,23 +831,41 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           }
           return next;
         });
+      }).catch((e) => {
+        console.error("Failed to listen session-closed:", e);
+        return null;
       });
-      if (!cancelled) unlisteners.push(unlistenSessionClosed);
-      else unlistenSessionClosed();
+      if (cancelled) {
+        unlistenSessionClosed?.();
+        return;
+      }
+      if (unlistenSessionClosed) unlisteners.push(unlistenSessionClosed);
 
       const unlistenTmuxPaneOutput = await listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", () => {
         // Output bytes are delivered directly to Terminal.tsx listeners per pane.
         // No React state update is needed here.
+      }).catch((e) => {
+        console.error("Failed to listen tmux-pane-output:", e);
+        return null;
       });
-      if (!cancelled) unlisteners.push(unlistenTmuxPaneOutput);
-      else unlistenTmuxPaneOutput();
+      if (cancelled) {
+        unlistenTmuxPaneOutput?.();
+        return;
+      }
+      if (unlistenTmuxPaneOutput) unlisteners.push(unlistenTmuxPaneOutput);
 
       const unlistenTmuxRequestSync = await listen<[number, string]>("tmux-request-sync", (event) => {
         const [sessionId, command] = event.payload;
         tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
+      }).catch((e) => {
+        console.error("Failed to listen tmux-request-sync:", e);
+        return null;
       });
-      if (!cancelled) unlisteners.push(unlistenTmuxRequestSync);
-      else unlistenTmuxRequestSync();
+      if (cancelled) {
+        unlistenTmuxRequestSync?.();
+        return;
+      }
+      if (unlistenTmuxRequestSync) unlisteners.push(unlistenTmuxRequestSync);
 
       const unlistenTmuxControlEvent = await listen<[number, TmuxControlEvent]>("tmux-control-event", (event) => {
         const [sessionId, controlEvent] = event.payload;
@@ -858,9 +911,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             alert(`Tmux session failed: ${controlEvent.message}`);
           }
         }
+      }).catch((e) => {
+        console.error("Failed to listen tmux-control-event:", e);
+        return null;
       });
-      if (!cancelled) unlisteners.push(unlistenTmuxControlEvent);
-      else unlistenTmuxControlEvent();
+      if (cancelled) {
+        unlistenTmuxControlEvent?.();
+        return;
+      }
+      if (unlistenTmuxControlEvent) unlisteners.push(unlistenTmuxControlEvent);
     })();
 
     return () => {

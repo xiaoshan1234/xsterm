@@ -7,12 +7,20 @@ interface GroupStore {
 }
 
 let storeInstance: Store | null = null;
+let settingsStoreInstance: Store | null = null;
 
 async function getStore(): Promise<Store> {
   if (!storeInstance) {
     storeInstance = await load("sessions.json", { autoSave: true, defaults: {} });
   }
   return storeInstance;
+}
+
+export async function getSettingsStore(): Promise<Store> {
+  if (!settingsStoreInstance) {
+    settingsStoreInstance = await load("settings.json", { autoSave: true, defaults: {} });
+  }
+  return settingsStoreInstance;
 }
 
 export async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
