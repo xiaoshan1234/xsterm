@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { PaneNode } from "../types/session";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
+import { useDragResize } from "../hooks/useDragResize";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
 import TabBar from "./TabBar";
@@ -44,7 +45,6 @@ export default function AppLayout() {
   const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | null>(null);
   const [saveWorkspaceId, setSaveWorkspaceId] = useState<string | null>(null);
   const mainAreaRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
@@ -53,40 +53,21 @@ export default function AppLayout() {
     onToggleLogs: () => {},
   });
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDraggingRef.current = true;
-    document.body.style.cursor = "ns-resize";
-    document.body.style.userSelect = "none";
-  }, []);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current || !mainAreaRef.current) return;
+  const { start: startResize } = useDragResize({
+    direction: "vertical",
+    onDelta: ({ clientY }) => {
+      if (!mainAreaRef.current) return;
 
       const rect = mainAreaRef.current.getBoundingClientRect();
       const availableHeight = rect.height;
-      const relativeYFromBottom = availableHeight - (e.clientY - rect.top);
+      const relativeYFromBottom = availableHeight - (clientY - rect.top);
       const newHeight = Math.max(
         MIN_PANEL_HEIGHT,
         Math.min(availableHeight - MIN_TERMINAL_HEIGHT, relativeYFromBottom)
       );
       setPanelHeight(newHeight);
-    };
-
-    const handleMouseUp = () => {
-      isDraggingRef.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, []);
+    },
+  });
 
   const handleSendPanelToggle = useCallback((collapsed: boolean) => {
     setSendPanelCollapsed(collapsed);
@@ -183,7 +164,7 @@ export default function AppLayout() {
               {!sendPanelCollapsed && (
                 <div
                   className="panel-resize-handle"
-                  onMouseDown={handleMouseDown}
+                  onMouseDown={(e) => startResize(panelHeight, e)}
                   title="拖拽调整高度"
                 />
               )}

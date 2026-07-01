@@ -1,5 +1,6 @@
-import { useCallback, useRef, useEffect, MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useRef, MouseEvent as ReactMouseEvent } from "react";
 import { PaneNode, Workspace } from "../types/session";
+import { useDragResize } from "../hooks/useDragResize";
 import { Pane } from "./Pane";
 
 interface PaneTreeProps {
@@ -62,78 +63,48 @@ function SplitNode({
   const direction = node.direction ?? "horizontal";
   const children = node.children ?? [];
   const containerRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
-  const dragHandlersRef = useRef<
-    { move: (e: MouseEvent) => void; up: () => void } | null
-  >(null);
+  const activeIndexRef = useRef(0);
+
+  const { start: startResize } = useDragResize({
+    direction,
+    onDelta: ({ clientX, clientY }) => {
+      const container = containerRef.current;
+      const childIndex = activeIndexRef.current;
+      if (!container || children.length < 2) return;
+
+      const rect = container.getBoundingClientRect();
+      const clientXY = direction === "horizontal" ? clientX : clientY;
+      const startXY = direction === "horizontal" ? rect.left : rect.top;
+      const length = direction === "horizontal" ? rect.width : rect.height;
+      if (length === 0) return;
+
+      const pct = ((clientXY - startXY) / length) * 100;
+      const totalSize = children[childIndex].size + children[childIndex + 1].size;
+      const clampedPct = Math.max(10, Math.min(totalSize - 10, pct));
+
+      onUpdateNode(node.id, (current) => {
+        if (!current.children) return current;
+        const updatedChildren = [...current.children];
+        updatedChildren[childIndex] = { ...updatedChildren[childIndex], size: clampedPct };
+        updatedChildren[childIndex + 1] = {
+          ...updatedChildren[childIndex + 1],
+          size: totalSize - clampedPct,
+        };
+        return { ...current, children: updatedChildren };
+      });
+    },
+  });
 
   const handleResizeStart = useCallback(
     (e: ReactMouseEvent, childIndex: number) => {
       e.preventDefault();
       e.stopPropagation();
-      isDraggingRef.current = true;
-      document.body.style.cursor = direction === "horizontal" ? "col-resize" : "row-resize";
-      document.body.style.userSelect = "none";
-
-      const container = containerRef.current;
-      if (!container || children.length < 2) return;
-
+      activeIndexRef.current = childIndex;
       const totalSize = children[childIndex].size + children[childIndex + 1].size;
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        if (!isDraggingRef.current) return;
-        const currentContainer = containerRef.current;
-        if (!currentContainer) return;
-
-        const rect = currentContainer.getBoundingClientRect();
-        const clientXY = direction === "horizontal" ? moveEvent.clientX : moveEvent.clientY;
-        const startXY = direction === "horizontal" ? rect.left : rect.top;
-        const length = direction === "horizontal" ? rect.width : rect.height;
-        if (length === 0) return;
-
-        const pct = ((clientXY - startXY) / length) * 100;
-        const clampedPct = Math.max(10, Math.min(totalSize - 10, pct));
-
-        onUpdateNode(node.id, (current) => {
-          if (!current.children) return current;
-          const updatedChildren = [...current.children];
-          updatedChildren[childIndex] = { ...updatedChildren[childIndex], size: clampedPct };
-          updatedChildren[childIndex + 1] = {
-            ...updatedChildren[childIndex + 1],
-            size: totalSize - clampedPct,
-          };
-          return { ...current, children: updatedChildren };
-        });
-      };
-
-      const handleMouseUp = () => {
-        isDraggingRef.current = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-        dragHandlersRef.current = null;
-      };
-
-      dragHandlersRef.current = { move: handleMouseMove, up: handleMouseUp };
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
+      startResize(totalSize, e);
     },
-    [direction, children, node.id, onUpdateNode]
+    [children, startResize]
   );
-
-  useEffect(() => {
-    return () => {
-      isDraggingRef.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      if (dragHandlersRef.current) {
-        window.removeEventListener("mousemove", dragHandlersRef.current.move);
-        window.removeEventListener("mouseup", dragHandlersRef.current.up);
-        dragHandlersRef.current = null;
-      }
-    };
-  }, []);
 
   return (
     <div

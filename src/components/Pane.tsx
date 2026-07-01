@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { PaneNode, SplitDirection, Workspace } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
+import * as paneTree from "../utils/paneTree";
 import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -14,15 +15,6 @@ interface PaneProps {
 }
 
 type DialogMode = "split" | "attach";
-
-function replacePaneNode(root: PaneNode, targetId: string, replacement: PaneNode): PaneNode {
-  if (root.id === targetId) return replacement;
-  if (!root.children) return root;
-  return {
-    ...root,
-    children: root.children.map((child) => replacePaneNode(child, targetId, replacement)),
-  };
-}
 
 export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
   const {
@@ -62,7 +54,7 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
     (sessionId: number) => {
       const attachedSession = sessions.find((s) => s.id === sessionId);
       updateWorkspacePaneTree(workspace.id, (root) =>
-        replacePaneNode(root, pane.id, {
+        paneTree.replacePaneNode(root, pane.id, {
           ...pane,
           sessionId,
           configId: attachedSession?.configId,

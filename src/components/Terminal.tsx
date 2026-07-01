@@ -1,46 +1,12 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { listen } from "@tauri-apps/api/event";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { TerminalTheme } from "../types/theme";
 import { uploadImageToSshSession } from "../services/sessionService";
 import { getClipboardImages } from "../utils/clipboard";
+import { useXterm } from "../hooks/useXterm";
+import { useTauriTerminalOutput } from "../hooks/useTauriTerminalOutput";
+import { useTerminalResize } from "../hooks/useTerminalResize";
 import "@xterm/xterm/css/xterm.css";
-
-function decodeOutput(data: number[]): string {
-  return new TextDecoder().decode(new Uint8Array(data));
-}
-
-function themeToXtermTheme(theme: TerminalTheme) {
-  return {
-    foreground: theme.foreground,
-    background: theme.background,
-    cursor: theme.cursor,
-    black: theme.black,
-    red: theme.red,
-    green: theme.green,
-    yellow: theme.yellow,
-    blue: theme.blue,
-    magenta: theme.magenta,
-    cyan: theme.cyan,
-    white: theme.white,
-    brightBlack: theme.brightBlack,
-    brightRed: theme.brightRed,
-    brightGreen: theme.brightGreen,
-    brightYellow: theme.brightYellow,
-    brightBlue: theme.brightBlue,
-    brightMagenta: theme.brightMagenta,
-    brightCyan: theme.brightCyan,
-    brightWhite: theme.brightWhite,
-  };
-}
-
-interface PendingWrite {
-  text: string;
-  resolve: () => void;
-}
 
 interface TerminalProps {
   sessionId: number;
@@ -55,21 +21,26 @@ export interface TerminalRef {
   copySelection: () => Promise<void>;
 }
 
+const XTERM_OPTIONS = {
+  fontSize: 14,
+  fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+  cursorBlink: true,
+  screenReaderMode: false,
+};
+
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   { sessionId, sessionType, paneId, isActive = true, onFocus },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const initDoneRef = useRef(false);
-  const { writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane, getEffectiveLocalEcho } = useSession();
   const { currentTheme } = useTheme();
+  const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, XTERM_OPTIONS);
+
+  const { writeSession, sendKeysToTmuxPane, getEffectiveLocalEcho } = useSession();
   const localEchoEnabled = getEffectiveLocalEcho(sessionId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
   const lastDataRef = useRef<{ text: string; time: number } | null>(null);
-
   const isFocusedRef = useRef(isActive);
 
   useEffect(() => {
@@ -81,18 +52,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   }, [localEchoEnabled]);
 
   const writeSessionRef = useRef(writeSession);
-  const resizeSessionRef = useRef(resizeSession);
   const sendKeysToTmuxPaneRef = useRef(sendKeysToTmuxPane);
-  const resizeTmuxPaneRef = useRef(resizeTmuxPane);
-  const captureTmuxPaneRef = useRef(captureTmuxPane);
 
   useEffect(() => {
     writeSessionRef.current = writeSession;
-    resizeSessionRef.current = resizeSession;
     sendKeysToTmuxPaneRef.current = sendKeysToTmuxPane;
-    resizeTmuxPaneRef.current = resizeTmuxPane;
-    captureTmuxPaneRef.current = captureTmuxPane;
-  }, [writeSession, resizeSession, sendKeysToTmuxPane, resizeTmuxPane, captureTmuxPane]);
+  }, [writeSession, sendKeysToTmuxPane]);
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
@@ -122,16 +87,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   );
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const xterm = new XTerm({
-      fontSize: 14,
-      fontFamily: "Menlo, Monaco, 'Courier New', monospace",
-      cursorBlink: true,
-      screenReaderMode: false,
-      theme: themeToXtermTheme(currentTheme),
-    });
+    const xterm = termRef.current;
+    if (!xterm) return;
 
     xterm.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
@@ -153,7 +110,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       return true;
     });
 
-    xterm.onData((data) => {
+    const dataDisposer = xterm.onData((data) => {
       if (!isFocusedRef.current) return;
 
       const now = Date.now();
@@ -173,147 +130,29 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       }
     });
 
-    const fitAddon = new FitAddon();
-    xterm.loadAddon(fitAddon);
-
-    xterm.open(container);
-
-    xtermRef.current = xterm;
-    fitAddonRef.current = fitAddon;
-
-    document.addEventListener("paste", handlePaste, true);
-
-    const fitAndResize = () => {
-      if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
-        fitAddonRef.current.fit();
-        if (paneId) {
-          resizeTmuxPaneRef.current(sessionId, paneId, xterm.rows, xterm.cols);
-        } else {
-          resizeSessionRef.current(sessionId, xterm.rows, xterm.cols);
-        }
-      }
-    };
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (initDoneRef.current) {
-        fitAndResize();
-      }
-    });
-    resizeObserver.observe(container);
-
-    const timeoutIds: number[] = [];
-
-    const initRafId = requestAnimationFrame(() => {
-      fitAndResize();
-      initDoneRef.current = true;
-      timeoutIds.push(window.setTimeout(fitAndResize, 300));
-      timeoutIds.push(window.setTimeout(fitAndResize, 800));
-    });
-
-    let unlisten: (() => void) | null = null;
-    let listenerActive = true;
-    let rafId: number | null = null;
-    let writeQueue: PendingWrite[] = [];
-
-    const flushWrites = () => {
-      rafId = null;
-      if (writeQueue.length === 0 || !xtermRef.current) return;
-      const pending = writeQueue;
-      writeQueue = [];
-      const text = pending.map((w) => w.text).join("");
-      xtermRef.current.write(text, () => {
-        for (const w of pending) {
-          w.resolve();
-        }
-      });
-    };
-
-    const queueWrite = (text: string): Promise<void> => {
-      return new Promise((resolve) => {
-        writeQueue.push({ text, resolve });
-        if (rafId === null) {
-          rafId = requestAnimationFrame(flushWrites);
-        }
-      });
-    };
-
-    if (paneId) {
-      listen<[number, { paneId: string; data: number[] }]>("tmux-pane-output", (event) => {
-        const [id, output] = event.payload;
-        if (id === sessionId && output.paneId === paneId) {
-          queueWrite(decodeOutput(output.data));
-        }
-      })
-        .then((fn) => {
-          if (listenerActive && xtermRef.current) {
-            unlisten = fn;
-            captureTmuxPaneRef.current(sessionId, paneId).catch((err) => {
-              console.error("[xsterm] Failed to capture tmux pane:", err);
-            });
-          } else {
-            fn();
-          }
-        })
-        .catch((err) => {
-          if (listenerActive) {
-            console.error("[xsterm] Failed to listen tmux-pane-output:", err);
-          }
-        });
-    } else {
-      listen<[number, number[]]>("session-output", (event) => {
-        const [id, data] = event.payload;
-        if (id === sessionId) {
-          queueWrite(decodeOutput(data));
-        }
-      })
-        .then((fn) => {
-          if (listenerActive && xtermRef.current) {
-            unlisten = fn;
-          } else {
-            fn();
-          }
-        })
-        .catch((err) => {
-          if (listenerActive) {
-            console.error("[xsterm] Failed to listen session-output:", err);
-          }
-        });
-    }
-
     return () => {
-      listenerActive = false;
-      resizeObserver.disconnect();
-      document.removeEventListener("paste", handlePaste, true);
-      unlisten?.();
-      if (initRafId !== null) {
-        cancelAnimationFrame(initRafId);
-      }
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        xterm.write(writeQueue.map((w) => w.text).join(""));
-      }
-      timeoutIds.forEach((id) => clearTimeout(id));
-      xterm.dispose();
-      xtermRef.current = null;
-      fitAddonRef.current = null;
-      initDoneRef.current = false;
+      dataDisposer.dispose();
     };
-  }, [sessionId, paneId, handlePaste]);
+  }, [sessionId, paneId]);
 
   useEffect(() => {
-    const xterm = xtermRef.current;
-    if (!xterm) return;
-    xterm.options.theme = themeToXtermTheme(currentTheme);
-  }, [currentTheme]);
+    document.addEventListener("paste", handlePaste, true);
+    return () => {
+      document.removeEventListener("paste", handlePaste, true);
+    };
+  }, [handlePaste]);
+
+  useTauriTerminalOutput(termRef, sessionId, sessionType, paneId);
+  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, sessionType, paneId);
 
   useImperativeHandle(
     ref,
     () => ({
       selectAll: () => {
-        xtermRef.current?.selectAll();
+        termRef.current?.selectAll();
       },
       copySelection: async () => {
-        const selection = xtermRef.current?.getSelection();
+        const selection = termRef.current?.getSelection();
         if (selection) {
           await navigator.clipboard.writeText(selection).catch(() => {});
         }
@@ -323,7 +162,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   );
 
   useEffect(() => {
-    const xterm = xtermRef.current;
+    const xterm = termRef.current;
     if (!xterm) return;
     if (isActive) {
       xterm.focus();
