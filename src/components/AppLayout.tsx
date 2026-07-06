@@ -1,10 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
 import { WorkspaceContainer } from "./WorkspaceContainer";
-import { EmptyState } from "./EmptyState";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import "../styles/pane.css";
@@ -13,9 +12,9 @@ export default function AppLayout() {
   const {
     workspaces,
     activeWorkspaceId,
-    savedConfigs,
     savedWorkspaces,
     savedWindowConfigs,
+    createDefaultWorkspace,
     createLocalSession,
     createSshSession,
     createTmuxSession,
@@ -33,6 +32,12 @@ export default function AppLayout() {
   const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | "windows" | null>(null);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      createDefaultWorkspace();
+    }
+  }, [workspaces.length, createDefaultWorkspace]);
 
   useAppShortcuts({
     onCreateSession: () => setShowCreateDialog(true),
@@ -82,19 +87,9 @@ export default function AppLayout() {
         <div className="main-area">
           {activeView === "settings" ? (
             <SettingsView activeCategory={activeSettingsCategory} />
-          ) : workspaces.length === 0 ? (
-            <EmptyState
-              onCreateSession={() => setShowCreateDialog(true)}
-              hasSavedConfigs={savedConfigs.length > 0}
-            />
           ) : activeWorkspace ? (
             <WorkspaceContainer workspace={activeWorkspace} />
-          ) : (
-            <EmptyState
-              onCreateSession={() => setShowCreateDialog(true)}
-              hasSavedConfigs={savedConfigs.length > 0}
-            />
-          )}
+          ) : null}
         </div>
       </div>
       <CreateSessionDialog

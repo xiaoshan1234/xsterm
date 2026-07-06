@@ -299,6 +299,23 @@ export function useSessionActions({
     [sessionsRef, setWorkspaces]
   );
 
+  const createInitWindow = useCallback((): Window => {
+    const windowId = generateId();
+    const paneId = generateId();
+    const window: Window = {
+      id: windowId,
+      name: "New Session",
+      activePaneId: paneId,
+      windowType: "init",
+      rootPane: {
+        id: paneId,
+        type: "leaf",
+        size: 100,
+      },
+    };
+    return window;
+  }, []);
+
   const replaceInitWindowWithSession = useCallback(
     (workspaceId: string, windowId: string, sessionId: number) => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
@@ -327,20 +344,51 @@ export function useSessionActions({
     [sessionsRef, setWorkspaces]
   );
 
+  const createDefaultWorkspace = useCallback((): Workspace => {
+    const workspaceId = generateId();
+    const windowId = generateId();
+    const paneId = generateId();
+    const workspace: Workspace = {
+      id: workspaceId,
+      name: "Default",
+      windows: [
+        {
+          id: windowId,
+          name: "New Session",
+          activePaneId: paneId,
+          windowType: "init",
+          rootPane: {
+            id: paneId,
+            type: "leaf",
+            size: 100,
+          },
+        },
+      ],
+      activeWindowId: windowId,
+    };
+    setWorkspaces((prev) => (prev.length === 0 ? [workspace] : prev));
+    setActiveWorkspaceId(workspaceId);
+    return workspace;
+  }, [setWorkspaces, setActiveWorkspaceId]);
+
   const closeWindow = useCallback(
     (workspaceId: string, windowId: string) => {
       setWorkspaces((prev) =>
         prev.map((workspace) => {
           if (workspace.id !== workspaceId) return workspace;
           const remaining = workspace.windows.filter((w) => w.id !== windowId);
-          if (remaining.length === 0) return workspace;
           let nextActiveId = workspace.activeWindowId;
-          if (nextActiveId === windowId) {
+          let windows = remaining;
+          if (remaining.length === 0) {
+            const initWindow = createInitWindow();
+            windows = [initWindow];
+            nextActiveId = initWindow.id;
+          } else if (nextActiveId === windowId) {
             const closedIndex = workspace.windows.findIndex((w) => w.id === windowId);
             const fallback = remaining[closedIndex - 1] ?? remaining[closedIndex] ?? remaining[remaining.length - 1];
             nextActiveId = fallback?.id ?? null;
           }
-          return { ...workspace, windows: remaining, activeWindowId: nextActiveId };
+          return { ...workspace, windows, activeWindowId: nextActiveId };
         })
       );
     },
@@ -1137,6 +1185,8 @@ export function useSessionActions({
     createWorkspaceFromSession,
     createSessionFromSavedConfig,
     createWindow,
+    createDefaultWorkspace,
+    createInitWindow,
     replaceInitWindowWithSession,
     closeWindow,
     setActiveWindow,

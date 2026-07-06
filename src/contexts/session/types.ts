@@ -61,6 +61,8 @@ export interface SessionContextType {
   createWindowFromSession: (sessionId: number, name?: string) => Window;
   createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
   createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
+  createDefaultWorkspace: () => Workspace;
+  createInitWindow: () => Window;
   replaceInitWindowWithSession: (workspaceId: string, windowId: string, sessionId: number) => void;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
@@ -162,6 +164,8 @@ export interface SessionActions {
   createWindowFromSession: (sessionId: number, name?: string) => Window;
   createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
   createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
+  createDefaultWorkspace: () => Workspace;
+  createInitWindow: () => Window;
   replaceInitWindowWithSession: (workspaceId: string, windowId: string, sessionId: number) => void;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
