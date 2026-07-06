@@ -6,7 +6,7 @@ import CommandSendPanel from "./CommandSendPanel";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
-import { PlusIcon, WorkspaceIcon } from "./icons/Icon";
+import { PlusIcon, SaveIcon } from "./icons/Icon";
 import "./WorkspaceContainer.css";
 
 function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
@@ -205,7 +205,7 @@ function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, o
           <PlusIcon size={14} />
         </button>
         <button className="window-tab-action" type="button" onClick={onSaveAll} title="Save all windows as workspace">
-          <WorkspaceIcon size={14} />
+          <SaveIcon size={14} />
         </button>
       </div>
     </div>
