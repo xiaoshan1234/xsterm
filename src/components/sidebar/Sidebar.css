@@ -27,6 +27,11 @@
   color: var(--text-primary);
 }
 
+.workspace-list-item.selected {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
 .workspace-list-item-icon {
   display: flex;
   align-items: center;

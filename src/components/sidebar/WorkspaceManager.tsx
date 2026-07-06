@@ -20,9 +20,14 @@ export function WorkspaceManager({
 }: WorkspaceManagerProps) {
   const [renamingWorkspace, setRenamingWorkspace] = useState<SavedWorkspace | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
 
   const handleLoad = (workspace: SavedWorkspace) => {
     loadWorkspace(workspace.id).catch(console.error);
+  };
+
+  const handleWorkspaceClick = (workspace: SavedWorkspace) => {
+    setSelectedWorkspaceId(workspace.id);
   };
 
   const handleStartRename = (workspace: SavedWorkspace) => {
@@ -53,8 +58,8 @@ export function WorkspaceManager({
             ]}
           >
             <div
-              className="workspace-list-item"
-              onClick={() => handleLoad(workspace)}
+              className={`workspace-list-item ${selectedWorkspaceId === workspace.id ? "selected" : ""}`}
+              onClick={() => handleWorkspaceClick(workspace)}
               onDoubleClick={() => handleLoad(workspace)}
             >
               <span className="workspace-list-item-icon">
