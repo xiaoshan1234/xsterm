@@ -9,28 +9,6 @@
   overflow: hidden;
 }
 
-.command-send-panel--collapsed {
-  min-height: auto;
-  padding: 4px 12px;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.panel-toggle {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 4px 8px;
-}
-
-.panel-toggle:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
 .panel-row {
   display: flex;
   gap: 8px;

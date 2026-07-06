@@ -6,6 +6,7 @@ import CommandSendPanel from "./CommandSendPanel";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { PlusIcon, SaveIcon } from "./icons/Icon";
+import "./WorkspaceContainer.css";
 
 function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
   if (root.id === nodeId) {
@@ -38,6 +39,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
   const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0] ?? null;
 
   const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
+  const [showCommandPanel, setShowCommandPanel] = useState(false);
 
   const handleActivatePane = useCallback(
     (paneId: string) => {
@@ -102,10 +104,17 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
           onUpdateNode={handleUpdateNode}
         />
       ) : null}
-      <CommandSendPanel
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        writeSession={writeSession}
+      {showCommandPanel && (
+        <CommandSendPanel
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          writeSession={writeSession}
+        />
+      )}
+      <WorkspaceBottomBar
+        workspaceName={workspace.name}
+        onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
+        commandPanelOpen={showCommandPanel}
       />
       {savingWindowId && (
         <SaveDialog
@@ -119,6 +128,34 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
           title="Save Window Config"
         />
       )}
+    </div>
+  );
+}
+
+interface WorkspaceBottomBarProps {
+  workspaceName: string;
+  onToggleCommandPanel: () => void;
+  commandPanelOpen: boolean;
+}
+
+function WorkspaceBottomBar({ workspaceName, onToggleCommandPanel, commandPanelOpen }: WorkspaceBottomBarProps) {
+  return (
+    <div className="workspace-bottom-bar">
+      <div className="workspace-bottom-bar-start">
+        <button
+          className="workspace-bottom-bar-button"
+          type="button"
+          onClick={onToggleCommandPanel}
+          title={commandPanelOpen ? "Hide command panel" : "Show command panel"}
+        >
+          {commandPanelOpen ? "▼" : "▲"}
+          <span>Command</span>
+        </button>
+      </div>
+      <div className="workspace-bottom-bar-end">
+        <span className="workspace-bottom-bar-label">Workspace:</span>
+        <span className="workspace-bottom-bar-name">{workspaceName}</span>
+      </div>
     </div>
   );
 }

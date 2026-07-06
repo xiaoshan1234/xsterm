@@ -6,8 +6,6 @@ interface CommandSendPanelProps {
   sessions: Session[];
   activeSessionId: number | null;
   writeSession: (id: number, data: string) => Promise<void>;
-  style?: React.CSSProperties;
-  onToggle?: (collapsed: boolean) => void;
 }
 
 type SendMode = "text" | "hex";
@@ -19,8 +17,6 @@ export default function CommandSendPanel({
   sessions,
   activeSessionId,
   writeSession,
-  style,
-  onToggle,
 }: CommandSendPanelProps) {
   const [input, setInput] = useState("");
   const [sendMode, setSendMode] = useState<SendMode>("text");
@@ -30,7 +26,6 @@ export default function CommandSendPanel({
   const [target, setTarget] = useState<TargetMode>("current");
   const [runState, setRunState] = useState<RunState>("idle");
   const [hexError, setHexError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(true);
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
 
   const stopRef = useRef(false);
@@ -38,7 +33,6 @@ export default function CommandSendPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
 
-  // Execution position refs so resume/continue can pick up where we left off.
   const chunkIndexRef = useRef(0);
   const repetitionRef = useRef(0);
   const chunksRef = useRef<string[]>([]);
@@ -54,7 +48,6 @@ export default function CommandSendPanel({
     return [target as number];
   }, [target, activeSessionId, sessions]);
 
-  // Refs for mutable execution parameters to avoid stale closures in timer callbacks.
   const breakpointsRef = useRef(breakpoints);
   const countRef = useRef(count);
   const intervalValueRef = useRef(interval);
@@ -112,7 +105,6 @@ export default function CommandSendPanel({
       return { chunks, chunkToLineIndex };
     }
 
-    // split by character
     return { chunks: input.split("").filter((c) => c.length > 0), chunkToLineIndex: [] };
   }, [input, sendMode, splitMode]);
 
@@ -153,7 +145,6 @@ export default function CommandSendPanel({
     const chunkIndex = chunkIndexRef.current;
     const chunk = chunks[chunkIndex];
 
-    // In line mode, check for breakpoints before sending.
     if (splitModeRef.current === "line" && chunkToLineIndex.length > 0) {
       const lineIndex = chunkToLineIndex[chunkIndex];
       if (breakpointsRef.current.has(lineIndex)) {
@@ -162,7 +153,6 @@ export default function CommandSendPanel({
       }
     }
 
-    // For line mode in text, append \r\n
     const dataToSend =
       sendModeRef.current === "text" && splitModeRef.current === "line" ? chunk + "\r\n" : chunk;
 
@@ -188,7 +178,6 @@ export default function CommandSendPanel({
     if (currentInterval > 0) {
       intervalRef.current = setTimeout(runNext, currentInterval * 1000);
     } else {
-      // No interval, run synchronously but still yield to UI
       intervalRef.current = setTimeout(runNext, 0);
     }
   }, [resetExecution]);
@@ -298,11 +287,10 @@ export default function CommandSendPanel({
             const isActive = activeLineIndex === lineIndex && runState !== "idle";
             return (
               <div
-                // Line numbers are the stable identifier for gutter rows.
                 key={lineIndex}
                 className={`panel-gutter-line ${isActive ? "panel-gutter-line--active" : ""}`}
                 onClick={() => toggleBreakpoint(lineIndex)}
-                title={hasBreakpoint ? "移除断点" : "添加断点"}
+                title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
               >
               <span className="panel-breakpoint">
                 {hasBreakpoint ? "●" : ""}
@@ -315,29 +303,12 @@ export default function CommandSendPanel({
     );
   };
 
-  if (collapsed) {
-    return (
-      <div className="command-send-panel command-send-panel--collapsed" style={style}>
-        <button
-          className="panel-toggle"
-          onClick={() => {
-            setCollapsed(false);
-            onToggle?.(false);
-          }}
-          title="展开"
-        >
-          ▲
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="command-send-panel" style={style}>
+    <div className="command-send-panel">
       <div className="panel-row panel-controls">
         <div className="control-group">
           <button className="btn btn--primary panel-send" onClick={handleSend}>
-            发送
+            Send
           </button>
           {runState === "running" ? (
             <button className="btn btn--secondary" onClick={handleStop}>
@@ -345,7 +316,7 @@ export default function CommandSendPanel({
             </button>
           ) : runState === "paused" ? (
             <button className="btn btn--secondary panel-continue" onClick={handleContinue}>
-              继续
+              Continue
             </button>
           ) : (
             <button className="btn btn--secondary" onClick={handlePlay}>
@@ -368,7 +339,7 @@ export default function CommandSendPanel({
               checked={sendMode === "text"}
               onChange={() => setSendMode("text")}
             />
-            <span>文本(T)</span>
+            <span>Text</span>
           </label>
           <label className="radio-label">
             <input
@@ -377,7 +348,7 @@ export default function CommandSendPanel({
               checked={sendMode === "hex"}
               onChange={() => setSendMode("hex")}
             />
-            <span>Hex(H)</span>
+            <span>Hex</span>
           </label>
         </div>
 
@@ -389,7 +360,7 @@ export default function CommandSendPanel({
               checked={splitMode === "line"}
               onChange={() => setSplitMode("line")}
             />
-            <span>竖线(L)</span>
+            <span>Line</span>
           </label>
           <label className="radio-label">
             <input
@@ -398,13 +369,13 @@ export default function CommandSendPanel({
               checked={splitMode === "character"}
               onChange={() => setSplitMode("character")}
             />
-            <span>字符(C)</span>
+            <span>Char</span>
           </label>
         </div>
 
         <div className="control-group form-field">
           <label className="input-label">
-            <span>计数(C)</span>
+            <span>Count</span>
             <input
               type="number"
               min={1}
@@ -416,7 +387,7 @@ export default function CommandSendPanel({
 
         <div className="control-group form-field">
           <label className="input-label">
-            <span>间隔(I)</span>
+            <span>Interval</span>
             <input
               type="number"
               min={0}
@@ -430,7 +401,7 @@ export default function CommandSendPanel({
 
         <div className="control-group form-field">
           <label className="input-label">
-            <span>目标(T)</span>
+            <span>Target</span>
             <select
               value={
                 target === "current"
@@ -446,8 +417,8 @@ export default function CommandSendPanel({
                 else setTarget(parseInt(val));
               }}
             >
-              <option value="current">当前会话</option>
-              <option value="all">所有会话</option>
+              <option value="current">Current</option>
+              <option value="all">All</option>
               {sessions.map((s) => (
                 <option key={s.id} value={String(s.id)}>
                   {s.name}
@@ -458,17 +429,6 @@ export default function CommandSendPanel({
         </div>
 
         {hexError && <span className="hex-error">{hexError}</span>}
-
-        <button
-          className="btn btn--secondary panel-close"
-          onClick={() => {
-            setCollapsed(true);
-            onToggle?.(true);
-          }}
-          title="折叠"
-        >
-          ✕
-        </button>
       </div>
 
       <div className="panel-row panel-editor">
@@ -478,7 +438,7 @@ export default function CommandSendPanel({
           className="panel-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="输入命令或 Hex 数据，点击行号设置断点..."
+          placeholder="Enter command or Hex data, click line number to set breakpoint..."
           spellCheck={false}
         />
       </div>
