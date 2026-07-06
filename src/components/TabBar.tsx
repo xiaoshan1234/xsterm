@@ -70,12 +70,14 @@ function getFirstLeafWithSession(root: PaneNode): PaneNode | null {
 }
 
 function getWorkspaceSessionType(workspace: Workspace, sessions: Session[]): Session["type"] | null {
+  const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
+  if (!activeWindow) return null;
   let leaf: PaneNode | null = null;
-  if (workspace.activePaneId) {
-    leaf = findPaneNode(workspace.rootPane, workspace.activePaneId);
+  if (activeWindow.activePaneId) {
+    leaf = findPaneNode(activeWindow.rootPane, activeWindow.activePaneId);
   }
   if (!leaf || leaf.sessionId === undefined) {
-    leaf = getFirstLeafWithSession(workspace.rootPane);
+    leaf = getFirstLeafWithSession(activeWindow.rootPane);
   }
   if (!leaf || leaf.sessionId === undefined) return null;
   return sessions.find((s) => s.id === leaf!.sessionId)?.type ?? null;

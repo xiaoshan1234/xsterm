@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Workspace, PaneNode } from "../types/session";
+import { Workspace, PaneNode, Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import { PaneTree } from "./PaneTree";
 
@@ -19,38 +19,85 @@ interface WorkspaceContainerProps {
 }
 
 export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
-  const { setActivePane, setActiveWorkspace, updateWorkspacePaneTree } = useSession();
+  const { setActiveWorkspace, setActiveWindow, setActivePane, updateWindowPaneTree } = useSession();
+
+  const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0] ?? null;
 
   const handleActivatePane = useCallback(
     (paneId: string) => {
+      if (!activeWindow) return;
       setActiveWorkspace(workspace.id);
-      setActivePane(workspace.id, paneId);
+      setActiveWindow(workspace.id, activeWindow.id);
+      setActivePane(workspace.id, activeWindow.id, paneId);
     },
-    [workspace.id, setActivePane, setActiveWorkspace]
+    [workspace.id, activeWindow, setActiveWorkspace, setActiveWindow, setActivePane]
   );
 
   const handleUpdateNode = useCallback(
-    (nodeId: string, updater: (node: typeof workspace.rootPane) => typeof workspace.rootPane) => {
-      updateWorkspacePaneTree(workspace.id, (root) => {
+    (nodeId: string, updater: (node: typeof activeWindow.rootPane) => typeof activeWindow.rootPane) => {
+      if (!activeWindow) return;
+      updateWindowPaneTree(workspace.id, activeWindow.id, (root) => {
         if (root.id === nodeId) {
           return updater(root);
         }
         return updateNodeInTree(root, nodeId, updater);
       });
     },
-    [workspace.id, updateWorkspacePaneTree]
+    [workspace.id, activeWindow, updateWindowPaneTree]
   );
 
   return (
     <div className="workspace-container" onMouseDown={() => setActiveWorkspace(workspace.id)}>
-      <PaneTree
-        workspace={workspace}
-        node={workspace.rootPane}
-        isActive={true}
-        activePaneId={workspace.activePaneId}
-        onActivatePane={handleActivatePane}
-        onUpdateNode={handleUpdateNode}
-      />
+      {workspace.windows.length > 1 && (
+        <WindowTabBar
+          windows={workspace.windows}
+          activeWindowId={workspace.activeWindowId}
+          onSelect={(windowId) => setActiveWindow(workspace.id, windowId)}
+        />
+      )}
+      {activeWindow ? (
+        <PaneTree
+          workspace={workspace}
+          windowId={activeWindow.id}
+          node={activeWindow.rootPane}
+          isActive={true}
+          activePaneId={activeWindow.activePaneId}
+          onActivatePane={handleActivatePane}
+          onUpdateNode={handleUpdateNode}
+        />
+      ) : null}
     </div>
   );
 }
+
+interface WindowTabBarProps {
+  windows: Window[];
+  activeWindowId: string | null;
+  onSelect: (windowId: string) => void;
+}
+
+function WindowTabBar({ windows, activeWindowId, onSelect }: WindowTabBarProps) {
+  return (
+    <div className="workspace-tabs window-tabs">
+      {windows.map((window) => (
+        <div
+          key={window.id}
+          className={`tab ${window.id === activeWindowId ? "active" : ""}`}
+          role="tab"
+          aria-selected={window.id === activeWindowId}
+          tabIndex={0}
+          onClick={() => onSelect(window.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSelect(window.id);
+            }
+          }}
+        >
+          <span className="tab-title">{window.name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+

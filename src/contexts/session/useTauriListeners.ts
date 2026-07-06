@@ -44,13 +44,16 @@ export function useTauriListeners({
         establishingSessionsRef.current.delete(sessionId);
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         setWorkspaces((prev) =>
-          prev.map((workspace) => {
-            const newRoot = removeSessionAndCollapse(workspace.rootPane, sessionId);
-            const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
-              ? workspace.activePaneId
-              : (getLeafPaneIds(newRoot)[0] ?? null);
-            return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
-          })
+          prev.map((workspace) => ({
+            ...workspace,
+            windows: workspace.windows.map((window) => {
+              const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
+              const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
+                ? window.activePaneId
+                : (getLeafPaneIds(newRoot)[0] ?? null);
+              return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
+            }),
+          }))
         );
         setTmuxState((prev) => {
           const next = cloneTmuxState(prev);
@@ -140,13 +143,16 @@ export function useTauriListeners({
             sessionService.closeSession(sessionId).catch(console.error);
             setSessions((prev) => prev.filter((s) => s.id !== sessionId));
             setWorkspaces((prev) =>
-              prev.map((workspace) => {
-                const newRoot = removeSessionAndCollapse(workspace.rootPane, sessionId);
-                const newActivePaneId = findPaneNode(newRoot, workspace.activePaneId ?? "")
-                  ? workspace.activePaneId
-                  : (getLeafPaneIds(newRoot)[0] ?? null);
-                return { ...workspace, rootPane: newRoot, activePaneId: newActivePaneId };
-              })
+              prev.map((workspace) => ({
+                ...workspace,
+                windows: workspace.windows.map((window) => {
+                  const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
+                  const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
+                    ? window.activePaneId
+                    : (getLeafPaneIds(newRoot)[0] ?? null);
+                  return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
+                }),
+              }))
             );
             alert(`Tmux session failed: ${controlEvent.message}`);
           }

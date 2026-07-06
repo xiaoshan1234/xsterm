@@ -5,6 +5,7 @@ import { Pane } from "./Pane";
 
 interface PaneTreeProps {
   workspace: Workspace;
+  windowId: string;
   node: PaneNode;
   isActive: boolean;
   activePaneId: string | null;
@@ -14,6 +15,7 @@ interface PaneTreeProps {
 
 export function PaneTree({
   workspace,
+  windowId,
   node,
   isActive,
   activePaneId,
@@ -24,6 +26,7 @@ export function PaneTree({
     return (
       <Pane
         workspace={workspace}
+        windowId={windowId}
         pane={node}
         isActive={isActive && activePaneId === node.id}
         onActivate={() => onActivatePane(node.id)}
@@ -34,6 +37,7 @@ export function PaneTree({
   return (
     <SplitNode
       workspace={workspace}
+      windowId={windowId}
       node={node}
       isActive={isActive}
       activePaneId={activePaneId}
@@ -45,6 +49,7 @@ export function PaneTree({
 
 interface SplitNodeProps {
   workspace: Workspace;
+  windowId: string;
   node: PaneNode;
   isActive: boolean;
   activePaneId: string | null;
@@ -54,6 +59,7 @@ interface SplitNodeProps {
 
 function SplitNode({
   workspace,
+  windowId,
   node,
   isActive,
   activePaneId,
@@ -121,6 +127,7 @@ function SplitNode({
         >
           <PaneTree
             workspace={workspace}
+            windowId={windowId}
             node={child}
             isActive={isActive}
             activePaneId={activePaneId}

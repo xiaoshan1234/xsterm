@@ -10,6 +10,9 @@ export function useAppShortcuts({
 }) {
   const { workspaces, activeWorkspaceId, setActivePane, closeSession } = useSession();
 
+  const activeWindowFor = (workspace: typeof workspaces[number]) =>
+    workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
+
   useShortcuts([
     { key: "n", ctrl: true, shift: true, handler: onCreateSession },
     {
@@ -18,13 +21,15 @@ export function useAppShortcuts({
       handler: () => {
         const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
         if (!workspace) return;
-        const leafIds = collectLeafIds(workspace.rootPane);
+        const window = activeWindowFor(workspace);
+        if (!window) return;
+        const leafIds = collectLeafIds(window.rootPane);
         if (leafIds.length <= 1) return;
-        const currentIndex = workspace.activePaneId
-          ? leafIds.indexOf(workspace.activePaneId)
+        const currentIndex = window.activePaneId
+          ? leafIds.indexOf(window.activePaneId)
           : -1;
         const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % leafIds.length : 0;
-        setActivePane(workspace.id, leafIds[nextIndex]);
+        setActivePane(workspace.id, window.id, leafIds[nextIndex]);
       },
     },
     {
@@ -34,15 +39,17 @@ export function useAppShortcuts({
       handler: () => {
         const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
         if (!workspace) return;
-        const leafIds = collectLeafIds(workspace.rootPane);
+        const window = activeWindowFor(workspace);
+        if (!window) return;
+        const leafIds = collectLeafIds(window.rootPane);
         if (leafIds.length <= 1) return;
-        const currentIndex = workspace.activePaneId
-          ? leafIds.indexOf(workspace.activePaneId)
+        const currentIndex = window.activePaneId
+          ? leafIds.indexOf(window.activePaneId)
           : -1;
         const prevIndex = currentIndex >= 0
           ? (currentIndex - 1 + leafIds.length) % leafIds.length
           : leafIds.length - 1;
-        setActivePane(workspace.id, leafIds[prevIndex]);
+        setActivePane(workspace.id, window.id, leafIds[prevIndex]);
       },
     },
     {
@@ -50,8 +57,10 @@ export function useAppShortcuts({
       ctrl: true,
       handler: () => {
         const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
-        if (!workspace || !workspace.activePaneId) return;
-        const pane = findPane(workspace.rootPane, workspace.activePaneId);
+        if (!workspace) return;
+        const window = activeWindowFor(workspace);
+        if (!window || !window.activePaneId) return;
+        const pane = findPane(window.rootPane, window.activePaneId);
         if (pane?.sessionId !== undefined) {
           closeSession(pane.sessionId);
         }

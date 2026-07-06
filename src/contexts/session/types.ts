@@ -8,6 +8,7 @@ import {
   Session,
   SessionGroup,
   SplitDirection,
+  Window,
   Workspace,
 } from "../../types/session";
 import { SshTmuxSessionConfig, TmuxState } from "../../types/tmux";
@@ -53,9 +54,12 @@ export interface SessionContextType {
   createWorkspaceFromSession: (sessionId: number, name?: string) => Workspace;
   createWorkspaceFromSavedConfig: (configId: string, name?: string) => Promise<Workspace>;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
-  splitPane: (workspaceId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;
-  updateWorkspacePaneTree: (workspaceId: string, updater: (root: PaneNode) => PaneNode) => void;
-  setActivePane: (workspaceId: string, paneId: string) => void;
+  createWindow: (workspaceId: string, sessionId?: number, name?: string) => Window;
+  closeWindow: (workspaceId: string, windowId: string) => void;
+  setActiveWindow: (workspaceId: string, windowId: string) => void;
+  splitPane: (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;
+  updateWindowPaneTree: (workspaceId: string, windowId: string, updater: (root: PaneNode) => PaneNode) => void;
+  setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
   saveWorkspace: (workspaceId: string, name: string) => void;
   loadWorkspace: (savedWorkspaceId: string) => Promise<Workspace>;
@@ -137,9 +141,12 @@ export interface SessionActions {
   createWorkspaceFromSession: (sessionId: number, name?: string) => Workspace;
   createWorkspaceFromSavedConfig: (configId: string, name?: string) => Promise<Workspace>;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
-  splitPane: (workspaceId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;
-  updateWorkspacePaneTree: (workspaceId: string, updater: (root: PaneNode) => PaneNode) => void;
-  setActivePane: (workspaceId: string, paneId: string) => void;
+  createWindow: (workspaceId: string, sessionId?: number, name?: string) => Window;
+  closeWindow: (workspaceId: string, windowId: string) => void;
+  setActiveWindow: (workspaceId: string, windowId: string) => void;
+  splitPane: (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;
+  updateWindowPaneTree: (workspaceId: string, windowId: string, updater: (root: PaneNode) => PaneNode) => void;
+  setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
   saveWorkspace: (workspaceId: string, name: string) => void;
   loadWorkspace: (savedWorkspaceId: string) => Promise<Workspace>;

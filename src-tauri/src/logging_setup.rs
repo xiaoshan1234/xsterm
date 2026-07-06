@@ -11,7 +11,7 @@ const DEFAULT_MAX_FILE_SIZE_MB: u64 = 10;
 /// Default number of retained log files.
 const DEFAULT_MAX_LOG_FILES: usize = 5;
 /// Default log level filter.
-const DEFAULT_LOG_LEVEL: &str = "info";
+const DEFAULT_LOG_LEVEL: &str = "debug";
 /// Conversion factor from megabytes to bytes.
 const BYTES_PER_MB: u64 = 1024 * 1024;
 

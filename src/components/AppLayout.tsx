@@ -90,7 +90,9 @@ export default function AppLayout() {
 
   const activeSessionId = activeWorkspace
     ? (() => {
-        const findActiveSession = (node: typeof activeWorkspace.rootPane): number | null => {
+        const activeWindow = activeWorkspace.windows.find((w) => w.id === activeWorkspace.activeWindowId) ?? activeWorkspace.windows[0];
+        if (!activeWindow) return null;
+        const findActiveSession = (node: typeof activeWindow.rootPane): number | null => {
           if (node.type === "leaf") return node.sessionId ?? null;
           for (const child of node.children ?? []) {
             const found = findActiveSession(child);
@@ -98,12 +100,12 @@ export default function AppLayout() {
           }
           return null;
         };
-        return activeWorkspace.activePaneId
+        return activeWindow.activePaneId
           ? (() => {
-              const node = findPane(activeWorkspace.rootPane, activeWorkspace.activePaneId);
-              return node?.sessionId ?? findActiveSession(activeWorkspace.rootPane);
+              const node = findPane(activeWindow.rootPane, activeWindow.activePaneId);
+              return node?.sessionId ?? findActiveSession(activeWindow.rootPane);
             })()
-          : findActiveSession(activeWorkspace.rootPane);
+          : findActiveSession(activeWindow.rootPane);
       })()
     : null;
 

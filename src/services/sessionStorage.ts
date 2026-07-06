@@ -81,7 +81,24 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
   logger.debug("sessionStorage", "loadSavedWorkspaces", undefined);
   try {
     const store = await getStore();
-    const workspaces = (await store.get<SavedWorkspace[]>("savedWorkspaces")) || [];
+    const raw = (await store.get<(SavedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) || [];
+    const workspaces = raw.map((w) => {
+      if ("rootPane" in w && w.rootPane !== undefined) {
+        const legacy = w as SavedWorkspace & { rootPane: { id: string; type: "leaf" | "split"; size: number } };
+        return {
+          id: legacy.id,
+          name: legacy.name,
+          windows: [
+            {
+              id: crypto.randomUUID(),
+              name: legacy.name || "Window",
+              rootPane: legacy.rootPane as import("../types/session").PaneNode,
+            },
+          ],
+        };
+      }
+      return w as SavedWorkspace;
+    });
     logger.debug("sessionStorage", "loadSavedWorkspaces:result", { count: workspaces.length });
     return workspaces;
   } catch (e) {

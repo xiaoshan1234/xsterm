@@ -61,6 +61,23 @@
   white-space: nowrap;
 }
 
+.window-tabs {
+  min-height: 30px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.window-tabs .tab {
+  height: 30px;
+  min-width: 80px;
+  max-width: 160px;
+  background: transparent;
+}
+
+.window-tabs .tab.active {
+  background: var(--bg-primary);
+}
+
 .tab-disconnected {
   color: var(--error);
   font-weight: bold;

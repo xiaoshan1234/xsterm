@@ -20,13 +20,15 @@ export function SelectSessionDialog({
   const usedSessionIds = useMemo(() => {
     const used = new Set<number>();
     workspaces.forEach((workspace) => {
-      const collect = (node: typeof workspace.rootPane) => {
-        if (node.type === "leaf" && node.sessionId !== undefined) {
-          used.add(node.sessionId);
-        }
-        node.children?.forEach(collect);
-      };
-      collect(workspace.rootPane);
+      workspace.windows.forEach((window) => {
+        const collect = (node: typeof window.rootPane) => {
+          if (node.type === "leaf" && node.sessionId !== undefined) {
+            used.add(node.sessionId);
+          }
+          node.children?.forEach(collect);
+        };
+        collect(window.rootPane);
+      });
     });
     return used;
   }, [workspaces]);

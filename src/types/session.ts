@@ -12,17 +12,30 @@ export interface PaneNode {
   configId?: string;
 }
 
-export interface SavedWorkspace {
+export interface SavedWindow {
   id: string;
   name: string;
   rootPane: PaneNode;
 }
 
-export interface Workspace {
+export interface SavedWorkspace {
+  id: string;
+  name: string;
+  windows: SavedWindow[];
+}
+
+export interface Window {
   id: string;
   name: string;
   rootPane: PaneNode;
   activePaneId: string | null;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  windows: Window[];
+  activeWindowId: string | null;
 }
 
 export interface Session {

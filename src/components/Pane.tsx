@@ -9,6 +9,7 @@ import { TmuxSessionView } from "./TmuxSessionView";
 
 interface PaneProps {
   workspace: Workspace;
+  windowId: string;
   pane: PaneNode;
   isActive: boolean;
   onActivate: () => void;
@@ -16,7 +17,7 @@ interface PaneProps {
 
 type DialogMode = "split" | "attach";
 
-export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
+export function Pane({ workspace, windowId, pane, isActive, onActivate }: PaneProps) {
   const {
     sessions,
     splitPane,
@@ -28,13 +29,12 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
     createTmuxWindow,
     closeTmuxWindow,
     closeTmuxPane,
-    updateWorkspacePaneTree,
+    updateWindowPaneTree,
   } = useSession();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
   const [pendingSplit, setPendingSplit] = useState<SplitDirection | null>(null);
   const contextMenuRef = useRef<ContextMenuRef>(null);
-  // terminalRef: 命令式句柄，用于调用子 Terminal 组件暴露的 selectAll / copySelection
   const terminalRef = useRef<TerminalRef>(null);
 
   const session = pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
@@ -54,7 +54,7 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
   const attachSessionToPane = useCallback(
     (sessionId: number) => {
       const attachedSession = sessions.find((s) => s.id === sessionId);
-      updateWorkspacePaneTree(workspace.id, (root) =>
+      updateWindowPaneTree(workspace.id, windowId, (root) =>
         paneTree.replacePaneNode(root, pane.id, {
           ...pane,
           sessionId,
@@ -63,13 +63,13 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
       );
       onActivate();
     },
-    [workspace.id, pane, sessions, updateWorkspacePaneTree, onActivate]
+    [workspace.id, windowId, pane, sessions, updateWindowPaneTree, onActivate]
   );
 
   const handleSelectSession = useCallback(
     (sessionId: number) => {
       if (dialogMode === "split" && pendingSplit) {
-        splitPane(workspace.id, pane.id, pendingSplit, sessionId);
+        splitPane(workspace.id, windowId, pane.id, pendingSplit, sessionId);
         setPendingSplit(null);
         setDialogMode(null);
         setShowSessionDialog(false);
@@ -79,7 +79,7 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
         setShowSessionDialog(false);
       }
     },
-    [dialogMode, pendingSplit, workspace.id, pane.id, splitPane, attachSessionToPane]
+    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, attachSessionToPane]
   );
 
   const handleSelectConfig = useCallback(
@@ -87,7 +87,7 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
       if (dialogMode === "split" && pendingSplit) {
         try {
           const session = await createSessionFromSavedConfig(configId);
-          splitPane(workspace.id, pane.id, pendingSplit, session.id);
+          splitPane(workspace.id, windowId, pane.id, pendingSplit, session.id);
         } catch (e) {
           console.error("Failed to create session for split:", e);
         } finally {
@@ -107,7 +107,7 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
         }
       }
     },
-    [dialogMode, pendingSplit, workspace.id, pane.id, splitPane, createSessionFromSavedConfig, attachSessionToPane]
+    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, createSessionFromSavedConfig, attachSessionToPane]
   );
 
   const handleCloseSession = useCallback(() => {
@@ -174,7 +174,6 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
           onMouseDown={onActivate}
           onContextMenuCapture={handleContextMenuCapture}
         >
-            {/* 渲染决策：有 session 且为 tmux/ssh_tmux 类型 → TmuxSessionView（含多个 Terminal），否则 → Terminal，无 session → 空状态 */}
             {session ? (
               session.type === "tmux" || session.type === "ssh_tmux" ? (
                 <div className="workspace-pane-content" onMouseDown={onActivate}>
