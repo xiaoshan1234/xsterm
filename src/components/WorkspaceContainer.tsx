@@ -5,7 +5,8 @@ import { PaneTree } from "./PaneTree";
 import CommandSendPanel from "./CommandSendPanel";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
-import { PlusIcon, SaveIcon } from "./icons/Icon";
+import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
+import { PlusIcon, WorkspaceIcon } from "./icons/Icon";
 import "./WorkspaceContainer.css";
 
 function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
@@ -32,13 +33,14 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
     updateWindowPaneTree,
     createWindow,
     saveWindow,
-    saveAllWindows,
+    saveWorkspace,
     writeSession,
   } = useSession();
 
   const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0] ?? null;
 
   const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
+  const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
   const [showCommandPanel, setShowCommandPanel] = useState(false);
 
   const handleActivatePane = useCallback(
@@ -63,6 +65,14 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
     },
     [workspace.id, activeWindow, updateWindowPaneTree]
   );
+
+  const handleSaveAll = useCallback(() => {
+    if (workspace.name === "Default") {
+      setShowSaveWorkspaceDialog(true);
+    } else {
+      saveWorkspace(workspace.id, workspace.name);
+    }
+  }, [workspace.name, workspace.id, saveWorkspace]);
 
   const activeSessionId = activeWindow
     ? (() => {
@@ -90,7 +100,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
         activeWindowId={workspace.activeWindowId}
         onSelect={(windowId) => setActiveWindow(workspace.id, windowId)}
         onAdd={() => createWindow(workspace.id)}
-        onSaveAll={() => saveAllWindows(workspace.id)}
+        onSaveAll={handleSaveAll}
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
       />
       {activeWindow ? (
@@ -128,6 +138,15 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
           title="Save Window Config"
         />
       )}
+      <SaveWorkspaceDialog
+        isOpen={showSaveWorkspaceDialog}
+        onClose={() => setShowSaveWorkspaceDialog(false)}
+        onSave={(name) => {
+          saveWorkspace(workspace.id, name);
+          setShowSaveWorkspaceDialog(false);
+        }}
+        defaultName={workspace.name}
+      />
     </div>
   );
 }
@@ -185,8 +204,8 @@ function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, o
         <button className="window-tab-action" type="button" onClick={onAdd} title="New window">
           <PlusIcon size={14} />
         </button>
-        <button className="window-tab-action" type="button" onClick={onSaveAll} title="Save all windows">
-          <SaveIcon size={14} />
+        <button className="window-tab-action" type="button" onClick={onSaveAll} title="Save all windows as workspace">
+          <WorkspaceIcon size={14} />
         </button>
       </div>
     </div>

@@ -3,25 +3,19 @@ import { useSession } from "../contexts/SessionContext";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
-import TabBar from "./TabBar";
 import { WorkspaceContainer } from "./WorkspaceContainer";
 import { EmptyState } from "./EmptyState";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
-import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
 import "../styles/pane.css";
 
 export default function AppLayout() {
   const {
     workspaces,
     activeWorkspaceId,
-    sessions,
     savedConfigs,
     savedWorkspaces,
     savedWindowConfigs,
-    setActiveWorkspace,
-    closeWorkspace,
-    saveWorkspace,
     createLocalSession,
     createSshSession,
     createTmuxSession,
@@ -37,7 +31,6 @@ export default function AppLayout() {
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<"appearance" | "shortcuts" | "about">("appearance");
   const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | "windows" | null>(null);
-  const [saveWorkspaceId, setSaveWorkspaceId] = useState<string | null>(null);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
@@ -45,16 +38,6 @@ export default function AppLayout() {
     onCreateSession: () => setShowCreateDialog(true),
     onToggleLogs: () => {},
   });
-
-  const handleSaveWorkspace = useCallback(
-    (name: string) => {
-      if (saveWorkspaceId) {
-        saveWorkspace(saveWorkspaceId, name);
-        setSaveWorkspaceId(null);
-      }
-    },
-    [saveWorkspaceId, saveWorkspace]
-  );
 
   const handleLoadWindow = useCallback(
     async (savedWindowId: string) => {
@@ -104,25 +87,13 @@ export default function AppLayout() {
               onCreateSession={() => setShowCreateDialog(true)}
               hasSavedConfigs={savedConfigs.length > 0}
             />
+          ) : activeWorkspace ? (
+            <WorkspaceContainer workspace={activeWorkspace} />
           ) : (
-            <>
-              <TabBar
-                workspaces={workspaces}
-                sessions={sessions}
-                activeWorkspaceId={activeWorkspaceId}
-                onSelect={setActiveWorkspace}
-                onClose={closeWorkspace}
-                onSave={(id) => setSaveWorkspaceId(id)}
-              />
-              {activeWorkspace ? (
-                <WorkspaceContainer workspace={activeWorkspace} />
-              ) : (
-                <EmptyState
-                  onCreateSession={() => setShowCreateDialog(true)}
-                  hasSavedConfigs={savedConfigs.length > 0}
-                />
-              )}
-            </>
+            <EmptyState
+              onCreateSession={() => setShowCreateDialog(true)}
+              hasSavedConfigs={savedConfigs.length > 0}
+            />
           )}
         </div>
       </div>
@@ -133,12 +104,6 @@ export default function AppLayout() {
         onCreateSsh={createSshSession}
         onCreateTmux={createTmuxSession}
         initialGroupId={createSessionGroupId}
-      />
-      <SaveWorkspaceDialog
-        isOpen={saveWorkspaceId !== null}
-        onClose={() => setSaveWorkspaceId(null)}
-        onSave={handleSaveWorkspace}
-        defaultName={activeWorkspace?.name ?? "My Workspace"}
       />
     </div>
   );

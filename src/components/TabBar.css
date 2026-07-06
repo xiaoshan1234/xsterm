@@ -62,17 +62,24 @@
 }
 
 .window-tabs {
-  min-height: 30px;
+  display: flex;
+  background: var(--bg-secondary);
+  min-height: 36px;
+  overflow-x: auto;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
+  flex-shrink: 0;
   justify-content: flex-start;
 }
 
+.window-tabs:empty {
+  display: none;
+}
+
 .window-tabs .tab {
-  height: 30px;
-  min-width: 80px;
-  max-width: 160px;
-  background: transparent;
+  height: 36px;
+  min-width: 120px;
+  max-width: 200px;
+  background: var(--bg-tertiary);
 }
 
 .window-tabs .tab.active {
