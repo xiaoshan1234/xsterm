@@ -6,7 +6,7 @@ import CommandSendPanel from "./CommandSendPanel";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
-import { PlusIcon, SaveIcon } from "./icons/Icon";
+import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";
 import "./WorkspaceContainer.css";
 import "./TabBar.css";
 
@@ -33,6 +33,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
     setActivePane,
     updateWindowPaneTree,
     createWindow,
+    closeWindow,
     saveWindow,
     saveWorkspace,
     writeSession,
@@ -103,6 +104,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
         onAdd={() => createWindow(workspace.id)}
         onSaveAll={handleSaveAll}
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
+        onCloseWindow={(windowId) => closeWindow(workspace.id, windowId)}
       />
       {activeWindow ? (
         <PaneTree
@@ -187,9 +189,10 @@ interface WindowTabBarProps {
   onAdd: () => void;
   onSaveAll: () => void;
   onSaveWindow: (windowId: string) => void;
+  onCloseWindow: (windowId: string) => void;
 }
 
-function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow }: WindowTabBarProps) {
+function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow, onCloseWindow }: WindowTabBarProps) {
   return (
     <div className="workspace-tabs window-tabs">
       {workspace.windows.map((window) => (
@@ -199,6 +202,7 @@ function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, o
           isActive={window.id === activeWindowId}
           onSelect={() => onSelect(window.id)}
           onSave={() => onSaveWindow(window.id)}
+          onClose={() => onCloseWindow(window.id)}
         />
       ))}
       <div className="window-tab-actions">
@@ -218,13 +222,32 @@ interface WindowTabProps {
   isActive: boolean;
   onSelect: () => void;
   onSave: () => void;
+  onClose: () => void;
 }
 
-function WindowTab({ window, isActive, onSelect, onSave }: WindowTabProps) {
+function WindowTab({ window, isActive, onSelect, onSave, onClose }: WindowTabProps) {
   const contextMenuRef = useRef<ContextMenuRef>(null);
   const contextMenuItems: ContextMenuItem[] = [
     { label: "Save as Window Config", onClick: onSave },
+    { label: "Close", onClick: onClose, danger: true },
   ];
+
+  const handleCloseClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClose();
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClose();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      onClose();
+    }
+  };
 
   return (
     <ContextMenu ref={contextMenuRef} items={contextMenuItems}>
@@ -234,6 +257,8 @@ function WindowTab({ window, isActive, onSelect, onSave }: WindowTabProps) {
         aria-selected={isActive}
         tabIndex={0}
         onClick={onSelect}
+        onDoubleClick={handleDoubleClick}
+        onMouseDown={handleMouseDown}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -242,6 +267,15 @@ function WindowTab({ window, isActive, onSelect, onSave }: WindowTabProps) {
         }}
       >
         <span className="tab-title">{window.name}</span>
+        <button
+          className="tab-close"
+          type="button"
+          onClick={handleCloseClick}
+          aria-label={`Close window ${window.name}`}
+          title="Close window"
+        >
+          <CloseIcon size={12} />
+        </button>
       </div>
     </ContextMenu>
   );
