@@ -48,18 +48,23 @@ export function useSessionPersistence({
     [nextGroupId, setGroups]
   );
 
+  // ============================================================
+  // 初始化：从 Tauri store 加载持久化数据到 React 状态
+  // ============================================================
   useEffect(() => {
     const init = async () => {
+      // 并行加载三个数据源：会话配置、分组、工作区快照
       const [configs, savedGroups, workspacesData] = await Promise.all([
-        sessionStorage.loadSavedConfigs(),
-        sessionStorage.loadSavedGroups(),
-        sessionStorage.loadSavedWorkspaces(),
+        sessionStorage.loadSavedConfigs(),   // 读取 sessions.json 中的 savedConfigs
+        sessionStorage.loadSavedGroups(),    // 读取 sessions.json 中的 groups（含 nextGroupId）
+        sessionStorage.loadSavedWorkspaces(),// 读取 sessions.json 中的 savedWorkspaces
       ]);
       setSavedConfigs(configs);
       setGroups(savedGroups.groups);
       setNextGroupId(savedGroups.nextGroupId);
       setSavedWorkspaces(workspacesData);
 
+      // 单独从 settings store 加载全局本地回显设置
       try {
         const store = await sessionStorage.getSettingsStore();
         const savedGlobalEcho = await store.get<boolean>("globalLocalEcho");
@@ -73,6 +78,9 @@ export function useSessionPersistence({
     init();
   }, [setSavedConfigs, setGroups, setNextGroupId, setSavedWorkspaces, setGlobalLocalEcho]);
 
+  // ============================================================
+  // 同步：globalLocalEcho 变更时自动写回 settings store
+  // ============================================================
   useEffect(() => {
     let cancelled = false;
     const persist = async () => {

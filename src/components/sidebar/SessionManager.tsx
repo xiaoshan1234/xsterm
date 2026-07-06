@@ -13,6 +13,12 @@ interface SessionManagerProps {
   onCreateSessionWithGroup: (groupId: number) => void;
 }
 
+/**
+ * SessionManager -管理会话配置的列表和分组，支持单击选中、双击打开、右键菜单操作。
+ * 单击：标记选中状态（高亮背景）。
+ * 双击：打开对应会话并建立连接。
+ * 会话可按组（SessionGroup）归类，支持拖拽分组。
+ */
 export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: SessionManagerProps) {
   const {
     sessions,
@@ -28,6 +34,8 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     updateConfig,
     moveConfigToGroup,
   } = useSession();
+
+  // selectedConfigId: 当前被单击选中的会话配置 ID，用于高亮显示
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -38,6 +46,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
 
+  // isConnected - 检查某配置是否已有活跃会话连接
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
 
@@ -57,10 +66,12 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     setShowNewGroupDialog(false);
   };
 
+  // handleConfigClick - 单击时设置选中状态（高亮背景），不影响已连接状态
   const handleConfigClick = (config: SavedSessionConfig) => {
     setSelectedConfigId(config.id);
   };
 
+  // handleConfigDoubleClick - 双击时根据配置类型打开对应会话（本地/SSH/Tmux）并建立连接
   const handleConfigDoubleClick = (config: SavedSessionConfig) => {
     openFromConfig(config.id).catch(console.error);
   };
@@ -130,6 +141,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
             onDragLeave={handleGroupDragLeave}
             onDrop={(e) => handleGroupDrop(e, group.id)}
           >
+            {/* 右键分组头菜单：Create Session（在组内新建）、Edit（重命名）、Delete（删除分组） */}
             <ContextMenu
               items={[
                 { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
@@ -249,6 +261,9 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   );
 }
 
+// SessionItem - 单个会话条目组件，支持选中高亮和已连接状态区分
+// selected: 是否选中（单击选中），选中时添加 selected 类名高亮
+// connected: 是否已建立连接，未连接时 name 显示为 disconnected 样式
 interface SessionItemProps {
   config: SavedSessionConfig;
   selected: boolean;

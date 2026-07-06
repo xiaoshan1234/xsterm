@@ -50,6 +50,10 @@ export function useXterm(
     themeRef.current = theme;
   }, [theme]);
 
+  // 在 containerRef 指向的 DOM 元素上创建 xterm 实例。
+  // 每个 Terminal 组件拥有独立的 xterm 实例，通过 ref 暴露给外部。
+  // FitAddon 同时加载到 xterm 上，用于根据容器尺寸自动调整终端大小。
+  // 组件卸载时调用 dispose() 销毁实例并将 ref 置空，防止内存泄漏。
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -73,6 +77,7 @@ export function useXterm(
     };
   }, [containerRef]);
 
+  // 主题变更时同步更新 xterm 实例的 theme 配置。
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;

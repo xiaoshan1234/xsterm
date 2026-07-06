@@ -98,6 +98,12 @@ export function useSessionActions({
     [savedConfigs, setSessions, establishingSessionsRef, tmuxListTimeoutsRef]
   );
 
+  /**
+   * 根据已有会话创建工作区
+   *
+   * 流程：查找会话 → 创建以该会话为唯一面板的工作区 → 加入 workspaces → 设为活跃工作区
+   * 用于 createLocalSession/createSshSession/createTmuxSession 之后自动创建默认工作区
+   */
   const createWorkspaceFromSession = useCallback(
     (sessionId: number, name?: string): Workspace => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
@@ -122,6 +128,12 @@ export function useSessionActions({
     [openFromConfigInternal]
   );
 
+  /**
+   * 从已保存配置创建工作区（一步完成）
+   *
+   * 完整流程：查找配置 → createSessionFromSavedConfig 创建会话 → createWorkspaceFromSession 创建工作区
+   * 用于侧边栏"从已保存配置创建"操作，一步到位
+   */
   const createWorkspaceFromSavedConfig = useCallback(
     async (configId: string, name?: string): Promise<Workspace> => {
       const config = savedConfigs.find((c) => c.id === configId);
@@ -151,6 +163,19 @@ export function useSessionActions({
     [setWorkspaces]
   );
 
+  /**
+   * 在工作区中拆分面板（split pane）
+   *
+   * 拆分流程：
+   * 1. 找到目标面板（必须是 leaf）
+   * 2. 将目标面板尺寸减半，作为左/上部分
+   * 3. 创建新面板（使用指定 sessionId 或空），作为右/下部分
+   * 4. 将两者组成 splitNode，替换原面板位置
+   * 5. 将新面板设为活跃面板
+   *
+   * 若未指定 sessionId：新面板为空白面板（无关联会话）
+   * 若指定 sessionId：新面板关联该会话
+   */
   const splitPane = useCallback(
     (workspaceId: string, paneId: string, direction: SplitDirection, sessionId?: number) => {
       setWorkspaces((prev) => {
@@ -203,6 +228,16 @@ export function useSessionActions({
     [setWorkspaces, setActiveWorkspaceId, workspacesRef]
   );
 
+  /**
+   * 将工作区保存为快照（持久化到 sessions.json）
+   *
+   * 工作区保存流程：
+   * 1. 找到目标工作区（深拷贝 rootPane 结构，包含所有面板和会话引用 configId）
+   * 2. 生成新的 savedWorkspace 对象（带新 ID，与原工作区独立）
+   * 3. 追加到 savedWorkspaces 并通过 persistSavedWorkspaces 写入 sessions.json
+   *
+   * 注意：保存的是 configId 而非会话 ID，重启后通过 loadWorkspace 重建会话
+   */
   const saveWorkspace = useCallback(
     (workspaceId: string, name: string) => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
@@ -223,11 +258,23 @@ export function useSessionActions({
     [workspacesRef, setSavedWorkspaces, persistSavedWorkspaces]
   );
 
+  /**
+   * 从快照加载工作区（从 sessions.json 恢复）
+   *
+   * 工作区加载完整流程：
+   * 1. 找到 savedWorkspace，遍历面板树（buildTree 递归）
+   * 2. 对每个 leaf 面板：若含 configId 则调用 openFromConfigInternal 重建会话（复用已有会话避免重复）
+   * 3. buildTree 返回新面板树（所有节点 ID 重新生成，与原快照独立）
+   * 4. 创建工作区，加入 workspaces，设为活跃
+   *
+   * 异常处理：任何面板重建失败时 rollback（关闭已创建会话，回退 sessions 状态）
+   */
   const loadWorkspace = useCallback(
     async (savedWorkspaceId: string): Promise<Workspace> => {
       const saved = savedWorkspaces.find((w) => w.id === savedWorkspaceId);
       if (!saved) throw new Error("Saved workspace not found");
 
+      // configId → 已在本次加载中创建的会话（同一配置只创建一次）
       const configIdToSession = new Map<string, Session>();
 
       const rollback = async () => {
@@ -322,6 +369,18 @@ export function useSessionActions({
     [setSavedWorkspaces, persistSavedWorkspaces]
   );
 
+  /**
+   * 创建并激活会话的核心内部方法
+   *
+   * 创建会话的完整流程：
+   * 1. 生成 configId（作为持久化配置的唯一标识）
+   * 2. 调用后端服务（sessionService 或 tmuxService）创建真实会话
+   * 3. 构建前端 Session 对象，加入 sessions[]
+   * 4. 若 save=true，将配置保存到 savedConfigs（持久化，重启后可恢复）
+   * 5. 自动调用 createWorkspaceFromSession 创建默认工作区
+   *
+   * createLocalSession / createSshSession / createTmuxSession 均调用此方法
+   */
   const createAndActivateSession = useCallback(
     async (
       type: Session["type"],
@@ -359,6 +418,12 @@ export function useSessionActions({
     [updateConfigs, createWorkspaceFromSession, setSessions]
   );
 
+  /**
+   * 创建本地会话并自动创建工作区
+   *
+   * 调用链：createLocalSession → createAndActivateSession("local", ...)
+   *  → 后端 sessionService.createLocal(config) → sessions[] + 自动创建工作区
+   */
   const createLocalSession = useCallback(
     async (config: LocalSessionConfig, save = true): Promise<Session> => {
       return createAndActivateSession("local", () => sessionService.createLocal(config), config, save);
@@ -366,6 +431,12 @@ export function useSessionActions({
     [createAndActivateSession]
   );
 
+  /**
+   * 创建 SSH 会话并自动创建工作区
+   *
+   * 调用链：createSshSession → createAndActivateSession("ssh", ...)
+   *  → 后端 sessionService.createSsh(config) → sessions[] + 自动创建工作区
+   */
   const createSshSession = useCallback(
     async (config: SSHSessionConfig, save = true): Promise<Session> => {
       return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save);
@@ -373,6 +444,14 @@ export function useSessionActions({
     [createAndActivateSession]
   );
 
+  /**
+   * 创建 Tmux 会话并自动创建工作区
+   *
+   * 特殊处理：
+   * - 根据 config.ssh 判断是纯 Tmux（"tmux"）还是 SSH+Tmux（"ssh_tmux"）
+   * - Tmux 会话需要 500ms 后调用 listSessions 同步窗口/面板状态
+   * - 使用 establishingSessionsRef 标记会话正在初始化（避免重复初始化）
+   */
   const createTmuxSession = useCallback(
     async (config: SshTmuxSessionConfig, save = true): Promise<Session> => {
       const session = await (config.ssh
@@ -407,6 +486,12 @@ export function useSessionActions({
     [createAndActivateSession, establishingSessionsRef, tmuxListTimeoutsRef]
   );
 
+  /**
+   * 从已保存配置打开会话（同时创建默认工作区）
+   *
+   * 与 createSessionFromSavedConfig 的区别：此方法额外调用 createWorkspaceFromSession，
+   * 用于侧边栏"打开"操作，同时展示会话界面
+   */
   const openFromConfig = useCallback(
     async (configId: string): Promise<Session> => {
       const session = await openFromConfigInternal(configId);
@@ -438,6 +523,17 @@ export function useSessionActions({
     [updateConfigs, updateGroups, sessionsRef, setSessions, setWorkspaces]
   );
 
+  /**
+   * 关闭会话
+   *
+   * 关闭会话流程：
+   * 1. 调用后端 sessionService.closeSession(id) 关闭真实会话
+   * 2. 清理 tmuxListTimeoutsRef 中的定时器
+   * 3. 从 sessions[] 移除该会话
+   * 4. 在所有工作区中移除该会话对应的面板（removeSessionAndCollapse），并自动切换活跃面板
+   *
+   * 注意：不会自动删除 savedConfigs（配置保留，用户可重新打开）
+   */
   const closeSession = useCallback(
     async (id: number): Promise<void> => {
       try {

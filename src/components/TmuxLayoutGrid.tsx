@@ -18,9 +18,14 @@ interface TmuxLayoutGridProps {
 }
 
 export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLayoutGridProps) {
+  // parseTmuxLayout: 将 tmux layout 字符串解析为 cells 数组，每个 cell 代表一个窗格的几何信息
+  // paneMap: 将 panes 数组转为 Map，方便通过 paneId 快速查找对应的 TmuxPane 元数据（标题、copyMode 等）
   const cells = parseTmuxLayout(layout);
   const paneMap = new Map(panes.map((p) => [p.id, p]));
 
+  // 渲染流程：遍历所有 cell，仅保留有 paneId 且在 paneMap 中有对应记录的 cell
+  // 每个 cell 对应一个 tmux pane，渲染为一个绝对定位的容器，内部挂载一个 Terminal 组件
+  // 关键：Terminal 的 paneId prop 与该 cell 的 paneId 一致，使按键数据路由到正确的 tmux pane
   return (
     <div className="tmux-layout-grid" style={{ position: "relative", width: "100%", height: "100%" }}>
       {cells
@@ -58,6 +63,7 @@ export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLa
                 )}
               </div>
               <div className="tmux-pane-terminal">
+                {/* 每个 tmux pane 对应一个 Terminal 实例，paneId 使按键路由到后端对应 pane */}
                 <Terminal sessionId={sessionId} paneId={cell.paneId} />
               </div>
             </div>

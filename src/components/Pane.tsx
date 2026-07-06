@@ -34,6 +34,7 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
   const [pendingSplit, setPendingSplit] = useState<SplitDirection | null>(null);
   const contextMenuRef = useRef<ContextMenuRef>(null);
+  // terminalRef: 命令式句柄，用于调用子 Terminal 组件暴露的 selectAll / copySelection
   const terminalRef = useRef<TerminalRef>(null);
 
   const session = pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
@@ -173,6 +174,7 @@ export function Pane({ workspace, pane, isActive, onActivate }: PaneProps) {
           onMouseDown={onActivate}
           onContextMenuCapture={handleContextMenuCapture}
         >
+            {/* 渲染决策：有 session 且为 tmux/ssh_tmux 类型 → TmuxSessionView（含多个 Terminal），否则 → Terminal，无 session → 空状态 */}
             {session ? (
               session.type === "tmux" || session.type === "ssh_tmux" ? (
                 <div className="workspace-pane-content" onMouseDown={onActivate}>
