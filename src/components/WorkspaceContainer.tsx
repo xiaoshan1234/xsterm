@@ -8,6 +8,7 @@ import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
 import { PlusIcon, SaveIcon } from "./icons/Icon";
 import "./WorkspaceContainer.css";
+import "./TabBar.css";
 
 function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
   if (root.id === nodeId) {

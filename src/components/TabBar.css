@@ -63,6 +63,7 @@
 
 .window-tabs {
   display: flex;
+  flex-direction: row;
   background: var(--bg-secondary);
   min-height: 36px;
   overflow-x: auto;
