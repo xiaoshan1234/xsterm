@@ -37,7 +37,7 @@ export default function AppLayout() {
     if (workspaces.length === 0) {
       createDefaultWorkspace();
     }
-  }, [workspaces.length, createDefaultWorkspace]);
+  }, []);
 
   useAppShortcuts({
     onCreateSession: () => setShowCreateDialog(true),
