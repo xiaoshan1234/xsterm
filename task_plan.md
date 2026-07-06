@@ -9,53 +9,35 @@ to:
 
 A `Window` is a tabbed container inside a workspace. It owns the pane tree and active pane state. The UI renders workspace tabs at the top, and inside the active workspace renders a window tab bar plus the active window's pane tree.
 
-## Current State
-- `Workspace` in `src/types/session.ts` has `rootPane`, `activePaneId`, and `name`.
-- `TabBar` renders `Workspace[]` as tabs.
-- `WorkspaceContainer` renders the active workspace's pane tree.
-- `useSessionActions` has `splitPane`, `setActivePane`, `updateWorkspacePaneTree`, `closeWorkspace`, `saveWorkspace`, `loadWorkspace`, `createWorkspaceFromSession`, etc.
-- Persistence stores `SavedWorkspace` with `rootPane`.
+## Phase 1-5 (completed)
+- Defined `Window`/`SavedWindow` types and updated `Workspace`/`SavedWorkspace`.
+- Updated actions (`createWindow`, `closeWindow`, `setActiveWindow`, `splitPane`, etc.).
+- Updated UI (`WorkspaceContainer`, `PaneTree`, `Pane`, `TabBar`, `AppLayout`).
+- Updated persistence with backward compatibility.
+- Build passes.
 
-## Phases
+## New Requirements (Phase 6)
 
-### Phase 1: Define types and state shape ✅
-- Added `Window` and `SavedWindow` types.
-- Updated `Workspace` to hold `windows: Window[]` and `activeWindowId`.
-- Updated `SavedWorkspace` to hold saved windows.
+### 6.1 Default workspace for session-config-created windows ✅
+- Added `createWindowFromSession` and `createWindowFromSavedConfig`.
+- `createAndActivateSession` and `openFromConfig` now add windows to the first/default workspace.
 
-### Phase 2: Update UI components ✅
-- `WorkspaceContainer` renders a window tab bar (when >1 window) and the active window's pane tree.
-- `PaneTree` and `Pane` now receive `windowId` and call `updateWindowPaneTree` / `splitPane` with window ID.
-- `TabBar` derives session type from the active window.
-- `AppLayout` derives `activeSessionId` from active window.
+### 6.2 Per-workspace window tab bar and session tool ✅
+- `WorkspaceContainer` now includes both the window tab bar and `CommandSendPanel`.
+- `AppLayout` removed the global `CommandSendPanel` and resize handle.
 
-### Phase 3: Update state/actions ✅
-- `useSessionActions` now has `createWindow`, `closeWindow`, `setActiveWindow`.
-- `splitPane`, `setActivePane`, `updateWindowPaneTree` operate on a window inside a workspace.
-- `createWorkspaceFromSession` creates a workspace with one default window.
-- `saveWorkspace` / `loadWorkspace` handle windows.
-- `closeSession`, `removeConfig`, and Tauri listeners now iterate over windows.
+### 6.3 Add-window button in window tab bar ✅
+- `WindowTabBar` renders `+` button to create an empty window.
 
-### Phase 4: Persistence migration ✅
-- `loadSavedWorkspaces` wraps legacy saved workspaces (with `rootPane` directly) into a single default window.
+### 6.4 Window Manager sidebar ✅
+- Added `"windows"` sidebar panel with `WindowManager` component.
+- Supports load (double-click), rename, delete.
 
-### Phase 5: Type-check and clean up ✅
-- `npm run build` passes (`tsc && vite build`).
-- Removed unused `findPaneNode` from `WorkspaceContainer.tsx`.
+### 6.5 Right-click tab → save as window config ✅
+- Window tabs have context menu with "Save as Window Config".
 
-## Files Likely to Change
-- `src/types/session.ts`
-- `src/contexts/session/types.ts`
-- `src/contexts/session/useSessionState.ts`
-- `src/contexts/session/useSessionActions.ts`
-- `src/contexts/session/paneUtils.ts`
-- `src/components/TabBar.tsx`
-- `src/components/WorkspaceContainer.tsx`
-- `src/components/AppLayout.tsx`
-- `src/services/sessionStorage.ts`
-- `src/components/sidebar/WorkspaceManager.tsx` (maybe)
-- `src/hooks/useAppShortcuts.ts` (maybe)
+### 6.6 Save-all-windows button ✅
+- Added save-all button in `WindowTabBar`.
 
-## Notes
-- Tmux already has its own "window" concept. The new frontend `Window` is unrelated. Naming may need disambiguation (e.g., `FrontendWindow` internally, but keep user-facing "Window").
-- Preserve existing session lifecycle and tmux handling.
+### Verification ✅
+- `npm run build` passes.

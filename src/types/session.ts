@@ -18,6 +18,8 @@ export interface SavedWindow {
   rootPane: PaneNode;
 }
 
+export interface SavedWindowConfig extends SavedWindow {}
+
 export interface SavedWorkspace {
   id: string;
   name: string;

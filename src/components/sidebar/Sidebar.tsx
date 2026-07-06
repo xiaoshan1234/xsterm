@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
-import { SavedWorkspace, Workspace } from "../../types/session";
+import { SavedWindowConfig, SavedWorkspace, Workspace } from "../../types/session";
 import { useDragResize } from "../../hooks/useDragResize";
 import { SidebarToolbar, SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
 import { WorkspaceManager } from "./WorkspaceManager";
+import { WindowManager } from "./WindowManager";
 import "./Sidebar.css";
 
 const TOOLBAR_WIDTH = 48;
@@ -25,6 +26,10 @@ interface SidebarProps {
   loadWorkspace: (id: string) => Promise<Workspace>;
   deleteSavedWorkspace: (id: string) => void;
   renameSavedWorkspace: (id: string, name: string) => void;
+  savedWindowConfigs: SavedWindowConfig[];
+  loadWindow: (id: string) => Promise<void>;
+  deleteSavedWindow: (id: string) => void;
+  renameSavedWindow: (id: string, name: string) => void;
 }
 
 const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
@@ -45,6 +50,10 @@ export default function Sidebar({
   loadWorkspace,
   deleteSavedWorkspace,
   renameSavedWorkspace,
+  savedWindowConfigs,
+  loadWindow,
+  deleteSavedWindow,
+  renameSavedWindow,
 }: SidebarProps) {
   const [submenuWidth, setSubmenuWidth] = useState(DEFAULT_SUBMENU_WIDTH);
 
@@ -89,6 +98,17 @@ export default function Sidebar({
             loadWorkspace={loadWorkspace}
             deleteSavedWorkspace={deleteSavedWorkspace}
             renameSavedWorkspace={renameSavedWorkspace}
+          />
+        </div>
+      )}
+
+      {sidebarPanel === "windows" && (
+        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
+          <WindowManager
+            savedWindowConfigs={savedWindowConfigs}
+            loadWindow={loadWindow}
+            deleteSavedWindow={deleteSavedWindow}
+            renameSavedWindow={renameSavedWindow}
           />
         </div>
       )}

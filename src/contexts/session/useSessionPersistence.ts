@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import * as sessionStorage from "../../services/sessionStorage";
-import { SavedSessionConfig, SavedWorkspace, SessionGroup } from "../../types/session";
+import { SavedSessionConfig, SavedWindowConfig, SavedWorkspace, SessionGroup } from "../../types/session";
 import { SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {
@@ -8,6 +8,7 @@ interface UseSessionPersistenceOptions {
   setGroups: (value: SessionGroup[] | ((prev: SessionGroup[]) => SessionGroup[])) => void;
   setNextGroupId: (value: number | ((prev: number) => number)) => void;
   setSavedWorkspaces: (value: SavedWorkspace[] | ((prev: SavedWorkspace[]) => SavedWorkspace[])) => void;
+  setSavedWindowConfigs: (value: SavedWindowConfig[] | ((prev: SavedWindowConfig[]) => SavedWindowConfig[])) => void;
   setGlobalLocalEcho: (value: boolean | ((prev: boolean) => boolean)) => void;
   globalLocalEcho: boolean;
   nextGroupId: number;
@@ -18,12 +19,17 @@ export function useSessionPersistence({
   setGroups,
   setNextGroupId,
   setSavedWorkspaces,
+  setSavedWindowConfigs,
   setGlobalLocalEcho,
   globalLocalEcho,
   nextGroupId,
 }: UseSessionPersistenceOptions): SessionPersistence {
   const persistSavedWorkspaces = useCallback((workspacesData: SavedWorkspace[]) => {
     sessionStorage.persistWorkspaces(workspacesData);
+  }, []);
+
+  const persistSavedWindowConfigs = useCallback((configs: SavedWindowConfig[]) => {
+    sessionStorage.persistWindowConfigs(configs);
   }, []);
 
   const updateConfigs = useCallback(
@@ -48,23 +54,20 @@ export function useSessionPersistence({
     [nextGroupId, setGroups]
   );
 
-  // ============================================================
-  // 初始化：从 Tauri store 加载持久化数据到 React 状态
-  // ============================================================
   useEffect(() => {
     const init = async () => {
-      // 并行加载三个数据源：会话配置、分组、工作区快照
-      const [configs, savedGroups, workspacesData] = await Promise.all([
-        sessionStorage.loadSavedConfigs(),   // 读取 sessions.json 中的 savedConfigs
-        sessionStorage.loadSavedGroups(),    // 读取 sessions.json 中的 groups（含 nextGroupId）
-        sessionStorage.loadSavedWorkspaces(),// 读取 sessions.json 中的 savedWorkspaces
+      const [configs, savedGroups, workspacesData, windowConfigs] = await Promise.all([
+        sessionStorage.loadSavedConfigs(),
+        sessionStorage.loadSavedGroups(),
+        sessionStorage.loadSavedWorkspaces(),
+        sessionStorage.loadSavedWindowConfigs(),
       ]);
       setSavedConfigs(configs);
       setGroups(savedGroups.groups);
       setNextGroupId(savedGroups.nextGroupId);
       setSavedWorkspaces(workspacesData);
+      setSavedWindowConfigs(windowConfigs);
 
-      // 单独从 settings store 加载全局本地回显设置
       try {
         const store = await sessionStorage.getSettingsStore();
         const savedGlobalEcho = await store.get<boolean>("globalLocalEcho");
@@ -76,11 +79,8 @@ export function useSessionPersistence({
       }
     };
     init();
-  }, [setSavedConfigs, setGroups, setNextGroupId, setSavedWorkspaces, setGlobalLocalEcho]);
+  }, [setSavedConfigs, setGroups, setNextGroupId, setSavedWorkspaces, setSavedWindowConfigs, setGlobalLocalEcho]);
 
-  // ============================================================
-  // 同步：globalLocalEcho 变更时自动写回 settings store
-  // ============================================================
   useEffect(() => {
     let cancelled = false;
     const persist = async () => {
@@ -100,5 +100,5 @@ export function useSessionPersistence({
     };
   }, [globalLocalEcho]);
 
-  return { updateConfigs, updateGroups, persistSavedWorkspaces };
+  return { updateConfigs, updateGroups, persistSavedWorkspaces, persistSavedWindowConfigs };
 }

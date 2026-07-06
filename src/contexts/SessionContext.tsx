@@ -21,6 +21,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     workspaces: state.workspaces,
     activeWorkspaceId: state.activeWorkspaceId,
     savedWorkspaces: state.savedWorkspaces,
+    savedWindowConfigs: state.savedWindowConfigs,
     groups: state.groups,
     globalLocalEcho: state.globalLocalEcho,
     setGlobalLocalEcho: state.setGlobalLocalEcho,

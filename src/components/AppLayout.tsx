@@ -1,8 +1,6 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useSession } from "../contexts/SessionContext";
-import { PaneNode } from "../types/session";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
-import { useDragResize } from "../hooks/useDragResize";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
 import TabBar from "./TabBar";
@@ -10,13 +8,8 @@ import { WorkspaceContainer } from "./WorkspaceContainer";
 import { EmptyState } from "./EmptyState";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
-import CommandSendPanel from "./CommandSendPanel";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
 import "../styles/pane.css";
-
-const DEFAULT_PANEL_HEIGHT = 140;
-const MIN_PANEL_HEIGHT = 80;
-const MIN_TERMINAL_HEIGHT = 100;
 
 export default function AppLayout() {
   const {
@@ -25,26 +18,26 @@ export default function AppLayout() {
     sessions,
     savedConfigs,
     savedWorkspaces,
+    savedWindowConfigs,
     setActiveWorkspace,
     closeWorkspace,
     saveWorkspace,
     createLocalSession,
     createSshSession,
     createTmuxSession,
-    writeSession,
     loadWorkspace,
     deleteSavedWorkspace,
     renameSavedWorkspace,
+    loadWindow,
+    deleteSavedWindow,
+    renameSavedWindow,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
-  const [panelHeight, setPanelHeight] = useState(DEFAULT_PANEL_HEIGHT);
-  const [sendPanelCollapsed, setSendPanelCollapsed] = useState(true);
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<"appearance" | "shortcuts" | "about">("appearance");
-  const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | null>(null);
+  const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | "windows" | null>(null);
   const [saveWorkspaceId, setSaveWorkspaceId] = useState<string | null>(null);
-  const mainAreaRef = useRef<HTMLDivElement>(null);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
@@ -52,31 +45,6 @@ export default function AppLayout() {
     onCreateSession: () => setShowCreateDialog(true),
     onToggleLogs: () => {},
   });
-
-  const { start: startResize } = useDragResize({
-    direction: "vertical",
-    onDelta: ({ clientY }) => {
-      if (!mainAreaRef.current) return;
-
-      const rect = mainAreaRef.current.getBoundingClientRect();
-      const availableHeight = rect.height;
-      const relativeYFromBottom = availableHeight - (clientY - rect.top);
-      const newHeight = Math.max(
-        MIN_PANEL_HEIGHT,
-        Math.min(availableHeight - MIN_TERMINAL_HEIGHT, relativeYFromBottom)
-      );
-      setPanelHeight(newHeight);
-    },
-  });
-
-  const handleSendPanelToggle = useCallback((collapsed: boolean) => {
-    setSendPanelCollapsed(collapsed);
-    if (!collapsed && mainAreaRef.current) {
-      const rect = mainAreaRef.current.getBoundingClientRect();
-      const availableHeight = rect.height;
-      setPanelHeight(Math.max(MIN_PANEL_HEIGHT, availableHeight * 0.25));
-    }
-  }, []);
 
   const handleSaveWorkspace = useCallback(
     (name: string) => {
@@ -88,26 +56,13 @@ export default function AppLayout() {
     [saveWorkspaceId, saveWorkspace]
   );
 
-  const activeSessionId = activeWorkspace
-    ? (() => {
-        const activeWindow = activeWorkspace.windows.find((w) => w.id === activeWorkspace.activeWindowId) ?? activeWorkspace.windows[0];
-        if (!activeWindow) return null;
-        const findActiveSession = (node: typeof activeWindow.rootPane): number | null => {
-          if (node.type === "leaf") return node.sessionId ?? null;
-          for (const child of node.children ?? []) {
-            const found = findActiveSession(child);
-            if (found !== null) return found;
-          }
-          return null;
-        };
-        return activeWindow.activePaneId
-          ? (() => {
-              const node = findPane(activeWindow.rootPane, activeWindow.activePaneId);
-              return node?.sessionId ?? findActiveSession(activeWindow.rootPane);
-            })()
-          : findActiveSession(activeWindow.rootPane);
-      })()
-    : null;
+  const handleLoadWindow = useCallback(
+    async (savedWindowId: string) => {
+      if (!activeWorkspace) return;
+      await loadWindow(savedWindowId, activeWorkspace.id);
+    },
+    [activeWorkspace, loadWindow]
+  );
 
   return (
     <div className="app-container">
@@ -136,8 +91,12 @@ export default function AppLayout() {
           loadWorkspace={loadWorkspace}
           deleteSavedWorkspace={deleteSavedWorkspace}
           renameSavedWorkspace={renameSavedWorkspace}
+          savedWindowConfigs={savedWindowConfigs}
+          loadWindow={handleLoadWindow}
+          deleteSavedWindow={deleteSavedWindow}
+          renameSavedWindow={renameSavedWindow}
         />
-        <div className="main-area" ref={mainAreaRef}>
+        <div className="main-area">
           {activeView === "settings" ? (
             <SettingsView activeCategory={activeSettingsCategory} />
           ) : workspaces.length === 0 ? (
@@ -163,20 +122,6 @@ export default function AppLayout() {
                   hasSavedConfigs={savedConfigs.length > 0}
                 />
               )}
-              {!sendPanelCollapsed && (
-                <div
-                  className="panel-resize-handle"
-                  onMouseDown={(e) => startResize(panelHeight, e)}
-                  title="拖拽调整高度"
-                />
-              )}
-              <CommandSendPanel
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                writeSession={writeSession}
-                style={{ height: sendPanelCollapsed ? "auto" : panelHeight }}
-                onToggle={handleSendPanelToggle}
-              />
             </>
           )}
         </div>
@@ -197,15 +142,4 @@ export default function AppLayout() {
       />
     </div>
   );
-}
-
-function findPane(root: PaneNode, id: string): PaneNode | null {
-  if (root.id === id) return root;
-  if (root.children) {
-    for (const child of root.children) {
-      const found = findPane(child, id);
-      if (found) return found;
-    }
-  }
-  return null;
 }

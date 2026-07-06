@@ -4,6 +4,7 @@ import {
   PaneNode,
   SSHSessionConfig,
   SavedSessionConfig,
+  SavedWindowConfig,
   SavedWorkspace,
   Session,
   SessionGroup,
@@ -19,6 +20,7 @@ export interface SessionContextType {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   savedWorkspaces: SavedWorkspace[];
+  savedWindowConfigs: SavedWindowConfig[];
   groups: SessionGroup[];
   globalLocalEcho: boolean;
   setGlobalLocalEcho: (enabled: boolean) => void;
@@ -52,8 +54,9 @@ export interface SessionContextType {
   closeTmuxWindow: (sessionId: number, windowId: string) => Promise<void>;
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
   createWorkspaceFromSession: (sessionId: number, name?: string) => Workspace;
-  createWorkspaceFromSavedConfig: (configId: string, name?: string) => Promise<Workspace>;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
+  createWindowFromSession: (sessionId: number, name?: string) => Window;
+  createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
   createWindow: (workspaceId: string, sessionId?: number, name?: string) => Window;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
@@ -66,12 +69,18 @@ export interface SessionContextType {
   closeWorkspace: (workspaceId: string) => void;
   deleteSavedWorkspace: (id: string) => void;
   renameSavedWorkspace: (id: string, name: string) => void;
+  saveWindow: (workspaceId: string, windowId: string, name: string) => void;
+  saveAllWindows: (workspaceId: string) => void;
+  loadWindow: (savedWindowId: string, workspaceId?: string) => Promise<Window>;
+  deleteSavedWindow: (id: string) => void;
+  renameSavedWindow: (id: string, name: string) => void;
 }
 
 export type SetSavedConfigs = Dispatch<SetStateAction<SavedSessionConfig[]>>;
 export type SetSessions = Dispatch<SetStateAction<Session[]>>;
 export type SetWorkspaces = Dispatch<SetStateAction<Workspace[]>>;
 export type SetSavedWorkspaces = Dispatch<SetStateAction<SavedWorkspace[]>>;
+export type SetSavedWindowConfigs = Dispatch<SetStateAction<SavedWindowConfig[]>>;
 export type SetGroups = Dispatch<SetStateAction<SessionGroup[]>>;
 export type SetTmuxState = Dispatch<SetStateAction<TmuxState>>;
 export type SetActiveTmuxWindowIds = Dispatch<SetStateAction<Map<number, string>>>;
@@ -87,6 +96,8 @@ export interface SessionState {
   setActiveWorkspaceId: Dispatch<SetStateAction<string | null>>;
   savedWorkspaces: SavedWorkspace[];
   setSavedWorkspaces: SetSavedWorkspaces;
+  savedWindowConfigs: SavedWindowConfig[];
+  setSavedWindowConfigs: SetSavedWindowConfigs;
   groups: SessionGroup[];
   setGroups: SetGroups;
   nextGroupId: number;
@@ -109,6 +120,7 @@ export interface SessionPersistence {
   updateConfigs: (updater: (prev: SavedSessionConfig[]) => SavedSessionConfig[]) => void;
   updateGroups: (updater: (prev: SessionGroup[]) => SessionGroup[], nextId?: number) => void;
   persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
+  persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
 }
 
 export interface SessionActions {
@@ -139,8 +151,9 @@ export interface SessionActions {
   closeTmuxWindow: (sessionId: number, windowId: string) => Promise<void>;
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
   createWorkspaceFromSession: (sessionId: number, name?: string) => Workspace;
-  createWorkspaceFromSavedConfig: (configId: string, name?: string) => Promise<Workspace>;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
+  createWindowFromSession: (sessionId: number, name?: string) => Window;
+  createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
   createWindow: (workspaceId: string, sessionId?: number, name?: string) => Window;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
@@ -153,6 +166,11 @@ export interface SessionActions {
   closeWorkspace: (workspaceId: string) => void;
   deleteSavedWorkspace: (id: string) => void;
   renameSavedWorkspace: (id: string, name: string) => void;
+  saveWindow: (workspaceId: string, windowId: string, name: string) => void;
+  saveAllWindows: (workspaceId: string) => void;
+  loadWindow: (savedWindowId: string, workspaceId?: string) => Promise<Window>;
+  deleteSavedWindow: (id: string) => void;
+  renameSavedWindow: (id: string, name: string) => void;
 }
 
 export interface SessionProviderProps {

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ChatIcon, SettingsIcon, LogIcon, WorkspaceIcon } from "../icons/Icon";
+import { ChatIcon, SettingsIcon, LogIcon, WorkspaceIcon, WindowIcon } from "../icons/Icon";
 
-export type SidebarMenu = "chat" | "settings" | "workspace";
+export type SidebarMenu = "chat" | "settings" | "workspace" | "windows";
 
 interface SidebarToolbarProps {
   activeMenu: SidebarMenu | null;
@@ -30,6 +30,13 @@ export function SidebarToolbar({
           title="Workspaces"
         >
           <WorkspaceIcon />
+        </button>
+        <button
+          className={`sidebar-btn ${activeMenu === "windows" ? "active" : ""}`}
+          onClick={() => onMenuClick("windows")}
+          title="Windows"
+        >
+          <WindowIcon />
         </button>
         <button
           className="sidebar-btn"

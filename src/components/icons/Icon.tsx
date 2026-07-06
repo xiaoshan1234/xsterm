@@ -131,3 +131,19 @@ export const RestoreIcon = icon("0 0 24 24", (
 export const ChevronIcon = icon("0 0 24 24", (
   <polyline points="9 18 15 12 9 6" />
 ));
+
+export const SaveIcon = icon("0 0 24 24", (
+  <>
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" />
+    <polyline points="7 3 7 8 15 8" />
+  </>
+));
+
+export const WindowIcon = icon("0 0 24 24", (
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <line x1="3" y1="9" x2="21" y2="9" />
+    <line x1="9" y1="21" x2="9" y2="9" />
+  </>
+));

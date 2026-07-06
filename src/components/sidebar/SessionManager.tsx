@@ -24,7 +24,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     sessions,
     savedConfigs,
     groups,
-    openFromConfig,
+    createWindowFromSavedConfig,
     removeConfig,
     createGroup,
     toggleGroup,
@@ -73,7 +73,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
 
   // handleConfigDoubleClick - 双击时根据配置类型打开对应会话（本地/SSH/Tmux）并建立连接
   const handleConfigDoubleClick = (config: SavedSessionConfig) => {
-    openFromConfig(config.id).catch(console.error);
+    createWindowFromSavedConfig(config.id).catch(console.error);
   };
 
   const removeOrCloseConfig = (config: SavedSessionConfig) => {

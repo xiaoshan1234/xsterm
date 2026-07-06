@@ -4,6 +4,7 @@ import {
   PaneNode,
   SSHSessionConfig,
   SavedSessionConfig,
+  SavedWindowConfig,
   SavedWorkspace,
   Session,
   SplitDirection,
@@ -47,6 +48,8 @@ export function useSessionActions({
   setActiveWorkspaceId,
   savedWorkspaces,
   setSavedWorkspaces,
+  savedWindowConfigs,
+  setSavedWindowConfigs,
   nextGroupId,
   setNextGroupId,
   setTmuxState,
@@ -56,6 +59,7 @@ export function useSessionActions({
   updateConfigs,
   updateGroups,
   persistSavedWorkspaces,
+  persistSavedWindowConfigs,
 }: UseSessionActionsOptions): SessionActions {
   const openFromConfigInternal = useCallback(
     async (configId: string): Promise<Session> => {
@@ -99,12 +103,44 @@ export function useSessionActions({
     [savedConfigs, setSessions, establishingSessionsRef, tmuxListTimeoutsRef]
   );
 
-  /**
-   * 根据已有会话创建工作区
-   *
-   * 流程：查找会话 → 创建以该会话为唯一面板的窗口 → 将窗口加入工作区 → 设为活跃工作区
-   * 用于 createLocalSession/createSshSession/createTmuxSession 之后自动创建默认工作区
-   */
+  const createWindowFromSession = useCallback(
+    (sessionId: number, name?: string): Window => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      const windowName = name ?? session?.name ?? "Window";
+      const rootPane = createLeafPane(100, sessionId, session?.configId);
+      const window: Window = {
+        id: generateId(),
+        name: windowName,
+        rootPane,
+        activePaneId: rootPane.id,
+      };
+
+      setWorkspaces((prev) => {
+        if (prev.length === 0) {
+          const workspace: Workspace = {
+            id: generateId(),
+            name: "Default",
+            windows: [window],
+            activeWindowId: window.id,
+          };
+          setActiveWorkspaceId(workspace.id);
+          return [workspace];
+        }
+        return prev.map((workspace) =>
+          workspace.id === workspacesRef.current[0]?.id
+            ? {
+                ...workspace,
+                windows: [...workspace.windows, window],
+                activeWindowId: window.id,
+              }
+            : workspace
+        );
+      });
+      return window;
+    },
+    [sessionsRef, setWorkspaces, setActiveWorkspaceId, workspacesRef]
+  );
+
   const createWorkspaceFromSession = useCallback(
     (sessionId: number, name?: string): Workspace => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
@@ -136,21 +172,15 @@ export function useSessionActions({
     [openFromConfigInternal]
   );
 
-  /**
-   * 从已保存配置创建工作区（一步完成）
-   *
-   * 完整流程：查找配置 → createSessionFromSavedConfig 创建会话 → createWorkspaceFromSession 创建工作区
-   * 用于侧边栏"从已保存配置创建"操作，一步到位
-   */
-  const createWorkspaceFromSavedConfig = useCallback(
-    async (configId: string, name?: string): Promise<Workspace> => {
+  const createWindowFromSavedConfig = useCallback(
+    async (configId: string, name?: string): Promise<Window> => {
       const config = savedConfigs.find((c) => c.id === configId);
       if (!config) throw new Error("Config not found");
 
       const session = await createSessionFromSavedConfig(configId);
-      return createWorkspaceFromSession(session.id, name ?? config.name);
+      return createWindowFromSession(session.id, name ?? config.name);
     },
-    [savedConfigs, createSessionFromSavedConfig, createWorkspaceFromSession]
+    [savedConfigs, createSessionFromSavedConfig, createWindowFromSession]
   );
 
   const setActiveWorkspace = useCallback(
@@ -459,6 +489,154 @@ export function useSessionActions({
     [setSavedWorkspaces, persistSavedWorkspaces]
   );
 
+  const saveWindow = useCallback(
+    (workspaceId: string, windowId: string, name: string) => {
+      const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
+      const window = workspace?.windows.find((w) => w.id === windowId);
+      if (!workspace || !window) return;
+
+      const savedWindow: SavedWindowConfig = {
+        id: generateId(),
+        name: name.trim() || window.name,
+        rootPane: structuredClone(window.rootPane),
+      };
+
+      setSavedWindowConfigs((prev) => {
+        const updated = [...prev, savedWindow];
+        persistSavedWindowConfigs(updated);
+        return updated;
+      });
+    },
+    [workspacesRef, setSavedWindowConfigs, persistSavedWindowConfigs]
+  );
+
+  const saveAllWindows = useCallback(
+    (workspaceId: string) => {
+      const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
+      if (!workspace) return;
+
+      const newConfigs: SavedWindowConfig[] = workspace.windows.map((window) => ({
+        id: generateId(),
+        name: window.name,
+        rootPane: structuredClone(window.rootPane),
+      }));
+
+      setSavedWindowConfigs((prev) => {
+        const updated = [...prev, ...newConfigs];
+        persistSavedWindowConfigs(updated);
+        return updated;
+      });
+    },
+    [workspacesRef, setSavedWindowConfigs, persistSavedWindowConfigs]
+  );
+
+  const loadWindow = useCallback(
+    async (savedWindowId: string, workspaceId?: string): Promise<Window> => {
+      const saved = savedWindowConfigs.find((w) => w.id === savedWindowId);
+      if (!saved) throw new Error("Saved window config not found");
+
+      const configIdToSession = new Map<string, Session>();
+
+      const rollback = async () => {
+        const sessionsToClose = [...configIdToSession.values()];
+        const idsToClose = new Set(sessionsToClose.map((s) => s.id));
+        await Promise.all(
+          sessionsToClose.map((session) =>
+            sessionService
+              .closeSession(session.id)
+              .catch((e) => console.error("Failed to close session during window rollback:", e))
+          )
+        );
+        for (const id of idsToClose) {
+          establishingSessionsRef.current.delete(id);
+          const timeoutId = tmuxListTimeoutsRef.current.get(id);
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+            tmuxListTimeoutsRef.current.delete(id);
+          }
+        }
+        if (idsToClose.size > 0) {
+          setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
+        }
+      };
+
+      const buildTree = async (node: PaneNode): Promise<PaneNode> => {
+        if (node.type === "leaf") {
+          if (node.sessionId !== undefined) {
+            return { ...node, id: generateId() };
+          }
+          const configId = node.configId;
+          if (configId) {
+            let session = configIdToSession.get(configId);
+            if (!session) {
+              try {
+                session = await openFromConfigInternal(configId);
+                configIdToSession.set(configId, session);
+              } catch (e) {
+                console.error("Failed to recreate session for window:", e);
+                await rollback();
+                throw e;
+              }
+            }
+            return createLeafPane(node.size, session.id, configId);
+          }
+          return { ...createLeafPane(node.size), id: generateId() };
+        }
+        const children = await Promise.all((node.children ?? []).map((child) => buildTree(child)));
+        return {
+          id: generateId(),
+          type: "split",
+          direction: node.direction,
+          size: node.size,
+          children,
+        };
+      };
+
+      const rootPane = await buildTree(saved.rootPane);
+      const window: Window = {
+        id: generateId(),
+        name: saved.name,
+        rootPane,
+        activePaneId: getLeafPaneIds(rootPane)[0] ?? null,
+      };
+
+      const targetWorkspaceId = workspaceId ?? workspacesRef.current[0]?.id;
+      if (!targetWorkspaceId) throw new Error("No workspace available to load window");
+
+      setWorkspaces((prev) =>
+        prev.map((workspace) =>
+          workspace.id === targetWorkspaceId
+            ? { ...workspace, windows: [...workspace.windows, window], activeWindowId: window.id }
+            : workspace
+        )
+      );
+      return window;
+    },
+    [savedWindowConfigs, openFromConfigInternal, setSessions, setWorkspaces, establishingSessionsRef, tmuxListTimeoutsRef]
+  );
+
+  const deleteSavedWindow = useCallback(
+    (id: string) => {
+      setSavedWindowConfigs((prev) => {
+        const updated = prev.filter((w) => w.id !== id);
+        persistSavedWindowConfigs(updated);
+        return updated;
+      });
+    },
+    [setSavedWindowConfigs, persistSavedWindowConfigs]
+  );
+
+  const renameSavedWindow = useCallback(
+    (id: string, name: string) => {
+      setSavedWindowConfigs((prev) => {
+        const updated = prev.map((w) => (w.id === id ? { ...w, name } : w));
+        persistSavedWindowConfigs(updated);
+        return updated;
+      });
+    },
+    [setSavedWindowConfigs, persistSavedWindowConfigs]
+  );
+
   /**
    * 创建并激活会话的核心内部方法
    *
@@ -502,10 +680,10 @@ export function useSessionActions({
         updateConfigs((prev) => [...prev, savedConfig]);
       }
 
-      createWorkspaceFromSession(session.id, session.name);
+      createWindowFromSession(session.id, session.name);
       return session;
     },
-    [updateConfigs, createWorkspaceFromSession, setSessions]
+    [updateConfigs, createWindowFromSession, setSessions]
   );
 
   /**
@@ -585,10 +763,10 @@ export function useSessionActions({
   const openFromConfig = useCallback(
     async (configId: string): Promise<Session> => {
       const session = await openFromConfigInternal(configId);
-      createWorkspaceFromSession(session.id, session.name);
+      createWindowFromSession(session.id, session.name);
       return session;
     },
-    [openFromConfigInternal, createWorkspaceFromSession]
+    [openFromConfigInternal, createWindowFromSession]
   );
 
   const removeConfig = useCallback(
@@ -869,8 +1047,9 @@ export function useSessionActions({
     createTmuxWindow,
     closeTmuxWindow,
     closeTmuxPane,
+    createWindowFromSession,
+    createWindowFromSavedConfig,
     createWorkspaceFromSession,
-    createWorkspaceFromSavedConfig,
     createSessionFromSavedConfig,
     createWindow,
     closeWindow,
@@ -884,5 +1063,10 @@ export function useSessionActions({
     closeWorkspace,
     deleteSavedWorkspace,
     renameSavedWorkspace,
+    saveWindow,
+    saveAllWindows,
+    loadWindow,
+    deleteSavedWindow,
+    renameSavedWindow,
   };
 }
