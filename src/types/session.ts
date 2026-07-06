@@ -31,6 +31,7 @@ export interface Window {
   name: string;
   rootPane: PaneNode;
   activePaneId: string | null;
+  windowType?: "terminal" | "init";
 }
 
 export interface Workspace {

@@ -28,6 +28,9 @@ export interface SessionContextType {
   createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createTmuxSession: (config: SshTmuxSessionConfig, save?: boolean) => Promise<Session>;
+  createLocalSessionOnly: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
+  createTmuxSessionOnly: (config: SshTmuxSessionConfig, save?: boolean) => Promise<Session>;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -57,7 +60,8 @@ export interface SessionContextType {
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
   createWindowFromSession: (sessionId: number, name?: string) => Window;
   createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
-  createWindow: (workspaceId: string, sessionId?: number, name?: string) => Window;
+  createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
+  replaceInitWindowWithSession: (workspaceId: string, windowId: string, sessionId: number) => void;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
   splitPane: (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;
@@ -127,6 +131,9 @@ export interface SessionActions {
   createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createTmuxSession: (config: SshTmuxSessionConfig, save?: boolean) => Promise<Session>;
+  createLocalSessionOnly: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
+  createTmuxSessionOnly: (config: SshTmuxSessionConfig, save?: boolean) => Promise<Session>;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -154,7 +161,8 @@ export interface SessionActions {
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
   createWindowFromSession: (sessionId: number, name?: string) => Window;
   createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
-  createWindow: (workspaceId: string, sessionId?: number, name?: string) => Window;
+  createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
+  replaceInitWindowWithSession: (workspaceId: string, windowId: string, sessionId: number) => void;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
   splitPane: (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;

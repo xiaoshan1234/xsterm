@@ -277,14 +277,15 @@ export function useSessionActions({
   );
 
   const createWindow = useCallback(
-    (workspaceId: string, sessionId?: number, name?: string): Window => {
+    (workspaceId: string, sessionId?: number, name?: string, windowType: "terminal" | "init" = "terminal"): Window => {
       const session = sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
       const rootPane = createLeafPane(100, sessionId, session?.configId);
       const window: Window = {
         id: generateId(),
-        name: name ?? session?.name ?? "Window",
+        name: name ?? session?.name ?? (windowType === "init" ? "New Session" : "Window"),
         rootPane,
         activePaneId: rootPane.id,
+        windowType,
       };
       setWorkspaces((prev) =>
         prev.map((workspace) =>
@@ -294,6 +295,34 @@ export function useSessionActions({
         )
       );
       return window;
+    },
+    [sessionsRef, setWorkspaces]
+  );
+
+  const replaceInitWindowWithSession = useCallback(
+    (workspaceId: string, windowId: string, sessionId: number) => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      const rootPane = createLeafPane(100, sessionId, session?.configId);
+      setWorkspaces((prev) =>
+        prev.map((workspace) =>
+          workspace.id === workspaceId
+            ? {
+                ...workspace,
+                windows: workspace.windows.map((window) =>
+                  window.id === windowId
+                    ? {
+                        ...window,
+                        name: session?.name ?? window.name,
+                        rootPane,
+                        activePaneId: rootPane.id,
+                        windowType: "terminal",
+                      }
+                    : window
+                ),
+              }
+            : workspace
+        )
+      );
     },
     [sessionsRef, setWorkspaces]
   );
@@ -654,7 +683,8 @@ export function useSessionActions({
       type: Session["type"],
       create: () => Promise<sessionService.SessionInfo>,
       config: LocalSessionConfig | SSHSessionConfig | TmuxSessionConfig | SshTmuxSessionConfig,
-      save: boolean
+      save: boolean,
+      skipAutoWindow = false
     ): Promise<Session> => {
       const configId = generateId();
       const info = await create();
@@ -680,7 +710,9 @@ export function useSessionActions({
         updateConfigs((prev) => [...prev, savedConfig]);
       }
 
-      createWindowFromSession(session.id, session.name);
+      if (!skipAutoWindow) {
+        createWindowFromSession(session.id, session.name);
+      }
       return session;
     },
     [updateConfigs, createWindowFromSession, setSessions]
@@ -734,6 +766,56 @@ export function useSessionActions({
             () => tmuxService.createTmux(config.tmux),
             config.tmux,
             save
+          ));
+
+      establishingSessionsRef.current.add(session.id);
+
+      const existingTimeout = tmuxListTimeoutsRef.current.get(session.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        tmuxListTimeoutsRef.current.delete(session.id);
+        tmuxService.listSessions(session.id).catch(console.error);
+      }, 500);
+      tmuxListTimeoutsRef.current.set(session.id, timeoutId);
+
+      return session;
+    },
+    [createAndActivateSession, establishingSessionsRef, tmuxListTimeoutsRef]
+  );
+
+  const createLocalSessionOnly = useCallback(
+    async (config: LocalSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, true);
+    },
+    [createAndActivateSession]
+  );
+
+  const createSshSessionOnly = useCallback(
+    async (config: SSHSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, true);
+    },
+    [createAndActivateSession]
+  );
+
+  const createTmuxSessionOnly = useCallback(
+    async (config: SshTmuxSessionConfig, save = true): Promise<Session> => {
+      const session = await (config.ssh
+        ? createAndActivateSession(
+            "ssh_tmux",
+            () => tmuxService.createSshTmuxSession(config),
+            config,
+            save,
+            true
+          )
+        : createAndActivateSession(
+            "tmux",
+            () => tmuxService.createTmux(config.tmux),
+            config.tmux,
+            save,
+            true
           ));
 
       establishingSessionsRef.current.add(session.id);
@@ -1024,6 +1106,9 @@ export function useSessionActions({
     createLocalSession,
     createSshSession,
     createTmuxSession,
+    createLocalSessionOnly,
+    createSshSessionOnly,
+    createTmuxSessionOnly,
     openFromConfig,
     removeConfig,
     closeSession,
@@ -1052,6 +1137,7 @@ export function useSessionActions({
     createWorkspaceFromSession,
     createSessionFromSavedConfig,
     createWindow,
+    replaceInitWindowWithSession,
     closeWindow,
     setActiveWindow,
     splitPane,

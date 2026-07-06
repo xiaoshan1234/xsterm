@@ -15,6 +15,7 @@ interface CreateSessionDialogProps {
   onCreateLocal: (config: LocalSessionConfig, save: boolean) => Promise<Session>;
   onCreateSsh: (config: SSHSessionConfig, save: boolean) => Promise<Session>;
   onCreateTmux: (config: SshTmuxSessionConfig, save: boolean) => Promise<Session>;
+  initialTab?: "local" | "ssh" | "tmux";
   initialGroupId?: number | null;
 }
 
@@ -24,13 +25,14 @@ export default function CreateSessionDialog({
   onCreateLocal,
   onCreateSsh,
   onCreateTmux,
+  initialTab = "local",
   initialGroupId,
 }: CreateSessionDialogProps) {
   const { groups, savedConfigs, addToGroup } = useSession();
   const savedSshConfigs = savedConfigs.filter(
     (c) => c.type === "ssh" || c.type === "ssh_tmux"
   );
-  const [tab, setTab] = useState<"local" | "ssh" | "tmux">("local");
+  const [tab, setTab] = useState<"local" | "ssh" | "tmux">(initialTab);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [saveConfig, setSaveConfig] = useState(true);
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>({});
@@ -50,6 +52,7 @@ export default function CreateSessionDialog({
 
   useEffect(() => {
     if (isOpen) {
+      setTab(initialTab);
       setSelectedGroupId(initialGroupId ?? null);
       setError("");
       setLocalConfig({});
@@ -64,7 +67,7 @@ export default function CreateSessionDialog({
       });
       setTmuxConfig({ tmux: { command: "new-session" } });
     }
-  }, [isOpen, initialGroupId]);
+  }, [isOpen, initialGroupId, initialTab]);
 
   const handleCreate = async () => {
     setError("");

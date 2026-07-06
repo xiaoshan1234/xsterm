@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Workspace, PaneNode, Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import { PaneTree } from "./PaneTree";
+import { InitWindowView } from "./InitWindowView";
 import CommandSendPanel from "./CommandSendPanel";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
@@ -101,21 +102,25 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
         onSelect={(windowId) => setActiveWindow(workspace.id, windowId)}
-        onAdd={() => createWindow(workspace.id)}
+        onAdd={() => createWindow(workspace.id, undefined, undefined, "init")}
         onSaveAll={handleSaveAll}
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
         onCloseWindow={(windowId) => closeWindow(workspace.id, windowId)}
       />
       {activeWindow ? (
-        <PaneTree
-          workspace={workspace}
-          windowId={activeWindow.id}
-          node={activeWindow.rootPane}
-          isActive={true}
-          activePaneId={activeWindow.activePaneId}
-          onActivatePane={handleActivatePane}
-          onUpdateNode={handleUpdateNode}
-        />
+        activeWindow.windowType === "init" ? (
+          <InitWindowView workspace={workspace} windowId={activeWindow.id} />
+        ) : (
+          <PaneTree
+            workspace={workspace}
+            windowId={activeWindow.id}
+            node={activeWindow.rootPane}
+            isActive={true}
+            activePaneId={activeWindow.activePaneId}
+            onActivatePane={handleActivatePane}
+            onUpdateNode={handleUpdateNode}
+          />
+        )
       ) : null}
       {showCommandPanel && (
         <CommandSendPanel
