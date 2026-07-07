@@ -173,3 +173,32 @@ export function isSessionUsedInOtherWindow(
   }
   return false;
 }
+
+export function collectSessionIdsFromPaneTree(root: PaneNode): number[] {
+  const ids = new Set<number>();
+  forEachPane(root, (node) => {
+    if (node.type === "leaf" && node.sessionId !== undefined) {
+      ids.add(node.sessionId);
+    }
+  });
+  return Array.from(ids);
+}
+
+export function collectSessionIdsFromWorkspace(workspace: Workspace): number[] {
+  const ids = new Set<number>();
+  workspace.windows.forEach((window) => {
+    collectSessionIdsFromPaneTree(window.rootPane).forEach((id) => ids.add(id));
+  });
+  return Array.from(ids);
+}
+
+export function withRecomputedSessionIds(workspace: Workspace): Workspace {
+  return {
+    ...workspace,
+    sessionIds: collectSessionIdsFromWorkspace(workspace),
+  };
+}
+
+export function stripSessionIdFromPaneTree(root: PaneNode): PaneNode {
+  return mapPaneTree(root, (node) => (node.type === "leaf" ? { ...node, sessionId: undefined } : node));
+}

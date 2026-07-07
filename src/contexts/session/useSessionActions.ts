@@ -16,6 +16,7 @@ import * as sessionService from "../../services/sessionService";
 import * as tmuxService from "../../services/tmuxService";
 import { cloneTmuxState } from "../tmuxStateReducer";
 import {
+  collectSessionIdsFromWorkspace,
   createLeafPane,
   createSplitNode,
   findPaneNode,
@@ -26,6 +27,8 @@ import {
   isSessionUsedInOtherWindow,
   removeSessionAndCollapse,
   replacePaneNode,
+  stripSessionIdFromPaneTree,
+  withRecomputedSessionIds,
 } from "./paneUtils";
 import { SessionActions, SessionPersistence, SessionState } from "./types";
 
@@ -162,6 +165,7 @@ export function useSessionActions({
             name: "Default",
             windows: [finalWindow],
             activeWindowId: finalWindow.id,
+            sessionIds: [sessionId],
           };
           setActiveWorkspaceId(workspace.id);
           return [workspace];
@@ -170,11 +174,11 @@ export function useSessionActions({
         const finalWindow: Window = { ...window, name: uniqueName };
         return prev.map((workspace) =>
           workspace.id === targetWorkspaceId
-            ? {
+            ? withRecomputedSessionIds({
                 ...workspace,
                 windows: [...workspace.windows, finalWindow],
                 activeWindowId: finalWindow.id,
-              }
+              })
             : workspace
         );
       });
@@ -199,6 +203,7 @@ export function useSessionActions({
         name: name ?? session?.name ?? "Workspace",
         windows: [window],
         activeWindowId: window.id,
+        sessionIds: [sessionId],
       };
       setWorkspaces((prev) => [...prev, workspace]);
       setActiveWorkspaceId(workspace.id);
@@ -290,13 +295,13 @@ export function useSessionActions({
 
         return prev.map((w) =>
           w.id === workspaceId
-            ? {
+            ? withRecomputedSessionIds({
                 ...workspace,
                 activeWindowId: windowId,
                 windows: workspace.windows.map((win) =>
                   win.id === windowId ? { ...win, rootPane: newRoot, activePaneId: newPane.id } : win
                 ),
-              }
+              })
             : w
         );
       });
@@ -309,12 +314,12 @@ export function useSessionActions({
       setWorkspaces((prev) =>
         prev.map((workspace) =>
           workspace.id === workspaceId
-            ? {
+            ? withRecomputedSessionIds({
                 ...workspace,
                 windows: workspace.windows.map((window) =>
                   window.id === windowId ? { ...window, rootPane: updater(window.rootPane) } : window
                 ),
-              }
+              })
             : workspace
         )
       );
@@ -342,7 +347,11 @@ export function useSessionActions({
         const finalWindow: Window = { ...window, name: uniqueName };
         return prev.map((workspace) =>
           workspace.id === workspaceId
-            ? { ...workspace, windows: [...workspace.windows, finalWindow], activeWindowId: finalWindow.id }
+            ? withRecomputedSessionIds({
+                ...workspace,
+                windows: [...workspace.windows, finalWindow],
+                activeWindowId: finalWindow.id,
+              })
             : workspace
         );
       });
@@ -377,7 +386,7 @@ export function useSessionActions({
         prev.map((workspace) => {
           if (workspace.id !== workspaceId) return workspace;
           const uniqueName = getUniqueWindowName(prev, workspaceId, baseName, windowId);
-          return {
+          return withRecomputedSessionIds({
             ...workspace,
             windows: workspace.windows.map((window) =>
               window.id === windowId
@@ -390,7 +399,7 @@ export function useSessionActions({
                   }
                 : window
             ),
-          };
+          });
         })
       );
     },
@@ -421,6 +430,7 @@ export function useSessionActions({
         },
       ],
       activeWindowId: windowId,
+      sessionIds: [],
     };
     console.log("[createDefaultWorkspace] constructed workspace:", JSON.parse(JSON.stringify(workspace)));
 
@@ -473,7 +483,7 @@ export function useSessionActions({
             const fallback = remaining[closedIndex - 1] ?? remaining[closedIndex] ?? remaining[remaining.length - 1];
             nextActiveId = fallback?.id ?? null;
           }
-          return { ...workspace, windows, activeWindowId: nextActiveId };
+          return withRecomputedSessionIds({ ...workspace, windows, activeWindowId: nextActiveId });
         })
       );
 
@@ -495,6 +505,20 @@ export function useSessionActions({
 
   const closeWorkspace = useCallback(
     (workspaceId: string) => {
+      const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
+      if (workspace && workspace.sessionIds.length > 0) {
+        const idsToClose = new Set(workspace.sessionIds);
+        idsToClose.forEach((sessionId) => {
+          sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
+          const timeoutId = tmuxListTimeoutsRef.current.get(sessionId);
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+            tmuxListTimeoutsRef.current.delete(sessionId);
+          }
+          establishingSessionsRef.current.delete(sessionId);
+        });
+        setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
+      }
       setWorkspaces((prev) => prev.filter((w) => w.id !== workspaceId));
       setActiveWorkspaceId((current) => {
         if (current !== workspaceId) return current;
@@ -505,7 +529,7 @@ export function useSessionActions({
         return fallback?.id ?? null;
       });
     },
-    [setWorkspaces, setActiveWorkspaceId, workspacesRef]
+    [setWorkspaces, setActiveWorkspaceId, workspacesRef, setSessions, tmuxListTimeoutsRef, establishingSessionsRef]
   );
 
   /**
@@ -534,7 +558,7 @@ export function useSessionActions({
         windows: workspace.windows.map((window) => ({
           id: generateId(),
           name: window.name,
-          rootPane: structuredClone(window.rootPane),
+          rootPane: stripSessionIdFromPaneTree(window.rootPane),
         })),
       };
 
@@ -591,9 +615,6 @@ export function useSessionActions({
 
       const buildTree = async (node: PaneNode): Promise<PaneNode> => {
         if (node.type === "leaf") {
-          if (node.sessionId !== undefined) {
-            return { ...node, id: generateId() };
-          }
           const configId = node.configId;
           if (configId) {
             let session = configIdToSession.get(configId);
@@ -647,11 +668,16 @@ export function useSessionActions({
         return { ...w, name: unique };
       });
       const activeWindow = windows[0] ?? null;
-      const workspace: Workspace = {
+      const workspaceWithoutIds: Workspace = {
         id: generateId(),
         name: saved.name,
         windows,
         activeWindowId: activeWindow?.id ?? null,
+        sessionIds: [],
+      };
+      const workspace: Workspace = {
+        ...workspaceWithoutIds,
+        sessionIds: collectSessionIdsFromWorkspace(workspaceWithoutIds),
       };
 
       setWorkspaces((prev) => [...prev, workspace]);
@@ -697,7 +723,7 @@ export function useSessionActions({
       const savedWindow: SavedWindowConfig = {
         id: generateId(),
         name: name.trim() || window.name,
-        rootPane: structuredClone(window.rootPane),
+        rootPane: stripSessionIdFromPaneTree(window.rootPane),
       };
 
       setSavedWindowConfigs((prev) => {
@@ -717,7 +743,7 @@ export function useSessionActions({
       const newConfigs: SavedWindowConfig[] = workspace.windows.map((window) => ({
         id: generateId(),
         name: window.name,
-        rootPane: structuredClone(window.rootPane),
+        rootPane: stripSessionIdFromPaneTree(window.rootPane),
       }));
 
       setSavedWindowConfigs((prev) => {
@@ -761,9 +787,6 @@ export function useSessionActions({
 
       const buildTree = async (node: PaneNode): Promise<PaneNode> => {
         if (node.type === "leaf") {
-          if (node.sessionId !== undefined) {
-            return { ...node, id: generateId() };
-          }
           const configId = node.configId;
           if (configId) {
             let session = configIdToSession.get(configId);
@@ -808,7 +831,11 @@ export function useSessionActions({
         const finalWindow: Window = { ...window, name: uniqueName };
         return prev.map((workspace) =>
           workspace.id === targetWorkspaceId
-            ? { ...workspace, windows: [...workspace.windows, finalWindow], activeWindowId: finalWindow.id }
+            ? withRecomputedSessionIds({
+                ...workspace,
+                windows: [...workspace.windows, finalWindow],
+                activeWindowId: finalWindow.id,
+              })
             : workspace
         );
       });
@@ -1033,16 +1060,18 @@ export function useSessionActions({
         sessionService.closeSession(session.id).catch(console.error);
         setSessions((prev) => prev.filter((s) => s.configId !== configId));
         setWorkspaces((prev) =>
-          prev.map((workspace) => ({
-            ...workspace,
-            windows: workspace.windows.map((window) => {
-              const newRoot = removeSessionAndCollapse(window.rootPane, session.id);
-              const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
-                ? window.activePaneId
-                : (getLeafPaneIds(newRoot)[0] ?? null);
-              return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
-            }),
-          }))
+          prev.map((workspace) =>
+            withRecomputedSessionIds({
+              ...workspace,
+              windows: workspace.windows.map((window) => {
+                const newRoot = removeSessionAndCollapse(window.rootPane, session.id);
+                const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
+                  ? window.activePaneId
+                  : (getLeafPaneIds(newRoot)[0] ?? null);
+                return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
+              }),
+            })
+          )
         );
       }
     },
@@ -1074,16 +1103,18 @@ export function useSessionActions({
         }
         setSessions((prev) => prev.filter((s) => s.id !== id));
         setWorkspaces((prev) =>
-          prev.map((workspace) => ({
-            ...workspace,
-            windows: workspace.windows.map((window) => {
-              const newRoot = removeSessionAndCollapse(window.rootPane, id);
-              const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
-                ? window.activePaneId
-                : (getLeafPaneIds(newRoot)[0] ?? null);
-              return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
-            }),
-          }))
+          prev.map((workspace) =>
+            withRecomputedSessionIds({
+              ...workspace,
+              windows: workspace.windows.map((window) => {
+                const newRoot = removeSessionAndCollapse(window.rootPane, id);
+                const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
+                  ? window.activePaneId
+                  : (getLeafPaneIds(newRoot)[0] ?? null);
+                return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
+              }),
+            })
+          )
         );
       }
     },

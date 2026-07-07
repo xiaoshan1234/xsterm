@@ -1,43 +1,44 @@
-# Workspace → Window → Session/Pane Architecture Refactor
+# Workspace Session Ownership
 
 ## Goal
-Change the frontend state/container hierarchy from:
-- `Workspace (tab)` → `Session/Pane`
+When a workspace instance is created from a saved workspace config, its sessions are created together with it. The saved workspace config does not store runtime session IDs; it only stores the session type/config (via `configId`) and pane layout. The runtime workspace instance explicitly tracks its contained sessions via `sessionIds` and manages their lifecycle (closing them when the workspace is closed).
 
-to:
-- `Workspace` → `Window (tab)` → `Session/Pane`
+## Current State
+- `SavedWorkspace` persists pane trees that may still contain runtime `sessionId` values (bug).
+- `Workspace` has no explicit `sessionIds` field; the inclusion relationship is implicit in the pane tree.
+- `loadWorkspace` already recreates sessions from `configId`, but it preserves stale `sessionId` values.
+- `closeWorkspace` does not close the workspace's sessions.
 
-A `Window` is a tabbed container inside a workspace. It owns the pane tree and active pane state. The UI renders workspace tabs at the top, and inside the active workspace renders a window tab bar plus the active window's pane tree.
+## Plan
 
-## Phase 1-5 (completed)
-- Defined `Window`/`SavedWindow` types and updated `Workspace`/`SavedWorkspace`.
-- Updated actions (`createWindow`, `closeWindow`, `setActiveWindow`, `splitPane`, etc.).
-- Updated UI (`WorkspaceContainer`, `PaneTree`, `Pane`, `TabBar`, `AppLayout`).
-- Updated persistence with backward compatibility.
-- Build passes.
+### Phase 1 — Extend types and helpers
+- Add `sessionIds: number[]` to the `Workspace` runtime type.
+- Add `collectSessionIdsFromPaneTree`, `collectSessionIdsFromWorkspace`, and `withRecomputedSessionIds` helpers in `paneUtils.ts`.
+- Add `stripSessionIdFromPaneTree` helper to ensure saved configs never persist runtime IDs.
 
-## New Requirements (Phase 6)
+### Phase 2 — Keep saved config free of runtime IDs
+- `saveWorkspace`: strip `sessionId` from every pane tree before persisting.
+- `saveWindow` / `saveAllWindows`: strip `sessionId` from saved pane trees.
+- `loadWorkspace` / `loadWindow`: ignore stale `sessionId` in saved pane trees; always recreate from `configId`.
 
-### 6.1 Default workspace for session-config-created windows ✅
-- Added `createWindowFromSession` and `createWindowFromSavedConfig`.
-- `createAndActivateSession` and `openFromConfig` now add windows to the first/default workspace.
+### Phase 3 — Workspace owns its sessions
+- Populate `sessionIds` when a workspace is created:
+  - `createDefaultWorkspace` → `[]`
+  - `createWorkspaceFromSession` → `[sessionId]`
+  - `loadWorkspace` → collect from loaded pane trees
+- Recompute `sessionIds` after every workspace pane/session mutation:
+  - `createWindow`, `createWindowFromSession`, `createWindowFromSavedConfig`, `loadWindow`
+  - `replaceInitWindowWithSession`, `splitPane`
+  - `closeWindow`, `closeSession`, `removeConfig`
+  - `useTauriListeners` session-closed and tmux CommandError handlers
+- `closeWorkspace`: close all sessions listed in `workspace.sessionIds`.
 
-### 6.2 Per-workspace window tab bar and session tool ✅
-- `WorkspaceContainer` now includes both the window tab bar and `CommandSendPanel`.
-- `AppLayout` removed the global `CommandSendPanel` and resize handle.
+### Phase 4 — Verify
+- `npm run build` passes with no TypeScript errors.
+- No type-safety suppressions (`as any`, `@ts-ignore`, etc.).
 
-### 6.3 Add-window button in window tab bar ✅
-- `WindowTabBar` renders `+` button to create an empty window.
-
-### 6.4 Window Manager sidebar ✅
-- Added `"windows"` sidebar panel with `WindowManager` component.
-- Supports load (double-click), rename, delete.
-
-### 6.5 Right-click tab → save as window config ✅
-- Window tabs have context menu with "Save as Window Config".
-
-### 6.6 Save-all-windows button ✅
-- Added save-all button in `WindowTabBar`.
-
-### Verification ✅
-- `npm run build` passes.
+## Files to Modify
+- `src/types/session.ts`
+- `src/contexts/session/paneUtils.ts`
+- `src/contexts/session/useSessionActions.ts`
+- `src/contexts/session/useTauriListeners.ts`

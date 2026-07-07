@@ -42,8 +42,24 @@
 - `TmuxLayoutGrid.tsx` 残留 `console.log`、非空断言、`parseInt` 缺 radix。
 - `TmuxSessionForm.tsx` / `SessionContext.tsx` 存在类型断言 `as`。
 
-## 结构问题
+## 结构/行为发现
 
-- `SessionContext.tsx` 941 行，混合状态/业务逻辑/工具函数/Tauri 监听。
-- `Terminal.tsx` 313 行，单个 effect 管理 xterm 全生命周期。
-- 多处重复代码：`replacePaneNode`、`findPaneNode`、拖拽模板、SSH 默认值。
+### 1. Workspace 实例现在显式维护 session 集合
+- 运行时 `Workspace` 新增 `sessionIds: number[]`。
+- `loadWorkspace` 从保存的 `configId` 重建会话后，把会话 ID 收集到 `workspace.sessionIds`。
+- `closeWorkspace` 关闭 `workspace.sessionIds` 中的所有会话。
+- 所有会改变 workspace 内 session 分布的 mutation 都会通过 `withRecomputedSessionIds` 重新计算该集合。
+
+### 2. 保存的 workspace/window 配置不再包含 runtime sessionId
+- `saveWorkspace`、`saveWindow`、`saveAllWindows` 调用 `stripSessionIdFromPaneTree` 后再持久化。
+- `loadWorkspace`、`loadWindow` 的 `buildTree` 忽略已保存的 `sessionId`，只根据 `configId` 重建会话。
+
+## 文件变更
+- `src/types/session.ts` — `Workspace` 增加 `sessionIds`。
+- `src/contexts/session/paneUtils.ts` — 新增 `collectSessionIdsFromPaneTree`、`collectSessionIdsFromWorkspace`、`withRecomputedSessionIds`、`stripSessionIdFromPaneTree`。
+- `src/contexts/session/useSessionActions.ts` — 更新加载、保存、关闭、创建窗口等逻辑以维护 session 集合。
+- `src/contexts/session/useTauriListeners.ts` — session 关闭/Tmux 错误处理时重新计算 workspace 的 `sessionIds`。
+
+## 验证
+- `npx tsc --noEmit` 通过。
+- `npm run build` 通过（运行前需 `npm install` 以修复 `@rollup/rollup-linux-x64-gnu` 缺失）。
