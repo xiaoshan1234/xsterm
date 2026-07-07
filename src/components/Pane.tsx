@@ -25,6 +25,7 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
     workspaces,
     splitPane,
     closeSession,
+    closePane,
     createSessionFromSavedConfig,
     tmuxState,
     activeTmuxWindowIds,
@@ -162,6 +163,11 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
     {
       label: "Split Vertical",
       onClick: () => handleStartSplit("vertical"),
+    },
+    {
+      label: "Close Pane",
+      onClick: () => closePane(workspace.id, windowId, pane.id),
+      danger: true,
     },
   ];
 

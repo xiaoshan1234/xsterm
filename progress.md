@@ -7,3 +7,5 @@
 - [x] Phase 2 — 保存配置不保留 runtime sessionId
 - [x] Phase 3 — Workspace 显式维护其 session 集合
 - [x] Phase 4 — 构建验证 (`npm run build` 通过)
+- [x] Debug — 修复 `createWindowFromSession`/`splitPane` 因 `sessionsRef` 未同步导致 `configId` 丢失
+- [x] 新增 — 右键 pane 菜单增加 "Close Pane"，关闭 pane 同时关闭其 session

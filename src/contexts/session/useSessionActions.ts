@@ -26,6 +26,7 @@ import {
   getDefaultWindowName,
   getLeafPaneIds,
   isSessionUsedInOtherWindow,
+  removePaneFromTree,
   removeSessionAndCollapse,
   replacePaneNode,
   stripSessionIdFromPaneTree,
@@ -1143,6 +1144,48 @@ export function useSessionActions({
     [setSessions, setWorkspaces, tmuxListTimeoutsRef]
   );
 
+  const closePane = useCallback(
+    async (workspaceId: string, windowId: string, paneId: string): Promise<void> => {
+      const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
+      const window = workspace?.windows.find((w) => w.id === windowId);
+      const pane = window ? findPaneNode(window.rootPane, paneId) : null;
+      if (!pane) return;
+
+      const sessionId = pane.sessionId;
+      if (sessionId !== undefined) {
+        try {
+          await sessionService.closeSession(sessionId);
+        } catch (e) {
+          console.error("Failed to close session backend:", e);
+        } finally {
+          const timeoutId = tmuxListTimeoutsRef.current.get(sessionId);
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+            tmuxListTimeoutsRef.current.delete(sessionId);
+          }
+          establishingSessionsRef.current.delete(sessionId);
+        }
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      }
+
+      setWorkspaces((prev) =>
+        prev.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          return withRecomputedSessionIds({
+            ...workspace,
+            windows: workspace.windows.map((window) => {
+              if (window.id !== windowId) return window;
+              const newRoot = removePaneFromTree(window.rootPane, paneId);
+              const newActivePaneId = window.activePaneId === paneId ? (getLeafPaneIds(newRoot)[0] ?? null) : window.activePaneId;
+              return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
+            }),
+          });
+        })
+      );
+    },
+    [workspacesRef, setSessions, setWorkspaces, tmuxListTimeoutsRef, establishingSessionsRef]
+  );
+
   const renameSession = useCallback(
     (id: number, name: string) => {
       setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
@@ -1360,6 +1403,7 @@ export function useSessionActions({
     openFromConfig,
     removeConfig,
     closeSession,
+    closePane,
     addToGroup,
     removeFromGroup,
     moveConfigToGroup,

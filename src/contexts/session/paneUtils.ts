@@ -202,3 +202,24 @@ export function withRecomputedSessionIds(workspace: Workspace): Workspace {
 export function stripSessionIdFromPaneTree(root: PaneNode): PaneNode {
   return mapPaneTree(root, (node) => (node.type === "leaf" ? { ...node, sessionId: undefined } : node));
 }
+
+function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
+  if (root.id === paneId) {
+    return null;
+  }
+  if (root.type === "leaf") {
+    return root;
+  }
+  const children = root.children?.map((child) => removePaneRecursive(child, paneId)).filter((child): child is PaneNode => child !== null) ?? [];
+  if (children.length === 0) {
+    return null;
+  }
+  if (children.length === 1) {
+    return { ...children[0], size: root.size };
+  }
+  return { ...root, children };
+}
+
+export function removePaneFromTree(root: PaneNode, paneId: string): PaneNode {
+  return removePaneRecursive(root, paneId) ?? createLeafPane(root.size);
+}
