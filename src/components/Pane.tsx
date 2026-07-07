@@ -7,6 +7,7 @@ import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
 import { TmuxSessionView } from "./TmuxSessionView";
+import { PaneInitCard } from "./PaneInitCard";
 
 interface PaneProps {
   workspace: Workspace;
@@ -214,10 +215,11 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
                 <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive} onFocus={onActivate} />
               )
             ) : (
-              <div className="workspace-pane-empty">
-                <span>No session</span>
-                <span className="workspace-pane-empty-hint">Right-click to split</span>
-              </div>
+              <PaneInitCard
+                onSessionCreated={(session) => attachSessionToPane(session.id)}
+                title="No session"
+                subtitle="Create or open a session"
+              />
             )}
           </div>
         </ContextMenu>

@@ -1,10 +1,6 @@
-import { useState } from "react";
 import { useSession } from "../contexts/SessionContext";
-import { LocalSessionConfig, SSHSessionConfig, Session, Workspace } from "../types/session";
-import { SshTmuxSessionConfig } from "../types/tmux";
-import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
-import CreateSessionDialog from "./dialogs/CreateSessionDialog";
-import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
+import { Workspace } from "../types/session";
+import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
 
 interface InitWindowViewProps {
@@ -13,109 +9,14 @@ interface InitWindowViewProps {
 }
 
 export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
-  const {
-    sessions,
-    createLocalSessionOnly,
-    createSshSessionOnly,
-    createTmuxSessionOnly,
-    replaceInitWindowWithSession,
-    createSessionFromSavedConfig,
-  } = useSession();
-  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux" | null>(null);
-  const [showSelectDialog, setShowSelectDialog] = useState(false);
-
-  const handleCreate = async (
-    create: () => Promise<Session>
-  ): Promise<Session> => {
-    const session = await create();
-    try {
-      replaceInitWindowWithSession(workspace.id, windowId, session);
-    } catch (e) {
-      if (e instanceof Error && e.message === "Session is already used in another window") {
-        window.alert("Session is already used in another window");
-      } else {
-        throw e;
-      }
-    }
-    return session;
-  };
-
-  const handleCreateLocal = (config: LocalSessionConfig, save: boolean) =>
-    handleCreate(() => createLocalSessionOnly(config, save));
-
-  const handleCreateSsh = (config: SSHSessionConfig, save: boolean) =>
-    handleCreate(() => createSshSessionOnly(config, save));
-
-  const handleCreateTmux = (config: SshTmuxSessionConfig, save: boolean) =>
-    handleCreate(() => createTmuxSessionOnly(config, save));
-
-  const handleSelectSession = (sessionId: number) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (session) {
-      try {
-        replaceInitWindowWithSession(workspace.id, windowId, session);
-      } catch (e) {
-        if (e instanceof Error && e.message === "Session is already used in another window") {
-          window.alert("Session is already used in another window");
-        } else {
-          throw e;
-        }
-      }
-    }
-    setShowSelectDialog(false);
-  };
-
-  const handleSelectConfig = async (configId: string) => {
-    try {
-      const session = await createSessionFromSavedConfig(configId);
-      replaceInitWindowWithSession(workspace.id, windowId, session);
-    } catch (e) {
-      if (e instanceof Error && e.message === "Session is already used in another window") {
-        window.alert("Session is already used in another window");
-      } else {
-        console.error("Failed to create session from saved config:", e);
-      }
-    }
-    setShowSelectDialog(false);
-  };
+  const { replaceInitWindowWithSession } = useSession();
 
   return (
     <div className="init-window-view">
-      <div className="init-window-card">
-        <h2 className="init-window-title">Create a session</h2>
-        <p className="init-window-subtitle">Create new or open a saved session</p>
-        <div className="init-window-options">
-          <button
-            className="init-window-option"
-            type="button"
-            onClick={() => setCreateDialogTab("local")}
-          >
-            <PlusIcon size={32} />
-            <span className="init-window-option-label">Create New</span>
-          </button>
-          <button
-            className="init-window-option"
-            type="button"
-            onClick={() => setShowSelectDialog(true)}
-          >
-            <FolderOpenIcon size={32} />
-            <span className="init-window-option-label">Open Saved</span>
-          </button>
-        </div>
-      </div>
-      <CreateSessionDialog
-        isOpen={createDialogTab !== null}
-        onClose={() => setCreateDialogTab(null)}
-        onCreateLocal={handleCreateLocal}
-        onCreateSsh={handleCreateSsh}
-        onCreateTmux={handleCreateTmux}
-        initialTab={createDialogTab ?? "local"}
-      />
-      <SelectSessionDialog
-        isOpen={showSelectDialog}
-        onClose={() => setShowSelectDialog(false)}
-        onSelectSession={handleSelectSession}
-        onSelectConfig={handleSelectConfig}
+      <PaneInitCard
+        onSessionCreated={(session) =>
+          replaceInitWindowWithSession(workspace.id, windowId, session)
+        }
       />
     </div>
   );
