@@ -91,11 +91,17 @@ export const LayoutIcon = icon("0 0 24 24", (
   </>
 ));
 
-export const WorkspaceIcon = icon("0 0 24 24", (
+export const WorkspaceIcon = icon("14 10 64 48", (
   <>
-    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-    <line x1="8" y1="21" x2="16" y2="21" />
-    <line x1="12" y1="17" x2="12" y2="21" />
+    <rect x="30" y="18" width="56" height="40" rx="4" fill="none" strokeWidth="1" />
+    <rect x="22" y="14" width="56" height="40" rx="4" fill="none" strokeWidth="2" />
+    <rect x="14" y="10" width="56" height="40" rx="4" fill="none" strokeWidth="3" />
+    <line x1="18" y1="16" x2="34" y2="16" strokeWidth="2" strokeLinecap="round" />
+    <line x1="20" y1="24" x2="52" y2="24" strokeWidth="2" strokeLinecap="round" />
+    <line x1="20" y1="29" x2="42" y2="29" strokeWidth="2" strokeLinecap="round" />
+    <rect x="44" y="27.5" width="2" height="5" rx="1" fill="#FFFFFF" />
+    <line x1="20" y1="34" x2="48" y2="34" strokeWidth="2" strokeLinecap="round" />
+    <line x1="20" y1="39" x2="36" y2="39" strokeWidth="2" strokeLinecap="round" />
   </>
 ));
 
