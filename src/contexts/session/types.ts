@@ -63,7 +63,7 @@ export interface SessionContextType {
   createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
   createDefaultWorkspace: () => Workspace;
   createInitWindow: () => Window;
-  replaceInitWindowWithSession: (workspaceId: string, windowId: string, sessionId: number) => void;
+  replaceInitWindowWithSession: (workspaceId: string, windowId: string, session: Session) => void;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
   splitPane: (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;
@@ -167,7 +167,7 @@ export interface SessionActions {
   createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
   createDefaultWorkspace: () => Workspace;
   createInitWindow: () => Window;
-  replaceInitWindowWithSession: (workspaceId: string, windowId: string, sessionId: number) => void;
+  replaceInitWindowWithSession: (workspaceId: string, windowId: string, session: Session) => void;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;
   splitPane: (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => void;

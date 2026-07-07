@@ -345,10 +345,9 @@ export function useSessionActions({
   }, []);
 
   const replaceInitWindowWithSession = useCallback(
-    (workspaceId: string, windowId: string, sessionId: number) => {
-      const session = sessionsRef.current.find((s) => s.id === sessionId);
-      const rootPane = createLeafPane(100, sessionId, session?.configId);
-      const baseName = getDefaultWindowName(rootPane, sessionsRef.current, "Window");
+    (workspaceId: string, windowId: string, session: Session) => {
+      const rootPane = createLeafPane(100, session.id, session.configId);
+      const baseName = session.name;
       setWorkspaces((prev) =>
         prev.map((workspace) => {
           if (workspace.id !== workspaceId) return workspace;
@@ -370,7 +369,7 @@ export function useSessionActions({
         })
       );
     },
-    [sessionsRef, setWorkspaces]
+    [setWorkspaces]
   );
 
   const createDefaultWorkspace = useCallback((): Workspace => {

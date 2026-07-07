@@ -28,7 +28,7 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
     create: () => Promise<Session>
   ): Promise<Session> => {
     const session = await create();
-    replaceInitWindowWithSession(workspace.id, windowId, session.id);
+    replaceInitWindowWithSession(workspace.id, windowId, session);
     return session;
   };
 
@@ -44,7 +44,7 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
   const handleSelectSession = (sessionId: number) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
-      replaceInitWindowWithSession(workspace.id, windowId, session.id);
+      replaceInitWindowWithSession(workspace.id, windowId, session);
     }
     setShowSelectDialog(false);
   };
@@ -52,7 +52,7 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
   const handleSelectConfig = async (configId: string) => {
     try {
       const session = await createSessionFromSavedConfig(configId);
-      replaceInitWindowWithSession(workspace.id, windowId, session.id);
+      replaceInitWindowWithSession(workspace.id, windowId, session);
     } catch (e) {
       console.error("Failed to create session from saved config:", e);
     }
