@@ -153,7 +153,7 @@ fn spawn_output_forwarder(
                     let data = &buf[..n];
                     let payload = serde_json::to_vec(&(session_id, data)).unwrap();
                     if let Err(e) = backend_clone.emit("session-output", &payload) {
-                        eprintln!("Failed to emit session output: {}", e);
+                        tracing::error!("Failed to emit session output: {}", e);
                         break;
                     }
                 }

@@ -10,9 +10,10 @@ use crate::error::StringError;
 const DEFAULT_MAX_FILE_SIZE_MB: u64 = 10;
 /// Default number of retained log files.
 const DEFAULT_MAX_LOG_FILES: usize = 5;
-/// Default log level filter.
+#[cfg(debug_assertions)]
 const DEFAULT_LOG_LEVEL: &str = "debug";
-/// Conversion factor from megabytes to bytes.
+#[cfg(not(debug_assertions))]
+const DEFAULT_LOG_LEVEL: &str = "warn";
 const BYTES_PER_MB: u64 = 1024 * 1024;
 
 /// User-configurable logging settings.

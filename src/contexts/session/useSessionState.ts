@@ -37,11 +37,9 @@ export function useSessionState(): SessionState {
   useEffect(() => {
     if (activeWorkspaceId === null && workspaces.length > 0) {
       setActiveWorkspaceId(workspaces[0].id);
-      console.log("[useSessionState] activeWorkspaceId was null, fallback to first workspace:", workspaces[0].id);
     } else if (activeWorkspaceId && !workspaces.find((w) => w.id === activeWorkspaceId)) {
       const fallbackId = workspaces[0]?.id ?? null;
       setActiveWorkspaceId(fallbackId);
-      console.log("[useSessionState] activeWorkspaceId not found, fallback to:", fallbackId);
     }
   }, [workspaces, activeWorkspaceId, setActiveWorkspaceId]);
 

@@ -42,6 +42,10 @@ function consoleLog(level: LogLevel, prefix: string, message: string, data?: unk
 
 export function LoggerProvider({ children }: { children: ReactNode }) {
   const log = useCallback((level: LogLevel, source: string, message: string, data?: unknown) => {
+    if (import.meta.env.PROD && (level === LogLevel.DEBUG || level === LogLevel.INFO)) {
+      return;
+    }
+
     const prefix = `[${source}]`;
     consoleLog(level, prefix, message, data);
 
