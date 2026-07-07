@@ -19,6 +19,7 @@ import {
   createLeafPane,
   createSplitNode,
   findPaneNode,
+  forEachPane,
   generateId,
   getDefaultWindowName,
   getLeafPaneIds,
@@ -445,6 +446,17 @@ export function useSessionActions({
 
   const closeWindow = useCallback(
     (workspaceId: string, windowId: string) => {
+      const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
+      const window = workspace?.windows.find((w) => w.id === windowId);
+      if (!window) return;
+
+      const sessionIdsToClose = new Set<number>();
+      forEachPane(window.rootPane, (node) => {
+        if (node.type === "leaf" && node.sessionId !== undefined) {
+          sessionIdsToClose.add(node.sessionId);
+        }
+      });
+
       setWorkspaces((prev) =>
         prev.map((workspace) => {
           if (workspace.id !== workspaceId) return workspace;
@@ -464,8 +476,21 @@ export function useSessionActions({
           return { ...workspace, windows, activeWindowId: nextActiveId };
         })
       );
+
+      sessionIdsToClose.forEach((sessionId) => {
+        sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
+        const timeoutId = tmuxListTimeoutsRef.current.get(sessionId);
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+          tmuxListTimeoutsRef.current.delete(sessionId);
+        }
+        establishingSessionsRef.current.delete(sessionId);
+      });
+      if (sessionIdsToClose.size > 0) {
+        setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
+      }
     },
-    [setWorkspaces]
+    [setWorkspaces, setSessions, tmuxListTimeoutsRef, establishingSessionsRef, workspacesRef]
   );
 
   const closeWorkspace = useCallback(
