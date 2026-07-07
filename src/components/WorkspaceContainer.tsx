@@ -110,7 +110,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
         onSelect={(windowId) => setActiveWindow(workspace.id, windowId)}
-        onAdd={() => createWindow(workspace.id, undefined, undefined, "init")}
+        onAdd={() => createWindow(workspace.id, undefined, undefined, undefined, "init")}
         onSaveAll={handleSaveAll}
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
         onCloseWindow={(windowId) => closeWindow(workspace.id, windowId)}

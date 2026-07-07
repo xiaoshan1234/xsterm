@@ -77,7 +77,8 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
     (sessionId: number) => {
       if (dialogMode === "split" && pendingSplit) {
         try {
-          splitPane(workspace.id, windowId, pane.id, pendingSplit, sessionId);
+          const sessionConfigId = sessions.find((s) => s.id === sessionId)?.configId;
+          splitPane(workspace.id, windowId, pane.id, pendingSplit, sessionId, sessionConfigId);
         } catch (e) {
           if (e instanceof Error && e.message === "Session is already used in another window") {
             window.alert("Session is already used in another window");
@@ -94,7 +95,7 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
         setShowSessionDialog(false);
       }
     },
-    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, attachSessionToPane]
+    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, attachSessionToPane, sessions]
   );
 
   const handleSelectConfig = useCallback(
@@ -102,7 +103,7 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
       if (dialogMode === "split" && pendingSplit) {
         try {
           const session = await createSessionFromSavedConfig(configId);
-          splitPane(workspace.id, windowId, pane.id, pendingSplit, session.id);
+          splitPane(workspace.id, windowId, pane.id, pendingSplit, session.id, session.configId);
         } catch (e) {
           if (e instanceof Error && e.message === "Session is already used in another window") {
             window.alert("Session is already used in another window");

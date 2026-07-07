@@ -16,6 +16,7 @@ import * as sessionService from "../../services/sessionService";
 import * as tmuxService from "../../services/tmuxService";
 import { cloneTmuxState } from "../tmuxStateReducer";
 import {
+  collectSessionIdsFromPaneTree,
   collectSessionIdsFromWorkspace,
   createLeafPane,
   createSplitNode,
@@ -141,11 +142,10 @@ export function useSessionActions({
   );
 
   const createWindowFromSession = useCallback(
-    (sessionId: number, name?: string, targetWorkspaceIdParam?: string): Window => {
+    (sessionId: number, configId: string, name?: string, targetWorkspaceIdParam?: string): Window => {
       assertSessionNotUsedElsewhere(workspacesRef.current, null, null, sessionId);
-      const session = sessionsRef.current.find((s) => s.id === sessionId);
-      const rootPane = createLeafPane(100, sessionId, session?.configId);
-      const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, "Window");
+      const rootPane = createLeafPane(100, sessionId, configId);
+      const baseName = name ?? "Window";
       const window: Window = {
         id: generateId(),
         name: baseName,
@@ -188,10 +188,10 @@ export function useSessionActions({
   );
 
   const createWorkspaceFromSession = useCallback(
-    (sessionId: number, name?: string): Workspace => {
+    (sessionId: number, configId: string, name?: string): Workspace => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       const windowName = name ?? session?.name ?? "Window";
-      const rootPane = createLeafPane(100, sessionId, session?.configId);
+      const rootPane = createLeafPane(100, sessionId, configId);
       const window: Window = {
         id: generateId(),
         name: windowName,
@@ -226,7 +226,7 @@ export function useSessionActions({
 
       const session = await createSessionFromSavedConfig(configId);
       assertSessionNotUsedElsewhere(workspacesRef.current, null, null, session.id);
-      return createWindowFromSession(session.id, name ?? config.name, activeWorkspaceId ?? undefined);
+      return createWindowFromSession(session.id, session.configId, name ?? config.name, activeWorkspaceId ?? undefined);
     },
     [savedConfigs, createSessionFromSavedConfig, createWindowFromSession, workspacesRef, activeWorkspaceId]
   );
@@ -272,7 +272,7 @@ export function useSessionActions({
    * 在工作区中拆分面板（split pane）
    */
   const splitPane = useCallback(
-    (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => {
+    (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number, configId?: string) => {
       if (sessionId !== undefined) {
         assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, sessionId);
       }
@@ -289,7 +289,7 @@ export function useSessionActions({
         const session = sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
         const halfSize = target.size / 2;
         const originalPane = { ...target, size: halfSize };
-        const newPane = createLeafPane(halfSize, sessionId, session?.configId);
+        const newPane = createLeafPane(halfSize, sessionId, configId ?? session?.configId);
         const splitNode = createSplitNode(direction, originalPane, newPane);
         const newRoot = replacePaneNode(window.rootPane, paneId, splitNode);
 
@@ -328,12 +328,11 @@ export function useSessionActions({
   );
 
   const createWindow = useCallback(
-    (workspaceId: string, sessionId?: number, name?: string, windowType: "terminal" | "init" = "terminal"): Window => {
+    (workspaceId: string, sessionId?: number, configId?: string, name?: string, windowType: "terminal" | "init" = "terminal"): Window => {
       if (sessionId !== undefined) {
         assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, null, sessionId);
       }
-      const session = sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
-      const rootPane = createLeafPane(100, sessionId, session?.configId);
+      const rootPane = createLeafPane(100, sessionId, configId);
       const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, windowType === "init" ? "New Session" : "Window");
       const window: Window = {
         id: generateId(),
@@ -587,6 +586,12 @@ export function useSessionActions({
       const saved = savedWorkspaces.find((w) => w.id === savedWorkspaceId);
       if (!saved) throw new Error("Saved workspace not found");
 
+      console.log(`[loadWorkspace] start: savedWorkspaceId=${savedWorkspaceId}, name=${saved.name}`);
+      console.log("[loadWorkspace] saved workspace windows:", saved.windows.length);
+      saved.windows.forEach((w, i) => {
+        console.log(`[loadWorkspace] saved window[${i}] id=${w.id}, name=${w.name}, rootPane=`, JSON.parse(JSON.stringify(w.rootPane)));
+      });
+
       // configId → 已在本次加载中创建的会话（同一配置只创建一次）
       const configIdToSession = new Map<string, Session>();
 
@@ -613,26 +618,36 @@ export function useSessionActions({
         }
       };
 
-      const buildTree = async (node: PaneNode): Promise<PaneNode> => {
+      const buildTree = async (node: PaneNode, depth = 0): Promise<PaneNode> => {
         if (node.type === "leaf") {
+          console.log(`[loadWorkspace] buildTree leaf at depth=${depth}: id=${node.id}, sessionId=${node.sessionId}, configId=${node.configId}`);
+          if (node.sessionId !== undefined && node.configId === undefined) {
+            console.warn(`[loadWorkspace] leaf has sessionId but no configId; session cannot be recreated`);
+          }
           const configId = node.configId;
           if (configId) {
             let session = configIdToSession.get(configId);
             if (!session) {
+              console.log(`[loadWorkspace] pane configId=${configId}: creating new session`);
               try {
                 session = await openFromConfigInternal(configId);
+                console.log(
+                  `[loadWorkspace] created session: id=${session.id}, type=${session.type}, configId=${configId}`
+                );
                 configIdToSession.set(configId, session);
               } catch (e) {
                 console.error("Failed to recreate session for workspace:", e);
                 await rollback();
                 throw e;
               }
+            } else {
+              console.log(`[loadWorkspace] pane configId=${configId}: reusing session ${session.id}`);
             }
             return createLeafPane(node.size, session.id, configId);
           }
           return { ...createLeafPane(node.size), id: generateId() };
         }
-        const children = await Promise.all((node.children ?? []).map((child) => buildTree(child)));
+        const children = await Promise.all((node.children ?? []).map((child) => buildTree(child, depth + 1)));
         return {
           id: generateId(),
           type: "split",
@@ -644,6 +659,7 @@ export function useSessionActions({
 
       const buildWindow = async (savedWindow: { id: string; name: string; rootPane: PaneNode }): Promise<Window> => {
         const rootPane = await buildTree(savedWindow.rootPane);
+        console.log(`[loadWorkspace] built window name=${savedWindow.name}, rootPane sessionIds=`, collectSessionIdsFromPaneTree(rootPane));
         return {
           id: generateId(),
           name: savedWindow.name,
@@ -679,6 +695,12 @@ export function useSessionActions({
         ...workspaceWithoutIds,
         sessionIds: collectSessionIdsFromWorkspace(workspaceWithoutIds),
       };
+
+      console.log(
+        `[loadWorkspace] complete: workspaceId=${workspace.id}, name=${workspace.name}, sessionIds=${JSON.stringify(
+          workspace.sessionIds
+        )}`
+      );
 
       setWorkspaces((prev) => [...prev, workspace]);
       setActiveWorkspaceId(workspace.id);
@@ -911,7 +933,7 @@ export function useSessionActions({
       }
 
       if (!skipAutoWindow) {
-        createWindowFromSession(session.id, session.name, activeWorkspaceId ?? undefined);
+        createWindowFromSession(session.id, session.configId, session.name, activeWorkspaceId ?? undefined);
       }
       return session;
     },
