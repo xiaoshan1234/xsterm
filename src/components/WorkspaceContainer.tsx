@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Workspace, PaneNode, Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import { PaneTree } from "./PaneTree";
@@ -29,6 +29,8 @@ interface WorkspaceContainerProps {
 export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
   const {
     sessions,
+    workspaces,
+    activeWorkspaceId,
     setActiveWorkspace,
     setActiveWindow,
     setActivePane,
@@ -38,6 +40,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
     saveWindow,
     saveWorkspace,
     writeSession,
+    savedWorkspaces,
   } = useSession();
 
   const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0] ?? null;
@@ -73,7 +76,13 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
     if (workspace.name === "Default") {
       setShowSaveWorkspaceDialog(true);
     } else {
-      saveWorkspace(workspace.id, workspace.name);
+      try {
+        saveWorkspace(workspace.id, workspace.name);
+      } catch (e) {
+        if (e instanceof Error && e.message === "Workspace name already exists") {
+          window.alert("Workspace name already exists");
+        }
+      }
     }
   }, [workspace.name, workspace.id, saveWorkspace]);
 
@@ -131,6 +140,9 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
       )}
       <WorkspaceBottomBar
         workspaceName={workspace.name}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelectWorkspace={setActiveWorkspace}
         onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
         commandPanelOpen={showCommandPanel}
       />
@@ -154,6 +166,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
           setShowSaveWorkspaceDialog(false);
         }}
         defaultName={workspace.name}
+        savedWorkspaces={savedWorkspaces}
       />
     </div>
   );
@@ -161,11 +174,63 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
 
 interface WorkspaceBottomBarProps {
   workspaceName: string;
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  onSelectWorkspace: (workspaceId: string) => void;
   onToggleCommandPanel: () => void;
   commandPanelOpen: boolean;
 }
 
-function WorkspaceBottomBar({ workspaceName, onToggleCommandPanel, commandPanelOpen }: WorkspaceBottomBarProps) {
+function WorkspaceBottomBar({
+  workspaceName,
+  workspaces,
+  activeWorkspaceId,
+  onSelectWorkspace,
+  onToggleCommandPanel,
+  commandPanelOpen,
+}: WorkspaceBottomBarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(target)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  const handleToggle = () => {
+    setMenuOpen((prev) => !prev);
+  };
+
+  const handleSelect = (id: string) => {
+    onSelectWorkspace(id);
+    setMenuOpen(false);
+  };
+
   return (
     <div className="workspace-bottom-bar">
       <div className="workspace-bottom-bar-start">
@@ -180,8 +245,39 @@ function WorkspaceBottomBar({ workspaceName, onToggleCommandPanel, commandPanelO
         </button>
       </div>
       <div className="workspace-bottom-bar-end">
-        <span className="workspace-bottom-bar-label">Workspace:</span>
-        <span className="workspace-bottom-bar-name">{workspaceName}</span>
+        <div className="workspace-switcher">
+          <button
+            ref={triggerRef}
+            className="workspace-switcher-trigger"
+            type="button"
+            onClick={handleToggle}
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            title="Switch workspace"
+          >
+            <span className="workspace-bottom-bar-label">Workspace:</span>
+            <span className="workspace-bottom-bar-name">{workspaceName}</span>
+          </button>
+          {menuOpen && (
+            <div ref={menuRef} className="workspace-switcher-menu" role="menu">
+              {workspaces.map((w) => {
+                const isActive = w.id === activeWorkspaceId;
+                return (
+                  <button
+                    key={w.id}
+                    className={`workspace-switcher-item ${isActive ? "active" : ""}`}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => handleSelect(w.id)}
+                  >
+                    <span className="workspace-switcher-item-name">{w.name}</span>
+                    {isActive && <span className="workspace-switcher-check" aria-hidden="true">●</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

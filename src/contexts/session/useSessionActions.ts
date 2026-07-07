@@ -445,9 +445,14 @@ export function useSessionActions({
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       if (!workspace) return;
 
+      const finalName = name.trim() || workspace.name;
+      if (savedWorkspaces.some((w) => w.name.trim() === finalName)) {
+        throw new Error("Workspace name already exists");
+      }
+
       const savedWorkspace: SavedWorkspace = {
         id: generateId(),
-        name: name.trim() || workspace.name,
+        name: finalName,
         windows: workspace.windows.map((window) => ({
           id: generateId(),
           name: window.name,
@@ -461,7 +466,7 @@ export function useSessionActions({
         return updated;
       });
     },
-    [workspacesRef, setSavedWorkspaces, persistSavedWorkspaces]
+    [workspacesRef, setSavedWorkspaces, persistSavedWorkspaces, savedWorkspaces]
   );
 
   /**
@@ -577,13 +582,18 @@ export function useSessionActions({
 
   const renameSavedWorkspace = useCallback(
     (id: string, name: string) => {
+      const trimmedName = name.trim();
+      if (savedWorkspaces.some((w) => w.id !== id && w.name.trim() === trimmedName)) {
+        throw new Error("Workspace name already exists");
+      }
+
       setSavedWorkspaces((prev) => {
-        const updated = prev.map((w) => (w.id === id ? { ...w, name } : w));
+        const updated = prev.map((w) => (w.id === id ? { ...w, name: trimmedName } : w));
         persistSavedWorkspaces(updated);
         return updated;
       });
     },
-    [setSavedWorkspaces, persistSavedWorkspaces]
+    [setSavedWorkspaces, persistSavedWorkspaces, savedWorkspaces]
   );
 
   const saveWindow = useCallback(

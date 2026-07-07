@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
+import "./SaveDialog.css";
 
 interface SaveDialogProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface SaveDialogProps {
   defaultName: string;
   title?: string;
   label?: string;
+  validateName?: (name: string) => string | null;
 }
 
 export function SaveDialog({
@@ -18,12 +20,15 @@ export function SaveDialog({
   defaultName,
   title = "Save",
   label = "Name",
+  validateName,
 }: SaveDialogProps) {
   const [name, setName] = useState(() => defaultName);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setName(defaultName);
+      setError(null);
     }
   }, [isOpen, defaultName]);
 
@@ -31,6 +36,15 @@ export function SaveDialog({
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
+
+    if (validateName) {
+      const validationError = validateName(trimmed);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
     onSave(trimmed);
     onClose();
   };
@@ -57,10 +71,14 @@ export function SaveDialog({
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (error) setError(null);
+            }}
             placeholder="e.g., Work Terminal"
             autoFocus
           />
+          {error && <span className="save-dialog__error">{error}</span>}
         </FormField>
       </form>
     </Dialog>
