@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import NavBar from "./NavBar";
@@ -33,7 +33,11 @@ export default function AppLayout() {
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
+  const initializedRef = useRef(false);
+
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
     if (workspaces.length === 0) {
       createDefaultWorkspace();
     }

@@ -345,9 +345,12 @@ export function useSessionActions({
   );
 
   const createDefaultWorkspace = useCallback((): Workspace => {
+    console.log("[createDefaultWorkspace] >>> invoked");
     const workspaceId = generateId();
     const windowId = generateId();
     const paneId = generateId();
+    console.log("[createDefaultWorkspace] generated ids:", { workspaceId, windowId, paneId });
+
     const workspace: Workspace = {
       id: workspaceId,
       name: "Default",
@@ -366,8 +369,25 @@ export function useSessionActions({
       ],
       activeWindowId: windowId,
     };
-    setWorkspaces((prev) => (prev.length === 0 ? [workspace] : prev));
-    setActiveWorkspaceId(workspaceId);
+    console.log("[createDefaultWorkspace] constructed workspace:", JSON.parse(JSON.stringify(workspace)));
+
+    const existingWorkspace = workspacesRef.current[0];
+
+    setWorkspaces((prev) => {
+      const shouldCreate = prev.length === 0;
+      console.log("[createDefaultWorkspace] setWorkspaces callback - prev.length:", prev.length, "will create:", shouldCreate);
+      if (shouldCreate) {
+        console.log("[createDefaultWorkspace] returning new workspace list:", [workspace]);
+        return [workspace];
+      }
+      console.log("[createDefaultWorkspace] workspaces already exist, keeping prev:", prev);
+      return prev;
+    });
+
+    const nextActiveWorkspaceId = existingWorkspace ? existingWorkspace.id : workspaceId;
+    setActiveWorkspaceId(nextActiveWorkspaceId);
+    console.log("[createDefaultWorkspace] setActiveWorkspaceId:", nextActiveWorkspaceId);
+    console.log("[createDefaultWorkspace] <<< returning workspace:", JSON.parse(JSON.stringify(workspace)));
     return workspace;
   }, [setWorkspaces, setActiveWorkspaceId]);
 
