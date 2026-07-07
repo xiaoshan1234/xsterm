@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, MouseEvent as ReactMouseEvent } from "react";
 import { Workspace } from "../types/session";
+import { CloseIcon } from "./icons/Icon";
 import "./WorkspaceBottomBar.css";
 
 export interface WorkspaceBottomBarProps {
@@ -7,6 +8,7 @@ export interface WorkspaceBottomBarProps {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   onSelectWorkspace: (workspaceId: string) => void;
+  onCloseWorkspace: (workspaceId: string) => void;
   commandPanelOpen: boolean;
   onToggleCommandPanel: () => void;
 }
@@ -16,6 +18,7 @@ export function WorkspaceBottomBar({
   workspaces,
   activeWorkspaceId,
   onSelectWorkspace,
+  onCloseWorkspace,
   onToggleCommandPanel,
   commandPanelOpen,
 }: WorkspaceBottomBarProps) {
@@ -61,6 +64,11 @@ export function WorkspaceBottomBar({
     setMenuOpen(false);
   };
 
+  const handleClose = (e: ReactMouseEvent<HTMLSpanElement>, id: string) => {
+    e.stopPropagation();
+    onCloseWorkspace(id);
+  };
+
   return (
     <div className="workspace-bottom-bar">
       <div className="workspace-bottom-bar-start">
@@ -91,6 +99,7 @@ export function WorkspaceBottomBar({
             <div ref={menuRef} className="workspace-switcher-menu" role="menu">
               {workspaces.map((w) => {
                 const isActive = w.id === activeWorkspaceId;
+                const isDefault = w.name === "default";
                 return (
                   <button
                     key={w.id}
@@ -99,8 +108,23 @@ export function WorkspaceBottomBar({
                     role="menuitem"
                     onClick={() => handleSelect(w.id)}
                   >
-                    <span className="workspace-switcher-item-name">{w.name}</span>
-                    {isActive && <span className="workspace-switcher-check" aria-hidden="true">●</span>}
+                    <span className="workspace-switcher-item-left">
+                      {isActive && <span className="workspace-switcher-check" aria-hidden="true">●</span>}
+                      <span className="workspace-switcher-item-name">{w.name}</span>
+                    </span>
+                    <span className="workspace-switcher-item-actions">
+                      {!isDefault && (
+                        <span
+                          className="workspace-switcher-item-close"
+                          onClick={(e) => handleClose(e, w.id)}
+                          title="Close workspace"
+                          role="button"
+                          aria-label={`Close workspace ${w.name}`}
+                        >
+                          <CloseIcon size={12} />
+                        </span>
+                      )}
+                    </span>
                   </button>
                 );
               })}

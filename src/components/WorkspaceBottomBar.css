@@ -120,8 +120,40 @@
   white-space: nowrap;
 }
 
+.workspace-switcher-item-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.workspace-switcher-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .workspace-switcher-check {
   flex-shrink: 0;
   font-size: 8px;
   color: var(--text-secondary);
+}
+
+.workspace-switcher-item-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.workspace-switcher-item-close:hover {
+  background: var(--error-bg, rgba(255, 0, 0, 0.1));
+  color: var(--error, #ff4d4f);
 }

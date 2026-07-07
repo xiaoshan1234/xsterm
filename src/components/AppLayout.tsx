@@ -26,6 +26,7 @@ export default function AppLayout() {
     loadWindow,
     deleteSavedWindow,
     renameSavedWindow,
+    closeWorkspace,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
@@ -98,14 +99,15 @@ export default function AppLayout() {
             <WorkspaceContainer workspace={activeWorkspace} commandPanelOpen={showCommandPanel} />
           ) : null}
           {activeWorkspace && activeView === "terminal" && (
-            <WorkspaceBottomBar
-              workspaceName={activeWorkspace.name}
-              workspaces={workspaces}
-              activeWorkspaceId={activeWorkspaceId}
-              onSelectWorkspace={setActiveWorkspace}
-              commandPanelOpen={showCommandPanel}
-              onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
-            />
+          <WorkspaceBottomBar
+            workspaceName={activeWorkspace.name}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSelectWorkspace={setActiveWorkspace}
+            onCloseWorkspace={closeWorkspace}
+            commandPanelOpen={showCommandPanel}
+            onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
+          />
           )}
         </div>
       </div>
