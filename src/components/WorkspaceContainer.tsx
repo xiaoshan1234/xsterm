@@ -35,6 +35,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     updateWindowPaneTree,
     createWindow,
     closeWindow,
+    renameWindow,
     saveWindow,
     saveWorkspace,
     writeSession,
@@ -44,6 +45,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0] ?? null;
 
   const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
+  const [renamingWindow, setRenamingWindow] = useState<{ id: string; name: string } | null>(null);
   const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
 
   const handleActivatePane = useCallback(
@@ -112,6 +114,12 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         onSaveAll={handleSaveAll}
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
         onCloseWindow={(windowId) => closeWindow(workspace.id, windowId)}
+        onRenameWindow={(windowId) => {
+          const window = workspace.windows.find((w) => w.id === windowId);
+          if (window) {
+            setRenamingWindow({ id: windowId, name: window.name });
+          }
+        }}
       />
       {activeWindow ? (
         activeWindow.windowType === "init" ? (
@@ -147,6 +155,19 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
           title="Save Window Config"
         />
       )}
+      {renamingWindow && (
+        <SaveDialog
+          isOpen={true}
+          onClose={() => setRenamingWindow(null)}
+          onSave={(name) => {
+            renameWindow(workspace.id, renamingWindow.id, name);
+            setRenamingWindow(null);
+          }}
+          defaultName={renamingWindow.name}
+          title="Rename Window"
+          label="Window Name"
+        />
+      )}
       <SaveWorkspaceDialog
         isOpen={showSaveWorkspaceDialog}
         onClose={() => setShowSaveWorkspaceDialog(false)}
@@ -169,9 +190,10 @@ interface WindowTabBarProps {
   onSaveAll: () => void;
   onSaveWindow: (windowId: string) => void;
   onCloseWindow: (windowId: string) => void;
+  onRenameWindow: (windowId: string) => void;
 }
 
-function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow, onCloseWindow }: WindowTabBarProps) {
+function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow, onCloseWindow, onRenameWindow }: WindowTabBarProps) {
   return (
     <div className="workspace-tabs window-tabs">
       {workspace.windows.map((window) => (
@@ -182,6 +204,7 @@ function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, o
           onSelect={() => onSelect(window.id)}
           onSave={() => onSaveWindow(window.id)}
           onClose={() => onCloseWindow(window.id)}
+          onRename={() => onRenameWindow(window.id)}
         />
       ))}
       <div className="window-tab-actions">
@@ -201,12 +224,14 @@ interface WindowTabProps {
   isActive: boolean;
   onSelect: () => void;
   onSave: () => void;
+  onRename: () => void;
   onClose: () => void;
 }
 
-function WindowTab({ window, isActive, onSelect, onSave, onClose }: WindowTabProps) {
+function WindowTab({ window, isActive, onSelect, onSave, onRename, onClose }: WindowTabProps) {
   const contextMenuRef = useRef<ContextMenuRef>(null);
   const contextMenuItems: ContextMenuItem[] = [
+    { label: "Rename", onClick: onRename },
     { label: "Save as Window Config", onClick: onSave },
     { label: "Close", onClick: onClose, danger: true },
   ];

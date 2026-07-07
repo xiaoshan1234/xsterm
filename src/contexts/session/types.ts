@@ -80,6 +80,7 @@ export interface SessionContextType {
   loadWindow: (savedWindowId: string, workspaceId?: string) => Promise<Window>;
   deleteSavedWindow: (id: string) => void;
   renameSavedWindow: (id: string, name: string) => void;
+  renameWindow: (workspaceId: string, windowId: string, name: string) => void;
 }
 
 export type SetSavedConfigs = Dispatch<SetStateAction<SavedSessionConfig[]>>;
@@ -183,6 +184,7 @@ export interface SessionActions {
   loadWindow: (savedWindowId: string, workspaceId?: string) => Promise<Window>;
   deleteSavedWindow: (id: string) => void;
   renameSavedWindow: (id: string, name: string) => void;
+  renameWindow: (workspaceId: string, windowId: string, name: string) => void;
 }
 
 export interface SessionProviderProps {

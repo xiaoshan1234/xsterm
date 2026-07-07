@@ -20,11 +20,31 @@ import {
   createSplitNode,
   findPaneNode,
   generateId,
+  getDefaultWindowName,
   getLeafPaneIds,
   removeSessionAndCollapse,
   replacePaneNode,
 } from "./paneUtils";
 import { SessionActions, SessionPersistence, SessionState } from "./types";
+
+function getUniqueWindowName(
+  workspaces: Workspace[],
+  workspaceId: string,
+  baseName: string,
+  excludeWindowId?: string
+): string {
+  const workspace = workspaces.find((w) => w.id === workspaceId);
+  if (!workspace) return baseName;
+  const existing = new Set(
+    workspace.windows.filter((w) => w.id !== excludeWindowId).map((w) => w.name)
+  );
+  if (!existing.has(baseName)) return baseName;
+  let suffix = 2;
+  while (existing.has(`${baseName}-${suffix}`)) {
+    suffix += 1;
+  }
+  return `${baseName}-${suffix}`;
+}
 
 function buildFrontendSession(info: sessionService.SessionInfo, configId: string, type: Session["type"]): Session {
   return {
@@ -106,32 +126,37 @@ export function useSessionActions({
   const createWindowFromSession = useCallback(
     (sessionId: number, name?: string): Window => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
-      const windowName = name ?? session?.name ?? "Window";
       const rootPane = createLeafPane(100, sessionId, session?.configId);
+      const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, "Window");
       const window: Window = {
         id: generateId(),
-        name: windowName,
+        name: baseName,
         rootPane,
         activePaneId: rootPane.id,
       };
 
       setWorkspaces((prev) => {
-        if (prev.length === 0) {
+        const targetWorkspaceId = workspacesRef.current[0]?.id ?? prev[0]?.id ?? null;
+        if (prev.length === 0 || !targetWorkspaceId) {
+          const uniqueName = getUniqueWindowName(prev, "", baseName);
+          const finalWindow: Window = { ...window, name: uniqueName };
           const workspace: Workspace = {
             id: generateId(),
             name: "Default",
-            windows: [window],
-            activeWindowId: window.id,
+            windows: [finalWindow],
+            activeWindowId: finalWindow.id,
           };
           setActiveWorkspaceId(workspace.id);
           return [workspace];
         }
+        const uniqueName = getUniqueWindowName(prev, targetWorkspaceId, baseName);
+        const finalWindow: Window = { ...window, name: uniqueName };
         return prev.map((workspace) =>
-          workspace.id === workspacesRef.current[0]?.id
+          workspace.id === targetWorkspaceId
             ? {
                 ...workspace,
-                windows: [...workspace.windows, window],
-                activeWindowId: window.id,
+                windows: [...workspace.windows, finalWindow],
+                activeWindowId: finalWindow.id,
               }
             : workspace
         );
@@ -280,20 +305,23 @@ export function useSessionActions({
     (workspaceId: string, sessionId?: number, name?: string, windowType: "terminal" | "init" = "terminal"): Window => {
       const session = sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
       const rootPane = createLeafPane(100, sessionId, session?.configId);
+      const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, windowType === "init" ? "New Session" : "Window");
       const window: Window = {
         id: generateId(),
-        name: name ?? session?.name ?? (windowType === "init" ? "New Session" : "Window"),
+        name: baseName,
         rootPane,
         activePaneId: rootPane.id,
         windowType,
       };
-      setWorkspaces((prev) =>
-        prev.map((workspace) =>
+      setWorkspaces((prev) => {
+        const uniqueName = getUniqueWindowName(prev, workspaceId, baseName);
+        const finalWindow: Window = { ...window, name: uniqueName };
+        return prev.map((workspace) =>
           workspace.id === workspaceId
-            ? { ...workspace, windows: [...workspace.windows, window], activeWindowId: window.id }
+            ? { ...workspace, windows: [...workspace.windows, finalWindow], activeWindowId: finalWindow.id }
             : workspace
-        )
-      );
+        );
+      });
       return window;
     },
     [sessionsRef, setWorkspaces]
@@ -320,25 +348,26 @@ export function useSessionActions({
     (workspaceId: string, windowId: string, sessionId: number) => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       const rootPane = createLeafPane(100, sessionId, session?.configId);
+      const baseName = getDefaultWindowName(rootPane, sessionsRef.current, "Window");
       setWorkspaces((prev) =>
-        prev.map((workspace) =>
-          workspace.id === workspaceId
-            ? {
-                ...workspace,
-                windows: workspace.windows.map((window) =>
-                  window.id === windowId
-                    ? {
-                        ...window,
-                        name: session?.name ?? window.name,
-                        rootPane,
-                        activePaneId: rootPane.id,
-                        windowType: "terminal",
-                      }
-                    : window
-                ),
-              }
-            : workspace
-        )
+        prev.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          const uniqueName = getUniqueWindowName(prev, workspaceId, baseName, windowId);
+          return {
+            ...workspace,
+            windows: workspace.windows.map((window) =>
+              window.id === windowId
+                ? {
+                    ...window,
+                    name: uniqueName,
+                    rootPane,
+                    activePaneId: rootPane.id,
+                    windowType: "terminal",
+                  }
+                : window
+            ),
+          };
+        })
       );
     },
     [sessionsRef, setWorkspaces]
@@ -401,8 +430,9 @@ export function useSessionActions({
           let windows = remaining;
           if (remaining.length === 0) {
             const initWindow = createInitWindow();
-            windows = [initWindow];
-            nextActiveId = initWindow.id;
+            const uniqueName = getUniqueWindowName(prev, workspaceId, initWindow.name);
+            windows = [{ ...initWindow, name: uniqueName }];
+            nextActiveId = windows[0].id;
           } else if (nextActiveId === windowId) {
             const closedIndex = workspace.windows.findIndex((w) => w.id === windowId);
             const fallback = remaining[closedIndex - 1] ?? remaining[closedIndex] ?? remaining[remaining.length - 1];
@@ -553,7 +583,21 @@ export function useSessionActions({
         };
       };
 
-      const windows = await Promise.all(saved.windows.map((w) => buildWindow(w)));
+      const builtWindows = await Promise.all(saved.windows.map((w) => buildWindow(w)));
+      const usedNames = new Set<string>();
+      const windows = builtWindows.map((w) => {
+        if (!usedNames.has(w.name)) {
+          usedNames.add(w.name);
+          return w;
+        }
+        let suffix = 2;
+        while (usedNames.has(`${w.name}-${suffix}`)) {
+          suffix += 1;
+        }
+        const unique = `${w.name}-${suffix}`;
+        usedNames.add(unique);
+        return { ...w, name: unique };
+      });
       const activeWindow = windows[0] ?? null;
       const workspace: Workspace = {
         id: generateId(),
@@ -700,9 +744,10 @@ export function useSessionActions({
       };
 
       const rootPane = await buildTree(saved.rootPane);
+      const baseName = saved.name || getDefaultWindowName(rootPane, sessionsRef.current, "Window");
       const window: Window = {
         id: generateId(),
-        name: saved.name,
+        name: baseName,
         rootPane,
         activePaneId: getLeafPaneIds(rootPane)[0] ?? null,
       };
@@ -710,13 +755,15 @@ export function useSessionActions({
       const targetWorkspaceId = workspaceId ?? workspacesRef.current[0]?.id;
       if (!targetWorkspaceId) throw new Error("No workspace available to load window");
 
-      setWorkspaces((prev) =>
-        prev.map((workspace) =>
+      setWorkspaces((prev) => {
+        const uniqueName = getUniqueWindowName(prev, targetWorkspaceId, baseName);
+        const finalWindow: Window = { ...window, name: uniqueName };
+        return prev.map((workspace) =>
           workspace.id === targetWorkspaceId
-            ? { ...workspace, windows: [...workspace.windows, window], activeWindowId: window.id }
+            ? { ...workspace, windows: [...workspace.windows, finalWindow], activeWindowId: finalWindow.id }
             : workspace
-        )
-      );
+        );
+      });
       return window;
     },
     [savedWindowConfigs, openFromConfigInternal, setSessions, setWorkspaces, establishingSessionsRef, tmuxListTimeoutsRef]
@@ -1006,6 +1053,28 @@ export function useSessionActions({
     [updateConfigs, sessionsRef, setSessions]
   );
 
+  const renameWindow = useCallback(
+    (workspaceId: string, windowId: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setWorkspaces((prev) =>
+        prev.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          const window = workspace.windows.find((w) => w.id === windowId);
+          if (!window) return workspace;
+          const uniqueName = getUniqueWindowName(prev, workspaceId, trimmed, windowId);
+          return {
+            ...workspace,
+            windows: workspace.windows.map((w) =>
+              w.id === windowId ? { ...w, name: uniqueName } : w
+            ),
+          };
+        })
+      );
+    },
+    [setWorkspaces]
+  );
+
   const createGroup = useCallback(
     (name: string) => {
       const id = nextGroupId;
@@ -1234,5 +1303,6 @@ export function useSessionActions({
     loadWindow,
     deleteSavedWindow,
     renameSavedWindow,
+    renameWindow,
   };
 }

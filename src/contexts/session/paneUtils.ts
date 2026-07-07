@@ -1,4 +1,4 @@
-import { PaneNode, SplitDirection } from "../../types/session";
+import { PaneNode, Session, SplitDirection } from "../../types/session";
 
 export function generateId(): string {
   return crypto.randomUUID();
@@ -89,4 +89,31 @@ export function replacePaneNode(root: PaneNode, targetId: string, replacement: P
     ...root,
     children: root.children.map((child) => replacePaneNode(child, targetId, replacement)),
   };
+}
+
+/**
+ * Returns the first leaf node (depth-first) that has a defined `sessionId`.
+ * Used to derive a default window name from the first session attached to the window.
+ */
+export function findFirstLeafWithSession(root: PaneNode): PaneNode | null {
+  if (root.type === "leaf") {
+    return root.sessionId !== undefined ? root : null;
+  }
+  if (!root.children) return null;
+  for (const child of root.children) {
+    const found = findFirstLeafWithSession(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Derives the default window name from the first session attached to the root pane.
+ * Falls back to `fallback` when no session is attached or the session can't be found.
+ */
+export function getDefaultWindowName(rootPane: PaneNode, sessions: Session[], fallback: string): string {
+  const firstLeaf = findFirstLeafWithSession(rootPane);
+  if (!firstLeaf || firstLeaf.sessionId === undefined) return fallback;
+  const session = sessions.find((s) => s.id === firstLeaf.sessionId);
+  return session?.name ?? fallback;
 }
