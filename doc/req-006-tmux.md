@@ -1,7 +1,7 @@
 # Tmux会话管理需求
 
 ## 目标
-能够用本软件，完成对本地 tmux-session 和  remote-ssh-tmux-session 的 读取/显示/写入/配置读取/配置存储/配置设置 。
+能够用本软件，完成对 local-tmux-session 和  ssh-tmux-session 的 读取/显示/写入/配置读取/配置存储/配置设置 。
 
 ## 约束
 1. tmux-session 需要一个 local-session/ssh-session 来做底层通信通道，我称之为 underlay-session
