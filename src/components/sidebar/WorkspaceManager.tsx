@@ -13,6 +13,8 @@ interface WorkspaceManagerProps {
   renameSavedWorkspace: (id: string, name: string) => void;
 }
 
+const DEFAULT_WORKSPACE_ID = "default";
+
 /**
  * WorkspaceManager - 管理工作区列表，支持单击选中、双击加载/切换、右键菜单操作。
  * 单击：标记选中状态（高亮背景）。
@@ -24,10 +26,19 @@ export function WorkspaceManager({
   deleteSavedWorkspace,
   renameSavedWorkspace,
 }: WorkspaceManagerProps) {
-  const { workspaces, setActiveWorkspace } = useSession();
+  const { workspaces, setActiveWorkspace, createDefaultWorkspace } = useSession();
   const [renamingWorkspace, setRenamingWorkspace] = useState<SavedWorkspace | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+
+  const handleOpenDefault = () => {
+    const existingDefault = workspaces.find((w) => w.name === "default");
+    if (existingDefault) {
+      setActiveWorkspace(existingDefault.id);
+    } else {
+      createDefaultWorkspace();
+    }
+  };
 
   const handleOpen = (workspace: SavedWorkspace) => {
     const existing = workspaces.find((w) => w.name === workspace.name);
@@ -60,6 +71,26 @@ export function WorkspaceManager({
     <div className="workspace-manager">
       <div className="submenu-header">Workspaces</div>
       <div className="workspace-list">
+        <ContextMenu
+          items={[
+            {
+              label: workspaces.some((w) => w.name === "default") ? "Switch" : "Load",
+              onClick: handleOpenDefault,
+            },
+          ]}
+        >
+          <div
+            className={`workspace-list-item ${selectedWorkspaceId === DEFAULT_WORKSPACE_ID ? "selected" : ""}`}
+            onClick={() => setSelectedWorkspaceId(DEFAULT_WORKSPACE_ID)}
+            onDoubleClick={handleOpenDefault}
+          >
+            <span className="workspace-list-item-icon">
+              <LayoutIcon size={14} />
+            </span>
+            <span className="workspace-list-item-name">default</span>
+          </div>
+        </ContextMenu>
+
         {savedWorkspaces.map((workspace) => {
           const isLoaded = workspaces.some((w) => w.name === workspace.name);
           return (

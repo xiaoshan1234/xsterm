@@ -163,7 +163,7 @@ export function useSessionActions({
           const finalWindow: Window = { ...window, name: uniqueName };
           const workspace: Workspace = {
             id: generateId(),
-            name: "Default",
+            name: "default",
             windows: [finalWindow],
             activeWindowId: finalWindow.id,
             sessionIds: [sessionId],
@@ -407,15 +407,19 @@ export function useSessionActions({
   );
 
   const createDefaultWorkspace = useCallback((): Workspace => {
-    console.log("[createDefaultWorkspace] >>> invoked");
+    const existingDefault = workspacesRef.current.find((w) => w.name === "default");
+    if (existingDefault) {
+      setActiveWorkspaceId(existingDefault.id);
+      return existingDefault;
+    }
+
     const workspaceId = generateId();
     const windowId = generateId();
     const paneId = generateId();
-    console.log("[createDefaultWorkspace] generated ids:", { workspaceId, windowId, paneId });
 
     const workspace: Workspace = {
       id: workspaceId,
-      name: "Default",
+      name: "default",
       windows: [
         {
           id: windowId,
@@ -432,27 +436,11 @@ export function useSessionActions({
       activeWindowId: windowId,
       sessionIds: [],
     };
-    console.log("[createDefaultWorkspace] constructed workspace:", JSON.parse(JSON.stringify(workspace)));
 
-    const existingWorkspace = workspacesRef.current[0];
-
-    setWorkspaces((prev) => {
-      const shouldCreate = prev.length === 0;
-      console.log("[createDefaultWorkspace] setWorkspaces callback - prev.length:", prev.length, "will create:", shouldCreate);
-      if (shouldCreate) {
-        console.log("[createDefaultWorkspace] returning new workspace list:", [workspace]);
-        return [workspace];
-      }
-      console.log("[createDefaultWorkspace] workspaces already exist, keeping prev:", prev);
-      return prev;
-    });
-
-    const nextActiveWorkspaceId = existingWorkspace ? existingWorkspace.id : workspaceId;
-    setActiveWorkspaceId(nextActiveWorkspaceId);
-    console.log("[createDefaultWorkspace] setActiveWorkspaceId:", nextActiveWorkspaceId);
-    console.log("[createDefaultWorkspace] <<< returning workspace:", JSON.parse(JSON.stringify(workspace)));
+    setWorkspaces((prev) => [...prev, workspace]);
+    setActiveWorkspaceId(workspaceId);
     return workspace;
-  }, [setWorkspaces, setActiveWorkspaceId]);
+  }, [setWorkspaces, setActiveWorkspaceId, workspacesRef]);
 
   const closeWindow = useCallback(
     (workspaceId: string, windowId: string) => {
@@ -506,7 +494,9 @@ export function useSessionActions({
   const closeWorkspace = useCallback(
     (workspaceId: string) => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
-      if (workspace && workspace.sessionIds.length > 0) {
+      if (!workspace || workspace.name === "default") return;
+
+      if (workspace.sessionIds.length > 0) {
         const idsToClose = new Set(workspace.sessionIds);
         idsToClose.forEach((sessionId) => {
           sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
@@ -548,25 +538,51 @@ export function useSessionActions({
       if (!workspace) return;
 
       const finalName = name.trim() || workspace.name;
-      if (savedWorkspaces.some((w) => w.name.trim() === finalName)) {
-        throw new Error("Workspace name already exists");
+      const isDefault = workspace.name === "default";
+
+      if (finalName === "default") {
+        throw new Error("Workspace name is reserved");
       }
 
-      const savedWorkspace: SavedWorkspace = {
-        id: generateId(),
+      const buildSavedWorkspace = (id: string): SavedWorkspace => ({
+        id,
         name: finalName,
         windows: workspace.windows.map((window) => ({
           id: generateId(),
           name: window.name,
           rootPane: stripSessionIdFromPaneTree(window.rootPane),
         })),
-      };
-
-      setSavedWorkspaces((prev) => {
-        const updated = [...prev, savedWorkspace];
-        persistSavedWorkspaces(updated);
-        return updated;
       });
+
+      if (isDefault) {
+        if (savedWorkspaces.some((w) => w.name.trim() === finalName)) {
+          throw new Error("Workspace name already exists");
+        }
+        const savedWorkspaceData = buildSavedWorkspace(generateId());
+        setSavedWorkspaces((prev) => {
+          const updated = [...prev, savedWorkspaceData];
+          persistSavedWorkspaces(updated);
+          return updated;
+        });
+        return;
+      }
+
+      const existingSavedByName = savedWorkspaces.find((w) => w.name.trim() === finalName);
+      const savedWorkspaceData = buildSavedWorkspace(existingSavedByName?.id ?? generateId());
+
+      if (existingSavedByName) {
+        setSavedWorkspaces((prev) => {
+          const updated = prev.map((w) => (w.id === existingSavedByName.id ? savedWorkspaceData : w));
+          persistSavedWorkspaces(updated);
+          return updated;
+        });
+      } else {
+        setSavedWorkspaces((prev) => {
+          const updated = [...prev, savedWorkspaceData];
+          persistSavedWorkspaces(updated);
+          return updated;
+        });
+      }
     },
     [workspacesRef, setSavedWorkspaces, persistSavedWorkspaces, savedWorkspaces]
   );
@@ -691,6 +707,7 @@ export function useSessionActions({
         windows,
         activeWindowId: activeWindow?.id ?? null,
         sessionIds: [],
+        savedWorkspaceId: saved.id,
       };
       const workspace: Workspace = {
         ...workspaceWithoutIds,
@@ -724,6 +741,9 @@ export function useSessionActions({
   const renameSavedWorkspace = useCallback(
     (id: string, name: string) => {
       const trimmedName = name.trim();
+      if (trimmedName === "default") {
+        throw new Error("Workspace name is reserved");
+      }
       if (savedWorkspaces.some((w) => w.id !== id && w.name.trim() === trimmedName)) {
         throw new Error("Workspace name already exists");
       }

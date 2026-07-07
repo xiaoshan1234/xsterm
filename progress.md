@@ -9,3 +9,4 @@
 - [x] Phase 4 — 构建验证 (`npm run build` 通过)
 - [x] Debug — 修复 `createWindowFromSession`/`splitPane` 因 `sessionsRef` 未同步导致 `configId` 丢失
 - [x] 新增 — 右键 pane 菜单增加 "Close Pane"，关闭 pane 同时关闭其 session
+- [x] 修复 — 已加载的 saved workspace 修改后保存应覆盖旧配置，而不是提示 "Workspace name already exists"

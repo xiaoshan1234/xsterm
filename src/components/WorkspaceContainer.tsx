@@ -72,14 +72,16 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   );
 
   const handleSaveAll = useCallback(() => {
-    if (workspace.name === "Default") {
+    if (workspace.name === "default") {
       setShowSaveWorkspaceDialog(true);
     } else {
       try {
         saveWorkspace(workspace.id, workspace.name);
       } catch (e) {
-        if (e instanceof Error && e.message === "Workspace name already exists") {
-          window.alert("Workspace name already exists");
+        if (e instanceof Error) {
+          if (e.message === "Workspace name already exists" || e.message === "Workspace name is reserved") {
+            window.alert(e.message);
+          }
         }
       }
     }

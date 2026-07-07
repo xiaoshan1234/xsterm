@@ -21,14 +21,21 @@ interface TabBarProps {
 }
 
 export default function TabBar({ workspaces, sessions, activeWorkspaceId, onSelect, onClose, onSave }: TabBarProps) {
+  const sortedWorkspaces = [...workspaces].sort((a, b) => {
+    if (a.name === "default") return -1;
+    if (b.name === "default") return 1;
+    return 0;
+  });
+
   return (
     <div className="workspace-tabs">
-      {workspaces.map((workspace) => (
+      {sortedWorkspaces.map((workspace) => (
         <WorkspaceTab
           key={workspace.id}
           workspace={workspace}
           sessions={sessions}
           isActive={workspace.id === activeWorkspaceId}
+          isDefault={workspace.name === "default"}
           onSelect={() => onSelect(workspace.id)}
           onClose={() => onClose(workspace.id)}
           onSave={() => onSave(workspace.id)}
@@ -42,6 +49,7 @@ interface WorkspaceTabProps {
   workspace: Workspace;
   sessions: Session[];
   isActive: boolean;
+  isDefault: boolean;
   onSelect: () => void;
   onClose: () => void;
   onSave: () => void;
@@ -98,7 +106,7 @@ function SessionTypeIcon({ type, size }: { type: Session["type"]; size: number }
   }
 }
 
-function WorkspaceTab({ workspace, sessions, isActive, onSelect, onClose, onSave }: WorkspaceTabProps) {
+function WorkspaceTab({ workspace, sessions, isActive, isDefault, onSelect, onClose, onSave }: WorkspaceTabProps) {
   const handleCloseClick = (e: MouseEvent) => {
     e.stopPropagation();
     onClose();
@@ -106,7 +114,7 @@ function WorkspaceTab({ workspace, sessions, isActive, onSelect, onClose, onSave
 
   const contextMenuItems: ContextMenuItem[] = [
     { label: "Save as Workspace", onClick: onSave },
-    { label: "Close", onClick: onClose, danger: true },
+    ...(isDefault ? [] : [{ label: "Close", onClick: onClose, danger: true }]),
   ];
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -127,7 +135,7 @@ function WorkspaceTab({ workspace, sessions, isActive, onSelect, onClose, onSave
         tabIndex={0}
         onClick={onSelect}
         onMouseDown={(e) => {
-          if (e.button === 1) {
+          if (e.button === 1 && !isDefault) {
             e.preventDefault();
             onClose();
           }
@@ -138,14 +146,16 @@ function WorkspaceTab({ workspace, sessions, isActive, onSelect, onClose, onSave
           {sessionType ? <SessionTypeIcon type={sessionType} size={14} /> : <LayoutIcon size={14} />}
         </span>
         <span className="tab-title">{workspace.name}</span>
-        <button
-          className="tab-close"
-          type="button"
-          onClick={handleCloseClick}
-          aria-label="Close workspace"
-        >
-          <CloseIcon size={12} />
-        </button>
+        {!isDefault && (
+          <button
+            className="tab-close"
+            type="button"
+            onClick={handleCloseClick}
+            aria-label="Close workspace"
+          >
+            <CloseIcon size={12} />
+          </button>
+        )}
       </div>
     </ContextMenu>
   );

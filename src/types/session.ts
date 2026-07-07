@@ -40,6 +40,7 @@ export interface Workspace {
   windows: Window[];
   activeWindowId: string | null;
   sessionIds: number[];
+  savedWorkspaceId?: string;
 }
 
 export interface Session {
