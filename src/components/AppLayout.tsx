@@ -4,6 +4,7 @@ import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
 import { WorkspaceContainer } from "./WorkspaceContainer";
+import { WorkspaceBottomBar } from "./WorkspaceBottomBar";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import "../styles/pane.css";
@@ -12,6 +13,7 @@ export default function AppLayout() {
   const {
     workspaces,
     activeWorkspaceId,
+    setActiveWorkspace,
     savedWorkspaces,
     savedWindowConfigs,
     createDefaultWorkspace,
@@ -30,6 +32,7 @@ export default function AppLayout() {
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<"appearance" | "shortcuts" | "about">("appearance");
   const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | "windows" | null>(null);
+  const [showCommandPanel, setShowCommandPanel] = useState(false);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
@@ -92,8 +95,18 @@ export default function AppLayout() {
           {activeView === "settings" ? (
             <SettingsView activeCategory={activeSettingsCategory} />
           ) : activeWorkspace ? (
-            <WorkspaceContainer workspace={activeWorkspace} />
+            <WorkspaceContainer workspace={activeWorkspace} commandPanelOpen={showCommandPanel} />
           ) : null}
+          {activeWorkspace && activeView === "terminal" && (
+            <WorkspaceBottomBar
+              workspaceName={activeWorkspace.name}
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onSelectWorkspace={setActiveWorkspace}
+              commandPanelOpen={showCommandPanel}
+              onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
+            />
+          )}
         </div>
       </div>
       <CreateSessionDialog

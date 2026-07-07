@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Workspace, PaneNode, Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import { PaneTree } from "./PaneTree";
@@ -8,7 +8,6 @@ import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
 import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";
-import "./WorkspaceContainer.css";
 import "./TabBar.css";
 
 function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
@@ -24,13 +23,12 @@ function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNo
 
 interface WorkspaceContainerProps {
   workspace: Workspace;
+  commandPanelOpen: boolean;
 }
 
-export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
+export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceContainerProps) {
   const {
     sessions,
-    workspaces,
-    activeWorkspaceId,
     setActiveWorkspace,
     setActiveWindow,
     setActivePane,
@@ -47,7 +45,6 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
 
   const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
   const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
-  const [showCommandPanel, setShowCommandPanel] = useState(false);
 
   const handleActivatePane = useCallback(
     (paneId: string) => {
@@ -131,21 +128,13 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
           />
         )
       ) : null}
-      {showCommandPanel && (
+      {commandPanelOpen && (
         <CommandSendPanel
           sessions={sessions}
           activeSessionId={activeSessionId}
           writeSession={writeSession}
         />
       )}
-      <WorkspaceBottomBar
-        workspaceName={workspace.name}
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        onSelectWorkspace={setActiveWorkspace}
-        onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
-        commandPanelOpen={showCommandPanel}
-      />
       {savingWindowId && (
         <SaveDialog
           isOpen={true}
@@ -168,117 +157,6 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
         defaultName={workspace.name}
         savedWorkspaces={savedWorkspaces}
       />
-    </div>
-  );
-}
-
-interface WorkspaceBottomBarProps {
-  workspaceName: string;
-  workspaces: Workspace[];
-  activeWorkspaceId: string | null;
-  onSelectWorkspace: (workspaceId: string) => void;
-  onToggleCommandPanel: () => void;
-  commandPanelOpen: boolean;
-}
-
-function WorkspaceBottomBar({
-  workspaceName,
-  workspaces,
-  activeWorkspaceId,
-  onSelectWorkspace,
-  onToggleCommandPanel,
-  commandPanelOpen,
-}: WorkspaceBottomBarProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(target) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(target)
-      ) {
-        setMenuOpen(false);
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [menuOpen]);
-
-  const handleToggle = () => {
-    setMenuOpen((prev) => !prev);
-  };
-
-  const handleSelect = (id: string) => {
-    onSelectWorkspace(id);
-    setMenuOpen(false);
-  };
-
-  return (
-    <div className="workspace-bottom-bar">
-      <div className="workspace-bottom-bar-start">
-        <button
-          className="workspace-bottom-bar-button"
-          type="button"
-          onClick={onToggleCommandPanel}
-          title={commandPanelOpen ? "Hide command panel" : "Show command panel"}
-        >
-          {commandPanelOpen ? "▼" : "▲"}
-          <span>Command</span>
-        </button>
-      </div>
-      <div className="workspace-bottom-bar-end">
-        <div className="workspace-switcher">
-          <button
-            ref={triggerRef}
-            className="workspace-switcher-trigger"
-            type="button"
-            onClick={handleToggle}
-            aria-haspopup="true"
-            aria-expanded={menuOpen}
-            title="Switch workspace"
-          >
-            <span className="workspace-bottom-bar-label">Workspace:</span>
-            <span className="workspace-bottom-bar-name">{workspaceName}</span>
-          </button>
-          {menuOpen && (
-            <div ref={menuRef} className="workspace-switcher-menu" role="menu">
-              {workspaces.map((w) => {
-                const isActive = w.id === activeWorkspaceId;
-                return (
-                  <button
-                    key={w.id}
-                    className={`workspace-switcher-item ${isActive ? "active" : ""}`}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => handleSelect(w.id)}
-                  >
-                    <span className="workspace-switcher-item-name">{w.name}</span>
-                    {isActive && <span className="workspace-switcher-check" aria-hidden="true">●</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
