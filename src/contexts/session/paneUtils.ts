@@ -1,4 +1,4 @@
-import { PaneNode, Session, SplitDirection } from "../../types/session";
+import { PaneNode, Session, SplitDirection, Workspace } from "../../types/session";
 
 export function generateId(): string {
   return crypto.randomUUID();
@@ -116,4 +116,60 @@ export function getDefaultWindowName(rootPane: PaneNode, sessions: Session[], fa
   if (!firstLeaf || firstLeaf.sessionId === undefined) return fallback;
   const session = sessions.find((s) => s.id === firstLeaf.sessionId);
   return session?.name ?? fallback;
+}
+
+/**
+ * Returns true when the given `sessionId` is attached to any leaf pane
+ * anywhere in the given pane tree (depth-first search).
+ */
+export function isSessionInPaneTree(root: PaneNode, sessionId: number): boolean {
+  if (root.type === "leaf") {
+    return root.sessionId === sessionId;
+  }
+  if (!root.children) return false;
+  for (const child of root.children) {
+    if (isSessionInPaneTree(child, sessionId)) return true;
+  }
+  return false;
+}
+
+/**
+ * Scans every workspace and window's pane tree (depth-first) and returns
+ * the first location where the given session is attached. Returns null
+ * when the session is not used in any window.
+ */
+export function findSessionWindow(
+  workspaces: Workspace[],
+  sessionId: number
+): { workspaceId: string; windowId: string } | null {
+  for (const workspace of workspaces) {
+    for (const window of workspace.windows) {
+      if (isSessionInPaneTree(window.rootPane, sessionId)) {
+        return { workspaceId: workspace.id, windowId: window.id };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Returns true when the given session is attached to a pane in any
+ * window other than the currently active one. A null `currentWorkspaceId`
+ * or `currentWindowId` means "no current window" — in that case the
+ * session is considered "used elsewhere" as soon as it is found anywhere.
+ */
+export function isSessionUsedInOtherWindow(
+  workspaces: Workspace[],
+  currentWorkspaceId: string | null,
+  currentWindowId: string | null,
+  sessionId: number
+): boolean {
+  for (const workspace of workspaces) {
+    for (const window of workspace.windows) {
+      if (!isSessionInPaneTree(window.rootPane, sessionId)) continue;
+      if (currentWorkspaceId === null || currentWindowId === null) return true;
+      if (workspace.id !== currentWorkspaceId || window.id !== currentWindowId) return true;
+    }
+  }
+  return false;
 }

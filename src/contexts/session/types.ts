@@ -58,7 +58,7 @@ export interface SessionContextType {
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
   createWorkspaceFromSession: (sessionId: number, name?: string) => Workspace;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
-  createWindowFromSession: (sessionId: number, name?: string) => Window;
+  createWindowFromSession: (sessionId: number, name?: string, targetWorkspaceId?: string) => Window;
   createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
   createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
   createDefaultWorkspace: () => Workspace;
@@ -162,7 +162,7 @@ export interface SessionActions {
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
   createWorkspaceFromSession: (sessionId: number, name?: string) => Workspace;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
-  createWindowFromSession: (sessionId: number, name?: string) => Window;
+  createWindowFromSession: (sessionId: number, name?: string, targetWorkspaceId?: string) => Window;
   createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
   createWindow: (workspaceId: string, sessionId?: number, name?: string, windowType?: "terminal" | "init") => Window;
   createDefaultWorkspace: () => Workspace;

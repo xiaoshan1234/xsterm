@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { PaneNode, SplitDirection, Workspace } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import * as paneTree from "../utils/paneTree";
+import { isSessionUsedInOtherWindow } from "../contexts/session/paneUtils";
 import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -20,6 +21,7 @@ type DialogMode = "split" | "attach";
 export function Pane({ workspace, windowId, pane, isActive, onActivate }: PaneProps) {
   const {
     sessions,
+    workspaces,
     splitPane,
     closeSession,
     createSessionFromSavedConfig,
@@ -53,6 +55,10 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
 
   const attachSessionToPane = useCallback(
     (sessionId: number) => {
+      if (isSessionUsedInOtherWindow(workspaces, workspace.id, windowId, sessionId)) {
+        window.alert("Session is already used in another window");
+        return;
+      }
       const attachedSession = sessions.find((s) => s.id === sessionId);
       updateWindowPaneTree(workspace.id, windowId, (root) =>
         paneTree.replacePaneNode(root, pane.id, {
@@ -63,13 +69,21 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
       );
       onActivate();
     },
-    [workspace.id, windowId, pane, sessions, updateWindowPaneTree, onActivate]
+    [workspaces, workspace.id, windowId, pane, sessions, updateWindowPaneTree, onActivate]
   );
 
   const handleSelectSession = useCallback(
     (sessionId: number) => {
       if (dialogMode === "split" && pendingSplit) {
-        splitPane(workspace.id, windowId, pane.id, pendingSplit, sessionId);
+        try {
+          splitPane(workspace.id, windowId, pane.id, pendingSplit, sessionId);
+        } catch (e) {
+          if (e instanceof Error && e.message === "Session is already used in another window") {
+            window.alert("Session is already used in another window");
+          } else {
+            throw e;
+          }
+        }
         setPendingSplit(null);
         setDialogMode(null);
         setShowSessionDialog(false);
@@ -89,7 +103,11 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
           const session = await createSessionFromSavedConfig(configId);
           splitPane(workspace.id, windowId, pane.id, pendingSplit, session.id);
         } catch (e) {
-          console.error("Failed to create session for split:", e);
+          if (e instanceof Error && e.message === "Session is already used in another window") {
+            window.alert("Session is already used in another window");
+          } else {
+            console.error("Failed to create session for split:", e);
+          }
         } finally {
           setPendingSplit(null);
           setDialogMode(null);
@@ -100,7 +118,11 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
           const session = await createSessionFromSavedConfig(configId);
           attachSessionToPane(session.id);
         } catch (e) {
-          console.error("Failed to create session for attach:", e);
+          if (e instanceof Error && e.message === "Session is already used in another window") {
+            window.alert("Session is already used in another window");
+          } else {
+            console.error("Failed to create session for attach:", e);
+          }
         } finally {
           setDialogMode(null);
           setShowSessionDialog(false);

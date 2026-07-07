@@ -28,7 +28,15 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
     create: () => Promise<Session>
   ): Promise<Session> => {
     const session = await create();
-    replaceInitWindowWithSession(workspace.id, windowId, session);
+    try {
+      replaceInitWindowWithSession(workspace.id, windowId, session);
+    } catch (e) {
+      if (e instanceof Error && e.message === "Session is already used in another window") {
+        window.alert("Session is already used in another window");
+      } else {
+        throw e;
+      }
+    }
     return session;
   };
 
@@ -44,7 +52,15 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
   const handleSelectSession = (sessionId: number) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
-      replaceInitWindowWithSession(workspace.id, windowId, session);
+      try {
+        replaceInitWindowWithSession(workspace.id, windowId, session);
+      } catch (e) {
+        if (e instanceof Error && e.message === "Session is already used in another window") {
+          window.alert("Session is already used in another window");
+        } else {
+          throw e;
+        }
+      }
     }
     setShowSelectDialog(false);
   };
@@ -54,7 +70,11 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
       const session = await createSessionFromSavedConfig(configId);
       replaceInitWindowWithSession(workspace.id, windowId, session);
     } catch (e) {
-      console.error("Failed to create session from saved config:", e);
+      if (e instanceof Error && e.message === "Session is already used in another window") {
+        window.alert("Session is already used in another window");
+      } else {
+        console.error("Failed to create session from saved config:", e);
+      }
     }
     setShowSelectDialog(false);
   };

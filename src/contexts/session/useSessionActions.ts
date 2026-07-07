@@ -22,6 +22,7 @@ import {
   generateId,
   getDefaultWindowName,
   getLeafPaneIds,
+  isSessionUsedInOtherWindow,
   removeSessionAndCollapse,
   replacePaneNode,
 } from "./paneUtils";
@@ -57,6 +58,17 @@ function buildFrontendSession(info: sessionService.SessionInfo, configId: string
   };
 }
 
+function assertSessionNotUsedElsewhere(
+  workspaces: Workspace[],
+  workspaceId: string | null,
+  windowId: string | null,
+  sessionId: number
+): void {
+  if (isSessionUsedInOtherWindow(workspaces, workspaceId, windowId, sessionId)) {
+    throw new Error("Session is already used in another window");
+  }
+}
+
 interface UseSessionActionsOptions extends SessionState, SessionPersistence {}
 
 export function useSessionActions({
@@ -66,6 +78,7 @@ export function useSessionActions({
   setWorkspaces,
   workspacesRef,
   setActiveWorkspaceId,
+  activeWorkspaceId,
   savedWorkspaces,
   setSavedWorkspaces,
   savedWindowConfigs,
@@ -124,7 +137,8 @@ export function useSessionActions({
   );
 
   const createWindowFromSession = useCallback(
-    (sessionId: number, name?: string): Window => {
+    (sessionId: number, name?: string, targetWorkspaceIdParam?: string): Window => {
+      assertSessionNotUsedElsewhere(workspacesRef.current, null, null, sessionId);
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       const rootPane = createLeafPane(100, sessionId, session?.configId);
       const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, "Window");
@@ -136,8 +150,10 @@ export function useSessionActions({
       };
 
       setWorkspaces((prev) => {
-        const targetWorkspaceId = workspacesRef.current[0]?.id ?? prev[0]?.id ?? null;
-        if (prev.length === 0 || !targetWorkspaceId) {
+        const fallbackWorkspaceId = workspacesRef.current[0]?.id ?? prev[0]?.id ?? null;
+        const targetWorkspaceId = targetWorkspaceIdParam ?? fallbackWorkspaceId;
+        const workspaceExists = targetWorkspaceId && prev.some((w) => w.id === targetWorkspaceId);
+        if (prev.length === 0 || !targetWorkspaceId || !workspaceExists) {
           const uniqueName = getUniqueWindowName(prev, "", baseName);
           const finalWindow: Window = { ...window, name: uniqueName };
           const workspace: Workspace = {
@@ -203,9 +219,10 @@ export function useSessionActions({
       if (!config) throw new Error("Config not found");
 
       const session = await createSessionFromSavedConfig(configId);
-      return createWindowFromSession(session.id, name ?? config.name);
+      assertSessionNotUsedElsewhere(workspacesRef.current, null, null, session.id);
+      return createWindowFromSession(session.id, name ?? config.name, activeWorkspaceId ?? undefined);
     },
-    [savedConfigs, createSessionFromSavedConfig, createWindowFromSession]
+    [savedConfigs, createSessionFromSavedConfig, createWindowFromSession, workspacesRef, activeWorkspaceId]
   );
 
   const setActiveWorkspace = useCallback(
@@ -250,6 +267,9 @@ export function useSessionActions({
    */
   const splitPane = useCallback(
     (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number) => {
+      if (sessionId !== undefined) {
+        assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, sessionId);
+      }
       setWorkspaces((prev) => {
         const workspace = prev.find((w) => w.id === workspaceId);
         if (!workspace) return prev;
@@ -280,7 +300,7 @@ export function useSessionActions({
         );
       });
     },
-    [sessionsRef, setWorkspaces]
+    [sessionsRef, setWorkspaces, workspacesRef]
   );
 
   const updateWindowPaneTree = useCallback(
@@ -303,6 +323,9 @@ export function useSessionActions({
 
   const createWindow = useCallback(
     (workspaceId: string, sessionId?: number, name?: string, windowType: "terminal" | "init" = "terminal"): Window => {
+      if (sessionId !== undefined) {
+        assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, null, sessionId);
+      }
       const session = sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
       const rootPane = createLeafPane(100, sessionId, session?.configId);
       const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, windowType === "init" ? "New Session" : "Window");
@@ -346,6 +369,7 @@ export function useSessionActions({
 
   const replaceInitWindowWithSession = useCallback(
     (workspaceId: string, windowId: string, session: Session) => {
+      assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, session.id);
       const rootPane = createLeafPane(100, session.id, session.configId);
       const baseName = session.name;
       setWorkspaces((prev) =>
@@ -369,7 +393,7 @@ export function useSessionActions({
         })
       );
     },
-    [setWorkspaces]
+    [setWorkspaces, workspacesRef]
   );
 
   const createDefaultWorkspace = useCallback((): Workspace => {
@@ -835,11 +859,11 @@ export function useSessionActions({
       }
 
       if (!skipAutoWindow) {
-        createWindowFromSession(session.id, session.name);
+        createWindowFromSession(session.id, session.name, activeWorkspaceId ?? undefined);
       }
       return session;
     },
-    [updateConfigs, createWindowFromSession, setSessions]
+    [updateConfigs, createWindowFromSession, setSessions, activeWorkspaceId]
   );
 
   /**
@@ -969,10 +993,10 @@ export function useSessionActions({
   const openFromConfig = useCallback(
     async (configId: string): Promise<Session> => {
       const session = await openFromConfigInternal(configId);
-      createWindowFromSession(session.id, session.name);
+      createWindowFromSession(session.id, session.name, activeWorkspaceId ?? undefined);
       return session;
     },
-    [openFromConfigInternal, createWindowFromSession]
+    [openFromConfigInternal, createWindowFromSession, activeWorkspaceId]
   );
 
   const removeConfig = useCallback(
