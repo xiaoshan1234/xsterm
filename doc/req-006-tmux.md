@@ -13,7 +13,7 @@
 ### 连接 tmux 会话
 1. 连接 underlay-session , 如果失败，弹窗报错，用户点击明白，流程结束
 2. 探测是否安装了 tmux server , 如果没有，弹窗报错，用户点击明白，流程结束
-3. 探测是否存在设置的 tmux-session, 如果没有,弹窗报错，用户点击明白，流程结束
+3. 使用 tmux -CC new-session -A -s <session_name> 建立 tmux-session 连接
 4. 成功建立连接
 ### 读取 tmux 会话
 1. 探测设置的tmux-session, 有几个window,每个window有多少pane
