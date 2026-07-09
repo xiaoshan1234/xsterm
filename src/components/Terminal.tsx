@@ -26,6 +26,7 @@ interface TerminalProps {
 export interface TerminalRef {
   selectAll: () => void;
   copySelection: () => Promise<void>;
+  clear: () => void;
 }
 
 const XTERM_OPTIONS = {
@@ -186,6 +187,9 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         if (selection) {
           await navigator.clipboard.writeText(selection).catch(() => {});
         }
+      },
+      clear: () => {
+        termRef.current?.clear();
       },
     }),
     []

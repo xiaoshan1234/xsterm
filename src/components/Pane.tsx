@@ -136,6 +136,10 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
     }
   }, [pane.sessionId, closeSession]);
 
+  const handleClear = useCallback(() => {
+    terminalRef.current?.clear();
+  }, []);
+
   const handleSelectAll = useCallback(() => {
     terminalRef.current?.selectAll();
   }, []);
@@ -159,11 +163,6 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
       label: "Split Vertical",
       onClick: () => handleStartSplit("vertical"),
     },
-    {
-      label: "Close Pane",
-      onClick: () => closePane(workspace.id, windowId, pane.id),
-      danger: true,
-    },
   ];
 
   if (!session) {
@@ -184,11 +183,24 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
         onClick: handleCopy,
       },
       {
-        label: "Close Session",
-        onClick: handleCloseSession,
-        danger: true,
+        label: "Clear Pane",
+        onClick: handleClear,
       }
     );
+  }
+
+  contextMenuItems.push({
+    label: "Close Pane",
+    onClick: () => closePane(workspace.id, windowId, pane.id),
+    danger: true,
+  });
+
+  if (session) {
+    contextMenuItems.push({
+      label: "Close Session",
+      onClick: handleCloseSession,
+      danger: true,
+    });
   }
 
   return (
