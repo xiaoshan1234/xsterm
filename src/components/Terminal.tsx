@@ -17,6 +17,7 @@ interface TerminalProps {
   sessionId: number;
   sessionType?: "local" | "ssh";
   isActive?: boolean;
+  isWindowActive?: boolean;
   onFocus?: () => void;
 }
 
@@ -33,7 +34,7 @@ const XTERM_OPTIONS = {
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
-  { sessionId, sessionType, isActive = true, onFocus },
+  { sessionId, sessionType, isActive = true, isWindowActive = true, onFocus },
   ref
 ) {
   // containerRef: xterm.js 的实际 DOM 挂载点，useXterm 会在此 div 内创建 Terminal 实例
@@ -147,7 +148,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useTauriTerminalOutput: 订阅 Tauri 后端 PTY 输出流，将数据写入 xterm 显示
   // useTerminalResize: 监听容器尺寸变化，调用 fitAddon.fit() 让 xterm 自适应新尺寸
   useTauriTerminalOutput(termRef, sessionId);
-  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId);
+  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, isWindowActive);
 
   // 通过 ref 暴露 xterm 操作给父组件：selectAll（全选）、copySelection（复制选中内容）
   useImperativeHandle(

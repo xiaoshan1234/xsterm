@@ -7,7 +7,8 @@ export function useTerminalResize(
   containerRef: RefObject<HTMLDivElement | null>,
   termRef: RefObject<XTerm | null>,
   fitAddonRef: RefObject<FitAddon | null>,
-  sessionId: number
+  sessionId: number,
+  isWindowActive: boolean = true
 ): void {
   const { resizeSession } = useSession();
   const resizeSessionRef = useRef(resizeSession);
@@ -32,6 +33,7 @@ export function useTerminalResize(
     const timeoutIds: number[] = [];
 
     const fitAndResize = () => {
+      if (!isWindowActive) return;
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
         resizeSessionRef.current(sessionId, xterm.rows, xterm.cols);
@@ -72,5 +74,5 @@ export function useTerminalResize(
         clearTimeout(resizeTimer);
       }
     };
-  }, [containerRef, termRef, fitAddonRef, sessionId]);
+  }, [containerRef, termRef, fitAddonRef, sessionId, isWindowActive]);
 }

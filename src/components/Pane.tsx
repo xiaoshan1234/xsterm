@@ -13,12 +13,13 @@ interface PaneProps {
   windowId: string;
   pane: PaneNode;
   isActive: boolean;
+  isWindowActive: boolean;
   onActivate: () => void;
 }
 
 type DialogMode = "split" | "attach";
 
-export function Pane({ workspace, windowId, pane, isActive, onActivate }: PaneProps) {
+export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onActivate }: PaneProps) {
   const {
     sessions,
     workspaces,
@@ -198,7 +199,7 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
           onContextMenuCapture={handleContextMenuCapture}
         >
           {session ? (
-            <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive} onFocus={onActivate} />
+            <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} />
           ) : (
             <PaneInitCard
               onSessionCreated={(session) => attachSessionToPane(session.id)}

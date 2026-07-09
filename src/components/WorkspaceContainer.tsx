@@ -49,26 +49,24 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
 
   const handleActivatePane = useCallback(
-    (paneId: string) => {
-      if (!activeWindow) return;
+    (windowId: string, paneId: string) => {
       setActiveWorkspace(workspace.id);
-      setActiveWindow(workspace.id, activeWindow.id);
-      setActivePane(workspace.id, activeWindow.id, paneId);
+      setActiveWindow(workspace.id, windowId);
+      setActivePane(workspace.id, windowId, paneId);
     },
-    [workspace.id, activeWindow, setActiveWorkspace, setActiveWindow, setActivePane]
+    [workspace.id, setActiveWorkspace, setActiveWindow, setActivePane]
   );
 
   const handleUpdateNode = useCallback(
-    (nodeId: string, updater: (node: typeof activeWindow.rootPane) => typeof activeWindow.rootPane) => {
-      if (!activeWindow) return;
-      updateWindowPaneTree(workspace.id, activeWindow.id, (root) => {
+    (windowId: string, nodeId: string, updater: (node: PaneNode) => PaneNode) => {
+      updateWindowPaneTree(workspace.id, windowId, (root) => {
         if (root.id === nodeId) {
           return updater(root);
         }
         return updateNodeInTree(root, nodeId, updater);
       });
     },
-    [workspace.id, activeWindow, updateWindowPaneTree]
+    [workspace.id, updateWindowPaneTree]
   );
 
   const handleSaveAll = useCallback(() => {
@@ -123,21 +121,27 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
           }
         }}
       />
-      {activeWindow ? (
-        activeWindow.windowType === "init" ? (
-          <InitWindowView workspace={workspace} windowId={activeWindow.id} />
-        ) : (
-          <PaneTree
-            workspace={workspace}
-            windowId={activeWindow.id}
-            node={activeWindow.rootPane}
-            isActive={true}
-            activePaneId={activeWindow.activePaneId}
-            onActivatePane={handleActivatePane}
-            onUpdateNode={handleUpdateNode}
-          />
-        )
-      ) : null}
+      {workspace.windows.map((window) => (
+        <div
+          key={window.id}
+          className={`terminal-pane ${window.id === activeWindow?.id ? "terminal-pane--active" : ""}`}
+        >
+          {window.windowType === "init" ? (
+            <InitWindowView workspace={workspace} windowId={window.id} />
+          ) : (
+            <PaneTree
+              workspace={workspace}
+              windowId={window.id}
+              node={window.rootPane}
+              isActive={true}
+              isWindowActive={window.id === activeWindow?.id}
+              activePaneId={window.activePaneId}
+              onActivatePane={handleActivatePane}
+              onUpdateNode={handleUpdateNode}
+            />
+          )}
+        </div>
+      ))}
       {commandPanelOpen && (
         <CommandSendPanel
           sessions={sessions}

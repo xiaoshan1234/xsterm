@@ -8,9 +8,10 @@ interface PaneTreeProps {
   windowId: string;
   node: PaneNode;
   isActive: boolean;
+  isWindowActive: boolean;
   activePaneId: string | null;
-  onActivatePane: (paneId: string) => void;
-  onUpdateNode: (nodeId: string, updater: (node: PaneNode) => PaneNode) => void;
+  onActivatePane: (windowId: string, paneId: string) => void;
+  onUpdateNode: (windowId: string, nodeId: string, updater: (node: PaneNode) => PaneNode) => void;
 }
 
 export function PaneTree({
@@ -18,6 +19,7 @@ export function PaneTree({
   windowId,
   node,
   isActive,
+  isWindowActive,
   activePaneId,
   onActivatePane,
   onUpdateNode,
@@ -30,7 +32,8 @@ export function PaneTree({
         windowId={windowId}
         pane={node}
         isActive={isActive && activePaneId === node.id}
-        onActivate={() => onActivatePane(node.id)}
+        isWindowActive={isWindowActive}
+        onActivate={() => onActivatePane(windowId, node.id)}
       />
     );
   }
@@ -41,6 +44,7 @@ export function PaneTree({
       windowId={windowId}
       node={node}
       isActive={isActive}
+      isWindowActive={isWindowActive}
       activePaneId={activePaneId}
       onActivatePane={onActivatePane}
       onUpdateNode={onUpdateNode}
@@ -53,9 +57,10 @@ interface SplitNodeProps {
   windowId: string;
   node: PaneNode;
   isActive: boolean;
+  isWindowActive: boolean;
   activePaneId: string | null;
-  onActivatePane: (paneId: string) => void;
-  onUpdateNode: (nodeId: string, updater: (node: PaneNode) => PaneNode) => void;
+  onActivatePane: (windowId: string, paneId: string) => void;
+  onUpdateNode: (windowId: string, nodeId: string, updater: (node: PaneNode) => PaneNode) => void;
 }
 
 function SplitNode({
@@ -63,6 +68,7 @@ function SplitNode({
   windowId,
   node,
   isActive,
+  isWindowActive,
   activePaneId,
   onActivatePane,
   onUpdateNode,
@@ -89,7 +95,7 @@ function SplitNode({
       const totalSize = children[childIndex].size + children[childIndex + 1].size;
       const clampedPct = Math.max(10, Math.min(totalSize - 10, pct));
 
-      onUpdateNode(node.id, (current) => {
+      onUpdateNode(windowId, node.id, (current) => {
         if (!current.children) return current;
         const updatedChildren = [...current.children];
         updatedChildren[childIndex] = { ...updatedChildren[childIndex], size: clampedPct };
@@ -131,6 +137,7 @@ function SplitNode({
             windowId={windowId}
             node={child}
             isActive={isActive}
+            isWindowActive={isWindowActive}
             activePaneId={activePaneId}
             onActivatePane={onActivatePane}
             onUpdateNode={onUpdateNode}
