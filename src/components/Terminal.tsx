@@ -6,7 +6,7 @@ import { getClipboardImages } from "../utils/clipboard";
 import { useXterm } from "../hooks/useXterm";
 import { useTauriTerminalOutput } from "../hooks/useTauriTerminalOutput";
 import { useTerminalResize } from "../hooks/useTerminalResize";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 
 // Props 说明：
@@ -115,18 +115,36 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
     xterm.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
-      if (event.ctrlKey && event.shiftKey && (event.key === "c" || event.key === "C")) {
+
+      const copyShortcut = (event.ctrlKey && event.shiftKey && (event.key === "c" || event.key === "C")) ||
+        (event.ctrlKey && event.key === "Insert") ||
+        (event.metaKey && (event.key === "c" || event.key === "C"));
+
+      if (copyShortcut) {
+        const selection = xterm.getSelection();
+        if (selection && selection.length > 0) {
+          writeText(selection).catch((err) => {
+            console.error("[xsterm] Failed to copy selection via keyboard:", err);
+          });
+        }
         return false;
       }
-      if (event.ctrlKey && event.shiftKey && (event.key === "v" || event.key === "V")) {
+
+      const pasteShortcut = (event.ctrlKey && event.shiftKey && (event.key === "v" || event.key === "V")) ||
+        (event.shiftKey && event.key === "Insert") ||
+        (event.metaKey && (event.key === "v" || event.key === "V"));
+
+      if (pasteShortcut && isConnectedRef.current) {
+        readText().then((text) => {
+          if (text) {
+            writeSessionRef.current(sessionId, text);
+          }
+        }).catch((err) => {
+          console.error("[xsterm] Failed to paste text from clipboard:", err);
+        });
         return false;
       }
-      if (event.metaKey && (event.key === "c" || event.key === "C")) {
-        return false;
-      }
-      if (event.metaKey && (event.key === "v" || event.key === "V")) {
-        return false;
-      }
+
       if (event.ctrlKey && (event.key === "n" || event.key === "N") && event.shiftKey) {
         return false;
       }
