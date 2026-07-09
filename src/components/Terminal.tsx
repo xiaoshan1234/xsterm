@@ -77,16 +77,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     writeSessionRef.current = writeSession;
   }, [writeSession]);
 
-  const prevIsConnectedRef = useRef(isConnected);
-
-  useEffect(() => {
-    const xterm = termRef.current;
-    if (xterm && prevIsConnectedRef.current && !isConnected) {
-      xterm.write("\n\n连接已经断开，输入回车重新进行连接\n");
-    }
-    prevIsConnectedRef.current = isConnected;
-  }, [isConnected]);
-
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
       if (sessionType !== "ssh") return;

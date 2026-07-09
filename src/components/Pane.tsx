@@ -7,6 +7,7 @@ import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
 import { PaneInitCard } from "./PaneInitCard";
+import "./Pane.css";
 
 interface PaneProps {
   workspace: Workspace;
@@ -199,7 +200,16 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
           onContextMenuCapture={handleContextMenuCapture}
         >
           {session ? (
-            <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} />
+            <div className="pane-session-container">
+              {!session.is_connected && (
+                <div className="pane-disconnect-banner">
+                  连接已经断开，输入回车重新进行连接
+                </div>
+              )}
+              <div className="pane-terminal-wrapper">
+                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} />
+              </div>
+            </div>
           ) : (
             <PaneInitCard
               onSessionCreated={(session) => attachSessionToPane(session.id)}
