@@ -11,13 +11,11 @@ import "@xterm/xterm/css/xterm.css";
 // Props 说明：
 // - sessionId: Tauri session 句柄，所有 terminal 操作（写入、按键）都通过此 ID 路由到后端
 // - sessionType: 会话类型，local 为本地 shell，ssh 为远程连接
-// - paneId: tmux pane ID（非空时表示该 Terminal 属于某个 tmux pane，按键数据发往 tmux 后端）
 // - isActive: 当前窗格是否为激活状态，决定 focus/blur
 // - onFocus: 被点击时触发，通知父组件切换激活窗格
 interface TerminalProps {
   sessionId: number;
   sessionType?: "local" | "ssh";
-  paneId?: string;
   isActive?: boolean;
   onFocus?: () => void;
 }
@@ -35,7 +33,7 @@ const XTERM_OPTIONS = {
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
-  { sessionId, sessionType, paneId, isActive = true, onFocus },
+  { sessionId, sessionType, isActive = true, onFocus },
   ref
 ) {
   // containerRef: xterm.js 的实际 DOM 挂载点，useXterm 会在此 div 内创建 Terminal 实例
@@ -44,7 +42,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useXterm: 初始化 xterm.js，加载主题和应用 xterm options；返回 termRef（xterm 实例）和 fitAddonRef（自适应尺寸插件）
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, XTERM_OPTIONS);
 
-  const { writeSession, sendKeysToTmuxPane, getEffectiveLocalEcho } = useSession();
+  const { writeSession, getEffectiveLocalEcho } = useSession();
   const localEchoEnabled = getEffectiveLocalEcho(sessionId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
@@ -60,16 +58,14 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   }, [localEchoEnabled]);
 
   const writeSessionRef = useRef(writeSession);
-  const sendKeysToTmuxPaneRef = useRef(sendKeysToTmuxPane);
 
   useEffect(() => {
     writeSessionRef.current = writeSession;
-    sendKeysToTmuxPaneRef.current = sendKeysToTmuxPane;
-  }, [writeSession, sendKeysToTmuxPane]);
+  }, [writeSession]);
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
-      if (sessionType !== "ssh" || paneId) return;
+      if (sessionType !== "ssh") return;
 
       const target = e.target as Node | null;
       const container = containerRef.current;
@@ -91,7 +87,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       }
     },
-    [sessionId, sessionType, paneId]
+    [sessionId, sessionType]
   );
 
   useEffect(() => {
@@ -131,17 +127,13 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (localEchoEnabledRef.current) {
         xterm.write(data);
       }
-      if (paneId) {
-        sendKeysToTmuxPaneRef.current(sessionId, paneId, data);
-      } else {
-        writeSessionRef.current(sessionId, data);
-      }
+      writeSessionRef.current(sessionId, data);
     });
 
     return () => {
       dataDisposer.dispose();
     };
-  }, [sessionId, paneId]);
+  }, [sessionId]);
 
   useEffect(() => {
     document.addEventListener("paste", handlePaste, true);
@@ -152,8 +144,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
   // useTauriTerminalOutput: 订阅 Tauri 后端 PTY 输出流，将数据写入 xterm 显示
   // useTerminalResize: 监听容器尺寸变化，调用 fitAddon.fit() 让 xterm 自适应新尺寸
-  useTauriTerminalOutput(termRef, sessionId, sessionType, paneId);
-  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, sessionType, paneId);
+  useTauriTerminalOutput(termRef, sessionId);
+  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId);
 
   // 通过 ref 暴露 xterm 操作给父组件：selectAll（全选）、copySelection（复制选中内容）
   useImperativeHandle(

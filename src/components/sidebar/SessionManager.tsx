@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSession } from "../../contexts/SessionContext";
 import { SavedSessionConfig, SessionGroup } from "../../types/session";
-import { LocalSessionIcon, SshSessionIcon, TmuxSessionIcon, SshTmuxSessionIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
+import { LocalSessionIcon, SshSessionIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -71,7 +71,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     setSelectedConfigId(config.id);
   };
 
-  // handleConfigDoubleClick - 双击时根据配置类型打开对应会话（本地/SSH/Tmux）并建立连接
+  // handleConfigDoubleClick - 双击时根据配置类型打开对应会话（本地/SSH）并建立连接
   const handleConfigDoubleClick = (config: SavedSessionConfig) => {
     createWindowFromSavedConfig(config.id).catch(console.error);
   };
@@ -253,7 +253,6 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
           config={editingSession}
           groups={groups}
           groupId={editingSessionGroupId}
-          savedSshConfigs={savedConfigs.filter((c) => c.type === "ssh" || c.type === "ssh_tmux")}
           onSave={handleSessionSave}
         />
       )}
@@ -292,12 +291,8 @@ function SessionItem({
       {indented && <span className="session-item-indent" />}
       {config.type === "local" ? (
         <LocalSessionIcon size={14} />
-      ) : config.type === "ssh" ? (
-        <SshSessionIcon size={14} />
-      ) : config.type === "tmux" ? (
-        <TmuxSessionIcon size={14} />
       ) : (
-        <SshTmuxSessionIcon size={14} />
+        <SshSessionIcon size={14} />
       )}
       <span className={`session-item-name ${!connected ? "disconnected" : ""}`}>{config.name}</span>
       <button className="session-item-close" onClick={onClose}>

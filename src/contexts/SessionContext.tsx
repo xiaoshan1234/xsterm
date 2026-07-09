@@ -26,8 +26,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     globalLocalEcho: state.globalLocalEcho,
     setGlobalLocalEcho: state.setGlobalLocalEcho,
     getEffectiveLocalEcho: state.getEffectiveLocalEcho,
-    tmuxState: state.tmuxState,
-    activeTmuxWindowIds: state.activeTmuxWindowIds,
     ...actions,
   };
 

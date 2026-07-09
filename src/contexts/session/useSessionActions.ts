@@ -11,10 +11,7 @@ import {
   Window,
   Workspace,
 } from "../../types/session";
-import { SshTmuxSessionConfig, TmuxSessionConfig } from "../../types/tmux";
 import * as sessionService from "../../services/sessionService";
-import * as tmuxService from "../../services/tmuxService";
-import { cloneTmuxState } from "../tmuxStateReducer";
 import {
   collectSessionIdsFromWorkspace,
   createLeafPane,
@@ -90,10 +87,7 @@ export function useSessionActions({
   setSavedWindowConfigs,
   nextGroupId,
   setNextGroupId,
-  setTmuxState,
-  setActiveTmuxWindowIds,
   establishingSessionsRef,
-  tmuxListTimeoutsRef,
   updateConfigs,
   updateGroups,
   persistSavedWorkspaces,
@@ -113,14 +107,6 @@ export function useSessionActions({
       } else if (config.type === "ssh" && config.sshConfig) {
         info = await sessionService.createSsh(config.sshConfig);
         type = "ssh";
-      } else if (config.type === "tmux" && config.tmuxConfig) {
-        info = await tmuxService.createTmux(config.tmuxConfig);
-        type = "tmux";
-        establishingSessionsRef.current.add(info.id);
-      } else if (config.type === "ssh_tmux" && config.sshTmuxConfig) {
-        info = await tmuxService.createSshTmuxSession(config.sshTmuxConfig);
-        type = "ssh_tmux";
-        establishingSessionsRef.current.add(info.id);
       } else {
         throw new Error("Invalid config");
       }
@@ -128,17 +114,9 @@ export function useSessionActions({
       const session = buildFrontendSession(info, configId, type);
       setSessions((prev) => [...prev, session]);
 
-      if (type === "tmux" || type === "ssh_tmux") {
-        const timeoutId = window.setTimeout(() => {
-          tmuxListTimeoutsRef.current.delete(session.id);
-          tmuxService.listSessions(session.id).catch(console.error);
-        }, 500);
-        tmuxListTimeoutsRef.current.set(session.id, timeoutId);
-      }
-
       return session;
     },
-    [savedConfigs, setSessions, establishingSessionsRef, tmuxListTimeoutsRef]
+    [savedConfigs, setSessions]
   );
 
   const createWindowFromSession = useCallback(
@@ -476,18 +454,13 @@ export function useSessionActions({
 
       sessionIdsToClose.forEach((sessionId) => {
         sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
-        const timeoutId = tmuxListTimeoutsRef.current.get(sessionId);
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-          tmuxListTimeoutsRef.current.delete(sessionId);
-        }
         establishingSessionsRef.current.delete(sessionId);
       });
       if (sessionIdsToClose.size > 0) {
         setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
       }
     },
-    [setWorkspaces, setSessions, tmuxListTimeoutsRef, establishingSessionsRef, workspacesRef]
+    [setWorkspaces, setSessions, establishingSessionsRef, workspacesRef]
   );
 
   const closeWorkspace = useCallback(
@@ -499,11 +472,6 @@ export function useSessionActions({
         const idsToClose = new Set(workspace.sessionIds);
         idsToClose.forEach((sessionId) => {
           sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
-          const timeoutId = tmuxListTimeoutsRef.current.get(sessionId);
-          if (timeoutId !== undefined) {
-            clearTimeout(timeoutId);
-            tmuxListTimeoutsRef.current.delete(sessionId);
-          }
           establishingSessionsRef.current.delete(sessionId);
         });
         setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
@@ -518,7 +486,7 @@ export function useSessionActions({
         return fallback?.id ?? null;
       });
     },
-    [setWorkspaces, setActiveWorkspaceId, workspacesRef, setSessions, tmuxListTimeoutsRef, establishingSessionsRef]
+    [setWorkspaces, setActiveWorkspaceId, workspacesRef, setSessions, establishingSessionsRef]
   );
 
   /**
@@ -617,11 +585,6 @@ export function useSessionActions({
         );
         for (const id of idsToClose) {
           establishingSessionsRef.current.delete(id);
-          const timeoutId = tmuxListTimeoutsRef.current.get(id);
-          if (timeoutId !== undefined) {
-            clearTimeout(timeoutId);
-            tmuxListTimeoutsRef.current.delete(id);
-          }
         }
         if (idsToClose.size > 0) {
           setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
@@ -703,7 +666,7 @@ export function useSessionActions({
       setActiveWorkspaceId(workspace.id);
       return workspace;
     },
-    [savedWorkspaces, openFromConfigInternal, setSessions, setWorkspaces, setActiveWorkspaceId, establishingSessionsRef, tmuxListTimeoutsRef]
+    [savedWorkspaces, openFromConfigInternal, setSessions, setWorkspaces, setActiveWorkspaceId, establishingSessionsRef]
   );
 
   const deleteSavedWorkspace = useCallback(
@@ -796,11 +759,6 @@ export function useSessionActions({
         );
         for (const id of idsToClose) {
           establishingSessionsRef.current.delete(id);
-          const timeoutId = tmuxListTimeoutsRef.current.get(id);
-          if (timeoutId !== undefined) {
-            clearTimeout(timeoutId);
-            tmuxListTimeoutsRef.current.delete(id);
-          }
         }
         if (idsToClose.size > 0) {
           setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
@@ -863,7 +821,7 @@ export function useSessionActions({
       });
       return window;
     },
-    [savedWindowConfigs, openFromConfigInternal, setSessions, setWorkspaces, establishingSessionsRef, tmuxListTimeoutsRef]
+    [savedWindowConfigs, openFromConfigInternal, setSessions, setWorkspaces, establishingSessionsRef]
   );
 
   const deleteSavedWindow = useCallback(
@@ -893,18 +851,16 @@ export function useSessionActions({
    *
    * 创建会话的完整流程：
    * 1. 生成 configId（作为持久化配置的唯一标识）
-   * 2. 调用后端服务（sessionService 或 tmuxService）创建真实会话
+   * 2. 调用后端服务 sessionService 创建真实会话
    * 3. 构建前端 Session 对象，加入 sessions[]
    * 4. 若 save=true，将配置保存到 savedConfigs（持久化，重启后可恢复）
    * 5. 自动调用 createWorkspaceFromSession 创建默认工作区
-   *
-   * createLocalSession / createSshSession / createTmuxSession 均调用此方法
    */
   const createAndActivateSession = useCallback(
     async (
       type: Session["type"],
       create: () => Promise<sessionService.SessionInfo>,
-      config: LocalSessionConfig | SSHSessionConfig | TmuxSessionConfig | SshTmuxSessionConfig,
+      config: LocalSessionConfig | SSHSessionConfig,
       save: boolean,
       skipAutoWindow = false
     ): Promise<Session> => {
@@ -919,15 +875,9 @@ export function useSessionActions({
         if (type === "local") {
           const localConfig = config as LocalSessionConfig;
           savedConfig = { id: configId, name: info.name, type: "local", localConfig };
-        } else if (type === "ssh") {
+        } else {
           const sshConfig = config as SSHSessionConfig;
           savedConfig = { id: configId, name: info.name, type: "ssh", sshConfig };
-        } else if (type === "tmux") {
-          const tmuxConfig = config as TmuxSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "tmux", tmuxConfig };
-        } else {
-          const sshTmuxConfig = config as SshTmuxSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "ssh_tmux", sshTmuxConfig };
         }
         updateConfigs((prev) => [...prev, savedConfig]);
       }
@@ -966,48 +916,6 @@ export function useSessionActions({
     [createAndActivateSession]
   );
 
-  /**
-   * 创建 Tmux 会话并自动创建工作区
-   *
-   * 特殊处理：
-   * - 根据 config.ssh 判断是纯 Tmux（"tmux"）还是 SSH+Tmux（"ssh_tmux"）
-   * - Tmux 会话需要 500ms 后调用 listSessions 同步窗口/面板状态
-   * - 使用 establishingSessionsRef 标记会话正在初始化（避免重复初始化）
-   */
-  const createTmuxSession = useCallback(
-    async (config: SshTmuxSessionConfig, save = true): Promise<Session> => {
-      const session = await (config.ssh
-        ? createAndActivateSession(
-            "ssh_tmux",
-            () => tmuxService.createSshTmuxSession(config),
-            config,
-            save
-          )
-        : createAndActivateSession(
-            "tmux",
-            () => tmuxService.createTmux(config.tmux),
-            config.tmux,
-            save
-          ));
-
-      establishingSessionsRef.current.add(session.id);
-
-      const existingTimeout = tmuxListTimeoutsRef.current.get(session.id);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-
-      const timeoutId = window.setTimeout(() => {
-        tmuxListTimeoutsRef.current.delete(session.id);
-        tmuxService.listSessions(session.id).catch(console.error);
-      }, 500);
-      tmuxListTimeoutsRef.current.set(session.id, timeoutId);
-
-      return session;
-    },
-    [createAndActivateSession, establishingSessionsRef, tmuxListTimeoutsRef]
-  );
-
   const createLocalSessionOnly = useCallback(
     async (config: LocalSessionConfig, save = true): Promise<Session> => {
       return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, true);
@@ -1020,42 +928,6 @@ export function useSessionActions({
       return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, true);
     },
     [createAndActivateSession]
-  );
-
-  const createTmuxSessionOnly = useCallback(
-    async (config: SshTmuxSessionConfig, save = true): Promise<Session> => {
-      const session = await (config.ssh
-        ? createAndActivateSession(
-            "ssh_tmux",
-            () => tmuxService.createSshTmuxSession(config),
-            config,
-            save,
-            true
-          )
-        : createAndActivateSession(
-            "tmux",
-            () => tmuxService.createTmux(config.tmux),
-            config.tmux,
-            save,
-            true
-          ));
-
-      establishingSessionsRef.current.add(session.id);
-
-      const existingTimeout = tmuxListTimeoutsRef.current.get(session.id);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-
-      const timeoutId = window.setTimeout(() => {
-        tmuxListTimeoutsRef.current.delete(session.id);
-        tmuxService.listSessions(session.id).catch(console.error);
-      }, 500);
-      tmuxListTimeoutsRef.current.set(session.id, timeoutId);
-
-      return session;
-    },
-    [createAndActivateSession, establishingSessionsRef, tmuxListTimeoutsRef]
   );
 
   /**
@@ -1105,9 +977,8 @@ export function useSessionActions({
    *
    * 关闭会话流程：
    * 1. 调用后端 sessionService.closeSession(id) 关闭真实会话
-   * 2. 清理 tmuxListTimeoutsRef 中的定时器
-   * 3. 从 sessions[] 移除该会话
-   * 4. 在所有工作区中移除该会话对应的面板（removeSessionAndCollapse），并自动切换活跃面板
+   * 2. 从 sessions[] 移除该会话
+   * 3. 在所有工作区中移除该会话对应的面板（removeSessionAndCollapse），并自动切换活跃面板
    *
    * 注意：不会自动删除 savedConfigs（配置保留，用户可重新打开）
    */
@@ -1118,11 +989,6 @@ export function useSessionActions({
       } catch (e) {
         console.error("Failed to close session backend:", e);
       } finally {
-        const timeoutId = tmuxListTimeoutsRef.current.get(id);
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-          tmuxListTimeoutsRef.current.delete(id);
-        }
         setSessions((prev) => prev.filter((s) => s.id !== id));
         setWorkspaces((prev) =>
           prev.map((workspace) =>
@@ -1140,7 +1006,7 @@ export function useSessionActions({
         );
       }
     },
-    [setSessions, setWorkspaces, tmuxListTimeoutsRef]
+    [setSessions, setWorkspaces]
   );
 
   const closePane = useCallback(
@@ -1157,11 +1023,6 @@ export function useSessionActions({
         } catch (e) {
           console.error("Failed to close session backend:", e);
         } finally {
-          const timeoutId = tmuxListTimeoutsRef.current.get(sessionId);
-          if (timeoutId !== undefined) {
-            clearTimeout(timeoutId);
-            tmuxListTimeoutsRef.current.delete(sessionId);
-          }
           establishingSessionsRef.current.delete(sessionId);
         }
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
@@ -1182,7 +1043,7 @@ export function useSessionActions({
         })
       );
     },
-    [workspacesRef, setSessions, setWorkspaces, tmuxListTimeoutsRef, establishingSessionsRef]
+    [workspacesRef, setSessions, setWorkspaces, establishingSessionsRef]
   );
 
   const renameSession = useCallback(
@@ -1292,113 +1153,23 @@ export function useSessionActions({
 
   const writeSession = useCallback(
     async (id: number, data: string): Promise<void> => {
-      const session = sessionsRef.current.find((s) => s.id === id);
-      if (session?.type === "tmux" || session?.type === "ssh_tmux") {
-        throw new Error("Use sendKeysToTmuxPane for tmux sessions");
-      }
       await sessionService.writeSession(id, data);
     },
-    [sessionsRef]
+    []
   );
 
   const resizeSession = useCallback(
     async (id: number, rows: number, cols: number): Promise<void> => {
-      const session = sessionsRef.current.find((s) => s.id === id);
-      if (session?.type === "tmux" || session?.type === "ssh_tmux") {
-        throw new Error("Use resizeTmuxPane for tmux sessions");
-      }
       await sessionService.resizeSession(id, rows, cols);
     },
-    [sessionsRef]
-  );
-
-  const writeTmuxCommand = useCallback(async (id: number, command: string): Promise<void> => {
-    await tmuxService.writeTmuxCommand(id, command);
-  }, []);
-
-  const resizeTmuxPane = useCallback(
-    async (id: number, paneId: string, rows: number, cols: number): Promise<void> => {
-      await tmuxService.resizeTmuxPane(id, paneId, rows, cols);
-    },
     []
-  );
-
-  const sendKeysToTmuxPane = useCallback(
-    async (id: number, paneId: string, keys: string): Promise<void> => {
-      await tmuxService.sendKeysToTmuxPane(id, paneId, keys);
-    },
-    []
-  );
-
-  const captureTmuxPane = useCallback(
-    async (id: number, paneId: string): Promise<void> => {
-      await tmuxService.captureTmuxPane(id, paneId);
-    },
-    []
-  );
-
-  const createTmuxWindow = useCallback(
-    async (sessionId: number, name?: string): Promise<void> => {
-      await tmuxService.createTmuxWindow(sessionId, name);
-    },
-    []
-  );
-
-  const closeTmuxWindow = useCallback(
-    async (sessionId: number, windowId: string): Promise<void> => {
-      await tmuxService.closeTmuxWindow(sessionId, windowId);
-    },
-    []
-  );
-
-  const closeTmuxPane = useCallback(
-    async (sessionId: number, paneId: string): Promise<void> => {
-      await tmuxService.closeTmuxPane(sessionId, paneId);
-    },
-    []
-  );
-
-  const splitTmuxPane = useCallback(
-    async (sessionId: number, paneId: string, direction: "h" | "v" = "h"): Promise<void> => {
-      await tmuxService.splitTmuxPane(sessionId, paneId, direction);
-    },
-    []
-  );
-
-  const setActiveTmuxWindow = useCallback(
-    (sessionId: number, windowId: string) => {
-      setActiveTmuxWindowIds((prev) => {
-        const next = new Map(prev);
-        next.set(sessionId, windowId);
-        return next;
-      });
-      const tmuxSessionId = String(sessionId);
-      const command = `select-window -t ${windowId}\n`;
-      tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
-      setTmuxState((prev) => {
-        const next = cloneTmuxState(prev);
-        const session = next.sessions.get(tmuxSessionId);
-        if (session) {
-          session.activeWindowId = windowId;
-        }
-        for (const window of next.windows.values()) {
-          if (window.sessionId === tmuxSessionId) {
-            window.isActive = window.id === windowId;
-          }
-        }
-        return next;
-      });
-    },
-    [setActiveTmuxWindowIds, setTmuxState]
   );
 
   return {
     createLocalSession,
     createSshSession,
-    createTmuxSession,
     createLocalSessionOnly,
     createSshSessionOnly,
-    createTmuxSessionOnly,
     openFromConfig,
     removeConfig,
     closeSession,
@@ -1414,15 +1185,6 @@ export function useSessionActions({
     toggleGroup,
     writeSession,
     resizeSession,
-    writeTmuxCommand,
-    resizeTmuxPane,
-    sendKeysToTmuxPane,
-    captureTmuxPane,
-    splitTmuxPane,
-    setActiveTmuxWindow,
-    createTmuxWindow,
-    closeTmuxWindow,
-    closeTmuxPane,
     createWindowFromSession,
     createWindowFromSavedConfig,
     createWorkspaceFromSession,

@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { SavedSessionConfig, SavedWindowConfig, SavedWorkspace, Session, SessionGroup, Workspace } from "../../types/session";
-import { TmuxState } from "../../types/tmux";
 import { SessionState } from "./types";
 
 export function useSessionState(): SessionState {
@@ -14,17 +13,10 @@ export function useSessionState(): SessionState {
   const [nextGroupId, setNextGroupId] = useState(1);
   const [globalLocalEcho, setGlobalLocalEcho] = useState(false);
   const [sessionLocalEchoOverrides] = useState<Map<number, boolean>>(new Map());
-  const [tmuxState, setTmuxState] = useState<TmuxState>({
-    sessions: new Map(),
-    windows: new Map(),
-    panes: new Map(),
-  });
-  const [activeTmuxWindowIds, setActiveTmuxWindowIds] = useState<Map<number, string>>(new Map());
 
   const sessionsRef = useRef(sessions);
   const workspacesRef = useRef(workspaces);
   const establishingSessionsRef = useRef<Set<number>>(new Set());
-  const tmuxListTimeoutsRef = useRef<Map<number, number>>(new Map());
 
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -73,14 +65,9 @@ export function useSessionState(): SessionState {
     globalLocalEcho,
     setGlobalLocalEcho,
     sessionLocalEchoOverrides,
-    tmuxState,
-    setTmuxState,
-    activeTmuxWindowIds,
-    setActiveTmuxWindowIds,
     sessionsRef,
     workspacesRef,
     establishingSessionsRef,
-    tmuxListTimeoutsRef,
     getEffectiveLocalEcho,
   };
 }

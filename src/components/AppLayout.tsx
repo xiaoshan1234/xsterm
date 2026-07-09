@@ -19,7 +19,6 @@ export default function AppLayout() {
     createDefaultWorkspace,
     createLocalSession,
     createSshSession,
-    createTmuxSession,
     loadWorkspace,
     deleteSavedWorkspace,
     renameSavedWorkspace,
@@ -116,7 +115,6 @@ export default function AppLayout() {
         onClose={() => setShowCreateDialog(false)}
         onCreateLocal={createLocalSession}
         onCreateSsh={createSshSession}
-        onCreateTmux={createTmuxSession}
         initialGroupId={createSessionGroupId}
       />
     </div>

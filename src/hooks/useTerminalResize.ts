@@ -7,18 +7,14 @@ export function useTerminalResize(
   containerRef: RefObject<HTMLDivElement | null>,
   termRef: RefObject<XTerm | null>,
   fitAddonRef: RefObject<FitAddon | null>,
-  sessionId: number,
-  _sessionType?: "local" | "ssh",
-  paneId?: string
+  sessionId: number
 ): void {
-  const { resizeSession, resizeTmuxPane } = useSession();
+  const { resizeSession } = useSession();
   const resizeSessionRef = useRef(resizeSession);
-  const resizeTmuxPaneRef = useRef(resizeTmuxPane);
 
   useEffect(() => {
     resizeSessionRef.current = resizeSession;
-    resizeTmuxPaneRef.current = resizeTmuxPane;
-  }, [resizeSession, resizeTmuxPane]);
+  }, [resizeSession]);
 
   // 使用 ResizeObserver 监听容器尺寸变化，触发 fitAddon.fit() 使 xterm 自适应新尺寸，
   // 并将 rows/cols 通知给 Tauri 后端以调整 PTY 大小。
@@ -38,11 +34,7 @@ export function useTerminalResize(
     const fitAndResize = () => {
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
-        if (paneId) {
-          resizeTmuxPaneRef.current(sessionId, paneId, xterm.rows, xterm.cols);
-        } else {
-          resizeSessionRef.current(sessionId, xterm.rows, xterm.cols);
-        }
+        resizeSessionRef.current(sessionId, xterm.rows, xterm.cols);
       }
     };
 
@@ -80,5 +72,5 @@ export function useTerminalResize(
         clearTimeout(resizeTimer);
       }
     };
-  }, [containerRef, termRef, fitAddonRef, sessionId, paneId]);
+  }, [containerRef, termRef, fitAddonRef, sessionId]);
 }

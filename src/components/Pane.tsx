@@ -6,7 +6,6 @@ import { isSessionUsedInOtherWindow } from "../contexts/session/paneUtils";
 import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
-import { TmuxSessionView } from "./TmuxSessionView";
 import { PaneInitCard } from "./PaneInitCard";
 
 interface PaneProps {
@@ -27,12 +26,6 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
     closeSession,
     closePane,
     createSessionFromSavedConfig,
-    tmuxState,
-    activeTmuxWindowIds,
-    setActiveTmuxWindow,
-    createTmuxWindow,
-    closeTmuxWindow,
-    closeTmuxPane,
     updateWindowPaneTree,
   } = useSession();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
@@ -204,30 +197,15 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
           onMouseDown={onActivate}
           onContextMenuCapture={handleContextMenuCapture}
         >
-            {session ? (
-              session.type === "tmux" || session.type === "ssh_tmux" ? (
-                <div className="workspace-pane-content" onMouseDown={onActivate}>
-                  <TmuxSessionView
-                    session={session}
-                    isActive={isActive}
-                    tmuxState={tmuxState}
-                    activeTmuxWindowIds={activeTmuxWindowIds}
-                    setActiveTmuxWindow={setActiveTmuxWindow}
-                    createTmuxWindow={createTmuxWindow}
-                    closeTmuxWindow={closeTmuxWindow}
-                    closeTmuxPane={closeTmuxPane}
-                  />
-                </div>
-              ) : (
-                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive} onFocus={onActivate} />
-              )
-            ) : (
-              <PaneInitCard
-                onSessionCreated={(session) => attachSessionToPane(session.id)}
-                title="No session"
-                subtitle="Create or open a session"
-              />
-            )}
+          {session ? (
+            <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive} onFocus={onActivate} />
+          ) : (
+            <PaneInitCard
+              onSessionCreated={(session) => attachSessionToPane(session.id)}
+              title="No session"
+              subtitle="Create or open a session"
+            />
+          )}
           </div>
         </ContextMenu>
       <SelectSessionDialog

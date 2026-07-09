@@ -60,27 +60,11 @@
   display: flex;
 }
 
-.terminal-pane--active:not(.tmux-pane) > * {
+.terminal-pane--active > * {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.tmux-pane {
-  display: none;
-  flex-direction: column;
-}
-
-.tmux-pane.terminal-pane--active {
-  display: flex;
-}
-
-.tmux-pane-grid {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  min-height: 0;
 }
 
 .terminal-empty {

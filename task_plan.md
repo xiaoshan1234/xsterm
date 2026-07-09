@@ -30,7 +30,7 @@ When a workspace instance is created from a saved workspace config, its sessions
   - `createWindow`, `createWindowFromSession`, `createWindowFromSavedConfig`, `loadWindow`
   - `replaceInitWindowWithSession`, `splitPane`
   - `closeWindow`, `closeSession`, `removeConfig`
-  - `useTauriListeners` session-closed and tmux CommandError handlers
+  - `useTauriListeners` session-closed handlers
 - `closeWorkspace`: close all sessions listed in `workspace.sessionIds`.
 
 ### Phase 4 — Verify

@@ -4,8 +4,6 @@ import {
   CloseIcon,
   LocalSessionIcon,
   SshSessionIcon,
-  TmuxSessionIcon,
-  SshTmuxSessionIcon,
   LayoutIcon,
 } from "./icons/Icon";
 import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
@@ -97,10 +95,6 @@ function SessionTypeIcon({ type, size }: { type: Session["type"]; size: number }
       return <LocalSessionIcon size={size} />;
     case "ssh":
       return <SshSessionIcon size={size} />;
-    case "tmux":
-      return <TmuxSessionIcon size={size} />;
-    case "ssh_tmux":
-      return <SshTmuxSessionIcon size={size} />;
     default:
       return <LayoutIcon size={size} />;
   }

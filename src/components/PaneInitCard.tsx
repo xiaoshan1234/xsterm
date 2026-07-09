@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { LocalSessionConfig, SSHSessionConfig, Session } from "../types/session";
-import { SshTmuxSessionConfig } from "../types/tmux";
 import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -22,10 +21,9 @@ export function PaneInitCard({
     sessions,
     createLocalSessionOnly,
     createSshSessionOnly,
-    createTmuxSessionOnly,
     createSessionFromSavedConfig,
   } = useSession();
-  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux" | null>(null);
+  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
 
   const handleCreate = async (create: () => Promise<Session>): Promise<Session> => {
@@ -47,9 +45,6 @@ export function PaneInitCard({
 
   const handleCreateSsh = (config: SSHSessionConfig, save: boolean) =>
     handleCreate(() => createSshSessionOnly(config, save));
-
-  const handleCreateTmux = (config: SshTmuxSessionConfig, save: boolean) =>
-    handleCreate(() => createTmuxSessionOnly(config, save));
 
   const handleSelectSession = (sessionId: number) => {
     const session = sessions.find((s) => s.id === sessionId);
@@ -108,7 +103,6 @@ export function PaneInitCard({
         onClose={() => setCreateDialogTab(null)}
         onCreateLocal={handleCreateLocal}
         onCreateSsh={handleCreateSsh}
-        onCreateTmux={handleCreateTmux}
         initialTab={createDialogTab ?? "local"}
       />
       <SelectSessionDialog

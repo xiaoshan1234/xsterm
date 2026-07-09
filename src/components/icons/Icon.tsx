@@ -39,28 +39,6 @@ export const SshSessionIcon = icon("0 0 24 24", (
   </>
 ));
 
-export const TmuxSessionIcon = icon("0 0 24 24", (
-  <>
-    <rect x="2" y="2" width="20" height="20" rx="2" />
-    <path d="M17 12H7" />
-    <path d="M14 9l3 3-3 3" />
-    <path d="M10 15l-3-3 3-3" />
-  </>
-));
-
-export const SshTmuxSessionIcon = icon("0 0 24 24", (
-  <>
-    <rect x="2" y="2" width="9" height="9" rx="1" ry="1" />
-    <rect x="13" y="2" width="9" height="9" rx="1" ry="1" />
-    <rect x="2" y="13" width="9" height="9" rx="1" ry="1" />
-    <rect x="13" y="13" width="9" height="9" rx="1" ry="1" />
-    <line x1="11" y1="5.5" x2="13" y2="5.5" />
-    <line x1="11" y1="16.5" x2="13" y2="16.5" />
-    <line x1="5.5" y1="11" x2="5.5" y2="13" />
-    <line x1="16.5" y1="11" x2="16.5" y2="13" />
-  </>
-));
-
 export const ChatIcon = icon("0 0 24 24", (
   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
 ));

@@ -1,5 +1,3 @@
-import type { TmuxSessionConfig, SshTmuxSessionConfig } from "./tmux";
-
 export type SplitDirection = "horizontal" | "vertical";
 
 export interface PaneNode {
@@ -47,19 +45,14 @@ export interface Session {
   id: number;
   configId: string;
   name: string;
-  type: "local" | "ssh" | "tmux" | "ssh_tmux";
+  type: "local" | "ssh";
   is_connected: boolean;
   session_type: SessionType;
 }
 
 export type SessionType =
   | { type: "local"; shell: string; cwd: string }
-  | { type: "ssh"; host: string; port: number; user: string }
-  | { type: "tmux"; socket?: string; command: string }
-  | { type: "ssh_tmux"; host: string; port: number; user: string; socket?: string; command: string };
-
-export { TmuxSessionConfig, SshTmuxSessionConfig };
-export * from "./tmux";
+  | { type: "ssh"; host: string; port: number; user: string };
 
 export interface LocalSessionConfig {
   shell?: string;
@@ -80,11 +73,9 @@ export interface SSHSessionConfig {
 export interface SavedSessionConfig {
   id: string;
   name: string;
-  type: "local" | "ssh" | "tmux" | "ssh_tmux";
+  type: "local" | "ssh";
   localConfig?: LocalSessionConfig;
   sshConfig?: SSHSessionConfig;
-  tmuxConfig?: TmuxSessionConfig;
-  sshTmuxConfig?: SshTmuxSessionConfig;
 }
 
 export interface SessionGroup {
