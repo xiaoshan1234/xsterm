@@ -18,11 +18,11 @@
   height: 100%;
 }
 
-.pane-tree-split--horizontal {
+.pane-tree-split.pane-tree-split--horizontal {
   flex-direction: row;
 }
 
-.pane-tree-split--vertical {
+.pane-tree-split.pane-tree-split--vertical {
   flex-direction: column;
 }
 
