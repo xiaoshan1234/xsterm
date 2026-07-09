@@ -18,6 +18,8 @@ interface TerminalProps {
   sessionType?: "local" | "ssh";
   isActive?: boolean;
   isWindowActive?: boolean;
+  isConnected: boolean;
+  configId: string;
   onFocus?: () => void;
 }
 
@@ -34,7 +36,7 @@ const XTERM_OPTIONS = {
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
-  { sessionId, sessionType, isActive = true, isWindowActive = true, onFocus },
+  { sessionId, sessionType, isActive = true, isWindowActive = true, isConnected, configId: _configId, onFocus },
   ref
 ) {
   // containerRef: xterm.js 的实际 DOM 挂载点，useXterm 会在此 div 内创建 Terminal 实例
@@ -43,12 +45,15 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useXterm: 初始化 xterm.js，加载主题和应用 xterm options；返回 termRef（xterm 实例）和 fitAddonRef（自适应尺寸插件）
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, XTERM_OPTIONS);
 
-  const { writeSession, getEffectiveLocalEcho } = useSession();
+  const { writeSession, getEffectiveLocalEcho, reconnectSession } = useSession();
   const localEchoEnabled = getEffectiveLocalEcho(sessionId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
   const lastDataRef = useRef<{ text: string; time: number } | null>(null);
   const isFocusedRef = useRef(isActive);
+  const isConnectedRef = useRef(isConnected);
+  const isReconnectingRef = useRef(false);
+  const reconnectSessionRef = useRef(reconnectSession);
 
   useEffect(() => {
     isFocusedRef.current = isActive;
@@ -58,11 +63,29 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     localEchoEnabledRef.current = localEchoEnabled;
   }, [localEchoEnabled]);
 
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  useEffect(() => {
+    reconnectSessionRef.current = reconnectSession;
+  }, [reconnectSession]);
+
   const writeSessionRef = useRef(writeSession);
 
   useEffect(() => {
     writeSessionRef.current = writeSession;
   }, [writeSession]);
+
+  const prevIsConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    const xterm = termRef.current;
+    if (xterm && prevIsConnectedRef.current && !isConnected) {
+      xterm.write("\n\n连接已经断开，输入回车重新进行连接\n");
+    }
+    prevIsConnectedRef.current = isConnected;
+  }, [isConnected]);
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
@@ -95,6 +118,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     const xterm = termRef.current;
     if (!xterm) return;
 
+    isReconnectingRef.current = false;
     xterm.clear();
 
     xterm.attachCustomKeyEventHandler((event) => {
@@ -119,6 +143,16 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
     const dataDisposer = xterm.onData((data) => {
       if (!isFocusedRef.current) return;
+
+      if (!isConnectedRef.current) {
+        if (data === "\r" && !isReconnectingRef.current) {
+          isReconnectingRef.current = true;
+          reconnectSessionRef.current(sessionId).finally(() => {
+            isReconnectingRef.current = false;
+          });
+        }
+        return;
+      }
 
       const now = Date.now();
       const last = lastDataRef.current;

@@ -31,6 +31,7 @@ export interface SessionContextType {
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
+  reconnectSession: (id: number) => Promise<Session>;
   closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
   addToGroup: (groupId: number, configId: string) => void;
   removeFromGroup: (groupId: number, configId: string) => void;
@@ -118,6 +119,7 @@ export interface SessionActions {
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
+  reconnectSession: (id: number) => Promise<Session>;
   closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
   addToGroup: (groupId: number, configId: string) => void;
   removeFromGroup: (groupId: number, configId: string) => void;

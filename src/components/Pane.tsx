@@ -199,7 +199,7 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
           onContextMenuCapture={handleContextMenuCapture}
         >
           {session ? (
-            <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} />
+            <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} />
           ) : (
             <PaneInitCard
               onSessionCreated={(session) => attachSessionToPane(session.id)}

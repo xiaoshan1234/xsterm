@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse, withRecomputedSessionIds } from "./paneUtils";
+import { findPaneNode, getLeafPaneIds, isSessionInPaneTree, removeSessionAndCollapse, withRecomputedSessionIds } from "./paneUtils";
 import { SessionState } from "./types";
 
 type ListenersState = Pick<
@@ -24,9 +24,29 @@ export function useTauriListeners({
     const unlisteners: (() => void)[] = [];
 
     (async () => {
+      const unlistenSessionDisconnected = await listen<number>("session-disconnected", (event) => {
+        const sessionId = event.payload;
+        establishingSessionsRef.current.delete(sessionId);
+        setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, is_connected: false } : s)));
+      }).catch((e) => {
+        console.error("Failed to listen session-disconnected:", e);
+        return null;
+      });
+      if (cancelled) {
+        unlistenSessionDisconnected?.();
+        return;
+      }
+      if (unlistenSessionDisconnected) unlisteners.push(unlistenSessionDisconnected);
+
       const unlistenSessionClosed = await listen<number>("session-closed", (event) => {
         const sessionId = event.payload;
         establishingSessionsRef.current.delete(sessionId);
+        const stillExists = sessionsRef.current.some((s) => s.id === sessionId);
+        if (!stillExists) return;
+        const stillAttached = workspacesRef.current.some((workspace) =>
+          workspace.windows.some((window) => isSessionInPaneTree(window.rootPane, sessionId))
+        );
+        if (!stillAttached) return;
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         setWorkspaces((prev) =>
           prev.map((workspace) =>

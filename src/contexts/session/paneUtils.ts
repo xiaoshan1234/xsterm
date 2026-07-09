@@ -69,6 +69,19 @@ export function removeSessionFromPaneTree(root: PaneNode, sessionId: number): Pa
   });
 }
 
+export function replaceSessionIdInPaneTree(
+  root: PaneNode,
+  oldSessionId: number,
+  newSessionId: number
+): PaneNode {
+  return mapPaneTree(root, (node) => {
+    if (node.type === "leaf" && node.sessionId === oldSessionId) {
+      return { ...node, sessionId: newSessionId };
+    }
+    return node;
+  });
+}
+
 export function collapseEmptySplits(root: PaneNode): PaneNode {
   if (root.type === "leaf") return root;
   const collapsedChildren = root.children?.map(collapseEmptySplits) ?? [];

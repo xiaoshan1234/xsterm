@@ -146,7 +146,7 @@ fn spawn_output_forwarder(
                 Ok(0) => {
                     // EOF: the shell process exited.
                     let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-closed", &payload);
+                    let _ = backend_clone.emit("session-disconnected", &payload);
                     break;
                 }
                 Ok(n) => {

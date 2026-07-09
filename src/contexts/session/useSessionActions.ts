@@ -25,6 +25,7 @@ import {
   removePaneFromTree,
   removeSessionAndCollapse,
   replacePaneNode,
+  replaceSessionIdInPaneTree,
   stripSessionIdFromPaneTree,
   withRecomputedSessionIds,
 } from "./paneUtils";
@@ -1009,6 +1010,56 @@ export function useSessionActions({
     [setSessions, setWorkspaces]
   );
 
+  const reconnectSession = useCallback(
+    async (id: number): Promise<Session> => {
+      const oldSession = sessionsRef.current.find((s) => s.id === id);
+      if (!oldSession) throw new Error("Session not found");
+
+      const config = savedConfigs.find((c) => c.id === oldSession.configId);
+      if (!config) throw new Error("Saved config not found for session");
+
+      let info: sessionService.SessionInfo;
+      let type: Session["type"];
+
+      if (config.type === "local" && config.localConfig) {
+        info = await sessionService.createLocal(config.localConfig);
+        type = "local";
+      } else if (config.type === "ssh" && config.sshConfig) {
+        info = await sessionService.createSsh(config.sshConfig);
+        type = "ssh";
+      } else {
+        throw new Error("Invalid saved config");
+      }
+
+      const newSession = buildFrontendSession(info, oldSession.configId, type);
+      setSessions((prev) => [...prev, newSession]);
+
+      setWorkspaces((prev) =>
+        prev.map((workspace) =>
+          withRecomputedSessionIds({
+            ...workspace,
+            windows: workspace.windows.map((window) => ({
+              ...window,
+              rootPane: replaceSessionIdInPaneTree(window.rootPane, id, newSession.id),
+            })),
+          })
+        )
+      );
+
+      establishingSessionsRef.current.delete(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+
+      try {
+        await sessionService.closeSession(id);
+      } catch (e) {
+        console.error("Failed to close old session backend during reconnect:", e);
+      }
+
+      return newSession;
+    },
+    [savedConfigs, sessionsRef, setSessions, setWorkspaces, establishingSessionsRef]
+  );
+
   const closePane = useCallback(
     async (workspaceId: string, windowId: string, paneId: string): Promise<void> => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
@@ -1173,6 +1224,7 @@ export function useSessionActions({
     openFromConfig,
     removeConfig,
     closeSession,
+    reconnectSession,
     closePane,
     addToGroup,
     removeFromGroup,

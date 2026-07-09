@@ -50,7 +50,7 @@ pub fn create_ssh_session(
                 }
                 Ok(None) | Err(_) => {
                     let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-closed", &payload);
+                    let _ = backend_clone.emit("session-disconnected", &payload);
                     break;
                 }
             }
