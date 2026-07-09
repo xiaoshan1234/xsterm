@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Write};
 
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
@@ -64,6 +64,52 @@ pub fn create_local_session(
     let handles = LocalSessionHandles { child: Some(child), _pair: pair };
 
     Ok((LocalSession { info, writer }, handles))
+}
+
+/// Create a local shell session for use as a tmux underlay.
+///
+/// Unlike [`create_local_session`], this does not start an output forwarder;
+/// the caller is responsible for reading from the returned reader.
+pub fn create_local_underlay_session(
+    pty_system: &dyn PtySystem,
+    config: LocalSessionConfig,
+    session_id: u32,
+) -> Result<(Box<dyn Write + Send>, Box<dyn Read + Send>, LocalSessionHandles, SessionInfo), String> {
+    let shell_path = resolve_shell_path(config.shell);
+    let (shell_exe, shell_extra_args) = parse_shell_command(&shell_path);
+    let shell_name = extract_shell_name(&shell_exe);
+    let cwd = resolve_working_directory(config.cwd);
+
+    let mut pair = pty_system
+        .openpty(default_pty_size())
+        .map_err_string()?;
+
+    let mut cmd = portable_pty::CommandBuilder::new(&shell_exe);
+    for arg in &shell_extra_args {
+        cmd.arg(arg);
+    }
+    apply_shell_flags(&mut cmd, &shell_name);
+    if let Some(args) = config.args {
+        for arg in args {
+            cmd.arg(&arg);
+        }
+    }
+    cmd.cwd(&cwd);
+
+    let child = pair.spawn(cmd).map_err_string()?;
+    let writer = pair.master_writer().map_err_string()?;
+    let reader = pair.master_reader().map_err_string()?;
+
+    let info = SessionInfo {
+        id: session_id,
+        name: shell_name,
+        session_type: SessionType::Local { shell: shell_path, cwd },
+        is_connected: true,
+    };
+
+    let handles = LocalSessionHandles { child: Some(child), _pair: pair };
+
+    Ok((writer, reader, handles, info))
 }
 
 /// Determine the shell executable path from config or environment defaults.

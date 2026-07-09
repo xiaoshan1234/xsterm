@@ -1,7 +1,6 @@
-import { useEffect, useRef, RefObject } from "react";
+import { useEffect, RefObject } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { listen } from "@tauri-apps/api/event";
-import { useSession } from "../contexts/SessionContext";
 
 function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
@@ -18,18 +17,8 @@ export function useTauriTerminalOutput(
   _sessionType?: "local" | "ssh",
   paneId?: string
 ): void {
-  const { captureTmuxPane } = useSession();
-  const captureTmuxPaneRef = useRef(captureTmuxPane);
-
-  useEffect(() => {
-    captureTmuxPaneRef.current = captureTmuxPane;
-  }, [captureTmuxPane]);
-
-  // 监听 Tauri 后端事件，将终端输出写入 xterm 实例。
-  // - paneId 存在时监听 tmux-pane-output 事件，针对特定 tmux pane 输出。
-  // - 无 paneId 时监听 session-output 事件，针对整个会话输出。
-  // 数据通过 requestAnimationFrame 批量写入，避免频繁调用 xterm.write()。
-  // 清理时取消事件监听，并将队列中剩余数据一次性写入后退出。
+  // The tmux underlay backend polls pane output automatically and emits
+  // `tmux-pane-output` events, so no manual capture request is needed here.
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;
@@ -71,9 +60,6 @@ export function useTauriTerminalOutput(
         .then((fn) => {
           if (listenerActive && termRef.current) {
             unlisten = fn;
-            captureTmuxPaneRef.current(sessionId, paneId).catch((err) => {
-              console.error("[xsterm] Failed to capture tmux pane:", err);
-            });
           } else {
             fn();
           }

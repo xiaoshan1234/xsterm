@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { TmuxPane } from "../types/tmux";
 import Terminal from "./Terminal";
+import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import "./TmuxLayoutGrid.css";
 
 export interface LayoutCell {
@@ -15,9 +17,10 @@ interface TmuxLayoutGridProps {
   layout: string;
   panes: TmuxPane[];
   onClosePane?: (paneId: string) => void;
+  onSplitPane?: (direction: "h" | "v") => void;
 }
 
-export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLayoutGridProps) {
+export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane, onSplitPane }: TmuxLayoutGridProps) {
   // parseTmuxLayout: 将 tmux layout 字符串解析为 cells 数组，每个 cell 代表一个窗格的几何信息
   // paneMap: 将 panes 数组转为 Map，方便通过 paneId 快速查找对应的 TmuxPane 元数据（标题、copyMode 等）
   const cells = parseTmuxLayout(layout);
@@ -36,40 +39,75 @@ export function TmuxLayoutGrid({ sessionId, layout, panes, onClosePane }: TmuxLa
           const pane = paneMap.get(paneId);
           if (!pane) return null;
           return (
-            <div
+            <TmuxLayoutCell
               key={paneId}
-              className="tmux-layout-cell"
-              style={{
-                position: "absolute",
-                left: `${cell.x}%`,
-                top: `${cell.y}%`,
-                width: `${cell.width}%`,
-                height: `${cell.height}%`,
-              }}
-            >
-              <div className="tmux-pane-header">
-                <span className="tmux-pane-title">
-                  {pane.inCopyMode && <span className="tmux-copy-mode-indicator">[COPY] </span>}
-                  {pane.title || paneId}
-                </span>
-                {onClosePane && (
-                  <button
-                    className="tmux-pane-close"
-                    onClick={() => onClosePane(paneId)}
-                    title="Close pane"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <div className="tmux-pane-terminal">
-                {/* 每个 tmux pane 对应一个 Terminal 实例，paneId 使按键路由到后端对应 pane */}
-                <Terminal sessionId={sessionId} paneId={cell.paneId} />
-              </div>
-            </div>
+              cell={cell}
+              pane={pane}
+              paneId={paneId}
+              sessionId={sessionId}
+              onClosePane={onClosePane}
+              onSplitPane={onSplitPane}
+            />
           );
         })}
     </div>
+  );
+}
+
+interface TmuxLayoutCellProps {
+  cell: LayoutCell;
+  pane: TmuxPane;
+  paneId: string;
+  sessionId: number;
+  onClosePane?: (paneId: string) => void;
+  onSplitPane?: (direction: "h" | "v") => void;
+}
+
+function TmuxLayoutCell({ cell, pane, paneId, sessionId, onClosePane, onSplitPane }: TmuxLayoutCellProps) {
+  const contextMenuRef = useRef<ContextMenuRef>(null);
+  const items: ContextMenuItem[] = [];
+  if (onSplitPane) {
+    items.push(
+      { label: "Split Horizontal", onClick: () => onSplitPane("h") },
+      { label: "Split Vertical", onClick: () => onSplitPane("v") }
+    );
+  }
+  if (onClosePane) {
+    items.push({ label: "Close Pane", onClick: () => onClosePane(paneId), danger: true });
+  }
+
+  return (
+    <ContextMenu ref={contextMenuRef} items={items}>
+      <div
+        className="tmux-layout-cell"
+        style={{
+          position: "absolute",
+          left: `${cell.x}%`,
+          top: `${cell.y}%`,
+          width: `${cell.width}%`,
+          height: `${cell.height}%`,
+        }}
+      >
+        <div className="tmux-pane-header">
+          <span className="tmux-pane-title">
+            {pane.inCopyMode && <span className="tmux-copy-mode-indicator">[COPY] </span>}
+            {pane.title || paneId}
+          </span>
+          {onClosePane && (
+            <button
+              className="tmux-pane-close"
+              onClick={() => onClosePane(paneId)}
+              title="Close pane"
+            >
+              ×
+            </button>
+          )}
+        </div>
+        <div className="tmux-pane-terminal">
+          <Terminal sessionId={sessionId} paneId={paneId} />
+        </div>
+      </div>
+    </ContextMenu>
   );
 }
 

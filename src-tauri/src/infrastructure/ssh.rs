@@ -349,7 +349,12 @@ async fn run_data_loop(
                     break;
                 }
             }
-            resize = resize_rx.as_mut().unwrap().recv(), if resize_rx.is_some() => {
+            resize = async {
+                match resize_rx.as_mut() {
+                    Some(rx) => rx.recv().await,
+                    None => std::future::pending::<Option<(u16, u16)>>().await,
+                }
+            }, if resize_rx.is_some() => {
                 match resize {
                     Some((cols, rows)) => {
                         if channel.window_change(u32::from(cols), u32::from(rows), 0, 0).await.is_ok() {

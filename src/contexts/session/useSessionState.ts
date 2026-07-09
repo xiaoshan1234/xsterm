@@ -18,6 +18,7 @@ export function useSessionState(): SessionState {
     sessions: new Map(),
     windows: new Map(),
     panes: new Map(),
+    underlays: new Map(),
   });
   const [activeTmuxWindowIds, setActiveTmuxWindowIds] = useState<Map<number, string>>(new Map());
 

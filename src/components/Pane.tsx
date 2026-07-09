@@ -6,7 +6,8 @@ import { isSessionUsedInOtherWindow } from "../contexts/session/paneUtils";
 import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
-import { TmuxSessionView } from "./TmuxSessionView";
+import { TmuxLayoutGrid } from "./TmuxLayoutGrid";
+import { TmuxUnderlayWindow } from "./TmuxUnderlayWindow";
 import { PaneInitCard } from "./PaneInitCard";
 
 interface PaneProps {
@@ -28,11 +29,10 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
     closePane,
     createSessionFromSavedConfig,
     tmuxState,
-    activeTmuxWindowIds,
-    setActiveTmuxWindow,
-    createTmuxWindow,
-    closeTmuxWindow,
     closeTmuxPane,
+    splitTmuxPane,
+    connectTmuxUnderlay,
+    disconnectTmuxUnderlay,
     updateWindowPaneTree,
   } = useSession();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
@@ -42,6 +42,8 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
   const terminalRef = useRef<TerminalRef>(null);
 
   const session = pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
+  const underlay = pane.sessionId !== undefined ? tmuxState.underlays.get(pane.sessionId) : undefined;
+  const tmuxWindow = pane.tmuxWindowId ? tmuxState.windows.get(pane.tmuxWindowId) : undefined;
 
   const handleStartSplit = useCallback((direction: SplitDirection) => {
     setPendingSplit(direction);
@@ -57,7 +59,7 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
 
   const attachSessionToPane = useCallback(
     (sessionId: number) => {
-      if (isSessionUsedInOtherWindow(workspaces, workspace.id, windowId, sessionId)) {
+      if (isSessionUsedInOtherWindow(workspaces, sessions, workspace.id, windowId, sessionId)) {
         window.alert("Session is already used in another window");
         return;
       }
@@ -155,6 +157,33 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
     contextMenuRef.current?.open(e.clientX, e.clientY);
   }, []);
 
+  const handleConnectUnderlay = useCallback(
+    (name: string) => {
+      if (pane.sessionId !== undefined) {
+        connectTmuxUnderlay(pane.sessionId, name);
+      }
+    },
+    [pane.sessionId, connectTmuxUnderlay]
+  );
+
+  const handleDisconnectUnderlay = useCallback(() => {
+    if (pane.sessionId !== undefined) {
+      disconnectTmuxUnderlay(pane.sessionId);
+    }
+  }, [pane.sessionId, disconnectTmuxUnderlay]);
+
+  const handleSplitTmuxPane = useCallback(
+    (direction: "h" | "v") => {
+      const activePane = tmuxWindow?.panes
+        .map((pid) => tmuxState.panes.get(pid))
+        .find((p) => p?.isActive);
+      if (pane.sessionId !== undefined && activePane) {
+        splitTmuxPane(pane.sessionId, activePane.id, direction);
+      }
+    },
+    [pane.sessionId, tmuxWindow, tmuxState.panes, splitTmuxPane]
+  );
+
   const contextMenuItems: ContextMenuItem[] = [
     {
       label: "Split Horizontal",
@@ -178,7 +207,7 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
     });
   }
 
-  if (session) {
+  if (session && session.type !== "tmux" && session.type !== "ssh_tmux") {
     contextMenuItems.push(
       {
         label: "Select All",
@@ -204,32 +233,46 @@ export function Pane({ workspace, windowId, pane, isActive, onActivate }: PanePr
           onMouseDown={onActivate}
           onContextMenuCapture={handleContextMenuCapture}
         >
-            {session ? (
-              session.type === "tmux" || session.type === "ssh_tmux" ? (
-                <div className="workspace-pane-content" onMouseDown={onActivate}>
-                  <TmuxSessionView
-                    session={session}
-                    isActive={isActive}
-                    tmuxState={tmuxState}
-                    activeTmuxWindowIds={activeTmuxWindowIds}
-                    setActiveTmuxWindow={setActiveTmuxWindow}
-                    createTmuxWindow={createTmuxWindow}
-                    closeTmuxWindow={closeTmuxWindow}
-                    closeTmuxPane={closeTmuxPane}
+          {session ? (
+            session.type === "tmux" || session.type === "ssh_tmux" ? (
+              <div className="workspace-pane-content" onMouseDown={onActivate}>
+                {pane.tmuxWindowId ? (
+                  tmuxWindow ? (
+                    <TmuxLayoutGrid
+                      sessionId={session.id}
+                      layout={tmuxWindow.layout}
+                      panes={tmuxWindow.panes
+                        .map((pid) => tmuxState.panes.get(pid))
+                        .filter((p): p is NonNullable<typeof p> => Boolean(p))}
+                      onClosePane={(paneId) => closeTmuxPane(session.id, paneId)}
+                      onSplitPane={(direction) => handleSplitTmuxPane(direction)}
+                    />
+                  ) : (
+                    <div className="terminal-empty">Tmux window unavailable</div>
+                  )
+                ) : (
+                  <TmuxUnderlayWindow
+                    sessionId={session.id}
+                    targetSession={underlay?.targetSession ?? (session.session_type.type === "tmux" || session.session_type.type === "ssh_tmux" ? session.session_type.target : session.name)}
+                    status={underlay?.status ?? "idle"}
+                    error={underlay?.error}
+                    onConnect={handleConnectUnderlay}
+                    onDisconnect={handleDisconnectUnderlay}
                   />
-                </div>
-              ) : (
-                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive} onFocus={onActivate} />
-              )
+                )}
+              </div>
             ) : (
-              <PaneInitCard
-                onSessionCreated={(session) => attachSessionToPane(session.id)}
-                title="No session"
-                subtitle="Create or open a session"
-              />
-            )}
-          </div>
-        </ContextMenu>
+              <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive} onFocus={onActivate} />
+            )
+          ) : (
+            <PaneInitCard
+              onSessionCreated={(session) => attachSessionToPane(session.id)}
+              title="No session"
+              subtitle="Create or open a session"
+            />
+          )}
+        </div>
+      </ContextMenu>
       <SelectSessionDialog
         isOpen={showSessionDialog}
         onClose={() => {

@@ -46,6 +46,7 @@ export function TmuxSessionView({
       className={`terminal-pane tmux-pane ${isActive ? "terminal-pane--active" : ""}`}
     >
       <TmuxWindowTabs
+        tmuxState={tmuxState}
         windows={windows}
         activeWindowId={activeWindow?.id ?? null}
         onSelect={(windowId) => setActiveTmuxWindow(session.id, windowId)}

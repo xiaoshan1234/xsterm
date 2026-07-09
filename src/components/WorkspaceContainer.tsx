@@ -8,6 +8,7 @@ import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
 import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";
+import { forEachPane } from "../contexts/session/paneUtils";
 import "./TabBar.css";
 
 function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
@@ -35,6 +36,8 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     updateWindowPaneTree,
     createWindow,
     closeWindow,
+    closeTmuxWindow,
+    createTmuxWindow,
     renameWindow,
     saveWindow,
     saveWorkspace,
@@ -87,6 +90,31 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     }
   }, [workspace.name, workspace.id, saveWorkspace]);
 
+  const handleCloseWindow = useCallback(
+    (windowId: string) => {
+      const window = workspace.windows.find((w) => w.id === windowId);
+      if (!window) return;
+
+      let tmuxWindowToClose: { sessionId: number; windowId: string } | null = null;
+      forEachPane(window.rootPane, (node) => {
+        if (node.type === "leaf" && node.sessionId !== undefined && node.tmuxWindowId) {
+          const session = sessions.find((s) => s.id === node.sessionId);
+          if (session?.type === "tmux" || session?.type === "ssh_tmux") {
+            tmuxWindowToClose = { sessionId: node.sessionId, windowId: node.tmuxWindowId };
+          }
+        }
+      });
+
+      if (tmuxWindowToClose) {
+        const { sessionId, windowId } = tmuxWindowToClose;
+        closeTmuxWindow(sessionId, windowId).catch(console.error);
+      }
+
+      closeWindow(workspace.id, windowId);
+    },
+    [workspace, closeTmuxWindow, closeWindow, sessions]
+  );
+
   const activeSessionId = activeWindow
     ? (() => {
         const findActiveSession = (node: typeof activeWindow.rootPane): number | null => {
@@ -111,17 +139,19 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
       <WindowTabBar
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
+        sessions={sessions}
         onSelect={(windowId) => setActiveWindow(workspace.id, windowId)}
         onAdd={() => createWindow(workspace.id, undefined, undefined, undefined, "init")}
         onSaveAll={handleSaveAll}
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
-        onCloseWindow={(windowId) => closeWindow(workspace.id, windowId)}
+        onCloseWindow={handleCloseWindow}
         onRenameWindow={(windowId) => {
           const window = workspace.windows.find((w) => w.id === windowId);
           if (window) {
             setRenamingWindow({ id: windowId, name: window.name });
           }
         }}
+        onCreateTmuxWindow={(sessionId) => createTmuxWindow(sessionId)}
       />
       {activeWindow ? (
         activeWindow.windowType === "init" ? (
@@ -186,6 +216,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
 
 interface WindowTabBarProps {
   workspace: Workspace;
+  sessions: ReturnType<typeof useSession>["sessions"];
   activeWindowId: string | null;
   onSelect: (windowId: string) => void;
   onAdd: () => void;
@@ -193,20 +224,23 @@ interface WindowTabBarProps {
   onSaveWindow: (windowId: string) => void;
   onCloseWindow: (windowId: string) => void;
   onRenameWindow: (windowId: string) => void;
+  onCreateTmuxWindow: (sessionId: number) => void;
 }
 
-function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow, onCloseWindow, onRenameWindow }: WindowTabBarProps) {
+function WindowTabBar({ workspace, sessions, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow, onCloseWindow, onRenameWindow, onCreateTmuxWindow }: WindowTabBarProps) {
   return (
     <div className="workspace-tabs window-tabs">
       {workspace.windows.map((window) => (
         <WindowTab
           key={window.id}
           window={window}
+          sessions={sessions}
           isActive={window.id === activeWindowId}
           onSelect={() => onSelect(window.id)}
           onSave={() => onSaveWindow(window.id)}
           onClose={() => onCloseWindow(window.id)}
           onRename={() => onRenameWindow(window.id)}
+          onCreateTmuxWindow={onCreateTmuxWindow}
         />
       ))}
       <div className="window-tab-actions">
@@ -223,20 +257,39 @@ function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, o
 
 interface WindowTabProps {
   window: Window;
+  sessions: ReturnType<typeof useSession>["sessions"];
   isActive: boolean;
   onSelect: () => void;
   onSave: () => void;
   onRename: () => void;
   onClose: () => void;
+  onCreateTmuxWindow: (sessionId: number) => void;
 }
 
-function WindowTab({ window, isActive, onSelect, onSave, onRename, onClose }: WindowTabProps) {
+function WindowTab({ window, sessions, isActive, onSelect, onSave, onRename, onClose, onCreateTmuxWindow }: WindowTabProps) {
   const contextMenuRef = useRef<ContextMenuRef>(null);
+
+  let underlaySessionId: number | null = null;
+  forEachPane(window.rootPane, (node) => {
+    if (node.type === "leaf" && node.sessionId !== undefined && !node.tmuxWindowId) {
+      const session = sessions.find((s) => s.id === node.sessionId);
+      if (session?.type === "tmux" || session?.type === "ssh_tmux") {
+        underlaySessionId = node.sessionId;
+      }
+    }
+  });
+
   const contextMenuItems: ContextMenuItem[] = [
     { label: "Rename", onClick: onRename },
     { label: "Save as Window Config", onClick: onSave },
-    { label: "Close", onClick: onClose, danger: true },
   ];
+  if (underlaySessionId !== null) {
+    contextMenuItems.push({
+      label: "New Tmux Window",
+      onClick: () => onCreateTmuxWindow(underlaySessionId!),
+    });
+  }
+  contextMenuItems.push({ label: "Close", onClick: onClose, danger: true });
 
   const handleCloseClick = (e: React.MouseEvent) => {
     e.stopPropagation();

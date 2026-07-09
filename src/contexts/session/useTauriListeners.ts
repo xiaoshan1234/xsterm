@@ -1,10 +1,17 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { TmuxControlEvent } from "../../types/tmux";
 import * as sessionService from "../../services/sessionService";
-import * as tmuxService from "../../services/tmuxService";
-import { applyTmuxControlEvent, cloneTmuxState } from "../tmuxStateReducer";
-import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse, withRecomputedSessionIds } from "./paneUtils";
+import { TmuxStateSnapshot } from "../../types/tmux";
+import { Workspace } from "../../types/session";
+import { applyTmuxStateSync, cloneTmuxState } from "../tmuxStateReducer";
+import {
+  findPaneNode,
+  generateId,
+  getLeafPaneIds,
+  removeSessionAndCollapse,
+  withRecomputedSessionIds,
+  forEachPane,
+} from "./paneUtils";
 import { SessionState } from "./types";
 
 type ListenersState = Pick<
@@ -19,6 +26,10 @@ type ListenersState = Pick<
   | "tmuxListTimeoutsRef"
 >;
 
+interface UseTauriListenersOptions extends ListenersState {
+  onTmuxStateSync?: (sessionId: number, snapshot: TmuxStateSnapshot) => void;
+}
+
 export function useTauriListeners({
   setSessions,
   setWorkspaces,
@@ -28,10 +39,67 @@ export function useTauriListeners({
   workspacesRef,
   establishingSessionsRef,
   tmuxListTimeoutsRef,
-}: ListenersState): void {
+  onTmuxStateSync,
+}: UseTauriListenersOptions): void {
   useEffect(() => {
     let cancelled = false;
     const unlisteners: (() => void)[] = [];
+
+    const cleanupWorkspacesForSession = (prev: Workspace[], sessionId: number): Workspace[] => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      const isTmux = session?.type === "tmux" || session?.type === "ssh_tmux";
+
+      if (!isTmux) {
+        return prev.map((workspace) =>
+          withRecomputedSessionIds({
+            ...workspace,
+            windows: workspace.windows.map((window) => {
+              const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
+              const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
+                ? window.activePaneId
+                : (getLeafPaneIds(newRoot)[0] ?? null);
+              return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
+            }),
+          })
+        );
+      }
+
+      return prev.map((workspace) => {
+        const remaining = workspace.windows.filter((window) => {
+          let hasSession = false;
+          forEachPane(window.rootPane, (node) => {
+            if (node.type === "leaf" && node.sessionId === sessionId) {
+              hasSession = true;
+            }
+          });
+          return !hasSession;
+        });
+
+        let nextActiveId = workspace.activeWindowId;
+        if (remaining.length === 0) {
+          const paneId = generateId();
+          const windowId = generateId();
+          remaining.push({
+            id: windowId,
+            name: "New Session",
+            activePaneId: paneId,
+            windowType: "init",
+            rootPane: {
+              id: paneId,
+              type: "leaf",
+              size: 100,
+            },
+          });
+          nextActiveId = windowId;
+        } else if (!remaining.find((w) => w.id === workspace.activeWindowId)) {
+          const closedIndex = workspace.windows.findIndex((w) => w.id === workspace.activeWindowId);
+          const fallback = remaining[closedIndex - 1] ?? remaining[closedIndex] ?? remaining[remaining.length - 1];
+          nextActiveId = fallback?.id ?? null;
+        }
+
+        return withRecomputedSessionIds({ ...workspace, windows: remaining, activeWindowId: nextActiveId });
+      });
+    };
 
     (async () => {
       const unlistenSessionClosed = await listen<number>("session-closed", (event) => {
@@ -43,20 +111,7 @@ export function useTauriListeners({
         }
         establishingSessionsRef.current.delete(sessionId);
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-        setWorkspaces((prev) =>
-          prev.map((workspace) =>
-            withRecomputedSessionIds({
-              ...workspace,
-              windows: workspace.windows.map((window) => {
-                const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
-                const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
-                  ? window.activePaneId
-                  : (getLeafPaneIds(newRoot)[0] ?? null);
-                return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
-              }),
-            })
-          )
-        );
+        setWorkspaces((prev) => cleanupWorkspacesForSession(prev, sessionId));
         setTmuxState((prev) => {
           const next = cloneTmuxState(prev);
           for (const [_, state] of next.sessions) {
@@ -74,6 +129,7 @@ export function useTauriListeners({
               next.panes.delete(pid);
             }
           }
+          next.underlays.delete(sessionId);
           return next;
         });
       }).catch((e) => {
@@ -99,77 +155,52 @@ export function useTauriListeners({
       }
       if (unlistenTmuxPaneOutput) unlisteners.push(unlistenTmuxPaneOutput);
 
-      const unlistenTmuxRequestSync = await listen<[number, string]>("tmux-request-sync", (event) => {
-        const [sessionId, command] = event.payload;
-        tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
-      }).catch((e) => {
-        console.error("Failed to listen tmux-request-sync:", e);
-        return null;
-      });
-      if (cancelled) {
-        unlistenTmuxRequestSync?.();
-        return;
-      }
-      if (unlistenTmuxRequestSync) unlisteners.push(unlistenTmuxRequestSync);
-
-      const unlistenTmuxControlEvent = await listen<[number, TmuxControlEvent]>("tmux-control-event", (event) => {
-        const [sessionId, controlEvent] = event.payload;
-        const sessionIdKey = sessionId;
-        setTmuxState((prev) => applyTmuxControlEvent(prev, String(sessionId), controlEvent));
-        if (controlEvent.type === "SessionChanged") {
+      const unlistenTmuxStateSync = await listen<[number, TmuxStateSnapshot]>("tmux-state-sync", (event) => {
+        const [sessionId, snapshot] = event.payload;
+        setTmuxState((prev) => applyTmuxStateSync(prev, sessionId, snapshot));
+        if (establishingSessionsRef.current.has(sessionId)) {
           establishingSessionsRef.current.delete(sessionId);
-          tmuxService
-            .listWindows(sessionId, controlEvent.sessionId)
-            .catch(console.error);
-        }
-        if (controlEvent.type === "WindowClosed") {
-          setActiveTmuxWindowIds((prev) => {
-            const next = new Map(prev);
-            const activeId = next.get(sessionIdKey);
-            if (activeId === controlEvent.windowId) {
-              next.delete(sessionIdKey);
-            }
-            return next;
-          });
-        }
-        if (controlEvent.type === "WindowActivated") {
-          setActiveTmuxWindowIds((prev) => {
-            const next = new Map(prev);
-            next.set(sessionIdKey, controlEvent.windowId);
-            return next;
-          });
-        }
-        if (controlEvent.type === "CommandError") {
-          if (establishingSessionsRef.current.has(sessionId)) {
-            establishingSessionsRef.current.delete(sessionId);
-            sessionService.closeSession(sessionId).catch(console.error);
-            setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-            setWorkspaces((prev) =>
-              prev.map((workspace) =>
-                withRecomputedSessionIds({
-                  ...workspace,
-                  windows: workspace.windows.map((window) => {
-                    const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
-                    const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
-                      ? window.activePaneId
-                      : (getLeafPaneIds(newRoot)[0] ?? null);
-                    return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
-                  }),
-                })
-              )
-            );
-            alert(`Tmux session failed: ${controlEvent.message}`);
-          }
+          onTmuxStateSync?.(sessionId, snapshot);
         }
       }).catch((e) => {
-        console.error("Failed to listen tmux-control-event:", e);
+        console.error("Failed to listen tmux-state-sync:", e);
         return null;
       });
       if (cancelled) {
-        unlistenTmuxControlEvent?.();
+        unlistenTmuxStateSync?.();
         return;
       }
-      if (unlistenTmuxControlEvent) unlisteners.push(unlistenTmuxControlEvent);
+      if (unlistenTmuxStateSync) unlisteners.push(unlistenTmuxStateSync);
+
+      const unlistenTmuxConnectionError = await listen<[number, { message: string }]>("tmux-connection-error", (event) => {
+        const [sessionId, { message }] = event.payload;
+        window.alert(message);
+        establishingSessionsRef.current.delete(sessionId);
+        sessionService.closeSession(sessionId).catch(console.error);
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        setWorkspaces((prev) => cleanupWorkspacesForSession(prev, sessionId));
+        setTmuxState((prev) => {
+          const next = cloneTmuxState(prev);
+          const underlay = next.underlays.get(sessionId);
+          if (underlay) {
+            next.underlays.set(sessionId, { ...underlay, status: "error", error: message });
+          }
+          return next;
+        });
+        setActiveTmuxWindowIds((prev) => {
+          const next = new Map(prev);
+          next.delete(sessionId);
+          return next;
+        });
+      }).catch((e) => {
+        console.error("Failed to listen tmux-connection-error:", e);
+        return null;
+      });
+      if (cancelled) {
+        unlistenTmuxConnectionError?.();
+        return;
+      }
+      if (unlistenTmuxConnectionError) unlisteners.push(unlistenTmuxConnectionError);
     })();
 
     return () => {
@@ -189,5 +220,6 @@ export function useTauriListeners({
     workspacesRef,
     establishingSessionsRef,
     tmuxListTimeoutsRef,
+    onTmuxStateSync,
   ]);
 }

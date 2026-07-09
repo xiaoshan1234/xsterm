@@ -12,9 +12,13 @@ pub enum SessionType {
     #[serde(rename = "ssh")]
     Ssh { host: String, port: u16, user: String },
 
-    /// A session connected to a tmux server in control mode.
+    /// A tmux underlay session.
     #[serde(rename = "tmux")]
-    Tmux { socket: Option<String>, command: String },
+    Tmux {
+        socket: Option<String>,
+        command: String,
+        target: String,
+    },
 
     #[serde(rename = "ssh_tmux")]
     SshTmux {
@@ -23,10 +27,11 @@ pub enum SessionType {
         user: String,
         socket: Option<String>,
         command: String,
+        target: String,
     },
 }
 
-/// Configuration for creating a tmux control mode session over SSH.
+/// Configuration for creating a tmux underlay session over SSH.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshTmuxSessionConfig {
     pub ssh: SSHSessionConfig,
@@ -38,7 +43,7 @@ pub struct TmuxSessionConfig {
     pub name: Option<String>,
     /// Optional tmux socket name (`-L` flag).
     pub socket: Option<String>,
-    /// The tmux subcommand that enters control mode, e.g. `new-session` or
+    /// The tmux subcommand used to enter the target session, e.g. `new-session` or
     /// `attach-session`.
     pub command: String,
     /// Optional target argument for the subcommand, e.g. a session name.

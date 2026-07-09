@@ -1,349 +1,218 @@
-//! Data models for tmux control mode state.
+//! Frontend-facing data models for the tmux `-CC` backend.
 //!
-//! This module defines the frontend-facing state tree (session, window, pane)
-//! and the control events that drive it. All serializable types use camelCase
-//! field names so they match the TypeScript consumer without extra mapping.
+//! All serializable types use `camelCase` so they match the TypeScript IPC
+//! payloads produced by the Tauri event layer.
 
 use serde::{Deserialize, Serialize};
 
-use super::parser::{PaneListEntry, WindowListEntry};
+use crate::services::tmux::parser::{PaneListEntry, WindowListEntry};
 
-/// A tmux pane (`%N`).
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TmuxPane {
-    pub id: String,
-    pub session_id: String,
-    pub window_id: String,
-    pub title: String,
-    pub is_active: bool,
-    pub is_paused: bool,
-    pub in_copy_mode: bool,
-    pub width: u16,
-    pub height: u16,
-}
-
-/// A tmux window (`@N`).
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TmuxWindow {
-    pub id: String,
-    pub session_id: String,
-    pub name: String,
-    pub active_pane_id: Option<String>,
-    pub layout: String,
-    pub panes: Vec<String>,
-    pub is_active: bool,
-}
-
-/// A tmux session (`$N`).
-///
-/// Part of the frontend-facing state tree; kept available for serialization
-/// even though the backend currently emits incremental events instead of
-/// full snapshots.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TmuxSession {
-    pub id: String,
-    pub name: String,
-    pub active_window_id: Option<String>,
-    pub windows: Vec<String>,
-}
-
-/// Events emitted to the frontend when tmux control state changes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all_fields = "camelCase")]
+/// Event emitted to the frontend when tmux state changes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum TmuxControlEvent {
-    /// The active tmux session for this client changed.
-    SessionChanged {
-        session_id: String,
-        name: String,
+    /// Pane terminal output.
+    PaneOutput {
+        #[serde(flatten)]
+        output: TmuxPaneOutput,
     },
-    /// The current tmux session was renamed.
-    SessionRenamed {
-        name: String,
+    /// Captured historical pane output.
+    CapturedPaneOutput {
+        #[serde(flatten)]
+        output: TmuxPaneOutput,
     },
-    /// A new window was created.
-    WindowAdded {
-        window: TmuxWindow,
-    },
-    /// A window was closed.
-    WindowClosed {
-        window_id: String,
-    },
-    /// A window was renamed.
-    WindowRenamed {
-        window_id: String,
-        name: String,
-    },
-    /// The active window changed.
-    WindowActivated {
-        window_id: String,
-    },
+    /// Successful command response.
+    CommandResponse { cmd_num: usize, lines: Vec<String> },
+    /// Error command response.
+    CommandError { cmd_num: usize, lines: Vec<String> },
+    /// Client disconnect.
+    Exit { reason: Option<String> },
+    /// Active tmux session changed.
+    SessionChanged { session_id: String, name: String },
+    /// Tmux session renamed.
+    SessionRenamed { name: String },
+    /// Window added.
+    WindowAdded { window_id: String },
+    /// Window closed.
+    WindowClosed { window_id: String },
+    /// Window renamed.
+    WindowRenamed { window_id: String, name: String },
+    /// Window activated (became current).
+    WindowActivated { window_id: String },
     /// Window layout changed.
-    LayoutChanged {
-        window_id: String,
-        layout: String,
-    },
-    /// A new pane appeared.
-    PaneAdded {
-        pane: TmuxPane,
-    },
-    /// A pane was closed.
-    PaneClosed {
-        pane_id: String,
-    },
+    LayoutChanged { window_id: String, layout: String },
+    /// Pane closed.
+    PaneClosed { pane_id: String },
     /// Pane title changed.
-    PaneTitleChanged {
-        pane_id: String,
-        title: String,
-    },
-    /// Pane entered or left copy/scroll mode.
-    PaneModeChanged {
-        pane_id: String,
-        in_copy_mode: bool,
-    },
-    /// Flow control: pane output paused.
-    PanePaused {
-        pane_id: String,
-    },
-    /// Flow control: pane output resumed.
-    PaneContinued {
-        pane_id: String,
-    },
-    WindowList {
-        windows: Vec<TmuxWindowListEntry>,
-    },
-    PaneList {
-        panes: Vec<TmuxPaneListEntry>,
-    },
-    CommandError {
-        cmd_num: u64,
-        message: String,
-    },
-    Exit {
-        reason: Option<String>,
-    },
-    Unknown {
-        raw: String,
-    },
+    PaneTitleChanged { pane_id: String, title: String },
+    /// Pane mode changed (e.g. copy mode).
+    PaneModeChanged { pane_id: String, mode: String },
+    /// Pane output paused.
+    PanePaused { pane_id: String },
+    /// Pane output resumed.
+    PaneContinued { pane_id: String },
+    /// Parsed `list-windows` response.
+    WindowList { windows: Vec<TmuxWindow> },
+    /// Parsed `list-panes` response.
+    PaneList { panes: Vec<TmuxPane> },
+    /// Fallback for unknown notifications.
+    Unknown { raw: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TmuxWindowListEntry {
-    pub window_id: String,
-    pub session_id: String,
-    pub name: String,
-    pub active: bool,
-    pub layout: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TmuxPaneListEntry {
-    pub pane_id: String,
-    pub window_id: String,
-    pub session_id: String,
-    pub title: String,
-    pub active: bool,
-    pub width: u16,
-    pub height: u16,
-}
-
-impl From<WindowListEntry> for TmuxWindowListEntry {
-    fn from(w: WindowListEntry) -> Self {
-        TmuxWindowListEntry {
-            window_id: w.window_id,
-            session_id: w.session_id,
-            name: w.name,
-            active: w.active,
-            layout: w.layout,
-        }
-    }
-}
-
-impl From<PaneListEntry> for TmuxPaneListEntry {
-    fn from(p: PaneListEntry) -> Self {
-        TmuxPaneListEntry {
-            pane_id: p.pane_id,
-            window_id: p.window_id,
-            session_id: p.session_id,
-            title: p.title,
-            active: p.active,
-            width: p.width,
-            height: p.height,
-        }
-    }
-}
-
-/// Output event for a single pane. Emitted separately from control events so
-/// that the frontend can route it directly to the matching xterm.js instance.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Terminal output for a specific pane.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TmuxPaneOutput {
     pub pane_id: String,
     pub data: Vec<u8>,
 }
 
-/// Container for the complete tmux state tree. This is sent to the frontend
-/// after initial synchronization.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// A tmux pane.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TmuxStateSnapshot {
-    pub session: TmuxSession,
-    pub windows: Vec<TmuxWindow>,
+pub struct TmuxPane {
+    pub pane_id: String,
+    pub window_id: String,
+    pub session_id: String,
+    pub active: bool,
+    pub width: u16,
+    pub height: u16,
+    pub cwd: String,
+    pub title: String,
+}
+
+impl From<PaneListEntry> for TmuxPane {
+    fn from(entry: PaneListEntry) -> Self {
+        Self {
+            pane_id: entry.pane_id,
+            window_id: entry.window_id,
+            session_id: entry.session_id,
+            active: entry.active,
+            width: entry.width,
+            height: entry.height,
+            cwd: entry.cwd,
+            title: entry.title,
+        }
+    }
+}
+
+/// A tmux window.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TmuxWindow {
+    pub window_id: String,
+    pub session_id: String,
+    pub name: String,
+    pub active: bool,
+    pub layout: String,
     pub panes: Vec<TmuxPane>,
+}
+
+impl From<WindowListEntry> for TmuxWindow {
+    fn from(entry: WindowListEntry) -> Self {
+        Self {
+            window_id: entry.window_id,
+            session_id: entry.session_id,
+            name: entry.name,
+            active: entry.active,
+            layout: entry.layout,
+            panes: Vec::new(),
+        }
+    }
+}
+
+/// A tmux session.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub struct TmuxSession {
+    pub session_id: String,
+    pub name: String,
+    pub active_window_id: Option<String>,
+    pub windows: Vec<TmuxWindow>,
+}
+
+/// Full state snapshot (planned for future use).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub struct TmuxStateSnapshot {
+    pub session_id: String,
+    pub active_window_id: Option<String>,
+    pub active_pane_id: Option<String>,
+    pub in_copy_mode: bool,
+    pub windows: Vec<TmuxWindow>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     #[test]
-    fn window_list_serializes_to_camel_case() {
-        let event = TmuxControlEvent::WindowList {
-            windows: vec![TmuxWindowListEntry {
-                window_id: "@0".to_string(),
-                session_id: "$0".to_string(),
-                name: "bash".to_string(),
-                active: true,
-                layout: "c080,80x24,0,0,0".to_string(),
-            }],
+    fn window_list_entry_converts_to_tmux_window() {
+        let entry = WindowListEntry {
+            window_id: "@1".to_string(),
+            session_id: "$1".to_string(),
+            name: "main".to_string(),
+            active: true,
+            layout: "babc,0x0".to_string(),
         };
-        let json = serde_json::to_string(&event).unwrap();
-        assert!(
-            json.contains("\"windowId\""),
-            "expected camelCase windowId in {}",
-            json
-        );
-        assert!(
-            json.contains("\"sessionId\""),
-            "expected camelCase sessionId in {}",
-            json
-        );
-        assert!(
-            !json.contains("\"window_id\""),
-            "snake_case should not appear in {}",
-            json
-        );
+        let window: TmuxWindow = entry.into();
+        assert_eq!(window.window_id, "@1");
+        assert_eq!(window.session_id, "$1");
+        assert_eq!(window.name, "main");
+        assert!(window.active);
+        assert_eq!(window.layout, "babc,0x0");
+        assert!(window.panes.is_empty());
     }
 
     #[test]
-    fn pane_list_serializes_to_camel_case() {
-        let event = TmuxControlEvent::PaneList {
-            panes: vec![TmuxPaneListEntry {
-                pane_id: "%0".to_string(),
-                window_id: "@0".to_string(),
-                session_id: "$0".to_string(),
-                title: "bash".to_string(),
-                active: true,
-                width: 80,
-                height: 24,
-            }],
+    fn pane_list_entry_converts_to_tmux_pane() {
+        let entry = PaneListEntry {
+            pane_id: "%1".to_string(),
+            window_id: "@1".to_string(),
+            session_id: "$1".to_string(),
+            active: true,
+            width: 80,
+            height: 24,
+            cwd: "/home".to_string(),
+            title: "zsh".to_string(),
         };
-        let json = serde_json::to_string(&event).unwrap();
-        assert!(
-            json.contains("\"paneId\""),
-            "expected camelCase paneId in {}",
-            json
-        );
-        assert!(
-            json.contains("\"windowId\""),
-            "expected camelCase windowId in {}",
-            json
-        );
-        assert!(
-            json.contains("\"sessionId\""),
-            "expected camelCase sessionId in {}",
-            json
-        );
-        assert!(
-            !json.contains("\"pane_id\""),
-            "snake_case should not appear in {}",
-            json
-        );
+        let pane: TmuxPane = entry.into();
+        assert_eq!(pane.pane_id, "%1");
+        assert_eq!(pane.window_id, "@1");
+        assert_eq!(pane.session_id, "$1");
+        assert!(pane.active);
+        assert_eq!(pane.width, 80);
+        assert_eq!(pane.height, 24);
+        assert_eq!(pane.cwd, "/home");
+        assert_eq!(pane.title, "zsh");
     }
 
     #[test]
     fn pane_output_serializes_to_camel_case() {
         let output = TmuxPaneOutput {
             pane_id: "%0".to_string(),
-            data: vec![1, 2, 3],
+            data: vec![97, 98],
         };
         let json = serde_json::to_string(&output).unwrap();
-        assert!(
-            json.contains("\"paneId\""),
-            "expected camelCase paneId in {}",
-            json
-        );
-        assert!(
-            !json.contains("\"pane_id\""),
-            "snake_case should not appear in {}",
-            json
-        );
+        assert!(json.contains("paneId"));
+        assert!(!json.contains("pane_id"));
     }
 
-    // The following tests exercise public state types that are not yet
-    // consumed elsewhere in the crate. They keep the API surface intact and
-    // prevent dead-code warnings.
-
     #[test]
-    fn tmux_session_serializes_to_camel_case() {
-        let session = TmuxSession {
-            id: "$0".to_string(),
+    fn window_list_event_serializes_to_camel_case() {
+        let window = TmuxWindow {
+            window_id: "@1".to_string(),
+            session_id: "$1".to_string(),
             name: "main".to_string(),
-            active_window_id: Some("@0".to_string()),
-            windows: vec!["@0".to_string()],
+            active: true,
+            layout: "babc".to_string(),
+            panes: Vec::new(),
         };
-        let json = serde_json::to_string(&session).unwrap();
-        assert!(
-            json.contains("\"activeWindowId\""),
-            "expected camelCase activeWindowId in {}",
-            json
-        );
-        assert!(
-            !json.contains("\"active_window_id\""),
-            "snake_case should not appear in {}",
-            json
-        );
-    }
-
-    #[test]
-    fn tmux_state_snapshot_serializes_to_camel_case() {
-        let snapshot = TmuxStateSnapshot {
-            session: TmuxSession {
-                id: "$0".to_string(),
-                name: "main".to_string(),
-                ..Default::default()
-            },
-            windows: vec![TmuxWindow {
-                id: "@0".to_string(),
-                ..Default::default()
-            }],
-            panes: vec![TmuxPane {
-                id: "%0".to_string(),
-                ..Default::default()
-            }],
-        };
-        let json = serde_json::to_string(&snapshot).unwrap();
-        assert!(
-            json.contains("\"activeWindowId\""),
-            "expected camelCase activeWindowId in {}",
-            json
-        );
-        assert!(
-            json.contains("\"activePaneId\""),
-            "expected camelCase activePaneId in {}",
-            json
-        );
-        assert!(
-            json.contains("\"inCopyMode\""),
-            "expected camelCase inCopyMode in {}",
-            json
-        );
+        let event = TmuxControlEvent::WindowList { windows: vec![window] };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("windowId"));
+        assert!(!json.contains("window_id"));
     }
 }

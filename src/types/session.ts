@@ -10,6 +10,7 @@ export interface PaneNode {
   children?: PaneNode[];
   sessionId?: number;
   configId?: string;
+  tmuxWindowId?: string;
 }
 
 export interface SavedWindow {
@@ -55,8 +56,8 @@ export interface Session {
 export type SessionType =
   | { type: "local"; shell: string; cwd: string }
   | { type: "ssh"; host: string; port: number; user: string }
-  | { type: "tmux"; socket?: string; command: string }
-  | { type: "ssh_tmux"; host: string; port: number; user: string; socket?: string; command: string };
+  | { type: "tmux"; socket?: string; command: string; target: string }
+  | { type: "ssh_tmux"; host: string; port: number; user: string; socket?: string; command: string; target: string };
 
 export { TmuxSessionConfig, SshTmuxSessionConfig };
 export * from "./tmux";

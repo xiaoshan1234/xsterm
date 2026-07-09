@@ -13,7 +13,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const state = useSessionState();
   const persistence = useSessionPersistence(state);
   const actions = useSessionActions({ ...state, ...persistence });
-  useTauriListeners(state);
+  useTauriListeners({ ...state, onTmuxStateSync: actions.onTmuxStateSync });
 
   const value: SessionContextType = {
     sessions: state.sessions,

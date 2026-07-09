@@ -1,0 +1,78 @@
+.tmux-underlay-window {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 1rem;
+}
+
+.tmux-underlay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 280px;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background: var(--surface-bg, #1e1e1e);
+  border: 1px solid var(--border-color, #333);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.tmux-underlay-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tmux-underlay-label {
+  color: var(--text-muted, #888);
+  font-size: 0.875rem;
+}
+
+.tmux-underlay-status {
+  font-weight: 500;
+}
+
+.tmux-underlay-status--idle {
+  color: var(--text-muted, #888);
+}
+
+.tmux-underlay-status--connecting {
+  color: var(--info-color, #3b82f6);
+}
+
+.tmux-underlay-status--connected {
+  color: var(--success-color, #22c55e);
+}
+
+.tmux-underlay-status--error {
+  color: var(--error-color, #ef4444);
+}
+
+.tmux-underlay-status--disconnected {
+  color: var(--warning-color, #f59e0b);
+}
+
+.tmux-underlay-target {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.875rem;
+}
+
+.tmux-underlay-error {
+  color: var(--error-color, #ef4444);
+  font-size: 0.875rem;
+  max-width: 180px;
+  text-align: right;
+}
+
+.tmux-underlay-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.tmux-underlay-actions .btn {
+  flex: 1;
+}

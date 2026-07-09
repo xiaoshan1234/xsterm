@@ -1,239 +1,204 @@
-//! Builders for tmux control mode commands.
-//!
-//! This module produces the raw UTF-8 strings that are written to a tmux
-//! control mode stdin. Each command is terminated with a newline.
-//!
-//! Commands are grouped into five categories:
-//!
-//! - **Session**: create, attach, list, kill sessions
-//! - **Window**: create, resize, kill, query windows
-//! - **Pane**: send keys, capture, kill panes
-//! - **Query**: request metadata such as layout
-//! - **Flow control**: pause/resume output handling
-//!
-//! Most functions accept tmux identifiers directly (`%0`, `@0`, `$0`) and do
-//! not validate them; callers are responsible for using ids received from the
-//! tmux control stream.
-//!
-//! Many builders are consumed by the frontend through `write_tmux_command`
-//! rather than by other Rust code, so this module keeps the full vocabulary
-//! available as a public API.
 #![allow(dead_code)]
 
-// ===================================================================
-// Constants
-// ===================================================================
+//! Pure tmux command string builders.
+//!
+//! All functions return a complete tmux command line ending with `\n` so they
+//! can be written directly to a tmux control-mode stdin.
 
-/// Command number used for requests that do not need a response.
-pub const NO_CMD_NUM: u64 = 0;
+/// Command number used when no correlation is needed.
+pub const NO_CMD_NUM: usize = 0;
 
-// ===================================================================
-// Initial argv builder
-// ===================================================================
+fn shell_tokenize(command: &str) -> Vec<String> {
+    command.split_whitespace().map(String::from).collect()
+}
 
-/// Build the argv for the initial tmux control mode invocation.
+/// Build the argv used to spawn `tmux -CC` for a new or attach session.
 ///
-/// `tmux -CC` is always prepended by the caller; this function returns only
-/// the subcommand and its flags. For both `new-session` and `attach-session`
-/// we use `new-session -A -D -s <name>` so the control client attaches to an
-/// existing session or creates it if it does not exist.
-pub fn build_tmux_argv(command: &str, target: Option<&str>) -> Vec<String> {
-    let mut args: Vec<String> = command.split_whitespace().map(String::from).collect();
-    if args.is_empty() {
-        args.push("new-session".to_string());
+/// - `attach-session` is rewritten to `new-session -A -D` so that tmux creates
+///   the session if it does not exist.
+/// - Pre-existing `-A`, `-D`, `-s` and `-t` flags are not duplicated.
+pub fn build_tmux_argv(command: &str, target: Option<&str>, socket: Option<&str>) -> Vec<String> {
+    let mut argv = vec!["tmux".to_string()];
+    if let Some(socket) = socket {
+        argv.push("-L".to_string());
+        argv.push(socket.to_string());
+    }
+    argv.push("-CC".to_string());
+
+    let mut tokens = shell_tokenize(command);
+    if tokens.is_empty() {
+        tokens.push("new-session".to_string());
     }
 
-    match args[0].as_str() {
-        "new-session" | "attach-session" => {
-            args[0] = "new-session".to_string();
-            add_flag_if_missing(&mut args, "-A");
-            add_flag_if_missing(&mut args, "-D");
-            if let Some(t) = target {
-                add_flag_with_value(&mut args, "-s", t);
-            }
+    let is_attach = tokens[0] == "attach-session";
+    if is_attach {
+        tokens[0] = "new-session".to_string();
+    }
+
+    let has_flag = |flag: &str| tokens.iter().any(|t| t == flag);
+
+    if tokens[0] == "new-session" {
+        if !has_flag("-A") {
+            tokens.push("-A".to_string());
         }
-        _ => {
-            if let Some(t) = target {
-                args.push(t.to_string());
-            }
+        if !has_flag("-D") {
+            tokens.push("-D".to_string());
         }
     }
 
-    args
-}
-
-fn add_flag_if_missing(args: &mut Vec<String>, flag: &str) {
-    if !args.contains(&flag.to_string()) {
-        args.push(flag.to_string());
+    if let Some(target) = target {
+        if !has_flag("-s") && !has_flag("-t") {
+            tokens.push("-s".to_string());
+            tokens.push(target.to_string());
+        }
     }
+
+    argv.extend(tokens);
+    argv
 }
 
-fn add_flag_with_value(args: &mut Vec<String>, flag: &str, value: &str) {
-    if !args.contains(&flag.to_string()) {
-        args.push(flag.to_string());
-        args.push(value.to_string());
-    }
-}
-
-// ===================================================================
-// Session commands
-// ===================================================================
-
-/// Create a new tmux session and enter control mode.
-pub fn new_session(name: Option<&str>) -> String {
-    match name {
-        Some(n) => format!("new-session -s {}\n", quote_tmux_arg(n)),
-        None => "new-session\n".to_string(),
-    }
-}
-
-/// Attach to an existing tmux session in control mode.
-pub fn attach_session(name: &str) -> String {
-    format!("attach-session -t {}\n", quote_tmux_arg(name))
-}
-
-/// List sessions.
-pub fn list_sessions() -> String {
-    "list-sessions\n".to_string()
-}
-
-/// Kill a session.
-pub fn kill_session(session_id: &str) -> String {
-    format!("kill-session -t {}\n", session_id)
-}
-
-// ===================================================================
-// Window commands
-// ===================================================================
-
-/// List windows, optionally scoped to a specific tmux session.
-pub fn list_windows(session_id: &str) -> String {
-    if session_id.is_empty() {
-        "list-windows -F '#{session_id}\t#{window_id}\t#{window_active}\t#{window_layout}\t#{window_name}'\n".to_string()
+/// Wrap an argument in double quotes, escaping existing double quotes.
+pub fn quote_tmux_arg(arg: &str) -> String {
+    if arg.contains('"') {
+        format!("\"{}\"", arg.replace('"', "\\\""))
     } else {
-        format!(
-            "list-windows -t {} -F '#{{session_id}}\t#{{window_id}}\t#{{window_active}}\t#{{window_layout}}\t#{{window_name}}'\n",
-            session_id
-        )
+        format!("\"{}\"", arg)
     }
 }
 
-/// Resize the tmux window containing the pane to the given dimensions.
-pub fn resize_window_for_pane(pane_id: &str, rows: u16, cols: u16) -> String {
-    format!("resize-window -t {} -x {} -y {}\n", pane_id, cols, rows)
+/// Escape arbitrary user input for use inside a tmux `send-keys` argument.
+///
+/// - Backslashes are doubled.
+/// - Carriage return / line feed become the `Enter` key name.
+/// - Double quotes are escaped.
+pub fn escape_tmux_keys(keys: &str) -> String {
+    let mut out = String::with_capacity(keys.len());
+    let mut chars = keys.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            out.push('\\');
+            out.push('\\');
+        } else if c == '\r' {
+            if chars.peek() == Some(&'\n') {
+                chars.next();
+            }
+            out.push_str("Enter");
+        } else if c == '\n' {
+            out.push_str("Enter");
+        } else if c == '"' {
+            out.push('\\');
+            out.push('"');
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
-/// Kill a window.
-pub fn kill_window(window_id: &str) -> String {
-    format!("kill-window -t {}\n", window_id)
-}
-
-// ===================================================================
-// Pane commands
-// ===================================================================
-
-/// List panes for a window, returning tab-separated machine-readable fields.
-pub fn list_panes(window_id: &str) -> String {
-    format!(
-        "list-panes -t {} -F '#{{session_id}}\t#{{window_id}}\t#{{pane_id}}\t#{{pane_active}}\t#{{pane_width}}\t#{{pane_height}}\t#{{pane_title}}'\n",
-        window_id
-    )
-}
-
-/// Send literal keys to a pane.
+/// Build a `send-keys` command targeting a pane.
 pub fn send_keys(pane_id: &str, keys: &str) -> String {
     format!("send-keys -t {} \"{}\"\n", pane_id, escape_tmux_keys(keys))
 }
 
-/// Capture a pane's recent contents.
-pub fn capture_pane(pane_id: &str, history: Option<usize>, escape_sequences: bool) -> String {
-    let mut cmd = format!("capture-pane -t {}", pane_id);
-    if escape_sequences {
-        cmd.push_str(" -e");
-    }
-    if let Some(n) = history {
-        cmd.push_str(&format!(" -S -{}", n));
-    }
-    cmd.push_str(" -p\n");
-    cmd
+/// Build a `resize-pane` command.
+pub fn resize_pane(pane_id: &str, rows: u16, cols: u16) -> String {
+    format!("resize-pane -t {} -x {} -y {}\n", pane_id, cols, rows)
 }
 
-/// Kill a pane.
+/// Build a `resize-window` command targeting the window containing a pane.
+pub fn resize_window_for_pane(pane_id: &str, cols: u16, rows: u16) -> String {
+    format!("resize-window -t {} -x {} -y {}\n", pane_id, cols, rows)
+}
+
+/// Build a `list-windows` command for a session (or all sessions if empty).
+pub fn list_windows(session_id: &str) -> String {
+    let format = "#{window_id}\t#{session_id}\t#{window_name}\t#{window_active}\t#{window_layout}";
+    if session_id.is_empty() {
+        format!("list-windows -F '{}'", format) + "\n"
+    } else {
+        format!("list-windows -t {} -F '{}'", session_id, format) + "\n"
+    }
+}
+
+/// Build a `list-panes` command for a window (or all panes if empty).
+pub fn list_panes(window_id: &str) -> String {
+    let format = "#{pane_id}\t#{window_id}\t#{session_id}\t#{pane_active}\t#{pane_width}\t#{pane_height}\t#{pane_current_path}\t#{pane_title}";
+    if window_id.is_empty() {
+        format!("list-panes -F '{}'", format) + "\n"
+    } else {
+        format!("list-panes -t {} -F '{}'", window_id, format) + "\n"
+    }
+}
+
+/// Build a `capture-pane` command for historical pane output.
+pub fn capture_pane(pane_id: &str, history: usize) -> String {
+    if history == 0 {
+        format!("capture-pane -t {} -p\n", pane_id)
+    } else {
+        format!("capture-pane -t {} -p -S -{}\n", pane_id, history)
+    }
+}
+
+/// Build a `new-session` command.
+pub fn new_session(name: &str, socket: Option<&str>) -> String {
+    if let Some(socket) = socket {
+        format!(
+            "new-session -L {} -s {}\n",
+            quote_tmux_arg(socket),
+            quote_tmux_arg(name)
+        )
+    } else {
+        format!("new-session -s {}\n", quote_tmux_arg(name))
+    }
+}
+
+/// Build an `attach-session` command.
+pub fn attach_session(target: &str, socket: Option<&str>) -> String {
+    if let Some(socket) = socket {
+        format!(
+            "attach-session -L {} -t {}\n",
+            quote_tmux_arg(socket),
+            quote_tmux_arg(target)
+        )
+    } else {
+        format!("attach-session -t {}\n", quote_tmux_arg(target))
+    }
+}
+
+/// Build a `kill-session` command.
+pub fn kill_session(session_id: &str) -> String {
+    format!("kill-session -t {}\n", session_id)
+}
+
+/// Build a `kill-window` command.
+pub fn kill_window(window_id: &str) -> String {
+    format!("kill-window -t {}\n", window_id)
+}
+
+/// Build a `kill-pane` command.
 pub fn kill_pane(pane_id: &str) -> String {
     format!("kill-pane -t {}\n", pane_id)
 }
 
-// ===================================================================
-// Query commands
-// ===================================================================
-
-/// Request the current layout of a window.
-pub fn display_message_window_layout(window_id: &str) -> String {
-    format!("display-message -t {} -p '#{{window_layout}}'\n", window_id)
-}
-
-// ===================================================================
-// Flow-control commands
-// ===================================================================
-
-/// Refresh a paused pane by acknowledging its output.
-pub fn refresh_client_pane(pane_id: &str) -> String {
-    format!("refresh-client -A {}:continue\n", pane_id)
-}
-
-/// Enable or disable pause-after flow control.
-pub fn set_pause_after(seconds: u64) -> String {
-    format!("refresh-client -p {}\n", seconds)
-}
-
-// ===================================================================
-// String helpers
-// ===================================================================
-
-/// Escape a string for use as a tmux key sequence.
-///
-/// Tmux `send-keys` accepts either literal characters or special key names
-/// such as `C-c`, `Enter`, `Tab`. For ordinary text we pass the characters
-/// through mostly unchanged, but backslashes and quotes are doubled. Line
-/// endings are converted to the `Enter` key name.
-fn escape_tmux_keys(keys: &str) -> String {
-    let mut result = String::with_capacity(keys.len());
-    let mut chars = keys.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '\\' => result.push_str("\\\\"),
-            '"' => result.push_str("\\\""),
-            '\r' => {
-                if chars.peek() == Some(&'\n') {
-                    chars.next();
-                }
-                append_enter(&mut result);
-            }
-            '\n' => append_enter(&mut result),
-            _ => result.push(c),
-        }
+/// Build a `new-window` command in a session.
+pub fn new_window(session_id: &str, name: Option<&str>) -> String {
+    let mut cmd = format!("new-window -t {}", session_id);
+    if let Some(name) = name {
+        cmd.push_str(&format!(" -n {}", quote_tmux_arg(name)));
     }
-    result
+    cmd.push('\n');
+    cmd
 }
 
-fn append_enter(result: &mut String) {
-    if !result.ends_with("Enter") {
-        result.push_str("Enter");
-    }
+/// Build a `split-window` command from a pane.
+pub fn split_window(pane_id: &str, direction: &str) -> String {
+    let flag = match direction {
+        "horizontal" | "h" => "-h",
+        "vertical" | "v" => "-v",
+        _ => "-v",
+    };
+    format!("split-window -t {} {}\n", pane_id, flag)
 }
-
-/// Quote an argument that may contain spaces for tmux `-t` targets.
-fn quote_tmux_arg(arg: &str) -> String {
-    if arg.chars().any(|c| c.is_whitespace()) {
-        format!("\"{}\"", arg.replace('\"', "\\\""))
-    } else {
-        arg.to_string()
-    }
-}
-
-// ===================================================================
-// Tests
-// ===================================================================
 
 #[cfg(test)]
 mod tests {
@@ -241,7 +206,7 @@ mod tests {
 
     #[test]
     fn send_keys_simple_text() {
-        assert_eq!(send_keys("%0", "hello"), "send-keys -t %0 \"hello\"\n");
+        assert_eq!(send_keys("%0", "abc"), "send-keys -t %0 \"abc\"\n");
     }
 
     #[test]
@@ -261,55 +226,105 @@ mod tests {
 
     #[test]
     fn send_keys_mixed_with_enter() {
+        assert_eq!(send_keys("%0", "ab\r"), "send-keys -t %0 \"abEnter\"\n");
+    }
+
+    #[test]
+    fn send_keys_escape_backslash_and_quote() {
         assert_eq!(
-            send_keys("%0", "hello\rworld"),
-            "send-keys -t %0 \"helloEnterworld\"\n"
+            send_keys("%0", "a\\b\"c"),
+            "send-keys -t %0 \"a\\\\b\\\"c\"\n"
         );
     }
 
     #[test]
     fn resize_window_for_pane_format() {
         assert_eq!(
-            resize_window_for_pane("%3", 24, 80),
-            "resize-window -t %3 -x 80 -y 24\n"
+            resize_window_for_pane("%0", 80, 24),
+            "resize-window -t %0 -x 80 -y 24\n"
+        );
+    }
+
+    #[test]
+    fn resize_pane_format() {
+        assert_eq!(
+            resize_pane("%0", 24, 80),
+            "resize-pane -t %0 -x 80 -y 24\n"
         );
     }
 
     #[test]
     fn new_session_with_name() {
+        assert_eq!(new_session("xsterm", None), "new-session -s \"xsterm\"\n");
+    }
+
+    #[test]
+    fn new_session_with_socket() {
         assert_eq!(
-            new_session(Some("my session")),
-            "new-session -s \"my session\"\n"
+            new_session("xsterm", Some("custom")),
+            "new-session -L \"custom\" -s \"xsterm\"\n"
+        );
+    }
+
+    #[test]
+    fn attach_session_format() {
+        assert_eq!(
+            attach_session("xsterm", None),
+            "attach-session -t \"xsterm\"\n"
         );
     }
 
     #[test]
     fn build_tmux_argv_new_session_adds_attach_flags() {
-        let args = build_tmux_argv("new-session", Some("foo"));
-        assert_eq!(args, vec!["new-session", "-A", "-D", "-s", "foo"]);
+        let argv = build_tmux_argv("new-session", Some("xsterm"), None);
+        assert_eq!(
+            argv,
+            vec!["tmux", "-CC", "new-session", "-A", "-D", "-s", "xsterm"]
+        );
     }
 
     #[test]
     fn build_tmux_argv_new_session_without_target() {
-        let args = build_tmux_argv("new-session", None);
-        assert_eq!(args, vec!["new-session", "-A", "-D"]);
+        let argv = build_tmux_argv("new-session", None, None);
+        assert_eq!(argv, vec!["tmux", "-CC", "new-session", "-A", "-D"]);
     }
 
     #[test]
     fn build_tmux_argv_attach_session_uses_new_session_with_attach_flags() {
-        let args = build_tmux_argv("attach-session", Some("foo"));
-        assert_eq!(args, vec!["new-session", "-A", "-D", "-s", "foo"]);
+        let argv = build_tmux_argv("attach-session", Some("xsterm"), None);
+        assert_eq!(
+            argv,
+            vec!["tmux", "-CC", "new-session", "-A", "-D", "-s", "xsterm"]
+        );
     }
 
     #[test]
     fn build_tmux_argv_does_not_duplicate_flags() {
-        let args = build_tmux_argv("new-session -A -D -s foo", Some("foo"));
-        assert_eq!(args, vec!["new-session", "-A", "-D", "-s", "foo"]);
+        let argv = build_tmux_argv("new-session -A -D -s xsterm", None, None);
+        assert_eq!(
+            argv,
+            vec!["tmux", "-CC", "new-session", "-A", "-D", "-s", "xsterm"]
+        );
     }
 
-    // The following tests exercise public command builders that are not yet
-    // consumed elsewhere in the crate. They keep the API surface intact and
-    // prevent dead-code warnings.
+    #[test]
+    fn build_tmux_argv_with_socket() {
+        let argv = build_tmux_argv("new-session", Some("xsterm"), Some("custom"));
+        assert_eq!(
+            argv,
+            vec![
+                "tmux",
+                "-L",
+                "custom",
+                "-CC",
+                "new-session",
+                "-A",
+                "-D",
+                "-s",
+                "xsterm"
+            ]
+        );
+    }
 
     #[test]
     fn no_cmd_num_is_zero() {
@@ -317,48 +332,58 @@ mod tests {
     }
 
     #[test]
-    fn attach_session_format() {
-        assert_eq!(
-            attach_session("my-session"),
-            "attach-session -t my-session\n"
-        );
-    }
-
-    #[test]
-    fn list_sessions_format() {
-        assert_eq!(list_sessions(), "list-sessions\n");
-    }
-
-    #[test]
     fn kill_session_format() {
-        assert_eq!(kill_session("$0"), "kill-session -t $0\n");
+        assert_eq!(kill_session("$1"), "kill-session -t $1\n");
     }
 
     #[test]
     fn kill_window_format() {
-        assert_eq!(kill_window("@0"), "kill-window -t @0\n");
+        assert_eq!(kill_window("@1"), "kill-window -t @1\n");
     }
 
     #[test]
     fn kill_pane_format() {
-        assert_eq!(kill_pane("%0"), "kill-pane -t %0\n");
+        assert_eq!(kill_pane("%1"), "kill-pane -t %1\n");
     }
 
     #[test]
-    fn display_message_window_layout_format() {
+    fn list_windows_format() {
+        assert!(list_windows("$1").starts_with("list-windows -t $1 -F"));
+    }
+
+    #[test]
+    fn list_windows_without_target() {
+        assert!(list_windows("").starts_with("list-windows -F"));
+    }
+
+    #[test]
+    fn list_panes_format() {
+        assert!(list_panes("@1").starts_with("list-panes -t @1 -F"));
+    }
+
+    #[test]
+    fn capture_pane_format() {
+        assert_eq!(capture_pane("%1", 1000), "capture-pane -t %1 -p -S -1000\n");
+        assert_eq!(capture_pane("%1", 0), "capture-pane -t %1 -p\n");
+    }
+
+    #[test]
+    fn new_window_format() {
         assert_eq!(
-            display_message_window_layout("@0"),
-            "display-message -t @0 -p '#{window_layout}'\n"
+            new_window("$1", Some("editor")),
+            "new-window -t $1 -n \"editor\"\n"
         );
+        assert_eq!(new_window("$1", None), "new-window -t $1\n");
     }
 
     #[test]
-    fn refresh_client_pane_format() {
-        assert_eq!(refresh_client_pane("%0"), "refresh-client -A %0:continue\n");
+    fn split_window_format() {
+        assert_eq!(split_window("%0", "vertical"), "split-window -t %0 -v\n");
+        assert_eq!(split_window("%0", "horizontal"), "split-window -t %0 -h\n");
     }
 
     #[test]
-    fn set_pause_after_format() {
-        assert_eq!(set_pause_after(5), "refresh-client -p 5\n");
+    fn quote_tmux_arg_escapes_quotes() {
+        assert_eq!(quote_tmux_arg("a\"b"), "\"a\\\"b\"");
     }
 }

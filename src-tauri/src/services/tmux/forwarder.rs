@@ -1,12 +1,4 @@
-//! Background forwarding thread for tmux control mode output.
-//!
-//! `spawn_control_forwarder` runs on a dedicated thread (spawned through
-//! [`AppBackend`]) and repeatedly reads bytes from the tmux transport. It
-//! feeds those bytes to [`TmuxControlParser`] and dispatches each parsed
-//! message to [`handle_message`]. When the transport closes or the local tmux
-//! child exits, it emits `session-closed` and marks the session as exited.
-
-use std::io::Read;
+use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -14,81 +6,126 @@ use std::time::{Duration, Instant};
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::Child;
 use crate::services::tmux::channel_io::CapturePaneQueue;
-use crate::services::tmux::events::emit_closed;
 use crate::services::tmux::handlers::{handle_message, DispatchState};
 use crate::services::tmux::parser::TmuxControlParser;
 
-const TMUX_READ_BUFFER_SIZE: usize = 8192;
-const CHILD_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+/// Interval between checks for the underlying child process status.
+const CHILD_CHECK_INTERVAL: Duration = Duration::from_millis(500);
 
-/// Spawn a background thread that reads tmux control mode output and dispatches
-/// messages to the frontend.
-pub fn spawn_control_forwarder(
-    mut reader: Box<dyn Read + Send>,
-    backend: impl AppBackend + 'static,
+/// Buffer size for reading from the tmux control-mode transport.
+const READ_BUFFER_SIZE: usize = 8192;
+
+/// Spawn a background thread that reads tmux control-mode bytes, parses them,
+/// and dispatches the resulting messages to the frontend.
+///
+/// The forwarder exits when the reader reaches EOF, the child process exits, or
+/// an `%exit` notification is received.
+pub fn spawn_control_forwarder<B: AppBackend + 'static>(
+    reader: Box<dyn Read + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    backend: B,
     session_id: u32,
-    exited: Arc<AtomicBool>,
-    child: Option<Arc<Mutex<Box<dyn Child>>>>,
+    state: Arc<DispatchState>,
     capture_queue: CapturePaneQueue,
+    child: Option<Arc<Mutex<Option<Box<dyn Child>>>>>,
+    exited: Arc<AtomicBool>,
 ) {
-    let state = Arc::new(DispatchState::default());
-    let backend_clone = backend.clone();
-    let state_clone = Arc::clone(&state);
-    let capture_queue_clone = Arc::clone(&capture_queue);
-
     backend.spawn(Box::new(move || {
-        let classifier_queue = Arc::clone(&capture_queue_clone);
-        let mut parser =
-            TmuxControlParser::with_classifier(move || classifier_queue.lock().ok()?.pop_front());
-        let mut buf = [0u8; TMUX_READ_BUFFER_SIZE];
-        let mut last_child_check = Instant::now();
-
-        loop {
-            check_child_status(
-                child.as_ref(),
-                &backend_clone,
-                session_id,
-                &exited,
-                &mut last_child_check,
-            );
-
-            match reader.read(&mut buf) {
-                Ok(0) => {
-                    emit_closed(&backend_clone, session_id);
-                    break;
-                }
-                Ok(n) => {
-                    tracing::trace!("tmux session {} read {} bytes", session_id, n);
-                    for message in parser.parse(&buf[..n]) {
-                        tracing::trace!("tmux session {} parsed {:?}", session_id, message);
-                        handle_message(&backend_clone, session_id, message, &state_clone, &exited);
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("tmux session {} read error: {}", session_id, e);
-                    emit_closed(&backend_clone, session_id);
-                    break;
-                }
-            }
-        }
-
-        for message in parser.flush() {
-            handle_message(&backend_clone, session_id, message, &state_clone, &exited);
-        }
-
-        exited.store(true, Ordering::Relaxed);
+        run_forwarder_loop(
+            reader,
+            writer,
+            backend,
+            session_id,
+            state,
+            capture_queue,
+            child,
+            exited,
+        );
     }));
 }
 
-/// Periodically check whether the local tmux child has exited.
-fn check_child_status<B: AppBackend>(
-    child: Option<&Arc<Mutex<Box<dyn Child>>>>,
-    backend: &B,
+fn run_forwarder_loop<B: AppBackend>(
+    mut reader: Box<dyn Read + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    backend: B,
     session_id: u32,
-    exited: &Arc<AtomicBool>,
+    state: Arc<DispatchState>,
+    capture_queue: CapturePaneQueue,
+    child: Option<Arc<Mutex<Option<Box<dyn Child>>>>>,
+    exited: Arc<AtomicBool>,
+) {
+    let mut parser = TmuxControlParser::with_classifier(move || {
+        capture_queue.lock().ok()?.pop_front()
+    });
+    let mut buf = [0u8; READ_BUFFER_SIZE];
+    let mut last_child_check = Instant::now();
+
+    loop {
+        if exited.load(Ordering::Relaxed) {
+            break;
+        }
+
+        match reader.read(&mut buf) {
+            Ok(0) => {
+                tracing::info!("tmux control reader EOF for session {}", session_id);
+                exited.store(true, Ordering::Relaxed);
+                break;
+            }
+            Ok(n) => {
+                let messages = parser.parse(&buf[..n]);
+                for message in messages {
+                    let mut writer_guard = match writer.lock() {
+                        Ok(guard) => guard,
+                        Err(e) => {
+                            tracing::error!("tmux writer lock poisoned for session {}: {}", session_id, e);
+                            break;
+                        }
+                    };
+                    match handle_message(
+                        message,
+                        &state,
+                        &backend,
+                        session_id,
+                        writer_guard.as_mut(),
+                        &exited,
+                    ) {
+                        Ok(true) => {
+                            tracing::info!("tmux session {} closing after exit notification", session_id);
+                            return;
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            tracing::error!("Error handling tmux message for session {}: {}", session_id, e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("tmux control read error for session {}: {}", session_id, e);
+                exited.store(true, Ordering::Relaxed);
+                break;
+            }
+        }
+
+        if check_child_status(&child, &mut last_child_check) {
+            tracing::info!("tmux child process exited for session {}", session_id);
+            exited.store(true, Ordering::Relaxed);
+            break;
+        }
+    }
+
+    if let Err(e) = crate::services::tmux::events::emit_closed(&backend, session_id) {
+        tracing::error!("Failed to emit session-closed for session {}: {}", session_id, e);
+    }
+}
+
+/// Check whether the underlying child process has exited, throttling checks to
+/// `CHILD_CHECK_INTERVAL`.
+fn check_child_status(
+    child: &Option<Arc<Mutex<Option<Box<dyn Child>>>>>,
     last_check: &mut Instant,
 ) -> bool {
-    let child_ref = match child {
+    let child = match child {
         Some(c) => c,
         None => return false,
     };
@@ -98,18 +135,21 @@ fn check_child_status<B: AppBackend>(
     }
     *last_check = Instant::now();
 
-    let status = child_ref.lock().ok().and_then(|mut c| c.try_wait().ok()?);
-
-    if let Some(status) = status {
-        tracing::info!(
-            "tmux session {} child exited with status {:?}",
-            session_id,
-            status
-        );
-        emit_closed(backend, session_id);
-        exited.store(true, Ordering::Relaxed);
-        true
-    } else {
-        false
+    match child.lock() {
+        Ok(mut c) => match c.as_mut() {
+            Some(c) => match c.try_wait() {
+                Ok(Some(_status)) => true,
+                Ok(None) => false,
+                Err(e) => {
+                    tracing::error!("Failed to check child status: {}", e);
+                    false
+                }
+            },
+            None => false,
+        },
+        Err(e) => {
+            tracing::error!("Child lock poisoned: {}", e);
+            false
+        }
     }
 }

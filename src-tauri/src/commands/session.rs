@@ -94,18 +94,18 @@ pub fn list_sessions(
     with_manager(state, |manager| Ok(manager.list()))
 }
 
-/// Create a new tmux control mode session.
+/// Create a new tmux `-CC` control session.
 #[tauri::command]
 pub async fn create_tmux_session(
     config: TmuxSessionConfig,
     state: State<'_, Arc<Mutex<SessionManager>>>,
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
-    tracing::info!("Creating tmux control mode session");
+    tracing::info!("Creating tmux -CC session");
     let backend = RealAppBackend::new(app);
     with_manager(state, |manager| manager.create_tmux(config, backend))
         .inspect(|info| {
-            tracing::info!("Tmux session created: id={}", info.id);
+            tracing::info!("Tmux -CC session created: id={}", info.id);
         })
         .map_err(|e| {
             tracing::error!("Failed to create tmux session: {}", e);
@@ -113,7 +113,7 @@ pub async fn create_tmux_session(
         })
 }
 
-/// Create a new tmux control mode session on a remote host over SSH.
+/// Create a new tmux `-CC` control session on a remote host over SSH.
 #[tauri::command]
 pub async fn create_ssh_tmux_session(
     config: SshTmuxSessionConfig,
@@ -121,7 +121,7 @@ pub async fn create_ssh_tmux_session(
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     tracing::info!(
-        "Creating SSH tmux session: {}@{}:{}",
+        "Creating SSH tmux -CC session: {}@{}:{}",
         config.ssh.username,
         config.ssh.host,
         config.ssh.port
@@ -129,22 +129,12 @@ pub async fn create_ssh_tmux_session(
     let backend = RealAppBackend::new(app);
     with_manager(state, |manager| manager.create_ssh_tmux(config, backend))
         .inspect(|info| {
-            tracing::info!("SSH tmux session created: id={}", info.id);
+            tracing::info!("SSH tmux -CC session created: id={}", info.id);
         })
         .map_err(|e| {
             tracing::error!("Failed to create SSH tmux session: {}", e);
             e
         })
-}
-
-/// Write a raw tmux control mode command to a tmux session.
-#[tauri::command]
-pub async fn write_tmux_command(
-    session_id: u32,
-    command: String,
-    state: State<'_, Arc<Mutex<SessionManager>>>,
-) -> Result<(), String> {
-    with_manager(state, |manager| manager.write_tmux_command(session_id, &command))
 }
 
 /// Resize a tmux pane.
@@ -170,14 +160,45 @@ pub async fn send_keys_to_tmux_pane(
     with_manager(state, |manager| manager.send_keys_to_tmux_pane(session_id, &pane_id, &keys))
 }
 
-/// Request a recent history capture of a tmux pane.
+/// Create a new tmux window in the target session.
 #[tauri::command]
-pub async fn capture_tmux_pane(
+pub async fn create_tmux_window(
+    session_id: u32,
+    name: Option<String>,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+) -> Result<(), String> {
+    with_manager(state, |manager| manager.create_tmux_window(session_id, name))
+}
+
+/// Close a tmux window.
+#[tauri::command]
+pub async fn close_tmux_window(
+    session_id: u32,
+    window_id: String,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+) -> Result<(), String> {
+    with_manager(state, |manager| manager.close_tmux_window(session_id, &window_id))
+}
+
+/// Close a tmux pane.
+#[tauri::command]
+pub async fn close_tmux_pane(
     session_id: u32,
     pane_id: String,
     state: State<'_, Arc<Mutex<SessionManager>>>,
 ) -> Result<(), String> {
-    with_manager(state, |manager| manager.capture_tmux_pane(session_id, &pane_id))
+    with_manager(state, |manager| manager.close_tmux_pane(session_id, &pane_id))
+}
+
+/// Split a tmux pane.
+#[tauri::command]
+pub async fn split_tmux_pane(
+    session_id: u32,
+    pane_id: String,
+    direction: String,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+) -> Result<(), String> {
+    with_manager(state, |manager| manager.split_tmux_pane(session_id, &pane_id, &direction))
 }
 
 /// Upload an image file to the SSH server for the given session and return the

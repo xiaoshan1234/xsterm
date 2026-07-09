@@ -12,10 +12,12 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::resize_session,
         session::close_session,
         session::list_sessions,
-        session::write_tmux_command,
         session::resize_tmux_pane,
         session::send_keys_to_tmux_pane,
-        session::capture_tmux_pane,
+        session::create_tmux_window,
+        session::close_tmux_window,
+        session::close_tmux_pane,
+        session::split_tmux_pane,
         session::upload_image_to_ssh_session,
         persistence::save_sessions,
         persistence::load_sessions,
@@ -27,3 +29,4 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         logging::get_log_dir,
     ]
 }
+

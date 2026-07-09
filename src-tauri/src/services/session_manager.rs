@@ -1,20 +1,20 @@
 use std::collections::HashMap;
 use std::io::Write;
+use std::sync::{Arc, Mutex};
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
 use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
-use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
-use crate::services::tmux::{create_ssh_tmux_session, create_tmux_session, resize_window_for_pane, send_keys, TmuxSession, TmuxSessionHandles};
 use crate::models::session::{build_remote_image_path, LocalSessionConfig, SSHSessionConfig, SessionInfo, SshTmuxSessionConfig, TmuxSessionConfig};
 use crate::services::local_session::create_local_session;
+use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
+use crate::services::tmux::{commands, create_ssh_tmux_session, create_tmux_session, TmuxSession};
 
 /// Internal enum representing an active session, either local, SSH, or tmux.
 enum Session {
     Local(LocalSession, LocalSessionHandles),
     Ssh(SshSessionWrapper),
-    Tmux(TmuxSession, #[allow(dead_code)] TmuxSessionHandles),
-    SshTmux(TmuxSession),
+    Tmux(TmuxSession),
 }
 
 impl Session {
@@ -22,8 +22,7 @@ impl Session {
         match self {
             Session::Local(s, _) => &s.info,
             Session::Ssh(s) => &s.info,
-            Session::Tmux(s, _) => &s.info,
-            Session::SshTmux(s) => &s.info,
+            Session::Tmux(s) => &s.info,
         }
     }
 
@@ -36,8 +35,7 @@ impl Session {
                 Ok(())
             }
             Session::Ssh(_wrapper) => Ok(()),
-            Session::Tmux(_session, _handles) => Ok(()),
-            Session::SshTmux(_session) => Ok(()),
+            Session::Tmux(session) => session.close(),
         }
     }
 }
@@ -79,22 +77,26 @@ impl SessionManager {
         Ok(self.insert_session(id, Session::Local(session, handles)))
     }
 
-    /// Create a new tmux control mode session.
+    /// Create a new tmux `-CC` control session backed by a local PTY.
     pub fn create_tmux(
         &mut self,
         config: TmuxSessionConfig,
         backend: impl AppBackend + 'static,
     ) -> Result<SessionInfo, String> {
         let id = self.allocate_session_id();
+        let session = create_tmux_session(backend, self.pty_system.as_ref(), config, id)?;
+        Ok(self.insert_session(id, Session::Tmux(session)))
+    }
 
-        let (session, handles) = create_tmux_session(
-            self.pty_system.as_ref(),
-            config,
-            backend,
-            id,
-        )?;
-
-        Ok(self.insert_session(id, Session::Tmux(session, handles)))
+    /// Create a new tmux `-CC` control session on a remote host over SSH.
+    pub fn create_ssh_tmux(
+        &mut self,
+        config: SshTmuxSessionConfig,
+        backend: impl AppBackend + 'static,
+    ) -> Result<SessionInfo, String> {
+        let id = self.allocate_session_id();
+        let session = create_ssh_tmux_session(backend, self.ssh_backend.as_ref(), config, id)?;
+        Ok(self.insert_session(id, Session::Tmux(session)))
     }
 
     /// Create a new SSH session.
@@ -115,24 +117,6 @@ impl SessionManager {
         Ok(self.insert_session(id, Session::Ssh(wrapper)))
     }
 
-    /// Create a new tmux control mode session on a remote host over SSH.
-    pub fn create_ssh_tmux(
-        &mut self,
-        config: SshTmuxSessionConfig,
-        backend: impl AppBackend + 'static,
-    ) -> Result<SessionInfo, String> {
-        let id = self.allocate_session_id();
-
-        let session = create_ssh_tmux_session(
-            self.ssh_backend.as_ref(),
-            config,
-            backend,
-            id,
-        )?;
-
-        Ok(self.insert_session(id, Session::SshTmux(session)))
-    }
-
     /// Insert a newly created session into the manager and return its metadata.
     fn insert_session(&mut self, id: u32, session: Session) -> SessionInfo {
         let info = session.info().clone();
@@ -141,9 +125,7 @@ impl SessionManager {
     }
 
     /// Return a clone of the SSH config for the session with the given `id`.
-    pub fn get_ssh_config(&self,
-        id: u32,
-    ) -> Result<SSHSessionConfig, String> {
+    pub fn get_ssh_config(&self, id: u32) -> Result<SSHSessionConfig, String> {
         match self.sessions.get(&id) {
             Some(Session::Ssh(ssh)) => Ok(ssh.config.clone()),
             Some(_) => Err(format!("Session {} is not an SSH session", id)),
@@ -164,8 +146,8 @@ impl SessionManager {
                     .map_err(|_| format!("SSH channel closed for session {}", id))?;
                 Ok(())
             }
-            Some(Session::Tmux(_, _)) | Some(Session::SshTmux(_)) => Err(format!(
-                "Session {} is a tmux session; use write_tmux_command instead",
+            Some(Session::Tmux(_)) => Err(format!(
+                "Session {} is a tmux session; use send_keys_to_tmux_pane instead",
                 id
             )),
             None => Err(format!("Session {} not found", id)),
@@ -183,7 +165,7 @@ impl SessionManager {
                     Ok(())
                 }
             }
-            Some(Session::Tmux(_, _)) | Some(Session::SshTmux(_)) => Err(format!(
+            Some(Session::Tmux(_)) => Err(format!(
                 "Session {} is a tmux session; use resize_tmux_pane instead",
                 id
             )),
@@ -191,18 +173,7 @@ impl SessionManager {
         }
     }
 
-    /// Write a tmux control mode command to the session with the given `id`.
-    pub fn write_tmux_command(&mut self, id: u32, command: &str) -> Result<(), String> {
-        match self.sessions.get_mut(&id) {
-            Some(Session::Tmux(session, _)) | Some(Session::SshTmux(session)) => {
-                session.write_command(command)
-            }
-            Some(_) => Err(format!("Session {} is not a tmux session", id)),
-            None => Err(format!("Session {} not found", id)),
-        }
-    }
-
-    /// Send a tmux resize-window command so the pane's window matches the terminal.
+    /// Send a tmux resize-pane command for the given pane.
     pub fn resize_tmux_pane(
         &mut self,
         id: u32,
@@ -210,8 +181,13 @@ impl SessionManager {
         rows: u16,
         cols: u16,
     ) -> Result<(), String> {
-        let command = resize_window_for_pane(pane_id, rows, cols);
-        self.write_tmux_command(id, &command)
+        match self.sessions.get(&id) {
+            Some(Session::Tmux(session)) => {
+                session.write_command(&commands::resize_pane(pane_id, rows, cols))
+            }
+            Some(_) => Err(format!("Session {} is not a tmux session", id)),
+            None => Err(format!("Session {} not found", id)),
+        }
     }
 
     /// Send a tmux send-keys command for the given pane.
@@ -221,20 +197,67 @@ impl SessionManager {
         pane_id: &str,
         keys: &str,
     ) -> Result<(), String> {
-        let command = send_keys(pane_id, keys);
-        self.write_tmux_command(id, &command)
+        match self.sessions.get(&id) {
+            Some(Session::Tmux(session)) => {
+                session.write_command(&commands::send_keys(pane_id, keys))
+            }
+            Some(_) => Err(format!("Session {} is not a tmux session", id)),
+            None => Err(format!("Session {} not found", id)),
+        }
     }
 
-    /// Request a recent history capture of a tmux pane.
-    pub fn capture_tmux_pane(
+    /// Create a new tmux window in the target session.
+    pub fn create_tmux_window(
+        &mut self,
+        id: u32,
+        name: Option<String>,
+    ) -> Result<(), String> {
+        match self.sessions.get(&id) {
+            Some(Session::Tmux(session)) => {
+                let target = match &session.info.session_type {
+                    crate::models::session::SessionType::Tmux { target, .. } => target.clone(),
+                    crate::models::session::SessionType::SshTmux { target, .. } => target.clone(),
+                    _ => return Err(format!("Session {} is not a tmux session", id)),
+                };
+                session.write_command(&commands::new_window(&target, name.as_deref()))
+            }
+            Some(_) => Err(format!("Session {} is not a tmux session", id)),
+            None => Err(format!("Session {} not found", id)),
+        }
+    }
+
+    /// Close a tmux window.
+    pub fn close_tmux_window(&mut self, id: u32, window_id: &str) -> Result<(), String> {
+        match self.sessions.get(&id) {
+            Some(Session::Tmux(session)) => {
+                session.write_command(&commands::kill_window(window_id))
+            }
+            Some(_) => Err(format!("Session {} is not a tmux session", id)),
+            None => Err(format!("Session {} not found", id)),
+        }
+    }
+
+    /// Close a tmux pane.
+    pub fn close_tmux_pane(&mut self, id: u32, pane_id: &str) -> Result<(), String> {
+        match self.sessions.get(&id) {
+            Some(Session::Tmux(session)) => {
+                session.write_command(&commands::kill_pane(pane_id))
+            }
+            Some(_) => Err(format!("Session {} is not a tmux session", id)),
+            None => Err(format!("Session {} not found", id)),
+        }
+    }
+
+    /// Split a tmux pane.
+    pub fn split_tmux_pane(
         &mut self,
         id: u32,
         pane_id: &str,
+        direction: &str,
     ) -> Result<(), String> {
         match self.sessions.get(&id) {
-            Some(Session::Tmux(session, _)) | Some(Session::SshTmux(session)) => {
-                const CAPTURE_HISTORY_LINES: usize = 250;
-                session.request_capture_pane(pane_id, CAPTURE_HISTORY_LINES)
+            Some(Session::Tmux(session)) => {
+                session.write_command(&commands::split_window(pane_id, direction))
             }
             Some(_) => Err(format!("Session {} is not a tmux session", id)),
             None => Err(format!("Session {} not found", id)),

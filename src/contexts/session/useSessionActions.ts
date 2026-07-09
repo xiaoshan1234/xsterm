@@ -11,7 +11,7 @@ import {
   Window,
   Workspace,
 } from "../../types/session";
-import { SshTmuxSessionConfig, TmuxSessionConfig } from "../../types/tmux";
+import { SshTmuxSessionConfig, TmuxSessionConfig, TmuxStateSnapshot } from "../../types/tmux";
 import * as sessionService from "../../services/sessionService";
 import * as tmuxService from "../../services/tmuxService";
 import { cloneTmuxState } from "../tmuxStateReducer";
@@ -65,11 +65,12 @@ function buildFrontendSession(info: sessionService.SessionInfo, configId: string
 
 function assertSessionNotUsedElsewhere(
   workspaces: Workspace[],
+  sessions: Session[],
   workspaceId: string | null,
   windowId: string | null,
   sessionId: number
 ): void {
-  if (isSessionUsedInOtherWindow(workspaces, workspaceId, windowId, sessionId)) {
+  if (isSessionUsedInOtherWindow(workspaces, sessions, workspaceId, windowId, sessionId)) {
     throw new Error("Session is already used in another window");
   }
 }
@@ -114,13 +115,11 @@ export function useSessionActions({
         info = await sessionService.createSsh(config.sshConfig);
         type = "ssh";
       } else if (config.type === "tmux" && config.tmuxConfig) {
-        info = await tmuxService.createTmux(config.tmuxConfig);
+        info = await sessionService.createTmux(config.tmuxConfig);
         type = "tmux";
-        establishingSessionsRef.current.add(info.id);
       } else if (config.type === "ssh_tmux" && config.sshTmuxConfig) {
-        info = await tmuxService.createSshTmuxSession(config.sshTmuxConfig);
+        info = await sessionService.createSshTmuxSession(config.sshTmuxConfig);
         type = "ssh_tmux";
-        establishingSessionsRef.current.add(info.id);
       } else {
         throw new Error("Invalid config");
       }
@@ -129,21 +128,17 @@ export function useSessionActions({
       setSessions((prev) => [...prev, session]);
 
       if (type === "tmux" || type === "ssh_tmux") {
-        const timeoutId = window.setTimeout(() => {
-          tmuxListTimeoutsRef.current.delete(session.id);
-          tmuxService.listSessions(session.id).catch(console.error);
-        }, 500);
-        tmuxListTimeoutsRef.current.set(session.id, timeoutId);
+        establishingSessionsRef.current.add(session.id);
       }
 
       return session;
     },
-    [savedConfigs, setSessions, establishingSessionsRef, tmuxListTimeoutsRef]
+    [savedConfigs, setSessions, establishingSessionsRef]
   );
 
   const createWindowFromSession = useCallback(
     (sessionId: number, configId: string, name?: string, targetWorkspaceIdParam?: string): Window => {
-      assertSessionNotUsedElsewhere(workspacesRef.current, null, null, sessionId);
+      assertSessionNotUsedElsewhere(workspacesRef.current, sessionsRef.current, null, null, sessionId);
       const rootPane = createLeafPane(100, sessionId, configId);
       const baseName = name ?? "Window";
       const window: Window = {
@@ -225,10 +220,10 @@ export function useSessionActions({
       if (!config) throw new Error("Config not found");
 
       const session = await createSessionFromSavedConfig(configId);
-      assertSessionNotUsedElsewhere(workspacesRef.current, null, null, session.id);
+      assertSessionNotUsedElsewhere(workspacesRef.current, sessionsRef.current, null, null, session.id);
       return createWindowFromSession(session.id, session.configId, name ?? config.name, activeWorkspaceId ?? undefined);
     },
-    [savedConfigs, createSessionFromSavedConfig, createWindowFromSession, workspacesRef, activeWorkspaceId]
+    [savedConfigs, createSessionFromSavedConfig, createWindowFromSession, workspacesRef, activeWorkspaceId, sessionsRef]
   );
 
   const setActiveWorkspace = useCallback(
@@ -274,7 +269,7 @@ export function useSessionActions({
   const splitPane = useCallback(
     (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number, configId?: string) => {
       if (sessionId !== undefined) {
-        assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, sessionId);
+        assertSessionNotUsedElsewhere(workspacesRef.current, sessionsRef.current, workspaceId, windowId, sessionId);
       }
       setWorkspaces((prev) => {
         const workspace = prev.find((w) => w.id === workspaceId);
@@ -330,7 +325,7 @@ export function useSessionActions({
   const createWindow = useCallback(
     (workspaceId: string, sessionId?: number, configId?: string, name?: string, windowType: "terminal" | "init" = "terminal"): Window => {
       if (sessionId !== undefined) {
-        assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, null, sessionId);
+        assertSessionNotUsedElsewhere(workspacesRef.current, sessionsRef.current, workspaceId, null, sessionId);
       }
       const rootPane = createLeafPane(100, sessionId, configId);
       const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, windowType === "init" ? "New Session" : "Window");
@@ -378,7 +373,7 @@ export function useSessionActions({
 
   const replaceInitWindowWithSession = useCallback(
     (workspaceId: string, windowId: string, session: Session) => {
-      assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, session.id);
+      assertSessionNotUsedElsewhere(workspacesRef.current, sessionsRef.current, workspaceId, windowId, session.id);
       const rootPane = createLeafPane(100, session.id, session.configId);
       const baseName = session.name;
       setWorkspaces((prev) =>
@@ -402,7 +397,7 @@ export function useSessionActions({
         })
       );
     },
-    [setWorkspaces, workspacesRef]
+    [setWorkspaces, workspacesRef, sessionsRef]
   );
 
   const createDefaultWorkspace = useCallback((): Workspace => {
@@ -448,16 +443,32 @@ export function useSessionActions({
       if (!window) return;
 
       const sessionIdsToClose = new Set<number>();
+      const tmuxSessionIdsToClose = new Set<number>();
       forEachPane(window.rootPane, (node) => {
         if (node.type === "leaf" && node.sessionId !== undefined) {
           sessionIdsToClose.add(node.sessionId);
+          const session = sessionsRef.current.find((s) => s.id === node.sessionId);
+          if (session?.type === "tmux" || session?.type === "ssh_tmux") {
+            tmuxSessionIdsToClose.add(node.sessionId);
+          }
         }
       });
 
       setWorkspaces((prev) =>
         prev.map((workspace) => {
           if (workspace.id !== workspaceId) return workspace;
-          const remaining = workspace.windows.filter((w) => w.id !== windowId);
+          let remaining = workspace.windows.filter((w) => w.id !== windowId);
+          if (tmuxSessionIdsToClose.size > 0) {
+            remaining = remaining.filter((w) => {
+              let isTmuxWindow = false;
+              forEachPane(w.rootPane, (node) => {
+                if (node.type === "leaf" && node.sessionId !== undefined && tmuxSessionIdsToClose.has(node.sessionId) && node.tmuxWindowId) {
+                  isTmuxWindow = true;
+                }
+              });
+              return !isTmuxWindow;
+            });
+          }
           let nextActiveId = workspace.activeWindowId;
           let windows = remaining;
           if (remaining.length === 0) {
@@ -487,7 +498,7 @@ export function useSessionActions({
         setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
       }
     },
-    [setWorkspaces, setSessions, tmuxListTimeoutsRef, establishingSessionsRef, workspacesRef]
+    [setWorkspaces, setSessions, tmuxListTimeoutsRef, establishingSessionsRef, workspacesRef, sessionsRef, createInitWindow]
   );
 
   const closeWorkspace = useCallback(
@@ -646,7 +657,7 @@ export function useSessionActions({
                 throw e;
               }
             }
-            return createLeafPane(node.size, session.id, configId);
+            return createLeafPane(node.size, session.id, configId, node.tmuxWindowId);
           }
           return { ...createLeafPane(node.size), id: generateId() };
         }
@@ -699,11 +710,28 @@ export function useSessionActions({
         sessionIds: collectSessionIdsFromWorkspace(workspaceWithoutIds),
       };
 
+      // Set up underlay state for any loaded tmux sessions.
+      for (const session of configIdToSession.values()) {
+        if (session.type === "tmux" || session.type === "ssh_tmux") {
+          const config = savedConfigs.find((c) => c.id === session.configId);
+          const targetSession = config?.tmuxConfig?.target ?? config?.sshTmuxConfig?.tmux.target ?? "xsterm";
+          setTmuxState((prev) => {
+            const next = cloneTmuxState(prev);
+            next.underlays.set(session.id, {
+              sessionId: session.id,
+              targetSession,
+              status: "idle",
+            });
+            return next;
+          });
+        }
+      }
+
       setWorkspaces((prev) => [...prev, workspace]);
       setActiveWorkspaceId(workspace.id);
       return workspace;
     },
-    [savedWorkspaces, openFromConfigInternal, setSessions, setWorkspaces, setActiveWorkspaceId, establishingSessionsRef, tmuxListTimeoutsRef]
+    [savedWorkspaces, openFromConfigInternal, setSessions, setWorkspaces, setActiveWorkspaceId, establishingSessionsRef, tmuxListTimeoutsRef, savedConfigs, setTmuxState]
   );
 
   const deleteSavedWorkspace = useCallback(
@@ -822,7 +850,7 @@ export function useSessionActions({
                 throw e;
               }
             }
-            return createLeafPane(node.size, session.id, configId);
+            return createLeafPane(node.size, session.id, configId, node.tmuxWindowId);
           }
           return { ...createLeafPane(node.size), id: generateId() };
         }
@@ -848,6 +876,23 @@ export function useSessionActions({
       const targetWorkspaceId = workspaceId ?? workspacesRef.current[0]?.id;
       if (!targetWorkspaceId) throw new Error("No workspace available to load window");
 
+      // Set up underlay state for any loaded tmux sessions.
+      for (const session of configIdToSession.values()) {
+        if (session.type === "tmux" || session.type === "ssh_tmux") {
+          const config = savedConfigs.find((c) => c.id === session.configId);
+          const targetSession = config?.tmuxConfig?.target ?? config?.sshTmuxConfig?.tmux.target ?? "xsterm";
+          setTmuxState((prev) => {
+            const next = cloneTmuxState(prev);
+            next.underlays.set(session.id, {
+              sessionId: session.id,
+              targetSession,
+              status: "idle",
+            });
+            return next;
+          });
+        }
+      }
+
       setWorkspaces((prev) => {
         const uniqueName = getUniqueWindowName(prev, targetWorkspaceId, baseName);
         const finalWindow: Window = { ...window, name: uniqueName };
@@ -863,7 +908,7 @@ export function useSessionActions({
       });
       return window;
     },
-    [savedWindowConfigs, openFromConfigInternal, setSessions, setWorkspaces, establishingSessionsRef, tmuxListTimeoutsRef]
+    [savedWindowConfigs, openFromConfigInternal, setSessions, setWorkspaces, establishingSessionsRef, tmuxListTimeoutsRef, sessionsRef, savedConfigs, setTmuxState]
   );
 
   const deleteSavedWindow = useCallback(
@@ -971,41 +1016,40 @@ export function useSessionActions({
    *
    * 特殊处理：
    * - 根据 config.ssh 判断是纯 Tmux（"tmux"）还是 SSH+Tmux（"ssh_tmux"）
-   * - Tmux 会话需要 500ms 后调用 listSessions 同步窗口/面板状态
-   * - 使用 establishingSessionsRef 标记会话正在初始化（避免重复初始化）
+   * - 创建 underlay 控制窗口（不自动连接，等待用户点击 Connect）
+   * - 设置 TmuxUnderlayState 初始状态
    */
   const createTmuxSession = useCallback(
     async (config: SshTmuxSessionConfig, save = true): Promise<Session> => {
       const session = await (config.ssh
         ? createAndActivateSession(
             "ssh_tmux",
-            () => tmuxService.createSshTmuxSession(config),
+            () => sessionService.createSshTmuxSession(config),
             config,
             save
           )
         : createAndActivateSession(
             "tmux",
-            () => tmuxService.createTmux(config.tmux),
+            () => sessionService.createTmux(config.tmux),
             config.tmux,
             save
           ));
 
+      const targetSession = config.tmux.target ?? "xsterm";
+      setTmuxState((prev) => {
+        const next = cloneTmuxState(prev);
+        next.underlays.set(session.id, {
+          sessionId: session.id,
+          targetSession,
+          status: "idle",
+        });
+        return next;
+      });
       establishingSessionsRef.current.add(session.id);
-
-      const existingTimeout = tmuxListTimeoutsRef.current.get(session.id);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-
-      const timeoutId = window.setTimeout(() => {
-        tmuxListTimeoutsRef.current.delete(session.id);
-        tmuxService.listSessions(session.id).catch(console.error);
-      }, 500);
-      tmuxListTimeoutsRef.current.set(session.id, timeoutId);
 
       return session;
     },
-    [createAndActivateSession, establishingSessionsRef, tmuxListTimeoutsRef]
+    [createAndActivateSession, setTmuxState, establishingSessionsRef]
   );
 
   const createLocalSessionOnly = useCallback(
@@ -1027,35 +1071,33 @@ export function useSessionActions({
       const session = await (config.ssh
         ? createAndActivateSession(
             "ssh_tmux",
-            () => tmuxService.createSshTmuxSession(config),
+            () => sessionService.createSshTmuxSession(config),
             config,
             save,
             true
           )
         : createAndActivateSession(
             "tmux",
-            () => tmuxService.createTmux(config.tmux),
+            () => sessionService.createTmux(config.tmux),
             config.tmux,
             save,
             true
           ));
 
-      establishingSessionsRef.current.add(session.id);
-
-      const existingTimeout = tmuxListTimeoutsRef.current.get(session.id);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-
-      const timeoutId = window.setTimeout(() => {
-        tmuxListTimeoutsRef.current.delete(session.id);
-        tmuxService.listSessions(session.id).catch(console.error);
-      }, 500);
-      tmuxListTimeoutsRef.current.set(session.id, timeoutId);
+      const targetSession = config.tmux.target ?? "xsterm";
+      setTmuxState((prev) => {
+        const next = cloneTmuxState(prev);
+        next.underlays.set(session.id, {
+          sessionId: session.id,
+          targetSession,
+          status: "idle",
+        });
+        return next;
+      });
 
       return session;
     },
-    [createAndActivateSession, establishingSessionsRef, tmuxListTimeoutsRef]
+    [createAndActivateSession, setTmuxState]
   );
 
   /**
@@ -1312,10 +1354,6 @@ export function useSessionActions({
     [sessionsRef]
   );
 
-  const writeTmuxCommand = useCallback(async (id: number, command: string): Promise<void> => {
-    await tmuxService.writeTmuxCommand(id, command);
-  }, []);
-
   const resizeTmuxPane = useCallback(
     async (id: number, paneId: string, rows: number, cols: number): Promise<void> => {
       await tmuxService.resizeTmuxPane(id, paneId, rows, cols);
@@ -1326,13 +1364,6 @@ export function useSessionActions({
   const sendKeysToTmuxPane = useCallback(
     async (id: number, paneId: string, keys: string): Promise<void> => {
       await tmuxService.sendKeysToTmuxPane(id, paneId, keys);
-    },
-    []
-  );
-
-  const captureTmuxPane = useCallback(
-    async (id: number, paneId: string): Promise<void> => {
-      await tmuxService.captureTmuxPane(id, paneId);
     },
     []
   );
@@ -1365,6 +1396,102 @@ export function useSessionActions({
     []
   );
 
+  const connectTmuxUnderlay = useCallback(
+    async (sessionId: number, targetSession: string): Promise<void> => {
+      setTmuxState((prev) => {
+        const next = cloneTmuxState(prev);
+        next.underlays.set(sessionId, {
+          sessionId,
+          targetSession,
+          status: "connecting",
+        });
+        return next;
+      });
+      establishingSessionsRef.current.add(sessionId);
+      await tmuxService.connectTmuxUnderlay(sessionId, targetSession);
+    },
+    [setTmuxState, establishingSessionsRef]
+  );
+
+  const disconnectTmuxUnderlay = useCallback(
+    async (sessionId: number): Promise<void> => {
+      await tmuxService.disconnectTmuxUnderlay(sessionId);
+      setTmuxState((prev) => {
+        const next = cloneTmuxState(prev);
+        const underlay = next.underlays.get(sessionId);
+        if (underlay) {
+          next.underlays.set(sessionId, { ...underlay, status: "disconnected" });
+        }
+        return next;
+      });
+    },
+    [setTmuxState]
+  );
+
+  const createTmuxWindowFromUnderlay = useCallback(
+    (sessionId: number, configId: string, tmuxWindowId: string, name: string, targetWorkspaceId: string): Window => {
+      const rootPane = createLeafPane(100, sessionId, configId, tmuxWindowId);
+      const window: Window = {
+        id: generateId(),
+        name,
+        rootPane,
+        activePaneId: rootPane.id,
+        windowType: "terminal",
+      };
+      setWorkspaces((prev) => {
+        const workspaceExists = prev.some((w) => w.id === targetWorkspaceId);
+        if (!workspaceExists) return prev;
+        const uniqueName = getUniqueWindowName(prev, targetWorkspaceId, name);
+        const finalWindow: Window = { ...window, name: uniqueName };
+        return prev.map((workspace) =>
+          workspace.id === targetWorkspaceId
+            ? withRecomputedSessionIds({
+                ...workspace,
+                windows: [...workspace.windows, finalWindow],
+                activeWindowId: finalWindow.id,
+              })
+            : workspace
+        );
+      });
+      return window;
+    },
+    [setWorkspaces]
+  );
+
+  const onTmuxStateSync = useCallback(
+    (sessionId: number, snapshot: TmuxStateSnapshot) => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!session) return;
+
+      const tmuxSessionName = Object.values(snapshot.sessions)[0]?.name ?? "tmux";
+      const targetWorkspaceId = activeWorkspaceId ?? workspacesRef.current[0]?.id;
+      if (!targetWorkspaceId) return;
+
+      const targetWorkspace = workspacesRef.current.find((w) => w.id === targetWorkspaceId);
+      if (!targetWorkspace) return;
+
+      const existingTmuxWindowIds = new Set(
+        targetWorkspace.windows
+          .flatMap((w) => {
+            const ids: string[] = [];
+            forEachPane(w.rootPane, (node) => {
+              if (node.type === "leaf" && node.tmuxWindowId) {
+                ids.push(node.tmuxWindowId);
+              }
+            });
+            return ids;
+          })
+      );
+
+      for (const tmuxWindow of Object.values(snapshot.windows)) {
+        if (existingTmuxWindowIds.has(tmuxWindow.id)) continue;
+        const windowName = `${tmuxSessionName}:${tmuxWindow.name}`;
+        createTmuxWindowFromUnderlay(sessionId, session.configId, tmuxWindow.id, windowName, targetWorkspaceId);
+      }
+    },
+    [activeWorkspaceId, sessionsRef, workspacesRef]
+  );
+
   const setActiveTmuxWindow = useCallback(
     (sessionId: number, windowId: string) => {
       setActiveTmuxWindowIds((prev) => {
@@ -1372,18 +1499,15 @@ export function useSessionActions({
         next.set(sessionId, windowId);
         return next;
       });
-      const tmuxSessionId = String(sessionId);
-      const command = `select-window -t ${windowId}\n`;
-      tmuxService.writeTmuxCommand(sessionId, command).catch(console.error);
       setTmuxState((prev) => {
         const next = cloneTmuxState(prev);
-        const session = next.sessions.get(tmuxSessionId);
+        const session = next.sessions.get(String(sessionId));
         if (session) {
-          session.activeWindowId = windowId;
+          next.sessions.set(String(sessionId), { ...session, activeWindowId: windowId });
         }
         for (const window of next.windows.values()) {
-          if (window.sessionId === tmuxSessionId) {
-            window.isActive = window.id === windowId;
+          if (window.sessionId === String(sessionId)) {
+            next.windows.set(window.id, { ...window, isActive: window.id === windowId });
           }
         }
         return next;
@@ -1414,15 +1538,15 @@ export function useSessionActions({
     toggleGroup,
     writeSession,
     resizeSession,
-    writeTmuxCommand,
     resizeTmuxPane,
     sendKeysToTmuxPane,
-    captureTmuxPane,
     splitTmuxPane,
     setActiveTmuxWindow,
     createTmuxWindow,
     closeTmuxWindow,
     closeTmuxPane,
+    connectTmuxUnderlay,
+    disconnectTmuxUnderlay,
     createWindowFromSession,
     createWindowFromSavedConfig,
     createWorkspaceFromSession,
@@ -1448,5 +1572,6 @@ export function useSessionActions({
     deleteSavedWindow,
     renameSavedWindow,
     renameWindow,
+    onTmuxStateSync,
   };
 }

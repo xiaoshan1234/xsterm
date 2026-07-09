@@ -46,7 +46,7 @@ export default function CreateSessionDialog({
     passphrase: "",
   });
   const [tmuxConfig, setTmuxConfig] = useState<SshTmuxSessionConfig>({
-    tmux: { command: "new-session" },
+    tmux: { command: "new-session", target: "" },
   });
   const [error, setError] = useState("");
 
@@ -65,7 +65,7 @@ export default function CreateSessionDialog({
         key_file: "",
         passphrase: "",
       });
-      setTmuxConfig({ tmux: { command: "new-session" } });
+      setTmuxConfig({ tmux: { command: "new-session", target: "" } });
     }
   }, [isOpen, initialGroupId, initialTab]);
 

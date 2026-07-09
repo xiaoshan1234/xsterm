@@ -4,13 +4,14 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
-export function createLeafPane(size: number, sessionId?: number, configId?: string): PaneNode {
+export function createLeafPane(size: number, sessionId?: number, configId?: string, tmuxWindowId?: string): PaneNode {
   return {
     id: generateId(),
     type: "leaf",
     size,
     sessionId,
     configId,
+    tmuxWindowId,
   };
 }
 
@@ -157,13 +158,22 @@ export function findSessionWindow(
  * window other than the currently active one. A null `currentWorkspaceId`
  * or `currentWindowId` means "no current window" — in that case the
  * session is considered "used elsewhere" as soon as it is found anywhere.
+ *
+ * Tmux sessions are allowed to appear in multiple xsterm windows because
+ * the underlay session is shown in the control window and each tmux window
+ * is rendered as its own xsterm window.
  */
 export function isSessionUsedInOtherWindow(
   workspaces: Workspace[],
+  sessions: Session[],
   currentWorkspaceId: string | null,
   currentWindowId: string | null,
   sessionId: number
 ): boolean {
+  const session = sessions.find((s) => s.id === sessionId);
+  if (session?.type === "tmux" || session?.type === "ssh_tmux") {
+    return false;
+  }
   for (const workspace of workspaces) {
     for (const window of workspace.windows) {
       if (!isSessionInPaneTree(window.rootPane, sessionId)) continue;

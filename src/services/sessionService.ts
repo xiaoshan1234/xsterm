@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { logger } from "../contexts/LoggerContext";
-import { Session, LocalSessionConfig, SSHSessionConfig } from "../types/session";
+import { Session, LocalSessionConfig, SSHSessionConfig, TmuxSessionConfig, SshTmuxSessionConfig } from "../types/session";
 
 export interface SessionInfo {
   id: number;
@@ -20,6 +20,20 @@ export async function createSsh(config: SSHSessionConfig): Promise<SessionInfo> 
   logger.debug("sessionService", "createSsh", { config });
   const result = await invoke<SessionInfo>("create_ssh_session", { config });
   logger.debug("sessionService", "createSsh:result", result);
+  return result;
+}
+
+export async function createTmux(config: TmuxSessionConfig): Promise<SessionInfo> {
+  logger.debug("sessionService", "createTmux", { config });
+  const result = await invoke<SessionInfo>("create_tmux_session", { config });
+  logger.debug("sessionService", "createTmux:result", result);
+  return result;
+}
+
+export async function createSshTmuxSession(config: SshTmuxSessionConfig): Promise<SessionInfo> {
+  logger.debug("sessionService", "createSshTmuxSession", { config });
+  const result = await invoke<SessionInfo>("create_ssh_tmux_session", { config });
+  logger.debug("sessionService", "createSshTmuxSession:result", result);
   return result;
 }
 

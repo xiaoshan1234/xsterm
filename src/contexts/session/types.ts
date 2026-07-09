@@ -12,7 +12,7 @@ import {
   Window,
   Workspace,
 } from "../../types/session";
-import { SshTmuxSessionConfig, TmuxState } from "../../types/tmux";
+import { SshTmuxSessionConfig, TmuxState, TmuxStateSnapshot } from "../../types/tmux";
 
 export interface SessionContextType {
   sessions: Session[];
@@ -46,10 +46,8 @@ export interface SessionContextType {
   toggleGroup: (id: number) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
-  writeTmuxCommand: (id: number, command: string) => Promise<void>;
   resizeTmuxPane: (id: number, paneId: string, rows: number, cols: number) => Promise<void>;
   sendKeysToTmuxPane: (id: number, paneId: string, keys: string) => Promise<void>;
-  captureTmuxPane: (id: number, paneId: string) => Promise<void>;
   splitTmuxPane: (id: number, paneId: string, direction?: "h" | "v") => Promise<void>;
   tmuxState: TmuxState;
   activeTmuxWindowIds: Map<number, string>;
@@ -57,6 +55,9 @@ export interface SessionContextType {
   createTmuxWindow: (sessionId: number, name?: string) => Promise<void>;
   closeTmuxWindow: (sessionId: number, windowId: string) => Promise<void>;
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
+  connectTmuxUnderlay: (sessionId: number, targetSession: string) => Promise<void>;
+  disconnectTmuxUnderlay: (sessionId: number) => Promise<void>;
+  onTmuxStateSync: (sessionId: number, snapshot: TmuxStateSnapshot) => void;
   createWorkspaceFromSession: (sessionId: number, configId: string, name?: string) => Workspace;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
   createWindowFromSession: (sessionId: number, configId: string, name?: string, targetWorkspaceId?: string) => Window;
@@ -153,15 +154,16 @@ export interface SessionActions {
   toggleGroup: (id: number) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
-  writeTmuxCommand: (id: number, command: string) => Promise<void>;
   resizeTmuxPane: (id: number, paneId: string, rows: number, cols: number) => Promise<void>;
   sendKeysToTmuxPane: (id: number, paneId: string, keys: string) => Promise<void>;
-  captureTmuxPane: (id: number, paneId: string) => Promise<void>;
   splitTmuxPane: (id: number, paneId: string, direction?: "h" | "v") => Promise<void>;
   setActiveTmuxWindow: (sessionId: number, windowId: string) => void;
   createTmuxWindow: (sessionId: number, name?: string) => Promise<void>;
   closeTmuxWindow: (sessionId: number, windowId: string) => Promise<void>;
   closeTmuxPane: (sessionId: number, paneId: string) => Promise<void>;
+  connectTmuxUnderlay: (sessionId: number, targetSession: string) => Promise<void>;
+  disconnectTmuxUnderlay: (sessionId: number) => Promise<void>;
+  onTmuxStateSync: (sessionId: number, snapshot: TmuxStateSnapshot) => void;
   createWorkspaceFromSession: (sessionId: number, configId: string, name?: string) => Workspace;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
   createWindowFromSession: (sessionId: number, configId: string, name?: string, targetWorkspaceId?: string) => Window;
