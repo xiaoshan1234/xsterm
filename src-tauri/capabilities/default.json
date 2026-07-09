@@ -9,7 +9,7 @@
     "store:default",
     "clipboard-manager:default",
     "clipboard-manager:allow-read-image",
-    "clipboard-manager:allow-write",
+    "clipboard-manager:allow-write-text",
     "core:window:allow-minimize",
     "core:window:allow-maximize",
     "core:window:allow-unmaximize",
