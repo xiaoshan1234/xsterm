@@ -97,7 +97,6 @@ pub struct PaneListEntry {
 }
 
 struct PendingResponse {
-    cmd_num: usize,
     lines: Vec<String>,
     capture_pane_id: Option<String>,
 }
@@ -206,10 +205,9 @@ impl TmuxControlParser {
             return Some(parse_extended_output_line(rest));
         }
         if let Some(rest) = line.strip_prefix("%begin ") {
-            let cmd_num = parse_cmd_num(rest);
+            let _cmd_num = parse_cmd_num(rest);
             let capture_pane_id = self.classifier.as_mut().and_then(|c| c());
             self.pending_response = Some(PendingResponse {
-                cmd_num,
                 lines: Vec::new(),
                 capture_pane_id,
             });

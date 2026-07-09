@@ -30,11 +30,12 @@ pub fn spawn_control_forwarder<B: AppBackend + 'static>(
     child: Option<Arc<Mutex<Option<Box<dyn Child>>>>>,
     exited: Arc<AtomicBool>,
 ) {
+    let backend_for_loop = backend.clone();
     backend.spawn(Box::new(move || {
         run_forwarder_loop(
             reader,
             writer,
-            backend,
+            backend_for_loop,
             session_id,
             state,
             capture_queue,

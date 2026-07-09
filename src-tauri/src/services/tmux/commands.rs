@@ -35,19 +35,19 @@ pub fn build_tmux_argv(command: &str, target: Option<&str>, socket: Option<&str>
         tokens[0] = "new-session".to_string();
     }
 
-    let has_flag = |flag: &str| tokens.iter().any(|t| t == flag);
+    let has_flag = |tokens: &[String], flag: &str| tokens.iter().any(|t| t == flag);
 
     if tokens[0] == "new-session" {
-        if !has_flag("-A") {
+        if !has_flag(&tokens, "-A") {
             tokens.push("-A".to_string());
         }
-        if !has_flag("-D") {
+        if !has_flag(&tokens, "-D") {
             tokens.push("-D".to_string());
         }
     }
 
     if let Some(target) = target {
-        if !has_flag("-s") && !has_flag("-t") {
+        if !has_flag(&tokens, "-s") && !has_flag(&tokens, "-t") {
             tokens.push("-s".to_string());
             tokens.push(target.to_string());
         }

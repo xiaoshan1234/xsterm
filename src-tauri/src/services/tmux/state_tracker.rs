@@ -72,6 +72,7 @@ impl StateTracker {
         }
     }
 
+    #[allow(dead_code)]
     /// Return whether a pane is currently in copy mode.
     pub fn is_in_copy_mode(&self, pane_id: &str) -> bool {
         self.copy_mode_panes

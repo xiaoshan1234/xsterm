@@ -84,11 +84,9 @@ pub fn create_ssh_tmux_session<B: AppBackend + 'static>(
     let session = TmuxSession {
         writer: Arc::clone(&writer),
         exited: Arc::clone(&exited),
-        capture_queue: Arc::clone(&capture_queue),
         info,
         handles: TmuxSessionHandles {
             child: Mutex::new(None),
-            forwarder: None,
             _pair: None,
             _channel: Some(channel),
         },

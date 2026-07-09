@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};

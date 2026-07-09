@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 use crate::infrastructure::pty::{Child, PtyPair};
 use crate::infrastructure::ssh::SshChannel;
 use crate::models::session::SessionInfo;
-use crate::services::tmux::channel_io::CapturePaneQueue;
 
 pub mod local;
 pub mod ssh;
@@ -17,8 +16,6 @@ pub mod ssh;
 pub struct TmuxSessionHandles {
     /// The spawned child process for local PTY-backed sessions.
     pub child: Mutex<Option<Arc<Mutex<Option<Box<dyn Child>>>>>>,
-    /// The forwarder thread that reads and dispatches tmux control messages.
-    pub forwarder: Option<std::thread::JoinHandle<()>>,
     /// Keep the PTY pair alive — on Windows, dropping the pair destroys the
     /// ConPTY and kills the session.
     pub _pair: Option<Box<dyn PtyPair>>,
@@ -34,7 +31,6 @@ pub struct TmuxSessionHandles {
 pub struct TmuxSession {
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub exited: Arc<AtomicBool>,
-    pub capture_queue: CapturePaneQueue,
     pub info: SessionInfo,
     /// Handles that must remain alive for the duration of the session.
     pub handles: TmuxSessionHandles,
@@ -51,26 +47,6 @@ impl TmuxSession {
             .write_all(command.as_bytes())
             .map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())
-    }
-
-    /// Queue a `capture-pane` request for the given pane.
-    ///
-    /// The pane id is pushed onto the capture queue so that the parser can
-    /// correlate the upcoming command response with the correct pane. The
-    /// capture command is then sent to tmux.
-    pub fn request_capture_pane(&self, pane_id: &str, history: usize) -> Result<(), String> {
-        {
-            let mut queue = self.capture_queue.lock().map_err(|e| e.to_string())?;
-            queue.push_back(pane_id.to_string());
-        }
-
-        let command = crate::services::tmux::commands::capture_pane(pane_id, history);
-        self.write_command(&command)
-    }
-
-    /// Return whether the forwarder has marked the session as exited.
-    pub fn is_exited(&self) -> bool {
-        self.exited.load(Ordering::Relaxed)
     }
 
     /// Kill the local child process backing this session and signal the
