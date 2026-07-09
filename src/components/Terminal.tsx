@@ -6,6 +6,7 @@ import { getClipboardImages } from "../utils/clipboard";
 import { useXterm } from "../hooks/useXterm";
 import { useTauriTerminalOutput } from "../hooks/useTauriTerminalOutput";
 import { useTerminalResize } from "../hooks/useTerminalResize";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 
 // Props 说明：
@@ -114,6 +115,18 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
     xterm.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
+      if (event.ctrlKey && event.shiftKey && (event.key === "c" || event.key === "C")) {
+        return false;
+      }
+      if (event.ctrlKey && event.shiftKey && (event.key === "v" || event.key === "V")) {
+        return false;
+      }
+      if (event.metaKey && (event.key === "c" || event.key === "C")) {
+        return false;
+      }
+      if (event.metaKey && (event.key === "v" || event.key === "V")) {
+        return false;
+      }
       if (event.ctrlKey && (event.key === "n" || event.key === "N") && event.shiftKey) {
         return false;
       }
@@ -158,8 +171,18 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       writeSessionRef.current(sessionId, data);
     });
 
+    const selectionDisposer = xterm.onSelectionChange(() => {
+      const selection = xterm.getSelection();
+      if (selection && selection.length > 0) {
+        writeText(selection).catch((err) => {
+          console.error("[xsterm] Failed to copy selection on change:", err);
+        });
+      }
+    });
+
     return () => {
       dataDisposer.dispose();
+      selectionDisposer.dispose();
     };
   }, [sessionId]);
 
@@ -185,7 +208,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       copySelection: async () => {
         const selection = termRef.current?.getSelection();
         if (selection) {
-          await navigator.clipboard.writeText(selection).catch(() => {});
+          try {
+            await writeText(selection);
+          } catch (err) {
+            console.error("[xsterm] Failed to copy selection to clipboard:", err);
+          }
         }
       },
       clear: () => {
