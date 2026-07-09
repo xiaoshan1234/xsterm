@@ -27,6 +27,26 @@
 - 文件：`src/components/NavBar.tsx:28-30`
 - 问题：`appWindow.onResized?.(...).then(...)` 在 `onResized` 为 undefined 时会抛 TypeError。
 
+## 已修复 Bug
+
+### 7. SSH 多 session 共用显示 buffer
+- 文件：
+  - `src/hooks/useTauriTerminalOutput.ts`
+  - `src/components/Terminal.tsx`
+  - `src/components/PaneTree.tsx`
+- 现象：两个 SSH session 看上去共用同一个显示 buffer，新的 session 输出覆盖旧的 session 内容；输入仍然能正确路由到各自 session。
+- 根因：
+  1. `useTauriTerminalOutput` 在 `flushWrites` 和 cleanup 中读取 `termRef.current`，而该 ref 在 effect 重新运行后可能指向新的 xterm 实例，导致旧 session 的待写入数据被写入新 session 的终端。
+  2. 当 pane 的 `sessionId` 变化时，xterm 实例被复用，旧 session 的输出仍残留在 buffer 中，新 session 输出与之混合。
+  3. `PaneTree.tsx` 中的 `<Pane>` 没有 `key` 属性，React 在 pane 树变化时无法保证 terminal 实例的稳定身份。
+- 修复：
+  1. 在 `useTauriTerminalOutput` 的 effect 开始处捕获 `xterm = termRef.current`，后续 `flushWrites` 和 cleanup 都只写入该捕获的实例，并用 try/catch 处理 dispose 后的写异常。
+  2. 在 `Terminal.tsx` 的 `sessionId` effect 中调用 `xterm.clear()`，确保新 session 开始时 buffer 被清空。
+  3. 在 `PaneTree.tsx` 的 `<Pane>` 上添加 `key={node.id}`。
+- 验证：
+  - `npx tsc --noEmit`：通过
+  - `npm run build`：通过
+
 ## 中低风险 Bug
 
 - `SessionContext.tsx` 多处使用 stale `sessions` state 而非 `sessionsRef.current`。
@@ -52,6 +72,9 @@
 - `src/contexts/session/paneUtils.ts` — 新增 `collectSessionIdsFromPaneTree`、`collectSessionIdsFromWorkspace`、`withRecomputedSessionIds`、`stripSessionIdFromPaneTree`。
 - `src/contexts/session/useSessionActions.ts` — 更新加载、保存、关闭、创建窗口等逻辑以维护 session 集合。
 - `src/contexts/session/useTauriListeners.ts` — session 关闭/错误处理时重新计算 workspace 的 `sessionIds`。
+- `src/hooks/useTauriTerminalOutput.ts` — 捕获 xterm 实例，避免跨 session 输出污染。
+- `src/components/Terminal.tsx` — `sessionId` 变化时清空 xterm buffer。
+- `src/components/PaneTree.tsx` — 为 `<Pane>` 添加 `key` 属性。
 
 ## 验证
 - `npx tsc --noEmit` 通过。

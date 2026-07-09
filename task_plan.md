@@ -1,44 +1,39 @@
-# Workspace Session Ownership
+# SSH Session Output Buffer Bug Fix
 
 ## Goal
-When a workspace instance is created from a saved workspace config, its sessions are created together with it. The saved workspace config does not store runtime session IDs; it only stores the session type/config (via `configId`) and pane layout. The runtime workspace instance explicitly tracks its contained sessions via `sessionIds` and manages their lifecycle (closing them when the workspace is closed).
+Fix the bug where two SSH sessions in the same workspace appear to share/overlap the same terminal display buffer. Output from one session overwrites the other, although input still goes to the correct session separately.
 
-## Current State
-- `SavedWorkspace` persists pane trees that may still contain runtime `sessionId` values (bug).
-- `Workspace` has no explicit `sessionIds` field; the inclusion relationship is implicit in the pane tree.
-- `loadWorkspace` already recreates sessions from `configId`, but it preserves stale `sessionId` values.
-- `closeWorkspace` does not close the workspace's sessions.
+## Root Cause
+1. **Primary**: `useTauriTerminalOutput` reads `termRef.current` at execution time in `flushWrites` and cleanup. When the `sessionId` prop changes and the effect re-runs, the old effect's queued writes can be flushed into the new effect's xterm instance, causing cross-session output contamination.
+2. **Secondary**: When a pane's `sessionId` changes, the same xterm instance is reused. The old session's output remains in the buffer, so the new session appears to share the display buffer with the previous one.
+3. **Contributing**: `PaneTree` renders `<Pane>` without a `key` prop, so React cannot guarantee stable identity for terminal instances when the pane tree changes or sessions are reassigned. This can cause xterm instances to be reused or mismatched across sessions.
 
 ## Plan
 
-### Phase 1 — Extend types and helpers
-- Add `sessionIds: number[]` to the `Workspace` runtime type.
-- Add `collectSessionIdsFromPaneTree`, `collectSessionIdsFromWorkspace`, and `withRecomputedSessionIds` helpers in `paneUtils.ts`.
-- Add `stripSessionIdFromPaneTree` helper to ensure saved configs never persist runtime IDs.
+### Phase 1 — Fix `useTauriTerminalOutput` ✅
+- Capture the xterm instance into a local `xterm` const at the top of the effect.
+- Make `flushWrites` and cleanup write to the captured `xterm` instance, not `termRef.current`.
+- Drain the write queue to the old xterm in the cleanup function with try/catch.
 
-### Phase 2 — Keep saved config free of runtime IDs
-- `saveWorkspace`: strip `sessionId` from every pane tree before persisting.
-- `saveWindow` / `saveAllWindows`: strip `sessionId` from saved pane trees.
-- `loadWorkspace` / `loadWindow`: ignore stale `sessionId` in saved pane trees; always recreate from `configId`.
+### Phase 2 — Clear terminal on session change ✅
+- In `Terminal.tsx`, clear the xterm in the `sessionId` effect so the new session starts with a fresh buffer.
 
-### Phase 3 — Workspace owns its sessions
-- Populate `sessionIds` when a workspace is created:
-  - `createDefaultWorkspace` → `[]`
-  - `createWorkspaceFromSession` → `[sessionId]`
-  - `loadWorkspace` → collect from loaded pane trees
-- Recompute `sessionIds` after every workspace pane/session mutation:
-  - `createWindow`, `createWindowFromSession`, `createWindowFromSavedConfig`, `loadWindow`
-  - `replaceInitWindowWithSession`, `splitPane`
-  - `closeWindow`, `closeSession`, `removeConfig`
-  - `useTauriListeners` session-closed handlers
-- `closeWorkspace`: close all sessions listed in `workspace.sessionIds`.
+### Phase 3 — Fix `PaneTree` keys ✅
+- Add `key={node.id}` to the `<Pane>` element in `PaneTree`.
 
-### Phase 4 — Verify
-- `npm run build` passes with no TypeScript errors.
-- No type-safety suppressions (`as any`, `@ts-ignore`, etc.).
+### Phase 4 — Verify ✅
+- Run `npx tsc --noEmit` to ensure no TypeScript errors.
+- Run `npm run build` to ensure the frontend builds.
 
-## Files to Modify
-- `src/types/session.ts`
-- `src/contexts/session/paneUtils.ts`
-- `src/contexts/session/useSessionActions.ts`
-- `src/contexts/session/useTauriListeners.ts`
+## Files Modified
+- `src/hooks/useTauriTerminalOutput.ts`
+- `src/components/Terminal.tsx`
+- `src/components/PaneTree.tsx`
+
+## Verification Results
+- `npx tsc --noEmit`: passed, no errors
+- `npm run build`: passed, build artifacts generated
+
+## Notes
+- Reverted an initial attempt to add `sessionId` to `useXterm`'s dependency array. Disposing and recreating the xterm on every session change would race with `useTauriTerminalOutput`'s cleanup flush, so we instead keep the xterm instance and clear it explicitly.
+- Rust backend was not modified; session IDs are already allocated uniquely and emitted per-session.

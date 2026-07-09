@@ -29,15 +29,22 @@ export function useTauriTerminalOutput(
 
     const flushWrites = () => {
       rafId = null;
-      if (writeQueue.length === 0 || !termRef.current) return;
+      if (writeQueue.length === 0) return;
       const pending = writeQueue;
       writeQueue = [];
       const text = pending.map((w) => w.text).join("");
-      termRef.current.write(text, () => {
+      try {
+        xterm.write(text, () => {
+          for (const w of pending) {
+            w.resolve();
+          }
+        });
+      } catch (e) {
+        console.error("[xsterm] Failed to write to terminal:", e);
         for (const w of pending) {
           w.resolve();
         }
-      });
+      }
     };
 
     const queueWrite = (text: string): Promise<void> => {
@@ -56,7 +63,7 @@ export function useTauriTerminalOutput(
       }
     })
       .then((fn) => {
-        if (listenerActive && termRef.current) {
+        if (listenerActive) {
           unlisten = fn;
         } else {
           fn();
@@ -73,8 +80,22 @@ export function useTauriTerminalOutput(
       unlisten?.();
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
-        if (termRef.current) {
-          termRef.current.write(writeQueue.map((w) => w.text).join(""));
+      }
+      if (writeQueue.length > 0) {
+        const pending = writeQueue;
+        writeQueue = [];
+        const text = pending.map((w) => w.text).join("");
+        try {
+          xterm.write(text, () => {
+            for (const w of pending) {
+              w.resolve();
+            }
+          });
+        } catch (e) {
+          console.error("[xsterm] Failed to flush terminal writes:", e);
+          for (const w of pending) {
+            w.resolve();
+          }
         }
       }
     };

@@ -25,6 +25,7 @@ export function PaneTree({
   if (node.type === "leaf") {
     return (
       <Pane
+        key={node.id}
         workspace={workspace}
         windowId={windowId}
         pane={node}

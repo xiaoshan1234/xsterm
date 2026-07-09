@@ -94,6 +94,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     const xterm = termRef.current;
     if (!xterm) return;
 
+    xterm.clear();
+
     xterm.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
       if (event.ctrlKey && (event.key === "n" || event.key === "N") && event.shiftKey) {
