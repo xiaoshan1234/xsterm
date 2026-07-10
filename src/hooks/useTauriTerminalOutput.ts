@@ -8,7 +8,16 @@ function decodeOutput(data: number[]): string {
 }
 
 // OSC52: ESC ] 52 ; [clipboard] ; <base64-data> ; terminated by BEL or ESC \
-const OSC52_REGEX = /\x1b\]52;[cps01234567*]?;([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)/g;
+const OSC52_REGEX = /\x1b\]52;[^;\x07\x1b]*;([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)/g;
+
+function decodeBase64Utf8(encoded: string): string {
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
 
 function extractAndCopyOsc52(text: string): string {
   const matches = text.matchAll(OSC52_REGEX);
@@ -16,7 +25,7 @@ function extractAndCopyOsc52(text: string): string {
     const encoded = match[1];
     if (!encoded || encoded.length === 0) continue;
     try {
-      const decoded = atob(encoded);
+      const decoded = decodeBase64Utf8(encoded);
       writeText(decoded).catch((err) => {
         console.error("[xsterm] Failed to write OSC52 selection to clipboard:", err);
       });
