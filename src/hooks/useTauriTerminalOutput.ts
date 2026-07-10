@@ -2,6 +2,10 @@ import { useEffect, RefObject } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import {
+  appendSessionOutput,
+  getSessionOutput,
+} from "../utils/sessionOutputBuffer";
 
 function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
@@ -47,6 +51,7 @@ export function useTauriTerminalOutput(
 ): void {
   // 监听 Tauri 后端事件，将终端输出写入 xterm 实例。
   // 数据通过 requestAnimationFrame 批量写入，避免频繁调用 xterm.write()。
+  // 同时把输出追加到 sessionOutputBuffer，便于 pane remount 后恢复历史内容。
   // 清理时取消事件监听，并将队列中剩余数据一次性写入后退出。
   useEffect(() => {
     const xterm = termRef.current;
@@ -56,6 +61,7 @@ export function useTauriTerminalOutput(
     let unlisten: (() => void) | null = null;
     let rafId: number | null = null;
     let writeQueue: PendingWrite[] = [];
+    let hasReplayed = false;
 
     const flushWrites = () => {
       rafId = null;
@@ -86,18 +92,29 @@ export function useTauriTerminalOutput(
       });
     };
 
+    const handleOutput = (text: string) => {
+      appendSessionOutput(sessionId, text);
+      if (!hasReplayed) return;
+      queueWrite(text);
+    };
+
     listen<[number, number[]]>("session-output", (event) => {
       const [id, data] = event.payload;
       if (id === sessionId) {
-        queueWrite(extractAndCopyOsc52(decodeOutput(data)));
+        handleOutput(extractAndCopyOsc52(decodeOutput(data)));
       }
     })
       .then((fn) => {
-        if (listenerActive) {
-          unlisten = fn;
-        } else {
+        if (!listenerActive) {
           fn();
+          return;
         }
+        unlisten = fn;
+        const buffer = getSessionOutput(sessionId);
+        if (buffer) {
+          queueWrite(buffer);
+        }
+        hasReplayed = true;
       })
       .catch((err) => {
         if (listenerActive) {

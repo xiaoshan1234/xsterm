@@ -29,6 +29,7 @@ import {
   stripSessionIdFromPaneTree,
   withRecomputedSessionIds,
 } from "./paneUtils";
+import { clearSessionOutput } from "../../utils/sessionOutputBuffer";
 import { SessionActions, SessionPersistence, SessionState } from "./types";
 
 function getUniqueWindowName(
@@ -456,6 +457,7 @@ export function useSessionActions({
       sessionIdsToClose.forEach((sessionId) => {
         sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
         establishingSessionsRef.current.delete(sessionId);
+        clearSessionOutput(sessionId);
       });
       if (sessionIdsToClose.size > 0) {
         setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
@@ -474,6 +476,7 @@ export function useSessionActions({
         idsToClose.forEach((sessionId) => {
           sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
           establishingSessionsRef.current.delete(sessionId);
+          clearSessionOutput(sessionId);
         });
         setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
       }
@@ -586,6 +589,7 @@ export function useSessionActions({
         );
         for (const id of idsToClose) {
           establishingSessionsRef.current.delete(id);
+          clearSessionOutput(id);
         }
         if (idsToClose.size > 0) {
           setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
@@ -760,6 +764,7 @@ export function useSessionActions({
         );
         for (const id of idsToClose) {
           establishingSessionsRef.current.delete(id);
+          clearSessionOutput(id);
         }
         if (idsToClose.size > 0) {
           setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
@@ -953,6 +958,7 @@ export function useSessionActions({
       const session = sessionsRef.current.find((s) => s.configId === configId);
       if (session) {
         sessionService.closeSession(session.id).catch(console.error);
+        clearSessionOutput(session.id);
         setSessions((prev) => prev.filter((s) => s.configId !== configId));
         setWorkspaces((prev) =>
           prev.map((workspace) =>
@@ -990,6 +996,7 @@ export function useSessionActions({
       } catch (e) {
         console.error("Failed to close session backend:", e);
       } finally {
+        clearSessionOutput(id);
         setSessions((prev) => prev.filter((s) => s.id !== id));
         setWorkspaces((prev) =>
           prev.map((workspace) =>
@@ -1053,6 +1060,8 @@ export function useSessionActions({
         await sessionService.closeSession(id);
       } catch (e) {
         console.error("Failed to close old session backend during reconnect:", e);
+      } finally {
+        clearSessionOutput(id);
       }
 
       return newSession;
@@ -1076,6 +1085,7 @@ export function useSessionActions({
         } finally {
           establishingSessionsRef.current.delete(sessionId);
         }
+        clearSessionOutput(sessionId);
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       }
 
