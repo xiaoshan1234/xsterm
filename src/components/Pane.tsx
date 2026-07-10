@@ -33,8 +33,22 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
   const [pendingSplit, setPendingSplit] = useState<SplitDirection | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const contextMenuRef = useRef<ContextMenuRef>(null);
   const terminalRef = useRef<TerminalRef>(null);
+
+  const startSubmitting = () => {
+    if (isSubmittingRef.current) return false;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    return true;
+  };
+
+  const endSubmitting = () => {
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
+  };
 
   const session = pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
 
@@ -71,24 +85,25 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
 
   const handleSelectSession = useCallback(
     (sessionId: number) => {
-      if (dialogMode === "split" && pendingSplit) {
-        try {
+      if (!startSubmitting()) return;
+      try {
+        if (dialogMode === "split" && pendingSplit) {
           const sessionConfigId = sessions.find((s) => s.id === sessionId)?.configId;
           splitPane(workspace.id, windowId, pane.id, pendingSplit, sessionId, sessionConfigId);
-        } catch (e) {
-          if (e instanceof Error && e.message === "Session is already used in another window") {
-            window.alert("Session is already used in another window");
-          } else {
-            throw e;
-          }
+        } else if (dialogMode === "attach") {
+          attachSessionToPane(sessionId);
         }
         setPendingSplit(null);
         setDialogMode(null);
         setShowSessionDialog(false);
-      } else if (dialogMode === "attach") {
-        attachSessionToPane(sessionId);
-        setDialogMode(null);
-        setShowSessionDialog(false);
+      } catch (e) {
+        if (e instanceof Error && e.message === "Session is already used in another window") {
+          window.alert("Session is already used in another window");
+        } else {
+          window.alert(`Failed to attach session: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      } finally {
+        endSubmitting();
       }
     },
     [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, attachSessionToPane, sessions]
@@ -96,35 +111,25 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
 
   const handleSelectConfig = useCallback(
     async (configId: string) => {
-      if (dialogMode === "split" && pendingSplit) {
-        try {
-          const session = await createSessionFromSavedConfig(configId);
+      if (!startSubmitting()) return;
+      try {
+        const session = await createSessionFromSavedConfig(configId);
+        if (dialogMode === "split" && pendingSplit) {
           splitPane(workspace.id, windowId, pane.id, pendingSplit, session.id, session.configId);
-        } catch (e) {
-          if (e instanceof Error && e.message === "Session is already used in another window") {
-            window.alert("Session is already used in another window");
-          } else {
-            console.error("Failed to create session for split:", e);
-          }
-        } finally {
-          setPendingSplit(null);
-          setDialogMode(null);
-          setShowSessionDialog(false);
-        }
-      } else if (dialogMode === "attach") {
-        try {
-          const session = await createSessionFromSavedConfig(configId);
+        } else if (dialogMode === "attach") {
           attachSessionToPane(session.id);
-        } catch (e) {
-          if (e instanceof Error && e.message === "Session is already used in another window") {
-            window.alert("Session is already used in another window");
-          } else {
-            console.error("Failed to create session for attach:", e);
-          }
-        } finally {
-          setDialogMode(null);
-          setShowSessionDialog(false);
         }
+        setPendingSplit(null);
+        setDialogMode(null);
+        setShowSessionDialog(false);
+      } catch (e) {
+        if (e instanceof Error && e.message === "Session is already used in another window") {
+          window.alert("Session is already used in another window");
+        } else {
+          window.alert(`Failed to create session: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      } finally {
+        endSubmitting();
       }
     },
     [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, createSessionFromSavedConfig, attachSessionToPane]
@@ -234,12 +239,14 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
       <SelectSessionDialog
         isOpen={showSessionDialog}
         onClose={() => {
+          if (isSubmitting) return;
           setShowSessionDialog(false);
           setPendingSplit(null);
           setDialogMode(null);
         }}
         onSelectSession={handleSelectSession}
         onSelectConfig={handleSelectConfig}
+        disabled={isSubmitting}
       />
     </>
   );

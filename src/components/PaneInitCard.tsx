@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { LocalSessionConfig, SSHSessionConfig, Session } from "../types/session";
 import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
@@ -25,6 +25,20 @@ export function PaneInitCard({
   } = useSession();
   const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+
+  const startSubmitting = () => {
+    if (isSubmittingRef.current) return false;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    return true;
+  };
+
+  const endSubmitting = () => {
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
+  };
 
   const handleCreate = async (create: () => Promise<Session>): Promise<Session> => {
     const session = await create();
@@ -47,33 +61,42 @@ export function PaneInitCard({
     handleCreate(() => createSshSessionOnly(config, save));
 
   const handleSelectSession = (sessionId: number) => {
+    if (!startSubmitting()) return;
     const session = sessions.find((s) => s.id === sessionId);
-    if (session) {
-      try {
-        onSessionCreated(session);
-      } catch (e) {
-        if (e instanceof Error && e.message === "Session is already used in another window") {
-          window.alert("Session is already used in another window");
-        } else {
-          throw e;
-        }
-      }
+    if (!session) {
+      endSubmitting();
+      return;
     }
-    setShowSelectDialog(false);
-  };
 
-  const handleSelectConfig = async (configId: string) => {
     try {
-      const session = await createSessionFromSavedConfig(configId);
       onSessionCreated(session);
+      setShowSelectDialog(false);
     } catch (e) {
       if (e instanceof Error && e.message === "Session is already used in another window") {
         window.alert("Session is already used in another window");
       } else {
-        console.error("Failed to create session from saved config:", e);
+        window.alert(`Failed to create session: ${e instanceof Error ? e.message : String(e)}`);
       }
+    } finally {
+      endSubmitting();
     }
-    setShowSelectDialog(false);
+  };
+
+  const handleSelectConfig = async (configId: string) => {
+    if (!startSubmitting()) return;
+    try {
+      const session = await createSessionFromSavedConfig(configId);
+      onSessionCreated(session);
+      setShowSelectDialog(false);
+    } catch (e) {
+      if (e instanceof Error && e.message === "Session is already used in another window") {
+        window.alert("Session is already used in another window");
+      } else {
+        window.alert(`Failed to create session: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    } finally {
+      endSubmitting();
+    }
   };
 
   return (
@@ -110,6 +133,7 @@ export function PaneInitCard({
         onClose={() => setShowSelectDialog(false)}
         onSelectSession={handleSelectSession}
         onSelectConfig={handleSelectConfig}
+        disabled={isSubmitting}
       />
     </div>
   );

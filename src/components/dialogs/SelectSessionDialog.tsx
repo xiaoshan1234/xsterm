@@ -7,6 +7,7 @@ interface SelectSessionDialogProps {
   onClose: () => void;
   onSelectSession: (sessionId: number) => void;
   onSelectConfig: (configId: string) => void;
+  disabled?: boolean;
 }
 
 export function SelectSessionDialog({
@@ -14,6 +15,7 @@ export function SelectSessionDialog({
   onClose,
   onSelectSession,
   onSelectConfig,
+  disabled = false,
 }: SelectSessionDialogProps) {
   const { sessions, savedConfigs, workspaces } = useSession();
 
@@ -63,6 +65,7 @@ export function SelectSessionDialog({
                     <li key={session.id}>
                       <button
                         className="select-session-item"
+                        disabled={disabled}
                         onClick={() => onSelectSession(session.id)}
                       >
                         <span className="select-session-name">{session.name}</span>
@@ -79,10 +82,11 @@ export function SelectSessionDialog({
                 <ul className="select-session-list">
                   {availableConfigs.map((config) => (
                     <li key={config.id}>
-                      <button
-                        className="select-session-item"
-                        onClick={() => onSelectConfig(config.id)}
-                      >
+                    <button
+                      className="select-session-item"
+                      disabled={disabled}
+                      onClick={() => onSelectConfig(config.id)}
+                    >
                         <span className="select-session-name">{config.name}</span>
                         <span className="select-session-type">{config.type}</span>
                       </button>
