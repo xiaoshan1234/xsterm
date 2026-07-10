@@ -99,3 +99,7 @@ There are **no** `npm run lint`, `npm run test`, or `npm run format` scripts. Th
 ## .gitignore Reminder
 
 `dist/`, `node_modules/`, `src-tauri/target/`, and `src-tauri/gen/` are ignored. Do not try to inspect or commit files inside them.
+
+## Bug Fix Documentation
+
+After a bug is fixed, update `doc/bug.md` with the root cause and the solution details. Mark the bug as resolved (`是否解决: YES`) and keep the record in the same format as existing entries.
