@@ -1,9 +1,30 @@
 import { useEffect, RefObject } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { listen } from "@tauri-apps/api/event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
+}
+
+// OSC52: ESC ] 52 ; [clipboard] ; <base64-data> ; terminated by BEL or ESC \
+const OSC52_REGEX = /\x1b\]52;[cps01234567*]?;([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)/g;
+
+function extractAndCopyOsc52(text: string): string {
+  const matches = text.matchAll(OSC52_REGEX);
+  for (const match of matches) {
+    const encoded = match[1];
+    if (!encoded || encoded.length === 0) continue;
+    try {
+      const decoded = atob(encoded);
+      writeText(decoded).catch((err) => {
+        console.error("[xsterm] Failed to write OSC52 selection to clipboard:", err);
+      });
+    } catch (err) {
+      console.error("[xsterm] Failed to decode OSC52 selection:", err);
+    }
+  }
+  return text.replace(OSC52_REGEX, "");
 }
 
 interface PendingWrite {
@@ -59,7 +80,7 @@ export function useTauriTerminalOutput(
     listen<[number, number[]]>("session-output", (event) => {
       const [id, data] = event.payload;
       if (id === sessionId) {
-        queueWrite(decodeOutput(data));
+        queueWrite(extractAndCopyOsc52(decodeOutput(data)));
       }
     })
       .then((fn) => {

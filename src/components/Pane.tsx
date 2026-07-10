@@ -33,6 +33,7 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
   const [pendingSplit, setPendingSplit] = useState<SplitDirection | null>(null);
+  const [isCopyMode, setIsCopyMode] = useState(false);
   const contextMenuRef = useRef<ContextMenuRef>(null);
   const terminalRef = useRef<TerminalRef>(null);
 
@@ -140,6 +141,10 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
     terminalRef.current?.clear();
   }, []);
 
+  const handleToggleCopyMode = useCallback(() => {
+    setIsCopyMode((prev) => !prev);
+  }, []);
+
   const handleSelectAll = useCallback(() => {
     terminalRef.current?.selectAll();
   }, []);
@@ -185,6 +190,10 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
       {
         label: "Clear Pane",
         onClick: handleClear,
+      },
+      {
+        label: isCopyMode ? "Exit Copy Mode" : "Copy Mode",
+        onClick: handleToggleCopyMode,
       }
     );
   }
@@ -218,8 +227,13 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
                   连接已经断开，输入回车重新进行连接
                 </div>
               )}
+              {isCopyMode && (
+                <div className="pane-copy-mode-banner">
+                  Copy Mode: drag to select, then Copy/Ctrl+Shift+C
+                </div>
+              )}
               <div className="pane-terminal-wrapper">
-                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} />
+                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} isCopyMode={isCopyMode} configId={session.configId} />
               </div>
             </div>
           ) : (

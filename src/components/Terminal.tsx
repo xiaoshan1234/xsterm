@@ -20,6 +20,7 @@ interface TerminalProps {
   isActive?: boolean;
   isWindowActive?: boolean;
   isConnected: boolean;
+  isCopyMode?: boolean;
   configId: string;
   onFocus?: () => void;
 }
@@ -38,7 +39,7 @@ const XTERM_OPTIONS = {
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
-  { sessionId, sessionType, isActive = true, isWindowActive = true, isConnected, configId: _configId, onFocus },
+  { sessionId, sessionType, isActive = true, isWindowActive = true, isConnected, isCopyMode = false, configId: _configId, onFocus },
   ref
 ) {
   // containerRef: xterm.js 的实际 DOM 挂载点，useXterm 会在此 div 内创建 Terminal 实例
@@ -78,6 +79,16 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   useEffect(() => {
     writeSessionRef.current = writeSession;
   }, [writeSession]);
+
+  useEffect(() => {
+    if (!isConnectedRef.current) return;
+    const sequence = isCopyMode
+      ? "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l"
+      : "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h\x1b[?1015h";
+    writeSessionRef.current(sessionId, sequence).catch((err) => {
+      console.error("[xsterm] Failed to toggle mouse tracking for copy mode:", err);
+    });
+  }, [isCopyMode, sessionId]);
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
