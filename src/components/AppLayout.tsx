@@ -94,9 +94,16 @@ export default function AppLayout() {
         <div className="main-area">
           {activeView === "settings" ? (
             <SettingsView activeCategory={activeSettingsCategory} />
-          ) : activeWorkspace ? (
-            <WorkspaceContainer workspace={activeWorkspace} commandPanelOpen={showCommandPanel} />
-          ) : null}
+          ) : (
+            workspaces.map((workspace) => (
+              <div
+                key={workspace.id}
+                className={`workspace-view ${workspace.id === activeWorkspaceId ? "workspace-view--active" : ""}`}
+              >
+                <WorkspaceContainer workspace={workspace} commandPanelOpen={showCommandPanel} />
+              </div>
+            ))
+          )}
           {activeWorkspace && activeView === "terminal" && (
           <WorkspaceBottomBar
             workspaceName={activeWorkspace.name}
