@@ -1,11 +1,14 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
 import { Session } from "../types/session";
+import { useDragResize } from "../hooks/useDragResize";
 import "./CommandSendPanel.css";
 
 interface CommandSendPanelProps {
   sessions: Session[];
   activeSessionId: number | null;
   writeSession: (id: number, data: string) => Promise<void>;
+  style?: CSSProperties;
+  onHeightChange?: (height: number) => void;
 }
 
 type SendMode = "text" | "hex";
@@ -17,6 +20,8 @@ export default function CommandSendPanel({
   sessions,
   activeSessionId,
   writeSession,
+  style,
+  onHeightChange,
 }: CommandSendPanelProps) {
   const [input, setInput] = useState("");
   const [sendMode, setSendMode] = useState<SendMode>("text");
@@ -55,6 +60,15 @@ export default function CommandSendPanel({
   const splitModeRef = useRef(splitMode);
   const writeSessionRef = useRef(writeSession);
   const getTargetSessionsRef = useRef(getTargetSessions);
+
+  const initialHeight = typeof style?.height === "number" ? style.height : 160;
+
+  const { start } = useDragResize({
+    direction: "vertical",
+    onDelta: ({ delta, initialValue }) => {
+      onHeightChange?.(initialValue + delta);
+    },
+  });
 
   useEffect(() => {
     breakpointsRef.current = breakpoints;
@@ -304,7 +318,11 @@ export default function CommandSendPanel({
   };
 
   return (
-    <div className="command-send-panel">
+    <div className="command-send-panel" style={style}>
+      <div
+        className="panel-resize-handle"
+        onMouseDown={(e) => start(initialHeight, e)}
+      />
       <div className="panel-row panel-controls">
         <div className="control-group">
           <button className="btn btn--primary panel-send" onClick={handleSend}>
@@ -440,6 +458,7 @@ export default function CommandSendPanel({
           onChange={(e) => setInput(e.target.value)}
           placeholder="Enter command or Hex data, click line number to set breakpoint..."
           spellCheck={false}
+          rows={Math.max(lines.length, 1)}
         />
       </div>
     </div>

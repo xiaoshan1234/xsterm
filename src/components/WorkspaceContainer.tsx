@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Workspace, PaneNode, Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import { PaneTree } from "./PaneTree";
@@ -47,6 +47,30 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
   const [renamingWindow, setRenamingWindow] = useState<{ id: string; name: string } | null>(null);
   const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [commandPanelHeight, setCommandPanelHeight] = useState(160);
+  const [maxPanelHeight, setMaxPanelHeight] = useState(800);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const updateMax = () => {
+      setMaxPanelHeight(el.clientHeight);
+    };
+
+    updateMax();
+
+    const observer = new ResizeObserver(updateMax);
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, []);
+
+  const handlePanelHeightChange = useCallback((newHeight: number) => {
+    setCommandPanelHeight(Math.min(Math.max(newHeight, 120), Math.max(maxPanelHeight, 120)));
+  }, [maxPanelHeight]);
 
   const handleActivatePane = useCallback(
     (windowId: string, paneId: string) => {
@@ -105,7 +129,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     : null;
 
   return (
-    <div className="workspace-container" onMouseDown={() => setActiveWorkspace(workspace.id)}>
+    <div className="workspace-container" ref={containerRef} onMouseDown={() => setActiveWorkspace(workspace.id)}>
       <WindowTabBar
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
@@ -147,6 +171,8 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
           sessions={sessions}
           activeSessionId={activeSessionId}
           writeSession={writeSession}
+          style={{ height: commandPanelHeight, minHeight: 120 }}
+          onHeightChange={handlePanelHeightChange}
         />
       )}
       {savingWindowId && (
