@@ -48,18 +48,6 @@
   flex-direction: column;
 }
 
-.panel-resize-handle {
-  height: 6px;
-  background: var(--border-color);
-  cursor: ns-resize;
-  flex-shrink: 0;
-  transition: background 0.15s;
-}
-
-.panel-resize-handle:hover {
-  background: var(--accent);
-}
-
 .terminal-pane {
   flex: 1;
   min-width: 0;

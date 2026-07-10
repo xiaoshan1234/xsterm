@@ -318,11 +318,23 @@ export default function CommandSendPanel({
   };
 
   return (
-    <div className="command-send-panel" style={style}>
-      <div
-        className="panel-resize-handle"
-        onMouseDown={(e) => start(initialHeight, e)}
-      />
+    <div
+      className="command-send-panel"
+      style={style}
+      onMouseDown={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        if (e.clientY - rect.top <= 6) {
+          start(initialHeight, e);
+        }
+      }}
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        e.currentTarget.style.cursor = e.clientY - rect.top <= 6 ? "ns-resize" : "";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.cursor = "";
+      }}
+    >
       <div className="panel-row panel-controls">
         <div className="control-group">
           <button className="btn btn--primary panel-send" onClick={handleSend}>
