@@ -66,7 +66,7 @@ export default function CommandSendPanel({
   const { start } = useDragResize({
     direction: "vertical",
     onDelta: ({ delta, initialValue }) => {
-      onHeightChange?.(initialValue + delta);
+      onHeightChange?.(initialValue - delta);
     },
   });
 
