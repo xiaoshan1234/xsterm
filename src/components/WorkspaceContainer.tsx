@@ -109,25 +109,6 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     }
   }, [workspace.name, workspace.id, saveWorkspace]);
 
-  const activeSessionId = activeWindow
-    ? (() => {
-        const findActiveSession = (node: typeof activeWindow.rootPane): number | null => {
-          if (node.type === "leaf") return node.sessionId ?? null;
-          for (const child of node.children ?? []) {
-            const found = findActiveSession(child);
-            if (found !== null) return found;
-          }
-          return null;
-        };
-        return activeWindow.activePaneId
-          ? (() => {
-              const node = findPane(activeWindow.rootPane, activeWindow.activePaneId);
-              return node?.sessionId ?? findActiveSession(activeWindow.rootPane);
-            })()
-          : findActiveSession(activeWindow.rootPane);
-      })()
-    : null;
-
   return (
     <div className="workspace-container" ref={containerRef} onMouseDown={() => setActiveWorkspace(workspace.id)}>
       <WindowTabBar
@@ -168,8 +149,8 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
       ))}
       {commandPanelOpen && (
         <CommandSendPanel
+          workspace={workspace}
           sessions={sessions}
-          activeSessionId={activeSessionId}
           writeSession={writeSession}
           style={{ height: commandPanelHeight, minHeight: 120 }}
           onHeightChange={handlePanelHeightChange}
@@ -315,15 +296,4 @@ function WindowTab({ window, isActive, onSelect, onSave, onRename, onClose }: Wi
       </div>
     </ContextMenu>
   );
-}
-
-function findPane(root: PaneNode, id: string): PaneNode | null {
-  if (root.id === id) return root;
-  if (root.children) {
-    for (const child of root.children) {
-      const found = findPane(child, id);
-      if (found) return found;
-    }
-  }
-  return null;
 }

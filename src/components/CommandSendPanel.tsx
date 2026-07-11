@@ -1,23 +1,58 @@
 import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
-import { Session } from "../types/session";
+import { Session, Workspace, PaneNode, Window } from "../types/session";
 import { useDragResize } from "../hooks/useDragResize";
+import { forEachPane, findPaneNode, findFirstLeafWithSession } from "../contexts/session/paneUtils";
 import "./CommandSendPanel.css";
 
 interface CommandSendPanelProps {
+  workspace: Workspace;
   sessions: Session[];
-  activeSessionId: number | null;
   writeSession: (id: number, data: string) => Promise<void>;
   style?: CSSProperties;
   onHeightChange?: (height: number) => void;
 }
 
 type SplitMode = "line" | "character";
-type TargetMode = "current" | "all" | number;
 type RunState = "idle" | "running" | "paused";
 
+function getLeafPanesWithSession(root: PaneNode): PaneNode[] {
+  const panes: PaneNode[] = [];
+  forEachPane(root, (node) => {
+    if (node.type === "leaf" && node.sessionId !== undefined) {
+      panes.push(node);
+    }
+  });
+  return panes;
+}
+
+function getDefaultPaneId(window: Window): string | null {
+  if (window.activePaneId) {
+    const pane = findPaneNode(window.rootPane, window.activePaneId);
+    if (pane?.type === "leaf" && pane.sessionId !== undefined) {
+      return pane.id;
+    }
+  }
+  return findFirstLeafWithSession(window.rootPane)?.id ?? null;
+}
+
+function getFallbackSelection(workspace: Workspace): { windowId: string; paneId: string | null } {
+  const windowsWithTargets = workspace.windows.filter(
+    (w) => getLeafPanesWithSession(w.rootPane).length > 0
+  );
+  if (windowsWithTargets.length === 0) {
+    return { windowId: "", paneId: null };
+  }
+  const activeWindow = windowsWithTargets.find((w) => w.id === workspace.activeWindowId);
+  if (activeWindow) {
+    return { windowId: activeWindow.id, paneId: getDefaultPaneId(activeWindow) };
+  }
+  const firstWindow = windowsWithTargets[0];
+  return { windowId: firstWindow.id, paneId: getDefaultPaneId(firstWindow) };
+}
+
 export default function CommandSendPanel({
+  workspace,
   sessions,
-  activeSessionId,
   writeSession,
   style,
   onHeightChange,
@@ -26,7 +61,8 @@ export default function CommandSendPanel({
   const [splitMode, setSplitMode] = useState<SplitMode>("line");
   const [count, setCount] = useState(1);
   const [intervalMs, setIntervalMs] = useState(1000);
-  const [target, setTarget] = useState<TargetMode>("current");
+  const [targetWindowId, setTargetWindowId] = useState<string>(() => getFallbackSelection(workspace).windowId);
+  const [targetPaneId, setTargetPaneId] = useState<string | null>(() => getFallbackSelection(workspace).paneId);
   const [runState, setRunState] = useState<RunState>("idle");
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
 
@@ -43,14 +79,14 @@ export default function CommandSendPanel({
   const isContinuingRef = useRef(false);
 
   const getTargetSessions = useCallback((): number[] => {
-    if (target === "current") {
-      return activeSessionId !== null ? [activeSessionId] : [];
+    const selectedWindow = workspace.windows.find((w) => w.id === targetWindowId);
+    if (!selectedWindow) return [];
+    const pane = targetPaneId ? findPaneNode(selectedWindow.rootPane, targetPaneId) : null;
+    if (pane && pane.type === "leaf" && pane.sessionId !== undefined) {
+      return [pane.sessionId];
     }
-    if (target === "all") {
-      return sessions.filter((s) => s.is_connected).map((s) => s.id);
-    }
-    return [target as number];
-  }, [target, activeSessionId, sessions]);
+    return [];
+  }, [workspace, targetWindowId, targetPaneId]);
 
   const breakpointsRef = useRef(breakpoints);
   const countRef = useRef(count);
@@ -76,6 +112,27 @@ export default function CommandSendPanel({
     writeSessionRef.current = writeSession;
     getTargetSessionsRef.current = getTargetSessions;
   });
+
+  useEffect(() => {
+    const selectedWindow = workspace.windows.find((w) => w.id === targetWindowId);
+    if (!selectedWindow) {
+      const { windowId, paneId } = getFallbackSelection(workspace);
+      setTargetWindowId(windowId);
+      setTargetPaneId(paneId);
+      return;
+    }
+    const panes = getLeafPanesWithSession(selectedWindow.rootPane);
+    if (panes.length === 0) {
+      const { windowId, paneId } = getFallbackSelection(workspace);
+      setTargetWindowId(windowId);
+      setTargetPaneId(paneId);
+      return;
+    }
+    const paneExists = panes.some((p) => p.id === targetPaneId);
+    if (!paneExists) {
+      setTargetPaneId(getDefaultPaneId(selectedWindow));
+    }
+  }, [workspace, targetWindowId, targetPaneId]);
 
   const parseChunks = useCallback((): { chunks: string[]; chunkToLineIndex: number[] } => {
     if (!input.trim()) {
@@ -279,6 +336,9 @@ export default function CommandSendPanel({
   const lines = input.split("\n");
   const activeLineIndex = currentLineIndex();
 
+  const selectedWindow = workspace.windows.find((w) => w.id === targetWindowId);
+  const paneOptions = selectedWindow ? getLeafPanesWithSession(selectedWindow.rootPane) : [];
+
   const renderGutter = () => {
     return (
       <div className="panel-gutter" ref={gutterRef}>
@@ -398,29 +458,40 @@ export default function CommandSendPanel({
 
         <div className="control-group form-field">
           <label className="input-label">
-            <span>Target</span>
+            <span>Window</span>
             <select
-              value={
-                target === "current"
-                  ? "current"
-                  : target === "all"
-                  ? "all"
-                  : String(target)
-              }
+              value={targetWindowId}
               onChange={(e) => {
-                const val = e.target.value;
-                if (val === "current") setTarget("current");
-                else if (val === "all") setTarget("all");
-                else setTarget(parseInt(val));
+                const newWindowId = e.target.value;
+                setTargetWindowId(newWindowId);
+                const newWindow = workspace.windows.find((w) => w.id === newWindowId);
+                setTargetPaneId(newWindow ? getDefaultPaneId(newWindow) : null);
               }}
             >
-              <option value="current">Current</option>
-              <option value="all">All</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.name}
+              {workspace.windows.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
                 </option>
               ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="control-group form-field">
+          <label className="input-label">
+            <span>Pane</span>
+            <select
+              value={targetPaneId ?? ""}
+              onChange={(e) => setTargetPaneId(e.target.value || null)}
+            >
+              {paneOptions.map((pane) => {
+                const session = sessions.find((s) => s.id === pane.sessionId);
+                return (
+                  <option key={pane.id} value={pane.id}>
+                    {session?.name ?? pane.id}
+                  </option>
+                );
+              })}
             </select>
           </label>
         </div>
