@@ -56,6 +56,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   const isConnectedRef = useRef(isConnected);
   const isReconnectingRef = useRef(false);
   const reconnectSessionRef = useRef(reconnectSession);
+  const lastKeyboardPasteRef = useRef<{ time: number; text: string } | null>(null);
 
   useEffect(() => {
     isFocusedRef.current = isActive;
@@ -81,6 +82,13 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
+      const lastKeyboardPaste = lastKeyboardPasteRef.current;
+      if (lastKeyboardPaste && Date.now() - lastKeyboardPaste.time < 100) {
+        e.preventDefault();
+        lastKeyboardPasteRef.current = null;
+        return;
+      }
+
       if (sessionType !== "ssh") return;
 
       const target = e.target as Node | null;
@@ -137,6 +145,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (pasteShortcut && isConnectedRef.current) {
         readText().then((text) => {
           if (text) {
+            lastKeyboardPasteRef.current = { time: Date.now(), text };
             writeSessionRef.current(sessionId, text);
           }
         }).catch((err) => {
