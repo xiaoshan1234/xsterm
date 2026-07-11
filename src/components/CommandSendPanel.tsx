@@ -11,7 +11,6 @@ interface CommandSendPanelProps {
   onHeightChange?: (height: number) => void;
 }
 
-type SendMode = "text" | "hex";
 type SplitMode = "line" | "character";
 type TargetMode = "current" | "all" | number;
 type RunState = "idle" | "running" | "paused";
@@ -24,13 +23,11 @@ export default function CommandSendPanel({
   onHeightChange,
 }: CommandSendPanelProps) {
   const [input, setInput] = useState("");
-  const [sendMode, setSendMode] = useState<SendMode>("text");
   const [splitMode, setSplitMode] = useState<SplitMode>("line");
   const [count, setCount] = useState(1);
-  const [interval, setIntervalSec] = useState(1.0);
+  const [intervalMs, setIntervalMs] = useState(1000);
   const [target, setTarget] = useState<TargetMode>("current");
   const [runState, setRunState] = useState<RunState>("idle");
-  const [hexError, setHexError] = useState<string | null>(null);
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
 
   const stopRef = useRef(false);
@@ -42,6 +39,8 @@ export default function CommandSendPanel({
   const repetitionRef = useRef(0);
   const chunksRef = useRef<string[]>([]);
   const chunkToLineIndexRef = useRef<number[]>([]);
+  const hasUserSetIntervalRef = useRef(false);
+  const isContinuingRef = useRef(false);
 
   const getTargetSessions = useCallback((): number[] => {
     if (target === "current") {
@@ -55,8 +54,7 @@ export default function CommandSendPanel({
 
   const breakpointsRef = useRef(breakpoints);
   const countRef = useRef(count);
-  const intervalValueRef = useRef(interval);
-  const sendModeRef = useRef(sendMode);
+  const intervalValueRef = useRef(intervalMs);
   const splitModeRef = useRef(splitMode);
   const writeSessionRef = useRef(writeSession);
   const getTargetSessionsRef = useRef(getTargetSessions);
@@ -73,37 +71,15 @@ export default function CommandSendPanel({
   useEffect(() => {
     breakpointsRef.current = breakpoints;
     countRef.current = count;
-    intervalValueRef.current = interval;
-    sendModeRef.current = sendMode;
+    intervalValueRef.current = intervalMs;
     splitModeRef.current = splitMode;
     writeSessionRef.current = writeSession;
     getTargetSessionsRef.current = getTargetSessions;
   });
 
   const parseChunks = useCallback((): { chunks: string[]; chunkToLineIndex: number[] } => {
-    setHexError(null);
-
     if (!input.trim()) {
       return { chunks: [], chunkToLineIndex: [] };
-    }
-
-    if (sendMode === "hex") {
-      const hexStr = input.replace(/\s+/g, "");
-      if (hexStr.length % 2 !== 0) {
-        setHexError("Hex input must have even number of characters");
-        return { chunks: [], chunkToLineIndex: [] };
-      }
-      const validHex = /^[0-9a-fA-F]*$/;
-      if (!validHex.test(hexStr)) {
-        setHexError("Invalid hex characters detected");
-        return { chunks: [], chunkToLineIndex: [] };
-      }
-      const chunks: string[] = [];
-      for (let i = 0; i < hexStr.length; i += 2) {
-        const byte = parseInt(hexStr.substring(i, i + 2), 16);
-        chunks.push(String.fromCharCode(byte));
-      }
-      return { chunks, chunkToLineIndex: [] };
     }
 
     if (splitMode === "line") {
@@ -120,7 +96,7 @@ export default function CommandSendPanel({
     }
 
     return { chunks: input.split("").filter((c) => c.length > 0), chunkToLineIndex: [] };
-  }, [input, sendMode, splitMode]);
+  }, [input, splitMode]);
 
   const currentLineIndex = useCallback((): number | null => {
     const idx = chunkIndexRef.current;
@@ -138,6 +114,7 @@ export default function CommandSendPanel({
   const resetExecution = useCallback(() => {
     clearTimer();
     stopRef.current = true;
+    isContinuingRef.current = false;
     chunkIndexRef.current = 0;
     repetitionRef.current = 0;
     chunksRef.current = [];
@@ -167,8 +144,7 @@ export default function CommandSendPanel({
       }
     }
 
-    const dataToSend =
-      sendModeRef.current === "text" && splitModeRef.current === "line" ? chunk + "\r\n" : chunk;
+    const dataToSend = splitModeRef.current === "line" ? chunk + "\r\n" : chunk;
 
     const sessionIds = getTargetSessionsRef.current();
     sessionIds.forEach((id) => {
@@ -190,7 +166,7 @@ export default function CommandSendPanel({
 
     const currentInterval = intervalValueRef.current;
     if (currentInterval > 0) {
-      intervalRef.current = setTimeout(runNext, currentInterval * 1000);
+      intervalRef.current = setTimeout(runNext, currentInterval);
     } else {
       intervalRef.current = setTimeout(runNext, 0);
     }
@@ -213,22 +189,9 @@ export default function CommandSendPanel({
     runNext();
   }, [parseChunks, getTargetSessions, runNext]);
 
-  const handleSend = useCallback(() => {
-    resetExecution();
-    startExecution();
-  }, [resetExecution, startExecution]);
-
-  const handleStop = useCallback(() => {
-    resetExecution();
-  }, [resetExecution]);
-
-  const handlePlay = useCallback(() => {
-    resetExecution();
-    startExecution();
-  }, [resetExecution, startExecution]);
-
   const handleContinue = useCallback(() => {
-    if (runState !== "paused") return;
+    if (runState !== "paused" || isContinuingRef.current) return;
+    isContinuingRef.current = true;
 
     const chunks = chunksRef.current;
     const chunkIndex = chunkIndexRef.current;
@@ -239,8 +202,7 @@ export default function CommandSendPanel({
     }
 
     const chunk = chunks[chunkIndex];
-    const dataToSend =
-      sendMode === "text" && splitMode === "line" ? chunk + "\r\n" : chunk;
+    const dataToSend = splitMode === "line" ? chunk + "\r\n" : chunk;
 
     const sessionIds = getTargetSessions();
     sessionIds.forEach((id) => {
@@ -261,12 +223,36 @@ export default function CommandSendPanel({
     setRunState("running");
     stopRef.current = false;
 
-    if (interval > 0) {
-      intervalRef.current = setTimeout(runNext, interval * 1000);
+    isContinuingRef.current = false;
+
+    if (intervalMs > 0) {
+      intervalRef.current = setTimeout(runNext, intervalMs);
     } else {
       intervalRef.current = setTimeout(runNext, 0);
     }
-  }, [count, getTargetSessions, interval, resetExecution, runNext, runState, sendMode, splitMode, writeSession]);
+  }, [count, getTargetSessions, intervalMs, resetExecution, runNext, runState, splitMode, writeSession]);
+
+  const handleStop = useCallback(() => {
+    if (runState === "running" || runState === "paused") {
+      isContinuingRef.current = false;
+      resetExecution();
+    }
+  }, [resetExecution, runState]);
+
+  const handlePlay = useCallback(() => {
+    if (runState === "running") return;
+    if (runState === "paused") {
+      handleContinue();
+      return;
+    }
+    startExecution();
+  }, [handleContinue, runState, startExecution]);
+
+  useEffect(() => {
+    if (!hasUserSetIntervalRef.current) {
+      setIntervalMs(splitMode === "line" ? 1000 : 20);
+    }
+  }, [splitMode]);
 
   useEffect(() => {
     return () => {
@@ -337,49 +323,27 @@ export default function CommandSendPanel({
     >
       <div className="panel-row panel-controls">
         <div className="control-group">
-          <button className="btn btn--primary panel-send" onClick={handleSend}>
-            Send
+          <button
+            className="btn btn--secondary"
+            onClick={handlePlay}
+            disabled={runState === "running"}
+            title={runState === "paused" ? "Continue" : "Play"}
+          >
+            ▶
           </button>
-          {runState === "running" ? (
-            <button className="btn btn--secondary" onClick={handleStop}>
-              ■
-            </button>
-          ) : runState === "paused" ? (
-            <button className="btn btn--secondary panel-continue" onClick={handleContinue}>
-              Continue
-            </button>
-          ) : (
-            <button className="btn btn--secondary" onClick={handlePlay}>
-              ▶
-            </button>
-          )}
+          <button
+            className={`btn btn--secondary ${runState !== "idle" ? "panel-stop--running" : ""}`}
+            onClick={handleStop}
+            title="Stop"
+          >
+            ■
+          </button>
           <button className="btn btn--secondary" onClick={() => adjustCount(1)}>
             +
           </button>
           <button className="btn btn--secondary" onClick={() => adjustCount(-1)}>
             −
           </button>
-        </div>
-
-        <div className="control-group">
-          <label className="radio-label">
-            <input
-              type="radio"
-              name="sendMode"
-              checked={sendMode === "text"}
-              onChange={() => setSendMode("text")}
-            />
-            <span>Text</span>
-          </label>
-          <label className="radio-label">
-            <input
-              type="radio"
-              name="sendMode"
-              checked={sendMode === "hex"}
-              onChange={() => setSendMode("hex")}
-            />
-            <span>Hex</span>
-          </label>
         </div>
 
         <div className="control-group">
@@ -421,11 +385,14 @@ export default function CommandSendPanel({
             <input
               type="number"
               min={0}
-              step={0.1}
-              value={interval}
-              onChange={(e) => setIntervalSec(Math.max(0, parseFloat(e.target.value) || 0))}
+              step={1}
+              value={intervalMs}
+              onChange={(e) => {
+                hasUserSetIntervalRef.current = true;
+                setIntervalMs(Math.max(0, parseInt(e.target.value) || 0));
+              }}
             />
-            <span className="unit">s</span>
+            <span className="unit">ms</span>
           </label>
         </div>
 
@@ -457,8 +424,6 @@ export default function CommandSendPanel({
             </select>
           </label>
         </div>
-
-        {hexError && <span className="hex-error">{hexError}</span>}
       </div>
 
       <div className="panel-row panel-editor">
@@ -468,7 +433,7 @@ export default function CommandSendPanel({
           className="panel-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Enter command or Hex data, click line number to set breakpoint..."
+          placeholder="Enter command data, click line number to set breakpoint..."
           spellCheck={false}
           rows={Math.max(lines.length, 1)}
         />

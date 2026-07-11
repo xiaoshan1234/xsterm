@@ -24,22 +24,20 @@
 }
 
 .panel-controls .btn {
-  padding: 4px 10px;
+  padding: 4px 8px;
   font-size: 12px;
+  min-width: 32px;
+  min-height: 28px;
+  box-sizing: border-box;
 }
 
-.panel-send {
-  min-width: 48px;
+.panel-stop--running {
+  background: var(--error-bg, rgba(239, 68, 68, 0.15));
+  color: var(--error, #ef4444);
 }
 
-.panel-continue {
-  min-width: 48px;
-  background: var(--success-bg, rgba(34, 197, 94, 0.15));
-  color: var(--success, #22c55e);
-}
-
-.panel-continue:hover {
-  background: var(--success, #22c55e);
+.panel-stop--running:hover {
+  background: var(--error, #ef4444);
   color: var(--bg-primary, #ffffff);
 }
 
@@ -226,13 +224,4 @@
 .unit {
   color: var(--text-muted);
   font-size: 11px;
-}
-
-.hex-error {
-  color: var(--error);
-  font-size: 11px;
-  padding: 2px 6px;
-  background: var(--error-bg);
-  border-radius: 4px;
-  white-space: nowrap;
 }
