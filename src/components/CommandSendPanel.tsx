@@ -334,7 +334,12 @@ export default function CommandSendPanel({
   const activeLineIndex = currentLineIndex();
 
   const selectedWindow = workspace.windows.find((w) => w.id === targetWindowId);
-  const paneOptions = selectedWindow ? getLeafPanesWithSession(selectedWindow.rootPane) : [];
+  const paneOptions = selectedWindow
+    ? getLeafPanesWithSession(selectedWindow.rootPane).map((pane) => ({
+        pane,
+        number: getPaneNumber(selectedWindow.rootPane, pane.id),
+      }))
+    : [];
 
   const renderGutter = () => {
     return (
@@ -487,9 +492,8 @@ export default function CommandSendPanel({
               onChange={(e) => setTargetPaneId(e.target.value || null)}
             >
               <option value="active">Active</option>
-              {paneOptions.map((pane) => {
+              {paneOptions.map(({ pane, number }) => {
                 const session = sessions.find((s) => s.id === pane.sessionId);
-                const number = getPaneNumber(selectedWindow.rootPane, pane.id);
                 return (
                   <option key={pane.id} value={pane.id}>
                     #{number} {session?.name ?? pane.id}
