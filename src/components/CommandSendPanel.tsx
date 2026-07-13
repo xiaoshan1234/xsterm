@@ -35,21 +35,6 @@ function getDefaultPaneId(window: Window): string | null {
   return findFirstLeafWithSession(window.rootPane)?.id ?? null;
 }
 
-function getFallbackSelection(workspace: Workspace): { windowId: string; paneId: string | null } {
-  const windowsWithTargets = workspace.windows.filter(
-    (w) => getLeafPanesWithSession(w.rootPane).length > 0
-  );
-  if (windowsWithTargets.length === 0) {
-    return { windowId: "", paneId: null };
-  }
-  const activeWindow = windowsWithTargets.find((w) => w.id === workspace.activeWindowId);
-  if (activeWindow) {
-    return { windowId: activeWindow.id, paneId: getDefaultPaneId(activeWindow) };
-  }
-  const firstWindow = windowsWithTargets[0];
-  return { windowId: firstWindow.id, paneId: getDefaultPaneId(firstWindow) };
-}
-
 export default function CommandSendPanel({
   workspace,
   sessions,
@@ -61,8 +46,8 @@ export default function CommandSendPanel({
   const [splitMode, setSplitMode] = useState<SplitMode>("line");
   const [count, setCount] = useState(1);
   const [intervalMs, setIntervalMs] = useState(1000);
-  const [targetWindowId, setTargetWindowId] = useState<string>(() => getFallbackSelection(workspace).windowId);
-  const [targetPaneId, setTargetPaneId] = useState<string | null>(() => getFallbackSelection(workspace).paneId);
+  const [targetWindowId, setTargetWindowId] = useState<string>("active");
+  const [targetPaneId, setTargetPaneId] = useState<string | null>("active");
   const [runState, setRunState] = useState<RunState>("idle");
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
 
@@ -79,9 +64,16 @@ export default function CommandSendPanel({
   const isContinuingRef = useRef(false);
 
   const getTargetSessions = useCallback((): number[] => {
-    const selectedWindow = workspace.windows.find((w) => w.id === targetWindowId);
+    const resolvedWindowId =
+      targetWindowId === "active" ? workspace.activeWindowId : targetWindowId;
+    const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
     if (!selectedWindow) return [];
-    const pane = targetPaneId ? findPaneNode(selectedWindow.rootPane, targetPaneId) : null;
+
+    const resolvedPaneId =
+      targetPaneId === "active" ? selectedWindow.activePaneId : targetPaneId;
+    const pane = resolvedPaneId
+      ? findPaneNode(selectedWindow.rootPane, resolvedPaneId)
+      : null;
     if (pane && pane.type === "leaf" && pane.sessionId !== undefined) {
       return [pane.sessionId];
     }
@@ -114,23 +106,28 @@ export default function CommandSendPanel({
   });
 
   useEffect(() => {
-    const selectedWindow = workspace.windows.find((w) => w.id === targetWindowId);
+    const resolvedWindowId =
+      targetWindowId === "active" ? workspace.activeWindowId : targetWindowId;
+    const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
+
     if (!selectedWindow) {
-      const { windowId, paneId } = getFallbackSelection(workspace);
-      setTargetWindowId(windowId);
-      setTargetPaneId(paneId);
+      setTargetWindowId("active");
+      setTargetPaneId("active");
       return;
     }
+
     const panes = getLeafPanesWithSession(selectedWindow.rootPane);
     if (panes.length === 0) {
-      const { windowId, paneId } = getFallbackSelection(workspace);
-      setTargetWindowId(windowId);
-      setTargetPaneId(paneId);
+      setTargetWindowId("active");
+      setTargetPaneId("active");
       return;
     }
-    const paneExists = panes.some((p) => p.id === targetPaneId);
-    if (!paneExists) {
-      setTargetPaneId(getDefaultPaneId(selectedWindow));
+
+    if (targetPaneId !== "active") {
+      const paneExists = panes.some((p) => p.id === targetPaneId);
+      if (!paneExists) {
+        setTargetPaneId("active");
+      }
     }
   }, [workspace, targetWindowId, targetPaneId]);
 
@@ -464,10 +461,15 @@ export default function CommandSendPanel({
               onChange={(e) => {
                 const newWindowId = e.target.value;
                 setTargetWindowId(newWindowId);
-                const newWindow = workspace.windows.find((w) => w.id === newWindowId);
-                setTargetPaneId(newWindow ? getDefaultPaneId(newWindow) : null);
+                if (newWindowId === "active") {
+                  setTargetPaneId("active");
+                } else {
+                  const newWindow = workspace.windows.find((w) => w.id === newWindowId);
+                  setTargetPaneId(newWindow ? getDefaultPaneId(newWindow) : null);
+                }
               }}
             >
+              <option value="active">Active</option>
               {workspace.windows.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}
@@ -484,6 +486,7 @@ export default function CommandSendPanel({
               value={targetPaneId ?? ""}
               onChange={(e) => setTargetPaneId(e.target.value || null)}
             >
+              <option value="active">Active</option>
               {paneOptions.map((pane) => {
                 const session = sessions.find((s) => s.id === pane.sessionId);
                 const number = getPaneNumber(selectedWindow.rootPane, pane.id);
