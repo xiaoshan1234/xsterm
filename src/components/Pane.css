@@ -28,17 +28,18 @@
 
 .pane-number-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   z-index: 20;
-  padding: 2px 6px;
-  font-size: 11px;
+  padding: 1px 4px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
+  line-height: 1;
+  color: var(--text-muted);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 3px;
   pointer-events: none;
   user-select: none;
-  opacity: 0.85;
+  opacity: 0.9;
+  width: auto;
 }

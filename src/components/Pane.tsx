@@ -3,6 +3,7 @@ import { PaneNode, SplitDirection, Workspace } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import * as paneTree from "../utils/paneTree";
 import { isSessionUsedInOtherWindow, getPaneNumber } from "../contexts/session/paneUtils";
+import { useTheme } from "../contexts/ThemeContext";
 import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -30,6 +31,7 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
     createSessionFromSavedConfig,
     updateWindowPaneTree,
   } = useSession();
+  const { currentTheme } = useTheme();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
   const [pendingSplit, setPendingSplit] = useState<SplitDirection | null>(null);
@@ -219,7 +221,12 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
           onContextMenuCapture={handleContextMenuCapture}
         >
           {paneNumber !== null && (
-            <div className="pane-number-badge">{paneNumber}</div>
+            <div
+              className="pane-number-badge"
+              style={{ background: currentTheme.background }}
+            >
+              {paneNumber}
+            </div>
           )}
           {session ? (
             <div className="pane-session-container">
