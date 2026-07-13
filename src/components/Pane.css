@@ -26,7 +26,7 @@
   min-height: 0;
 }
 
-.pane-number-badge {
+.workspace-pane .pane-number-badge {
   position: absolute;
   top: 4px;
   right: 4px;
