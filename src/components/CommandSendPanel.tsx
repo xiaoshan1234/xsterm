@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
 import { Session, Workspace, PaneNode, Window } from "../types/session";
 import { useDragResize } from "../hooks/useDragResize";
-import { forEachPane, findPaneNode, findFirstLeafWithSession } from "../contexts/session/paneUtils";
+import { forEachPane, findPaneNode, findFirstLeafWithSession, getPaneNumber } from "../contexts/session/paneUtils";
 import "./CommandSendPanel.css";
 
 interface CommandSendPanelProps {
@@ -486,9 +486,10 @@ export default function CommandSendPanel({
             >
               {paneOptions.map((pane) => {
                 const session = sessions.find((s) => s.id === pane.sessionId);
+                const number = getPaneNumber(selectedWindow.rootPane, pane.id);
                 return (
                   <option key={pane.id} value={pane.id}>
-                    {session?.name ?? pane.id}
+                    #{number} {session?.name ?? pane.id}
                   </option>
                 );
               })}

@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { PaneNode, SplitDirection, Workspace } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import * as paneTree from "../utils/paneTree";
-import { isSessionUsedInOtherWindow } from "../contexts/session/paneUtils";
+import { isSessionUsedInOtherWindow, getPaneNumber } from "../contexts/session/paneUtils";
 import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -51,6 +51,8 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
   };
 
   const session = pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
+  const selectedWindow = workspace.windows.find((w) => w.id === windowId);
+  const paneNumber = selectedWindow ? getPaneNumber(selectedWindow.rootPane, pane.id) : null;
 
   const handleStartSplit = useCallback((direction: SplitDirection) => {
     setPendingSplit(direction);
@@ -216,6 +218,9 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
           onMouseDown={onActivate}
           onContextMenuCapture={handleContextMenuCapture}
         >
+          {paneNumber !== null && (
+            <div className="pane-number-badge">{paneNumber}</div>
+          )}
           {session ? (
             <div className="pane-session-container">
               {!session.is_connected && (

@@ -205,6 +205,21 @@ export function collectSessionIdsFromWorkspace(workspace: Workspace): number[] {
   return Array.from(ids);
 }
 
+export function getPaneNumberMap(root: PaneNode): Map<string, number> {
+  const map = new Map<string, number>();
+  let number = 1;
+  forEachPane(root, (node) => {
+    if (node.type === "leaf") {
+      map.set(node.id, number++);
+    }
+  });
+  return map;
+}
+
+export function getPaneNumber(root: PaneNode, paneId: string): number | null {
+  return getPaneNumberMap(root).get(paneId) ?? null;
+}
+
 export function withRecomputedSessionIds(workspace: Workspace): Workspace {
   return {
     ...workspace,
