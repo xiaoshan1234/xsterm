@@ -84,9 +84,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     async (e: ClipboardEvent) => {
       const lastKeyboardPaste = lastKeyboardPasteRef.current;
       if (lastKeyboardPaste && Date.now() - lastKeyboardPaste.time < 100) {
-        e.preventDefault();
-        lastKeyboardPasteRef.current = null;
-        return;
+        const text = e.clipboardData?.getData("text");
+        if (text) {
+          e.preventDefault();
+          lastKeyboardPasteRef.current = null;
+          return;
+        }
       }
 
       if (sessionType !== "ssh") return;
@@ -143,6 +146,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         (event.metaKey && (event.key === "v" || event.key === "V"));
 
       if (pasteShortcut && isConnectedRef.current) {
+        lastKeyboardPasteRef.current = { time: Date.now(), text: "" };
         readText().then((text) => {
           if (text) {
             lastKeyboardPasteRef.current = { time: Date.now(), text };

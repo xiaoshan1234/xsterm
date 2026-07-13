@@ -37,9 +37,10 @@ Terminal组件同时存在两条独立的粘贴数据路径：
 2. 浏览器的原生 `paste` 事件仍然会被 xterm.js 内部处理，触发 `onData`，再次调用 `writeSession` 发送同样的数据。
 当键盘快捷键粘贴后浏览器仍然触发 `paste` 事件时（如 macOS 上 `Cmd+V`），同一份文本被发送两次，后端回显后终端显示双倍内容。
 ## 解决方案
-1. 在 `src/components/Terminal.tsx` 中新增 `lastKeyboardPasteRef`，在键盘快捷键粘贴成功时记录时间戳和文本。
-2. 在 document 级别的 `paste` 事件处理器 `handlePaste` 中，检测到最近 100ms 内已处理过键盘粘贴时，调用 `e.preventDefault()` 阻止 xterm.js 再次处理该粘贴事件，从而避免重复写入。
-3. 保留原有的 SSH 图片粘贴逻辑，仅在非键盘触发的粘贴事件（如右键粘贴）中继续处理图片。
+1. 在 `src/components/Terminal.tsx` 中新增 `lastKeyboardPasteRef`。
+2. 在 `attachCustomKeyEventHandler` 的粘贴快捷键分支中**同步**设置 `lastKeyboardPasteRef.current`（而不是在异步的 `readText().then` 中设置），确保后续浏览器原生 `paste` 事件能检测到已处理过键盘粘贴。
+3. 在 document 级别的 `paste` 事件处理器 `handlePaste` 中，检测到最近 100ms 内已处理过键盘粘贴**且剪贴板包含文本**时，调用 `e.preventDefault()` 阻止 xterm.js 再次处理该文本粘贴事件。
+4. 如果剪贴板中是图片（无文本），不阻止原生 `paste` 事件，继续走原有的 SSH 图片粘贴逻辑。
 ## 是否解决
 YES
 
