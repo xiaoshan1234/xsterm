@@ -82,21 +82,30 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
-      const lastKeyboardPaste = lastKeyboardPasteRef.current;
-      if (lastKeyboardPaste && Date.now() - lastKeyboardPaste.time < 100) {
-        const text = e.clipboardData?.getData("text");
-        if (text) {
-          e.preventDefault();
-          lastKeyboardPasteRef.current = null;
-          return;
-        }
-      }
-
-      if (sessionType !== "ssh") return;
-
       const target = e.target as Node | null;
       const container = containerRef.current;
       if (!container || !target || !container.contains(target)) return;
+
+      const text = e.clipboardData?.getData("text") || e.clipboardData?.getData("text/plain");
+
+      const lastKeyboardPaste = lastKeyboardPasteRef.current;
+      if (lastKeyboardPaste && Date.now() - lastKeyboardPaste.time < 100) {
+        if (text) {
+          e.preventDefault();
+        }
+        lastKeyboardPasteRef.current = null;
+        return;
+      }
+
+      if (text) {
+        e.preventDefault();
+        if (isConnectedRef.current) {
+          writeSessionRef.current(sessionId, text);
+        }
+        return;
+      }
+
+      if (sessionType !== "ssh") return;
 
       const imageItems = await getClipboardImages(e);
       if (imageItems.length === 0) return;
