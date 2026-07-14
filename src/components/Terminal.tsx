@@ -92,6 +92,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (lastKeyboardPaste && Date.now() - lastKeyboardPaste.time < 100) {
         if (text) {
           e.preventDefault();
+          e.stopPropagation();
         }
         lastKeyboardPasteRef.current = null;
         return;
@@ -99,8 +100,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
       if (text) {
         e.preventDefault();
+        e.stopPropagation();
         if (isConnectedRef.current) {
           writeSessionRef.current(sessionId, text);
+          lastDataRef.current = { text, time: Date.now() };
         }
         return;
       }
@@ -111,6 +114,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (imageItems.length === 0) return;
 
       e.preventDefault();
+      e.stopPropagation();
 
       for (const file of imageItems) {
         try {
@@ -160,6 +164,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
           if (text) {
             lastKeyboardPasteRef.current = { time: Date.now(), text };
             writeSessionRef.current(sessionId, text);
+            lastDataRef.current = { text, time: Date.now() };
           }
         }).catch((err) => {
           console.error("[xsterm] Failed to paste text from clipboard:", err);
@@ -200,7 +205,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
       const now = Date.now();
       const last = lastDataRef.current;
-      if (last && last.text === data && now - last.time < 30) {
+      if (last && last.text === data && now - last.time < 100) {
         return;
       }
       lastDataRef.current = { text: data, time: now };

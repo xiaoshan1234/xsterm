@@ -32,15 +32,14 @@ YES
 ## 理想效果
 粘贴一次应该只输入一次数据，不应重复。
 ## BUG原因
-Terminal组件同时存在两条独立的粘贴数据路径：
-1. `attachCustomKeyEventHandler` 拦截了 `Cmd+V` / `Ctrl+Shift+V` / `Shift+Insert` 等键盘粘贴快捷键，通过 Tauri `readText()` 读取剪贴板并调用 `writeSession` 发送数据。
-2. 浏览器的原生 `paste` 事件仍然会被 xterm.js 内部处理，触发 `onData`，再次调用 `writeSession` 发送同样的数据。
-当键盘快捷键粘贴后浏览器仍然触发 `paste` 事件时（如 macOS 上 `Cmd+V`），同一份文本被发送两次，后端回显后终端显示双倍内容。
+前期修复（本 Bug 原方案）通过 `lastKeyboardPasteRef` 阻止了键盘快捷键粘贴（`Cmd+V`/`Ctrl+Shift+V`/`Shift+Insert`）与浏览器原生 `paste` 事件的重复发送。但在实际运行中，即使非键盘触发的粘贴（如 `Ctrl+V`、右键粘贴），浏览器原生 `paste` 事件仍可能同时触发两条数据路径：
+1. 文档级 `handlePaste` 处理函数读取剪贴板并调用 `writeSession` 发送数据；
+2. xterm.js 的 `onData` 事件处理器也会收到同样的粘贴内容，并再次调用 `writeSession`。
+`Terminal.tsx` 中 `onData` 原有的 30ms 去重窗口无法覆盖两条路径之间的实际时间差（日志中观察到约 31ms），导致后端收到两次 `writeSession` 调用，回显后终端出现双倍内容。
 ## 解决方案
-1. 在 `src/components/Terminal.tsx` 中保留 `lastKeyboardPasteRef`，在键盘粘贴快捷键按下时同步设置标记。
-2. 在 document 级别的 `paste` 事件处理器中统一处理文本粘贴：先判断是否为键盘快捷键触发的文本粘贴（最近 100ms 内），若是则阻止 xterm.js 的默认粘贴，避免快捷键与原生 `paste` 事件重复发送。
-3. 对于非键盘触发的文本粘贴（如 `Ctrl+V`、右键粘贴），直接在 `paste` 事件中读取剪贴板文本并调用 `writeSession` 发送，阻止 xterm.js 的 `onData` 路径。这样粘贴不会经过 `onData`，即使 local echo 开启也不会出现双倍显示。
-4. 对于非文本粘贴（如图片），保留原有的 SSH 图片粘贴逻辑。
+1. 在 `src/components/Terminal.tsx` 的 `handlePaste` 中，处理文本粘贴时调用 `e.stopPropagation()`，阻止 `paste` 事件继续传播到 xterm.js 的 textarea，避免 xterm 内部路径触发 `onData`。
+2. 在 `handlePaste` 发送文本后，以及键盘快捷键粘贴的 `readText().then()` 回调发送文本后，更新 `lastDataRef.current = { text, time: Date.now() }`，让后续可能到达的 `onData` 事件被去重逻辑拦截。
+3. 将 `onData` 去重时间阈值从 30ms 提高到 100ms，覆盖粘贴两条路径之间的典型时间差。
 ## 是否解决
 YES
 
