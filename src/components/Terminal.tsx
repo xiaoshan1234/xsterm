@@ -135,7 +135,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     if (!xterm) return;
 
     isReconnectingRef.current = false;
-    xterm.clear();
+    // 重新连接时创建了一个全新的 PTY/SSH session，xterm 实例却依旧保留旧 session 的
+    // 模式状态（如鼠标追踪模式）。如果不重置这些内部状态，xterm 仍会在鼠标移动时
+    // 生成鼠标事件转义序列并发送给新 PTY，而新的 PTY 没有启用对应模式，就会把这些
+    // 序列当普通字符显示，导致乱码。reset() 相当于 RIS，清除屏幕并重置所有模式。
+    xterm.reset();
 
     xterm.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;

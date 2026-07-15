@@ -45,6 +45,18 @@ YES
 
 # Bug 004
 ## 现象
+打开 opencode 后，session 断开并重新连接，此时在重新连接的 session 上移动鼠标，终端出现乱码。
+## 理想效果
+重新连接后移动鼠标不应出现乱码，应正常处理或不产生额外字符输出。
+## BUG原因
+重新连接（`reconnectSession`）会在后端创建一个全新的 PTY/SSH session（新的 sessionId），但前端的 xterm.js 实例是同一个对象，仍然保留着旧 session 的终端模式状态（如鼠标追踪模式）。当用户移动鼠标时，xterm.js 继续按照旧模式生成鼠标事件转义序列并发送给新 PTY；而新 PTY 没有启用对应鼠标模式，这些转义序列被当作普通字符回显到终端，于是出现乱码。原先代码在 sessionId 变化时只调用了 `xterm.clear()`，它只清屏并不会重置 xterm 内部的模式状态。
+## 解决方案
+在 `src/components/Terminal.tsx` 的 sessionId 变化 effect 中，将 `xterm.clear()` 替换为 `xterm.reset()`。`reset()` 相当于 RIS（Reset to Initial State），会清除屏幕并重置 xterm 的所有内部模式状态，使前端 xterm 实例与全新的 PTY session 状态保持一致，避免旧 session 的鼠标模式继续生效。
+## 是否解决
+YES
+
+# Bug 005
+## 现象
 ## 理想效果
 ## BUG原因
 ## 解决方案
