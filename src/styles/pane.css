@@ -59,7 +59,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 6px;
+  width: 3px;
   cursor: col-resize;
   transform: translateX(50%);
 }
@@ -68,7 +68,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 6px;
+  height: 3px;
   cursor: row-resize;
   transform: translateY(50%);
 }
