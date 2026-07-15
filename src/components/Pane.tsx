@@ -157,6 +157,10 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
     await terminalRef.current?.copySelection();
   }, []);
 
+  const handlePaste = useCallback(async () => {
+    await terminalRef.current?.pasteFromClipboard();
+  }, []);
+
   const handleContextMenuCapture = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -190,12 +194,20 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
       {
         label: "Copy",
         onClick: handleCopy,
-      },
-      {
-        label: "Clear Pane",
-        onClick: handleClear,
       }
     );
+
+    if (session.is_connected) {
+      contextMenuItems.push({
+        label: "Paste",
+        onClick: handlePaste,
+      });
+    }
+
+    contextMenuItems.push({
+      label: "Clear Pane",
+      onClick: handleClear,
+    });
   }
 
   contextMenuItems.push({

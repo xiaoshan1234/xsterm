@@ -28,6 +28,7 @@ export interface TerminalRef {
   selectAll: () => void;
   copySelection: () => Promise<void>;
   clear: () => void;
+  pasteFromClipboard: () => Promise<void>;
 }
 
 const XTERM_OPTIONS = {
@@ -247,7 +248,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   useTauriTerminalOutput(termRef, sessionId);
   useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, isWindowActive);
 
-  // 通过 ref 暴露 xterm 操作给父组件：selectAll（全选）、copySelection（复制选中内容）
   useImperativeHandle(
     ref,
     () => ({
@@ -267,8 +267,19 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       clear: () => {
         termRef.current?.clear();
       },
+      pasteFromClipboard: async () => {
+        try {
+          const text = await readText();
+          if (text && isConnectedRef.current) {
+            writeSessionRef.current(sessionId, text);
+            lastDataRef.current = { text, time: Date.now() };
+          }
+        } catch (err) {
+          console.error("[xsterm] Failed to paste from clipboard:", err);
+        }
+      },
     }),
-    []
+    [sessionId]
   );
 
   useEffect(() => {
