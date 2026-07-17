@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useSession } from "../contexts/SessionContext";
-import { LocalSessionConfig, SSHSessionConfig, Session } from "../types/session";
+import { Session, SessionTypeKind } from "../types/session";
 import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -23,7 +23,7 @@ export function PaneInitCard({
     createSshSessionOnly,
     createSessionFromSavedConfig,
   } = useSession();
-  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
+  const [createDialogType, setCreateDialogType] = useState<SessionTypeKind | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -53,12 +53,6 @@ export function PaneInitCard({
     }
     return session;
   };
-
-  const handleCreateLocal = (config: LocalSessionConfig, save: boolean) =>
-    handleCreate(() => createLocalSessionOnly(config, save));
-
-  const handleCreateSsh = (config: SSHSessionConfig, save: boolean) =>
-    handleCreate(() => createSshSessionOnly(config, save));
 
   const handleSelectSession = (sessionId: number) => {
     if (!startSubmitting()) return;
@@ -107,7 +101,7 @@ export function PaneInitCard({
         <button
           className="pane-init-card-option"
           type="button"
-          onClick={() => setCreateDialogTab("local")}
+          onClick={() => setCreateDialogType("local")}
         >
           <PlusIcon size={32} />
           <span className="pane-init-card-option-label">Create New</span>
@@ -122,11 +116,11 @@ export function PaneInitCard({
         </button>
       </div>
       <CreateSessionDialog
-        isOpen={createDialogTab !== null}
-        onClose={() => setCreateDialogTab(null)}
-        onCreateLocal={handleCreateLocal}
-        onCreateSsh={handleCreateSsh}
-        initialTab={createDialogTab ?? "local"}
+        isOpen={createDialogType !== null}
+        onClose={() => setCreateDialogType(null)}
+        onCreateLocal={(config, save) => handleCreate(() => createLocalSessionOnly(config, save))}
+        onCreateSsh={(config, save) => handleCreate(() => createSshSessionOnly(config, save))}
+        initialType={createDialogType ?? "local"}
       />
       <SelectSessionDialog
         isOpen={showSelectDialog}

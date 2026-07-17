@@ -1,0 +1,10 @@
+.terminal-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.terminal-config-form input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

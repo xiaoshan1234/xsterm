@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { LocalSessionConfig } from "../../types/session";
+import { LocalSessionSpec } from "../../types/session";
 import { FormField } from "../ui/FormField";
 
 const isWindows = navigator.userAgent.toLowerCase().includes("windows") ||
@@ -26,12 +26,13 @@ const LOCAL_SHELLS = isWindows
 const CWD_PLACEHOLDER = isWindows ? "C:\\Users\\you or %USERPROFILE%" : "/home/user or ~";
 
 interface LocalSessionFormProps {
-  config: LocalSessionConfig;
-  onChange: (config: LocalSessionConfig) => void;
+  value: LocalSessionSpec;
+  onChange: (value: LocalSessionSpec) => void;
   mode?: "create" | "edit";
+  disabled?: boolean;
 }
 
-export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSessionFormProps) {
+export function LocalSessionForm({ value, onChange, mode = "create", disabled }: LocalSessionFormProps) {
   useEffect(() => {
     if (mode === "create") {
       onChange({});
@@ -42,8 +43,9 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
     <>
       <FormField label="Shell">
         <select
-          value={config.shell || ""}
-          onChange={(e) => onChange({ ...config, shell: e.target.value || undefined })}
+          value={value.shell || ""}
+          onChange={(e) => onChange({ ...value, shell: e.target.value || undefined })}
+          disabled={disabled}
         >
           {LOCAL_SHELLS.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
@@ -54,20 +56,22 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
         <input
           type="text"
           placeholder={CWD_PLACEHOLDER}
-          value={config.cwd || ""}
-          onChange={(e) => onChange({ ...config, cwd: e.target.value })}
+          value={value.cwd || ""}
+          onChange={(e) => onChange({ ...value, cwd: e.target.value })}
+          disabled={disabled}
         />
       </FormField>
       <FormField label="Arguments">
         <input
           type="text"
           placeholder="--cd /home/user (space separated)"
-          value={config.args?.join(" ") || ""}
+          value={value.args?.join(" ") || ""}
           onChange={(e) => {
-            const value = e.target.value;
-            const args = value.trim() ? value.split(/\s+/) : undefined;
-            onChange({ ...config, args });
+            const v = e.target.value;
+            const args = v.trim() ? v.split(/\s+/) : undefined;
+            onChange({ ...value, args });
           }}
+          disabled={disabled}
         />
       </FormField>
     </>

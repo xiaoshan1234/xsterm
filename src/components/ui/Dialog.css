@@ -29,6 +29,7 @@
 .dialog--medium {
   min-width: 400px;
   max-width: 500px;
+  max-height: 80vh;
 }
 
 .dialog-header {

@@ -202,7 +202,7 @@ mod tests {
     use super::*;
     use crate::infrastructure::pty::{Child, PtyPair};
     use crate::infrastructure::ssh::{SshBackend, SshChannel, SshConnectResult};
-    use crate::models::session::{SSHAuth, SessionType};
+    use crate::models::session::{SSHAuth, SessionType, SystemConfig};
     use mockall::{mock, predicate::*};
     use std::io::{Read, Write};
     use std::sync::mpsc as sync_mpsc;
@@ -286,6 +286,7 @@ mod tests {
                 port: u16,
                 auth: &SSHAuth,
                 username: &str,
+                system: &SystemConfig,
             ) -> Result<SshConnectResult, String>;
         }
     }
@@ -297,8 +298,9 @@ mod tests {
             port: u16,
             auth: &SSHAuth,
             username: &str,
+            system: &SystemConfig,
         ) -> Result<SshConnectResult, String> {
-            self.connect(host, port, auth, username)
+            self.connect(host, port, auth, username, system)
         }
     }
 
@@ -344,6 +346,27 @@ mod tests {
         });
     }
 
+    fn expect_openpty_with_term(mock_pty_system: &mut MockPtySystemM, expected_term: &str) {
+        let expected_term = expected_term.to_string();
+        mock_pty_system.expect_openpty().returning(move |_| {
+            let term = expected_term.clone();
+            let mut pair = MockPtyPairM::new();
+            pair.expect_spawn()
+                .withf(move |cmd: &portable_pty::CommandBuilder| {
+                    cmd.get_env("TERM").and_then(|v| v.to_str()) == Some(term.as_str())
+                })
+                .returning(|_| {
+                    let mut child = MockChildM::new();
+                    child.expect_kill().times(0..).returning(|| Ok(()));
+                    Ok(Box::new(child))
+                });
+            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_resize().returning(|_, _| Ok(()));
+            Ok(Box::new(pair))
+        });
+    }
+
     #[test]
     fn create_local_with_default_config_creates_session_with_is_connected_true() {
         let mut mock_pty_system = MockPtySystemM::new();
@@ -351,7 +374,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, system: Default::default(), terminal: Default::default() }, mock_backend);
 
         assert!(result.is_ok());
         let info = result.unwrap();
@@ -367,7 +390,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None },
+            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, system: Default::default(), terminal: Default::default() },
             mock_backend,
         );
 
@@ -384,7 +407,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()), args: None },
+            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()), args: None, system: Default::default(), terminal: Default::default() },
             mock_backend,
         );
 
@@ -403,7 +426,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, system: Default::default(), terminal: Default::default() }, mock_backend);
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PTY open failed");
@@ -424,7 +447,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, system: Default::default(), terminal: Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -446,7 +469,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, system: Default::default(), terminal: Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         let close_result = manager.close(result.unwrap().id);
@@ -460,7 +483,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, system: Default::default(), terminal: Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -482,7 +505,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, system: Default::default(), terminal: Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         assert_eq!(manager.list().len(), 1);
@@ -495,7 +518,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, system: Default::default(), terminal: Default::default() }, mock_backend);
         assert!(result.is_ok());
         let info = result.unwrap();
 
@@ -513,7 +536,7 @@ mod tests {
     #[test]
     fn create_ssh_password_success() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| {
+        mock_ssh_backend.expect_connect().returning(|_, _, _, _, _| {
             let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
             Ok(SshConnectResult {
@@ -538,6 +561,8 @@ mod tests {
                 port: 22,
                 username: "testuser".to_string(),
                 auth: SSHAuth::Password { password: "testpass".to_string() },
+                system: Default::default(),
+                terminal: Default::default(),
             },
             mock_backend,
         );
@@ -559,7 +584,7 @@ mod tests {
     #[test]
     fn create_ssh_keyfile_success() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| {
+        mock_ssh_backend.expect_connect().returning(|_, _, _, _, _| {
             let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
             Ok(SshConnectResult {
@@ -587,6 +612,8 @@ mod tests {
                     key_file: "/home/user/.ssh/id_rsa".to_string(),
                     passphrase: Some("passphrase".to_string()),
                 },
+                system: Default::default(),
+                terminal: Default::default(),
             },
             mock_backend,
         );
@@ -608,7 +635,7 @@ mod tests {
     #[test]
     fn create_ssh_connection_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| Err("Failed to connect".to_string()));
+        mock_ssh_backend.expect_connect().returning(|_, _, _, _, _| Err("Failed to connect".to_string()));
         let mock_backend = TestAppBackend::default();
         let mut manager = SessionManager {
             sessions: HashMap::new(),
@@ -623,6 +650,8 @@ mod tests {
                 port: 22,
                 username: "user".to_string(),
                 auth: SSHAuth::Password { password: "pass".to_string() },
+                system: Default::default(),
+                terminal: Default::default(),
             },
             mock_backend,
         );
@@ -634,7 +663,7 @@ mod tests {
     #[test]
     fn create_ssh_auth_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| Err("SSH auth failed".to_string()));
+        mock_ssh_backend.expect_connect().returning(|_, _, _, _, _| Err("SSH auth failed".to_string()));
         let mock_backend = TestAppBackend::default();
         let mut manager = SessionManager {
             sessions: HashMap::new(),
@@ -652,11 +681,151 @@ mod tests {
                     key_file: "/path/to/bad/key".to_string(),
                     passphrase: None,
                 },
+                system: Default::default(),
+                terminal: Default::default(),
             },
             mock_backend,
         );
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "SSH auth failed");
+    }
+
+    #[test]
+    fn create_local_propagates_terminal_type_to_term_env() {
+        let mut mock_pty_system = MockPtySystemM::new();
+        expect_openpty_with_term(&mut mock_pty_system, "xterm-256color");
+        let mock_backend = TestAppBackend::default();
+        let mut manager = build_mock_manager(mock_pty_system);
+
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+                args: None,
+                system: SystemConfig {
+                    terminal_type: "xterm-256color".to_string(),
+                    ..Default::default()
+                },
+                terminal: Default::default(),
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        assert!(info.is_connected);
+    }
+
+    #[test]
+    fn create_local_uses_xterm_fallback_when_terminal_type_empty() {
+        let mut mock_pty_system = MockPtySystemM::new();
+        expect_openpty_with_term(&mut mock_pty_system, "xterm");
+        let mock_backend = TestAppBackend::default();
+        let mut manager = build_mock_manager(mock_pty_system);
+
+        let result = manager.create_local(
+            LocalSessionConfig {
+                shell: None,
+                cwd: None,
+                args: None,
+                system: SystemConfig {
+                    terminal_type: String::new(),
+                    ..Default::default()
+                },
+                terminal: Default::default(),
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn create_ssh_propagates_system_config_to_backend() {
+        let mut mock_ssh_backend = MockSshBackendM::new();
+        let received_system = std::sync::Arc::new(std::sync::Mutex::new(None::<SystemConfig>));
+        let captured = received_system.clone();
+        mock_ssh_backend.expect_connect().returning(move |_, _, _, _, system| {
+            *captured.lock().unwrap() = Some(system.clone());
+            let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+            let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
+            Ok(SshConnectResult {
+                channel: Box::new(MockSshChannelM::new()),
+                write_tx,
+                read_rx,
+                resize_tx: None,
+            })
+        });
+
+        let mock_backend = TestAppBackend::default();
+        let mut manager = SessionManager {
+            sessions: HashMap::new(),
+            next_id: 1,
+            pty_system: Box::new(MockPtySystemM::new()),
+            ssh_backend: Box::new(mock_ssh_backend),
+        };
+
+        let result = manager.create_ssh(
+            SSHSessionConfig {
+                host: "localhost".to_string(),
+                port: 22,
+                username: "testuser".to_string(),
+                auth: SSHAuth::Password { password: "testpass".to_string() },
+                system: SystemConfig {
+                    terminal_type: "xterm-256color".to_string(),
+                    ..Default::default()
+                },
+                terminal: Default::default(),
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let system = received_system.lock().unwrap().take().expect("system config should be passed to backend");
+        assert_eq!(system.terminal_type, "xterm-256color");
+    }
+
+    #[test]
+    fn create_ssh_preserves_terminal_auto_log_path() {
+        let mut mock_ssh_backend = MockSshBackendM::new();
+        mock_ssh_backend.expect_connect().returning(|_, _, _, _, _| {
+            let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+            let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
+            Ok(SshConnectResult {
+                channel: Box::new(MockSshChannelM::new()),
+                write_tx,
+                read_rx,
+                resize_tx: None,
+            })
+        });
+
+        let mock_backend = TestAppBackend::default();
+        let mut manager = SessionManager {
+            sessions: HashMap::new(),
+            next_id: 1,
+            pty_system: Box::new(MockPtySystemM::new()),
+            ssh_backend: Box::new(mock_ssh_backend),
+        };
+
+        let result = manager.create_ssh(
+            SSHSessionConfig {
+                host: "localhost".to_string(),
+                port: 22,
+                username: "testuser".to_string(),
+                auth: SSHAuth::Password { password: "testpass".to_string() },
+                system: Default::default(),
+                terminal: crate::models::session::TerminalConfig {
+                    auto_log_path: "/tmp/session.log".to_string(),
+                    ..Default::default()
+                },
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        let ssh_config = manager.get_ssh_config(info.id).unwrap();
+        assert_eq!(ssh_config.terminal.auto_log_path, "/tmp/session.log");
     }
 }

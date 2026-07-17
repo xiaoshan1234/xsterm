@@ -8,17 +8,27 @@ use tokio::sync::mpsc;
 
 use crate::error::StringError;
 use crate::infrastructure::pty::default_pty_size;
-use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo};
+use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo, SystemConfig};
 
 /// Default terminal type requested for SSH PTY sessions.
 const DEFAULT_TERMINAL_TYPE: &str = "xterm";
+
+/// Resolve the terminal type to request for a PTY from the system configuration.
+pub(crate) fn pty_terminal_type(system: &SystemConfig) -> &str {
+    if system.terminal_type.is_empty() {
+        DEFAULT_TERMINAL_TYPE
+    } else {
+        &system.terminal_type
+    }
+}
 
 /// Marker trait for SSH channel handles.
 pub trait SshChannel: Send {}
 
 /// Backend capable of establishing an SSH connection.
 pub trait SshBackend: Send {
-    /// Connect to `host:port` as `username` using the provided `auth` method.
+    /// Connect to `host:port` as `username` using the provided `auth` method and
+    /// `system` configuration.
     ///
     /// On success, returns the I/O channels needed to drive the session.
     fn connect(
@@ -27,6 +37,7 @@ pub trait SshBackend: Send {
         port: u16,
         auth: &SSHAuth,
         username: &str,
+        system: &SystemConfig,
     ) -> Result<SshConnectResult, String>;
 }
 
@@ -81,8 +92,9 @@ impl SshBackend for RusshBackend {
         port: u16,
         auth: &SSHAuth,
         username: &str,
+        system: &SystemConfig,
     ) -> Result<SshConnectResult, String> {
-        connect_ssh(host, port, auth, username)
+        connect_ssh(host, port, auth, username, system)
     }
 }
 
@@ -95,6 +107,7 @@ fn connect_ssh(
     port: u16,
     auth: &SSHAuth,
     username: &str,
+    system: &SystemConfig,
 ) -> Result<SshConnectResult, String> {
     let (result_tx, result_rx) = sync_mpsc::channel::<Result<(), String>>();
     let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
@@ -107,6 +120,7 @@ fn connect_ssh(
     let host = host.to_string();
     let username = username.to_string();
     let auth_clone = auth.clone();
+    let system_clone = system.clone();
 
     thread::spawn(move || {
         let rt = Builder::new_current_thread()
@@ -120,6 +134,7 @@ fn connect_ssh(
                 port,
                 &username,
                 &auth_clone,
+                &system_clone,
                 &result_tx,
                 &read_tx,
                 &mut write_rx,
@@ -145,12 +160,21 @@ fn connect_ssh(
 
 /// Run the full SSH session lifecycle: connect, authenticate, request PTY/shell,
 /// then forward data until the channel closes.
+///
+/// SSH-level system-config limitations:
+/// - `terminal_type` is applied through the SSH PTY request (`TERM`).
+/// - `charset` cannot be enforced by the SSH layer; encoding is handled by the terminal renderer.
+/// - `newline` cannot be enforced by the SSH layer; it depends on the remote shell/termios line discipline.
+/// - `backspace` and `delete` cannot be enforced by the SSH layer; they are termios or terminal-renderer key mappings.
+/// - `mouse_scroll` cannot be enforced by the SSH layer; it is an xterm/terminal-renderer mouse mode.
+/// - `signal_key` cannot be enforced by the SSH layer; it is a terminal-renderer key binding (e.g., Ctrl+C).
 #[allow(clippy::too_many_arguments)]
 async fn run_ssh_session(
     host: &str,
     port: u16,
     username: &str,
     auth: &SSHAuth,
+    system: &SystemConfig,
     result_tx: &sync_mpsc::Sender<Result<(), String>>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
@@ -173,11 +197,12 @@ async fn run_ssh_session(
         .await
         .map_err(|e| format!("Failed to open SSH session channel: {}", e))?;
 
+    let terminal_type = pty_terminal_type(system);
     let pty_size = default_pty_size();
     channel
         .request_pty(
             true,
-            DEFAULT_TERMINAL_TYPE,
+            terminal_type,
             u32::from(pty_size.cols),
             u32::from(pty_size.rows),
             u32::from(pty_size.pixel_width),
@@ -417,3 +442,26 @@ pub async fn upload_file_via_ssh(
 }
 
 pub use RusshBackend as SshBackendImpl;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pty_terminal_type_uses_configured_value() {
+        let system = SystemConfig {
+            terminal_type: "xterm-256color".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(pty_terminal_type(&system), "xterm-256color");
+    }
+
+    #[test]
+    fn pty_terminal_type_falls_back_to_default() {
+        let system = SystemConfig {
+            terminal_type: String::new(),
+            ..Default::default()
+        };
+        assert_eq!(pty_terminal_type(&system), "xterm");
+    }
+}

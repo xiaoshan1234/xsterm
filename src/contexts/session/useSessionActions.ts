@@ -1,17 +1,20 @@
 import { useCallback } from "react";
 import {
+  CreateSavedSessionConfig,
   LocalSessionConfig,
-  PaneNode,
   SSHSessionConfig,
+  PaneNode,
   SavedSessionConfig,
   SavedWindowConfig,
   SavedWorkspace,
   Session,
+  SessionTypeKind,
   SplitDirection,
   Window,
   Workspace,
 } from "../../types/session";
 import * as sessionService from "../../services/sessionService";
+import { toBackendConfig } from "../../utils/sessionConfigAdapter";
 import {
   collectSessionIdsFromWorkspace,
   createLeafPane,
@@ -100,14 +103,19 @@ export function useSessionActions({
       const config = savedConfigs.find((c) => c.id === configId);
       if (!config) throw new Error("Config not found");
 
+      const backendConfig = toBackendConfig(config);
+      if (typeof backendConfig === "string") {
+        throw new Error(backendConfig);
+      }
+
       let info: sessionService.SessionInfo;
       let type: Session["type"];
 
-      if (config.type === "local" && config.localConfig) {
-        info = await sessionService.createLocal(config.localConfig);
+      if (config.type === "local") {
+        info = await sessionService.createLocal(backendConfig as LocalSessionConfig);
         type = "local";
-      } else if (config.type === "ssh" && config.sshConfig) {
-        info = await sessionService.createSsh(config.sshConfig);
+      } else if (config.type === "ssh") {
+        info = await sessionService.createSsh(backendConfig as SSHSessionConfig);
         type = "ssh";
       } else {
         throw new Error("Invalid config");
@@ -857,34 +865,50 @@ export function useSessionActions({
    *
    * 创建会话的完整流程：
    * 1. 生成 configId（作为持久化配置的唯一标识）
-   * 2. 调用后端服务 sessionService 创建真实会话
-   * 3. 构建前端 Session 对象，加入 sessions[]
-   * 4. 若 save=true，将配置保存到 savedConfigs（持久化，重启后可恢复）
-   * 5. 自动调用 createWorkspaceFromSession 创建默认工作区
+   * 2. 使用 toBackendConfig 将分层配置转为后端扁平格式
+   * 3. 调用后端服务 sessionService 创建真实会话
+   * 4. 构建前端 Session 对象，加入 sessions[]
+   * 5. 若 save=true，将配置保存到 savedConfigs（持久化，重启后可恢复）
+   * 6. 自动调用 createWorkspaceFromSession 创建默认工作区
    */
   const createAndActivateSession = useCallback(
     async (
       type: Session["type"],
-      create: () => Promise<sessionService.SessionInfo>,
-      config: LocalSessionConfig | SSHSessionConfig,
+      config: CreateSavedSessionConfig,
       save: boolean,
       skipAutoWindow = false
     ): Promise<Session> => {
       const configId = generateId();
-      const info = await create();
-      const session = buildFrontendSession(info, configId, type);
+      const backendConfig = toBackendConfig({
+        ...config,
+        id: configId,
+      });
+      if (typeof backendConfig === "string") {
+        throw new Error(backendConfig);
+      }
+
+      let info: sessionService.SessionInfo;
+      if (type === "local") {
+        info = await sessionService.createLocal(backendConfig as LocalSessionConfig);
+      } else {
+        info = await sessionService.createSsh(backendConfig as SSHSessionConfig);
+      }
+
+      const sessionName = config.name || info.name;
+      const session = { ...buildFrontendSession(info, configId, type), name: sessionName };
 
       setSessions((prev) => [...prev, session]);
 
       if (save) {
-        let savedConfig: SavedSessionConfig;
-        if (type === "local") {
-          const localConfig = config as LocalSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "local", localConfig };
-        } else {
-          const sshConfig = config as SSHSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "ssh", sshConfig };
-        }
+        const savedConfig: SavedSessionConfig = {
+          id: configId,
+          name: config.name,
+          type: type as SessionTypeKind,
+          groupId: config.groupId,
+          spec: config.spec,
+          system: config.system,
+          terminal: config.terminal,
+        };
         updateConfigs((prev) => [...prev, savedConfig]);
       }
 
@@ -899,12 +923,12 @@ export function useSessionActions({
   /**
    * 创建本地会话并自动创建工作区
    *
-   * 调用链：createLocalSession → createAndActivateSession("local", ...)
-   *  → 后端 sessionService.createLocal(config) → sessions[] + 自动创建工作区
+   * 调用链：createLocalSession → createAndActivateSession("local", config, save)
+   *  → 后端 sessionService.createLocal(backendConfig) → sessions[] + 自动创建工作区
    */
   const createLocalSession = useCallback(
-    async (config: LocalSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save);
+    async (config: CreateSavedSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("local", config, save);
     },
     [createAndActivateSession]
   );
@@ -912,26 +936,26 @@ export function useSessionActions({
   /**
    * 创建 SSH 会话并自动创建工作区
    *
-   * 调用链：createSshSession → createAndActivateSession("ssh", ...)
-   *  → 后端 sessionService.createSsh(config) → sessions[] + 自动创建工作区
+   * 调用链：createSshSession → createAndActivateSession("ssh", config, save)
+   *  → 后端 sessionService.createSsh(backendConfig) → sessions[] + 自动创建工作区
    */
   const createSshSession = useCallback(
-    async (config: SSHSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save);
+    async (config: CreateSavedSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("ssh", config, save);
     },
     [createAndActivateSession]
   );
 
   const createLocalSessionOnly = useCallback(
-    async (config: LocalSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, true);
+    async (config: CreateSavedSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("local", config, save, true);
     },
     [createAndActivateSession]
   );
 
   const createSshSessionOnly = useCallback(
-    async (config: SSHSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, true);
+    async (config: CreateSavedSessionConfig, save = true): Promise<Session> => {
+      return createAndActivateSession("ssh", config, save, true);
     },
     [createAndActivateSession]
   );
@@ -1025,14 +1049,19 @@ export function useSessionActions({
       const config = savedConfigs.find((c) => c.id === oldSession.configId);
       if (!config) throw new Error("Saved config not found for session");
 
+      const backendConfig = toBackendConfig(config);
+      if (typeof backendConfig === "string") {
+        throw new Error(backendConfig);
+      }
+
       let info: sessionService.SessionInfo;
       let type: Session["type"];
 
-      if (config.type === "local" && config.localConfig) {
-        info = await sessionService.createLocal(config.localConfig);
+      if (config.type === "local") {
+        info = await sessionService.createLocal(backendConfig as LocalSessionConfig);
         type = "local";
-      } else if (config.type === "ssh" && config.sshConfig) {
-        info = await sessionService.createSsh(config.sshConfig);
+      } else if (config.type === "ssh") {
+        info = await sessionService.createSsh(backendConfig as SSHSessionConfig);
         type = "ssh";
       } else {
         throw new Error("Invalid saved config");
@@ -1158,24 +1187,33 @@ export function useSessionActions({
 
   const addToGroup = useCallback(
     (groupId: number, configId: string) => {
+      updateConfigs((prev) =>
+        prev.map((c) => (c.id === configId ? { ...c, groupId: String(groupId) } : c))
+      );
       updateGroups((prev) =>
         prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g))
       );
     },
-    [updateGroups]
+    [updateConfigs, updateGroups]
   );
 
   const removeFromGroup = useCallback(
     (groupId: number, configId: string) => {
+      updateConfigs((prev) =>
+        prev.map((c) => (c.id === configId ? { ...c, groupId: null } : c))
+      );
       updateGroups((prev) =>
         prev.map((g) => (g.id === groupId ? { ...g, configIds: g.configIds.filter((cid) => cid !== configId) } : g))
       );
     },
-    [updateGroups]
+    [updateConfigs, updateGroups]
   );
 
   const moveConfigToGroup = useCallback(
     (configId: string, groupId: number | null) => {
+      updateConfigs((prev) =>
+        prev.map((c) => (c.id === configId ? { ...c, groupId: groupId !== null ? String(groupId) : null } : c))
+      );
       updateGroups((prev) =>
         prev.map((g) => ({
           ...g,
@@ -1188,7 +1226,7 @@ export function useSessionActions({
         );
       }
     },
-    [updateGroups]
+    [updateConfigs, updateGroups]
   );
 
   const renameGroup = useCallback(

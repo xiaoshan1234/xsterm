@@ -1,8 +1,7 @@
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from "react";
 import {
-  LocalSessionConfig,
+  CreateSavedSessionConfig,
   PaneNode,
-  SSHSessionConfig,
   SavedSessionConfig,
   SavedWindowConfig,
   SavedWorkspace,
@@ -24,10 +23,10 @@ export interface SessionContextType {
   globalLocalEcho: boolean;
   setGlobalLocalEcho: (enabled: boolean) => void;
   getEffectiveLocalEcho: (sessionId: number) => boolean;
-  createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
-  createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
-  createLocalSessionOnly: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
-  createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
+  createLocalSession: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSession: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
+  createLocalSessionOnly: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSessionOnly: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -112,10 +111,10 @@ export interface SessionPersistence {
 }
 
 export interface SessionActions {
-  createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
-  createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
-  createLocalSessionOnly: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
-  createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
+  createLocalSession: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSession: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
+  createLocalSessionOnly: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
+  createSshSessionOnly: (config: CreateSavedSessionConfig, save?: boolean) => Promise<Session>;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;

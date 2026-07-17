@@ -90,14 +90,20 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     removeOrCloseConfig(config);
   };
 
-  const getConfigGroupId = (configId: string): number | null => {
-    const group = groups.find((g) => g.configIds.includes(configId));
+  const getConfigGroupId = (config: SavedSessionConfig): number | null => {
+    if (config.groupId !== null) {
+      const numeric = Number(config.groupId);
+      if (!isNaN(numeric) && groups.some((g) => g.id === numeric)) {
+        return numeric;
+      }
+    }
+    const group = groups.find((g) => g.configIds.includes(config.id));
     return group ? group.id : null;
   };
 
   const handleEditSession = (config: SavedSessionConfig) => {
     setEditingSession(config);
-    setEditingSessionGroupId(getConfigGroupId(config.id));
+    setEditingSessionGroupId(getConfigGroupId(config));
   };
 
   const handleSessionSave = (config: SavedSessionConfig, groupId: number | null) => {

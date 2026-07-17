@@ -22,6 +22,36 @@ pub struct SessionInfo {
     pub is_connected: bool,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemConfig {
+    pub newline: String,
+    pub terminal_type: String,
+    pub charset: String,
+    pub backspace: String,
+    pub delete: String,
+    pub mouse_scroll: String,
+    pub signal_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalConfig {
+    pub scrollback_lines: u32,
+    pub auto_log_path: String,
+    pub highlight_keywords: String,
+}
+
+impl Default for TerminalConfig {
+    fn default() -> Self {
+        Self {
+            scrollback_lines: 5000,
+            auto_log_path: String::new(),
+            highlight_keywords: String::new(),
+        }
+    }
+}
+
 /// Configuration for creating a local shell session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalSessionConfig {
@@ -31,6 +61,10 @@ pub struct LocalSessionConfig {
     pub cwd: Option<String>,
     #[serde(default)]
     pub args: Option<Vec<String>>,
+    #[serde(default)]
+    pub system: SystemConfig,
+    #[serde(default)]
+    pub terminal: TerminalConfig,
 }
 
 /// Configuration for creating an SSH session.
@@ -41,6 +75,10 @@ pub struct SSHSessionConfig {
     pub username: String,
     #[serde(flatten)]
     pub auth: SSHAuth,
+    #[serde(default)]
+    pub system: SystemConfig,
+    #[serde(default)]
+    pub terminal: TerminalConfig,
 }
 
 /// Authentication method for an SSH session.

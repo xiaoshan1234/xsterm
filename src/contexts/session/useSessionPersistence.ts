@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from "react";
 import * as sessionStorage from "../../services/sessionStorage";
+import { normalizeSavedConfig } from "../../utils/sessionConfigMigration";
 import { SavedSessionConfig, SavedWindowConfig, SavedWorkspace, SessionGroup } from "../../types/session";
 import { SessionPersistence } from "./types";
 
@@ -56,12 +57,13 @@ export function useSessionPersistence({
 
   useEffect(() => {
     const init = async () => {
-      const [configs, savedGroups, workspacesData, windowConfigs] = await Promise.all([
+      const [rawConfigs, savedGroups, workspacesData, windowConfigs] = await Promise.all([
         sessionStorage.loadSavedConfigs(),
         sessionStorage.loadSavedGroups(),
         sessionStorage.loadSavedWorkspaces(),
         sessionStorage.loadSavedWindowConfigs(),
       ]);
+      const configs = rawConfigs.map((c) => normalizeSavedConfig(c));
       setSavedConfigs(configs);
       setGroups(savedGroups.groups);
       setNextGroupId(savedGroups.nextGroupId);

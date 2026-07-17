@@ -3,7 +3,8 @@ use std::io::Read;
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{default_pty_size, LocalSession, LocalSessionHandles, PtySystem};
-use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
+use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType, SystemConfig};
+use crate::services::session_log::SessionLog;
 
 /// Default shell on Windows when no shell is configured.
 const WINDOWS_DEFAULT_SHELL: &str = "powershell.exe";
@@ -15,6 +16,26 @@ const PTY_READ_BUFFER_SIZE: usize = 8192;
 const POWERSHELL_NOLOGO_FLAG: &str = "-NoLogo";
 /// Bash argument to start a login shell.
 const BASH_LOGIN_FLAG: &str = "--login";
+/// Fallback terminal type when `system.terminal_type` is empty.
+const FALLBACK_TERM_TYPE: &str = "xterm";
+
+/// PTY-level system-config limitations.
+///
+/// `portable-pty` can only influence a subset of the `SystemConfig` fields:
+/// - `terminal_type` is applied via the `TERM` environment variable.
+/// - `charset` cannot be enforced by the PTY layer; encoding is handled by the terminal renderer.
+/// - `newline` cannot be enforced by the PTY layer; it depends on the shell/termios line discipline.
+/// - `backspace` and `delete` cannot be enforced by the PTY layer; they are termios or terminal-renderer key mappings.
+/// - `mouse_scroll` cannot be enforced by the PTY layer; it is an xterm/terminal-renderer mouse mode.
+/// - `signal_key` cannot be enforced by the PTY layer; it is a terminal-renderer key binding (e.g., Ctrl+C).
+pub(crate) fn apply_system_config(cmd: &mut portable_pty::CommandBuilder, system: &SystemConfig) {
+    let term = if system.terminal_type.is_empty() {
+        FALLBACK_TERM_TYPE
+    } else {
+        &system.terminal_type
+    };
+    cmd.env("TERM", term);
+}
 
 /// Create a new local shell session backed by a PTY.
 ///
@@ -47,6 +68,7 @@ pub fn create_local_session(
         }
     }
     cmd.cwd(&cwd);
+    apply_system_config(&mut cmd, &config.system);
 
     let child = pair.spawn(cmd).map_err_string()?;
     let writer = pair.master_writer().map_err_string()?;
@@ -59,7 +81,7 @@ pub fn create_local_session(
         is_connected: true,
     };
 
-    spawn_output_forwarder(reader, backend, session_id);
+    spawn_output_forwarder(reader, backend, session_id, config.terminal.auto_log_path);
 
     let handles = LocalSessionHandles { child: Some(child), _pair: pair };
 
@@ -137,7 +159,9 @@ fn spawn_output_forwarder(
     mut reader: Box<dyn Read + Send>,
     backend: impl AppBackend + 'static,
     session_id: u32,
+    auto_log_path: String,
 ) {
+    let mut log = SessionLog::new(&auto_log_path);
     let backend_clone = backend.clone();
     backend.spawn(Box::new(move || {
         let mut buf = [0u8; PTY_READ_BUFFER_SIZE];
@@ -151,6 +175,7 @@ fn spawn_output_forwarder(
                 }
                 Ok(n) => {
                     let data = &buf[..n];
+                    log.append(data);
                     let payload = serde_json::to_vec(&(session_id, data)).unwrap();
                     if let Err(e) = backend_clone.emit("session-output", &payload) {
                         tracing::error!("Failed to emit session output: {}", e);
@@ -161,4 +186,34 @@ fn spawn_output_forwarder(
             }
         }
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_system_config_sets_term_from_terminal_type() {
+        let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
+        let system = SystemConfig {
+            terminal_type: "xterm-256color".to_string(),
+            ..Default::default()
+        };
+        apply_system_config(&mut cmd, &system);
+        assert_eq!(
+            cmd.get_env("TERM"),
+            Some(std::ffi::OsStr::new("xterm-256color"))
+        );
+    }
+
+    #[test]
+    fn apply_system_config_falls_back_to_xterm_when_terminal_type_empty() {
+        let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
+        let system = SystemConfig {
+            terminal_type: String::new(),
+            ..Default::default()
+        };
+        apply_system_config(&mut cmd, &system);
+        assert_eq!(cmd.get_env("TERM"), Some(std::ffi::OsStr::new("xterm")));
+    }
 }
