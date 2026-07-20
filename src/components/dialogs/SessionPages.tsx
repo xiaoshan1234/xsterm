@@ -199,6 +199,7 @@ export function SessionPageLocal({
           placeholder="My session"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
+          autoFocus
         />
       </FieldRow>
       <FieldRow label="Group">
@@ -274,6 +275,7 @@ export function SessionPageSsh({
           placeholder="My session"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
+          autoFocus
         />
       </FieldRow>
       <FieldRow label="Group">

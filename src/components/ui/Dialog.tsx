@@ -8,10 +8,11 @@ interface DialogProps {
   title: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "small" | "medium";
+  size?: "small" | "medium" | "large";
+  contentClassName?: string;
 }
 
-export function Dialog({ isOpen, onClose, title, children, footer, size = "medium" }: DialogProps) {
+export function Dialog({ isOpen, onClose, title, children, footer, size = "medium", contentClassName }: DialogProps) {
   if (!isOpen) return null;
 
   return (
@@ -23,7 +24,7 @@ export function Dialog({ isOpen, onClose, title, children, footer, size = "mediu
             <CloseIcon size={16} />
           </button>
         </div>
-        <div className="dialog-content">{children}</div>
+        <div className={`dialog-content ${contentClassName ?? ""}`}>{children}</div>
         {footer && <div className="dialog-footer">{footer}</div>}
       </div>
     </div>

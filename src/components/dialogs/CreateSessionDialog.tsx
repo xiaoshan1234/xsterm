@@ -8,15 +8,23 @@ import type {
   SessionSpec,
   TerminalConfig,
   Session,
+  SystemConfig,
 } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
-import { FormField } from "../ui/FormField";
-import { LocalSessionForm } from "./LocalSessionForm";
-import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
-import { SessionTypeSelector, isImplementedType } from "./SessionTypeSelector";
-import { SystemConfigForm } from "./SystemConfigForm";
-import { TerminalConfigForm } from "./TerminalConfigForm";
+import { isImplementedType, validateSshConfig } from "../../utils/sessionFormUtils";
 import { useSystemProfile } from "./useSystemProfile";
+import { ProtocolTabs } from "./ProtocolTabs";
+import { SessionNavTree, SessionNavNodeId, getNavNodeLabel } from "./SessionNavTree";
+import {
+  SessionPageLocal,
+  SessionPageSsh,
+  TerminalModePage,
+  TerminalKeyboardPage,
+  TerminalLogPage,
+  SshAuthPage,
+  PlaceholderPage,
+} from "./SessionPages";
+import type { SessionPageProps } from "./SessionPages";
 import "./CreateSessionDialog.css";
 
 export type { CreateSavedSessionConfig };
@@ -71,8 +79,9 @@ export default function CreateSessionDialog({
   const [saveConfig, setSaveConfig] = useState(true);
   const [error, setError] = useState("");
   const [nameError, setNameError] = useState("");
+  const [selectedNode, setSelectedNode] = useState<SessionNavNodeId>("session");
 
-  const { system, setSystem, handleTypeChange } = useSystemProfile(
+  const { system, profile, setSystem, handleTypeChange } = useSystemProfile(
     narrowTypeForSystem(initialType),
   );
 
@@ -86,6 +95,7 @@ export default function CreateSessionDialog({
       setSaveConfig(true);
       setError("");
       setNameError("");
+      setSelectedNode("session");
       handleTypeChange(narrowTypeForSystem(initialType));
     }
   }, [isOpen, initialGroupId, initialType, handleTypeChange]);
@@ -95,6 +105,7 @@ export default function CreateSessionDialog({
       handleTypeChange(type);
     }
     setSpec(getDefaultSpec(type));
+    setSelectedNode("session");
   }, [type, handleTypeChange]);
 
   const handleCreate = async () => {
@@ -140,16 +151,115 @@ export default function CreateSessionDialog({
 
   const isCreateDisabled = !name.trim() || !isImplementedType(type) || !!nameError;
 
+  const treeProtocol = type === "ssh" ? "ssh" : "local";
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setNameError("");
+  };
+
+  const handleSystemChange = (next: SystemConfig) => {
+    setSystem(next);
+  };
+
+  const handleSshSpecChange = (next: SshSessionSpec) => {
+    setSpec(next);
+  };
+
+  const sharedSessionProps: SessionPageProps = {
+    name,
+    onNameChange: handleNameChange,
+    nameError: nameError || undefined,
+    spec,
+    onSpecChange: setSpec,
+    system,
+    onSystemChange: handleSystemChange,
+    profile,
+    groups,
+    groupId: selectedGroupId,
+    onGroupChange: setSelectedGroupId,
+  };
+
+  const renderPage = () => {
+    if (type === "ssh") {
+      switch (selectedNode) {
+        case "session":
+          return <SessionPageSsh {...sharedSessionProps} />;
+        case "ssh-auth":
+          return <SshAuthPage spec={spec as SshSessionSpec} onSpecChange={handleSshSpecChange} />;
+        case "terminal-mode":
+          return (
+            <TerminalModePage
+              system={system}
+              onSystemChange={handleSystemChange}
+              profile={profile}
+              terminal={terminal}
+              onTerminalChange={setTerminal}
+            />
+          );
+        case "terminal-keyboard":
+          return (
+            <TerminalKeyboardPage
+              system={system}
+              onSystemChange={handleSystemChange}
+              profile={profile}
+            />
+          );
+        case "terminal-log":
+          return <TerminalLogPage terminal={terminal} onTerminalChange={setTerminal} />;
+        default:
+          return <PlaceholderPage title={getNavNodeLabel(selectedNode)} />;
+      }
+    }
+
+    switch (selectedNode) {
+      case "session":
+        return type === "local" ? <SessionPageLocal {...sharedSessionProps} /> : <PlaceholderPage title="Session" />;
+      case "terminal-mode":
+        return (
+          <TerminalModePage
+            system={system}
+            onSystemChange={handleSystemChange}
+            profile={profile}
+            terminal={terminal}
+            onTerminalChange={setTerminal}
+          />
+        );
+      case "terminal-keyboard":
+        return (
+          <TerminalKeyboardPage
+            system={system}
+            onSystemChange={handleSystemChange}
+            profile={profile}
+          />
+        );
+      case "terminal-log":
+        return <TerminalLogPage terminal={terminal} onTerminalChange={setTerminal} />;
+      default:
+        return <PlaceholderPage title={getNavNodeLabel(selectedNode)} />;
+    }
+  };
+
   const footer = (
     <div className="dialog-footer-content">
-      <label className="checkbox-group">
-        <input
-          type="checkbox"
-          checked={saveConfig}
-          onChange={(e) => setSaveConfig(e.target.checked)}
-        />
-        <span>Save config</span>
-      </label>
+      <div className="create-session-dialog__footer-left">
+        <label className="checkbox-group">
+          <input
+            type="checkbox"
+            checked={saveConfig}
+            onChange={(e) => setSaveConfig(e.target.checked)}
+          />
+          <span>Save config</span>
+        </label>
+        <button
+          type="button"
+          className="btn btn--secondary"
+          disabled
+          title="Not implemented"
+        >
+          Edit defaults...
+        </button>
+      </div>
       <div className="dialog-footer-buttons">
         <button className="btn btn--secondary" onClick={onClose}>
           Cancel
@@ -166,82 +276,35 @@ export default function CreateSessionDialog({
   );
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title="Create Session" footer={footer}>
-      <div className="create-session-layer">
-        <h3 className="create-session-layer__title">Session</h3>
-        <div className="create-session-layer__content">
-          <FormField label="Name">
-            <input
-              type="text"
-              placeholder="My session"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setNameError(""); }}
-              autoFocus
-            />
-            {nameError && <div className="dialog-error">{nameError}</div>}
-          </FormField>
-
-          <SessionTypeSelector value={type} onChange={setType} />
-
-          {isImplementedType(type) && (
-            <>
-              {type === "local" && (
-                <LocalSessionForm
-                  value={spec as LocalSessionSpec}
-                  onChange={setSpec}
-                  mode="create"
-                />
-              )}
-              {type === "ssh" && (
-                <SshSessionForm
-                  value={spec as SshSessionSpec}
-                  onChange={setSpec}
-                  mode="create"
-                />
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="create-session-layer">
-        <h3 className="create-session-layer__title">System</h3>
-        <div className="create-session-layer__content">
-          <SystemConfigForm value={system} onChange={setSystem} />
-        </div>
-      </div>
-
-      <div className="create-session-layer">
-        <h3 className="create-session-layer__title">Terminal</h3>
-        <div className="create-session-layer__content">
-          <TerminalConfigForm value={terminal} onChange={setTerminal} />
-        </div>
-      </div>
-
-      <div className="create-session-layer">
-        <h3 className="create-session-layer__title">Options</h3>
-        <div className="create-session-layer__content">
-          <FormField label="Group">
-            <select
-              value={selectedGroupId === null ? "none" : selectedGroupId}
-              onChange={(e) =>
-                setSelectedGroupId(
-                  e.target.value === "none" ? null : parseInt(e.target.value),
-                )
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create Session"
+      size="large"
+      contentClassName="dialog-content--flush"
+      footer={footer}
+    >
+      <div className="create-session-dialog">
+        <ProtocolTabs value={type} onChange={setType} />
+        <div className="create-session-dialog__body">
+          <SessionNavTree
+            protocol={treeProtocol}
+            selected={selectedNode}
+            onSelect={setSelectedNode}
+          />
+          <div
+            className="create-session-dialog__content"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+                handleCreate();
               }
-            >
-              <option value="none">None</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          </FormField>
+            }}
+          >
+            {renderPage()}
+          </div>
         </div>
+        {error && <div className="dialog-error">{error}</div>}
       </div>
-
-      {error && <div className="dialog-error">{error}</div>}
     </Dialog>
   );
 }

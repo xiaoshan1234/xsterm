@@ -32,6 +32,13 @@
   max-height: 80vh;
 }
 
+.dialog--large {
+  min-width: 860px;
+  max-width: 960px;
+  width: 90vw;
+  max-height: 85vh;
+}
+
 .dialog-header {
   display: flex;
   align-items: center;
@@ -70,6 +77,11 @@
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
+}
+
+.dialog-content--flush {
+  padding: 0;
+  overflow: hidden;
 }
 
 .dialog-error {

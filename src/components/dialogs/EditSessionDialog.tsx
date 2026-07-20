@@ -1,20 +1,27 @@
 import { useState, useEffect } from "react";
 import {
   SavedSessionConfig,
-  LocalSessionSpec,
   SshSessionSpec,
   SessionSpec,
   SessionGroup,
+  SystemConfig,
 } from "../../types/session";
 import { detectProfileFromSystemConfig } from "../../constants/systemProfiles";
 import { Dialog } from "../ui/Dialog";
-import { FormField } from "../ui/FormField";
-import { SessionTypeSelector } from "./SessionTypeSelector";
-import { LocalSessionForm } from "./LocalSessionForm";
-import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
-import { SystemConfigForm } from "./SystemConfigForm";
-import { TerminalConfigForm } from "./TerminalConfigForm";
+import { validateSshConfig } from "../../utils/sessionFormUtils";
 import { useSystemProfile } from "./useSystemProfile";
+import { ProtocolTabs } from "./ProtocolTabs";
+import { SessionNavTree, SessionNavNodeId, getNavNodeLabel } from "./SessionNavTree";
+import {
+  SessionPageLocal,
+  SessionPageSsh,
+  TerminalModePage,
+  TerminalKeyboardPage,
+  TerminalLogPage,
+  SshAuthPage,
+  PlaceholderPage,
+} from "./SessionPages";
+import type { SessionPageProps } from "./SessionPages";
 import "./EditSessionDialog.css";
 
 interface EditSessionDialogProps {
@@ -40,9 +47,10 @@ export function EditSessionDialog({
   const [terminal, setTerminal] = useState(config.terminal);
   const [sshError, setSshError] = useState("");
   const [nameError, setNameError] = useState("");
+  const [selectedNode, setSelectedNode] = useState<SessionNavNodeId>("session");
 
   const systemType = config.type === "ssh" ? "ssh" : "local";
-  const { system, setSystem } = useSystemProfile(
+  const { system, profile, setSystem } = useSystemProfile(
     systemType,
     config.system,
     detectProfileFromSystemConfig(config.system),
@@ -57,12 +65,16 @@ export function EditSessionDialog({
       setSystem(config.system);
       setSshError("");
       setNameError("");
+      setSelectedNode("session");
     }
   }, [isOpen, config, groupId, setSystem]);
 
   const handleSave = () => {
     const trimmedName = name.trim();
-    if (!trimmedName) { setNameError("Session name is required"); return; }
+    if (!trimmedName) {
+      setNameError("Session name is required");
+      return;
+    }
 
     if (config.type === "ssh") {
       const validationError = validateSshConfig(spec as SshSessionSpec);
@@ -85,96 +97,162 @@ export function EditSessionDialog({
     onClose();
   };
 
-  const handleLocalSpecChange = (newSpec: LocalSessionSpec) => setSpec(newSpec);
-  const handleSshSpecChange = (newSpec: SshSessionSpec) => {
-    setSpec(newSpec);
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setNameError("");
+  };
+
+  const handleSystemChange = (next: SystemConfig) => {
+    setSystem(next);
+  };
+
+  const handleSshSpecChange = (next: SshSessionSpec) => {
+    setSpec(next);
     setSshError("");
   };
+
+  const treeProtocol = config.type === "ssh" ? "ssh" : "local";
+
+  const sharedSessionProps: SessionPageProps = {
+    name,
+    onNameChange: handleNameChange,
+    nameError: nameError || undefined,
+    spec,
+    onSpecChange: setSpec,
+    system,
+    onSystemChange: handleSystemChange,
+    profile,
+    groups,
+    groupId: selectedGroupId,
+    onGroupChange: setSelectedGroupId,
+  };
+
+  const renderPage = () => {
+    if (config.type === "ssh") {
+      switch (selectedNode) {
+        case "session":
+          return <SessionPageSsh {...sharedSessionProps} />;
+        case "ssh-auth":
+          return (
+            <SshAuthPage
+              spec={spec as SshSessionSpec}
+              onSpecChange={handleSshSpecChange}
+            />
+          );
+        case "terminal-mode":
+          return (
+            <TerminalModePage
+              system={system}
+              onSystemChange={handleSystemChange}
+              profile={profile}
+              terminal={terminal}
+              onTerminalChange={setTerminal}
+            />
+          );
+        case "terminal-keyboard":
+          return (
+            <TerminalKeyboardPage
+              system={system}
+              onSystemChange={handleSystemChange}
+              profile={profile}
+            />
+          );
+        case "terminal-log":
+          return <TerminalLogPage terminal={terminal} onTerminalChange={setTerminal} />;
+        default:
+          return <PlaceholderPage title={getNavNodeLabel(selectedNode)} />;
+      }
+    }
+
+    switch (selectedNode) {
+      case "session":
+        return config.type === "local" ? (
+          <SessionPageLocal {...sharedSessionProps} />
+        ) : (
+          <PlaceholderPage title="Session" />
+        );
+      case "terminal-mode":
+        return (
+          <TerminalModePage
+            system={system}
+            onSystemChange={handleSystemChange}
+            profile={profile}
+            terminal={terminal}
+            onTerminalChange={setTerminal}
+          />
+        );
+      case "terminal-keyboard":
+        return (
+          <TerminalKeyboardPage
+            system={system}
+            onSystemChange={handleSystemChange}
+            profile={profile}
+          />
+        );
+      case "terminal-log":
+        return <TerminalLogPage terminal={terminal} onTerminalChange={setTerminal} />;
+      default:
+        return <PlaceholderPage title={getNavNodeLabel(selectedNode)} />;
+    }
+  };
+
+  const footer = (
+    <div className="dialog-footer-content">
+      <div className="edit-session-dialog__footer-left">
+        <button
+          type="button"
+          className="btn btn--secondary"
+          disabled
+          title="Not implemented"
+        >
+          Edit defaults...
+        </button>
+      </div>
+      <div className="dialog-footer-buttons">
+        <button className="btn btn--secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          className="btn btn--primary"
+          onClick={handleSave}
+          disabled={!!nameError}
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
       title="Edit Session"
-      size="medium"
-      footer={
-        <div className="dialog-footer-buttons">
-          <button className="btn btn--secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn--primary" onClick={handleSave} disabled={!!nameError}>
-            Save
-          </button>
-        </div>
-      }
+      size="large"
+      contentClassName="dialog-content--flush"
+      footer={footer}
     >
-      {sshError && <div className="dialog-error">{sshError}</div>}
-
-      <section className="edit-session-layer">
-        <h3 className="edit-session-layer__title">Session</h3>
-
-          <FormField label="Name">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setNameError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && handleSave()}
-              autoFocus
-            />
-            {nameError && <div className="dialog-error">{nameError}</div>}
-          </FormField>
-
-        <SessionTypeSelector
-          value={config.type}
-          onChange={() => {}}
-          mode="edit"
-          disabled={true}
-        />
-
-        <FormField label="Group">
-          <select
-            value={selectedGroupId === null ? "none" : selectedGroupId}
-            onChange={(e) =>
-              setSelectedGroupId(
-                e.target.value === "none" ? null : parseInt(e.target.value),
-              )
-            }
+      <div className="edit-session-dialog">
+        <ProtocolTabs value={config.type} onChange={() => {}} disabled />
+        {sshError && <div className="dialog-error">{sshError}</div>}
+        <div className="edit-session-dialog__body">
+          <SessionNavTree
+            protocol={treeProtocol}
+            selected={selectedNode}
+            onSelect={setSelectedNode}
+          />
+          <div
+            className="edit-session-dialog__content"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+                handleSave();
+              }
+            }}
           >
-            <option value="none">None</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
-
-        {config.type === "local" && (
-          <LocalSessionForm
-            value={spec as LocalSessionSpec}
-            onChange={handleLocalSpecChange}
-            mode="edit"
-          />
-        )}
-
-        {config.type === "ssh" && (
-          <SshSessionForm
-            value={spec as SshSessionSpec}
-            onChange={handleSshSpecChange}
-            mode="edit"
-          />
-        )}
-      </section>
-
-      <section className="edit-session-layer">
-        <h3 className="edit-session-layer__title">System</h3>
-        <SystemConfigForm value={system} onChange={setSystem} />
-      </section>
-
-      <section className="edit-session-layer">
-        <h3 className="edit-session-layer__title">Terminal</h3>
-        <TerminalConfigForm value={terminal} onChange={setTerminal} />
-      </section>
+            {renderPage()}
+          </div>
+        </div>
+      </div>
     </Dialog>
   );
 }

@@ -16,6 +16,31 @@ export const IMPLEMENTED_NAV_NODES: ReadonlySet<SessionNavNodeId> = new Set([
   "ssh-auth",
 ] as const satisfies SessionNavNodeId[]);
 
+const NODE_LABELS: Record<SessionNavNodeId, string> = {
+  session: "Session",
+  "terminal-bell": "Bell",
+  "terminal-mode": "Mode",
+  "terminal-keyboard": "Keyboard",
+  "terminal-security": "Security",
+  "terminal-log": "Log",
+  "window-selection": "Selection",
+  "ssh-connection": "Connection",
+  "ssh-proxy": "Proxy",
+  "ssh-auth": "Authentication",
+  "ssh-agent": "Agent",
+  "ssh-password": "Password",
+  "ssh-kex": "Key Exchange",
+  "ssh-mac": "MAC Hash",
+  "ssh-pubkey": "Public Key",
+  "ssh-sftp": "SFTP",
+  "ssh-x11": "X11",
+  "ssh-modem": "X/Y/Z Modem",
+};
+
+export function getNavNodeLabel(id: SessionNavNodeId): string {
+  return NODE_LABELS[id] ?? id;
+}
+
 interface NavLeafDef {
   id: SessionNavNodeId;
   label: string;
