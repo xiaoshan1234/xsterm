@@ -63,21 +63,32 @@ click elements, execute JS, and take screenshots.
 
 ```
 WSL selenium-webdriver client
-        │  http://<windows-ip>:4446
+        │  http://127.0.0.1:4444  (WSL2 NAT auto-forwards Windows loopback)
         ▼
-TCP relay (scripts/windows/webdriver-relay.mjs, listens on 0.0.0.0:4446)
-        │  127.0.0.1:4444
-        ▼
-tauri-driver (Windows, loopback only - it has no --bind option)
+tauri-driver (Windows, 127.0.0.1:4444 — has no --bind option, only loopback)
         │  127.0.0.1:4445
         ▼
 msedgedriver → xsterm.exe (WebView2)
 ```
 
-`tauri-driver` **launches the app itself** when a WebDriver session is
-created. Do not start xsterm manually beforehand.
+Key facts (validated in this repo):
 
-## One-time Windows setup
+- WSL2 NAT mode auto-proxies Windows loopback ports to WSL, so the WSL
+  client can reach tauri-driver on `127.0.0.1:4444` directly. **No TCP
+  relay is needed.**
+- `tauri-driver` **launches the app itself** when a WebDriver session
+  is created. Do not start xsterm manually beforehand.
+- `tauri-driver` does **not** implement the standard WebDriver
+  `/status` endpoint; use `GET /sessions` (returns `{"sessions":[]}`)
+  to probe readiness.
+- The debug binary loads `http://localhost:1420` **on the Windows
+  side**, so the Vite dev server must also run on Windows (a WSL-side
+  Vite is unreachable from xsterm.exe). Run `npm run dev` in a Windows
+  shell, or use `scripts/start-webdriver.sh` after starting Vite.
+
+## One-time setup
+
+### Windows: install the WebDriver stack
 
 In a PowerShell window on Windows, from the repo root:
 
@@ -85,79 +96,106 @@ In a PowerShell window on Windows, from the repo root:
 powershell -ExecutionPolicy Bypass -File scripts\windows\start-webdriver.ps1
 ```
 
-The script will:
+The script:
 
-1. Install `tauri-driver` via cargo (pinned version) if missing.
-2. Install a version-matched `msedgedriver` if missing/mismatched
+1. Installs `tauri-driver` via cargo (pinned version) if missing.
+2. Installs a version-matched `msedgedriver` if missing/mismatched
    (first three version components must match your installed Edge).
-3. Start `tauri-driver` + the TCP relay and keep both alive until Ctrl+C.
+3. Starts `tauri-driver` and keeps it alive until Ctrl+C.
 
-If Windows Firewall blocks inbound connections on the relay port, run once in
-an **admin** PowerShell:
+Alternatively, from WSL:
 
-```powershell
-New-NetFirewallRule -DisplayName 'xsterm webdriver relay' -Direction Inbound -Protocol TCP -LocalPort 4446 -Action Allow
+```bash
+bash scripts/start-webdriver.sh
 ```
 
-### Which app binary gets launched?
+This launches the PowerShell script detached (hidden window), polls
+`/sessions` until ready, and prints the connect URL.
 
-By default the debug exe is used:
+### Windows: native module check
+
+If you ever ran `npm install` from inside WSL (e.g. when adding a
+test dependency), the `node_modules/@rollup/` directory may contain
+only Linux native binaries. Windows's `npm run dev` will then fail with
+`Cannot find module @rollup/rollup-win32-x64-msvc`. Fix:
+
+```bash
+npm install --include=optional     # run from a Windows shell
+```
+
+## Daily workflow
+
+**On Windows** (any terminal, foreground or background):
+
+```powershell
+npm run dev                                                    # Vite on :1420
+powershell -ExecutionPolicy Bypass -File scripts\windows\start-webdriver.ps1
+```
+
+**On WSL** (this terminal / AI session):
+
+```bash
+npm run test:remote:check       # one-shot verification
+npm run test:remote:drive       # interactive REPL
+```
+
+Commands: `shot <file.png>`, `html [css]`, `text <css>`, `find <css>`,
+`click <css>`, `sendkeys <css> <text>`, `key <KEY>`, `exec <js>`,
+`refresh`, `sleep <ms>`, `url`, `quit`.
+
+Typical AI-assisted UI-tuning loop:
+
+1. Windows: keep Vite + tauri-driver running.
+2. WSL: `npm run test:remote:drive` (e.g. inside tmux).
+3. `shot out/before.png` → inspect → edit code in WSL → `refresh` →
+   `shot out/after.png` → compare.
+
+## Which app binary gets launched?
+
+By default the debug exe:
 
 ```
 C:\Users\LONER\1111\prj\xsterm\src-tauri\target\debug\xsterm.exe
 ```
 
-Override with the `TAURI_APPLICATION` env var (must be a **Windows** path,
-not `/mnt/c/...`). Two supported workflows:
+Override with the `TAURI_APPLICATION` env var (must be a **Windows**
+path, not `/mnt/c/...`). Two supported workflows:
 
 | Binary | Requirement | Best for |
 |--------|-------------|----------|
-| `target\debug\xsterm.exe` | Vite dev server (`npm run dev`) running **on Windows** | UI iteration: edit code in WSL, `refresh` in the driver picks up new code |
+| `target\debug\xsterm.exe` | Vite dev server (`npm run dev`) running **on Windows** | UI iteration: edit code in WSL, `refresh` picks up new code |
 | `target\release\xsterm.exe` | nothing (frontend embedded) | verifying a packaged build |
-
-> The debug exe loads `http://localhost:1420` **on the Windows side** — the
-> Vite server must run on Windows, not in WSL.
-
-## Usage from WSL
-
-Self-check (diagnoses connectivity, session creation, screenshot round-trip):
-
-```bash
-npm run test:remote:check
-```
-
-Interactive driving REPL (keeps one app session alive):
-
-```bash
-npm run test:remote:drive
-```
-
-Commands: `shot <file.png>`, `html [css]`, `text <css>`, `find <css>`,
-`click <css>`, `sendkeys <css> <text>`, `key <KEY>`, `exec <js>`, `refresh`,
-`sleep <ms>`, `url`, `quit`.
-
-Typical AI-assisted UI-tuning loop:
-
-1. Windows: keep `start-webdriver.ps1` and `npm run dev` running.
-2. WSL: `npm run test:remote:drive` (e.g. inside tmux).
-3. `shot out/before.png` → inspect → edit code in WSL → `refresh` →
-   `shot out/after.png` → compare.
 
 ## Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `REMOTE_WEBDRIVER_URL` | `http://<auto-detected-gateway>:4446` | Full relay URL; set this to bypass auto-detection |
-| `REMOTE_WEBDRIVER_PORT` | `4446` | Relay port when auto-detecting the host IP |
-| `TAURI_APPLICATION` | `C:\Users\LONER\1111\prj\xsterm\src-tauri\target\debug\xsterm.exe` | Windows path of the exe tauri-driver launches |
+| `REMOTE_WEBDRIVER_URL` | `http://127.0.0.1:4444` | WebDriver endpoint. Override when driving from a non-WSL host. |
+| `TAURI_APPLICATION` | `C:\Users\LONER\1111\prj\xsterm\src-tauri\target\debug\xsterm.exe` | Windows path of the exe tauri-driver launches. |
 
 ## Troubleshooting
 
-- **`npm run test:remote:check` fails at step 2 (reachability)** — the
-  PowerShell script is not running, or the firewall blocks port 4446.
+- **`npm run test:remote:check` fails at step 1 (reachability)** — the
+  PowerShell script is not running on Windows. Start it (or run
+  `bash scripts/start-webdriver.sh` from WSL).
 - **Session creation fails with a driver/version error** — rerun
   `start-webdriver.ps1`; it reinstalls a matching msedgedriver.
-- **App window opens but is blank** — debug exe without the Vite dev server
-  running on Windows. Start `npm run dev` on Windows, then `refresh`.
-- **Port 4446 already in use** — a previous relay is still alive; stop it or
-  set `RELAY_PORT`/`REMOTE_WEBDRIVER_PORT` to a different port on both sides.
+- **App window opens but is blank (about:blank)** — Vite is not running
+  on Windows. Run `npm run dev` on Windows, then `refresh` in the driver.
+- **Windows-side `npm run dev` fails with `Cannot find module
+  @rollup/rollup-win32-x64-msvc`** — see "native module check" above.
+
+## One-shot helpers
+
+| Script | Purpose |
+|---|---|
+| `scripts/start-webdriver.sh` | WSL-side: launches the Windows PowerShell stack detached, polls for readiness, prints the connect URL. |
+| `scripts/windows/screenshot-window.ps1` | Windows-side: captures a single window (matched by title) into a PNG via `GetWindowRect` + `CopyFromScreen`. Falls back to full-screen capture if the window isn't visible. |
+
+```bash
+# From WSL — start the stack and wait until tauri-driver is responding
+scripts/start-webdriver.sh
+
+# On Windows — screenshot the xsterm window (or any title substring)
+powershell -ExecutionPolicy Bypass -File scripts\windows\screenshot-window.ps1 -WindowTitle xsterm -OutPath C:\temp\xsterm.png
+```
