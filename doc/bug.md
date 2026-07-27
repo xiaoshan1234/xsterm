@@ -62,3 +62,19 @@ YES
 ## 解决方案
 ## 是否解决
 NO
+
+# Bug 006
+## 现象
+`isSessionUsedInOtherWindow(workspaces, currentWorkspaceId, currentWindowId, sessionId)` 在"session 只存在于当前窗口"的情况下错误地返回 `true`。新增的单元测试套件（`src/contexts/session/paneUtils.test.ts`）中对应用例被标记为 `.todo` —— 其期望值为 `false` 而当前实现返回 `true`。
+## 理想效果
+仅当 `sessionId` 出现在一个**不是**当前 workspace/window 的窗口中时返回 `true`；当 session 仅存在于当前窗口时返回 `false`；当 `currentWorkspaceId` 或 `currentWindowId` 为 `null` 时维持现有语义（视为"无当前窗口"，找到即返回 `true`）。
+## BUG原因
+`src/contexts/session/paneUtils.ts` 第 174–188 行。函数遍历 `workspaces[].windows[]`，对**第一个**含目标 session 的窗口立即 `return true`，完全跳过了与 `currentWorkspaceId` / `currentWindowId` 的比对。文档注释明确说"any window other than the currently active one"，但实现里的早返回路径没有遵循该约束。
+## 解决方案
+在含目标 session 的窗口命中分支中，按以下顺序判断：
+1. 若 `currentWorkspaceId === null || currentWindowId === null`，按现有语义返回 `true`；
+2. 若 `workspace.id === currentWorkspaceId && window.id === currentWindowId`，`continue` 到下一个窗口；
+3. 否则返回 `true`。
+循环结束后返回 `false`。修复后把测试文件里的 `it.todo("isSessionUsedInOtherWindow returns false when session is only in the current window")` 改回 `it(...)`，断言期望值 `false`，验证全绿。
+## 是否解决
+NO
