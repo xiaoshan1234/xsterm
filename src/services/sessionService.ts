@@ -23,12 +23,17 @@ export async function createSsh(config: SSHSessionConfig): Promise<SessionInfo> 
   return result;
 }
 
-export async function writeSession(id: number, data: string): Promise<void> {
-  logger.debug("sessionService", "writeSession", { id, data });
+// Fire-and-forget: do not await. Keystroke writes are rAF-batched
+// upstream, so awaiting each IPC would defeat the batching.
+export function writeSession(id: number, data: string): Promise<void> {
   const encoded = new TextEncoder().encode(data);
   const arr = Array.from(encoded);
-  await invoke("write_session", { sessionId: id, data: arr });
-  logger.debug("sessionService", "writeSession:result", undefined);
+  return invoke("write_session", { sessionId: id, data: arr }).then(
+    () => undefined,
+    (e) => {
+      console.error("[xsterm] write_session failed:", e);
+    }
+  );
 }
 
 export async function resizeSession(id: number, rows: number, cols: number): Promise<void> {

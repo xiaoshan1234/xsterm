@@ -57,11 +57,37 @@ YES
 
 # Bug 005
 ## 现象
+在终端中输入字符时存在明显延迟，部分字符被静默丢弃（例如长按同一键时只有少量字符到达、快速连打相同字符时第二个被吃掉），整体感觉"输入太慢/漏字符"。
 ## 理想效果
+键入字符应该几乎即时到达 PTY/SSH 后端，肉眼无明显延迟；OS 长按 autorepeat 和快速连打相同字符都不应被吞；与系统终端 iTerm2、Windows Terminal 同级别。
 ## BUG原因
+两层叠加：
+
+1. **`xterm.onData` 的字符级时间去重窗口（曾为 100ms）** (`src/components/Terminal.tsx`)：`last.text === data && now - last.time < N` 这一条件会把任何"N 毫秒内同字符"的二次触发静默丢弃。这个窗口从 Bug 003 的 30ms → 100ms（覆盖观察到的 31ms 粘贴双路径间隔），副作用是吞掉 OS 长按 autorepeat 的 ~67% 重复键和快速连打 `aa`/`nn` 等同字符输入。Bug 003 同时加上了 `handlePaste` 里的 `e.stopPropagation()` 作为主防线，但后续分析意识到 stopPropagation 已经足够，时间窗口作为冗余保险并不必要：
+   - Bug 003 的 stopPropagation 在 document 级 capture 阶段调用，能阻止事件到达 target（xterm textarea）的 handlers；
+   - 如果 stopPropagation 真的失效，时间窗口也救不了 — 失效可能发生在任何延迟（同步到几百毫秒）；
+   - 所以这个"保险"既不必要，也不充分。
+2. **`sessionService.writeSession` 在热路径上调用 `logger.debug`** (`src/services/sessionService.ts:27,31`)：dev 模式下 `LoggerContext.debug` 同步执行 `console.debug(...)` + 序列化数据，并额外发起一次 `invoke("log_message", ...)` IPC，把每次按键的输入内容写到 Rust 日志。dev 模式下每次按键 = 1 次 `write_session` IPC + 1 次 `log_message` IPC + 控制台序列化开销。
+
+~~【已撤回】rAF 输入批处理 + 10ms dedup~~：曾考虑通过 `requestAnimationFrame` 合并每帧按键和缩小 dedup 窗口，被实施并回滚。原因：
+- rAF 批处理在正常打字场景（≥80ms/字符）下字符本就跨多帧，调度只是把发送时机推迟 0-16ms 而不减少 IPC 次数，纯粹引入延迟；
+- 缩小 dedup 窗口只是把 Bug 003 的"猜一个合理时间"换成"猜一个更紧的时间"，本质问题没解决；
+- 两个机制的合理解都是"相信 stopPropagation"，既然如此就把它们一起去掉。
 ## 解决方案
+1. `src/components/Terminal.tsx`：删除 `xterm.onData` 内的字符级时间去重逻辑，包括 `lastDataRef` ref 的 declaration、onData 里的 dedup 检查、3 处 paste 路径里 `lastDataRef.current = { text, time: ... }` 的赋值。完全信任 Bug 003 的 `e.stopPropagation()`。onData 现在直接：聚焦检查 → 连接检查 → localEcho (可选) → `writeSessionRef.current(sessionId, data)`，无任何过滤。
+2. `src/services/sessionService.ts`：移除 `writeSession` 内两个 `logger.debug` 调用，把 `async/await invoke(...)` 改为 `return invoke(...).then(...)` 的 fire-and-forget 形式。返回类型仍为 `Promise<void>` 以兼容 `CommandSendPanel` 中已有的 `.catch(...)` 链式调用。
+
+**未动 → flag-based → 已用 preventDefault 彻底简化**：原本的 `lastKeyboardPasteRef` 时间窗口 → flag → 全部移除。键盘粘贴 handler 现在**只**为 `Ctrl+Shift+V` 这种浏览器默认不合成 paste 事件的快捷键服务（`src/components/Terminal.tsx:155-165`）；`Cmd+V`/`Ctrl+V`/`Shift+Insert` 这些浏览器默认会合成 paste 事件的快捷键**完全不进键盘 handler**，让浏览器合成 paste 事件 → document handler 处理 —— 这样 document handler 才能拿到 clipboardData 里的 `text` 和 `files` 两类数据，**恢复 SSH 图片粘贴功能**。
+
+`preventDefault()` 是个二元操作：要么全阻止要么全放行，没办法区分剪贴板里是文本还是图片。所以只能针对"浏览器本来就不合成 paste 事件"的快捷键用 preventDefault，对"浏览器默认会合成"的快捷键必须让事件触发，让 document handler 自己读完整的 clipboardData。
+
+三条 paste 路径 → 两条互斥路径：
+- **键盘 handler 路径**：`Ctrl+Shift+V` 唯一，因为浏览器不为它合成 paste 事件
+- **document handler 路径**：`Cmd+V`/`Ctrl+V`/`Shift+Insert`/右键/浏览器菜单，全部统一走这里
+
+不再需要任何 flag、queueMicrotask、时间窗口或"猜延迟"的去重机制。
 ## 是否解决
-NO
+YES
 
 # Bug 006
 ## 现象

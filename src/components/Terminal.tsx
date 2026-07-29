@@ -52,12 +52,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   const localEchoEnabled = getEffectiveLocalEcho(sessionId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
-  const lastDataRef = useRef<{ text: string; time: number } | null>(null);
   const isFocusedRef = useRef(isActive);
   const isConnectedRef = useRef(isConnected);
   const isReconnectingRef = useRef(false);
   const reconnectSessionRef = useRef(reconnectSession);
-  const lastKeyboardPasteRef = useRef<{ time: number; text: string } | null>(null);
 
   useEffect(() => {
     isFocusedRef.current = isActive;
@@ -89,22 +87,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
       const text = e.clipboardData?.getData("text") || e.clipboardData?.getData("text/plain");
 
-      const lastKeyboardPaste = lastKeyboardPasteRef.current;
-      if (lastKeyboardPaste && Date.now() - lastKeyboardPaste.time < 100) {
-        if (text) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        lastKeyboardPasteRef.current = null;
-        return;
-      }
-
       if (text) {
         e.preventDefault();
         e.stopPropagation();
         if (isConnectedRef.current) {
           writeSessionRef.current(sessionId, text);
-          lastDataRef.current = { text, time: Date.now() };
         }
         return;
       }
@@ -159,17 +146,17 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         return false;
       }
 
-      const pasteShortcut = (event.ctrlKey && event.shiftKey && (event.key === "v" || event.key === "V")) ||
-        (event.shiftKey && event.key === "Insert") ||
-        (event.metaKey && (event.key === "v" || event.key === "V"));
+      // Only handle shortcuts whose browser default does NOT synthesize a
+      // paste event; otherwise let the document handler run so it can read
+      // both text and image clipboard data.
+      const isTerminalPasteShortcut =
+        event.ctrlKey && event.shiftKey && (event.key === "v" || event.key === "V");
 
-      if (pasteShortcut && isConnectedRef.current) {
-        lastKeyboardPasteRef.current = { time: Date.now(), text: "" };
+      if (isTerminalPasteShortcut && isConnectedRef.current) {
+        event.preventDefault();
         readText().then((text) => {
-          if (text) {
-            lastKeyboardPasteRef.current = { time: Date.now(), text };
+          if (text && isConnectedRef.current) {
             writeSessionRef.current(sessionId, text);
-            lastDataRef.current = { text, time: Date.now() };
           }
         }).catch((err) => {
           console.error("[xsterm] Failed to paste text from clipboard:", err);
@@ -207,13 +194,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
         return;
       }
-
-      const now = Date.now();
-      const last = lastDataRef.current;
-      if (last && last.text === data && now - last.time < 100) {
-        return;
-      }
-      lastDataRef.current = { text: data, time: now };
 
       if (localEchoEnabledRef.current) {
         xterm.write(data);
@@ -272,7 +252,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
           const text = await readText();
           if (text && isConnectedRef.current) {
             writeSessionRef.current(sessionId, text);
-            lastDataRef.current = { text, time: Date.now() };
           }
         } catch (err) {
           console.error("[xsterm] Failed to paste from clipboard:", err);
