@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Supported session types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +42,18 @@ pub struct SSHSessionConfig {
     pub username: String,
     #[serde(flatten)]
     pub auth: SSHAuth,
+    #[serde(default)]
+    pub term_type: Option<String>,
+    #[serde(default)]
+    pub initial_rows: Option<u32>,
+    #[serde(default)]
+    pub initial_cols: Option<u32>,
+    #[serde(default)]
+    pub keepalive_interval: Option<u32>,
+    #[serde(default)]
+    pub connection_timeout: Option<u32>,
+    #[serde(default)]
+    pub enable_compression: Option<bool>,
 }
 
 /// Authentication method for an SSH session.
@@ -53,6 +66,32 @@ pub enum SSHAuth {
     /// Authenticate with a private key file and optional passphrase.
     #[serde(rename = "key")]
     KeyFile { key_file: String, passphrase: Option<String> },
+}
+
+/// Display configuration for terminal appearance.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DisplayConfig {
+    pub font_size: Option<u32>,
+    pub font_family: Option<String>,
+    pub cursor_style: Option<String>,
+    pub cursor_blink: Option<bool>,
+    pub scrollback: Option<u32>,
+    pub line_height: Option<f64>,
+    pub letter_spacing: Option<f64>,
+    pub cursor_width: Option<u32>,
+}
+
+/// Environment variables configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct EnvConfig {
+    pub env: Option<HashMap<String, String>>,
+}
+
+/// Persistent saved session configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SavedSessionConfig {
+    pub display_config: Option<DisplayConfig>,
+    pub env_config: Option<EnvConfig>,
 }
 
 /// Build a remote path for an uploaded image file.
