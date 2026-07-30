@@ -98,10 +98,17 @@ export interface SessionEnvConfig {
 }
 
 export interface SavedSessionConfig {
+  /** Unique identifier for this saved session config */
   id: string;
+  /** Display name shown in the UI */
   name: string;
+  /** Session type - 'local' for PTY shell, 'ssh' for SSH connection */
   type: "local" | "ssh";
+  /** Display settings like font size, cursor style, etc. */
+  displayConfig?: SessionDisplayConfig;
+  /** Configuration for local PTY sessions (shell, cwd, args) */
   localConfig?: LocalSessionConfig;
+  /** Configuration for SSH sessions (host, port, auth, etc.) */
   sshConfig?: SSHSessionConfig;
 }
 
