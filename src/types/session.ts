@@ -68,6 +68,33 @@ export interface SSHSessionConfig {
   password?: string;
   key_file?: string;
   passphrase?: string;
+  /** Terminal type advertised to the server. @default 'xterm-256color' */
+  termType?: string;
+  /** Initial terminal rows. @default 24 */
+  initialRows?: number;
+  /** Initial terminal columns. @default 80 */
+  initialCols?: number;
+  /** SSH keepalive interval in seconds. @default 0 (disabled) */
+  keepaliveInterval?: number;
+  /** Connection timeout in seconds. @default 30 */
+  connectionTimeout?: number;
+  /** Enable zlib compression for the SSH stream. @default false */
+  enableCompression?: boolean;
+}
+
+export interface SessionDisplayConfig {
+  fontSize?: number;
+  fontFamily?: string;
+  cursorStyle?: "block" | "underline" | "bar";
+  cursorBlink?: boolean;
+  scrollback?: number;
+  lineHeight?: number;
+  letterSpacing?: number;
+  cursorWidth?: number;
+}
+
+export interface SessionEnvConfig {
+  env?: Record<string, string>;
 }
 
 export interface SavedSessionConfig {
