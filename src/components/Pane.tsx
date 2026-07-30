@@ -248,7 +248,7 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
                 </div>
               )}
               <div className="pane-terminal-wrapper">
-                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} />
+                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} displayConfig={session.displayConfig} />
               </div>
             </div>
           ) : (

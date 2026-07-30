@@ -1,17 +1,18 @@
 import { useState, useEffect } from "react";
 import { useSession } from "../../contexts/SessionContext";
-import { LocalSessionConfig, SSHSessionConfig, Session } from "../../types/session";
+import { LocalSessionConfig, SSHSessionConfig, Session, SessionDisplayConfig } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
+import { DisplayConfigForm } from "./DisplayConfigForm";
 import "./CreateSessionDialog.css";
 
 interface CreateSessionDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateLocal: (config: LocalSessionConfig, save: boolean) => Promise<Session>;
-  onCreateSsh: (config: SSHSessionConfig, save: boolean) => Promise<Session>;
+  onCreateLocal: (config: LocalSessionConfig, save: boolean, displayConfig?: SessionDisplayConfig) => Promise<Session>;
+  onCreateSsh: (config: SSHSessionConfig, save: boolean, displayConfig?: SessionDisplayConfig) => Promise<Session>;
   initialTab?: "local" | "ssh";
   initialGroupId?: number | null;
 }
@@ -38,6 +39,7 @@ export default function CreateSessionDialog({
     key_file: "",
     passphrase: "",
   });
+  const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(undefined);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function CreateSessionDialog({
         key_file: "",
         passphrase: "",
       });
+      setDisplayConfig(undefined);
     }
   }, [isOpen, initialGroupId, initialTab]);
 
@@ -64,14 +67,14 @@ export default function CreateSessionDialog({
 
     try {
       if (tab === "local") {
-        session = await onCreateLocal(localConfig, saveConfig);
+        session = await onCreateLocal(localConfig, saveConfig, displayConfig);
       } else {
         const validationError = validateSshConfig(sshConfig);
         if (validationError) {
           setError(validationError);
           return;
         }
-        session = await onCreateSsh(sshConfig, saveConfig);
+        session = await onCreateSsh(sshConfig, saveConfig, displayConfig);
       }
 
       if (selectedGroupId !== null) {
@@ -141,6 +144,11 @@ export default function CreateSessionDialog({
       ) : (
         <SshSessionForm config={sshConfig} onChange={setSshConfig} onError={setError} />
       )}
+
+      <details className="display-options-section">
+        <summary>Display Options (optional)</summary>
+        <DisplayConfigForm config={displayConfig} onChange={setDisplayConfig} />
+      </details>
     </Dialog>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { SessionDisplayConfig } from "../types/session";
 import { uploadImageToSshSession } from "../services/sessionService";
 import { getClipboardImages } from "../utils/clipboard";
 import { useXterm } from "../hooks/useXterm";
@@ -21,6 +22,7 @@ interface TerminalProps {
   isWindowActive?: boolean;
   isConnected: boolean;
   configId: string;
+  displayConfig?: SessionDisplayConfig;
   onFocus?: () => void;
 }
 
@@ -31,7 +33,7 @@ export interface TerminalRef {
   pasteFromClipboard: () => Promise<void>;
 }
 
-const XTERM_OPTIONS = {
+const DEFAULT_XTERM_OPTIONS = {
   fontSize: 14,
   fontFamily: "Menlo, Monaco, 'Courier New', monospace",
   cursorBlink: true,
@@ -39,14 +41,15 @@ const XTERM_OPTIONS = {
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
-  { sessionId, sessionType, isActive = true, isWindowActive = true, isConnected, configId: _configId, onFocus },
+  { sessionId, sessionType, isActive = true, isWindowActive = true, isConnected, configId: _configId, displayConfig, onFocus },
   ref
 ) {
   // containerRef: xterm.js 的实际 DOM 挂载点，useXterm 会在此 div 内创建 Terminal 实例
   const containerRef = useRef<HTMLDivElement>(null);
   const { currentTheme } = useTheme();
+  const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...displayConfig };
   // useXterm: 初始化 xterm.js，加载主题和应用 xterm options；返回 termRef（xterm 实例）和 fitAddonRef（自适应尺寸插件）
-  const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, XTERM_OPTIONS);
+  const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
   const { writeSession, getEffectiveLocalEcho, reconnectSession } = useSession();
   const localEchoEnabled = getEffectiveLocalEcho(sessionId);

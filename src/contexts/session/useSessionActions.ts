@@ -7,6 +7,7 @@ import {
   SavedWindowConfig,
   SavedWorkspace,
   Session,
+  SessionDisplayConfig,
   SplitDirection,
   Window,
   Workspace,
@@ -51,7 +52,12 @@ function getUniqueWindowName(
   return `${baseName}-${suffix}`;
 }
 
-function buildFrontendSession(info: sessionService.SessionInfo, configId: string, type: Session["type"]): Session {
+function buildFrontendSession(
+  info: sessionService.SessionInfo,
+  configId: string,
+  type: Session["type"],
+  displayConfig?: SessionDisplayConfig
+): Session {
   return {
     id: info.id,
     configId,
@@ -59,6 +65,7 @@ function buildFrontendSession(info: sessionService.SessionInfo, configId: string
     type,
     is_connected: info.is_connected,
     session_type: info.session_type,
+    displayConfig,
   };
 }
 
@@ -113,7 +120,7 @@ export function useSessionActions({
         throw new Error("Invalid config");
       }
 
-      const session = buildFrontendSession(info, configId, type);
+      const session = buildFrontendSession(info, configId, type, config.displayConfig);
       setSessions((prev) => [...prev, session]);
 
       return session;
@@ -868,11 +875,12 @@ export function useSessionActions({
       create: () => Promise<sessionService.SessionInfo>,
       config: LocalSessionConfig | SSHSessionConfig,
       save: boolean,
-      skipAutoWindow = false
+      skipAutoWindow = false,
+      displayConfig?: SessionDisplayConfig
     ): Promise<Session> => {
       const configId = generateId();
       const info = await create();
-      const session = buildFrontendSession(info, configId, type);
+      const session = buildFrontendSession(info, configId, type, displayConfig);
 
       setSessions((prev) => [...prev, session]);
 
@@ -880,10 +888,10 @@ export function useSessionActions({
         let savedConfig: SavedSessionConfig;
         if (type === "local") {
           const localConfig = config as LocalSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "local", localConfig };
+          savedConfig = { id: configId, name: info.name, type: "local", localConfig, displayConfig };
         } else {
           const sshConfig = config as SSHSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "ssh", sshConfig };
+          savedConfig = { id: configId, name: info.name, type: "ssh", sshConfig, displayConfig };
         }
         updateConfigs((prev) => [...prev, savedConfig]);
       }
@@ -903,8 +911,8 @@ export function useSessionActions({
    *  → 后端 sessionService.createLocal(config) → sessions[] + 自动创建工作区
    */
   const createLocalSession = useCallback(
-    async (config: LocalSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save);
+    async (config: LocalSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
+      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, false, displayConfig);
     },
     [createAndActivateSession]
   );
@@ -916,22 +924,22 @@ export function useSessionActions({
    *  → 后端 sessionService.createSsh(config) → sessions[] + 自动创建工作区
    */
   const createSshSession = useCallback(
-    async (config: SSHSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save);
+    async (config: SSHSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
+      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, false, displayConfig);
     },
     [createAndActivateSession]
   );
 
   const createLocalSessionOnly = useCallback(
-    async (config: LocalSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, true);
+    async (config: LocalSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
+      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, true, displayConfig);
     },
     [createAndActivateSession]
   );
 
   const createSshSessionOnly = useCallback(
-    async (config: SSHSessionConfig, save = true): Promise<Session> => {
-      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, true);
+    async (config: SSHSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
+      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, true, displayConfig);
     },
     [createAndActivateSession]
   );
@@ -1038,7 +1046,7 @@ export function useSessionActions({
         throw new Error("Invalid saved config");
       }
 
-      const newSession = buildFrontendSession(info, oldSession.configId, type);
+      const newSession = buildFrontendSession(info, oldSession.configId, type, config.displayConfig);
       setSessions((prev) => [...prev, newSession]);
 
       setWorkspaces((prev) =>

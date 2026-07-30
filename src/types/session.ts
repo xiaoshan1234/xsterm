@@ -48,6 +48,7 @@ export interface Session {
   type: "local" | "ssh";
   is_connected: boolean;
   session_type: SessionType;
+  displayConfig?: SessionDisplayConfig;
 }
 
 export type SessionType =

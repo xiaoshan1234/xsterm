@@ -32,6 +32,18 @@ export interface UseXtermResult {
   fitAddonRef: RefObject<FitAddon | null>;
 }
 
+// Keys we forward to xterm.options.set(); theme is handled separately.
+const SETTABLE_KEYS = [
+  "fontSize",
+  "fontFamily",
+  "cursorBlink",
+  "cursorStyle",
+  "cursorWidth",
+  "scrollback",
+  "lineHeight",
+  "letterSpacing",
+] as const;
+
 export function useXterm(
   containerRef: RefObject<HTMLDivElement | null>,
   theme: TerminalTheme,
@@ -83,6 +95,28 @@ export function useXterm(
     if (!xterm) return;
     xterm.options.theme = themeToXtermTheme(theme);
   }, [theme]);
+
+  // Display options 变更时同步更新 xterm 实例的可热更新配置。
+  useEffect(() => {
+    const xterm = termRef.current;
+    if (!xterm) return;
+    for (const key of SETTABLE_KEYS) {
+      const value = (options as Record<string, unknown>)[key];
+      if (value !== undefined) {
+        (xterm.options as Record<string, unknown>)[key] = value;
+      }
+    }
+    xterm.refresh(0, xterm.rows - 1);
+  }, [
+    options.fontSize,
+    options.fontFamily,
+    options.cursorBlink,
+    options.cursorStyle,
+    options.cursorWidth,
+    options.scrollback,
+    options.lineHeight,
+    options.letterSpacing,
+  ]);
 
   return { termRef, fitAddonRef };
 }

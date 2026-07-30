@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { SavedSessionConfig, LocalSessionConfig, SSHSessionConfig, SessionGroup } from "../../types/session";
+import { SavedSessionConfig, LocalSessionConfig, SSHSessionConfig, SessionGroup, SessionDisplayConfig } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
+import { DisplayConfigForm } from "./DisplayConfigForm";
 
 interface EditSessionDialogProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function EditSessionDialog({ isOpen, onClose, config, groups, groupId, on
   const [sshConfig, setSshConfig] = useState<SSHSessionConfig>(
     config.sshConfig ?? { host: "", port: 22, username: "", auth_type: "password", password: "", key_file: "", passphrase: "" }
   );
+  const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(config.displayConfig);
   const [sshError, setSshError] = useState("");
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export function EditSessionDialog({ isOpen, onClose, config, groups, groupId, on
       setSelectedGroupId(groupId);
       setLocalConfig(config.localConfig ?? {});
       setSshConfig(config.sshConfig ?? { host: "", port: 22, username: "", auth_type: "password", password: "", key_file: "", passphrase: "" });
+      setDisplayConfig(config.displayConfig);
       setSshError("");
     }
   }, [isOpen, config, groupId]);
@@ -50,6 +53,7 @@ export function EditSessionDialog({ isOpen, onClose, config, groups, groupId, on
       name: trimmedName,
       localConfig: config.type === "local" ? localConfig : undefined,
       sshConfig: config.type === "ssh" ? sshConfig : undefined,
+      displayConfig,
     };
 
     onSave(updatedConfig, selectedGroupId);
@@ -114,6 +118,11 @@ export function EditSessionDialog({ isOpen, onClose, config, groups, groupId, on
           />
         </>
       )}
+
+      <details className="display-options-section">
+        <summary>Display Options (optional)</summary>
+        <DisplayConfigForm config={displayConfig} onChange={setDisplayConfig} />
+      </details>
     </Dialog>
   );
 }
