@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { LocalSessionConfig } from "../../types/session";
 import { FormField } from "../ui/FormField";
+import "./LocalSessionForm.css";
 
 const isWindows = navigator.userAgent.toLowerCase().includes("windows") ||
   navigator.platform.toLowerCase().includes("win");
@@ -31,12 +32,42 @@ interface LocalSessionFormProps {
   mode?: "create" | "edit";
 }
 
+interface EnvVar {
+  key: string;
+  value: string;
+}
+
+function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
+  const result: Record<string, string> = {};
+  for (const v of vars) {
+    if (v.key.trim()) {
+      result[v.key.trim()] = v.value;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSessionFormProps) {
+  const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
+    const env = config.envConfig?.env || {};
+    return Object.entries(env).map(([key, value]) => ({ key, value }));
+  });
+
   useEffect(() => {
     if (mode === "create") {
       onChange({});
+      setEnvVars([]);
     }
   }, [mode]);
+
+  const updateEnvVars = (next: EnvVar[]) => {
+    setEnvVars(next);
+    const envMap = envVarsToMap(next);
+    onChange({
+      ...config,
+      envConfig: envMap ? { env: envMap } : undefined,
+    });
+  };
 
   return (
     <>
@@ -69,6 +100,49 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
             onChange({ ...config, args });
           }}
         />
+      </FormField>
+      <FormField label="Environment Variables">
+        <div className="env-vars-list">
+          {envVars.map((env, index) => (
+            <div key={index} className="env-var-row">
+              <input
+                type="text"
+                placeholder="KEY"
+                value={env.key}
+                onChange={(e) => {
+                  const next = [...envVars];
+                  next[index] = { ...env, key: e.target.value };
+                  updateEnvVars(next);
+                }}
+              />
+              <input
+                type="text"
+                placeholder="VALUE"
+                value={env.value}
+                onChange={(e) => {
+                  const next = [...envVars];
+                  next[index] = { ...env, value: e.target.value };
+                  updateEnvVars(next);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const next = envVars.filter((_, i) => i !== index);
+                  updateEnvVars(next);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => updateEnvVars([...envVars, { key: "", value: "" }])}
+          >
+            Add Variable
+          </button>
+        </div>
       </FormField>
     </>
   );

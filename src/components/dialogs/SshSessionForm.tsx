@@ -12,6 +12,13 @@ const DEFAULT_SSH_CONFIG: SSHSessionConfig = {
   passphrase: "",
 };
 
+const TERM_TYPES = [
+  { value: "xterm-256color", label: "xterm-256color (recommended)" },
+  { value: "xterm", label: "xterm" },
+  { value: "vt100", label: "vt100" },
+  { value: "screen", label: "screen" },
+];
+
 interface SshSessionFormProps {
   config: SSHSessionConfig;
   onChange: (config: SSHSessionConfig) => void;
@@ -90,6 +97,67 @@ export function SshSessionForm({ config, onChange, mode = "create" }: SshSession
           </FormField>
         </>
       )}
+      <FormField label="Terminal Type">
+        <select
+          value={config.termType || "xterm-256color"}
+          onChange={(e) => onChange({ ...config, termType: e.target.value })}
+        >
+          {TERM_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+      </FormField>
+      <FormField label="Initial Rows">
+        <input
+          type="number"
+          placeholder="24"
+          value={config.initialRows ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ ...config, initialRows: v ? parseInt(v) : undefined });
+          }}
+        />
+      </FormField>
+      <FormField label="Initial Cols">
+        <input
+          type="number"
+          placeholder="80"
+          value={config.initialCols ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ ...config, initialCols: v ? parseInt(v) : undefined });
+          }}
+        />
+      </FormField>
+      <FormField label="Keepalive Interval (seconds)">
+        <input
+          type="number"
+          placeholder="(disabled)"
+          value={config.keepaliveInterval ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ ...config, keepaliveInterval: v ? parseInt(v) : undefined });
+          }}
+        />
+      </FormField>
+      <FormField label="Connection Timeout (seconds)">
+        <input
+          type="number"
+          placeholder="(no timeout)"
+          value={config.connectionTimeout ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ ...config, connectionTimeout: v ? parseInt(v) : undefined });
+          }}
+        />
+      </FormField>
+      <FormField label="Enable Compression">
+        <input
+          type="checkbox"
+          checked={config.enableCompression ?? false}
+          onChange={(e) => onChange({ ...config, enableCompression: e.target.checked })}
+        />
+      </FormField>
     </>
   );
 }
