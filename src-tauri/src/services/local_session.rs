@@ -46,6 +46,13 @@ pub fn create_local_session(
             cmd.arg(&arg);
         }
     }
+    if let Some(env_config) = &config.env_config {
+        if let Some(env) = &env_config.env {
+            for (key, value) in env {
+                cmd.env(key, value);
+            }
+        }
+    }
     cmd.cwd(&cwd);
 
     let child = pair.spawn(cmd).map_err_string()?;
