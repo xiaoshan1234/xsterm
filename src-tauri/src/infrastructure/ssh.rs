@@ -1,5 +1,6 @@
 use std::sync::{mpsc as sync_mpsc, Arc};
 use std::thread;
+use std::time::Duration;
 
 use russh::keys::{decode_secret_key, PrivateKeyWithHashAlg, PublicKey};
 use russh::CryptoVec;
@@ -10,23 +11,23 @@ use crate::error::StringError;
 use crate::infrastructure::pty::default_pty_size;
 use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo};
 
-/// Default terminal type requested for SSH PTY sessions.
-const DEFAULT_TERMINAL_TYPE: &str = "xterm";
+/// Default terminal type requested for SSH PTY sessions when the config
+/// does not specify one. Defaults to `xterm-256color` for broad compatibility.
+const DEFAULT_TERMINAL_TYPE: &str = "xterm-256color";
 
 /// Marker trait for SSH channel handles.
 pub trait SshChannel: Send {}
 
 /// Backend capable of establishing an SSH connection.
 pub trait SshBackend: Send {
-    /// Connect to `host:port` as `username` using the provided `auth` method.
+    /// Connect using the full `SSHSessionConfig`, which carries host, port,
+    /// auth, terminal options, and connection-level knobs (keepalive,
+    /// timeout, compression).
     ///
     /// On success, returns the I/O channels needed to drive the session.
     fn connect(
         &self,
-        host: &str,
-        port: u16,
-        auth: &SSHAuth,
-        username: &str,
+        config: &SSHSessionConfig,
     ) -> Result<SshConnectResult, String>;
 }
 
@@ -77,12 +78,9 @@ impl RusshBackend {
 impl SshBackend for RusshBackend {
     fn connect(
         &self,
-        host: &str,
-        port: u16,
-        auth: &SSHAuth,
-        username: &str,
+        config: &SSHSessionConfig,
     ) -> Result<SshConnectResult, String> {
-        connect_ssh(host, port, auth, username)
+        connect_ssh(config)
     }
 }
 
@@ -90,12 +88,7 @@ impl SshBackend for RusshBackend {
 ///
 /// The thread communicates back through `result_tx` (success/failure of the
 /// initial handshake) and `read_tx` (incoming SSH channel data).
-fn connect_ssh(
-    host: &str,
-    port: u16,
-    auth: &SSHAuth,
-    username: &str,
-) -> Result<SshConnectResult, String> {
+fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
     let (result_tx, result_rx) = sync_mpsc::channel::<Result<(), String>>();
     let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
     let (write_tx, mut write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
@@ -104,9 +97,7 @@ fn connect_ssh(
         (Some(tx), Some(rx))
     };
 
-    let host = host.to_string();
-    let username = username.to_string();
-    let auth_clone = auth.clone();
+    let config_clone = config.clone();
 
     thread::spawn(move || {
         let rt = Builder::new_current_thread()
@@ -116,10 +107,7 @@ fn connect_ssh(
 
         rt.block_on(async move {
             let result = run_ssh_session(
-                &host,
-                port,
-                &username,
-                &auth_clone,
+                &config_clone,
                 &result_tx,
                 &read_tx,
                 &mut write_rx,
@@ -145,39 +133,84 @@ fn connect_ssh(
 
 /// Run the full SSH session lifecycle: connect, authenticate, request PTY/shell,
 /// then forward data until the channel closes.
-#[allow(clippy::too_many_arguments)]
 async fn run_ssh_session(
-    host: &str,
-    port: u16,
-    username: &str,
-    auth: &SSHAuth,
+    config: &SSHSessionConfig,
     result_tx: &sync_mpsc::Sender<Result<(), String>>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     resize_rx: Option<mpsc::UnboundedReceiver<(u16, u16)>>,
 ) -> Result<(), String> {
-    let config = Arc::new(russh::client::Config {
-        ..Default::default()
-    });
+    let mut russh_config = russh::client::Config::default();
+    if let Some(secs) = config.keepalive_interval {
+        russh_config.keepalive_interval = Some(Duration::from_secs(secs as u64));
+    }
+    if config.enable_compression.unwrap_or(false) {
+        russh_config.preferred.compression =
+            std::borrow::Cow::Borrowed(&[russh::compression::ZLIB]);
+    }
+    let russh_config = Arc::new(russh_config);
 
-    let mut handle = russh::client::connect(config, (host, port), ClientHandler)
+    let connect_fut =
+        russh::client::connect(russh_config, (config.host.clone(), config.port), ClientHandler);
+    let mut handle = if let Some(secs) = config.connection_timeout {
+        match tokio::time::timeout(
+            Duration::from_secs(secs as u64),
+            connect_fut,
+        )
         .await
-        .map_err(|e| format!("SSH connection to {}:{} failed: {}", host, port, e))?;
+        {
+            Ok(result) => result.map_err(|e| {
+                format!(
+                    "SSH connection to {}:{} failed: {}",
+                    config.host, config.port, e
+                )
+            })?,
+            Err(_) => {
+                return Err(format!(
+                    "SSH connection to {}:{} timed out after {} seconds",
+                    config.host, config.port, secs
+                ));
+            }
+        }
+    } else {
+        connect_fut.await.map_err(|e| {
+            format!(
+                "SSH connection to {}:{} failed: {}",
+                config.host, config.port, e
+            )
+        })?
+    };
 
-    authenticate(&mut handle, username, auth)
+    authenticate(&mut handle, &config.username, &config.auth)
         .await
-        .map_err(|e| format!("SSH authentication failed for {}@{}: {}", username, host, e))?;
+        .map_err(|e| {
+            format!(
+                "SSH authentication failed for {}@{}: {}",
+                config.username, config.host, e
+            )
+        })?;
 
     let mut channel = handle
         .channel_open_session()
         .await
         .map_err(|e| format!("Failed to open SSH session channel: {}", e))?;
 
-    let pty_size = default_pty_size();
+    let term_type = config
+        .term_type
+        .as_deref()
+        .unwrap_or(DEFAULT_TERMINAL_TYPE);
+    let mut pty_size = default_pty_size();
+    if let Some(rows) = config.initial_rows {
+        pty_size.rows = rows as u16;
+    }
+    if let Some(cols) = config.initial_cols {
+        pty_size.cols = cols as u16;
+    }
+
     channel
         .request_pty(
             true,
-            DEFAULT_TERMINAL_TYPE,
+            term_type,
             u32::from(pty_size.cols),
             u32::from(pty_size.rows),
             u32::from(pty_size.pixel_width),
@@ -347,9 +380,15 @@ async fn exec_ssh_command(
     command: &str,
     stdin_data: Vec<u8>,
 ) -> Result<(), String> {
-    let ssh_config = Arc::new(russh::client::Config {
-        ..Default::default()
-    });
+    let mut ssh_config = russh::client::Config::default();
+    if let Some(secs) = config.keepalive_interval {
+        ssh_config.keepalive_interval = Some(Duration::from_secs(secs as u64));
+    }
+    if config.enable_compression.unwrap_or(false) {
+        ssh_config.preferred.compression =
+            std::borrow::Cow::Borrowed(&[russh::compression::ZLIB]);
+    }
+    let ssh_config = Arc::new(ssh_config);
 
     let mut handle = russh::client::connect(
         ssh_config,

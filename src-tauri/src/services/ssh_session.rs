@@ -14,7 +14,7 @@ pub fn create_ssh_session(
     session_id: u32,
 ) -> Result<SshSessionWrapper, String> {
     let SshConnectResult { channel: _channel, write_tx, read_rx, resize_tx } =
-        ssh_backend.connect(&config.host, config.port, &config.auth, &config.username)?;
+        ssh_backend.connect(&config)?;
 
     // Keep the channel alive for the lifetime of the session. It is never used
     // directly because reads/writes go through the dedicated channels above.

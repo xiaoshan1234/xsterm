@@ -32,6 +32,8 @@ pub struct LocalSessionConfig {
     pub cwd: Option<String>,
     #[serde(default)]
     pub args: Option<Vec<String>>,
+    #[serde(default)]
+    pub env_config: Option<EnvConfig>,
 }
 
 /// Configuration for creating an SSH session.
@@ -91,7 +93,6 @@ pub struct EnvConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SavedSessionConfig {
     pub display_config: Option<DisplayConfig>,
-    pub env_config: Option<EnvConfig>,
 }
 
 /// Build a remote path for an uploaded image file.
