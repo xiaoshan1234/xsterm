@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState, MouseEvent as ReactMouseEvent } from "react";
-import { Workspace } from "../types/session";
-import { CloseIcon } from "./icons/Icon";
-import "./WorkspaceBottomBar.css";
+import { AppBar, Toolbar, Select, MenuItem, IconButton, Box, FormControl } from "@mui/material";
+import { Close as CloseIcon, Terminal as TerminalIcon, Check as CheckIcon } from "@mui/icons-material";
 
 export interface WorkspaceBottomBarProps {
   workspaceName: string;
-  workspaces: Workspace[];
+  workspaces: { id: string; name: string }[];
   activeWorkspaceId: string | null;
-  onSelectWorkspace: (workspaceId: string) => void;
-  onCloseWorkspace: (workspaceId: string) => void;
+  onSelectWorkspace: (id: string) => void;
+  onCloseWorkspace: (id: string) => void;
   commandPanelOpen: boolean;
   onToggleCommandPanel: () => void;
 }
@@ -19,119 +17,37 @@ export function WorkspaceBottomBar({
   activeWorkspaceId,
   onSelectWorkspace,
   onCloseWorkspace,
-  onToggleCommandPanel,
   commandPanelOpen,
+  onToggleCommandPanel,
 }: WorkspaceBottomBarProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(target) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(target)
-      ) {
-        setMenuOpen(false);
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [menuOpen]);
-
-  const handleToggle = () => {
-    setMenuOpen((prev) => !prev);
-  };
-
-  const handleSelect = (id: string) => {
-    onSelectWorkspace(id);
-    setMenuOpen(false);
-  };
-
-  const handleClose = (e: ReactMouseEvent<HTMLSpanElement>, id: string) => {
-    e.stopPropagation();
-    onCloseWorkspace(id);
-  };
-
   return (
-    <div className="workspace-bottom-bar">
-      <div className="workspace-bottom-bar-start">
-        <button
-          className="workspace-bottom-bar-button"
-          type="button"
-          onClick={onToggleCommandPanel}
-          title={commandPanelOpen ? "Hide emit panel" : "Show emit panel"}
-        >
-          <span>Emit</span>
-        </button>
-      </div>
-      <div className="workspace-bottom-bar-end">
-        <div className="workspace-switcher">
-          <button
-            ref={triggerRef}
-            className="workspace-switcher-trigger"
-            type="button"
-            onClick={handleToggle}
-            aria-haspopup="true"
-            aria-expanded={menuOpen}
-            title="Switch workspace"
+    <AppBar position="static" elevation={0} sx={{ bgcolor: "background.paper", borderTop: 1, borderColor: "divider" }}>
+      <Toolbar variant="dense" sx={{ minHeight: 32, display: "flex", gap: 1, px: 1 }}>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <Select
+            value={activeWorkspaceId ?? ""}
+            displayEmpty
+            onChange={(e) => onSelectWorkspace(e.target.value as string)}
+            sx={{ fontSize: "0.8125rem", height: 24 }}
           >
-            <span className="workspace-bottom-bar-label">Workspace:</span>
-            <span className="workspace-bottom-bar-name">{workspaceName}</span>
-          </button>
-          {menuOpen && (
-            <div ref={menuRef} className="workspace-switcher-menu" role="menu">
-              {workspaces.map((w) => {
-                const isActive = w.id === activeWorkspaceId;
-                const isDefault = w.name === "default";
-                return (
-                  <button
-                    key={w.id}
-                    className={`workspace-switcher-item ${isActive ? "active" : ""}`}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => handleSelect(w.id)}
-                  >
-                    <span className="workspace-switcher-item-left">
-                      {isActive && <span className="workspace-switcher-check" aria-hidden="true">●</span>}
-                      <span className="workspace-switcher-item-name">{w.name}</span>
-                    </span>
-                    <span className="workspace-switcher-item-actions">
-                      {!isDefault && (
-                        <span
-                          className="workspace-switcher-item-close"
-                          onClick={(e) => handleClose(e, w.id)}
-                          title="Close workspace"
-                          role="button"
-                          aria-label={`Close workspace ${w.name}`}
-                        >
-                          <CloseIcon size={12} />
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+            {workspaces.map((w) => (
+              <MenuItem key={w.id} value={w.id} sx={{ fontSize: "0.8125rem" }}>
+                {w.id === activeWorkspaceId ? <CheckIcon fontSize="small" sx={{ mr: 0.5 }} /> : null}
+                {w.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Box sx={{ flex: 1 }} />
+        <IconButton size="small" onClick={onToggleCommandPanel} color={commandPanelOpen ? "primary" : "default"}>
+          <TerminalIcon fontSize="small" />
+        </IconButton>
+        {activeWorkspaceId && (
+          <IconButton size="small" onClick={() => onCloseWorkspace(activeWorkspaceId)} aria-label="Close workspace">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        )}
+      </Toolbar>
+    </AppBar>
   );
 }

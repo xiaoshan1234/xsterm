@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { ChatIcon, SettingsIcon, LogIcon, WorkspaceIcon, WindowIcon } from "../icons/Icon";
+import { Box, IconButton, Tooltip } from "@mui/material";
+import { ChatIcon, WorkspaceIcon, WindowIcon, LogIcon, SettingsIcon } from "../icons";
 
 export type SidebarMenu = "chat" | "settings" | "workspace" | "windows";
 
@@ -15,125 +15,61 @@ export function SidebarToolbar({
   onToggleLogs,
 }: SidebarToolbarProps) {
   return (
-    <div className="sidebar-toolbar">
-      <div className="sidebar-section">
-        <button
-          className={`sidebar-btn ${activeMenu === "chat" ? "active" : ""}`}
-          onClick={() => onMenuClick("chat")}
-          title="Session Manager"
-        >
-          <ChatIcon />
-        </button>
-        <button
-          className={`sidebar-btn ${activeMenu === "workspace" ? "active" : ""}`}
-          onClick={() => onMenuClick("workspace")}
-          title="Workspaces"
-        >
-          <WorkspaceIcon />
-        </button>
-        <button
-          className={`sidebar-btn ${activeMenu === "windows" ? "active" : ""}`}
-          onClick={() => onMenuClick("windows")}
-          title="Windows"
-        >
-          <WindowIcon />
-        </button>
-        <button
-          className="sidebar-btn"
-          onClick={onToggleLogs}
-          title="Toggle Logs (Ctrl+L)"
-        >
-          <LogIcon />
-        </button>
-      </div>
-      <div className="sidebar-section sidebar-section-bottom">
-        <button
-          className={`sidebar-btn ${activeMenu === "settings" ? "active" : ""}`}
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: 48,
+        flexShrink: 0,
+        py: 1,
+        gap: 0.5,
+      }}
+    >
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+        <Tooltip title="Sessions" placement="right">
+          <IconButton
+            size="small"
+            onClick={() => onMenuClick("chat")}
+            color={activeMenu === "chat" ? "primary" : "default"}
+          >
+            <ChatIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Workspaces" placement="right">
+          <IconButton
+            size="small"
+            onClick={() => onMenuClick("workspace")}
+            color={activeMenu === "workspace" ? "primary" : "default"}
+          >
+            <WorkspaceIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Windows" placement="right">
+          <IconButton
+            size="small"
+            onClick={() => onMenuClick("windows")}
+            color={activeMenu === "windows" ? "primary" : "default"}
+          >
+            <WindowIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Logs" placement="right">
+          <IconButton size="small" onClick={onToggleLogs}>
+            <LogIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+      <Box sx={{ flex: 1 }} />
+      <Tooltip title="Settings" placement="right">
+        <IconButton
+          size="small"
           onClick={() => onMenuClick("settings")}
-          title="Settings"
+          color={activeMenu === "settings" ? "primary" : "default"}
         >
-          <SettingsIcon />
-        </button>
-      </div>
-    </div>
+          <SettingsIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </Box>
   );
-}
-
-interface ResizeHandleProps {
-  onResize: (width: number) => void;
-  minWidth: number;
-  maxWidth: number;
-}
-
-export function ResizeHandle({ onResize, minWidth, maxWidth }: ResizeHandleProps) {
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartWidth = useRef(0);
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isDragging.current = true;
-      dragStartX.current = e.clientX;
-      dragStartWidth.current = 0; // Will be set by parent before drag starts via onResize
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    []
-  );
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      const delta = e.clientX - dragStartX.current;
-      const newWidth = Math.max(minWidth, Math.min(maxWidth, dragStartWidth.current + delta));
-      onResize(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      if (!isDragging.current) return;
-      isDragging.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [minWidth, maxWidth, onResize]);
-
-  return (
-    <div
-      className="sidebar-resize-handle"
-      onMouseDown={handleMouseDown}
-    />
-  );
-}
-
-export function useSidebarResize(
-  defaultWidth: number,
-  minWidth: number,
-  maxWidth: number
-) {
-  const [width, setWidth] = useState(defaultWidth);
-
-  const handleResizeStart = useCallback((startWidth: number) => {
-    // Placeholder for future external control if needed.
-    void startWidth;
-  }, []);
-
-  return {
-    width,
-    setWidth,
-    handleResizeStart,
-    ResizeHandleComponent: (
-      <ResizeHandle onResize={(newWidth) => {
-        handleResizeStart(width);
-        setWidth(newWidth);
-      }} minWidth={minWidth} maxWidth={maxWidth} />
-    ),
-  };
 }

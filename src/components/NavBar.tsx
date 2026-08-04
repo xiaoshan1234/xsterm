@@ -1,16 +1,10 @@
 import { useState, useEffect } from "react";
+import { AppBar, Toolbar, IconButton, Box } from "@mui/material";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { CloseIcon, MinimizeIcon, MaximizeIcon, RestoreIcon } from "./icons/Icon";
-import "./NavBar.css";
+import { MinimizeIcon, MaximizeIcon, RestoreIcon, CloseIcon } from "./icons";
 import logo from "../assets/logo.svg";
 
-interface NavBarProps {
-  onMenuAction?: (menu: string) => void;
-}
-
-const MENU_ITEMS = ["File", "Edit", "View", "Terminal", "Help"];
-
-export default function NavBar({ onMenuAction }: NavBarProps) {
+export default function NavBar() {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
 
@@ -50,45 +44,60 @@ export default function NavBar({ onMenuAction }: NavBarProps) {
   const handleClose = () => appWindow.close();
 
   return (
-    <div className="navbar" data-tauri-drag-region>
-      <div className="navbar-logo" title="XSTerm">
-        <img className="navbar-logo-img" src={logo} alt="XSTerm" />
-      </div>
-      <div className="navbar-menu">
-        {MENU_ITEMS.map((item) => (
-          <button
-            key={item}
-            className="navbar-item"
-            onClick={() => onMenuAction?.(item)}
+    <AppBar
+      position="static"
+      elevation={0}
+      sx={{
+        bgcolor: "background.paper",
+        borderBottom: 1,
+        borderColor: "divider",
+      }}
+    >
+      <Toolbar
+        variant="dense"
+        className="xsterm-titlebar"
+        sx={{
+          minHeight: 28,
+          height: 28,
+          display: "flex",
+          justifyContent: "space-between",
+          px: 1,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <img src={logo} alt="xsterm" style={{ height: 16 }} />
+        </Box>
+        <Box sx={{ display: "flex" }}>
+          <IconButton
+            size="small"
+            className="non-drag"
+            onClick={handleMinimize}
+            aria-label="Minimize"
           >
-            {item}
-          </button>
-        ))}
-      </div>
-      <div className="navbar-drag-region" data-tauri-drag-region />
-      <div className="navbar-window-controls">
-        <button
-          className="window-control window-control--minimize"
-          onClick={handleMinimize}
-          title="最小化"
-        >
-          <MinimizeIcon size={14} />
-        </button>
-        <button
-          className="window-control window-control--maximize"
-          onClick={handleMaximize}
-          title={isMaximized ? "还原" : "最大化"}
-        >
-          {isMaximized ? <RestoreIcon size={14} /> : <MaximizeIcon size={14} />}
-        </button>
-        <button
-          className="window-control window-control--close"
-          onClick={handleClose}
-          title="关闭"
-        >
-          <CloseIcon size={14} />
-        </button>
-      </div>
-    </div>
+            <MinimizeIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            className="non-drag"
+            onClick={handleMaximize}
+            aria-label={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? (
+              <RestoreIcon fontSize="small" />
+            ) : (
+              <MaximizeIcon fontSize="small" />
+            )}
+          </IconButton>
+          <IconButton
+            size="small"
+            className="non-drag"
+            onClick={handleClose}
+            aria-label="Close"
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </Toolbar>
+    </AppBar>
   );
 }

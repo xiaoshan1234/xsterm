@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
+import { Circle as CircleIcon, PlayArrow as PlayArrowIcon, Stop as StopIcon, Remove as RemoveIcon } from "@mui/icons-material";
 import { Session, Workspace, PaneNode, Window } from "../types/session";
 import { useDragResize } from "../hooks/useDragResize";
 import { forEachPane, findPaneNode, findFirstLeafWithSession, getPaneNumber } from "../contexts/session/paneUtils";
@@ -355,7 +356,7 @@ export default function CommandSendPanel({
                 title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
               >
               <span className="panel-breakpoint">
-                {hasBreakpoint ? "●" : ""}
+                {hasBreakpoint ? <CircleIcon /> : ""}
               </span>
               <span className="panel-line-number">{lineIndex + 1}</span>
             </div>
@@ -391,20 +392,20 @@ export default function CommandSendPanel({
             disabled={runState === "running"}
             title={runState === "paused" ? "Continue" : "Play"}
           >
-            ▶
+            <PlayArrowIcon />
           </button>
           <button
             className={`btn btn--secondary ${runState !== "idle" ? "panel-stop--running" : ""}`}
             onClick={handleStop}
             title="Stop"
           >
-            ■
+            <StopIcon />
           </button>
           <button className="btn btn--secondary" onClick={() => adjustCount(1)}>
             +
           </button>
           <button className="btn btn--secondary" onClick={() => adjustCount(-1)}>
-            −
+            <RemoveIcon />
           </button>
         </div>
 

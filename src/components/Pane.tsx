@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import Box from "@mui/material/Box";
 import { PaneNode, SplitDirection, Workspace } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import * as paneTree from "../utils/paneTree";
@@ -8,7 +9,6 @@ import Terminal, { TerminalRef } from "./Terminal";
 import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
 import { PaneInitCard } from "./PaneInitCard";
-import "./Pane.css";
 
 interface PaneProps {
   workspace: Workspace;
@@ -227,38 +227,113 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
   return (
     <>
       <ContextMenu ref={contextMenuRef} items={contextMenuItems} className="pane-leaf">
-        <div
-          className={`workspace-pane ${isActive ? "workspace-pane--active" : ""}`}
+        <Box
+          sx={{
+            flex: 1,
+            overflow: "hidden",
+            minWidth: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            background: "var(--bg-primary)",
+            ...(isActive && {
+              outline: "2px solid var(--accent)",
+              outlineOffset: "-2px",
+            }),
+          }}
           onMouseDown={onActivate}
           onContextMenuCapture={handleContextMenuCapture}
         >
           {paneNumber !== null && (
-            <div
-              className="pane-number-badge"
-              style={{ background: currentTheme.background }}
+            <Box
+              sx={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                zIndex: 20,
+                padding: "1px 4px",
+                fontSize: "10px",
+                fontWeight: 600,
+                lineHeight: 1,
+                color: "var(--text-muted)",
+                borderTop: "1px solid transparent",
+                borderRight: "1px solid var(--border-color)",
+                borderBottom: "1px solid var(--border-color)",
+                borderLeft: "1px solid var(--border-color)",
+                borderRadius: 0,
+                pointerEvents: "none",
+                userSelect: "none",
+                opacity: 0.9,
+                width: "auto",
+                background: currentTheme.background,
+              }}
             >
               {paneNumber}
-            </div>
+            </Box>
           )}
           {session ? (
-            <div className="pane-session-container">
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                minWidth: 0,
+                minHeight: 0,
+                flex: 1,
+                width: "100%",
+              }}
+            >
               {!session.is_connected && (
-                <div className="pane-disconnect-banner">
+                <Box
+                  sx={{
+                    flexShrink: 0,
+                    padding: "8px 12px",
+                    background: "var(--error-bg)",
+                    color: "var(--error)",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    textAlign: "center",
+                    borderBottom: "1px solid var(--error)",
+                    userSelect: "none",
+                    pointerEvents: "none",
+                  }}
+                >
                   连接已经断开，输入回车重新进行连接
-                </div>
+                </Box>
               )}
-              <div className="pane-terminal-wrapper">
+              <Box
+                sx={{
+                  flex: 1,
+                  overflow: "hidden",
+                  minWidth: 0,
+                  minHeight: 0,
+                }}
+              >
                 <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} displayConfig={session.displayConfig} />
-              </div>
-            </div>
+              </Box>
+            </Box>
           ) : (
-            <PaneInitCard
-              onSessionCreated={(session) => attachSessionToPane(session.id)}
-              title="No session"
-              subtitle="Create or open a session"
-            />
+            <Box
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                minHeight: 0,
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <PaneInitCard
+                onSessionCreated={(session) => attachSessionToPane(session.id)}
+                title="No session"
+                subtitle="Create or open a session"
+              />
+            </Box>
           )}
-          </div>
+          </Box>
         </ContextMenu>
       <SelectSessionDialog
         isOpen={showSessionDialog}

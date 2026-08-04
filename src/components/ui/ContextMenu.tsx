@@ -1,13 +1,5 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  ReactNode,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
-import "./ContextMenu.css";
+import { useState, useCallback, ReactNode, forwardRef, useImperativeHandle } from "react";
+import { Menu, MenuItem } from "@mui/material";
 
 export interface ContextMenuItem {
   id?: string;
@@ -32,31 +24,26 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
   { items, children, onOpen, className },
   ref
 ) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
   const openMenu = useCallback(
     (x: number, y: number) => {
-      const safeX = Math.min(Math.max(x, 0), window.innerWidth - 180);
-      const safeY = Math.min(Math.max(y, 0), window.innerHeight - items.length * 36 - 16);
-      setPosition({ x: safeX, y: safeY });
-      setIsOpen(true);
+      setPos({ x, y });
+      setAnchorEl(document.body);
       onOpen?.();
     },
-    [items.length, onOpen]
+    [onOpen]
   );
 
   const closeMenu = useCallback(() => {
-    setIsOpen(false);
+    setAnchorEl(null);
+    setPos(null);
   }, []);
 
   useImperativeHandle(
     ref,
-    () => ({
-      open: openMenu,
-      close: closeMenu,
-    }),
+    () => ({ open: openMenu, close: closeMenu }),
     [openMenu, closeMenu]
   );
 
@@ -66,55 +53,34 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
     openMenu(e.clientX, e.clientY);
   };
 
-  const handleItemClick = (item: ContextMenuItem) => {
-    item.onClick();
-    setIsOpen(false);
+  const handleClose = () => {
+    closeMenu();
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen]);
+  const handleItemClick = (item: ContextMenuItem) => {
+    item.onClick();
+    closeMenu();
+  };
 
   return (
     <>
       <div onContextMenu={handleContextMenu} className={className}>{children}</div>
-      {isOpen && (
-        <div
-          ref={menuRef}
-          className="context-menu"
-          style={{ left: position.x, top: position.y }}
-        >
-          {items.map((item, index) => (
-            <button
-              key={item.id ?? item.label ?? index}
-              className={`context-menu-item ${item.danger ? "context-menu-item--danger" : ""}`}
-              onClick={() => handleItemClick(item)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <Menu
+        open={Boolean(anchorEl) && pos !== null}
+        onClose={handleClose}
+        anchorReference="anchorPosition"
+        anchorPosition={pos ? { top: pos.y, left: pos.x } : undefined}
+      >
+        {items.map((item, index) => (
+          <MenuItem
+            key={item.id ?? item.label ?? index}
+            onClick={() => handleItemClick(item)}
+            sx={item.danger ? { color: "error.main" } : undefined}
+          >
+            {item.label}
+          </MenuItem>
+        ))}
+      </Menu>
     </>
   );
 });

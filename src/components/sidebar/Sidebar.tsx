@@ -1,49 +1,42 @@
 import { useState, useCallback } from "react";
-import { SavedWindowConfig, SavedWorkspace, Workspace } from "../../types/session";
-import { useDragResize } from "../../hooks/useDragResize";
+import { Box, Drawer, Divider } from "@mui/material";
 import { SidebarToolbar, SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { WindowManager } from "./WindowManager";
-import "./Sidebar.css";
+import { useDragResize } from "../../hooks/useDragResize";
 
 const TOOLBAR_WIDTH = 48;
-const MIN_SUBMENU_WIDTH = 140;
-const MAX_SUBMENU_WIDTH = 400;
-const DEFAULT_SUBMENU_WIDTH = 200;
+const MIN_SUBMENU_WIDTH = 200;
+const MAX_SUBMENU_WIDTH = 500;
+const DEFAULT_SUBMENU_WIDTH = 280;
 
 type SettingsCategory = "appearance" | "shortcuts" | "about";
 
 interface SidebarProps {
+  sidebarPanel: SidebarMenu | null;
+  onSidebarPanelChange: (panel: SidebarMenu | null) => void;
   onCreateSession: () => void;
   onCreateSessionWithGroup: (groupId: number) => void;
   onToggleLogs: () => void;
-  sidebarPanel: SidebarMenu | null;
-  onSidebarPanelChange: (panel: SidebarMenu | null) => void;
   activeSettingsCategory?: SettingsCategory;
   onSelectSettingsCategory?: (category: SettingsCategory) => void;
-  savedWorkspaces: SavedWorkspace[];
-  loadWorkspace: (id: string) => Promise<Workspace>;
+  savedWorkspaces: any[];
+  loadWorkspace: (id: string) => Promise<any>;
   deleteSavedWorkspace: (id: string) => void;
   renameSavedWorkspace: (id: string, name: string) => void;
-  savedWindowConfigs: SavedWindowConfig[];
+  savedWindowConfigs: any[];
   loadWindow: (id: string) => Promise<void>;
   deleteSavedWindow: (id: string) => void;
   renameSavedWindow: (id: string, name: string) => void;
 }
 
-const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
-  { key: "appearance", label: "Appearance" },
-  { key: "shortcuts", label: "Shortcuts" },
-  { key: "about", label: "About" },
-];
-
 export default function Sidebar({
+  sidebarPanel,
+  onSidebarPanelChange,
   onCreateSession,
   onCreateSessionWithGroup,
   onToggleLogs,
-  sidebarPanel,
-  onSidebarPanelChange,
   activeSettingsCategory = "appearance",
   onSelectSettingsCategory,
   savedWorkspaces,
@@ -74,66 +67,101 @@ export default function Sidebar({
 
   const sidebarWidth = sidebarPanel ? TOOLBAR_WIDTH + submenuWidth : TOOLBAR_WIDTH;
 
-  return (
-    <div className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
-      <SidebarToolbar
-        activeMenu={sidebarPanel}
-        onMenuClick={handleMenuClick}
-        onToggleLogs={onToggleLogs}
-      />
-
-      {sidebarPanel === "chat" && (
-        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
+  const renderPanel = () => {
+    switch (sidebarPanel) {
+      case "chat":
+        return (
           <SessionManager
             onCreateSession={onCreateSession}
             onCreateSessionWithGroup={onCreateSessionWithGroup}
           />
-        </div>
-      )}
-
-      {sidebarPanel === "workspace" && (
-        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
+        );
+      case "workspace":
+        return (
           <WorkspaceManager
             savedWorkspaces={savedWorkspaces}
             loadWorkspace={loadWorkspace}
             deleteSavedWorkspace={deleteSavedWorkspace}
             renameSavedWorkspace={renameSavedWorkspace}
           />
-        </div>
-      )}
-
-      {sidebarPanel === "windows" && (
-        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
+        );
+      case "windows":
+        return (
           <WindowManager
             savedWindowConfigs={savedWindowConfigs}
             loadWindow={loadWindow}
             deleteSavedWindow={deleteSavedWindow}
             renameSavedWindow={renameSavedWindow}
           />
-        </div>
-      )}
+        );
+      case "settings":
+        return (
+          <Box sx={{ p: 1 }}>
+            <Box sx={{ px: 1, py: 0.5, fontWeight: 600, fontSize: 13 }}>Settings</Box>
+            {(["appearance", "shortcuts", "about"] as SettingsCategory[]).map((category) => (
+              <Box
+                key={category}
+                sx={{
+                  px: 1,
+                  py: 0.5,
+                  cursor: "pointer",
+                  borderRadius: 1,
+                  fontSize: 13,
+                  bgcolor: activeSettingsCategory === category ? "action.selected" : "transparent",
+                  "&:hover": { bgcolor: "action.hover" },
+                }}
+                onClick={() => onSelectSettingsCategory?.(category)}
+              >
+                {category.charAt(0).toUpperCase() + category.slice(1)}
+              </Box>
+            ))}
+          </Box>
+        );
+      default:
+        return null;
+    }
+  };
 
-      {sidebarPanel === "settings" && (
-        <div className="sidebar-submenu" style={{ width: submenuWidth }}>
-          <div className="submenu-header">Settings</div>
-          {SETTINGS_CATEGORIES.map((category) => (
-            <button
-              key={category.key}
-              className={`submenu-item ${activeSettingsCategory === category.key ? "active" : ""}`}
-              onClick={() => onSelectSettingsCategory?.(category.key)}
-            >
-              {category.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {sidebarPanel && (
-        <div
-          className="sidebar-resize-handle"
-          onMouseDown={(e) => startResize(submenuWidth, e)}
+  return (
+    <Drawer
+      variant="permanent"
+      anchor="left"
+      sx={{
+        width: sidebarWidth,
+        flexShrink: 0,
+        "& .MuiDrawer-paper": {
+          width: sidebarWidth,
+          position: "relative",
+          borderRight: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        },
+      }}
+    >
+      <Box sx={{ display: "flex", flex: 1, minWidth: 0 }}>
+        <SidebarToolbar
+          activeMenu={sidebarPanel}
+          onMenuClick={handleMenuClick}
+          onToggleLogs={onToggleLogs}
         />
-      )}
-    </div>
+        {sidebarPanel && (
+          <>
+            <Divider orientation="vertical" />
+            <Box sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", minWidth: 0 }}>
+              {renderPanel()}
+            </Box>
+            <Box
+              sx={{
+                width: 4,
+                cursor: "col-resize",
+                flexShrink: 0,
+                "&:hover": { bgcolor: "action.hover" },
+              }}
+              onMouseDown={(e) => startResize(submenuWidth, e)}
+            />
+          </>
+        )}
+      </Box>
+    </Drawer>
   );
 }

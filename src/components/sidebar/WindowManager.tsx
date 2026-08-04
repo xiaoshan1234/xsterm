@@ -1,6 +1,15 @@
 import { useState } from "react";
+import {
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
+} from "@mui/material";
+import { Edit as EditIcon, Close as CloseIcon } from "@mui/icons-material";
 import { SavedWindowConfig } from "../../types/session";
-import { WindowIcon } from "../icons/Icon";
+import { WindowIcon } from "../icons";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -47,7 +56,7 @@ export function WindowManager({
   return (
     <div className="workspace-manager">
       <div className="submenu-header">Windows</div>
-      <div className="workspace-list">
+      <List dense disablePadding className="workspace-list">
         {savedWindowConfigs.map((window) => (
           <ContextMenu
             key={window.id}
@@ -57,22 +66,52 @@ export function WindowManager({
               { label: "Delete", onClick: () => deleteSavedWindow(window.id), danger: true },
             ]}
           >
-            <div
-              className={`workspace-list-item ${selectedWindowId === window.id ? "selected" : ""}`}
-              onClick={() => handleClick(window)}
-              onDoubleClick={() => handleLoad(window)}
+            <ListItem
+              disablePadding
+              secondaryAction={
+                <>
+                  <IconButton
+                    edge="end"
+                    size="small"
+                    aria-label="rename"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartRename(window);
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    edge="end"
+                    size="small"
+                    aria-label="delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSavedWindow(window.id);
+                    }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </>
+              }
             >
-              <span className="workspace-list-item-icon">
-                <WindowIcon size={14} />
-              </span>
-              <span className="workspace-list-item-name">{window.name}</span>
-            </div>
+              <ListItemButton
+                selected={selectedWindowId === window.id}
+                onClick={() => handleClick(window)}
+                onDoubleClick={() => handleLoad(window)}
+              >
+                <ListItemIcon sx={{ minWidth: 32 }}>
+                  <WindowIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary={window.name} />
+              </ListItemButton>
+            </ListItem>
           </ContextMenu>
         ))}
         {savedWindowConfigs.length === 0 && (
           <div className="workspace-list-empty">No saved windows</div>
         )}
-      </div>
+      </List>
 
       {renamingWindow && (
         <Dialog

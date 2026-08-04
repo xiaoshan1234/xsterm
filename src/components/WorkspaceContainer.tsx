@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Workspace, PaneNode, Window } from "../types/session";
+import { Workspace, PaneNode } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
 import CommandSendPanel from "./CommandSendPanel";
-import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
-import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";
-import "./TabBar.css";
+import { PlusIcon, SaveIcon } from "./icons";
+import { TabBar } from "./TabBar";
+import { Box, IconButton, Menu, MenuItem } from "@mui/material";
 
 function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
   if (root.id === nodeId) {
@@ -120,9 +120,9 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
         onCloseWindow={(windowId) => closeWindow(workspace.id, windowId)}
         onRenameWindow={(windowId) => {
-          const window = workspace.windows.find((w) => w.id === windowId);
-          if (window) {
-            setRenamingWindow({ id: windowId, name: window.name });
+          const win = workspace.windows.find((w) => w.id === windowId);
+          if (win) {
+            setRenamingWindow({ id: windowId, name: win.name });
           }
         }}
       />
@@ -207,93 +207,65 @@ interface WindowTabBarProps {
 }
 
 function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow, onCloseWindow, onRenameWindow }: WindowTabBarProps) {
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; windowId: string } | null>(null);
+
+  const tabs = workspace.windows.map((w) => ({
+    id: w.id,
+    label: w.name,
+    closable: true,
+  }));
+
+  const handleContextMenu = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY, windowId: id });
+  };
+
+  const handleCloseCtxMenu = () => setCtxMenu(null);
+
+  const handleRename = () => {
+    if (ctxMenu) onRenameWindow(ctxMenu.windowId);
+    handleCloseCtxMenu();
+  };
+
+  const handleSave = () => {
+    if (ctxMenu) onSaveWindow(ctxMenu.windowId);
+    handleCloseCtxMenu();
+  };
+
+  const handleClose = () => {
+    if (ctxMenu) onCloseWindow(ctxMenu.windowId);
+    handleCloseCtxMenu();
+  };
+
   return (
-    <div className="workspace-tabs window-tabs">
-      {workspace.windows.map((window) => (
-        <WindowTab
-          key={window.id}
-          window={window}
-          isActive={window.id === activeWindowId}
-          onSelect={() => onSelect(window.id)}
-          onSave={() => onSaveWindow(window.id)}
-          onClose={() => onCloseWindow(window.id)}
-          onRename={() => onRenameWindow(window.id)}
+    <Box sx={{ display: "flex", alignItems: "stretch", borderBottom: 1, borderColor: "divider", bgcolor: "background.paper" }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <TabBar
+          tabs={tabs}
+          activeTab={activeWindowId}
+          onSelect={onSelect}
+          onClose={onCloseWindow}
+          onContextMenu={handleContextMenu}
         />
-      ))}
-      <div className="window-tab-actions">
-        <button className="window-tab-action" type="button" onClick={onAdd} title="New window">
-          <PlusIcon size={14} />
-        </button>
-        <button className="window-tab-action" type="button" onClick={onSaveAll} title="Save all windows as workspace">
-          <SaveIcon size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-interface WindowTabProps {
-  window: Window;
-  isActive: boolean;
-  onSelect: () => void;
-  onSave: () => void;
-  onRename: () => void;
-  onClose: () => void;
-}
-
-function WindowTab({ window, isActive, onSelect, onSave, onRename, onClose }: WindowTabProps) {
-  const contextMenuRef = useRef<ContextMenuRef>(null);
-  const contextMenuItems: ContextMenuItem[] = [
-    { label: "Rename", onClick: onRename },
-    { label: "Save as Window Config", onClick: onSave },
-    { label: "Close", onClick: onClose, danger: true },
-  ];
-
-  const handleCloseClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClose();
-  };
-
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClose();
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1) {
-      e.preventDefault();
-      onClose();
-    }
-  };
-
-  return (
-    <ContextMenu ref={contextMenuRef} items={contextMenuItems}>
-      <div
-        className={`tab ${isActive ? "active" : ""}`}
-        role="tab"
-        aria-selected={isActive}
-        tabIndex={0}
-        onClick={onSelect}
-        onDoubleClick={handleDoubleClick}
-        onMouseDown={handleMouseDown}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
+      </Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, borderLeft: 1, borderColor: "divider" }}>
+        <IconButton size="small" onClick={onAdd} title="New window" sx={{ p: 0.5 }}>
+          <PlusIcon fontSize="small" />
+        </IconButton>
+        <IconButton size="small" onClick={onSaveAll} title="Save all windows as workspace" sx={{ p: 0.5 }}>
+          <SaveIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <Menu
+        open={Boolean(ctxMenu)}
+        onClose={handleCloseCtxMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={ctxMenu ? { top: ctxMenu.y, left: ctxMenu.x } : undefined}
       >
-        <span className="tab-title">{window.name}</span>
-        <button
-          className="tab-close"
-          type="button"
-          onClick={handleCloseClick}
-          aria-label={`Close window ${window.name}`}
-          title="Close window"
-        >
-          <CloseIcon size={12} />
-        </button>
-      </div>
-    </ContextMenu>
+        <MenuItem onClick={handleRename}>Rename</MenuItem>
+        <MenuItem onClick={handleSave}>Save as Window Config</MenuItem>
+        <MenuItem onClick={handleClose} sx={{ color: "error.main" }}>Close</MenuItem>
+      </Menu>
+    </Box>
   );
 }

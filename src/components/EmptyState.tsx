@@ -1,3 +1,5 @@
+import { Box, Typography, Button } from "@mui/material";
+
 interface EmptyStateProps {
   onCreateSession: () => void;
   hasSavedConfigs: boolean;
@@ -5,15 +7,31 @@ interface EmptyStateProps {
 
 export function EmptyState({ onCreateSession, hasSavedConfigs }: EmptyStateProps) {
   return (
-    <div className="no-session">
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        p: 4,
+        height: "100%",
+      }}
+    >
       {hasSavedConfigs ? (
-        <p>Click a saved session to reconnect</p>
+        <Typography variant="body2" color="text.secondary">
+          Click a saved session to reconnect
+        </Typography>
       ) : (
         <>
-          <p>No active sessions</p>
-          <button onClick={onCreateSession}>Create Session</button>
+          <Typography variant="body2" color="text.secondary">
+            No active sessions
+          </Typography>
+          <Button variant="contained" onClick={onCreateSession}>
+            Create Session
+          </Button>
         </>
       )}
-    </div>
+    </Box>
   );
 }

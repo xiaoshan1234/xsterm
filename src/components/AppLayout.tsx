@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { Box } from "@mui/material";
 import { useSession } from "../contexts/SessionContext";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import NavBar from "./NavBar";
@@ -7,7 +8,6 @@ import { WorkspaceContainer } from "./WorkspaceContainer";
 import { WorkspaceBottomBar } from "./WorkspaceBottomBar";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
-import "../styles/pane.css";
 
 export default function AppLayout() {
   const {
@@ -60,9 +60,9 @@ export default function AppLayout() {
   );
 
   return (
-    <div className="app-container">
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100vh", width: "100vw", overflow: "hidden" }}>
       <NavBar />
-      <div className="content-area">
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar
           onCreateSession={() => { setCreateSessionGroupId(null); setShowCreateDialog(true); }}
           onCreateSessionWithGroup={(groupId) => { setCreateSessionGroupId(groupId); setShowCreateDialog(true); }}
@@ -91,32 +91,36 @@ export default function AppLayout() {
           deleteSavedWindow={deleteSavedWindow}
           renameSavedWindow={renameSavedWindow}
         />
-        <div className="main-area">
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
           {activeView === "settings" ? (
             <SettingsView activeCategory={activeSettingsCategory} />
           ) : (
             workspaces.map((workspace) => (
-              <div
+              <Box
                 key={workspace.id}
-                className={`workspace-view ${workspace.id === activeWorkspaceId ? "workspace-view--active" : ""}`}
+                sx={{
+                  flex: 1,
+                  display: workspace.id === activeWorkspaceId ? "flex" : "none",
+                  minHeight: 0,
+                }}
               >
                 <WorkspaceContainer workspace={workspace} commandPanelOpen={showCommandPanel} />
-              </div>
+              </Box>
             ))
           )}
           {activeWorkspace && activeView === "terminal" && (
-          <WorkspaceBottomBar
-            workspaceName={activeWorkspace.name}
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            onSelectWorkspace={setActiveWorkspace}
-            onCloseWorkspace={closeWorkspace}
-            commandPanelOpen={showCommandPanel}
-            onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
-          />
+            <WorkspaceBottomBar
+              workspaceName={activeWorkspace.name}
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onSelectWorkspace={setActiveWorkspace}
+              onCloseWorkspace={closeWorkspace}
+              commandPanelOpen={showCommandPanel}
+              onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
+            />
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
       <CreateSessionDialog
         isOpen={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
@@ -124,6 +128,6 @@ export default function AppLayout() {
         onCreateSsh={createSshSession}
         initialGroupId={createSessionGroupId}
       />
-    </div>
+    </Box>
   );
 }

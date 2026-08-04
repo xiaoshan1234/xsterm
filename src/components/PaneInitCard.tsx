@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import CardActionArea from "@mui/material/CardActionArea";
+import Typography from "@mui/material/Typography";
 import { useSession } from "../contexts/SessionContext";
 import { LocalSessionConfig, SSHSessionConfig, Session } from "../types/session";
-import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
+import { PlusIcon, FolderOpenIcon } from "./icons";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
-import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {
   onSessionCreated: (session: Session) => void;
@@ -100,27 +103,91 @@ export function PaneInitCard({
   };
 
   return (
-    <div className="pane-init-card">
-      <h2 className="pane-init-card-title">{title}</h2>
-      <p className="pane-init-card-subtitle">{subtitle}</p>
-      <div className="pane-init-card-options">
-        <button
-          className="pane-init-card-option"
-          type="button"
-          onClick={() => setCreateDialogTab("local")}
-        >
-          <PlusIcon size={32} />
-          <span className="pane-init-card-option-label">Create New</span>
-        </button>
-        <button
-          className="pane-init-card-option"
-          type="button"
-          onClick={() => setShowSelectDialog(true)}
-        >
-          <FolderOpenIcon size={32} />
-          <span className="pane-init-card-option-label">Open Saved</span>
-        </button>
-      </div>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        width: "100%",
+        height: "100%",
+        minWidth: 0,
+        minHeight: 0,
+        padding: 4,
+        boxSizing: "border-box",
+        background: "var(--bg-secondary)",
+        border: "1px solid var(--border-color)",
+        borderRadius: 0,
+        overflow: "auto",
+      }}
+    >
+      <Typography
+        variant="h6"
+        sx={{ fontWeight: 600, color: "var(--text-primary)", margin: 0 }}
+      >
+        {title}
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{ color: "var(--text-secondary)", margin: 0 }}
+      >
+        {subtitle}
+      </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          marginTop: 2,
+          flexWrap: "wrap",
+          justifyContent: "center",
+        }}
+      >
+        <Card sx={{ width: 120 }}>
+          <CardActionArea
+            onClick={() => setCreateDialogTab("local")}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1.5,
+              padding: "24px 16px",
+              color: "var(--text-secondary)",
+              "&:hover": {
+                color: "var(--text-primary)",
+                bgcolor: "var(--bg-hover)",
+              },
+            }}
+          >
+            <PlusIcon sx={{ fontSize: 32 }} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              Create New
+            </Typography>
+          </CardActionArea>
+        </Card>
+        <Card sx={{ width: 120 }}>
+          <CardActionArea
+            onClick={() => setShowSelectDialog(true)}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1.5,
+              padding: "24px 16px",
+              color: "var(--text-secondary)",
+              "&:hover": {
+                color: "var(--text-primary)",
+                bgcolor: "var(--bg-hover)",
+              },
+            }}
+          >
+            <FolderOpenIcon sx={{ fontSize: 32 }} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              Open Saved
+            </Typography>
+          </CardActionArea>
+        </Card>
+      </Box>
       <CreateSessionDialog
         isOpen={createDialogTab !== null}
         onClose={() => setCreateDialogTab(null)}
@@ -135,6 +202,6 @@ export function PaneInitCard({
         onSelectConfig={handleSelectConfig}
         disabled={isSubmitting}
       />
-    </div>
+    </Box>
   );
 }

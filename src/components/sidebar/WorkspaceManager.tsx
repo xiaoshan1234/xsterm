@@ -1,7 +1,16 @@
 import { useState } from "react";
+import {
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
+} from "@mui/material";
+import { Edit as EditIcon, Close as CloseIcon } from "@mui/icons-material";
 import { SavedWorkspace, Workspace } from "../../types/session";
 import { useSession } from "../../contexts/SessionContext";
-import { LayoutIcon } from "../icons/Icon";
+import { LayoutIcon } from "../icons";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -70,7 +79,7 @@ export function WorkspaceManager({
   return (
     <div className="workspace-manager">
       <div className="submenu-header">Workspaces</div>
-      <div className="workspace-list">
+      <List dense disablePadding className="workspace-list">
         <ContextMenu
           items={[
             {
@@ -79,16 +88,18 @@ export function WorkspaceManager({
             },
           ]}
         >
-          <div
-            className={`workspace-list-item ${selectedWorkspaceId === DEFAULT_WORKSPACE_ID ? "selected" : ""}`}
-            onClick={() => setSelectedWorkspaceId(DEFAULT_WORKSPACE_ID)}
-            onDoubleClick={handleOpenDefault}
-          >
-            <span className="workspace-list-item-icon">
-              <LayoutIcon size={14} />
-            </span>
-            <span className="workspace-list-item-name">default</span>
-          </div>
+          <ListItem disablePadding>
+            <ListItemButton
+              selected={selectedWorkspaceId === DEFAULT_WORKSPACE_ID}
+              onClick={() => setSelectedWorkspaceId(DEFAULT_WORKSPACE_ID)}
+              onDoubleClick={handleOpenDefault}
+            >
+              <ListItemIcon sx={{ minWidth: 32 }}>
+                <LayoutIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="default" />
+            </ListItemButton>
+          </ListItem>
         </ContextMenu>
 
         {savedWorkspaces.map((workspace) => {
@@ -102,23 +113,53 @@ export function WorkspaceManager({
                 { label: "Delete", onClick: () => deleteSavedWorkspace(workspace.id), danger: true },
               ]}
             >
-              <div
-                className={`workspace-list-item ${selectedWorkspaceId === workspace.id ? "selected" : ""}`}
-                onClick={() => handleWorkspaceClick(workspace)}
-                onDoubleClick={() => handleOpen(workspace)}
+              <ListItem
+                disablePadding
+                secondaryAction={
+                  <>
+                    <IconButton
+                      edge="end"
+                      size="small"
+                      aria-label="rename"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartRename(workspace);
+                      }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      edge="end"
+                      size="small"
+                      aria-label="delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSavedWorkspace(workspace.id);
+                      }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </>
+                }
               >
-                <span className="workspace-list-item-icon">
-                  <LayoutIcon size={14} />
-                </span>
-                <span className="workspace-list-item-name">{workspace.name}</span>
-              </div>
+                <ListItemButton
+                  selected={selectedWorkspaceId === workspace.id}
+                  onClick={() => handleWorkspaceClick(workspace)}
+                  onDoubleClick={() => handleOpen(workspace)}
+                >
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    <LayoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={workspace.name} />
+                </ListItemButton>
+              </ListItem>
             </ContextMenu>
           );
         })}
         {savedWorkspaces.length === 0 && (
           <div className="workspace-list-empty">No saved workspaces</div>
         )}
-      </div>
+      </List>
 
       {renamingWorkspace && (
         <Dialog

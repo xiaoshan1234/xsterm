@@ -1,6 +1,13 @@
 import { ReactNode } from "react";
-import { CloseIcon } from "../icons/Icon";
-import "./Dialog.css";
+import {
+  Dialog as MuiDialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Box,
+} from "@mui/material";
+import { Close as CloseIcon } from "@mui/icons-material";
 
 interface DialogProps {
   isOpen: boolean;
@@ -12,20 +19,24 @@ interface DialogProps {
 }
 
 export function Dialog({ isOpen, onClose, title, children, footer, size = "medium" }: DialogProps) {
-  if (!isOpen) return null;
+  const maxWidth = size === "small" ? "xs" : "sm";
 
   return (
-    <div className="dialog-overlay" onClick={onClose}>
-      <div className={`dialog dialog--${size}`} onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-header">
-          <h2 className="dialog-title">{title}</h2>
-          <button className="dialog-close" onClick={onClose} aria-label="Close">
-            <CloseIcon size={16} />
-          </button>
-        </div>
-        <div className="dialog-content">{children}</div>
-        {footer && <div className="dialog-footer">{footer}</div>}
-      </div>
-    </div>
+    <MuiDialog
+      open={isOpen}
+      onClose={onClose}
+      maxWidth={maxWidth}
+      fullWidth
+      PaperProps={{ sx: { boxShadow: 24 } }}
+    >
+      <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pr: 1 }}>
+        <Box component="span" sx={{ fontSize: "1.15rem", fontWeight: 600 }}>{title}</Box>
+        <IconButton onClick={onClose} aria-label="Close" size="small">
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>{children}</DialogContent>
+      {footer && <DialogActions sx={{ px: 3, py: 2 }}>{footer}</DialogActions>}
+    </MuiDialog>
   );
 }

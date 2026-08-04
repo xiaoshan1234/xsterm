@@ -1,7 +1,19 @@
 import { useState } from "react";
+import {
+  Box,
+  Button,
+  Collapse,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  ListSubheader,
+  Typography,
+} from "@mui/material";
 import { useSession } from "../../contexts/SessionContext";
 import { SavedSessionConfig, SessionGroup } from "../../types/session";
-import { LocalSessionIcon, SshSessionIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
+import { LocalSessionIcon, SshSessionIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -130,16 +142,40 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   };
 
   return (
-    <div className="session-manager">
-      <div className="submenu-header">Session Manager</div>
-      <div className="session-history">
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <List
+        component="div"
+        dense
+        disablePadding
+        sx={{ flex: 1, overflowY: "auto" }}
+        subheader={
+          <ListSubheader
+            component="div"
+            sx={{
+              bgcolor: "transparent",
+              color: "text.secondary",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+              lineHeight: "32px",
+              textTransform: "uppercase",
+            }}
+          >
+            Session Manager
+          </ListSubheader>
+        }
+      >
         {groups.map((group) => (
-          <div
+          <Box
             key={group.id}
-            className={`session-group ${dragOverGroupId === group.id ? "drag-over" : ""}`}
             onDragOver={(e) => handleGroupDragOver(e, group.id)}
             onDragLeave={handleGroupDragLeave}
             onDrop={(e) => handleGroupDrop(e, group.id)}
+            sx={
+              dragOverGroupId === group.id
+                ? { bgcolor: "action.hover", outline: "1px dashed", outlineColor: "primary.main", outlineOffset: -1 }
+                : undefined
+            }
           >
             {/* 右键分组头菜单：Create Session（在组内新建）、Edit（重命名）、Delete（删除分组） */}
             <ContextMenu
@@ -150,66 +186,78 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
               ]}
               onOpen={() => setSelectedConfigId(null)}
             >
-              <button
-                className="session-group-header"
-                onClick={() => toggleGroup(group.id)}
-              >
-                <span
-                  className="session-group-chevron"
-                  style={{ transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)" }}
-                >
-                  <ChevronIcon size={14} />
-                </span>
-                <FolderIcon size={14} />
-                <span className="session-group-name">{group.name}</span>
-                <span className="session-group-count">{group.configIds.length}</span>
-              </button>
+              <ListItemButton onClick={() => toggleGroup(group.id)} sx={{ py: 0.5 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <ChevronIcon
+                    fontSize="small"
+                    sx={{
+                      transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s",
+                    }}
+                  />
+                </ListItemIcon>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <FolderIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={group.name}
+                  primaryTypographyProps={{ noWrap: true, fontSize: "0.875rem" }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  {group.configIds.length}
+                </Typography>
+              </ListItemButton>
             </ContextMenu>
-            {!group.collapsed && (
-              <div className="session-group-items">
+            <Collapse in={!group.collapsed} timeout="auto" unmountOnExit>
+              <List component="div" dense disablePadding>
                 {savedConfigs
                   .filter((c) => group.configIds.includes(c.id))
                   .map((config) => (
-                <ContextMenu
-                  key={config.id}
-                  items={[
-                    { label: "Edit", onClick: () => handleEditSession(config) },
-                    { label: "Remove", onClick: () => removeOrCloseConfig(config), danger: true },
-                  ]}
-                  onOpen={() => handleConfigClick(config)}
-                >
-                  <div
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, config.id)}
-                  >
-                    <SessionItem
-                      config={config}
-                      selected={selectedConfigId === config.id}
-                      connected={isConnected(config)}
-                      indented
-                      onClick={() => handleConfigClick(config)}
-                      onDoubleClick={() => handleConfigDoubleClick(config)}
-                      onClose={(e) => handleConfigClose(config, e)}
-                    />
-                  </div>
-                </ContextMenu>
+                    <ContextMenu
+                      key={config.id}
+                      items={[
+                        { label: "Edit", onClick: () => handleEditSession(config) },
+                        { label: "Remove", onClick: () => removeOrCloseConfig(config), danger: true },
+                      ]}
+                      onOpen={() => handleConfigClick(config)}
+                    >
+                      <SessionItem
+                        config={config}
+                        selected={selectedConfigId === config.id}
+                        connected={isConnected(config)}
+                        onDragStart={(e) => handleDragStart(e, config.id)}
+                        onClick={() => handleConfigClick(config)}
+                        onDoubleClick={() => handleConfigDoubleClick(config)}
+                        onClose={(e) => handleConfigClose(config, e)}
+                      />
+                    </ContextMenu>
                   ))}
-              </div>
-            )}
-          </div>
+              </List>
+            </Collapse>
+          </Box>
         ))}
-      </div>
+      </List>
 
-      <div className="session-actions">
-        <button className="submenu-item" onClick={() => setShowNewGroupDialog(true)}>
-          <PlusIcon size={14} />
+      <Box sx={{ display: "flex", gap: 1, p: 1, borderTop: 1, borderColor: "divider" }}>
+        <Button
+          size="small"
+          variant="text"
+          fullWidth
+          startIcon={<PlusIcon fontSize="small" />}
+          onClick={() => setShowNewGroupDialog(true)}
+        >
           New Group
-        </button>
-        <button className="submenu-item" onClick={onCreateSession}>
-          <PlusIcon size={14} />
+        </Button>
+        <Button
+          size="small"
+          variant="text"
+          fullWidth
+          startIcon={<PlusIcon fontSize="small" />}
+          onClick={onCreateSession}
+        >
           New Session
-        </button>
-      </div>
+        </Button>
+      </Box>
 
       <Dialog
         isOpen={showNewGroupDialog}
@@ -217,13 +265,17 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
         title="Create Group"
         size="small"
         footer={
-          <div className="dialog-footer-buttons">
-            <button className="btn btn--secondary" onClick={() => setShowNewGroupDialog(false)}>Cancel</button>
-            <button className="btn btn--primary" onClick={handleCreateGroup}>Create</button>
-          </div>
+          <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+            <Button variant="outlined" size="small" onClick={() => setShowNewGroupDialog(false)}>Cancel</Button>
+            <Button variant="contained" size="small" onClick={handleCreateGroup}>Create</Button>
+          </Box>
         }
       >
-        {groupError && <div className="dialog-error">{groupError}</div>}
+        {groupError && (
+          <Typography color="error" variant="body2" sx={{ mb: 1 }}>
+            {groupError}
+          </Typography>
+        )}
         <FormField label="Group Name">
           <input
             type="text"
@@ -232,6 +284,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
             onChange={(e) => { setNewGroupName(e.target.value); setGroupError(""); }}
             onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
             autoFocus
+            style={{ width: "100%", padding: "8px", fontSize: "0.875rem" }}
           />
         </FormField>
       </Dialog>
@@ -256,18 +309,18 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
           onSave={handleSessionSave}
         />
       )}
-    </div>
+    </Box>
   );
 }
 
 // SessionItem - 单个会话条目组件，支持选中高亮和已连接状态区分
-// selected: 是否选中（单击选中），选中时添加 selected 类名高亮
-// connected: 是否已建立连接，未连接时 name 显示为 disconnected 样式
+// selected: 是否选中（单击选中），通过 ListItemButton 的 selected 属性高亮
+// connected: 是否已建立连接，未连接时 name 显示为 text.disabled 颜色
 interface SessionItemProps {
   config: SavedSessionConfig;
   selected: boolean;
   connected: boolean;
-  indented?: boolean;
+  onDragStart: (e: React.DragEvent) => void;
   onClick: () => void;
   onDoubleClick: () => void;
   onClose: (e: React.MouseEvent) => void;
@@ -277,27 +330,44 @@ function SessionItem({
   config,
   selected,
   connected,
-  indented,
+  onDragStart,
   onClick,
   onDoubleClick,
   onClose,
 }: SessionItemProps) {
   return (
-    <div
-      className={`session-item ${selected ? "selected" : ""}`}
+    <ListItemButton
+      draggable
+      onDragStart={onDragStart}
+      selected={selected}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      sx={{ pl: 4, py: 0.5, pr: 1 }}
     >
-      {indented && <span className="session-item-indent" />}
-      {config.type === "local" ? (
-        <LocalSessionIcon size={14} />
-      ) : (
-        <SshSessionIcon size={14} />
-      )}
-      <span className={`session-item-name ${!connected ? "disconnected" : ""}`}>{config.name}</span>
-      <button className="session-item-close" onClick={onClose}>
-        <CloseIcon size={12} />
-      </button>
-    </div>
+      <ListItemIcon sx={{ minWidth: 28 }}>
+        {config.type === "local" ? (
+          <LocalSessionIcon fontSize="small" />
+        ) : (
+          <SshSessionIcon fontSize="small" />
+        )}
+      </ListItemIcon>
+      <ListItemText
+        primary={config.name}
+        primaryTypographyProps={{
+          noWrap: true,
+          fontSize: "0.875rem",
+          color: connected ? "text.primary" : "text.disabled",
+        }}
+      />
+      <IconButton
+        size="small"
+        edge="end"
+        aria-label="close session"
+        onClick={onClose}
+        sx={{ ml: 0.5 }}
+      >
+        <CloseIcon fontSize="small" />
+      </IconButton>
+    </ListItemButton>
   );
 }

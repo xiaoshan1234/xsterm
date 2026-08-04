@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import "./FormField.css";
+import { FormControl, InputLabel, Box } from "@mui/material";
 
 interface FormFieldProps {
   label: string;
@@ -8,9 +8,11 @@ interface FormFieldProps {
 
 export function FormField({ label, children }: FormFieldProps) {
   return (
-    <div className="form-field">
-      <label className="form-field__label">{label}</label>
-      {children}
-    </div>
+    <FormControl fullWidth sx={{ mb: 2 }}>
+      <InputLabel shrink sx={{ position: "relative", transform: "none", mb: 0.5, fontSize: "0.875rem", fontWeight: 500 }}>
+        {label}
+      </InputLabel>
+      <Box>{children}</Box>
+    </FormControl>
   );
 }
