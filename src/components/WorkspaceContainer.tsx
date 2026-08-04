@@ -110,7 +110,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   }, [workspace.name, workspace.id, saveWorkspace]);
 
   return (
-    <div className="workspace-container" ref={containerRef} onMouseDown={() => setActiveWorkspace(workspace.id)}>
+    <Box className="workspace-container" ref={containerRef} sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }} onMouseDown={() => setActiveWorkspace(workspace.id)}>
       <WindowTabBar
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
@@ -127,9 +127,10 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         }}
       />
       {workspace.windows.map((window) => (
-        <div
+        <Box
           key={window.id}
           className={`terminal-pane ${window.id === activeWindow?.id ? "terminal-pane--active" : ""}`}
+          sx={{ flex: 1, minHeight: 0, display: window.id === activeWindow?.id ? "flex" : "none", flexDirection: "column" }}
         >
           {window.windowType === "init" ? (
             <InitWindowView workspace={workspace} windowId={window.id} />
@@ -145,7 +146,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
               onUpdateNode={handleUpdateNode}
             />
           )}
-        </div>
+        </Box>
       ))}
       {commandPanelOpen && (
         <CommandSendPanel
@@ -191,7 +192,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         defaultName={workspace.name}
         savedWorkspaces={savedWorkspaces}
       />
-    </div>
+    </Box>
   );
 }
 

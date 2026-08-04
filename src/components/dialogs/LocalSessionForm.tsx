@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
+import { Box, Button, MenuItem, Select, TextField, IconButton, FormControl, InputLabel, Stack } from "@mui/material";
+import { Delete as DeleteIcon, Add as AddIcon } from "@mui/icons-material";
 import { LocalSessionConfig } from "../../types/session";
-import { FormField } from "../ui/FormField";
-import "./LocalSessionForm.css";
 
-const isWindows = navigator.userAgent.toLowerCase().includes("windows") ||
-  navigator.platform.toLowerCase().includes("win");
+const isWindows = navigator.userAgent.toLowerCase().includes("windows") || navigator.platform.toLowerCase().includes("win");
 
 const LOCAL_SHELLS = isWindows
   ? [
@@ -32,18 +31,11 @@ interface LocalSessionFormProps {
   mode?: "create" | "edit";
 }
 
-interface EnvVar {
-  key: string;
-  value: string;
-}
+interface EnvVar { key: string; value: string; }
 
 function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
   const result: Record<string, string> = {};
-  for (const v of vars) {
-    if (v.key.trim()) {
-      result[v.key.trim()] = v.value;
-    }
-  }
+  for (const v of vars) if (v.key.trim()) result[v.key.trim()] = v.value;
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
@@ -54,96 +46,76 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
   });
 
   useEffect(() => {
-    if (mode === "create") {
-      onChange({});
-      setEnvVars([]);
-    }
+    if (mode === "create") { onChange({}); setEnvVars([]); }
   }, [mode]);
 
   const updateEnvVars = (next: EnvVar[]) => {
     setEnvVars(next);
     const envMap = envVarsToMap(next);
-    onChange({
-      ...config,
-      envConfig: envMap ? { env: envMap } : undefined,
-    });
+    onChange({ ...config, envConfig: envMap ? { env: envMap } : undefined });
   };
 
   return (
-    <>
-      <FormField label="Shell">
-        <select
+    <Stack spacing={2}>
+      <FormControl fullWidth>
+        <InputLabel id="shell-select-label">Shell</InputLabel>
+        <Select
+          labelId="shell-select-label"
+          label="Shell"
           value={config.shell || ""}
           onChange={(e) => onChange({ ...config, shell: e.target.value || undefined })}
         >
-          {LOCAL_SHELLS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-      </FormField>
-      <FormField label="Initial Directory">
-        <input
-          type="text"
-          placeholder={CWD_PLACEHOLDER}
-          value={config.cwd || ""}
-          onChange={(e) => onChange({ ...config, cwd: e.target.value })}
-        />
-      </FormField>
-      <FormField label="Arguments">
-        <input
-          type="text"
-          placeholder="--cd /home/user (space separated)"
-          value={config.args?.join(" ") || ""}
-          onChange={(e) => {
-            const value = e.target.value;
-            const args = value.trim() ? value.split(/\s+/) : undefined;
-            onChange({ ...config, args });
-          }}
-        />
-      </FormField>
-      <FormField label="Environment Variables">
-        <div className="env-vars-list">
+          {LOCAL_SHELLS.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
+        </Select>
+      </FormControl>
+
+      <TextField
+        fullWidth
+        label="Initial Directory"
+        placeholder={CWD_PLACEHOLDER}
+        value={config.cwd || ""}
+        onChange={(e) => onChange({ ...config, cwd: e.target.value })}
+      />
+
+      <TextField
+        fullWidth
+        label="Arguments"
+        placeholder="--cd /home/user (space separated)"
+        value={config.args?.join(" ") || ""}
+        onChange={(e) => {
+          const value = e.target.value;
+          const args = value.trim() ? value.split(/\s+/) : undefined;
+          onChange({ ...config, args });
+        }}
+      />
+
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Environment Variables</Typography>
+        <Stack spacing={1}>
           {envVars.map((env, index) => (
-            <div key={index} className="env-var-row">
-              <input
-                type="text"
-                placeholder="KEY"
-                value={env.key}
+            <Box key={index} sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <TextField size="small" placeholder="KEY" value={env.key} sx={{ flex: 1 }}
                 onChange={(e) => {
                   const next = [...envVars];
                   next[index] = { ...env, key: e.target.value };
                   updateEnvVars(next);
-                }}
-              />
-              <input
-                type="text"
-                placeholder="VALUE"
-                value={env.value}
+                }} />
+              <TextField size="small" placeholder="VALUE" value={env.value} sx={{ flex: 1 }}
                 onChange={(e) => {
                   const next = [...envVars];
                   next[index] = { ...env, value: e.target.value };
                   updateEnvVars(next);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const next = envVars.filter((_, i) => i !== index);
-                  updateEnvVars(next);
-                }}
-              >
-                Remove
-              </button>
-            </div>
+                }} />
+              <IconButton size="small" onClick={() => updateEnvVars(envVars.filter((_, i) => i !== index))}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
           ))}
-          <button
-            type="button"
-            onClick={() => updateEnvVars([...envVars, { key: "", value: "" }])}
-          >
+          <Button startIcon={<AddIcon />} size="small" onClick={() => updateEnvVars([...envVars, { key: "", value: "" }])}>
             Add Variable
-          </button>
-        </div>
-      </FormField>
-    </>
+          </Button>
+        </Stack>
+      </Box>
+    </Stack>
   );
 }

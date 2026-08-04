@@ -20,12 +20,8 @@ export function SaveWorkspaceDialog({ isOpen, onClose, onSave, defaultName, save
       label="Workspace Name"
       validateName={(name) => {
         const trimmed = name.trim();
-        if (trimmed === "default") {
-          return "Workspace name is reserved";
-        }
-        if (savedWorkspaces.some((w) => w.name.trim() === trimmed)) {
-          return "Workspace name already exists";
-        }
+        if (trimmed === "default") return "Workspace name is reserved";
+        if (savedWorkspaces.some((w) => w.name.trim() === trimmed)) return "Workspace name already exists";
         return null;
       }}
     />

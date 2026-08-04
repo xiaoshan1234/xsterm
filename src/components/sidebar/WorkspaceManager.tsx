@@ -6,6 +6,7 @@ import {
   ListItemIcon,
   ListItemText,
   IconButton,
+  Button,
 } from "@mui/material";
 import { Edit as EditIcon, Close as CloseIcon } from "@mui/icons-material";
 import { SavedWorkspace, Workspace } from "../../types/session";
@@ -168,10 +169,10 @@ export function WorkspaceManager({
           title="Rename Workspace"
           size="small"
           footer={
-            <div className="dialog-footer-buttons">
-              <button className="btn btn--secondary" onClick={() => setRenamingWorkspace(null)}>Cancel</button>
-              <button className="btn btn--primary" onClick={handleRenameSubmit}>Rename</button>
-            </div>
+            <>
+              <Button variant="outlined" size="small" onClick={() => setRenamingWorkspace(null)}>Cancel</Button>
+              <Button variant="contained" size="small" onClick={handleRenameSubmit}>Rename</Button>
+            </>
           }
         >
           <FormField label="Workspace Name">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
+import { Box, Button, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
 import { SavedSessionConfig, LocalSessionConfig, SSHSessionConfig, SessionGroup, SessionDisplayConfig } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
-import { FormField } from "../ui/FormField";
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
 import { DisplayConfigForm } from "./DisplayConfigForm";
@@ -39,15 +39,10 @@ export function EditSessionDialog({ isOpen, onClose, config, groups, groupId, on
   const handleSave = () => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
-
     if (config.type === "ssh") {
       const validationError = validateSshConfig(sshConfig);
-      if (validationError) {
-        setSshError(validationError);
-        return;
-      }
+      if (validationError) { setSshError(validationError); return; }
     }
-
     const updatedConfig: SavedSessionConfig = {
       ...config,
       name: trimmedName,
@@ -55,74 +50,44 @@ export function EditSessionDialog({ isOpen, onClose, config, groups, groupId, on
       sshConfig: config.type === "ssh" ? sshConfig : undefined,
       displayConfig,
     };
-
     onSave(updatedConfig, selectedGroupId);
     onClose();
   };
 
   return (
-    <Dialog
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Edit Session"
-      size="medium"
+    <Dialog isOpen={isOpen} onClose={onClose} title="Edit Session" size="medium"
       footer={
-        <div className="dialog-footer-buttons">
-          <button className="btn btn--secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn--primary" onClick={handleSave}>Save</button>
-        </div>
-      }
-    >
-      <FormField label="Name">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSave()}
-          autoFocus
-        />
-      </FormField>
+        <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave}>Save</Button>
+        </Box>
+      }>
+      <TextField fullWidth label="Name" value={name} autoFocus sx={{ mb: 2 }}
+        onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSave()} />
 
-      <FormField label="Group">
-        <select
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel id="edit-group-select-label">Group</InputLabel>
+        <Select labelId="edit-group-select-label" label="Group"
           value={selectedGroupId === null ? "none" : selectedGroupId}
-          onChange={(e) =>
-            setSelectedGroupId(
-              e.target.value === "none" ? null : parseInt(e.target.value)
-            )
-          }
-        >
-          <option value="none">None</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>{g.name}</option>
-          ))}
-        </select>
-      </FormField>
+          onChange={(e) => setSelectedGroupId(e.target.value === "none" ? null : Number(e.target.value))}>
+          <MenuItem value="none">None</MenuItem>
+          {groups.map((g) => <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>)}
+        </Select>
+      </FormControl>
 
-      {config.type === "local" && (
-        <LocalSessionForm
-          config={localConfig}
-          onChange={setLocalConfig}
-          mode="edit"
-        />
-      )}
+      {config.type === "local" && <LocalSessionForm config={localConfig} onChange={setLocalConfig} mode="edit" />}
 
       {config.type === "ssh" && (
         <>
-          {sshError && <div className="dialog-error">{sshError}</div>}
-          <SshSessionForm
-            config={sshConfig}
-            onChange={(cfg) => { setSshConfig(cfg); setSshError(""); }}
-            onError={(err) => setSshError(err)}
-            mode="edit"
-          />
+          {sshError && <Typography color="error" sx={{ mb: 2 }}>{sshError}</Typography>}
+          <SshSessionForm config={sshConfig} onChange={(cfg) => { setSshConfig(cfg); setSshError(""); }} onError={setSshError} mode="edit" />
         </>
       )}
 
-      <details className="display-options-section">
-        <summary>Display Options (optional)</summary>
+      <Box sx={{ mt: 2, p: 1, border: 1, borderColor: "divider", borderRadius: 1 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Display Options (optional)</Typography>
         <DisplayConfigForm config={displayConfig} onChange={setDisplayConfig} />
-      </details>
+      </Box>
     </Dialog>
   );
 }

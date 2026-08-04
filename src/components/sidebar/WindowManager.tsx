@@ -6,6 +6,7 @@ import {
   ListItemIcon,
   ListItemText,
   IconButton,
+  Button,
 } from "@mui/material";
 import { Edit as EditIcon, Close as CloseIcon } from "@mui/icons-material";
 import { SavedWindowConfig } from "../../types/session";
@@ -120,10 +121,10 @@ export function WindowManager({
           title="Rename Window"
           size="small"
           footer={
-            <div className="dialog-footer-buttons">
-              <button className="btn btn--secondary" onClick={() => setRenamingWindow(null)}>Cancel</button>
-              <button className="btn btn--primary" onClick={handleRenameSubmit}>Rename</button>
-            </div>
+            <>
+              <Button variant="outlined" size="small" onClick={() => setRenamingWindow(null)}>Cancel</Button>
+              <Button variant="contained" size="small" onClick={handleRenameSubmit}>Rename</Button>
+            </>
           }
         >
           <FormField label="Window Name">

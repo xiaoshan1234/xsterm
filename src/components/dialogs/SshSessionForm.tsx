@@ -1,15 +1,9 @@
 import { useState, useEffect } from "react";
+import { Box, MenuItem, Select, TextField, FormControlLabel, Switch, Stack, FormControl, InputLabel } from "@mui/material";
 import { SSHSessionConfig } from "../../types/session";
-import { FormField } from "../ui/FormField";
 
 const DEFAULT_SSH_CONFIG: SSHSessionConfig = {
-  host: "",
-  port: 22,
-  username: "",
-  auth_type: "password",
-  password: "",
-  key_file: "",
-  passphrase: "",
+  host: "", port: 22, username: "", auth_type: "password", password: "", key_file: "", passphrase: "",
 };
 
 const TERM_TYPES = [
@@ -27,160 +21,72 @@ interface SshSessionFormProps {
 }
 
 export function SshSessionForm({ config, onChange, mode = "create" }: SshSessionFormProps) {
-  useEffect(() => {
-    if (mode === "create") {
-      onChange(DEFAULT_SSH_CONFIG);
-    }
-  }, [mode]);
+  useEffect(() => { if (mode === "create") onChange(DEFAULT_SSH_CONFIG); }, [mode]);
+
+  const update = (patch: Partial<SSHSessionConfig>) => onChange({ ...config, ...patch });
 
   return (
-    <>
-      <FormField label="Host">
-        <input
-          type="text"
-          placeholder="example.com"
-          value={config.host}
-          onChange={(e) => onChange({ ...config, host: e.target.value })}
-        />
-      </FormField>
-      <FormField label="Port">
-        <input
-          type="number"
-          placeholder="22"
-          value={config.port}
-          onChange={(e) => onChange({ ...config, port: parseInt(e.target.value) || 22 })}
-        />
-      </FormField>
-      <FormField label="Username">
-        <input
-          type="text"
-          placeholder="root"
-          value={config.username}
-          onChange={(e) => onChange({ ...config, username: e.target.value })}
-        />
-      </FormField>
-      <FormField label="Authentication">
-        <select
+    <Stack spacing={2}>
+      <TextField fullWidth label="Host" placeholder="example.com" value={config.host} onChange={(e) => update({ host: e.target.value })} />
+      <TextField fullWidth type="number" label="Port" placeholder="22" value={config.port} onChange={(e) => update({ port: parseInt(e.target.value) || 22 })} />
+      <TextField fullWidth label="Username" placeholder="root" value={config.username} onChange={(e) => update({ username: e.target.value })} />
+
+      <FormControl fullWidth>
+        <InputLabel id="auth-select-label">Authentication</InputLabel>
+        <Select
+          labelId="auth-select-label"
+          label="Authentication"
           value={config.auth_type}
-          onChange={(e) => onChange({ ...config, auth_type: e.target.value as "password" | "key" })}
+          onChange={(e) => update({ auth_type: e.target.value as "password" | "key" })}
         >
-          <option value="password">Password</option>
-          <option value="key">Key File</option>
-        </select>
-      </FormField>
+          <MenuItem value="password">Password</MenuItem>
+          <MenuItem value="key">Key File</MenuItem>
+        </Select>
+      </FormControl>
+
       {config.auth_type === "password" ? (
-        <FormField label="Password">
-          <input
-            type="password"
-            placeholder="********"
-            value={config.password || ""}
-            onChange={(e) => onChange({ ...config, password: e.target.value })}
-          />
-        </FormField>
+        <TextField fullWidth type="password" label="Password" placeholder="********" value={config.password || ""} onChange={(e) => update({ password: e.target.value })} />
       ) : (
-        <>
-          <FormField label="Key File Path">
-            <input
-              type="text"
-              placeholder="~/.ssh/id_rsa"
-              value={config.key_file || ""}
-              onChange={(e) => onChange({ ...config, key_file: e.target.value })}
-            />
-          </FormField>
-          <FormField label="Passphrase (optional)">
-            <input
-              type="password"
-              placeholder="********"
-              value={config.passphrase || ""}
-              onChange={(e) => onChange({ ...config, passphrase: e.target.value })}
-            />
-          </FormField>
-        </>
+        <Stack spacing={2}>
+          <TextField fullWidth label="Key File Path" placeholder="~/.ssh/id_rsa" value={config.key_file || ""} onChange={(e) => update({ key_file: e.target.value })} />
+          <TextField fullWidth type="password" label="Passphrase (optional)" placeholder="********" value={config.passphrase || ""} onChange={(e) => update({ passphrase: e.target.value })} />
+        </Stack>
       )}
-      <FormField label="Terminal Type">
-        <select
+
+      <FormControl fullWidth>
+        <InputLabel id="term-select-label">Terminal Type</InputLabel>
+        <Select
+          labelId="term-select-label"
+          label="Terminal Type"
           value={config.termType || "xterm-256color"}
-          onChange={(e) => onChange({ ...config, termType: e.target.value })}
+          onChange={(e) => update({ termType: e.target.value })}
         >
-          {TERM_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
-      </FormField>
-      <FormField label="Initial Rows">
-        <input
-          type="number"
-          placeholder="24"
-          value={config.initialRows ?? ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange({ ...config, initialRows: v ? parseInt(v) : undefined });
-          }}
-        />
-      </FormField>
-      <FormField label="Initial Cols">
-        <input
-          type="number"
-          placeholder="80"
-          value={config.initialCols ?? ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange({ ...config, initialCols: v ? parseInt(v) : undefined });
-          }}
-        />
-      </FormField>
-      <FormField label="Keepalive Interval (seconds)">
-        <input
-          type="number"
-          placeholder="(disabled)"
-          value={config.keepaliveInterval ?? ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange({ ...config, keepaliveInterval: v ? parseInt(v) : undefined });
-          }}
-        />
-      </FormField>
-      <FormField label="Connection Timeout (seconds)">
-        <input
-          type="number"
-          placeholder="(no timeout)"
-          value={config.connectionTimeout ?? ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange({ ...config, connectionTimeout: v ? parseInt(v) : undefined });
-          }}
-        />
-      </FormField>
-      <FormField label="Enable Compression">
-        <input
-          type="checkbox"
-          checked={config.enableCompression ?? false}
-          onChange={(e) => onChange({ ...config, enableCompression: e.target.checked })}
-        />
-      </FormField>
-    </>
+          {TERM_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+        </Select>
+      </FormControl>
+
+      <TextField fullWidth type="number" label="Initial Rows" placeholder="24" value={config.initialRows ?? ""} onChange={(e) => { const v = e.target.value; update({ initialRows: v ? parseInt(v) : undefined }); }} />
+      <TextField fullWidth type="number" label="Initial Cols" placeholder="80" value={config.initialCols ?? ""} onChange={(e) => { const v = e.target.value; update({ initialCols: v ? parseInt(v) : undefined }); }} />
+      <TextField fullWidth type="number" label="Keepalive Interval (seconds)" placeholder="(disabled)" value={config.keepaliveInterval ?? ""} onChange={(e) => { const v = e.target.value; update({ keepaliveInterval: v ? parseInt(v) : undefined }); }} />
+      <TextField fullWidth type="number" label="Connection Timeout (seconds)" placeholder="(no timeout)" value={config.connectionTimeout ?? ""} onChange={(e) => { const v = e.target.value; update({ connectionTimeout: v ? parseInt(v) : undefined }); }} />
+
+      <FormControlLabel
+        control={<Switch checked={config.enableCompression ?? false} onChange={(e) => update({ enableCompression: e.target.checked })} />}
+        label="Enable Compression"
+      />
+    </Stack>
   );
 }
 
 export function validateSshConfig(config: SSHSessionConfig): string | null {
-  if (!config.host || !config.username) {
-    return "Host and username are required";
-  }
-  if (config.auth_type === "password" && !config.password) {
-    return "Password is required";
-  }
-  if (config.auth_type === "key" && !config.key_file) {
-    return "Key file path is required";
-  }
+  if (!config.host || !config.username) return "Host and username are required";
+  if (config.auth_type === "password" && !config.password) return "Password is required";
+  if (config.auth_type === "key" && !config.key_file) return "Key file path is required";
   return null;
 }
 
 export function useSshFormReset(isOpen: boolean) {
   const [config, setConfig] = useState<SSHSessionConfig>(DEFAULT_SSH_CONFIG);
-
-  useEffect(() => {
-    if (isOpen) setConfig(DEFAULT_SSH_CONFIG);
-  }, [isOpen]);
-
+  useEffect(() => { if (isOpen) setConfig(DEFAULT_SSH_CONFIG); }, [isOpen]);
   return [config, setConfig] as const;
 }
