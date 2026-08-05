@@ -110,7 +110,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   }, [workspace.name, workspace.id, saveWorkspace]);
 
   return (
-    <Box className="workspace-container" ref={containerRef} sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }} onMouseDown={() => setActiveWorkspace(workspace.id)}>
+    <Box ref={containerRef} sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }} onMouseDown={() => setActiveWorkspace(workspace.id)}>
       <WindowTabBar
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
@@ -129,7 +129,6 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
       {workspace.windows.map((window) => (
         <Box
           key={window.id}
-          className={`terminal-pane ${window.id === activeWindow?.id ? "terminal-pane--active" : ""}`}
           sx={{ flex: 1, minHeight: 0, display: window.id === activeWindow?.id ? "flex" : "none", flexDirection: "column" }}
         >
           {window.windowType === "init" ? (

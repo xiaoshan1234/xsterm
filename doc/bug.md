@@ -104,3 +104,48 @@ YES
 循环结束后返回 `false`。修复后把测试文件里的 `it.todo("isSessionUsedInOtherWindow returns false when session is only in the current window")` 改回 `it(...)`，断言期望值 `false`，验证全绿。
 ## 是否解决
 NO
+
+# Bug 007
+## 现象
+主工作区（workspace 容器）只占屏幕左侧约 40% 宽度，剩余约 60% 是空白背景。窗口越窄空白越明显，800×600 时主区只剩 ~350px。
+## 理想效果
+主工作区应占满 sidebar 之外的全部可用宽度。
+## BUG原因
+`src/components/AppLayout.tsx` 第 99-108 行 `workspaces.map` 外层 Box 缺 `flexDirection: column`。父级 `Box`（包含 sidebar + workspaces + WorkspaceBottomBar）正确设了 `flexDirection: column`，但 workspaces map 出来的 Box 没有指定方向，默认 `flexDirection: row`，导致 `<WorkspaceContainer>`（其内部是 `display:flex, flexDirection:column`）在 row 方向上只取自然宽度（≈TabBar + +/save 图标宽度 ≈ 350px），而不是 `flex: 1` 应有的拉伸宽度。
+## 解决方案
+给该 Box 加上 `flexDirection: "column"` 和 `minWidth: 0`，使 WorkspaceContainer 在 cross axis（width）上能正确填满父容器。
+## 是否解决
+YES
+
+# Bug 008
+## 现象
+系统偏好为浅色时，AppBar / Drawer / SettingsView 走 MUI 浅色主题（白底），但 `PaneInitCard` / `InitWindowView` / `Pane` 等组件仍显示深色背景——出现"半白半黑"的撕裂 UI。把 Chrome theme 切到 Light 即可复现。
+## 理想效果
+任意 Chrome theme（system / dark / light）下，所有面板（AppBar、Drawer、Workspace、Pane 容器、Card）的背景、文字、边框都跟随同一个主题。
+## BUG原因
+`src/theme/globalStyles.tsx` 在 `MuiGlobalStyles` 里用 `:root { '--bg-primary': '#1e1e1e', ... }` 把这些 CSS 变量**硬编码为深色值**，不跟随 `effectiveMode`。组件里多处直接引用 `var(--bg-*)`（如 `PaneInitCard`、`InitWindowView`、`Pane`），所以即便 MUI 切到 light，这些组件仍然渲染深色。
+## 解决方案
+1. 删掉 `globalStyles.tsx` 里 `:root` 的 CSS 变量块。
+2. 在 `src/main.tsx` 的 `ThemedApp` 中新增 `applyThemeCssVars(theme)`，通过 `useEffect` 在主题变化时把 MUI theme 派生的 CSS 变量写到 `document.documentElement.style`：
+   - `--bg-primary / --bg-secondary / --bg-tertiary / --bg-hover / --bg-active` 从 `palette.background` 派生（light/dark 各自一套 hover/active 透明度）。
+   - `--border-color` ← `palette.divider`
+   - `--text-primary / --text-secondary / --text-muted` ← `palette.text`
+   - `--accent / --accent-hover` ← `palette.primary`
+   - `--accent-bg / --error-bg` ← 由 hex 转 `rgba(r,g,b, a)`（dark 0.15 / 0.1，light 0.08 / 0.08）保证浅色背景下也可见。
+   - `--font-stack` ← `theme.typography.fontFamily`，`--font-mono` 保留 monospace fallback。
+3. 修复后 dark/light 模式下 SettingsView 与 welcome 卡片背景、文字、边框全部跟随主题，CSS 变量通过 `getComputedStyle(document.documentElement).getPropertyValue('--bg-primary')` 实测分别为 `#1e1e1e` / `#fafafa`。
+## 是否解决
+YES
+
+# Bug 009
+## 现象
+新建窗口首次启动时默认 800×600，对终端模拟器来说太小，sidebar（48px）+ 左半边 workspace 实际只剩 ~350px 宽，根本看不清内容。
+## 理想效果
+首次启动时默认尺寸足以容纳 sidebar + workspace + 多 pane，例如 1280×800，并设置合理的最小尺寸防止窗口被拖到无法使用的大小。
+## BUG原因
+`src-tauri/tauri.conf.json` 第 16-17 行 `width: 800, height: 600`，无最小尺寸约束。
+## 解决方案
+改为 `width: 1280, height: 800`，并新增 `minWidth: 800, minHeight: 500`。
+> 注意：tauri.conf.json 改动只在 Rust 二进制被重新构建后生效。开发态 xsterm.exe（已构建于 8 月 3 日）仍使用旧 800×600；本地可通过 `npm run tauri dev` 重启或在 WebDriver REPL 用 `driver.manage().window().setRect({width:1280, height:800})` 临时模拟新尺寸验证。
+## 是否解决
+YES

@@ -101,7 +101,9 @@ export default function AppLayout() {
                 sx={{
                   flex: 1,
                   display: workspace.id === activeWorkspaceId ? "flex" : "none",
+                  flexDirection: "column",
                   minHeight: 0,
+                  minWidth: 0,
                 }}
               >
                 <WorkspaceContainer workspace={workspace} commandPanelOpen={showCommandPanel} />
