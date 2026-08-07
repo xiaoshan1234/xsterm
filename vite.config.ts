@@ -29,4 +29,23 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // Split vendor code into separate chunks so app code changes don't invalidate
+  // the large cached vendor bundles. Keeps each chunk well under Vite's 500 kB warning.
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("/@mui/") || id.includes("/@emotion/")) return "mui-vendor";
+          if (id.includes("/@xterm/")) return "xterm-vendor";
+          if (id.includes("/@tauri-apps/")) return "tauri-vendor";
+          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) {
+            return "react-vendor";
+          }
+          return "vendor";
+        },
+      },
+    },
+  },
 }));

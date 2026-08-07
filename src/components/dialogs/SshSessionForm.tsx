@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Box, MenuItem, Select, TextField, FormControlLabel, Switch, Stack, FormControl, InputLabel } from "@mui/material";
+import { MenuItem, Select, TextField, FormControlLabel, Switch, Stack, FormControl, InputLabel } from "@mui/material";
 import { SSHSessionConfig } from "../../types/session";
 
 const DEFAULT_SSH_CONFIG: SSHSessionConfig = {

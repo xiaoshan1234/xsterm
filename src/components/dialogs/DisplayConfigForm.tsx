@@ -37,7 +37,7 @@ export function DisplayConfigForm({ config = {}, onChange }: DisplayConfigFormPr
 
       <FormControl fullWidth>
         <InputLabel id="cursor-style-label">Cursor Style</InputLabel>
-        <Select labelId="cursor-style-label" label="Cursor Style" value={config.cursorStyle || ""} onChange={(e) => update({ cursorStyle: e.target.value === "" ? undefined : (e.target.value as "block" | "underline" | "bar") })}>
+        <Select labelId="cursor-style-label" label="Cursor Style" value={config.cursorStyle || ""} onChange={(e) => update({ cursorStyle: (e.target.value || undefined) as "block" | "underline" | "bar" | undefined })}>
           <MenuItem value="">(use global default)</MenuItem>
           {CURSOR_STYLES.map((c) => <MenuItem key={c.value} value={c.value}>{c.label}</MenuItem>)}
         </Select>
@@ -46,8 +46,8 @@ export function DisplayConfigForm({ config = {}, onChange }: DisplayConfigFormPr
       <FormControlLabel control={<Switch checked={config.cursorBlink ?? false} onChange={(e) => update({ cursorBlink: e.target.checked })} />} label="Cursor Blink" />
 
       <TextField fullWidth type="number" label="Scrollback Lines" placeholder="(default)" value={config.scrollback ?? ""} onChange={(e) => { const v = e.target.value; update({ scrollback: v ? parseInt(v) : undefined }); }} />
-      <TextField fullWidth type="number" label="Line Height" placeholder="(default)" inputProps={{ step: 0.1 }} value={config.lineHeight ?? ""} onChange={(e) => { const v = e.target.value; update({ lineHeight: v ? parseFloat(v) : undefined }); }} />
-      <TextField fullWidth type="number" label="Letter Spacing" placeholder="(default)" inputProps={{ step: 0.1 }} value={config.letterSpacing ?? ""} onChange={(e) => { const v = e.target.value; update({ letterSpacing: v ? parseFloat(v) : undefined }); }} />
+      <TextField fullWidth type="number" label="Line Height" placeholder="(default)" slotProps={{ htmlInput: { step: 0.1 } }} value={config.lineHeight ?? ""} onChange={(e) => { const v = e.target.value; update({ lineHeight: v ? parseFloat(v) : undefined }); }} />
+      <TextField fullWidth type="number" label="Letter Spacing" placeholder="(default)" slotProps={{ htmlInput: { step: 0.1 } }} value={config.letterSpacing ?? ""} onChange={(e) => { const v = e.target.value; update({ letterSpacing: v ? parseFloat(v) : undefined }); }} />
       <TextField fullWidth type="number" label="Cursor Width" placeholder="(default)" value={config.cursorWidth ?? ""} onChange={(e) => { const v = e.target.value; update({ cursorWidth: v ? parseInt(v) : undefined }); }} />
     </Stack>
   );

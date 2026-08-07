@@ -27,7 +27,7 @@ export function Dialog({ isOpen, onClose, title, children, footer, size = "mediu
       onClose={onClose}
       maxWidth={maxWidth}
       fullWidth
-      PaperProps={{ sx: { boxShadow: 24 } }}
+      slotProps={{ paper: { sx: { boxShadow: 24 } } }}
     >
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pr: 1 }}>
         <Box component="span" sx={{ fontSize: "1.15rem", fontWeight: 600 }}>{title}</Box>

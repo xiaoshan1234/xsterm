@@ -59,6 +59,7 @@ export interface LocalSessionConfig {
   shell?: string;
   cwd?: string;
   args?: string[];
+  envConfig?: SessionEnvConfig;
 }
 
 export interface SSHSessionConfig {

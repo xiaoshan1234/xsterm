@@ -201,7 +201,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
                 </ListItemIcon>
                 <ListItemText
                   primary={group.name}
-                  primaryTypographyProps={{ noWrap: true, fontSize: "0.875rem" }}
+                  slotProps={{ primary: { noWrap: true, sx: { fontSize: "0.875rem" } } }}
                 />
                 <Typography variant="caption" color="text.secondary">
                   {group.configIds.length}
@@ -353,10 +353,12 @@ function SessionItem({
       </ListItemIcon>
       <ListItemText
         primary={config.name}
-        primaryTypographyProps={{
-          noWrap: true,
-          fontSize: "0.875rem",
-          color: connected ? "text.primary" : "text.disabled",
+        slotProps={{
+          primary: {
+            noWrap: true,
+            sx: { fontSize: "0.875rem" },
+            color: connected ? "text.primary" : "text.disabled",
+          },
         }}
       />
       <IconButton

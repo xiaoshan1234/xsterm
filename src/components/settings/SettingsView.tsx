@@ -41,6 +41,7 @@ export function SettingsView({ activeCategory = "appearance" }: SettingsViewProp
   const { mode, setMode } = useAppTheme();
   return (
     <Box
+      data-testid="settings-view"
       sx={{
         flex: 1,
         height: "100%",
@@ -117,6 +118,7 @@ export function SettingsView({ activeCategory = "appearance" }: SettingsViewProp
                 }}
               >
                 <Box
+                  data-terminal-swatch
                   sx={{
                     width: 14,
                     height: 14,

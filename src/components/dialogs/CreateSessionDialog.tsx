@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Box, Button, Tabs, Tab, MenuItem, Select, FormControl, InputLabel, TextField, Switch, FormControlLabel, Typography } from "@mui/material";
+import { Box, Button, Tabs, Tab, MenuItem, Select, FormControl, InputLabel, Switch, FormControlLabel, Typography } from "@mui/material";
 import { useSession } from "../../contexts/SessionContext";
 import { LocalSessionConfig, SSHSessionConfig, Session, SessionDisplayConfig } from "../../types/session";
 import { Dialog } from "../ui/Dialog";

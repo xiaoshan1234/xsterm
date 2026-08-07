@@ -12,7 +12,7 @@ export interface WorkspaceBottomBarProps {
 }
 
 export function WorkspaceBottomBar({
-  workspaceName,
+  workspaceName: _workspaceName,
   workspaces,
   activeWorkspaceId,
   onSelectWorkspace,
