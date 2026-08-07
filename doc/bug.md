@@ -149,3 +149,20 @@ YES
 > 注意：tauri.conf.json 改动只在 Rust 二进制被重新构建后生效。开发态 xsterm.exe（已构建于 8 月 3 日）仍使用旧 800×600；本地可通过 `npm run tauri dev` 重启或在 WebDriver REPL 用 `driver.manage().window().setRect({width:1280, height:800})` 临时模拟新尺寸验证。
 ## 是否解决
 YES
+
+# Bug 010
+## 现象
+点击侧边栏 "New Session" 打开新建会话对话框时，整个应用崩溃（React 根节点卸载，窗口变空白）。
+## 理想效果
+新建会话对话框应正常打开，用户能创建本地/SSH 会话。
+## BUG原因
+`src/components/dialogs/LocalSessionForm.tsx` 第 93 行使用了 `<Typography variant="subtitle2">` 渲染 "Environment Variables" 标题，但第 2 行的 MUI import 语句中 **没有导入 `Typography`**。`CreateSessionDialog` 默认停在 "Local Shell" 标签页并渲染 `LocalSessionForm`，渲染时遇到未定义的 `Typography` 标识符抛出 `ReferenceError: Typography is not defined`。React 19 在无错误边界时卸载整个根节点，导致 `#root` 变空、应用崩溃。该问题也导致 `npm run build`（tsc）报 TS2304 失败，是生产级阻塞。
+## 解决方案
+在 `src/components/dialogs/LocalSessionForm.tsx` 第 2 行的 MUI import 中补上 `Typography`：
+```diff
+-import { Box, Button, MenuItem, Select, TextField, IconButton, FormControl, InputLabel, Stack } from "@mui/material";
++import { Box, Button, MenuItem, Select, TextField, IconButton, FormControl, InputLabel, Stack, Typography } from "@mui/material";
+```
+修复后重新运行 spike/UI 测试可正常创建本地会话。
+## 是否解决
+YES

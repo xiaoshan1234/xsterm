@@ -131,59 +131,87 @@ describe("xsterm system smoke test", () => {
 
   it("loads the application container", async () => {
     await driver.get(APP_URL);
-    await driver.wait(until.elementLocated(By.css(".app-container")), 10_000);
-    const container = await driver.findElement(By.css(".app-container"));
-    assert.ok(await container.isDisplayed(), ".app-container should be visible");
+    // Root is #root; wait for React to mount children inside it.
+    await driver.wait(
+      until.elementLocated(By.css("#root > *")),
+      10_000
+    );
+    const container = await driver.findElement(By.css("#root > *"));
+    assert.ok(await container.isDisplayed(), "app root child should be visible");
   });
 
   it("renders the title bar", async () => {
-    const navbar = await driver.wait(
-      until.elementLocated(By.css(".navbar")),
+    // MUI AppBar renders as <header>; logo is <img alt="xsterm" />.
+    await driver.get(APP_URL);
+    const header = await driver.wait(
+      until.elementLocated(By.css("header")),
       10_000
     );
-    assert.ok(await navbar.isDisplayed(), ".navbar should be visible");
+    assert.ok(await header.isDisplayed(), "header (AppBar) should be visible");
 
-    const logo = await driver.findElements(By.css(".navbar-logo-img"));
-    assert.ok(logo.length > 0, "logo image should be present in navbar");
+    const logo = await driver.findElements(By.css("header img[alt='xsterm']"));
+    assert.ok(logo.length > 0, "logo image should be present in header");
   });
 
-  it("shows the menu bar items", async () => {
-    const menuItems = await driver.findElements(By.css(".navbar-item"));
-    const labels = await Promise.all(menuItems.map((el) => el.getText()));
-    assert.deepStrictEqual(labels, ["File", "Edit", "View", "Terminal", "Help"]);
+  it("shows the window control buttons", async () => {
+    // Window controls replace the absent menu bar (File/Edit/View/Terminal/Help).
+    await driver.get(APP_URL);
+    await driver.wait(
+      until.elementLocated(By.css("[aria-label='Minimize']")),
+      10_000
+    );
+    const minimize = await driver.findElement(By.css("[aria-label='Minimize']"));
+    const close = await driver.findElement(By.css("[aria-label='Close']"));
+    assert.ok(await minimize.isDisplayed(), "Minimize button should be visible");
+    assert.ok(await close.isDisplayed(), "Close button should be visible");
   });
 
   it("renders the main content area", async () => {
-    const contentArea = await driver.wait(
-      until.elementLocated(By.css(".content-area")),
+    await driver.get(APP_URL);
+    // MUI renders the toolbar with class xsterm-titlebar as the title bar.
+    const toolbar = await driver.wait(
+      until.elementLocated(By.css(".xsterm-titlebar")),
       10_000
     );
     assert.ok(
-      await contentArea.isDisplayed(),
-      ".content-area should be visible"
+      await toolbar.isDisplayed(),
+      ".xsterm-titlebar should be visible"
     );
   });
 
   it("has a sidebar with workspace/session controls", async () => {
-    const sidebar = await driver.findElements(By.css(".sidebar"));
-    if (sidebar.length === 0) {
-      // The sidebar component may use a different class name; just verify
-      // the content area contains more than one direct child.
-      const contentArea = await driver.findElement(By.css(".content-area"));
-      const children = await contentArea.findElements(By.css(":scope > *"));
-      assert.ok(children.length >= 2, "content area should contain sidebar and main area");
-    }
+    await driver.get(APP_URL);
+    // MUI Drawer renders as <aside class="MuiDrawer-root ...">.
+    const drawer = await driver.wait(
+      until.elementLocated(By.css("aside.MuiDrawer-root")),
+      10_000
+    );
+    assert.ok(await drawer.isDisplayed(), "MUI Drawer sidebar should be visible");
   });
 
   it("displays at least one workspace view", async () => {
-    const workspaceViews = await driver.findElements(By.css(".workspace-view"));
+    await driver.get(APP_URL);
+    // WorkspaceContainer renders an xterm terminal div.
+    const terminals = await driver.wait(
+      until.elementsLocated(By.css(".xterm")),
+      10_000
+    );
     assert.ok(
-      workspaceViews.length > 0,
-      "at least one .workspace-view should be rendered"
+      terminals.length > 0,
+      "at least one xterm terminal should be rendered"
     );
   });
 
-  it("can open and close the create-session dialog", async () => {
+  it("can open and close the create-session dialog", async function () {
+    // TC-1401: Dialog depends on Tauri window API (getCurrentWindow) which is
+    // unavailable in Chrome (no __TAURI_INTERNALS__). Run only inside Tauri.
+    const isTauri = await driver.executeScript(
+      "return typeof window.__TAURI_INTERNALS__ !== 'undefined'"
+    );
+    if (!isTauri) {
+      this.skip();
+    }
+
     // Open dialog via the keyboard shortcut Ctrl+Shift+N (or Cmd+Shift+N on macOS)
     const platform = process.platform;
     const key = platform === "darwin" ? "n" : "n";
@@ -200,9 +228,7 @@ describe("xsterm system smoke test", () => {
 
     await sleep(500);
 
-    // Dialog overlay is expected. If the dialog is not reachable because the
-    // app is running outside Tauri, we only verify the overlay exists when
-    // the app is responsive.
+    // Dialog overlay is expected when running inside Tauri.
     const dialogs = await driver.findElements(By.css("[role='dialog']"));
     if (dialogs.length > 0) {
       const dialog = dialogs[0];

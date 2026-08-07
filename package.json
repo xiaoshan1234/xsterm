@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test:system": "node --experimental-strip-types test/smoke.spec.ts",
+    "test:ui:preflight": "node --experimental-strip-types test/sys-test/preflight.ts",
+    "test:ui": "node --experimental-strip-types test/sys-test/run.ts",
     "test:remote:check": "node --experimental-strip-types test/remote/check.ts",
     "test:remote:drive": "node --experimental-strip-types test/remote/drive.ts",
     "test": "vitest run",

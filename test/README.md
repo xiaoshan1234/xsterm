@@ -199,3 +199,15 @@ scripts/start-webdriver.sh
 # On Windows — screenshot the xsterm window (or any title substring)
 powershell -ExecutionPolicy Bypass -File scripts\windows\screenshot-window.ps1 -WindowTitle xsterm -OutPath C:\temp\xsterm.png
 ```
+
+---
+
+## UI system test suite (automated)
+
+The `test/sys-test/` directory contains the automated E2E suite that drives the
+real Windows app via tauri-driver + selenium-webdriver, covering the manual UI
+test cases in `test/sys-test/ui-click-display-test-cases.md`.
+
+- **Run**: `npm run test:ui` (preflight + serial specs) or `npm run test:ui:preflight`
+- **Coverage matrix**: `test/sys-test/COVERAGE.md`
+- **Docs**: [test/sys-test/README.md](sys-test/README.md)
