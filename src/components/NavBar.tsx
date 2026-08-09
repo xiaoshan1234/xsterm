@@ -1,10 +1,16 @@
 import { useState, useEffect } from "react";
-import { AppBar, Toolbar, IconButton, Box } from "@mui/material";
+import { AppBar, Toolbar, IconButton, Box, Button } from "@mui/material";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { MinimizeIcon, MaximizeIcon, RestoreIcon, CloseIcon } from "./icons";
 import logo from "../assets/logo.svg";
 
-export default function NavBar() {
+interface NavBarProps {
+  onMenuAction?: (menu: string) => void;
+}
+
+const MENU_ITEMS = ["File", "Edit", "View", "Terminal", "Help"];
+
+export default function NavBar({ onMenuAction }: NavBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
 
@@ -64,8 +70,34 @@ export default function NavBar() {
           px: 1,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <img src={logo} alt="xsterm" style={{ height: 16 }} />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, ml: 1 }}>
+            {MENU_ITEMS.map((item) => (
+              <Button
+                key={item}
+                size="small"
+                color="inherit"
+                onClick={() => onMenuAction?.(item)}
+                sx={{
+                  minWidth: 0,
+                  px: 1,
+                  py: 0,
+                  fontSize: 12,
+                  lineHeight: "28px",
+                  color: "text.secondary",
+                  textTransform: "none",
+                  borderRadius: 0,
+                  "&:hover": {
+                    bgcolor: "action.hover",
+                    color: "text.primary",
+                  },
+                }}
+              >
+                {item}
+              </Button>
+            ))}
+          </Box>
         </Box>
         <Box sx={{ display: "flex" }}>
           <IconButton

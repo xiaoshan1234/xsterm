@@ -13,6 +13,7 @@
     "test:ui": "node --experimental-strip-types test/sys-test/run.ts",
     "test:remote:check": "node --experimental-strip-types test/remote/check.ts",
     "test:remote:drive": "node --experimental-strip-types test/remote/drive.ts",
+    "test:cleanup": "node scripts/cleanup-test-env.cjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
