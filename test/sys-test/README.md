@@ -28,27 +28,36 @@ npm run test:ui:preflight
 # 全量运行（预检通过后串行执行所有 specs）
 npm run test:ui
 
+# 自动启动 dev server（WSL 安全，通过 PowerShell 调用）
+START_TAURI=true npm run test:ui
+
 # 仅运行单个 spec（按文件名子串匹配）
 npm run test:ui -- --spec window
 ```
 
+> `START_TAURI=true` 会在预检前自动执行 `npm run tauri dev`，测试完成后自动停止。
+> 从 WSL 运行时，通过 `powershell.exe -NoProfile` 调用 Windows 侧的 npm。
+
 ## 目录结构
 
 ```
-test/sys-test/
-├── lib/                # 共享基础设施
-│   ├── harness.ts      # driver 生命周期 / 轮询等待 / 失败产物 / tc() 包装器
-│   ├── selectors.ts    # 全部 MUI scoped 选择器（含来源注释）
-│   ├── terminal.ts     # 终端输入/读取/轮询断言/会话创建
-│   ├── os.ts           # 剪贴板桥接 / 应用数据目录 / 端口探测
-│   └── config.ts       # ssh-config.json 读取
-├── specs/              # 16 个按模块划分的 spec 文件
-├── spike/              # spike 验证残件（probe/recon，非正式测试）
-├── preflight.ts        # 预检脚本
-├── run.ts              # 串行编排器
-├── COVERAGE.md         # 160 条覆盖矩阵
-├── ssh-config.example.json  # SSH 测试配置模板
-└── artifacts/          # 失败产物（gitignored）
+test/
+├── tauri-launcher.ts   # WSL 安全的 tauri dev 生命周期管理
+├── smoke.spec.ts       # Chrome 结构冒烟测试
+└── sys-test/
+    ├── lib/                # 共享基础设施
+    │   ├── harness.ts      # driver 生命周期 / 轮询等待 / 失败产物 / tc() 包装器
+    │   ├── selectors.ts    # 全部 MUI scoped 选择器（含来源注释）
+    │   ├── terminal.ts     # 终端输入/读取/轮询断言/会话创建
+    │   ├── os.ts           # 剪贴板桥接 / 应用数据目录 / 端口探测
+    │   └── config.ts       # ssh-config.json 读取
+    ├── specs/              # 16 个按模块划分的 spec 文件
+    ├── spike/              # spike 验证残件（probe/recon，非正式测试）
+    ├── preflight.ts        # 预检脚本
+    ├── run.ts              # 串行编排器（支持 START_TAURI=true）
+    ├── COVERAGE.md         # 160 条覆盖矩阵
+    ├── ssh-config.example.json  # SSH 测试配置模板
+    └── artifacts/          # 失败产物（gitignored）
 ```
 
 ## 隔离与命名约定

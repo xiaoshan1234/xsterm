@@ -32,6 +32,9 @@ npm run test:system
 START_TAURI=true npm run test:system
 ```
 
+> Works from **WSL** — the launcher uses `powershell.exe` to invoke `npm run tauri dev`
+> on the Windows side, then polls `http://localhost:1420` until Vite responds.
+
 > The smoke test waits up to 180 seconds for `http://localhost:1420` to respond.
 > Set `TAURI_DEV_TIMEOUT_MS` to override the wait timeout.
 
@@ -209,5 +212,6 @@ real Windows app via tauri-driver + selenium-webdriver, covering the manual UI
 test cases in `test/sys-test/ui-click-display-test-cases.md`.
 
 - **Run**: `npm run test:ui` (preflight + serial specs) or `npm run test:ui:preflight`
+- **Auto-start dev server**: `START_TAURI=true npm run test:ui` (launches `npm run tauri dev` before preflight)
 - **Coverage matrix**: `test/sys-test/COVERAGE.md`
 - **Docs**: [test/sys-test/README.md](sys-test/README.md)
