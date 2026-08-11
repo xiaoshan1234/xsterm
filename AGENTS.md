@@ -8,6 +8,18 @@
   - `src/` — Vite frontend (React, xterm.js)
   - `src-tauri/` — Rust backend (Tauri, `portable-pty`, `russh`)
 
+## Build Toolchain (WSL Environment)
+
+**When running in WSL, always use the Windows toolchain for compilation.** Do not use WSL-native `rustc`/`cargo`/`node`/`npm` for building.
+
+- **Frontend**: Use `powershell.exe -NoProfile -Command "Set-Location 'C:/path/to/project'; npm run build"` (or `npm run dev`, `npm run tauri dev`, etc.).
+- **Backend**: Use `cargo.exe build --release` (directly callable from WSL) or the full `npm run tauri build` via PowerShell.
+- **Type check**: Use `powershell.exe -NoProfile -Command "Set-Location 'C:/path/to/project'; npx tsc --noEmit"`.
+
+**Why**: The project targets Windows (WebView2, MSVC). Building with WSL toolchain produces Linux binaries that cannot run as the Tauri app.
+
+**Test launcher**: Use `test/tauri-launcher.ts` for `START_TAURI=true` workflows — it handles the PowerShell invocation automatically.
+
 ## Exact Commands
 
 | Command | What it does |
