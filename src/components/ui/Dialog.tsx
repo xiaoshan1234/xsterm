@@ -13,11 +13,13 @@ interface DialogProps {
   isOpen: boolean;
   onClose: () => void;
   title: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   footer?: ReactNode;
   size?: "small" | "medium";
   tabs?: DialogTab[];
   initialTab?: string;
+  onTabChange?: (id: string) => void;
+  className?: string;
 }
 
 export function Dialog({
@@ -29,6 +31,8 @@ export function Dialog({
   size = "medium",
   tabs,
   initialTab,
+  onTabChange,
+  className,
 }: DialogProps) {
   const [activeTabId, setActiveTabId] = useState<string | undefined>(
     initialTab ?? tabs?.[0]?.id
@@ -44,7 +48,7 @@ export function Dialog({
   return (
     <div className="dialog-overlay" onClick={onClose}>
       <div
-        className={`dialog dialog--${size}${hasTabs ? " dialog--with-sidebar" : ""}`}
+        className={`dialog dialog--${size}${hasTabs ? " dialog--with-sidebar" : ""}${className ? ` ${className}` : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
@@ -67,11 +71,15 @@ export function Dialog({
                     className={`dialog-sidebar-item${
                       isActive ? " dialog-sidebar-item--active" : ""
                     }`}
-                    onClick={() => setActiveTabId(tab.id)}
+                    onClick={() => {
+                      setActiveTabId(tab.id);
+                      onTabChange?.(tab.id);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setActiveTabId(tab.id);
+                        onTabChange?.(tab.id);
                       }
                     }}
                   >

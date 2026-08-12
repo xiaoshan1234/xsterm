@@ -1,0 +1,39 @@
+.dialog-tabs {
+  display: flex;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-color);
+  margin: 0 -20px;
+  flex-shrink: 0;
+}
+
+.dialog-tab {
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.dialog-tab:hover {
+  color: var(--text-primary);
+}
+
+.dialog-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+/* Layout wrapper: breaks out of .dialog-content padding so the
+ * .dialog-body grid can use the full content area. */
+.session-form-layout {
+  margin: -20px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}

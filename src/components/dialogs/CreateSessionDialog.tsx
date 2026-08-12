@@ -17,6 +17,11 @@ import {
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
 import { DisplayConfigForm } from "./DisplayConfigForm";
+import {
+  SessionFormLayout,
+  SessionFormSidebarItem,
+  SessionFormTab,
+} from "./SessionFormLayout";
 import "./CreateSessionDialog.css";
 
 interface CreateSessionDialogProps {
@@ -223,6 +228,31 @@ export default function CreateSessionDialog({
 
   const sidebarItems = SIDEBAR_ITEMS[topTab];
 
+  const topTabItems: SessionFormTab[] = [
+    {
+      id: "local",
+      label: "Shell",
+      active: topTab === "local",
+      onClick: () => handleTopTabChange("local"),
+    },
+    {
+      id: "ssh",
+      label: "SSH",
+      active: topTab === "ssh",
+      onClick: () => handleTopTabChange("ssh"),
+    },
+  ];
+
+  const sidebarItemProps: SessionFormSidebarItem[] = sidebarItems.map(
+    (item) => ({
+      id: item.id,
+      label: item.label,
+      icon: item.icon,
+      active: item.id === sectionId,
+      onClick: () => handleSectionChange(item.id),
+    }),
+  );
+
   const footer = (
     <div className="dialog-footer-content">
       <label className="checkbox-group">
@@ -252,54 +282,9 @@ export default function CreateSessionDialog({
       footer={footer}
       className="create-session-dialog"
     >
-      <div className="create-session-layout">
-        {/* Top tabs: Local Shell / SSH */}
-        <div className="dialog-tabs">
-          <button
-            className={`dialog-tab ${topTab === "local" ? "active" : ""}`}
-            onClick={() => handleTopTabChange("local")}
-          >
-            Shell
-          </button>
-          <button
-            className={`dialog-tab ${topTab === "ssh" ? "active" : ""}`}
-            onClick={() => handleTopTabChange("ssh")}
-          >
-            SSH
-          </button>
-        </div>
-
-        {/* Sidebar + panel */}
-        <div className="dialog-body">
-          <nav className="dialog-sidebar" aria-label="Section">
-            {sidebarItems.map((item) => {
-              const isActive = item.id === sectionId;
-              return (
-                <div
-                  key={item.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={isActive}
-                  className={`dialog-sidebar-item${
-                    isActive ? " dialog-sidebar-item--active" : ""
-                  }`}
-                  onClick={() => handleSectionChange(item.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleSectionChange(item.id);
-                    }
-                  }}
-                >
-                  <span className="dialog-sidebar-item-icon">{item.icon}</span>
-                  <span className="dialog-sidebar-item-label">{item.label}</span>
-                </div>
-              );
-            })}
-          </nav>
-          <div className="dialog-panel">{renderPanelContent()}</div>
-        </div>
-      </div>
+      <SessionFormLayout topTabs={topTabItems} sidebarItems={sidebarItemProps}>
+        {renderPanelContent()}
+      </SessionFormLayout>
     </Dialog>
   );
 }
