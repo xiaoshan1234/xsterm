@@ -32,6 +32,9 @@ npm run test:system
 START_TAURI=true npm run test:system
 ```
 
+> Works from **WSL** — the launcher uses `powershell.exe` to invoke `npm run tauri dev`
+> on the Windows side, then polls `http://localhost:1420` until Vite responds.
+
 > The smoke test waits up to 180 seconds for `http://localhost:1420` to respond.
 > Set `TAURI_DEV_TIMEOUT_MS` to override the wait timeout.
 
@@ -199,3 +202,16 @@ scripts/start-webdriver.sh
 # On Windows — screenshot the xsterm window (or any title substring)
 powershell -ExecutionPolicy Bypass -File scripts\windows\screenshot-window.ps1 -WindowTitle xsterm -OutPath C:\temp\xsterm.png
 ```
+
+---
+
+## UI system test suite (automated)
+
+The `test/sys-test/` directory contains the automated E2E suite that drives the
+real Windows app via tauri-driver + selenium-webdriver, covering the manual UI
+test cases in `test/sys-test/ui-click-display-test-cases.md`.
+
+- **Run**: `npm run test:ui` (preflight + serial specs) or `npm run test:ui:preflight`
+- **Auto-start dev server**: `START_TAURI=true npm run test:ui` (launches `npm run tauri dev` before preflight)
+- **Coverage matrix**: `test/sys-test/COVERAGE.md`
+- **Docs**: [test/sys-test/README.md](sys-test/README.md)

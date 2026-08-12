@@ -26,3 +26,8 @@ dist-ssr
 .omo
 .logs
 .vscode
+
+# UI-test artifacts (screenshots, recordings, etc.)
+test/sys-test/artifacts/
+# SSH credentials — never commit
+test/sys-test/ssh-config.json

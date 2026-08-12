@@ -1,0 +1,11 @@
+{
+  "$schema": "./ssh-config.example.json",
+  "host": "your-ssh-server.example.com",
+  "port": 22,
+  "username": "your-username",
+  "authType": "password",
+  "password": "your-password-or-leave-empty",
+  "keyFile": "",
+  "passphrase": "",
+  "disconnectCommand": "exit"
+}
