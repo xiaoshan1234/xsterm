@@ -50,7 +50,7 @@ function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
 export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSessionFormProps) {
   const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
     const env = config.envConfig?.env || {};
-    return Object.entries(env).map(([key, value]) => ({ key, value }));
+    return (Object.entries(env) as [string, string][]).map(([key, value]) => ({ key, value }));
   });
 
   useEffect(() => {
