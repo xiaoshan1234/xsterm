@@ -113,6 +113,22 @@ html, body, #root {
   color: var(--text-muted);
 }
 
+/* Override the text-input styling for checkboxes inside .form-field, otherwise
+ * width:100% + appearance:none turns them into invisible full-width boxes. */
+.form-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .checkbox-group {
   display: flex;
   align-items: center;

@@ -3,9 +3,11 @@
   padding: 0 20px;
   border-bottom: 1px solid var(--border-color);
   margin: 0 -20px;
+  flex-shrink: 0;
 }
 
 .dialog-tab {
+  flex: 1;
   padding: 12px 16px;
   background: transparent;
   border: none;
@@ -13,6 +15,7 @@
   color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
+  text-align: center;
   transition: color 0.15s, border-color 0.15s;
 }
 
@@ -23,4 +26,41 @@
 .dialog-tab.active {
   color: var(--text-primary);
   border-bottom-color: var(--accent);
+}
+
+/* 3-level layout wrapper: breaks out of .dialog-content padding so the
+ * .dialog-body grid can use the full content area. */
+.create-session-layout {
+  margin: -20px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Compound selector so this wins against .dialog--medium from Dialog.css. */
+.dialog.create-session-dialog {
+  width: 780px;
+  height: 640px;
+  max-width: 780px;
+  max-height: 640px;
+}
+
+.dialog.create-session-dialog .dialog-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.create-session-layout .dialog-sidebar,
+.create-session-layout .dialog-panel {
+  overflow: hidden;
+}
+
+/* 2-column grid for the Display panel so all 8 fields fit in the locked
+ * panel height without scrolling. */
+.display-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
 }
