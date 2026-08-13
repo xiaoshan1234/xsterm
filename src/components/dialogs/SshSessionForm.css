@@ -1,0 +1,63 @@
+/* Collapsible "Connection Options" section used inside SshSessionForm's
+ * "system" panel. Visual style mirrors the sidebar items in Dialog.css
+ * and the form-field tokens defined in global.css. */
+
+.ssh-opts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ssh-opts-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.ssh-opts-section__header:hover {
+  background: var(--bg-hover);
+}
+
+.ssh-opts-section__header:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ssh-opts-section__chevron {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: transform 0.15s ease;
+  margin-left: 8px;
+}
+
+.ssh-opts-section__header[aria-expanded="true"] .ssh-opts-section__chevron {
+  transform: rotate(90deg);
+}
+
+.ssh-opts-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 0 0;
+}
+
+/* 2-column row layout for the "Initial size" pair (rows + cols) and any
+ * other field pairs that belong visually side-by-side. */
+.ssh-opts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}

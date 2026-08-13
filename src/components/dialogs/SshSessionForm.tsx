@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { SSHSessionConfig } from "../../types/session";
 import { FormField } from "../ui/FormField";
+import "./SshSessionForm.css";
 
 const TERM_TYPES = [
   { value: "xterm-256color", label: "xterm-256color (recommended)" },
@@ -7,6 +9,20 @@ const TERM_TYPES = [
   { value: "vt100", label: "vt100" },
   { value: "screen", label: "screen" },
 ];
+
+interface SshOpts {
+  termType?: string;
+  initialRows?: number;
+  initialCols?: number;
+  keepaliveInterval?: number;
+  connectionTimeout?: number;
+  enableCompression?: boolean;
+}
+
+// Empty input → undefined so backend #[serde(default)] takes over.
+function parseOptionalInt(value: string): number | undefined {
+  return value.trim() ? parseInt(value, 10) : undefined;
+}
 
 interface SshSessionFormProps {
   config: SSHSessionConfig;
@@ -29,6 +45,22 @@ export function SshSessionForm({
 }: SshSessionFormProps) {
   const showLink = !section || section === "link";
   const showSystem = !section || section === "system";
+
+  const [showConnectionOptions, setShowConnectionOptions] = useState(true);
+  const [sshOpts, setSshOpts] = useState<SshOpts>(() => ({
+    termType: config.termType,
+    initialRows: config.initialRows,
+    initialCols: config.initialCols,
+    keepaliveInterval: config.keepaliveInterval,
+    connectionTimeout: config.connectionTimeout,
+    enableCompression: config.enableCompression,
+  }));
+
+  const updateOpts = (patch: Partial<SshOpts>) => {
+    const next = { ...sshOpts, ...patch };
+    setSshOpts(next);
+    onChange({ ...config, ...next });
+  };
 
   return (
     <>
@@ -114,87 +146,94 @@ export function SshSessionForm({
         </>
       )}
       {showSystem && (
-        <>
-          <FormField label="Terminal Type">
-            <select
-              value={config.termType || "xterm-256color"}
-              onChange={(e) =>
-                onChange({ ...config, termType: e.target.value })
-              }
+        <div className="ssh-opts-section">
+          <button
+            type="button"
+            className="ssh-opts-section__header"
+            aria-expanded={showConnectionOptions}
+            aria-controls="ssh-opts-body"
+            onClick={() => setShowConnectionOptions((v) => !v)}
+          >
+            <span>Connection Options</span>
+            <span className="ssh-opts-section__chevron" aria-hidden="true">
+              ▶
+            </span>
+          </button>
+          {showConnectionOptions && (
+            <div
+              id="ssh-opts-body"
+              className="ssh-opts-section__body"
             >
-              {TERM_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Initial Rows">
-            <input
-              type="number"
-              placeholder="24"
-              value={config.initialRows ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange({
-                  ...config,
-                  initialRows: v ? parseInt(v) : undefined,
-                });
-              }}
-            />
-          </FormField>
-          <FormField label="Initial Cols">
-            <input
-              type="number"
-              placeholder="80"
-              value={config.initialCols ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange({
-                  ...config,
-                  initialCols: v ? parseInt(v) : undefined,
-                });
-              }}
-            />
-          </FormField>
-          <FormField label="Keepalive Interval (seconds)">
-            <input
-              type="number"
-              placeholder="(disabled)"
-              value={config.keepaliveInterval ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange({
-                  ...config,
-                  keepaliveInterval: v ? parseInt(v) : undefined,
-                });
-              }}
-            />
-          </FormField>
-          <FormField label="Connection Timeout (seconds)">
-            <input
-              type="number"
-              placeholder="(no timeout)"
-              value={config.connectionTimeout ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange({
-                  ...config,
-                  connectionTimeout: v ? parseInt(v) : undefined,
-                });
-              }}
-            />
-          </FormField>
-          <FormField label="Enable Compression">
-            <input
-              type="checkbox"
-              checked={config.enableCompression ?? false}
-              onChange={(e) =>
-                onChange({ ...config, enableCompression: e.target.checked })
-              }
-            />
-          </FormField>
-        </>
+              <FormField label="Terminal Type">
+                <select
+                  value={sshOpts.termType || "xterm-256color"}
+                  onChange={(e) => updateOpts({ termType: e.target.value })}
+                >
+                  {TERM_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <div className="ssh-opts-row">
+                <FormField label="Initial Rows">
+                  <input
+                    type="number"
+                    placeholder="24"
+                    value={sshOpts.initialRows ?? ""}
+                    onChange={(e) =>
+                      updateOpts({ initialRows: parseOptionalInt(e.target.value) })
+                    }
+                  />
+                </FormField>
+                <FormField label="Initial Cols">
+                  <input
+                    type="number"
+                    placeholder="80"
+                    value={sshOpts.initialCols ?? ""}
+                    onChange={(e) =>
+                      updateOpts({ initialCols: parseOptionalInt(e.target.value) })
+                    }
+                  />
+                </FormField>
+              </div>
+              <FormField label="Keepalive Interval (seconds)">
+                <input
+                  type="number"
+                  placeholder="(disabled)"
+                  value={sshOpts.keepaliveInterval ?? ""}
+                  onChange={(e) =>
+                    updateOpts({
+                      keepaliveInterval: parseOptionalInt(e.target.value),
+                    })
+                  }
+                />
+              </FormField>
+              <FormField label="Connection Timeout (seconds)">
+                <input
+                  type="number"
+                  placeholder="30"
+                  value={sshOpts.connectionTimeout ?? ""}
+                  onChange={(e) =>
+                    updateOpts({
+                      connectionTimeout: parseOptionalInt(e.target.value),
+                    })
+                  }
+                />
+              </FormField>
+              <FormField label="Enable Compression">
+                <input
+                  type="checkbox"
+                  checked={sshOpts.enableCompression ?? false}
+                  onChange={(e) =>
+                    updateOpts({ enableCompression: e.target.checked })
+                  }
+                />
+              </FormField>
+            </div>
+          )}
+        </div>
       )}
     </>
   );

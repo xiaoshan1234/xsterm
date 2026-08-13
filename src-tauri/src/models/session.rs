@@ -95,6 +95,7 @@ pub enum SessionConfig {
 
 /// Display configuration for terminal appearance.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct DisplayConfig {
     pub font_size: Option<u32>,
     pub font_family: Option<String>,
@@ -108,6 +109,7 @@ pub struct DisplayConfig {
 
 /// Environment variables configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct EnvConfig {
     pub env: Option<HashMap<String, String>>,
 }

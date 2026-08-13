@@ -422,13 +422,34 @@ async fn exec_ssh_command(
     }
     let ssh_config = Arc::new(ssh_config);
 
-    let mut handle = russh::client::connect(
+    let connect_fut = russh::client::connect(
         ssh_config,
         (config.host.clone(), config.port),
         ClientHandler,
-    )
-    .await
-    .map_err(|e| format!("SSH connection to {}:{} failed: {}", config.host, config.port, e))?;
+    );
+    let mut handle = if let Some(secs) = config.connection_timeout {
+        match tokio::time::timeout(Duration::from_secs(secs as u64), connect_fut).await {
+            Ok(result) => result.map_err(|e| {
+                format!(
+                    "SSH connection to {}:{} failed: {}",
+                    config.host, config.port, e
+                )
+            })?,
+            Err(_) => {
+                return Err(format!(
+                    "SSH connection to {}:{} timed out after {} seconds",
+                    config.host, config.port, secs
+                ));
+            }
+        }
+    } else {
+        connect_fut.await.map_err(|e| {
+            format!(
+                "SSH connection to {}:{} failed: {}",
+                config.host, config.port, e
+            )
+        })?
+    };
 
     authenticate(&mut handle, &config.username, &config.auth).await?;
 
