@@ -611,6 +611,7 @@ mod tests {
 
     fn base_config(proxy_jump: Option<&str>, known_hosts: Option<&str>) -> SSHSessionConfig {
         SSHSessionConfig {
+            name: None,
             host: "example.com".to_string(),
             port: 22,
             username: "user".to_string(),

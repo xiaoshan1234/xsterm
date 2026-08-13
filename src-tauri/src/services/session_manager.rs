@@ -414,7 +414,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
 
         assert!(result.is_ok());
         let info = result.unwrap();
@@ -430,7 +430,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, env_config: None },
+            LocalSessionConfig { name: None, shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, env_config: None },
             mock_backend,
         );
 
@@ -447,7 +447,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()), args: None, env_config: None },
+            LocalSessionConfig { name: None, shell: None, cwd: Some("/tmp".to_string()), args: None, env_config: None },
             mock_backend,
         );
 
@@ -460,13 +460,59 @@ mod tests {
     }
 
     #[test]
+    fn create_local_with_explicit_name_uses_config_name() {
+        let mut mock_pty_system = MockPtySystemM::new();
+        expect_openpty(&mut mock_pty_system);
+        let mock_backend = TestAppBackend::default();
+        let mut manager = build_mock_manager(mock_pty_system);
+
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: Some("My Dev Shell".to_string()),
+                shell: Some("/usr/bin/zsh".to_string()),
+                cwd: None,
+                args: None,
+                env_config: None,
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        assert_eq!(info.name, "My Dev Shell");
+    }
+
+    #[test]
+    fn create_local_with_empty_name_falls_back_to_shell_basename() {
+        let mut mock_pty_system = MockPtySystemM::new();
+        expect_openpty(&mut mock_pty_system);
+        let mock_backend = TestAppBackend::default();
+        let mut manager = build_mock_manager(mock_pty_system);
+
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: Some("   ".to_string()),
+                shell: Some("/usr/bin/zsh".to_string()),
+                cwd: None,
+                args: None,
+                env_config: None,
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        assert!(info.name.contains("zsh"));
+    }
+
+    #[test]
     fn create_local_when_pty_open_fails_returns_err() {
         let mut mock_pty_system = MockPtySystemM::new();
         mock_pty_system.expect_openpty().returning(|_| Err("PTY open failed".to_string()));
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PTY open failed");
@@ -487,7 +533,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -509,7 +555,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         let close_result = manager.close(result.unwrap().id);
@@ -523,7 +569,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -545,7 +591,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         assert_eq!(manager.list().len(), 1);
@@ -558,7 +604,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
         let info = result.unwrap();
 
@@ -597,6 +643,7 @@ mod tests {
 
         let result = manager.create_ssh(
             SSHSessionConfig {
+                name: None,
                 host: "localhost".to_string(),
                 port: 22,
                 username: "testuser".to_string(),
@@ -628,6 +675,98 @@ mod tests {
     }
 
     #[test]
+    fn create_ssh_with_explicit_name_uses_config_name() {
+        let mut mock_ssh_backend = MockSshBackendM::new();
+        mock_ssh_backend.expect_connect().returning(|_| {
+            let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+            let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
+            Ok(SshConnectResult {
+                channel: Box::new(MockSshChannelM::new()),
+                write_tx,
+                read_rx,
+                resize_tx: None,
+            })
+        });
+
+        let mock_backend = TestAppBackend::default();
+        let mut manager = SessionManager {
+            sessions: HashMap::new(),
+            next_id: 1,
+            pty_system: Box::new(MockPtySystemM::new()),
+            ssh_backend: Box::new(mock_ssh_backend),
+        };
+
+        let result = manager.create_ssh(
+            SSHSessionConfig {
+                name: Some("Production Bastion".to_string()),
+                host: "bastion.example.com".to_string(),
+                port: 22,
+                username: "ops".to_string(),
+                auth: SSHAuth::Password { password: "p".to_string() },
+                term_type: None,
+                initial_rows: None,
+                initial_cols: None,
+                keepalive_interval: None,
+                connection_timeout: None,
+                enable_compression: None,
+                known_hosts_path: None,
+                proxy_jump: None,
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        assert_eq!(info.name, "Production Bastion");
+    }
+
+    #[test]
+    fn create_ssh_with_empty_name_falls_back_to_user_at_host() {
+        let mut mock_ssh_backend = MockSshBackendM::new();
+        mock_ssh_backend.expect_connect().returning(|_| {
+            let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+            let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
+            Ok(SshConnectResult {
+                channel: Box::new(MockSshChannelM::new()),
+                write_tx,
+                read_rx,
+                resize_tx: None,
+            })
+        });
+
+        let mock_backend = TestAppBackend::default();
+        let mut manager = SessionManager {
+            sessions: HashMap::new(),
+            next_id: 1,
+            pty_system: Box::new(MockPtySystemM::new()),
+            ssh_backend: Box::new(mock_ssh_backend),
+        };
+
+        let result = manager.create_ssh(
+            SSHSessionConfig {
+                name: Some("".to_string()),
+                host: "h.example.com".to_string(),
+                port: 22,
+                username: "alice".to_string(),
+                auth: SSHAuth::Password { password: "p".to_string() },
+                term_type: None,
+                initial_rows: None,
+                initial_cols: None,
+                keepalive_interval: None,
+                connection_timeout: None,
+                enable_compression: None,
+                known_hosts_path: None,
+                proxy_jump: None,
+            },
+            mock_backend,
+        );
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        assert_eq!(info.name, "alice@h.example.com");
+    }
+
+    #[test]
     fn create_ssh_keyfile_success() {
         let mut mock_ssh_backend = MockSshBackendM::new();
         mock_ssh_backend.expect_connect().returning(|_| {
@@ -651,6 +790,7 @@ mod tests {
 
         let result = manager.create_ssh(
             SSHSessionConfig {
+                name: None,
                 host: "example.com".to_string(),
                 port: 2222,
                 username: "admin".to_string(),
@@ -698,6 +838,7 @@ mod tests {
 
         let result = manager.create_ssh(
             SSHSessionConfig {
+                name: None,
                 host: "invalid-host".to_string(),
                 port: 22,
                 username: "user".to_string(),
@@ -732,6 +873,7 @@ mod tests {
 
         let result = manager.create_ssh(
             SSHSessionConfig {
+                name: None,
                 host: "example.com".to_string(),
                 port: 22,
                 username: "user".to_string(),
@@ -781,12 +923,13 @@ mod tests {
         };
 
         manager.create_local(
-            LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None },
+            LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None },
             mock_backend.clone(),
         ).expect("local session should be created");
 
         manager.create_ssh(
             SSHSessionConfig {
+                name: None,
                 host: "localhost".to_string(),
                 port: 22,
                 username: "testuser".to_string(),

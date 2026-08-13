@@ -62,7 +62,7 @@ pub fn create_local_session(
 
     let info = SessionInfo {
         id: session_id,
-        name: shell_name,
+        name: resolve_session_name(config.name, &shell_name),
         session_type: SessionType::Local { shell: shell_path, cwd },
         is_connected: true,
         capabilities: CapabilityFlags::for_local(),
@@ -113,6 +113,15 @@ fn extract_shell_name(shell_exe: &str) -> String {
         .unwrap_or(shell_exe)
         .trim_end_matches(".exe")
         .to_string()
+}
+
+/// Resolve the session display name: prefer an explicit user-supplied name,
+/// fall back to the auto-derived `default_name` when missing or empty.
+fn resolve_session_name(configured: Option<String>, default_name: &str) -> String {
+    match configured {
+        Some(name) if !name.trim().is_empty() => name,
+        _ => default_name.to_string(),
+    }
 }
 
 /// Resolve the working directory from config or environment defaults.

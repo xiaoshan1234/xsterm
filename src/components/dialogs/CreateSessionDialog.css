@@ -12,9 +12,16 @@
   overflow: hidden;
 }
 
-.session-form-layout .dialog-sidebar,
-.session-form-layout .dialog-panel {
+/* Sidebar is a fixed list of steps — no scroll needed. */
+.session-form-layout .dialog-sidebar {
   overflow: hidden;
+}
+
+/* Panel scrolls vertically so the SSH "link" step's many fields fit
+ * inside the locked 640px dialog height. */
+.session-form-layout .dialog-panel {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* 2-column grid for the Display panel so all 8 fields fit in the locked

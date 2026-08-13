@@ -29,6 +29,10 @@ pub struct SessionInfo {
 /// Configuration for creating a local shell session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalSessionConfig {
+    /// Optional display name for the session. Falls back to the shell basename
+    /// when `None` or empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Optional shell executable path. Falls back to the user's default shell.
     pub shell: Option<String>,
     /// Optional working directory. Falls back to the user's home directory.
@@ -42,6 +46,10 @@ pub struct LocalSessionConfig {
 /// Configuration for creating an SSH session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SSHSessionConfig {
+    /// Optional display name for the session. Falls back to
+    /// `format!("{}@{}", username, host)` when `None` or empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub host: String,
     pub port: u16,
     pub username: String,
@@ -187,6 +195,7 @@ mod tests {
     #[test]
     fn ssh_session_config_json_roundtrip_with_all_fields() {
         let config = SSHSessionConfig {
+            name: Some("my-server".to_string()),
             host: "example.com".to_string(),
             port: 2222,
             username: "user".to_string(),
@@ -208,6 +217,7 @@ mod tests {
         let roundtrip: SSHSessionConfig =
             serde_json::from_str(&json).expect("deserialize SSH config");
 
+        assert_eq!(roundtrip.name.as_deref(), Some("my-server"));
         assert_eq!(roundtrip.host, "example.com");
         assert_eq!(roundtrip.port, 2222);
         assert_eq!(roundtrip.username, "user");
@@ -227,6 +237,7 @@ mod tests {
     #[test]
     fn ssh_session_config_json_roundtrip_with_new_fields_absent() {
         let config = SSHSessionConfig {
+            name: None,
             host: "localhost".to_string(),
             port: 22,
             username: "admin".to_string(),
@@ -249,6 +260,7 @@ mod tests {
 
         assert_eq!(roundtrip.host, "localhost");
         assert_eq!(roundtrip.port, 22);
+        assert!(roundtrip.name.is_none());
         assert!(roundtrip.known_hosts_path.is_none());
         assert!(roundtrip.proxy_jump.is_none());
     }
@@ -256,6 +268,7 @@ mod tests {
     #[test]
     fn ssh_session_config_json_known_hosts_path_only() {
         let config = SSHSessionConfig {
+            name: None,
             host: "remote.example.com".to_string(),
             port: 22,
             username: "user".to_string(),
@@ -289,6 +302,7 @@ mod tests {
     #[test]
     fn ssh_session_config_json_proxy_jump_only() {
         let config = SSHSessionConfig {
+            name: None,
             host: "internal.example.com".to_string(),
             port: 22,
             username: "user".to_string(),
@@ -316,6 +330,114 @@ mod tests {
             roundtrip.proxy_jump.as_deref(),
             Some("bastion@jump.example.com:22")
         );
+    }
+
+    #[test]
+    fn ssh_session_config_json_roundtrip_preserves_name_field() {
+        let original = SSHSessionConfig {
+            name: Some("production-web".to_string()),
+            host: "prod.example.com".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            auth: SSHAuth::Password {
+                password: "secret".to_string(),
+            },
+            term_type: None,
+            initial_rows: None,
+            initial_cols: None,
+            keepalive_interval: None,
+            connection_timeout: None,
+            enable_compression: None,
+            known_hosts_path: None,
+            proxy_jump: None,
+        };
+
+        let json = serde_json::to_string(&original).expect("serialize");
+        assert!(json.contains("\"name\":\"production-web\""));
+
+        let roundtrip: SSHSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(roundtrip.name.as_deref(), Some("production-web"));
+        assert_eq!(roundtrip.host, "prod.example.com");
+        assert_eq!(roundtrip.username, "deploy");
+    }
+
+    #[test]
+    fn ssh_session_config_json_omits_name_when_none() {
+        let config = SSHSessionConfig {
+            name: None,
+            host: "h.example.com".to_string(),
+            port: 22,
+            username: "u".to_string(),
+            auth: SSHAuth::Password { password: "p".to_string() },
+            term_type: None,
+            initial_rows: None,
+            initial_cols: None,
+            keepalive_interval: None,
+            connection_timeout: None,
+            enable_compression: None,
+            known_hosts_path: None,
+            proxy_jump: None,
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize");
+        assert!(!json.contains("\"name\""));
+
+        let roundtrip: SSHSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        assert!(roundtrip.name.is_none());
+    }
+
+    #[test]
+    fn local_session_config_json_roundtrip_preserves_name_field() {
+        let original = LocalSessionConfig {
+            name: Some("my-shell".to_string()),
+            shell: Some("/bin/zsh".to_string()),
+            cwd: Some("/home/me".to_string()),
+            args: Some(vec!["-l".to_string()]),
+            env_config: None,
+        };
+
+        let json = serde_json::to_string(&original).expect("serialize");
+        assert!(json.contains("\"name\":\"my-shell\""));
+
+        let roundtrip: LocalSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(roundtrip.name.as_deref(), Some("my-shell"));
+        assert_eq!(roundtrip.shell.as_deref(), Some("/bin/zsh"));
+        assert_eq!(roundtrip.cwd.as_deref(), Some("/home/me"));
+        assert_eq!(roundtrip.args, Some(vec!["-l".to_string()]));
+    }
+
+    #[test]
+    fn local_session_config_json_omits_name_when_none() {
+        let config = LocalSessionConfig {
+            name: None,
+            shell: None,
+            cwd: None,
+            args: None,
+            env_config: None,
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize");
+        assert!(!json.contains("\"name\""));
+
+        let roundtrip: LocalSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        assert!(roundtrip.name.is_none());
+    }
+
+    #[test]
+    fn local_session_config_json_missing_name_field_defaults_to_none() {
+        let json_without_name = r#"{"shell":"/bin/bash"}"#;
+        let config: LocalSessionConfig =
+            serde_json::from_str(json_without_name).expect("deserialize");
+        assert!(config.name.is_none());
+        assert_eq!(config.shell.as_deref(), Some("/bin/bash"));
+    }
+
+    #[test]
+    fn ssh_session_config_json_missing_name_field_defaults_to_none() {
+        let json_without_name = r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p"}"#;
+        let config: SSHSessionConfig = serde_json::from_str(json_without_name).expect("deserialize");
+        assert!(config.name.is_none());
+        assert_eq!(config.host, "h");
     }
 }
 

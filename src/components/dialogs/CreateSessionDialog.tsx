@@ -98,6 +98,7 @@ export default function CreateSessionDialog({
   );
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [saveConfig, setSaveConfig] = useState(true);
+  const [name, setName] = useState("");
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>({});
   const [sshConfig, setSshConfig] = useState<SSHSessionConfig>(DEFAULT_SSH);
   const [displayConfig, setDisplayConfig] = useState<
@@ -112,6 +113,7 @@ export default function CreateSessionDialog({
       setConnectionType(initialTab);
       setSelectedGroupId(initialGroupId ?? null);
       setError("");
+      setName("");
       setLocalConfig({});
       setSshConfig(DEFAULT_SSH);
       setDisplayConfig(undefined);
@@ -121,6 +123,7 @@ export default function CreateSessionDialog({
   const handleTopTabChange = (next: TopTab) => {
     setTopTab(next);
     setSectionId(FIRST_SECTION[next]);
+    setConnectionType(next);
   };
 
   const handleSectionChange = (id: SectionId) => {
@@ -141,9 +144,17 @@ export default function CreateSessionDialog({
           setError(validationError);
           return;
         }
-        session = await onCreateSsh(sshConfig, saveConfig, displayConfig);
+        const trimmedName = name.trim();
+        const sshConfigWithName: SSHSessionConfig = trimmedName
+          ? { ...sshConfig, name: trimmedName }
+          : sshConfig;
+        session = await onCreateSsh(sshConfigWithName, saveConfig, displayConfig);
       } else {
-        session = await onCreateLocal(localConfig, saveConfig, displayConfig);
+        const trimmedName = name.trim();
+        const localConfigWithName: LocalSessionConfig = trimmedName
+          ? { ...localConfig, name: trimmedName }
+          : localConfig;
+        session = await onCreateLocal(localConfigWithName, saveConfig, displayConfig);
       }
 
       if (selectedGroupId !== null) {
@@ -176,6 +187,17 @@ export default function CreateSessionDialog({
     </FormField>
   );
 
+  const sessionNameField = (
+    <FormField label="Session Name">
+      <input
+        type="text"
+        value={name}
+        placeholder="Auto-generated if empty"
+        onChange={(e) => setName(e.target.value)}
+      />
+    </FormField>
+  );
+
   const renderPanelContent = () => {
     switch (sectionId) {
       case "general":
@@ -184,6 +206,7 @@ export default function CreateSessionDialog({
             {connectionType === "local" && error && (
               <div className="dialog-error">{error}</div>
             )}
+            {sessionNameField}
             {groupSelector}
             <LocalSessionForm
               config={localConfig}
@@ -197,6 +220,7 @@ export default function CreateSessionDialog({
             {connectionType === "ssh" && error && (
               <div className="dialog-error">{error}</div>
             )}
+            {sessionNameField}
             {groupSelector}
             <SshSessionForm
               config={sshConfig}

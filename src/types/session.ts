@@ -59,6 +59,8 @@ export type SessionType =
   | { type: "ssh"; config: SSHSessionConfig };
 
 export interface LocalSessionConfig {
+  /** Optional display name. Falls back to the shell basename when omitted. */
+  name?: string;
   shell?: string;
   cwd?: string;
   args?: string[];
@@ -66,6 +68,8 @@ export interface LocalSessionConfig {
 }
 
 export interface SSHSessionConfig {
+  /** Optional display name. Falls back to `user@host` when omitted. */
+  name?: string;
   host: string;
   port: number;
   username: string;

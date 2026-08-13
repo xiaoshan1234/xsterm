@@ -24,10 +24,11 @@ pub fn create_ssh_session(
     let host = config.host.clone();
     let port = config.port;
     let username = config.username.clone();
+    let default_name = format!("{}@{}", username, host);
 
     let info = SessionInfo {
         id: session_id,
-        name: format!("{}@{}", username, host),
+        name: resolve_session_name(config.name.clone(), &default_name),
         session_type: SessionType::Ssh {
             host,
             port,
@@ -66,4 +67,13 @@ pub fn create_ssh_session(
     });
 
     Ok(wrapper)
+}
+
+/// Resolve the session display name: prefer an explicit user-supplied name,
+/// fall back to the auto-derived `default_name` when missing or empty.
+fn resolve_session_name(configured: Option<String>, default_name: &str) -> String {
+    match configured {
+        Some(name) if !name.trim().is_empty() => name,
+        _ => default_name.to_string(),
+    }
 }
