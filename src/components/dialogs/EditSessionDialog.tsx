@@ -78,10 +78,10 @@ export function EditSessionDialog({
   const [name, setName] = useState(config.name);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(groupId);
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>(
-    config.localConfig ?? {},
+    config.type === "local" ? config.config : {},
   );
   const [sshConfig, setSshConfig] = useState<SSHSessionConfig>(
-    config.sshConfig ?? DEFAULT_SSH,
+    config.type === "ssh" ? config.config : DEFAULT_SSH,
   );
   const [displayConfig, setDisplayConfig] = useState<
     SessionDisplayConfig | undefined
@@ -95,8 +95,8 @@ export function EditSessionDialog({
     if (isOpen) {
       setName(config.name);
       setSelectedGroupId(groupId);
-      setLocalConfig(config.localConfig ?? {});
-      setSshConfig(config.sshConfig ?? DEFAULT_SSH);
+      setLocalConfig(config.type === "local" ? config.config : {});
+      setSshConfig(config.type === "ssh" ? config.config : DEFAULT_SSH);
       setDisplayConfig(config.displayConfig);
       setSshError("");
       setSectionId(FIRST_SECTION_BY_TYPE[config.type]);
@@ -116,13 +116,12 @@ export function EditSessionDialog({
       }
     }
 
-    const updatedConfig: SavedSessionConfig = {
-      ...config,
-      name: trimmedName,
-      localConfig: config.type === "local" ? localConfig : undefined,
-      sshConfig: config.type === "ssh" ? sshConfig : undefined,
-      displayConfig,
-    };
+    let updatedConfig: SavedSessionConfig;
+    if (config.type === "local") {
+      updatedConfig = { ...config, name: trimmedName, config: localConfig, displayConfig };
+    } else {
+      updatedConfig = { ...config, name: trimmedName, config: sshConfig, displayConfig };
+    }
 
     onSave(updatedConfig, selectedGroupId);
     onClose();

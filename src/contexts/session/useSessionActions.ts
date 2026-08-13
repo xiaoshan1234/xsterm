@@ -8,6 +8,7 @@ import {
   SavedWorkspace,
   Session,
   SessionDisplayConfig,
+  SessionType,
   SplitDirection,
   Window,
   Workspace,
@@ -32,6 +33,23 @@ import {
 } from "./paneUtils";
 import { clearSessionOutput } from "../../utils/sessionOutputBuffer";
 import { SessionActions, SessionPersistence, SessionState } from "./types";
+
+async function dispatchByType(
+  type: SessionType["type"],
+  local: () => Promise<sessionService.SessionInfo>,
+  ssh: () => Promise<sessionService.SessionInfo>,
+): Promise<sessionService.SessionInfo> {
+  switch (type) {
+    case "local":
+      return local();
+    case "ssh":
+      return ssh();
+    default: {
+      const _exhaustive: never = type;
+      throw new Error(`Unknown session type: ${String(_exhaustive)}`);
+    }
+  }
+}
 
 function getUniqueWindowName(
   workspaces: Workspace[],
@@ -110,15 +128,12 @@ export function useSessionActions({
       let info: sessionService.SessionInfo;
       let type: Session["type"];
 
-      if (config.type === "local" && config.localConfig) {
-        info = await sessionService.createLocal(config.localConfig);
-        type = "local";
-      } else if (config.type === "ssh" && config.sshConfig) {
-        info = await sessionService.createSsh(config.sshConfig);
-        type = "ssh";
-      } else {
-        throw new Error("Invalid config");
-      }
+      info = await dispatchByType(
+        config.type,
+        () => sessionService.createLocal(config.config as LocalSessionConfig),
+        () => sessionService.createSsh(config.config as SSHSessionConfig),
+      );
+      type = config.type;
 
       const session = buildFrontendSession(info, configId, type, config.displayConfig);
       setSessions((prev) => [...prev, session]);
@@ -888,10 +903,10 @@ export function useSessionActions({
         let savedConfig: SavedSessionConfig;
         if (type === "local") {
           const localConfig = config as LocalSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "local", localConfig, displayConfig };
+          savedConfig = { id: configId, name: info.name, version: 1, type: "local", config: localConfig, displayConfig };
         } else {
           const sshConfig = config as SSHSessionConfig;
-          savedConfig = { id: configId, name: info.name, type: "ssh", sshConfig, displayConfig };
+          savedConfig = { id: configId, name: info.name, version: 1, type: "ssh", config: sshConfig, displayConfig };
         }
         updateConfigs((prev) => [...prev, savedConfig]);
       }
@@ -1029,6 +1044,9 @@ export function useSessionActions({
     async (id: number): Promise<Session> => {
       const oldSession = sessionsRef.current.find((s) => s.id === id);
       if (!oldSession) throw new Error("Session not found");
+      if (oldSession.capabilities && !oldSession.capabilities.supportsReconnect) {
+        throw new Error("Reconnect not supported for this transport");
+      }
 
       const config = savedConfigs.find((c) => c.id === oldSession.configId);
       if (!config) throw new Error("Saved config not found for session");
@@ -1036,15 +1054,12 @@ export function useSessionActions({
       let info: sessionService.SessionInfo;
       let type: Session["type"];
 
-      if (config.type === "local" && config.localConfig) {
-        info = await sessionService.createLocal(config.localConfig);
-        type = "local";
-      } else if (config.type === "ssh" && config.sshConfig) {
-        info = await sessionService.createSsh(config.sshConfig);
-        type = "ssh";
-      } else {
-        throw new Error("Invalid saved config");
-      }
+      info = await dispatchByType(
+        config.type,
+        () => sessionService.createLocal(config.config as LocalSessionConfig),
+        () => sessionService.createSsh(config.config as SSHSessionConfig),
+      );
+      type = config.type;
 
       const newSession = buildFrontendSession(info, oldSession.configId, type, config.displayConfig);
       setSessions((prev) => [...prev, newSession]);

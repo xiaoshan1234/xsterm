@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
 
 use crate::infrastructure::app_backend::RealAppBackend;
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionInfo};
+use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo};
 use crate::services::session_manager::SessionManager;
 
 /// Create a new local shell session.
@@ -46,6 +46,36 @@ pub async fn create_ssh_session(
             tracing::error!("Failed to create SSH session: {}", e);
             e
         })
+}
+
+/// Create a new session from a generic [`SessionConfig`] discriminated union.
+///
+/// This is the unified entry point the frontend uses to create either a local
+/// shell session or an SSH session through a single command. The legacy
+/// `create_local_session` and `create_ssh_session` commands remain available
+/// for backward compatibility.
+#[tauri::command]
+pub async fn create_session(
+    config: SessionConfig,
+    state: State<'_, Arc<Mutex<SessionManager>>>,
+    app: AppHandle,
+) -> Result<SessionInfo, String> {
+    tracing::info!("Creating session via generic SessionConfig");
+    let backend = RealAppBackend::new(app);
+    with_manager(state, |manager| match config {
+        SessionConfig::Local(local) => manager.create_local(local, backend),
+        SessionConfig::Ssh(ssh) => manager.create_ssh(ssh, backend),
+    })
+    .inspect(|info| {
+        tracing::info!(
+            "Session created via generic command: id={}",
+            info.id
+        );
+    })
+    .map_err(|e| {
+        tracing::error!("Failed to create session via generic command: {}", e);
+        e
+    })
 }
 
 /// Write input data to an existing session.

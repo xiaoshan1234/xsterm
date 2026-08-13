@@ -1,42 +1,63 @@
 use std::collections::HashMap;
-use std::io::Write;
 
 use crate::infrastructure::app_backend::AppBackend;
-use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, NativePtySystem, PtySystem};
+use crate::infrastructure::pty::{NativePtySystem, PtySystem};
+use crate::infrastructure::session_backend::SessionBackend;
 use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
 use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
 use crate::models::session::{build_remote_image_path, LocalSessionConfig, SSHSessionConfig, SessionInfo};
 use crate::services::local_session::create_local_session;
 
-enum Session {
-    Local(LocalSession, LocalSessionHandles),
-    Ssh(SshSessionWrapper),
+/// Active session handle held by [`SessionManager`].
+///
+/// `Pty` holds a type-erased `Box<dyn SessionBackend>`; `Ssh` holds a
+/// concrete `Box<SshSessionWrapper>` so `get_ssh_config` can read the
+/// original `SSHSessionConfig` (which the trait does not expose). Both still
+/// dispatch via `SessionBackend` (the concrete box derefs to `SshSessionWrapper`,
+/// which implements the trait).
+enum ActiveSession {
+    Pty(Box<dyn SessionBackend + Send>),
+    Ssh(Box<SshSessionWrapper>),
 }
 
-impl Session {
-    fn info(&self) -> &SessionInfo {
+impl ActiveSession {
+    /// Borrow the underlying backend as a trait object.
+    fn backend(&self) -> &(dyn SessionBackend + '_) {
         match self {
-            Session::Local(s, _) => &s.info,
-            Session::Ssh(s) => &s.info,
+            ActiveSession::Pty(b) => &**b,
+            ActiveSession::Ssh(b) => &**b,
         }
     }
 
-    fn close(self) -> Result<(), String> {
+    /// Mutably borrow the underlying backend as a trait object.
+    fn backend_mut(&mut self) -> &mut (dyn SessionBackend + '_) {
         match self {
-            Session::Local(_session, mut handles) => {
-                if let Some(child) = handles.child.take() {
-                    child.kill()?;
-                }
-                Ok(())
-            }
-            Session::Ssh(_wrapper) => Ok(()),
+            ActiveSession::Pty(b) => &mut **b,
+            ActiveSession::Ssh(b) => &mut **b,
         }
+    }
+
+    /// Consume the variant and return the owned boxed backend (coerced to a
+    /// type-erased `Box<dyn SessionBackend + Send>`).
+    fn into_backend(self) -> Box<dyn SessionBackend + Send> {
+        match self {
+            ActiveSession::Pty(b) => b,
+            ActiveSession::Ssh(b) => b,
+        }
+    }
+
+    /// Build a complete [`SessionInfo`] (including `capabilities`) from this
+    /// session's metadata.
+    fn to_session_info(&self) -> SessionInfo {
+        let mut info = self.backend().info().clone();
+        info.capabilities = self.backend().capabilities().clone();
+        info
     }
 }
 
 /// Manages the lifecycle of all terminal sessions.
 pub struct SessionManager {
-    sessions: HashMap<u32, Session>,
+    sessions: HashMap<u32, ActiveSession>,
     next_id: u32,
     pty_system: Box<dyn PtySystem>,
     ssh_backend: Box<dyn SshBackend>,
@@ -61,14 +82,14 @@ impl SessionManager {
     ) -> Result<SessionInfo, String> {
         let id = self.allocate_session_id();
 
-        let (session, handles) = create_local_session(
+        let session = create_local_session(
             self.pty_system.as_ref(),
             config,
             backend,
             id,
         )?;
 
-        Ok(self.insert_session(id, Session::Local(session, handles)))
+        Ok(self.insert_session(id, ActiveSession::Pty(Box::new(session))))
     }
 
     /// Create a new SSH session.
@@ -86,12 +107,13 @@ impl SessionManager {
             id,
         )?;
 
-        Ok(self.insert_session(id, Session::Ssh(wrapper)))
+        Ok(self.insert_session(id, ActiveSession::Ssh(Box::new(wrapper))))
     }
 
-    /// Insert a newly created session into the manager and return its metadata.
-    fn insert_session(&mut self, id: u32, session: Session) -> SessionInfo {
-        let info = session.info().clone();
+    /// Insert a newly created session into the manager and return its metadata
+    /// (with `capabilities` populated from the backend).
+    fn insert_session(&mut self, id: u32, session: ActiveSession) -> SessionInfo {
+        let info = session.to_session_info();
         self.sessions.insert(id, session);
         info
     }
@@ -101,7 +123,7 @@ impl SessionManager {
         id: u32,
     ) -> Result<SSHSessionConfig, String> {
         match self.sessions.get(&id) {
-            Some(Session::Ssh(ssh)) => Ok(ssh.config.clone()),
+            Some(ActiveSession::Ssh(ssh)) => Ok(ssh.config.clone()),
             Some(_) => Err(format!("Session {} is not an SSH session", id)),
             None => Err(format!("Session {} not found", id)),
         }
@@ -110,31 +132,15 @@ impl SessionManager {
     /// Write input data to an existing session.
     pub fn write(&mut self, id: u32, data: &[u8]) -> Result<(), String> {
         match self.sessions.get_mut(&id) {
-            Some(Session::Local(s, _)) => {
-                s.writer.write_all(data).map_err(|e| e.to_string())?;
-                s.writer.flush().map_err(|e| e.to_string())?;
-                Ok(())
-            }
-            Some(Session::Ssh(s)) => {
-                s.write_tx.send(data.to_vec())
-                    .map_err(|_| format!("SSH channel closed for session {}", id))?;
-                Ok(())
-            }
+            Some(session) => session.backend_mut().write(data),
             None => Err(format!("Session {} not found", id)),
         }
     }
 
     /// Resize the PTY of the session with the given `id`.
     pub fn resize(&mut self, id: u32, rows: u16, cols: u16) -> Result<(), String> {
-        match self.sessions.get(&id) {
-            Some(Session::Local(_, handles)) => handles.resize(rows, cols),
-            Some(Session::Ssh(ssh)) => {
-                if let Some(resize_tx) = &ssh.resize_tx {
-                    resize_tx.send((cols, rows)).map_err(|_| "SSH session resize channel closed".to_string())
-                } else {
-                    Ok(())
-                }
-            }
+        match self.sessions.get_mut(&id) {
+            Some(session) => session.backend_mut().resize(rows, cols),
             None => Err(format!("Session {} not found", id)),
         }
     }
@@ -171,14 +177,14 @@ impl SessionManager {
     /// Close and remove the session with the given `id`.
     pub fn close(&mut self, id: u32) -> Result<(), String> {
         if let Some(session) = self.sessions.remove(&id) {
-            session.close()?;
+            session.into_backend().close()?;
         }
         Ok(())
     }
 
-    /// Return metadata for all active sessions.
+    /// Return metadata (including `capabilities`) for all active sessions.
     pub fn list(&self) -> Vec<SessionInfo> {
-        self.sessions.values().map(|s| s.info().clone()).collect()
+        self.sessions.values().map(|s| s.to_session_info()).collect()
     }
 
     /// Allocate the next unique session id.
@@ -202,10 +208,13 @@ mod tests {
     use super::*;
     use crate::infrastructure::pty::{Child, PtyPair};
     use crate::infrastructure::ssh::{SshBackend, SshChannel, SshConnectResult};
+    use crate::models::capabilities::CapabilityFlags;
     use crate::models::session::{SSHAuth, SessionType};
     use mockall::{mock, predicate::*};
     use std::io::{Read, Write};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc as sync_mpsc;
+    use std::sync::{Arc, Mutex};
 
     struct MockReadReturningZero;
     impl Read for MockReadReturningZero {
@@ -282,10 +291,7 @@ mod tests {
         pub SshBackendM {
             fn connect(
                 &self,
-                host: &str,
-                port: u16,
-                auth: &SSHAuth,
-                username: &str,
+                config: &SSHSessionConfig,
             ) -> Result<SshConnectResult, String>;
         }
     }
@@ -293,12 +299,9 @@ mod tests {
     impl SshBackend for MockSshBackendM {
         fn connect(
             &self,
-            host: &str,
-            port: u16,
-            auth: &SSHAuth,
-            username: &str,
+            config: &SSHSessionConfig,
         ) -> Result<SshConnectResult, String> {
-            self.connect(host, port, auth, username)
+            self.connect(config)
         }
     }
 
@@ -318,6 +321,66 @@ mod tests {
             self.emit_result.clone()
         }
         fn spawn(&self, _f: Box<dyn FnOnce() + Send>) {}
+    }
+
+    /// Hand-rolled `SessionBackend` for trait-dispatch smoke tests. Records
+    /// every call via atomic counters and mutex-backed payloads so tests can
+    /// assert lifecycle behaviour without spawning a real PTY or opening SSH.
+    struct MockBackend {
+        pub info: SessionInfo,
+        pub capabilities: CapabilityFlags,
+        pub write_called: Arc<AtomicUsize>,
+        pub write_data: Arc<Mutex<Vec<u8>>>,
+        pub resize_called: Arc<AtomicUsize>,
+        pub resize_dims: Arc<Mutex<Vec<(u16, u16)>>>,
+        pub close_called: Arc<AtomicBool>,
+    }
+
+    impl SessionBackend for MockBackend {
+        fn info(&self) -> &SessionInfo {
+            &self.info
+        }
+        fn capabilities(&self) -> &CapabilityFlags {
+            &self.capabilities
+        }
+        fn write(&mut self, data: &[u8]) -> Result<(), String> {
+            self.write_called.fetch_add(1, Ordering::SeqCst);
+            self.write_data
+                .lock()
+                .unwrap()
+                .extend_from_slice(data);
+            Ok(())
+        }
+        fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {
+            self.resize_called.fetch_add(1, Ordering::SeqCst);
+            self.resize_dims.lock().unwrap().push((rows, cols));
+            Ok(())
+        }
+        fn close(self: Box<Self>) -> Result<(), String> {
+            self.close_called.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    fn build_mock_backend() -> MockBackend {
+        MockBackend {
+            info: SessionInfo {
+                id: 999,
+                name: "mock".to_string(),
+                session_type: SessionType::Local {
+                    shell: "/bin/sh".to_string(),
+                    cwd: "/".to_string(),
+                },
+                is_connected: true,
+                capabilities: CapabilityFlags::for_local(),
+            },
+            capabilities: CapabilityFlags::for_local(),
+            write_called: Arc::new(AtomicUsize::new(0)),
+            write_data: Arc::new(Mutex::new(Vec::new())),
+            resize_called: Arc::new(AtomicUsize::new(0)),
+            resize_dims: Arc::new(Mutex::new(Vec::new())),
+            close_called: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     fn build_mock_manager(mock_pty_system: MockPtySystemM) -> SessionManager {
@@ -351,7 +414,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
 
         assert!(result.is_ok());
         let info = result.unwrap();
@@ -367,7 +430,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None },
+            LocalSessionConfig { shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, env_config: None },
             mock_backend,
         );
 
@@ -384,7 +447,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()), args: None },
+            LocalSessionConfig { shell: None, cwd: Some("/tmp".to_string()), args: None, env_config: None },
             mock_backend,
         );
 
@@ -403,7 +466,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PTY open failed");
@@ -424,7 +487,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -446,7 +509,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         let close_result = manager.close(result.unwrap().id);
@@ -460,7 +523,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -482,7 +545,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
 
         assert_eq!(manager.list().len(), 1);
@@ -495,7 +558,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None }, mock_backend);
         assert!(result.is_ok());
         let info = result.unwrap();
 
@@ -513,7 +576,7 @@ mod tests {
     #[test]
     fn create_ssh_password_success() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| {
+        mock_ssh_backend.expect_connect().returning(|_| {
             let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
             Ok(SshConnectResult {
@@ -538,6 +601,12 @@ mod tests {
                 port: 22,
                 username: "testuser".to_string(),
                 auth: SSHAuth::Password { password: "testpass".to_string() },
+                term_type: None,
+                initial_rows: None,
+                initial_cols: None,
+                keepalive_interval: None,
+                connection_timeout: None,
+                enable_compression: None,
             },
             mock_backend,
         );
@@ -559,7 +628,7 @@ mod tests {
     #[test]
     fn create_ssh_keyfile_success() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| {
+        mock_ssh_backend.expect_connect().returning(|_| {
             let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
             Ok(SshConnectResult {
@@ -587,6 +656,12 @@ mod tests {
                     key_file: "/home/user/.ssh/id_rsa".to_string(),
                     passphrase: Some("passphrase".to_string()),
                 },
+                term_type: None,
+                initial_rows: None,
+                initial_cols: None,
+                keepalive_interval: None,
+                connection_timeout: None,
+                enable_compression: None,
             },
             mock_backend,
         );
@@ -608,7 +683,7 @@ mod tests {
     #[test]
     fn create_ssh_connection_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| Err("Failed to connect".to_string()));
+        mock_ssh_backend.expect_connect().returning(|_| Err("Failed to connect".to_string()));
         let mock_backend = TestAppBackend::default();
         let mut manager = SessionManager {
             sessions: HashMap::new(),
@@ -623,6 +698,12 @@ mod tests {
                 port: 22,
                 username: "user".to_string(),
                 auth: SSHAuth::Password { password: "pass".to_string() },
+                term_type: None,
+                initial_rows: None,
+                initial_cols: None,
+                keepalive_interval: None,
+                connection_timeout: None,
+                enable_compression: None,
             },
             mock_backend,
         );
@@ -634,7 +715,7 @@ mod tests {
     #[test]
     fn create_ssh_auth_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_, _, _, _| Err("SSH auth failed".to_string()));
+        mock_ssh_backend.expect_connect().returning(|_| Err("SSH auth failed".to_string()));
         let mock_backend = TestAppBackend::default();
         let mut manager = SessionManager {
             sessions: HashMap::new(),
@@ -652,11 +733,158 @@ mod tests {
                     key_file: "/path/to/bad/key".to_string(),
                     passphrase: None,
                 },
+                term_type: None,
+                initial_rows: None,
+                initial_cols: None,
+                keepalive_interval: None,
+                connection_timeout: None,
+                enable_compression: None,
             },
             mock_backend,
         );
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "SSH auth failed");
+    }
+
+    #[test]
+    fn list_returns_session_info_with_capabilities() {
+        let mut mock_pty_system = MockPtySystemM::new();
+        expect_openpty(&mut mock_pty_system);
+
+        let mut mock_ssh_backend = MockSshBackendM::new();
+        mock_ssh_backend.expect_connect().returning(|_| {
+            let (write_tx, _write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+            let (_read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
+            Ok(SshConnectResult {
+                channel: Box::new(MockSshChannelM::new()),
+                write_tx,
+                read_rx,
+                resize_tx: None,
+            })
+        });
+
+        let mock_backend = TestAppBackend::default();
+        let mut manager = SessionManager {
+            sessions: HashMap::new(),
+            next_id: 1,
+            pty_system: Box::new(mock_pty_system),
+            ssh_backend: Box::new(mock_ssh_backend),
+        };
+
+        manager.create_local(
+            LocalSessionConfig { shell: None, cwd: None, args: None, env_config: None },
+            mock_backend.clone(),
+        ).expect("local session should be created");
+
+        manager.create_ssh(
+            SSHSessionConfig {
+                host: "localhost".to_string(),
+                port: 22,
+                username: "testuser".to_string(),
+                auth: SSHAuth::Password { password: "testpass".to_string() },
+                term_type: None,
+                initial_rows: None,
+                initial_cols: None,
+                keepalive_interval: None,
+                connection_timeout: None,
+                enable_compression: None,
+            },
+            mock_backend,
+        ).expect("ssh session should be created");
+
+        let infos = manager.list();
+        assert_eq!(infos.len(), 2);
+
+        let local_info = infos
+            .iter()
+            .find(|i| matches!(i.session_type, SessionType::Local { .. }))
+            .expect("local session info should be listed");
+        assert!(
+            local_info.capabilities.supports_local_echo,
+            "local session should advertise supports_local_echo"
+        );
+        assert!(
+            !local_info.capabilities.supports_reconnect,
+            "local session should NOT advertise supports_reconnect"
+        );
+
+        let ssh_info = infos
+            .iter()
+            .find(|i| matches!(i.session_type, SessionType::Ssh { .. }))
+            .expect("ssh session info should be listed");
+        assert!(
+            ssh_info.capabilities.supports_reconnect,
+            "ssh session should advertise supports_reconnect"
+        );
+        assert!(
+            !ssh_info.capabilities.supports_local_echo,
+            "ssh session should NOT advertise supports_local_echo"
+        );
+    }
+
+    #[test]
+    fn mock_backend_lifecycle_records_create_write_resize_close() {
+        let backend = build_mock_backend();
+        let write_called = Arc::clone(&backend.write_called);
+        let write_data = Arc::clone(&backend.write_data);
+        let resize_called = Arc::clone(&backend.resize_called);
+        let resize_dims = Arc::clone(&backend.resize_dims);
+        let close_called = Arc::clone(&backend.close_called);
+
+        let mut manager = build_mock_manager(MockPtySystemM::new());
+        manager
+            .sessions
+            .insert(999, ActiveSession::Pty(Box::new(backend)));
+
+        manager.write(999, b"hello").unwrap();
+        assert_eq!(write_called.load(Ordering::SeqCst), 1);
+        assert_eq!(*write_data.lock().unwrap(), b"hello".to_vec());
+
+        manager.resize(999, 24, 80).unwrap();
+        assert_eq!(resize_called.load(Ordering::SeqCst), 1);
+        assert_eq!(*resize_dims.lock().unwrap(), vec![(24, 80)]);
+
+        manager.close(999).unwrap();
+        assert!(close_called.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn mock_backend_lifecycle_via_create_session_unified_path() {
+        let backend = build_mock_backend();
+        let write_called = Arc::clone(&backend.write_called);
+        let write_data = Arc::clone(&backend.write_data);
+        let resize_called = Arc::clone(&backend.resize_called);
+        let resize_dims = Arc::clone(&backend.resize_dims);
+        let close_called = Arc::clone(&backend.close_called);
+
+        let mut manager = build_mock_manager(MockPtySystemM::new());
+        manager
+            .sessions
+            .insert(999, ActiveSession::Pty(Box::new(backend)));
+
+        // Unified info path: list() routes through to_session_info, which reads
+        // both info() and capabilities() from the trait object.
+        let infos = manager.list();
+        assert_eq!(infos.len(), 1);
+        let listed = &infos[0];
+        assert_eq!(listed.id, 999);
+        assert_eq!(listed.name, "mock");
+        assert!(listed.is_connected);
+        assert!(
+            listed.capabilities.supports_local_echo,
+            "mock backend capabilities should propagate through list()"
+        );
+
+        manager.write(999, b"unified").unwrap();
+        assert_eq!(write_called.load(Ordering::SeqCst), 1);
+        assert_eq!(*write_data.lock().unwrap(), b"unified".to_vec());
+
+        manager.resize(999, 30, 100).unwrap();
+        assert_eq!(resize_called.load(Ordering::SeqCst), 1);
+        assert_eq!(*resize_dims.lock().unwrap(), vec![(30, 100)]);
+
+        manager.close(999).unwrap();
+        assert!(close_called.load(Ordering::SeqCst));
     }
 }

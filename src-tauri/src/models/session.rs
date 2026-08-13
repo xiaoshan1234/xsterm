@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::models::capabilities::CapabilityFlags;
+
 /// Supported session types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -21,6 +23,7 @@ pub struct SessionInfo {
     pub name: String,
     pub session_type: SessionType,
     pub is_connected: bool,
+    pub capabilities: CapabilityFlags,
 }
 
 /// Configuration for creating a local shell session.
@@ -70,6 +73,26 @@ pub enum SSHAuth {
     KeyFile { key_file: String, passphrase: Option<String> },
 }
 
+/// Discriminated union for the configuration required to create a session.
+///
+/// Used by the generic `create_session` Tauri command so the frontend can pass
+/// either a local or SSH config via a single call. The shape is intentionally
+/// `{type, config}` so it mirrors the TS `SessionType` discriminated union.
+///
+/// Note: this is distinct from [`SessionType`], which is a *runtime* type tag
+/// attached to an already-created `SessionInfo`. `SessionConfig` is the input
+/// payload used at session creation time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "config")]
+pub enum SessionConfig {
+    /// Configuration for a local shell session.
+    #[serde(rename = "local")]
+    Local(LocalSessionConfig),
+    /// Configuration for an SSH session.
+    #[serde(rename = "ssh")]
+    Ssh(SSHSessionConfig),
+}
+
 /// Display configuration for terminal appearance.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DisplayConfig {
@@ -89,10 +112,64 @@ pub struct EnvConfig {
     pub env: Option<HashMap<String, String>>,
 }
 
-/// Persistent saved session configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct SavedSessionConfig {
+/// Returns the default schema version for [`SavedSessionConfigV1`].
+///
+/// Current schema is version `1`. Bump this constant (and migrate older payloads
+/// in `src/services/sessionStorage.ts`) whenever the on-disk shape changes.
+#[allow(dead_code)]
+fn default_version() -> u32 {
+    1
+}
+
+/// Top-level persisted session configuration (schema v1).
+///
+/// Shape (matches the TS `SavedSessionConfig`):
+/// ```json
+/// {
+///   "id": "...",
+///   "name": "...",
+///   "version": 1,
+///   "type": "local" | "ssh",
+///   "config": { ...LocalSessionConfig | SSHSessionConfig },
+///   "displayConfig": { ...DisplayConfig }  // optional
+/// }
+/// ```
+///
+/// The `type` / `config` pair is produced by flattening [`SavedSessionConfigKind`]
+/// (an adjacently-tagged enum: `tag = "type"`, `content = "config"`), so the
+/// serialized form is a flat object — identical to what the TS side emits.
+///
+/// Migration responsibility: the frontend persistence layer
+/// (`src/services/sessionStorage.ts`) reads the legacy v0 shape
+/// (`{ id, name, type, localConfig?, sshConfig? }`) and upgrades it to this v1
+/// shape before writing back. The Rust backend treats this struct as the
+/// authoritative representation for any v1+ payloads it is asked to deserialize.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedSessionConfigV1 {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_version")]
+    pub version: u32,
+    #[serde(flatten)]
+    pub config: SavedSessionConfigKind,
+    #[serde(default)]
     pub display_config: Option<DisplayConfig>,
+}
+
+/// Discriminated union carried inside [`SavedSessionConfigV1`].
+///
+/// Serialized as `{ "type": "...", "config": { ... } }`. The variants mirror
+/// the create-time [`SessionConfig`] enum but reuse the existing
+/// [`LocalSessionConfig`] / [`SSHSessionConfig`] payload structs.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "config")]
+pub enum SavedSessionConfigKind {
+    #[serde(rename = "local")]
+    Local(LocalSessionConfig),
+    #[serde(rename = "ssh")]
+    Ssh(SSHSessionConfig),
 }
 
 /// Build a remote path for an uploaded image file.

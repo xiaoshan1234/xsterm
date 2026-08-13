@@ -3,6 +3,7 @@ use std::thread;
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::ssh::{SshBackend, SshConnectResult, SshSessionWrapper};
+use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{SessionInfo, SessionType, SSHSessionConfig};
 
 /// Create an SSH session and start a thread that forwards channel output to the
@@ -33,9 +34,16 @@ pub fn create_ssh_session(
             user: username,
         },
         is_connected: true,
+        capabilities: CapabilityFlags::for_ssh(),
     };
 
-    let wrapper = SshSessionWrapper { info, write_tx, resize_tx, config };
+    let wrapper = SshSessionWrapper {
+        info,
+        write_tx,
+        resize_tx,
+        config,
+        capabilities: CapabilityFlags::for_ssh(),
+    };
 
     let backend_clone = backend.clone();
     thread::spawn(move || {

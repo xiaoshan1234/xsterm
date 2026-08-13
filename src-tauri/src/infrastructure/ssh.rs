@@ -9,6 +9,8 @@ use tokio::sync::mpsc;
 
 use crate::error::StringError;
 use crate::infrastructure::pty::default_pty_size;
+use crate::infrastructure::session_backend::SessionBackend;
+use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo};
 
 /// Default terminal type requested for SSH PTY sessions when the config
@@ -46,6 +48,36 @@ pub struct SshSessionWrapper {
     pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub resize_tx: Option<mpsc::UnboundedSender<(u16, u16)>>,
     pub config: SSHSessionConfig,
+    pub capabilities: CapabilityFlags,
+}
+
+impl SessionBackend for SshSessionWrapper {
+    fn info(&self) -> &SessionInfo {
+        &self.info
+    }
+
+    fn capabilities(&self) -> &CapabilityFlags {
+        &self.capabilities
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<(), String> {
+        self.write_tx
+            .send(data.to_vec())
+            .map_err(|_| format!("SSH channel closed for session {}", self.info.id))
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {
+        match self.resize_tx.as_ref() {
+            Some(tx) => tx
+                .send((rows, cols))
+                .map_err(|_| format!("SSH resize channel closed for session {}", self.info.id)),
+            None => Ok(()),
+        }
+    }
+
+    fn close(self: Box<Self>) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// russh client handler that accepts any server host key.

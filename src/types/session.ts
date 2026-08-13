@@ -1,3 +1,5 @@
+import type { CapabilityFlags } from "./capabilities";
+
 export type SplitDirection = "horizontal" | "vertical";
 
 export interface PaneNode {
@@ -49,11 +51,12 @@ export interface Session {
   is_connected: boolean;
   session_type: SessionType;
   displayConfig?: SessionDisplayConfig;
+  capabilities?: CapabilityFlags;
 }
 
 export type SessionType =
-  | { type: "local"; shell: string; cwd: string }
-  | { type: "ssh"; host: string; port: number; user: string };
+  | { type: "local"; config: LocalSessionConfig }
+  | { type: "ssh"; config: SSHSessionConfig };
 
 export interface LocalSessionConfig {
   shell?: string;
@@ -99,20 +102,10 @@ export interface SessionEnvConfig {
   env?: Record<string, string>;
 }
 
-export interface SavedSessionConfig {
-  /** Unique identifier for this saved session config */
-  id: string;
-  /** Display name shown in the UI */
-  name: string;
-  /** Session type - 'local' for PTY shell, 'ssh' for SSH connection */
-  type: "local" | "ssh";
-  /** Display settings like font size, cursor style, etc. */
-  displayConfig?: SessionDisplayConfig;
-  /** Configuration for local PTY sessions (shell, cwd, args) */
-  localConfig?: LocalSessionConfig;
-  /** Configuration for SSH sessions (host, port, auth, etc.) */
-  sshConfig?: SSHSessionConfig;
-}
+export type SavedSessionConfig =
+  ({ id: string; name: string; version: number } & SessionType) & {
+    displayConfig?: SessionDisplayConfig;
+  };
 
 export interface SessionGroup {
   id: number;

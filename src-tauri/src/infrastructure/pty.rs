@@ -2,6 +2,8 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::{Read, Write};
 
 use crate::error::StringError;
+use crate::infrastructure::session_backend::SessionBackend;
+use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::SessionInfo;
 
 /// Default terminal dimensions used when no explicit size is provided.
@@ -85,10 +87,45 @@ impl Child for NativeChild {
     }
 }
 
-/// Local session data, holding its metadata and a handle to write input.
+/// Local session data, holding its metadata and the resources needed to drive
+/// the underlying PTY for the session's lifetime.
+///
+/// `handles` is owned by the session itself (rather than being returned
+/// alongside it from the factory) so that `SessionBackend::close` can take
+/// full ownership and drop everything cleanly when the session ends.
 pub struct LocalSession {
     pub info: SessionInfo,
     pub writer: Box<dyn Write + Send>,
+    pub capabilities: CapabilityFlags,
+    pub handles: LocalSessionHandles,
+}
+
+impl SessionBackend for LocalSession {
+    fn info(&self) -> &SessionInfo {
+        &self.info
+    }
+
+    fn capabilities(&self) -> &CapabilityFlags {
+        &self.capabilities
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<(), String> {
+        self.writer.write_all(data).map_err(|e| e.to_string())?;
+        self.writer.flush().map_err(|e| e.to_string())
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {
+        self.handles.resize(rows, cols)
+    }
+
+    fn close(mut self: Box<Self>) -> Result<(), String> {
+        if let Some(child) = self.handles.child.take() {
+            child.kill()?;
+        }
+        // `self.handles._pair` is dropped when the box is dropped, which on
+        // Windows triggers `ClosePseudoConsole` and tears down the ConPTY.
+        Ok(())
+    }
 }
 
 /// Handles that must be kept alive for the lifetime of a local session.

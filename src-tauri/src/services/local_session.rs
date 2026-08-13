@@ -3,6 +3,7 @@ use std::io::Read;
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{default_pty_size, LocalSession, LocalSessionHandles, PtySystem};
+use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
 
 /// Default shell on Windows when no shell is configured.
@@ -26,7 +27,7 @@ pub fn create_local_session(
     config: LocalSessionConfig,
     backend: impl AppBackend + 'static,
     session_id: u32,
-) -> Result<(LocalSession, LocalSessionHandles), String> {
+) -> Result<LocalSession, String> {
     let shell_path = resolve_shell_path(config.shell);
     let (shell_exe, shell_extra_args) = parse_shell_command(&shell_path);
     let shell_name = extract_shell_name(&shell_exe);
@@ -64,13 +65,19 @@ pub fn create_local_session(
         name: shell_name,
         session_type: SessionType::Local { shell: shell_path, cwd },
         is_connected: true,
+        capabilities: CapabilityFlags::for_local(),
     };
 
     spawn_output_forwarder(reader, backend, session_id);
 
-    let handles = LocalSessionHandles { child: Some(child), _pair: pair };
+    let session = LocalSession {
+        info,
+        writer,
+        capabilities: CapabilityFlags::for_local(),
+        handles: LocalSessionHandles { child: Some(child), _pair: pair },
+    };
 
-    Ok((LocalSession { info, writer }, handles))
+    Ok(session)
 }
 
 /// Determine the shell executable path from config or environment defaults.

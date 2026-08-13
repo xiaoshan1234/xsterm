@@ -1,10 +1,145 @@
 import { load, Store } from "@tauri-apps/plugin-store";
 import { logger } from "../contexts/LoggerContext";
-import { SavedSessionConfig, SavedWindowConfig, SavedWorkspace, SessionGroup } from "../types/session";
+import { LocalSessionConfig, SavedSessionConfig, SavedWindowConfig, SavedWorkspace, SessionGroup, SSHSessionConfig } from "../types/session";
 
 interface GroupStore {
   groups: SessionGroup[];
   nextGroupId: number;
+}
+
+/**
+ * Schema versions of the `SavedSessionConfig` on-disk format.
+ * - v0 (legacy, pre-T3): `{type, localConfig|sshConfig, id, name, displayConfig?}`
+ * - v1 (current): `{type, config, version, id, name, displayConfig?}`
+ */
+export const SAVED_SESSION_CONFIG_VERSION = 1;
+
+/**
+ * Migrate a raw entry read from the persisted JSON store into the current
+ * `SavedSessionConfig` shape.
+ *
+ * Behavior:
+ * - New v1 shape (`type` + `config` + `version`): return as-is after validating
+ *   `version` against {@link SAVED_SESSION_CONFIG_VERSION}; any other version is
+ *   rejected as malformed so callers can skip it.
+ * - Legacy v0 local (`{type:"local", localConfig:{...}}`): convert to
+ *   `{type:"local", config: localConfig, version: 1}`.
+ * - Legacy v0 ssh (`{type:"ssh", sshConfig:{...}}`): convert to
+ *   `{type:"ssh", config: sshConfig, version: 1}`.
+ * - Anything else (missing `type`, no config sibling, etc.): return `null`.
+ *
+ * Never throws; never mutates `raw`.
+ */
+export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
+  if (raw === null || typeof raw !== "object") {
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
+
+  if (typeof obj.type === "string" && "config" in obj) {
+    if (obj.config === null || typeof obj.config !== "object") {
+      return null;
+    }
+    if ("version" in obj && obj.version !== SAVED_SESSION_CONFIG_VERSION) {
+      return null;
+    }
+    const id = String(obj.id ?? "");
+    const name = String(obj.name ?? "");
+    const displayConfig =
+      obj.displayConfig !== undefined && obj.displayConfig !== null
+        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        : {};
+    if (obj.type === "local") {
+      return {
+        id,
+        name,
+        version: SAVED_SESSION_CONFIG_VERSION,
+        type: "local",
+        config: obj.config as LocalSessionConfig,
+        ...displayConfig,
+      };
+    }
+    if (obj.type === "ssh") {
+      return {
+        id,
+        name,
+        version: SAVED_SESSION_CONFIG_VERSION,
+        type: "ssh",
+        config: obj.config as SSHSessionConfig,
+        ...displayConfig,
+      };
+    }
+    return null;
+  }
+
+  if (obj.type === "local" && "localConfig" in obj) {
+    const localConfig = obj.localConfig;
+    if (localConfig === null || typeof localConfig !== "object") {
+      return null;
+    }
+    const id = typeof obj.id === "string" ? obj.id : "";
+    const name = typeof obj.name === "string" ? obj.name : "";
+    if (!id || !name) {
+      return null;
+    }
+    return {
+      id,
+      name,
+      version: SAVED_SESSION_CONFIG_VERSION,
+      type: "local",
+      config: localConfig as LocalSessionConfig,
+      ...(obj.displayConfig !== undefined && obj.displayConfig !== null
+        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        : {}),
+    };
+  }
+
+  if (obj.type === "ssh" && "sshConfig" in obj) {
+    const sshConfig = obj.sshConfig;
+    if (sshConfig === null || typeof sshConfig !== "object") {
+      return null;
+    }
+    const id = typeof obj.id === "string" ? obj.id : "";
+    const name = typeof obj.name === "string" ? obj.name : "";
+    if (!id || !name) {
+      return null;
+    }
+    return {
+      id,
+      name,
+      version: SAVED_SESSION_CONFIG_VERSION,
+      type: "ssh",
+      config: sshConfig as SSHSessionConfig,
+      ...(obj.displayConfig !== undefined && obj.displayConfig !== null
+        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        : {}),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Run each element of `raw` through {@link migrateSavedConfig}, drop the nulls
+ * with a single `console.warn` per skip, and return the survivors in order.
+ */
+export function migrateSavedConfigList(raw: unknown): SavedSessionConfig[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const migrated: SavedSessionConfig[] = [];
+  for (const entry of raw) {
+    const result = migrateSavedConfig(entry);
+    if (result !== null) {
+      migrated.push(result);
+    } else {
+      console.warn(
+        "sessionStorage: skipping malformed saved session config (missing 'type' or unrecognised shape)",
+        entry
+      );
+    }
+  }
+  return migrated;
 }
 
 let storeInstance: Store | null = null;
@@ -28,7 +163,8 @@ export async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
   logger.debug("sessionStorage", "loadSavedConfigs", undefined);
   try {
     const store = await getStore();
-    const configs = (await store.get<SavedSessionConfig[]>("savedConfigs")) || [];
+    const raw = await store.get<unknown>("savedConfigs");
+    const configs = migrateSavedConfigList(raw ?? []);
     logger.debug("sessionStorage", "loadSavedConfigs:result", { count: configs.length });
     return configs;
   } catch (e) {
