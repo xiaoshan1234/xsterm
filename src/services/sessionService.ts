@@ -40,8 +40,7 @@ export async function createSsh(config: SSHSessionConfig): Promise<SessionInfo> 
 // upstream, so awaiting each IPC would defeat the batching.
 export function writeSession(id: number, data: string): Promise<void> {
   const encoded = new TextEncoder().encode(data);
-  const arr = Array.from(encoded);
-  return invoke("write_session", { sessionId: id, data: arr }).then(
+  return invoke("write_session", { sessionId: id, data: encoded }).then(
     () => undefined,
     (e) => {
       console.error("[xsterm] write_session failed:", e);
