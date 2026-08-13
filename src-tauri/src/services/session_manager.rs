@@ -607,6 +607,8 @@ mod tests {
                 keepalive_interval: None,
                 connection_timeout: None,
                 enable_compression: None,
+                known_hosts_path: None,
+                proxy_jump: None,
             },
             mock_backend,
         );
@@ -662,6 +664,8 @@ mod tests {
                 keepalive_interval: None,
                 connection_timeout: None,
                 enable_compression: None,
+                known_hosts_path: None,
+                proxy_jump: None,
             },
             mock_backend,
         );
@@ -704,6 +708,8 @@ mod tests {
                 keepalive_interval: None,
                 connection_timeout: None,
                 enable_compression: None,
+                known_hosts_path: None,
+                proxy_jump: None,
             },
             mock_backend,
         );
@@ -739,6 +745,8 @@ mod tests {
                 keepalive_interval: None,
                 connection_timeout: None,
                 enable_compression: None,
+                known_hosts_path: None,
+                proxy_jump: None,
             },
             mock_backend,
         );
@@ -789,6 +797,8 @@ mod tests {
                 keepalive_interval: None,
                 connection_timeout: None,
                 enable_compression: None,
+                known_hosts_path: None,
+                proxy_jump: None,
             },
             mock_backend,
         ).expect("ssh session should be created");

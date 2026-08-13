@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SSHSessionConfig } from "../../types/session";
 import { FormField } from "../ui/FormField";
 import "./SshSessionForm.css";
@@ -17,6 +17,8 @@ interface SshOpts {
   keepaliveInterval?: number;
   connectionTimeout?: number;
   enableCompression?: boolean;
+  knownHostsPath?: string;
+  proxyJump?: string;
 }
 
 // Empty input → undefined so backend #[serde(default)] takes over.
@@ -54,7 +56,19 @@ export function SshSessionForm({
     keepaliveInterval: config.keepaliveInterval,
     connectionTimeout: config.connectionTimeout,
     enableCompression: config.enableCompression,
+    knownHostsPath: config.knownHostsPath,
+    proxyJump: config.proxyJump,
   }));
+
+  // Re-read knownHostsPath/proxyJump from config when it changes externally
+  // (e.g. user loads a different saved SSH config).
+  useEffect(() => {
+    setSshOpts((prev) => ({
+      ...prev,
+      knownHostsPath: config.knownHostsPath,
+      proxyJump: config.proxyJump,
+    }));
+  }, [config.knownHostsPath, config.proxyJump]);
 
   const updateOpts = (patch: Partial<SshOpts>) => {
     const next = { ...sshOpts, ...patch };
@@ -143,6 +157,22 @@ export function SshSessionForm({
               </FormField>
             </>
           )}
+          <FormField label="Known Hosts File">
+            <input
+              type="text"
+              placeholder="~/.ssh/known_hosts"
+              value={sshOpts.knownHostsPath || ""}
+              onChange={(e) => updateOpts({ knownHostsPath: e.target.value })}
+            />
+          </FormField>
+          <FormField label="ProxyJump (SSH bastion)">
+            <input
+              type="text"
+              placeholder="user@bastion:22"
+              value={sshOpts.proxyJump || ""}
+              onChange={(e) => updateOpts({ proxyJump: e.target.value })}
+            />
+          </FormField>
         </>
       )}
       {showSystem && (

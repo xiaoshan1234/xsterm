@@ -102,6 +102,55 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
     });
   });
 
+describe("SSHSessionConfig — round-trip with knownHostsPath and proxyJump", () => {
+  it("preserves knownHostsPath and proxyJump in a v1 ssh config pass-through", () => {
+    const raw = {
+      id: "cfg-ssh-new",
+      name: "bastion",
+      version: 1,
+      type: "ssh",
+      config: {
+        host: "bastion.example.com",
+        port: 22,
+        username: "alice",
+        auth_type: "key",
+        key_file: "/k",
+        knownHostsPath: "/home/alice/.ssh/known_hosts",
+        proxyJump: "jump@example.com",
+      },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result?.config).toMatchObject({
+      host: "bastion.example.com",
+      port: 22,
+      username: "alice",
+      auth_type: "key",
+      key_file: "/k",
+      knownHostsPath: "/home/alice/.ssh/known_hosts",
+      proxyJump: "jump@example.com",
+    });
+  });
+
+  it("preserves v1 ssh config when knownHostsPath and proxyJump are absent", () => {
+    const raw = {
+      id: "cfg-ssh-plain",
+      name: "plain-ssh",
+      version: 1,
+      type: "ssh",
+      config: {
+        host: "h",
+        port: 22,
+        username: "u",
+        auth_type: "password",
+        password: "p",
+      },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result?.config).not.toHaveProperty("knownHostsPath");
+    expect(result?.config).not.toHaveProperty("proxyJump");
+  });
+});
+
   it("accepts a v1 ssh config unchanged", () => {
     const raw = {
       id: "cfg-6",

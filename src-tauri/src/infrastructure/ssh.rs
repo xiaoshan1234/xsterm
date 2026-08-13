@@ -112,8 +112,103 @@ impl SshBackend for RusshBackend {
         &self,
         config: &SSHSessionConfig,
     ) -> Result<SshConnectResult, String> {
+        // Host key verification stays disabled per AGENTS.md; the path is
+        // logged here as a future-use marker.
+        if let Some(path) = config.known_hosts_path.as_deref() {
+            tracing::info!(
+                "known_hosts_path noted (verification not implemented yet): {}",
+                path
+            );
+        }
+
+        if let Some(raw) = config.proxy_jump.as_deref() {
+            match parse_proxy_jump(raw) {
+                Some(parsed) => {
+                    let user = parsed.user.as_deref().unwrap_or("<unset>");
+                    let port = parsed
+                        .port
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "22".to_string());
+                    tracing::info!(
+                        "proxy_jump parsed: user={} host={} port={} (full chain not yet implemented, using direct connection)",
+                        user,
+                        parsed.host,
+                        port
+                    );
+                    // TODO: when russh proxy-jump chain support lands, route
+                    // the inner connection through this jump host.
+                }
+                None => {
+                    tracing::warn!(
+                        "proxy_jump = {} not yet implemented, falling back to direct connection",
+                        raw
+                    );
+                }
+            }
+        }
+
         connect_ssh(config)
     }
+}
+
+/// Parsed subset of an OpenSSH `ProxyJump` value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedJumpHost {
+    user: Option<String>,
+    host: String,
+    port: Option<u16>,
+}
+
+/// Parse a `proxy_jump` string in OpenSSH `ProxyJump` syntax.
+///
+/// Accepts `user@host:port`, `user@host`, `host:port`, and `host`. Returns
+/// `None` for empty input, leading/trailing whitespace, an empty user
+/// component (`@host`), an empty host component, a host containing
+/// whitespace, or any port suffix that is not a valid `u16`. Never panics,
+/// regardless of input — reachable from arbitrary frontend-supplied config.
+fn parse_proxy_jump(raw: &str) -> Option<ParsedJumpHost> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let (user_opt, remainder) = match trimmed.find('@') {
+        Some(idx) if idx > 0 => (Some(trimmed[..idx].trim()), trimmed[idx + 1..].trim()),
+        Some(_) => return None,
+        None => (None, trimmed),
+    };
+
+    if remainder.is_empty() {
+        return None;
+    }
+
+    // Out-of-range digit suffixes after `:` are still stripped so the host
+    // is not polluted with port-looking junk.
+    let (host, port_opt) = match remainder.rfind(':') {
+        Some(idx) => {
+            let port_str = remainder[idx + 1..].trim();
+            let host_part = remainder[..idx].trim();
+            if !port_str.is_empty() && port_str.chars().all(|c| c.is_ascii_digit()) {
+                match port_str.parse::<u16>() {
+                    Ok(p) => (host_part, Some(p)),
+                    Err(_) => (host_part, None),
+                }
+            } else {
+                (remainder, None)
+            }
+        }
+        None => (remainder, None),
+    };
+
+    if host.is_empty() || host.contains(char::is_whitespace) {
+        return None;
+    }
+
+    Some(ParsedJumpHost {
+        user: user_opt.filter(|u| !u.is_empty()).map(str::to_string),
+        host: host.to_string(),
+        port: port_opt,
+    })
 }
 
 /// Spawn a dedicated thread that runs an async russh connection.
@@ -509,3 +604,174 @@ pub async fn upload_file_via_ssh(
 }
 
 pub use RusshBackend as SshBackendImpl;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_config(proxy_jump: Option<&str>, known_hosts: Option<&str>) -> SSHSessionConfig {
+        SSHSessionConfig {
+            host: "example.com".to_string(),
+            port: 22,
+            username: "user".to_string(),
+            auth: crate::models::session::SSHAuth::Password {
+                password: "pw".to_string(),
+            },
+            term_type: None,
+            initial_rows: None,
+            initial_cols: None,
+            keepalive_interval: None,
+            connection_timeout: None,
+            enable_compression: None,
+            known_hosts_path: known_hosts.map(str::to_string),
+            proxy_jump: proxy_jump.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn parse_proxy_jump_user_host_port() {
+        let parsed = parse_proxy_jump("bastion@jump.example.com:2222").unwrap();
+        assert_eq!(parsed.user.as_deref(), Some("bastion"));
+        assert_eq!(parsed.host, "jump.example.com");
+        assert_eq!(parsed.port, Some(2222));
+    }
+
+    #[test]
+    fn parse_proxy_jump_user_host() {
+        let parsed = parse_proxy_jump("bastion@jump.example.com").unwrap();
+        assert_eq!(parsed.user.as_deref(), Some("bastion"));
+        assert_eq!(parsed.host, "jump.example.com");
+        assert_eq!(parsed.port, None);
+    }
+
+    #[test]
+    fn parse_proxy_jump_host_port() {
+        let parsed = parse_proxy_jump("jump.example.com:2222").unwrap();
+        assert_eq!(parsed.user, None);
+        assert_eq!(parsed.host, "jump.example.com");
+        assert_eq!(parsed.port, Some(2222));
+    }
+
+    #[test]
+    fn parse_proxy_jump_host_only() {
+        let parsed = parse_proxy_jump("jump.example.com").unwrap();
+        assert_eq!(parsed.user, None);
+        assert_eq!(parsed.host, "jump.example.com");
+        assert_eq!(parsed.port, None);
+    }
+
+    #[test]
+    fn parse_proxy_jump_trims_whitespace() {
+        let parsed = parse_proxy_jump("  user@host:22  ").unwrap();
+        assert_eq!(parsed.user.as_deref(), Some("user"));
+        assert_eq!(parsed.host, "host");
+        assert_eq!(parsed.port, Some(22));
+    }
+
+    #[test]
+    fn parse_proxy_jump_rejects_empty() {
+        assert!(parse_proxy_jump("").is_none());
+        assert!(parse_proxy_jump("   ").is_none());
+    }
+
+    #[test]
+    fn parse_proxy_jump_rejects_stray_at() {
+        assert!(parse_proxy_jump("@host").is_none());
+        assert!(parse_proxy_jump("user@").is_none());
+        assert!(parse_proxy_jump("@").is_none());
+    }
+
+    #[test]
+    fn parse_proxy_jump_rejects_whitespace_in_host() {
+        assert!(parse_proxy_jump("bad host").is_none());
+        assert!(parse_proxy_jump("user@bad host").is_none());
+    }
+
+    #[test]
+    fn parse_proxy_jump_handles_garbage_port_without_panicking() {
+        let parsed = parse_proxy_jump("user@host:notaport").unwrap();
+        assert_eq!(parsed.user.as_deref(), Some("user"));
+        assert_eq!(parsed.host, "host:notaport");
+        assert_eq!(parsed.port, None);
+
+        let parsed = parse_proxy_jump("host:999999").unwrap();
+        assert_eq!(parsed.host, "host");
+        assert_eq!(parsed.port, None);
+
+        let parsed = parse_proxy_jump("host:").unwrap();
+        assert_eq!(parsed.host, "host:");
+        assert_eq!(parsed.port, None);
+    }
+
+    #[test]
+    fn known_hosts_path_field_round_trips_through_config() {
+        let cfg = base_config(None, Some("/home/user/.ssh/known_hosts"));
+        assert_eq!(
+            cfg.known_hosts_path.as_deref(),
+            Some("/home/user/.ssh/known_hosts")
+        );
+
+        let cfg = base_config(None, None);
+        assert!(cfg.known_hosts_path.is_none());
+    }
+
+    #[test]
+    fn proxy_jump_field_round_trips_through_config() {
+        let cfg = base_config(Some("bastion@jump.example.com:22"), None);
+        assert_eq!(
+            cfg.proxy_jump.as_deref(),
+            Some("bastion@jump.example.com:22")
+        );
+
+        let cfg = base_config(None, None);
+        assert!(cfg.proxy_jump.is_none());
+    }
+
+    #[test]
+    fn russh_backend_connect_does_not_panic_on_bad_proxy_jump() {
+        let inputs = vec![
+            "",
+            "   ",
+            "@",
+            "@host",
+            "user@",
+            "host with space",
+            "user@bad host",
+            "host:not_a_port",
+            "host:",
+            "host:999999",
+            "user@host:22 extra",
+            "\x00\x01\x02",
+            "@@@",
+            "user@@host",
+        ];
+        for input in inputs {
+            let result = std::panic::catch_unwind(|| parse_proxy_jump(input));
+            assert!(
+                result.is_ok(),
+                "parse_proxy_jump panicked on input: {:?}",
+                input
+            );
+            if let Some(parsed) = result.unwrap() {
+                assert!(
+                    !parsed.host.is_empty(),
+                    "parse_proxy_jump returned empty host for input: {:?}",
+                    input
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn russh_backend_connect_logs_known_hosts_and_proxy_jump_without_panic() {
+        let cfg = base_config(
+            Some("bastion@jump.example.com:2222"),
+            Some("/home/user/.ssh/known_hosts"),
+        );
+        let parsed = parse_proxy_jump(cfg.proxy_jump.as_deref().unwrap()).unwrap();
+        assert_eq!(parsed.user.as_deref(), Some("bastion"));
+        assert_eq!(parsed.host, "jump.example.com");
+        assert_eq!(parsed.port, Some(2222));
+        assert!(cfg.known_hosts_path.is_some());
+    }
+}

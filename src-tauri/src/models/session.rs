@@ -59,6 +59,12 @@ pub struct SSHSessionConfig {
     pub connection_timeout: Option<u32>,
     #[serde(default)]
     pub enable_compression: Option<bool>,
+    /// Path to known_hosts file for host key verification (currently unused — see AGENTS.md note).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_hosts_path: Option<String>,
+    /// SSH proxy jump host (user@host or host:port) for cascading connections.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy_jump: Option<String>,
 }
 
 /// Authentication method for an SSH session.
@@ -172,6 +178,145 @@ pub enum SavedSessionConfigKind {
     Local(LocalSessionConfig),
     #[serde(rename = "ssh")]
     Ssh(SSHSessionConfig),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ssh_session_config_json_roundtrip_with_all_fields() {
+        let config = SSHSessionConfig {
+            host: "example.com".to_string(),
+            port: 2222,
+            username: "user".to_string(),
+            auth: SSHAuth::KeyFile {
+                key_file: "/home/user/.ssh/id_rsa".to_string(),
+                passphrase: Some("secret".to_string()),
+            },
+            term_type: Some("xterm-256color".to_string()),
+            initial_rows: Some(24),
+            initial_cols: Some(80),
+            keepalive_interval: Some(60),
+            connection_timeout: Some(30),
+            enable_compression: Some(true),
+            known_hosts_path: Some("/home/user/.ssh/known_hosts".to_string()),
+            proxy_jump: Some("jump.example.com".to_string()),
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize SSH config");
+        let roundtrip: SSHSessionConfig =
+            serde_json::from_str(&json).expect("deserialize SSH config");
+
+        assert_eq!(roundtrip.host, "example.com");
+        assert_eq!(roundtrip.port, 2222);
+        assert_eq!(roundtrip.username, "user");
+        assert_eq!(roundtrip.term_type.as_deref(), Some("xterm-256color"));
+        assert_eq!(roundtrip.initial_rows, Some(24));
+        assert_eq!(roundtrip.initial_cols, Some(80));
+        assert_eq!(roundtrip.keepalive_interval, Some(60));
+        assert_eq!(roundtrip.connection_timeout, Some(30));
+        assert_eq!(roundtrip.enable_compression, Some(true));
+        assert_eq!(
+            roundtrip.known_hosts_path.as_deref(),
+            Some("/home/user/.ssh/known_hosts")
+        );
+        assert_eq!(roundtrip.proxy_jump.as_deref(), Some("jump.example.com"));
+    }
+
+    #[test]
+    fn ssh_session_config_json_roundtrip_with_new_fields_absent() {
+        let config = SSHSessionConfig {
+            host: "localhost".to_string(),
+            port: 22,
+            username: "admin".to_string(),
+            auth: SSHAuth::Password {
+                password: "pass".to_string(),
+            },
+            term_type: None,
+            initial_rows: None,
+            initial_cols: None,
+            keepalive_interval: None,
+            connection_timeout: None,
+            enable_compression: None,
+            known_hosts_path: None,
+            proxy_jump: None,
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize SSH config");
+        let roundtrip: SSHSessionConfig =
+            serde_json::from_str(&json).expect("deserialize SSH config");
+
+        assert_eq!(roundtrip.host, "localhost");
+        assert_eq!(roundtrip.port, 22);
+        assert!(roundtrip.known_hosts_path.is_none());
+        assert!(roundtrip.proxy_jump.is_none());
+    }
+
+    #[test]
+    fn ssh_session_config_json_known_hosts_path_only() {
+        let config = SSHSessionConfig {
+            host: "remote.example.com".to_string(),
+            port: 22,
+            username: "user".to_string(),
+            auth: SSHAuth::KeyFile {
+                key_file: "/path/to/key".to_string(),
+                passphrase: None,
+            },
+            term_type: None,
+            initial_rows: None,
+            initial_cols: None,
+            keepalive_interval: None,
+            connection_timeout: None,
+            enable_compression: None,
+            known_hosts_path: Some("/custom/known_hosts".to_string()),
+            proxy_jump: None,
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize SSH config");
+        assert!(json.contains("known_hosts_path"));
+        assert!(!json.contains("proxy_jump"));
+
+        let roundtrip: SSHSessionConfig =
+            serde_json::from_str(&json).expect("deserialize SSH config");
+        assert_eq!(
+            roundtrip.known_hosts_path.as_deref(),
+            Some("/custom/known_hosts")
+        );
+        assert!(roundtrip.proxy_jump.is_none());
+    }
+
+    #[test]
+    fn ssh_session_config_json_proxy_jump_only() {
+        let config = SSHSessionConfig {
+            host: "internal.example.com".to_string(),
+            port: 22,
+            username: "user".to_string(),
+            auth: SSHAuth::Password {
+                password: "pass".to_string(),
+            },
+            term_type: None,
+            initial_rows: None,
+            initial_cols: None,
+            keepalive_interval: None,
+            connection_timeout: None,
+            enable_compression: None,
+            known_hosts_path: None,
+            proxy_jump: Some("bastion@jump.example.com:22".to_string()),
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize SSH config");
+        assert!(json.contains("proxy_jump"));
+        assert!(!json.contains("known_hosts_path"));
+
+        let roundtrip: SSHSessionConfig =
+            serde_json::from_str(&json).expect("deserialize SSH config");
+        assert!(roundtrip.known_hosts_path.is_none());
+        assert_eq!(
+            roundtrip.proxy_jump.as_deref(),
+            Some("bastion@jump.example.com:22")
+        );
+    }
 }
 
 /// Build a remote path for an uploaded image file.

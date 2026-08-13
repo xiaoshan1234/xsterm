@@ -85,6 +85,10 @@ export interface SSHSessionConfig {
   connectionTimeout?: number;
   /** Enable zlib compression for the SSH stream. @default false */
   enableCompression?: boolean;
+  /** Path to known_hosts file for host key verification (currently unused). */
+  knownHostsPath?: string;
+  /** SSH proxy jump host (user@host:port) for cascading connections. */
+  proxyJump?: string;
 }
 
 export interface SessionDisplayConfig {
