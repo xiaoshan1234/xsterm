@@ -162,7 +162,6 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
                 </span>
                 <FolderIcon size={14} />
                 <span className="session-group-name">{group.name}</span>
-                <span className="session-group-count">{group.configIds.length}</span>
               </button>
             </ContextMenu>
             {!group.collapsed && (

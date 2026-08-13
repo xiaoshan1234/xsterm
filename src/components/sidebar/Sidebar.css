@@ -305,13 +305,6 @@
   flex: 1;
 }
 
-.session-group-count {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-left: auto;
-  padding-right: 4px;
-}
-
 .session-group-items {
   display: flex;
   flex-direction: column;
