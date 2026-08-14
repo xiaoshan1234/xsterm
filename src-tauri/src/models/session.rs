@@ -566,6 +566,227 @@ mod tests {
         assert!(config.name.is_none());
         assert_eq!(config.host, "h");
     }
+
+    #[test]
+    fn local_session_config_json_roundtrip_with_all_new_fields() {
+        let config = LocalSessionConfig {
+            name: Some("my-shell".to_string()),
+            shell: Some("/bin/zsh".to_string()),
+            cwd: Some("/home/me".to_string()),
+            args: Some(vec!["-l".to_string()]),
+            env_config: None,
+            shell_template: Some("template {{name}}".to_string()),
+            term_type: Some("xterm-256color".to_string()),
+            charset: Some("utf-8".to_string()),
+            startup_command: Some("echo ready".to_string()),
+            startup_delay_ms: Some(500),
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize LocalSessionConfig");
+
+        assert!(json.contains("\"shellTemplate\""));
+        assert!(json.contains("\"termType\""));
+        assert!(json.contains("\"charset\""));
+        assert!(json.contains("\"startupCommand\""));
+        assert!(json.contains("\"startupDelayMs\""));
+
+        let roundtrip: LocalSessionConfig =
+            serde_json::from_str(&json).expect("deserialize LocalSessionConfig");
+
+        assert_eq!(roundtrip.shell_template.as_deref(), Some("template {{name}}"));
+        assert_eq!(roundtrip.term_type.as_deref(), Some("xterm-256color"));
+        assert_eq!(roundtrip.charset.as_deref(), Some("utf-8"));
+        assert_eq!(roundtrip.startup_command.as_deref(), Some("echo ready"));
+        assert_eq!(roundtrip.startup_delay_ms, Some(500));
+        assert_eq!(roundtrip.name.as_deref(), Some("my-shell"));
+        assert_eq!(roundtrip.shell.as_deref(), Some("/bin/zsh"));
+
+        let json_with_snake = r#"{"shell_template": "x", "startup_delay_ms": 999}"#;
+        let from_snake: LocalSessionConfig =
+            serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
+        assert!(from_snake.shell_template.is_none());
+        assert!(from_snake.startup_delay_ms.is_none());
+    }
+
+    #[test]
+    fn ssh_session_config_json_roundtrip_with_all_new_fields() {
+        let config = SSHSessionConfig {
+            name: Some("ssh-server".to_string()),
+            host: "example.com".to_string(),
+            port: 2222,
+            username: "user".to_string(),
+            auth: SSHAuth::KeyFile {
+                key_file: "/home/user/.ssh/id_rsa".to_string(),
+                passphrase: Some("secret".to_string()),
+            },
+            term_type: Some("xterm-256color".to_string()),
+            initial_rows: Some(24),
+            initial_cols: Some(80),
+            keepalive_interval: Some(60),
+            connection_timeout: Some(30),
+            tcp_nodelay: Some(true),
+            so_keepalive: Some(true),
+            null_packet_keepalive: Some(true),
+            charset: Some("gbk".to_string()),
+            enable_compression: Some(false),
+            known_hosts_path: Some("/home/user/.ssh/known_hosts".to_string()),
+            proxy_jump: Some("bastion.example.com".to_string()),
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize SSHSessionConfig");
+
+        assert!(json.contains("\"tcpNodelay\""));
+        assert!(json.contains("\"soKeepalive\""));
+        assert!(json.contains("\"nullPacketKeepalive\""));
+        assert!(json.contains("\"charset\""));
+
+        let roundtrip: SSHSessionConfig =
+            serde_json::from_str(&json).expect("deserialize SSHSessionConfig");
+
+        assert_eq!(roundtrip.tcp_nodelay, Some(true));
+        assert_eq!(roundtrip.so_keepalive, Some(true));
+        assert_eq!(roundtrip.null_packet_keepalive, Some(true));
+        assert_eq!(roundtrip.charset.as_deref(), Some("gbk"));
+        assert_eq!(roundtrip.host, "example.com");
+        assert_eq!(roundtrip.port, 2222);
+
+        let json_with_snake = r#"{"host":"h","port":22,"username":"u","authType":"password","password":"p","tcpNodelay":true,"charset":"latin1"}"#;
+        let from_snake: SSHSessionConfig =
+            serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
+        assert_eq!(from_snake.tcp_nodelay, Some(true));
+        assert_eq!(from_snake.charset.as_deref(), Some("latin1"));
+    }
+
+    #[test]
+    fn display_config_json_roundtrip_with_all_new_fields() {
+        let config = DisplayConfig {
+            font_size: Some(14),
+            font_family: Some("Cascadia Code".to_string()),
+            cursor_style: Some("block".to_string()),
+            cursor_blink: Some(true),
+            scrollback: Some(10000),
+            line_height: Some(1.2),
+            letter_spacing: Some(0.5),
+            cursor_width: Some(8),
+            line_timestamp: Some(true),
+            time_format: Some("%H:%M:%S".to_string()),
+            date_time_format: Some("%Y-%m-%d %H:%M:%S".to_string()),
+            auto_wrap: Some(true),
+            reverse_video: Some(false),
+            mouse_wheel_scroll_lines: Some(3),
+            fit_on_resize: Some(true),
+            sync_remote_title: Some(false),
+            backspace_sends: Some("backspace".to_string()),
+            delete_sends: Some("delete".to_string()),
+            line_feed_mode: Some(false),
+            cursor_key_mode: Some("application".to_string()),
+            keypad_mode: Some("application".to_string()),
+            modify_other_keys_format: Some("1;3".to_string()),
+            alt_sends_escape: Some(true),
+            word_separator_chars: Some(" ".to_string()),
+            alt_screen_word_separator_chars: Some("/".to_string()),
+            clipboard_read: Some("auto".to_string()),
+            clipboard_write: Some("auto".to_string()),
+            logging: None,
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize DisplayConfig");
+
+        assert!(json.contains("\"lineTimestamp\""));
+        assert!(json.contains("\"timeFormat\""));
+        assert!(json.contains("\"dateTimeFormat\""));
+        assert!(json.contains("\"autoWrap\""));
+        assert!(json.contains("\"reverseVideo\""));
+        assert!(json.contains("\"mouseWheelScrollLines\""));
+        assert!(json.contains("\"fitOnResize\""));
+        assert!(json.contains("\"syncRemoteTitle\""));
+        assert!(json.contains("\"backspaceSends\""));
+        assert!(json.contains("\"deleteSends\""));
+        assert!(json.contains("\"lineFeedMode\""));
+        assert!(json.contains("\"cursorKeyMode\""));
+        assert!(json.contains("\"keypadMode\""));
+        assert!(json.contains("\"modifyOtherKeysFormat\""));
+        assert!(json.contains("\"altSendsEscape\""));
+        assert!(json.contains("\"wordSeparatorChars\""));
+        assert!(json.contains("\"altScreenWordSeparatorChars\""));
+        assert!(json.contains("\"clipboardRead\""));
+        assert!(json.contains("\"clipboardWrite\""));
+        assert!(json.contains("\"logging\""));
+
+        let roundtrip: DisplayConfig =
+            serde_json::from_str(&json).expect("deserialize DisplayConfig");
+
+        assert_eq!(roundtrip.line_timestamp, Some(true));
+        assert_eq!(roundtrip.time_format.as_deref(), Some("%H:%M:%S"));
+        assert_eq!(roundtrip.date_time_format.as_deref(), Some("%Y-%m-%d %H:%M:%S"));
+        assert_eq!(roundtrip.auto_wrap, Some(true));
+        assert_eq!(roundtrip.reverse_video, Some(false));
+        assert_eq!(roundtrip.mouse_wheel_scroll_lines, Some(3));
+        assert_eq!(roundtrip.fit_on_resize, Some(true));
+        assert_eq!(roundtrip.sync_remote_title, Some(false));
+        assert_eq!(roundtrip.backspace_sends.as_deref(), Some("backspace"));
+        assert_eq!(roundtrip.delete_sends.as_deref(), Some("delete"));
+        assert_eq!(roundtrip.line_feed_mode, Some(false));
+        assert_eq!(roundtrip.cursor_key_mode.as_deref(), Some("application"));
+        assert_eq!(roundtrip.keypad_mode.as_deref(), Some("application"));
+        assert_eq!(roundtrip.modify_other_keys_format.as_deref(), Some("1;3"));
+        assert_eq!(roundtrip.alt_sends_escape, Some(true));
+        assert_eq!(roundtrip.word_separator_chars.as_deref(), Some(" "));
+        assert_eq!(
+            roundtrip.alt_screen_word_separator_chars.as_deref(),
+            Some("/")
+        );
+        assert_eq!(roundtrip.clipboard_read.as_deref(), Some("auto"));
+        assert_eq!(roundtrip.clipboard_write.as_deref(), Some("auto"));
+        assert!(roundtrip.logging.is_none());
+
+        assert_eq!(roundtrip.font_size, Some(14));
+        assert_eq!(roundtrip.font_family.as_deref(), Some("Cascadia Code"));
+        assert_eq!(roundtrip.scrollback, Some(10000));
+
+        let json_with_snake = r#"{"line_timestamp": true, "auto_wrap": false}"#;
+        let from_snake: DisplayConfig =
+            serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
+        assert!(from_snake.line_timestamp.is_none());
+        assert!(from_snake.auto_wrap.is_none());
+    }
+
+    #[test]
+    fn session_logging_config_json_roundtrip() {
+        let config = SessionLoggingConfig {
+            enabled: Some(true),
+            append: Some(false),
+            file_name_template: Some("/tmp/session-{{id}}.log".to_string()),
+            max_size_mb: Some(10),
+            line_format: Some("[{{ts}}] {{line}}".to_string()),
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize SessionLoggingConfig");
+
+        assert!(json.contains("\"enabled\""));
+        assert!(json.contains("\"append\""));
+        assert!(json.contains("\"fileNameTemplate\""));
+        assert!(json.contains("\"maxSizeMb\""));
+        assert!(json.contains("\"lineFormat\""));
+
+        let roundtrip: SessionLoggingConfig =
+            serde_json::from_str(&json).expect("deserialize SessionLoggingConfig");
+
+        assert_eq!(roundtrip.enabled, Some(true));
+        assert_eq!(roundtrip.append, Some(false));
+        assert_eq!(
+            roundtrip.file_name_template.as_deref(),
+            Some("/tmp/session-{{id}}.log")
+        );
+        assert_eq!(roundtrip.max_size_mb, Some(10));
+        assert_eq!(roundtrip.line_format.as_deref(), Some("[{{ts}}] {{line}}"));
+
+        let json_with_snake = r#"{"file_name_template": "x", "max_size_mb": 5}"#;
+        let from_snake: SessionLoggingConfig =
+            serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
+        assert!(from_snake.file_name_template.is_none());
+        assert!(from_snake.max_size_mb.is_none());
+    }
 }
 
 /// Build a remote path for an uploaded image file.
