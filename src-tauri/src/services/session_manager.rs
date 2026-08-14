@@ -414,7 +414,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
 
         assert!(result.is_ok());
         let info = result.unwrap();
@@ -430,7 +430,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { name: None, shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, env_config: None },
+            LocalSessionConfig { name: None, shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, env_config: None, ..Default::default() },
             mock_backend,
         );
 
@@ -447,7 +447,7 @@ mod tests {
         let mut manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { name: None, shell: None, cwd: Some("/tmp".to_string()), args: None, env_config: None },
+            LocalSessionConfig { name: None, shell: None, cwd: Some("/tmp".to_string()), args: None, env_config: None, ..Default::default() },
             mock_backend,
         );
 
@@ -473,6 +473,7 @@ mod tests {
                 cwd: None,
                 args: None,
                 env_config: None,
+                ..Default::default()
             },
             mock_backend,
         );
@@ -496,6 +497,7 @@ mod tests {
                 cwd: None,
                 args: None,
                 env_config: None,
+                ..Default::default()
             },
             mock_backend,
         );
@@ -512,7 +514,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PTY open failed");
@@ -533,7 +535,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -555,7 +557,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         let close_result = manager.close(result.unwrap().id);
@@ -569,7 +571,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -591,7 +593,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
 
         assert_eq!(manager.list().len(), 1);
@@ -604,7 +606,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let mut manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None }, mock_backend);
+        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
         let info = result.unwrap();
 
@@ -653,6 +655,10 @@ mod tests {
                 initial_cols: None,
                 keepalive_interval: None,
                 connection_timeout: None,
+                tcp_nodelay: None,
+                so_keepalive: None,
+                null_packet_keepalive: None,
+                charset: None,
                 enable_compression: None,
                 known_hosts_path: None,
                 proxy_jump: None,
@@ -708,6 +714,10 @@ mod tests {
                 initial_cols: None,
                 keepalive_interval: None,
                 connection_timeout: None,
+                tcp_nodelay: None,
+                so_keepalive: None,
+                null_packet_keepalive: None,
+                charset: None,
                 enable_compression: None,
                 known_hosts_path: None,
                 proxy_jump: None,
@@ -754,6 +764,10 @@ mod tests {
                 initial_cols: None,
                 keepalive_interval: None,
                 connection_timeout: None,
+                tcp_nodelay: None,
+                so_keepalive: None,
+                null_packet_keepalive: None,
+                charset: None,
                 enable_compression: None,
                 known_hosts_path: None,
                 proxy_jump: None,
@@ -803,6 +817,10 @@ mod tests {
                 initial_cols: None,
                 keepalive_interval: None,
                 connection_timeout: None,
+                tcp_nodelay: None,
+                so_keepalive: None,
+                null_packet_keepalive: None,
+                charset: None,
                 enable_compression: None,
                 known_hosts_path: None,
                 proxy_jump: None,
@@ -848,6 +866,10 @@ mod tests {
                 initial_cols: None,
                 keepalive_interval: None,
                 connection_timeout: None,
+                tcp_nodelay: None,
+                so_keepalive: None,
+                null_packet_keepalive: None,
+                charset: None,
                 enable_compression: None,
                 known_hosts_path: None,
                 proxy_jump: None,
@@ -886,6 +908,10 @@ mod tests {
                 initial_cols: None,
                 keepalive_interval: None,
                 connection_timeout: None,
+                tcp_nodelay: None,
+                so_keepalive: None,
+                null_packet_keepalive: None,
+                charset: None,
                 enable_compression: None,
                 known_hosts_path: None,
                 proxy_jump: None,
@@ -923,7 +949,7 @@ mod tests {
         };
 
         manager.create_local(
-            LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None },
+            LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() },
             mock_backend.clone(),
         ).expect("local session should be created");
 
@@ -939,6 +965,10 @@ mod tests {
                 initial_cols: None,
                 keepalive_interval: None,
                 connection_timeout: None,
+                tcp_nodelay: None,
+                so_keepalive: None,
+                null_packet_keepalive: None,
+                charset: None,
                 enable_compression: None,
                 known_hosts_path: None,
                 proxy_jump: None,

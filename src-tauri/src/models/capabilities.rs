@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Describes which capabilities a terminal session transport supports.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CapabilityFlags {
     pub supports_resize: bool,
     pub supports_reconnect: bool,

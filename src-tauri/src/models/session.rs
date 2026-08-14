@@ -5,7 +5,7 @@ use crate::models::capabilities::CapabilityFlags;
 
 /// Supported session types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum SessionType {
     /// A local shell session running on the host machine.
     #[serde(rename = "local")]
@@ -18,6 +18,7 @@ pub enum SessionType {
 
 /// Metadata describing a terminal session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionInfo {
     pub id: u32,
     pub name: String,
@@ -27,7 +28,8 @@ pub struct SessionInfo {
 }
 
 /// Configuration for creating a local shell session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalSessionConfig {
     /// Optional display name for the session. Falls back to the shell basename
     /// when `None` or empty.
@@ -41,10 +43,21 @@ pub struct LocalSessionConfig {
     pub args: Option<Vec<String>>,
     #[serde(default)]
     pub env_config: Option<EnvConfig>,
+    #[serde(default)]
+    pub shell_template: Option<String>,
+    #[serde(default)]
+    pub term_type: Option<String>,
+    #[serde(default)]
+    pub charset: Option<String>,
+    #[serde(default)]
+    pub startup_command: Option<String>,
+    #[serde(default)]
+    pub startup_delay_ms: Option<u64>,
 }
 
 /// Configuration for creating an SSH session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SSHSessionConfig {
     /// Optional display name for the session. Falls back to
     /// `format!("{}@{}", username, host)` when `None` or empty.
@@ -66,6 +79,14 @@ pub struct SSHSessionConfig {
     #[serde(default)]
     pub connection_timeout: Option<u32>,
     #[serde(default)]
+    pub tcp_nodelay: Option<bool>,
+    #[serde(default)]
+    pub so_keepalive: Option<bool>,
+    #[serde(default)]
+    pub null_packet_keepalive: Option<bool>,
+    #[serde(default)]
+    pub charset: Option<String>,
+    #[serde(default)]
     pub enable_compression: Option<bool>,
     /// Path to known_hosts file for host key verification (currently unused — see AGENTS.md note).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -75,9 +96,33 @@ pub struct SSHSessionConfig {
     pub proxy_jump: Option<String>,
 }
 
+impl Default for SSHSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: None,
+            host: String::new(),
+            port: 22,
+            username: String::new(),
+            auth: SSHAuth::Password { password: String::new() },
+            term_type: None,
+            initial_rows: None,
+            initial_cols: None,
+            keepalive_interval: None,
+            connection_timeout: None,
+            tcp_nodelay: None,
+            so_keepalive: None,
+            null_packet_keepalive: None,
+            charset: None,
+            enable_compression: None,
+            known_hosts_path: None,
+            proxy_jump: None,
+        }
+    }
+}
+
 /// Authentication method for an SSH session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "auth_type")]
+#[serde(tag = "authType", rename_all = "camelCase")]
 pub enum SSHAuth {
     /// Authenticate with a password.
     #[serde(rename = "password")]
@@ -97,7 +142,7 @@ pub enum SSHAuth {
 /// attached to an already-created `SessionInfo`. `SessionConfig` is the input
 /// payload used at session creation time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", content = "config")]
+#[serde(tag = "type", content = "config", rename_all = "camelCase")]
 pub enum SessionConfig {
     /// Configuration for a local shell session.
     #[serde(rename = "local")]
@@ -107,9 +152,24 @@ pub enum SessionConfig {
     Ssh(SSHSessionConfig),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SessionLoggingConfig {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub append: Option<bool>,
+    #[serde(default)]
+    pub file_name_template: Option<String>,
+    #[serde(default)]
+    pub max_size_mb: Option<u64>,
+    #[serde(default)]
+    pub line_format: Option<String>,
+}
+
 /// Display configuration for terminal appearance.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct DisplayConfig {
     pub font_size: Option<u32>,
     pub font_family: Option<String>,
@@ -119,11 +179,51 @@ pub struct DisplayConfig {
     pub line_height: Option<f64>,
     pub letter_spacing: Option<f64>,
     pub cursor_width: Option<u32>,
+    #[serde(default)]
+    pub line_timestamp: Option<bool>,
+    #[serde(default)]
+    pub time_format: Option<String>,
+    #[serde(default)]
+    pub date_time_format: Option<String>,
+    #[serde(default)]
+    pub auto_wrap: Option<bool>,
+    #[serde(default)]
+    pub reverse_video: Option<bool>,
+    #[serde(default)]
+    pub mouse_wheel_scroll_lines: Option<u32>,
+    #[serde(default)]
+    pub fit_on_resize: Option<bool>,
+    #[serde(default)]
+    pub sync_remote_title: Option<bool>,
+    #[serde(default)]
+    pub backspace_sends: Option<String>,
+    #[serde(default)]
+    pub delete_sends: Option<String>,
+    #[serde(default)]
+    pub line_feed_mode: Option<bool>,
+    #[serde(default)]
+    pub cursor_key_mode: Option<String>,
+    #[serde(default)]
+    pub keypad_mode: Option<String>,
+    #[serde(default)]
+    pub modify_other_keys_format: Option<String>,
+    #[serde(default)]
+    pub alt_sends_escape: Option<bool>,
+    #[serde(default)]
+    pub word_separator_chars: Option<String>,
+    #[serde(default)]
+    pub alt_screen_word_separator_chars: Option<String>,
+    #[serde(default)]
+    pub clipboard_read: Option<String>,
+    #[serde(default)]
+    pub clipboard_write: Option<String>,
+    #[serde(default)]
+    pub logging: Option<SessionLoggingConfig>,
 }
 
 /// Environment variables configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct EnvConfig {
     pub env: Option<HashMap<String, String>>,
 }
@@ -162,6 +262,7 @@ fn default_version() -> u32 {
 /// authoritative representation for any v1+ payloads it is asked to deserialize.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SavedSessionConfigV1 {
     pub id: String,
     pub name: String,
@@ -180,7 +281,7 @@ pub struct SavedSessionConfigV1 {
 /// [`LocalSessionConfig`] / [`SSHSessionConfig`] payload structs.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", content = "config")]
+#[serde(tag = "type", content = "config", rename_all = "camelCase")]
 pub enum SavedSessionConfigKind {
     #[serde(rename = "local")]
     Local(LocalSessionConfig),
@@ -208,6 +309,10 @@ mod tests {
             initial_cols: Some(80),
             keepalive_interval: Some(60),
             connection_timeout: Some(30),
+            tcp_nodelay: None,
+            so_keepalive: None,
+            null_packet_keepalive: None,
+            charset: None,
             enable_compression: Some(true),
             known_hosts_path: Some("/home/user/.ssh/known_hosts".to_string()),
             proxy_jump: Some("jump.example.com".to_string()),
@@ -249,6 +354,10 @@ mod tests {
             initial_cols: None,
             keepalive_interval: None,
             connection_timeout: None,
+            tcp_nodelay: None,
+            so_keepalive: None,
+            null_packet_keepalive: None,
+            charset: None,
             enable_compression: None,
             known_hosts_path: None,
             proxy_jump: None,
@@ -281,14 +390,18 @@ mod tests {
             initial_cols: None,
             keepalive_interval: None,
             connection_timeout: None,
+            tcp_nodelay: None,
+            so_keepalive: None,
+            null_packet_keepalive: None,
+            charset: None,
             enable_compression: None,
             known_hosts_path: Some("/custom/known_hosts".to_string()),
             proxy_jump: None,
         };
 
         let json = serde_json::to_string(&config).expect("serialize SSH config");
-        assert!(json.contains("known_hosts_path"));
-        assert!(!json.contains("proxy_jump"));
+        assert!(json.contains("knownHostsPath"));
+        assert!(!json.contains("proxyJump"));
 
         let roundtrip: SSHSessionConfig =
             serde_json::from_str(&json).expect("deserialize SSH config");
@@ -314,14 +427,18 @@ mod tests {
             initial_cols: None,
             keepalive_interval: None,
             connection_timeout: None,
+            tcp_nodelay: None,
+            so_keepalive: None,
+            null_packet_keepalive: None,
+            charset: None,
             enable_compression: None,
             known_hosts_path: None,
             proxy_jump: Some("bastion@jump.example.com:22".to_string()),
         };
 
         let json = serde_json::to_string(&config).expect("serialize SSH config");
-        assert!(json.contains("proxy_jump"));
-        assert!(!json.contains("known_hosts_path"));
+        assert!(json.contains("proxyJump"));
+        assert!(!json.contains("knownHostsPath"));
 
         let roundtrip: SSHSessionConfig =
             serde_json::from_str(&json).expect("deserialize SSH config");
@@ -347,6 +464,10 @@ mod tests {
             initial_cols: None,
             keepalive_interval: None,
             connection_timeout: None,
+            tcp_nodelay: None,
+            so_keepalive: None,
+            null_packet_keepalive: None,
+            charset: None,
             enable_compression: None,
             known_hosts_path: None,
             proxy_jump: None,
@@ -374,6 +495,10 @@ mod tests {
             initial_cols: None,
             keepalive_interval: None,
             connection_timeout: None,
+            tcp_nodelay: None,
+            so_keepalive: None,
+            null_packet_keepalive: None,
+            charset: None,
             enable_compression: None,
             known_hosts_path: None,
             proxy_jump: None,
@@ -394,6 +519,7 @@ mod tests {
             cwd: Some("/home/me".to_string()),
             args: Some(vec!["-l".to_string()]),
             env_config: None,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -414,6 +540,7 @@ mod tests {
             cwd: None,
             args: None,
             env_config: None,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&config).expect("serialize");
@@ -434,7 +561,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_missing_name_field_defaults_to_none() {
-        let json_without_name = r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p"}"#;
+        let json_without_name = r#"{"host":"h","port":22,"username":"u","authType":"password","password":"p"}"#;
         let config: SSHSessionConfig = serde_json::from_str(json_without_name).expect("deserialize");
         assert!(config.name.is_none());
         assert_eq!(config.host, "h");
