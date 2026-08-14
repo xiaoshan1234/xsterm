@@ -1,8 +1,12 @@
 use std::io::Read;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use portable_pty::PtySize;
 
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
-use crate::infrastructure::pty::{default_pty_size, LocalSession, LocalSessionHandles, PtySystem};
+use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, PtySystem};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
 
@@ -33,9 +37,17 @@ pub fn create_local_session(
     let shell_name = extract_shell_name(&shell_exe);
     let cwd = resolve_working_directory(config.cwd);
 
-    let mut pair = pty_system
-        .openpty(default_pty_size())
-        .map_err_string()?;
+    // Apply T6 + T-size fields to PTY creation.
+    // - `initial_rows` / `initial_cols` replace the previous hardcoded 24x80
+    //   default. `unwrap_or(24)` / `unwrap_or(80)` preserve the existing
+    //   fallback when the config leaves these unset.
+    let pty_size = PtySize {
+        rows: config.initial_rows.unwrap_or(24),
+        cols: config.initial_cols.unwrap_or(80),
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+    let mut pair = pty_system.openpty(pty_size).map_err_string()?;
 
     let mut cmd = portable_pty::CommandBuilder::new(&shell_exe);
     for arg in &shell_extra_args {
@@ -54,11 +66,26 @@ pub fn create_local_session(
             }
         }
     }
+    // T6 `term_type` → TERM env var (advertises terminal capabilities to the
+    // spawned shell, e.g. xterm-256color for color support).
+    if let Some(term_type) = &config.term_type {
+        cmd.env("TERM", term_type);
+    }
+    // T6 `charset` → LC_ALL env var (locale setting the child shell inherits;
+    // e.g. "en_US.UTF-8" enables UTF-8 input/output).
+    if let Some(charset) = &config.charset {
+        cmd.env("LC_ALL", charset);
+    }
     cmd.cwd(&cwd);
 
     let child = pair.spawn(cmd).map_err_string()?;
     let writer = pair.master_writer().map_err_string()?;
     let reader = pair.master_reader().map_err_string()?;
+
+    // Wrap the writer in Arc<Mutex<_>> so that both the foreground
+    // `SessionBackend::write` path and the optional `startup_command` background
+    // task can share the same PTY writer without conflicting.
+    let writer = Arc::new(Mutex::new(writer));
 
     let info = SessionInfo {
         id: session_id,
@@ -68,7 +95,41 @@ pub fn create_local_session(
         capabilities: CapabilityFlags::for_local(),
     };
 
-    spawn_output_forwarder(reader, backend, session_id);
+    spawn_output_forwarder(reader, backend.clone(), session_id);
+
+    // T6 `startup_command` + `startup_delay_ms` → fire-and-forget background
+    // task that writes the startup command (followed by `\n`) to the PTY after
+    // the configured delay. Uses a tokio current-thread runtime so we can call
+    // `tokio::time::sleep` per the T6 spec.
+    if let Some(startup_command) = config.startup_command.clone() {
+        let delay_ms = config.startup_delay_ms.unwrap_or(0);
+        let startup_writer = Arc::clone(&writer);
+        backend.spawn(Box::new(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to build tokio runtime for startup_command: {}",
+                        e
+                    );
+                    return;
+                }
+            };
+            rt.block_on(async move {
+                if delay_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                }
+                if let Ok(mut w) = startup_writer.lock() {
+                    let _ = w.write_all(startup_command.as_bytes());
+                    let _ = w.write_all(b"\n");
+                    let _ = w.flush();
+                }
+            });
+        }));
+    }
 
     let session = LocalSession {
         info,

@@ -53,6 +53,12 @@ pub struct LocalSessionConfig {
     pub startup_command: Option<String>,
     #[serde(default)]
     pub startup_delay_ms: Option<u64>,
+    /// Initial PTY rows. Defaults to 24 when `None`.
+    #[serde(default)]
+    pub initial_rows: Option<u16>,
+    /// Initial PTY columns. Defaults to 80 when `None`.
+    #[serde(default)]
+    pub initial_cols: Option<u16>,
 }
 
 /// Configuration for creating an SSH session.
@@ -580,6 +586,8 @@ mod tests {
             charset: Some("utf-8".to_string()),
             startup_command: Some("echo ready".to_string()),
             startup_delay_ms: Some(500),
+            initial_rows: Some(30),
+            initial_cols: Some(120),
         };
 
         let json = serde_json::to_string(&config).expect("serialize LocalSessionConfig");
@@ -598,6 +606,8 @@ mod tests {
         assert_eq!(roundtrip.charset.as_deref(), Some("utf-8"));
         assert_eq!(roundtrip.startup_command.as_deref(), Some("echo ready"));
         assert_eq!(roundtrip.startup_delay_ms, Some(500));
+        assert_eq!(roundtrip.initial_rows, Some(30));
+        assert_eq!(roundtrip.initial_cols, Some(120));
         assert_eq!(roundtrip.name.as_deref(), Some("my-shell"));
         assert_eq!(roundtrip.shell.as_deref(), Some("/bin/zsh"));
 

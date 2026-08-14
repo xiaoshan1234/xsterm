@@ -1,9 +1,11 @@
+use std::net::SocketAddr;
 use std::sync::{mpsc as sync_mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 
 use russh::keys::{decode_secret_key, PrivateKeyWithHashAlg, PublicKey};
 use russh::CryptoVec;
+use tokio::net::{TcpSocket, TcpStream};
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 
@@ -12,6 +14,11 @@ use crate::infrastructure::pty::default_pty_size;
 use crate::infrastructure::session_backend::SessionBackend;
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo};
+
+// 60-second interval for application-layer null-packet keepalive when
+// `config.null_packet_keepalive = Some(true)`. Matches the OpenSSH-style
+// "send a zero byte every N seconds" heartbeat pattern.
+const NULL_PACKET_KEEPALIVE_SECS: u64 = 60;
 
 /// Default terminal type requested for SSH PTY sessions when the config
 /// does not specify one. Defaults to `xterm-256color` for broad compatibility.
@@ -211,6 +218,88 @@ fn parse_proxy_jump(raw: &str) -> Option<ParsedJumpHost> {
     })
 }
 
+/// Resolve `host:port`, create a socket with the configured TCP options, and
+/// connect. Iterates over all resolved addresses (IPv4 first) so a single bad
+/// address does not abort the connection attempt.
+///
+/// `tcp_nodelay` defaults to `true` (Nagle's algorithm disabled) unless the
+/// caller explicitly opts out with `Some(false)`. `so_keepalive` defaults to
+/// `false` and only enables `SO_KEEPALIVE` when `Some(true)`.
+async fn open_configured_tcp_stream(config: &SSHSessionConfig) -> Result<TcpStream, String> {
+    let tcp_nodelay = config.tcp_nodelay.unwrap_or(true);
+    let so_keepalive = config.so_keepalive.unwrap_or(false);
+
+    let mut addrs: Vec<SocketAddr> = tokio::net::lookup_host((config.host.as_str(), config.port))
+        .await
+        .map_err(|e| {
+            format!(
+                "DNS resolution failed for {}:{}: {}",
+                config.host, config.port, e
+            )
+        })?
+        .collect();
+
+    if addrs.is_empty() {
+        return Err(format!(
+            "No addresses found for {}:{}",
+            config.host, config.port
+        ));
+    }
+
+    // Prefer IPv4 over IPv6 to preserve the historical address-order semantics
+    // of `tokio::net::TcpStream::connect` resolving `ToSocketAddrs`.
+    addrs.sort_by_key(|a| match a {
+        SocketAddr::V4(_) => 0,
+        SocketAddr::V6(_) => 1,
+    });
+
+    let mut last_err: Option<String> = None;
+    for addr in addrs {
+        let socket = match addr {
+            SocketAddr::V4(_) => TcpSocket::new_v4(),
+            SocketAddr::V6(_) => TcpSocket::new_v6(),
+        };
+        let socket = match socket {
+            Ok(s) => s,
+            Err(e) => {
+                last_err = Some(e.to_string());
+                continue;
+            }
+        };
+
+        if let Err(e) = socket.set_nodelay(tcp_nodelay) {
+            tracing::warn!(
+                "Failed to set TCP_NODELAY={} on {}: {}",
+                tcp_nodelay, addr, e
+            );
+        }
+        if let Err(e) = socket.set_keepalive(so_keepalive) {
+            tracing::warn!(
+                "Failed to set SO_KEEPALIVE={} on {}: {}",
+                so_keepalive, addr, e
+            );
+        }
+
+        match socket.connect(addr).await {
+            Ok(stream) => {
+                tracing::info!(
+                    "SSH TCP connected to {} (nodelay={}, keepalive={})",
+                    addr, tcp_nodelay, so_keepalive
+                );
+                return Ok(stream);
+            }
+            Err(e) => last_err = Some(e.to_string()),
+        }
+    }
+
+    Err(format!(
+        "SSH TCP connection to {}:{} failed: {}",
+        config.host,
+        config.port,
+        last_err.unwrap_or_else(|| "no addresses succeeded".to_string())
+    ))
+}
+
 /// Spawn a dedicated thread that runs an async russh connection.
 ///
 /// The thread communicates back through `result_tx` (success/failure of the
@@ -277,21 +366,23 @@ async fn run_ssh_session(
     }
     let russh_config = Arc::new(russh_config);
 
-    let connect_fut =
-        russh::client::connect(russh_config, (config.host.clone(), config.port), ClientHandler);
-    let mut handle = if let Some(secs) = config.connection_timeout {
-        match tokio::time::timeout(
-            Duration::from_secs(secs as u64),
-            connect_fut,
-        )
-        .await
-        {
-            Ok(result) => result.map_err(|e| {
+    // Open a pre-configured TcpStream (tcp_nodelay / so_keepalive honored) and
+    // hand it to russh via `connect_stream` instead of letting russh create its
+    // own socket with default options.
+    let connect_block = async {
+        let stream = open_configured_tcp_stream(config).await?;
+        russh::client::connect_stream(russh_config.clone(), stream, ClientHandler)
+            .await
+            .map_err(|e| {
                 format!(
                     "SSH connection to {}:{} failed: {}",
                     config.host, config.port, e
                 )
-            })?,
+            })
+    };
+    let mut handle = if let Some(secs) = config.connection_timeout {
+        match tokio::time::timeout(Duration::from_secs(secs as u64), connect_block).await {
+            Ok(result) => result?,
             Err(_) => {
                 return Err(format!(
                     "SSH connection to {}:{} timed out after {} seconds",
@@ -300,12 +391,7 @@ async fn run_ssh_session(
             }
         }
     } else {
-        connect_fut.await.map_err(|e| {
-            format!(
-                "SSH connection to {}:{} failed: {}",
-                config.host, config.port, e
-            )
-        })?
+        connect_block.await?
     };
 
     authenticate(&mut handle, &config.username, &config.auth)
@@ -321,6 +407,22 @@ async fn run_ssh_session(
         .channel_open_session()
         .await
         .map_err(|e| format!("Failed to open SSH session channel: {}", e))?;
+
+    // Apply `charset` via SSH environment variable. Many servers accept
+    // `AcceptEnv` for LC_*; if the server rejects the request we log a
+    // warning and continue rather than aborting the session.
+    if let Some(cs) = config.charset.as_deref() {
+        if !cs.is_empty() {
+            if let Err(e) = channel.set_env(false, "LC_ALL", cs.to_string()).await {
+                tracing::warn!(
+                    "SSH server rejected LC_ALL={} via env: {} (charset may not take effect)",
+                    cs, e
+                );
+            } else {
+                tracing::info!("Applied charset via SSH env LC_ALL={}", cs);
+            }
+        }
+    }
 
     let term_type = config
         .term_type
@@ -352,10 +454,43 @@ async fn run_ssh_session(
         .await
         .map_err(|e| format!("SSH shell request failed: {}", e))?;
 
+    // Application-layer null-packet keepalive. When enabled, spawn a long-lived
+    // task that periodically sends a single `\0` byte through the SSH channel;
+    // the data loop forwards it via the same path as user input. This is
+    // independent of russh's SSH-level `keepalive_interval` config.
+    let (keepalive_tx, mut keepalive_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    if config.null_packet_keepalive == Some(true) {
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_secs(NULL_PACKET_KEEPALIVE_SECS));
+            // First tick fires immediately; consume it so the first heartbeat
+            // is sent after one full interval, not at session open.
+            ticker.tick().await;
+            loop {
+                ticker.tick().await;
+                if keepalive_tx.send(b"\0".to_vec()).is_err() {
+                    tracing::debug!("Null-packet keepalive channel closed; exiting task");
+                    break;
+                }
+            }
+        });
+        tracing::info!(
+            "Null-packet keepalive enabled (every {}s)",
+            NULL_PACKET_KEEPALIVE_SECS
+        );
+    }
+
     result_tx.send(Ok(())).ok();
     tracing::info!("SSH session established, entering data loop");
 
-    run_data_loop(&mut handle, &mut channel, read_tx, write_rx, resize_rx).await;
+    run_data_loop(
+        &mut handle,
+        &mut channel,
+        read_tx,
+        write_rx,
+        resize_rx,
+        &mut keepalive_rx,
+    )
+    .await;
     tracing::info!("SSH data loop ended");
     Ok(())
 }
@@ -461,6 +596,7 @@ async fn run_data_loop(
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     mut resize_rx: Option<mpsc::UnboundedReceiver<(u16, u16)>>,
+    keepalive_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
 ) {
     let channel_id = channel.id();
     loop {
@@ -471,6 +607,11 @@ async fn run_data_loop(
                 }
             }
             data = write_rx.recv() => {
+                if forward_write_data(handle, channel_id, data).await {
+                    break;
+                }
+            }
+            data = keepalive_rx.recv() => {
                 if forward_write_data(handle, channel_id, data).await {
                     break;
                 }
@@ -517,19 +658,20 @@ async fn exec_ssh_command(
     }
     let ssh_config = Arc::new(ssh_config);
 
-    let connect_fut = russh::client::connect(
-        ssh_config,
-        (config.host.clone(), config.port),
-        ClientHandler,
-    );
-    let mut handle = if let Some(secs) = config.connection_timeout {
-        match tokio::time::timeout(Duration::from_secs(secs as u64), connect_fut).await {
-            Ok(result) => result.map_err(|e| {
+    let connect_block = async {
+        let stream = open_configured_tcp_stream(config).await?;
+        russh::client::connect_stream(ssh_config.clone(), stream, ClientHandler)
+            .await
+            .map_err(|e| {
                 format!(
                     "SSH connection to {}:{} failed: {}",
                     config.host, config.port, e
                 )
-            })?,
+            })
+    };
+    let mut handle = if let Some(secs) = config.connection_timeout {
+        match tokio::time::timeout(Duration::from_secs(secs as u64), connect_block).await {
+            Ok(result) => result?,
             Err(_) => {
                 return Err(format!(
                     "SSH connection to {}:{} timed out after {} seconds",
@@ -538,12 +680,7 @@ async fn exec_ssh_command(
             }
         }
     } else {
-        connect_fut.await.map_err(|e| {
-            format!(
-                "SSH connection to {}:{} failed: {}",
-                config.host, config.port, e
-            )
-        })?
+        connect_block.await?
     };
 
     authenticate(&mut handle, &config.username, &config.auth).await?;

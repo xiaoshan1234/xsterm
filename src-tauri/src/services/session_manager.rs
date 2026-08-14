@@ -4,9 +4,12 @@ use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{NativePtySystem, PtySystem};
 use crate::infrastructure::session_backend::SessionBackend;
 use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
-use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
-use crate::models::session::{build_remote_image_path, LocalSessionConfig, SSHSessionConfig, SessionInfo};
+use crate::models::session::{
+    build_remote_image_path, LocalSessionConfig, SessionInfo, SessionLoggingConfig, SSHSessionConfig,
+};
 use crate::services::local_session::create_local_session;
+use crate::services::session_log::start_session_logging;
+use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
 
 /// Active session handle held by [`SessionManager`].
 ///
@@ -89,6 +92,16 @@ impl SessionManager {
             id,
         )?;
 
+        // Start per-session output logging. The wiring of the output stream
+        // into the log writer is deferred to a follow-up wave; for now the
+        // call acknowledges the configuration so the global tracing log
+        // records that this session requested logging.
+        let logging_config = SessionLoggingConfig::default();
+        let stub_writer: Box<dyn std::io::Write + Send> = Box::new(Vec::<u8>::new());
+        if let Err(e) = start_session_logging(id, &logging_config, stub_writer) {
+            tracing::warn!("Failed to start session logging for session {}: {}", id, e);
+        }
+
         Ok(self.insert_session(id, ActiveSession::Pty(Box::new(session))))
     }
 
@@ -106,6 +119,14 @@ impl SessionManager {
             backend,
             id,
         )?;
+
+        // Start per-session output logging. See `create_local` for the
+        // rationale on the stub writer and the deferred wiring.
+        let logging_config = SessionLoggingConfig::default();
+        let stub_writer: Box<dyn std::io::Write + Send> = Box::new(Vec::<u8>::new());
+        if let Err(e) = start_session_logging(id, &logging_config, stub_writer) {
+            tracing::warn!("Failed to start session logging for session {}: {}", id, e);
+        }
 
         Ok(self.insert_session(id, ActiveSession::Ssh(Box::new(wrapper))))
     }

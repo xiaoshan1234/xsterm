@@ -1,5 +1,6 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::{Read, Write};
+use std::sync::{Arc, Mutex};
 
 use crate::error::StringError;
 use crate::infrastructure::session_backend::SessionBackend;
@@ -95,7 +96,10 @@ impl Child for NativeChild {
 /// full ownership and drop everything cleanly when the session ends.
 pub struct LocalSession {
     pub info: SessionInfo,
-    pub writer: Box<dyn Write + Send>,
+    /// Shared handle to the PTY master writer. Wrapped in `Arc<Mutex<_>>` so
+    /// that background tasks (e.g. `startup_command` senders) can write to the
+    /// same PTY concurrently with normal session output writes.
+    pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub capabilities: CapabilityFlags,
     pub handles: LocalSessionHandles,
 }
@@ -110,8 +114,9 @@ impl SessionBackend for LocalSession {
     }
 
     fn write(&mut self, data: &[u8]) -> Result<(), String> {
-        self.writer.write_all(data).map_err(|e| e.to_string())?;
-        self.writer.flush().map_err(|e| e.to_string())
+        let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
+        writer.write_all(data).map_err(|e| e.to_string())?;
+        writer.flush().map_err(|e| e.to_string())
     }
 
     fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {
