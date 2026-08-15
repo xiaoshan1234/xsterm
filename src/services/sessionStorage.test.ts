@@ -179,6 +179,112 @@ describe("SSHSessionConfig — round-trip with knownHostsPath and proxyJump", ()
     const result = migrateSavedConfig(raw);
     expect(result?.version).toBe(1);
   });
+
+  it("loads a v1 local config with only old fields and returns correct field values", () => {
+    const raw = {
+      id: "cfg-old",
+      name: "old-local",
+      version: 1,
+      type: "local",
+      config: { shell: "/bin/bash", cwd: "/home/me" },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("cfg-old");
+    expect(result?.name).toBe("old-local");
+    expect(result?.version).toBe(1);
+    expect(result?.type).toBe("local");
+    expect(result?.config).toEqual({ shell: "/bin/bash", cwd: "/home/me" });
+  });
+
+  it("loads a v1 ssh config with only old fields and returns correct field values", () => {
+    const raw = {
+      id: "cfg-old-ssh",
+      name: "old-ssh",
+      version: 1,
+      type: "ssh",
+      config: { host: "h", port: 22, username: "u", auth_type: "password", password: "p" },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("cfg-old-ssh");
+    expect(result?.name).toBe("old-ssh");
+    expect(result?.version).toBe(1);
+    expect(result?.type).toBe("ssh");
+    expect(result?.config).toEqual({ host: "h", port: 22, username: "u", auth_type: "password", password: "p" });
+  });
+
+  it("loads a v1 local config with all new fields and returns them unchanged", () => {
+    const raw = {
+      id: "cfg-new-local",
+      name: "new-local",
+      version: 1,
+      type: "local",
+      config: {
+        shell: "/usr/bin/zsh",
+        cwd: "/home/me",
+        shellTemplate: "zsh" as const,
+        termType: "xterm-256color",
+        charset: "utf-8",
+        startupCommand: "echo hello",
+        startupDelayMs: 100,
+        lineTimestamp: true,
+        autoWrap: false,
+        clipboardRead: "allow" as const,
+        logging: { enabled: true, path: "/tmp/session.log" },
+      },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result).not.toBeNull();
+    expect(result?.config).toMatchObject({
+      shell: "/usr/bin/zsh",
+      cwd: "/home/me",
+      shellTemplate: "zsh",
+      termType: "xterm-256color",
+      charset: "utf-8",
+      startupCommand: "echo hello",
+      startupDelayMs: 100,
+      lineTimestamp: true,
+      autoWrap: false,
+      clipboardRead: "allow",
+      logging: { enabled: true, path: "/tmp/session.log" },
+    });
+  });
+
+  it("loads a v1 ssh config with all new fields and returns them unchanged", () => {
+    const raw = {
+      id: "cfg-new-ssh",
+      name: "new-ssh",
+      version: 1,
+      type: "ssh",
+      config: {
+        host: "bastion.example.com",
+        port: 2222,
+        username: "alice",
+        auth_type: "key",
+        key_file: "/k",
+        termType: "xterm-256color",
+        tcpNoDelay: true,
+        soKeepalive: true,
+        nullPacketKeepalive: true,
+        charset: "gbk",
+      },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result).not.toBeNull();
+    expect(result?.config).toMatchObject({
+      host: "bastion.example.com",
+      port: 2222,
+      username: "alice",
+      auth_type: "key",
+      key_file: "/k",
+      termType: "xterm-256color",
+      tcpNoDelay: true,
+      soKeepalive: true,
+      nullPacketKeepalive: true,
+      charset: "gbk",
+    });
+  });
 });
 
 describe("migrateSavedConfig — malformed input", () => {

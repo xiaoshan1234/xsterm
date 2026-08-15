@@ -19,9 +19,13 @@ export const SAVED_SESSION_CONFIG_VERSION = 1;
  * `SavedSessionConfig` shape.
  *
  * Behavior:
- * - New v1 shape (`type` + `config` + `version`): return as-is after validating
+ * - v1 shape (`type` + `config` + `version`): return as-is after validating
  *   `version` against {@link SAVED_SESSION_CONFIG_VERSION}; any other version is
- *   rejected as malformed so callers can skip it.
+ *   rejected as malformed so callers can skip it.  Because the function uses
+ *   `as LocalSessionConfig` / `as SSHSessionConfig` type assertions, any
+ *   additional fields present in the v1 payload (e.g. shellTemplate, termType,
+ *   tcpNoDelay, etc.) are carried through automatically — TypeScript's
+ *   structural type system does not strip unknown fields from a cast result.
  * - Legacy v0 local (`{type:"local", localConfig:{...}}`): convert to
  *   `{type:"local", config: localConfig, version: 1}`.
  * - Legacy v0 ssh (`{type:"ssh", sshConfig:{...}}`): convert to
