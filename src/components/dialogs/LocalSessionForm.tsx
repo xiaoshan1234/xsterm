@@ -68,6 +68,7 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
     return (Object.entries(env) as [string, string][]).map(([key, value]) => ({ key, value }));
   });
 
+  // Reset form state on mount when mode is "create".
   useEffect(() => {
     if (mode === "create") {
       onChange({});

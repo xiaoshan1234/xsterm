@@ -10,34 +10,46 @@ interface CommonSettingsFormProps {
   onChange: (config: SessionDisplayConfig) => void;
 }
 
-// --- Enum option lists (display labels + value literals) ---
-
 const KEY_ACTION_OPTIONS = [
   { value: "auto", label: "Auto" },
   { value: "backspace", label: "Backspace (^H)" },
   { value: "delete", label: "Delete (^?)" },
-];
+] as const;
 
 const CURSOR_KEY_OPTIONS = [
   { value: "normal", label: "Normal (ANSI cursor keys)" },
   { value: "application", label: "Application (DECCKM)" },
-];
+] as const;
 
 const KEYPAD_OPTIONS = [
   { value: "normal", label: "Normal" },
   { value: "application", label: "Application (DECNKM)" },
-];
+] as const;
 
 const MODIFY_OTHER_KEYS_OPTIONS = [
   { value: "xterm", label: "xterm (CSI u)" },
   { value: "fixterm", label: "fixterm (CSI ? u)" },
-];
+] as const;
 
 const CLIPBOARD_OPTIONS = [
   { value: "ask", label: "Ask each time" },
   { value: "allow", label: "Allow" },
   { value: "deny", label: "Deny" },
-];
+] as const;
+
+/**
+ * Narrow an HTML `<select>` value (typed as `string`) to one of the literal
+ * values declared in an `as const` option list. Falls back to the first
+ * option for unknown values so the controlled-component contract holds.
+ */
+function narrowToLiteral<T extends string>(
+  value: string,
+  options: ReadonlyArray<{ value: T }>,
+): T {
+  return options.some((o) => o.value === (value as T))
+    ? (value as T)
+    : options[0].value;
+}
 
 export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsFormProps) {
   const update = (patch: Partial<SessionDisplayConfig>) => {
@@ -51,7 +63,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
 
   return (
     <div className="common-settings-form">
-      {/* --- Display ------------------------------------------------------- */}
+      {/* Display */}
       <details className="common-settings-group" open>
         <summary className="common-settings-group__title">Display</summary>
         <div className="common-settings-group__content">
@@ -124,7 +136,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
         </div>
       </details>
 
-      {/* --- Keyboard ------------------------------------------------------ */}
+      {/* Keyboard */}
       <details className="common-settings-group" open>
         <summary className="common-settings-group__title">Keyboard</summary>
         <div className="common-settings-group__content">
@@ -133,10 +145,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
               value={config.backspaceSends ?? "auto"}
               onChange={(e) =>
                 update({
-                  backspaceSends: e.target.value as
-                    | "auto"
-                    | "backspace"
-                    | "delete",
+                  backspaceSends: narrowToLiteral(e.target.value, KEY_ACTION_OPTIONS),
                 })
               }
             >
@@ -152,7 +161,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
               value={config.deleteSends ?? "auto"}
               onChange={(e) =>
                 update({
-                  deleteSends: e.target.value as "auto" | "backspace" | "delete",
+                  deleteSends: narrowToLiteral(e.target.value, KEY_ACTION_OPTIONS),
                 })
               }
             >
@@ -175,7 +184,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
               value={config.cursorKeyMode ?? "normal"}
               onChange={(e) =>
                 update({
-                  cursorKeyMode: e.target.value as "normal" | "application",
+                  cursorKeyMode: narrowToLiteral(e.target.value, CURSOR_KEY_OPTIONS),
                 })
               }
             >
@@ -191,7 +200,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
               value={config.keypadMode ?? "normal"}
               onChange={(e) =>
                 update({
-                  keypadMode: e.target.value as "normal" | "application",
+                  keypadMode: narrowToLiteral(e.target.value, KEYPAD_OPTIONS),
                 })
               }
             >
@@ -207,7 +216,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
               value={config.modifyOtherKeysFormat ?? "xterm"}
               onChange={(e) =>
                 update({
-                  modifyOtherKeysFormat: e.target.value as "xterm" | "fixterm",
+                  modifyOtherKeysFormat: narrowToLiteral(e.target.value, MODIFY_OTHER_KEYS_OPTIONS),
                 })
               }
             >
@@ -228,7 +237,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
         </div>
       </details>
 
-      {/* --- Security ------------------------------------------------------ */}
+      {/* Security */}
       <details className="common-settings-group" open>
         <summary className="common-settings-group__title">Security</summary>
         <div className="common-settings-group__content">
@@ -237,7 +246,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
               value={config.clipboardRead ?? "ask"}
               onChange={(e) =>
                 update({
-                  clipboardRead: e.target.value as "ask" | "allow" | "deny",
+                  clipboardRead: narrowToLiteral(e.target.value, CLIPBOARD_OPTIONS),
                 })
               }
             >
@@ -253,7 +262,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
               value={config.clipboardWrite ?? "ask"}
               onChange={(e) =>
                 update({
-                  clipboardWrite: e.target.value as "ask" | "allow" | "deny",
+                  clipboardWrite: narrowToLiteral(e.target.value, CLIPBOARD_OPTIONS),
                 })
               }
             >
@@ -267,7 +276,7 @@ export function CommonSettingsForm({ config = {}, onChange }: CommonSettingsForm
         </div>
       </details>
 
-      {/* --- Logging ------------------------------------------------------- */}
+      {/* Logging */}
       <details className="common-settings-group" open>
         <summary className="common-settings-group__title">Logging</summary>
         <div className="common-settings-group__content">

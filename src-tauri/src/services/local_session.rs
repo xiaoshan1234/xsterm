@@ -99,35 +99,20 @@ pub fn create_local_session(
 
     // T6 `startup_command` + `startup_delay_ms` → fire-and-forget background
     // task that writes the startup command (followed by `\n`) to the PTY after
-    // the configured delay. Uses a tokio current-thread runtime so we can call
-    // `tokio::time::sleep` per the T6 spec.
+    // the configured delay. The closure runs on a `std::thread` (via
+    // `AppBackend::spawn`), so `std::thread::sleep` is the natural fit.
     if let Some(startup_command) = config.startup_command.clone() {
         let delay_ms = config.startup_delay_ms.unwrap_or(0);
         let startup_writer = Arc::clone(&writer);
         backend.spawn(Box::new(move || {
-            let rt = match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(rt) => rt,
-                Err(e) => {
-                    tracing::error!(
-                        "Failed to build tokio runtime for startup_command: {}",
-                        e
-                    );
-                    return;
-                }
-            };
-            rt.block_on(async move {
-                if delay_ms > 0 {
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                }
-                if let Ok(mut w) = startup_writer.lock() {
-                    let _ = w.write_all(startup_command.as_bytes());
-                    let _ = w.write_all(b"\n");
-                    let _ = w.flush();
-                }
-            });
+            if delay_ms > 0 {
+                std::thread::sleep(Duration::from_millis(delay_ms));
+            }
+            if let Ok(mut w) = startup_writer.lock() {
+                let _ = w.write_all(startup_command.as_bytes());
+                let _ = w.write_all(b"\n");
+                let _ = w.flush();
+            }
         }));
     }
 

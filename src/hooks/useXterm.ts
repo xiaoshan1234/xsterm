@@ -73,10 +73,11 @@ export function useXterm(
     themeRef.current = theme;
   }, [theme]);
 
-  // 在 containerRef 指向的 DOM 元素上创建 xterm 实例。
-  // 每个 Terminal 组件拥有独立的 xterm 实例，通过 ref 暴露给外部。
-  // FitAddon 同时加载到 xterm 上，用于根据容器尺寸自动调整终端大小。
-  // 组件卸载时调用 dispose() 销毁实例并将 ref 置空，防止内存泄漏。
+  // Create the xterm instance on the DOM element pointed to by `containerRef`.
+  // Each Terminal component owns its own xterm instance, exposed via refs to
+  // callers. FitAddon is loaded alongside xterm so the terminal auto-resizes
+  // to the container. `dispose()` is called on unmount and refs are reset to
+  // null to avoid leaking the terminal across re-mounts.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -100,14 +101,15 @@ export function useXterm(
     };
   }, [containerRef]);
 
-  // 主题变更时同步更新 xterm 实例的 theme 配置。
+  // Sync the xterm instance's theme configuration when the theme prop changes.
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;
     xterm.options.theme = themeToXtermTheme(theme);
   }, [theme]);
 
-  // Display options 变更时同步更新 xterm 实例的可热更新配置。
+  // Sync the xterm instance's hot-reloadable display options when any of the
+  // settable option keys change.
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;
@@ -128,6 +130,9 @@ export function useXterm(
     options.scrollback,
     options.lineHeight,
     options.letterSpacing,
+    // autoWrap is not part of xterm.js ITerminalOptions (it maps to
+    // `convertEol`), so we read it off the options bag as an untyped key to
+    // include it in the dependency list.
     (options as Record<string, unknown>).autoWrap,
   ]);
 

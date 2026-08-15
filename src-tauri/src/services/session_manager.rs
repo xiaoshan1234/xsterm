@@ -92,13 +92,11 @@ impl SessionManager {
             id,
         )?;
 
-        // Start per-session output logging. The wiring of the output stream
-        // into the log writer is deferred to a follow-up wave; for now the
-        // call acknowledges the configuration so the global tracing log
-        // records that this session requested logging.
+        // Acknowledge the session's logging configuration. The wiring of the
+        // output stream into the log writer is deferred to a follow-up wave;
+        // for now the call emits a tracing event when logging is enabled.
         let logging_config = SessionLoggingConfig::default();
-        let stub_writer: Box<dyn std::io::Write + Send> = Box::new(Vec::<u8>::new());
-        if let Err(e) = start_session_logging(id, &logging_config, stub_writer) {
+        if let Err(e) = start_session_logging(id, &logging_config) {
             tracing::warn!("Failed to start session logging for session {}: {}", id, e);
         }
 
@@ -120,11 +118,10 @@ impl SessionManager {
             id,
         )?;
 
-        // Start per-session output logging. See `create_local` for the
-        // rationale on the stub writer and the deferred wiring.
+        // Acknowledge the session's logging configuration. See `create_local`
+        // for the rationale on the deferred wiring.
         let logging_config = SessionLoggingConfig::default();
-        let stub_writer: Box<dyn std::io::Write + Send> = Box::new(Vec::<u8>::new());
-        if let Err(e) = start_session_logging(id, &logging_config, stub_writer) {
+        if let Err(e) = start_session_logging(id, &logging_config) {
             tracing::warn!("Failed to start session logging for session {}: {}", id, e);
         }
 

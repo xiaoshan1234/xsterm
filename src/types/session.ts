@@ -125,7 +125,7 @@ export interface SessionDisplayConfig {
   letterSpacing?: number;
   cursorWidth?: number;
 
-  // --- 时间戳 (Timestamp) ---
+  // Timestamp
   /** Show a timestamp prefix on each output line. @default false */
   lineTimestamp?: boolean;
   /** Format string for per-line timestamps (xterm datetime format). @default "[HH:mm:ss]" */
@@ -133,23 +133,23 @@ export interface SessionDisplayConfig {
   /** Full datetime format used when lineTimestamp is enabled. @default "yyyy-MM-dd HH:mm:ss" */
   dateTimeFormat?: string;
 
-  // --- 显示 (Display) ---
+  // Display
   /** Enable automatic line wrapping (DECAWM). @default true */
   autoWrap?: boolean;
   /** Invert foreground/background colors (DECSCNM). @default false */
   reverseVideo?: boolean;
 
-  // --- 鼠标 (Mouse) ---
+  // Mouse
   /** Number of lines scrolled per mouse wheel tick. @default 1 */
   mouseWheelScrollLines?: number;
 
-  // --- 窗口 (Window) ---
+  // Window
   /** Fit the terminal to the window on resize (DECFRS). @default true */
   fitOnResize?: boolean;
   /** Sync the window title with the remote terminal (DCS title). @default true */
   syncRemoteTitle?: boolean;
 
-  // --- 键盘 (Keyboard) ---
+  // Keyboard
   /** Backspace key sends BS or DEL. @default "auto" */
   backspaceSends?: "auto" | "backspace" | "delete";
   /** Delete key sends BS or DEL. @default "auto" */
@@ -165,19 +165,19 @@ export interface SessionDisplayConfig {
   /** Alt key sends the ESC prefix. @default true */
   altSendsEscape?: boolean;
 
-  // --- 分词 (Word Separation) ---
+  // Word Separation
   /** Characters that separate words for double-click selection. @default ` !@#$%^&*()_+-=[]{};:'",.<>/?` */
   wordSeparatorChars?: string;
   /** Word separators for alternate screen. Defaults to wordSeparatorChars when unset. */
   altScreenWordSeparatorChars?: string;
 
-  // --- 安全 (Security) ---
+  // Security
   /** Whether to allow the terminal to read from the clipboard. @default "ask" */
   clipboardRead?: "ask" | "allow" | "deny";
   /** Whether to allow the terminal to write to the clipboard. @default "ask" */
   clipboardWrite?: "ask" | "allow" | "deny";
 
-  // --- 日志 (Logging) ---
+  // Logging
   /** Session output logging configuration. */
   logging?: SessionLoggingConfig;
 }
