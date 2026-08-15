@@ -6,25 +6,32 @@ import "./LocalSessionForm.css";
 const isWindows = navigator.userAgent.toLowerCase().includes("windows") ||
   navigator.platform.toLowerCase().includes("win");
 
-const LOCAL_SHELLS = isWindows
-  ? [
-      { value: "", label: "Default (PowerShell)" },
-      { value: "powershell.exe", label: "PowerShell" },
-      { value: "pwsh.exe", label: "PowerShell 7" },
-      { value: "cmd.exe", label: "CMD" },
-      { value: "wsl.exe", label: "WSL (Default Distro)" },
-      { value: "wsl.exe -d Ubuntu", label: "WSL - Ubuntu" },
-      { value: "wsl.exe -d Debian", label: "WSL - Debian" },
-      { value: "wsl.exe -d Arch", label: "WSL - Arch" },
-    ]
-  : [
-      { value: "", label: "Default ($SHELL)" },
-      { value: "/bin/bash", label: "Bash" },
-      { value: "/bin/zsh", label: "Zsh" },
-      { value: "/bin/sh", label: "Sh" },
-    ];
+const SHELL_TEMPLATES: Array<{ value: string; label: string }> = [
+  { value: "", label: "Default (per OS)" },
+  { value: "powershell", label: "PowerShell" },
+  { value: "powershell7", label: "PowerShell 7" },
+  { value: "cmd", label: "CMD" },
+  { value: "wsl", label: "WSL (Default Distro)" },
+  { value: "bash", label: "Bash" },
+  { value: "zsh", label: "Zsh" },
+  { value: "sh", label: "Sh" },
+  { value: "custom", label: "Custom (specify path)" },
+];
+
+const TERM_TYPES = [
+  { value: "xterm-256color", label: "xterm-256color (recommended)" },
+  { value: "xterm", label: "xterm" },
+  { value: "vt100", label: "vt100" },
+  { value: "screen", label: "screen" },
+];
+
+const CHARSETS = [
+  { value: "utf-8", label: "UTF-8 (recommended)" },
+  { value: "gbk", label: "GBK" },
+];
 
 const CWD_PLACEHOLDER = isWindows ? "C:\\Users\\you or %USERPROFILE%" : "/home/user or ~";
+const SHELL_PATH_PLACEHOLDER = isWindows ? "C:\\path\\to\\shell.exe" : "/path/to/shell";
 
 interface LocalSessionFormProps {
   config: LocalSessionConfig;
@@ -45,6 +52,14 @@ function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
     }
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+// Empty input → undefined so backend #[serde(default)] takes over.
+function parseOptionalInt(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = parseInt(trimmed, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
 }
 
 export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSessionFormProps) {
@@ -69,18 +84,95 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
     });
   };
 
+  // Resolve the shellTemplate select value. Priority:
+  //   1. Explicit shellTemplate on the config (e.g. "powershell", "bash").
+  //   2. Infer "custom" when a free-form shell path is already set.
+  //   3. Empty string → "Default (per OS)" in the UI, undefined in state.
+  const shellTemplateValue: string = (() => {
+    if (config.shellTemplate) return config.shellTemplate;
+    if (config.shell) return "custom";
+    return "";
+  })();
+
   return (
     <>
-      <FormField label="Shell">
+      <FormField label="Shell Template">
         <select
-          value={config.shell || ""}
-          onChange={(e) => onChange({ ...config, shell: e.target.value || undefined })}
+          value={shellTemplateValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({
+              ...config,
+              shellTemplate: v === ""
+                ? undefined
+                : (v as NonNullable<LocalSessionConfig["shellTemplate"]>),
+            });
+          }}
         >
-          {LOCAL_SHELLS.map((s) => (
+          {SHELL_TEMPLATES.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
       </FormField>
+
+      {shellTemplateValue === "custom" && (
+        <FormField label="Shell Path">
+          <input
+            type="text"
+            placeholder={SHELL_PATH_PLACEHOLDER}
+            value={config.shell || ""}
+            onChange={(e) =>
+              onChange({ ...config, shell: e.target.value || undefined })
+            }
+          />
+        </FormField>
+      )}
+
+      <FormField label="Terminal Type">
+        <select
+          value={config.termType || "xterm-256color"}
+          onChange={(e) => onChange({ ...config, termType: e.target.value })}
+        >
+          {TERM_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+      </FormField>
+
+      <FormField label="Charset">
+        <select
+          value={config.charset || "utf-8"}
+          onChange={(e) => onChange({ ...config, charset: e.target.value })}
+        >
+          {CHARSETS.map((c) => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+      </FormField>
+
+      <FormField label="Startup Command">
+        <input
+          type="text"
+          placeholder='echo "Hello, world!"'
+          value={config.startupCommand || ""}
+          onChange={(e) =>
+            onChange({ ...config, startupCommand: e.target.value || undefined })
+          }
+        />
+      </FormField>
+
+      <FormField label="Startup Delay (ms)">
+        <input
+          type="number"
+          placeholder="0"
+          min={0}
+          value={config.startupDelayMs ?? ""}
+          onChange={(e) =>
+            onChange({ ...config, startupDelayMs: parseOptionalInt(e.target.value) })
+          }
+        />
+      </FormField>
+
       <FormField label="Initial Directory">
         <input
           type="text"
@@ -89,6 +181,7 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
           onChange={(e) => onChange({ ...config, cwd: e.target.value })}
         />
       </FormField>
+
       <FormField label="Arguments">
         <input
           type="text"
@@ -101,6 +194,7 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
           }}
         />
       </FormField>
+
       <FormField label="Environment Variables">
         <div className="env-vars-list">
           {envVars.map((env, index) => (

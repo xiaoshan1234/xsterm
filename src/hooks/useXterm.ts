@@ -33,6 +33,11 @@ export interface UseXtermResult {
 }
 
 // Keys we forward to xterm.options.set(); theme is handled separately.
+// xterm-unsupported fields (lineTimestamp, reverseVideo, mouseWheelScrollLines,
+// fitOnResize, syncRemoteTitle, backspaceSends, deleteSends, lineFeedMode,
+// cursorKeyMode, keypadMode, modifyOtherKeysFormat, altSendsEscape,
+// wordSeparatorChars, altScreenWordSeparatorChars, clipboardRead, clipboardWrite,
+// logging) are intentionally kept in config but NOT applied (avoid xterm throw).
 const SETTABLE_KEYS = [
   "fontSize",
   "fontFamily",
@@ -42,7 +47,13 @@ const SETTABLE_KEYS = [
   "scrollback",
   "lineHeight",
   "letterSpacing",
+  "autoWrap",
 ] as const;
+
+// Map spec field names to xterm.js option names where they differ.
+const XTERM_OPTION_MAP: Record<string, string> = {
+  autoWrap: "convertEol",
+};
 
 export function useXterm(
   containerRef: RefObject<HTMLDivElement | null>,
@@ -103,7 +114,8 @@ export function useXterm(
     for (const key of SETTABLE_KEYS) {
       const value = (options as Record<string, unknown>)[key];
       if (value !== undefined) {
-        (xterm.options as Record<string, unknown>)[key] = value;
+        const xtermKey = XTERM_OPTION_MAP[key] ?? key;
+        (xterm.options as Record<string, unknown>)[xtermKey] = value;
       }
     }
     xterm.refresh(0, xterm.rows - 1);
@@ -116,6 +128,7 @@ export function useXterm(
     options.scrollback,
     options.lineHeight,
     options.letterSpacing,
+    (options as Record<string, unknown>).autoWrap,
   ]);
 
   return { termRef, fitAddonRef };

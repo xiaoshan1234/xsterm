@@ -16,6 +16,10 @@ interface SshOpts {
   initialCols?: number;
   keepaliveInterval?: number;
   connectionTimeout?: number;
+  tcpNoDelay?: boolean;
+  soKeepalive?: boolean;
+  nullPacketKeepalive?: boolean;
+  charset?: string;
   enableCompression?: boolean;
   knownHostsPath?: string;
   proxyJump?: string;
@@ -55,6 +59,10 @@ export function SshSessionForm({
     initialCols: config.initialCols,
     keepaliveInterval: config.keepaliveInterval,
     connectionTimeout: config.connectionTimeout,
+    tcpNoDelay: config.tcpNoDelay,
+    soKeepalive: config.soKeepalive,
+    nullPacketKeepalive: config.nullPacketKeepalive,
+    charset: config.charset,
     enableCompression: config.enableCompression,
     knownHostsPath: config.knownHostsPath,
     proxyJump: config.proxyJump,
@@ -173,6 +181,15 @@ export function SshSessionForm({
               onChange={(e) => updateOpts({ proxyJump: e.target.value })}
             />
           </FormField>
+          <FormField label="Charset">
+            <select
+              value={sshOpts.charset || "utf-8"}
+              onChange={(e) => updateOpts({ charset: e.target.value })}
+            >
+              <option value="utf-8">utf-8</option>
+              <option value="gbk">gbk</option>
+            </select>
+          </FormField>
         </>
       )}
       {showSystem && (
@@ -249,6 +266,29 @@ export function SshSessionForm({
                     updateOpts({
                       connectionTimeout: parseOptionalInt(e.target.value),
                     })
+                  }
+                />
+              </FormField>
+              <FormField label="TCP No Delay (disable Nagle)">
+                <input
+                  type="checkbox"
+                  checked={sshOpts.tcpNoDelay ?? true}
+                  onChange={(e) => updateOpts({ tcpNoDelay: e.target.checked })}
+                />
+              </FormField>
+              <FormField label="SO Keepalive">
+                <input
+                  type="checkbox"
+                  checked={sshOpts.soKeepalive ?? false}
+                  onChange={(e) => updateOpts({ soKeepalive: e.target.checked })}
+                />
+              </FormField>
+              <FormField label="Null Packet Keepalive">
+                <input
+                  type="checkbox"
+                  checked={sshOpts.nullPacketKeepalive ?? false}
+                  onChange={(e) =>
+                    updateOpts({ nullPacketKeepalive: e.target.checked })
                   }
                 />
               </FormField>
