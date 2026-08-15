@@ -17,6 +17,7 @@ import {
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
 import { DisplayConfigForm } from "./DisplayConfigForm";
+import { CommonSettingsForm } from "./CommonSettingsForm";
 import {
   SessionFormLayout,
   SessionFormSidebarItem,
@@ -32,7 +33,7 @@ interface EditSessionDialogProps {
   onSave: (config: SavedSessionConfig, groupId: number | null) => void;
 }
 
-type EditSectionId = "general" | "link" | "system" | "display";
+type EditSectionId = "general" | "link" | "system" | "common" | "display";
 
 const FIRST_SECTION_BY_TYPE: Record<"local" | "ssh", EditSectionId> = {
   local: "general",
@@ -58,11 +59,13 @@ interface SidebarDef {
 const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
   local: [
     { id: "general", label: "General", icon: <LocalSessionIcon size={16} /> },
+    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
     { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
   ],
   ssh: [
     { id: "link", label: "Link", icon: <SshSessionIcon size={16} /> },
     { id: "system", label: "System", icon: <SettingsIcon size={16} /> },
+    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
     { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
   ],
 };
@@ -193,6 +196,15 @@ export function EditSessionDialog({
           config={sshConfig}
           onChange={setSshConfig}
           section="system"
+        />
+      );
+    }
+
+    if (sectionId === "common") {
+      return (
+        <CommonSettingsForm
+          config={displayConfig}
+          onChange={setDisplayConfig}
         />
       );
     }

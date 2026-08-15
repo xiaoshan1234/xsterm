@@ -17,6 +17,7 @@ import {
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
 import { DisplayConfigForm } from "./DisplayConfigForm";
+import { CommonSettingsForm } from "./CommonSettingsForm";
 import {
   SessionFormLayout,
   SessionFormSidebarItem,
@@ -42,7 +43,7 @@ interface CreateSessionDialogProps {
 }
 
 type TopTab = "local" | "ssh";
-type SectionId = "general" | "link" | "system" | "display";
+type SectionId = "general" | "link" | "system" | "display" | "common";
 
 const FIRST_SECTION: Record<TopTab, SectionId> = {
   local: "general",
@@ -68,11 +69,13 @@ interface SidebarItemDef {
 const SIDEBAR_ITEMS: Record<TopTab, SidebarItemDef[]> = {
   local: [
     { id: "general", label: "General", icon: <LocalSessionIcon size={16} /> },
+    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
     { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
   ],
   ssh: [
     { id: "link", label: "Link", icon: <SshSessionIcon size={16} /> },
     { id: "system", label: "System", icon: <SettingsIcon size={16} /> },
+    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
     { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
   ],
 };
@@ -130,7 +133,7 @@ export default function CreateSessionDialog({
     setSectionId(id);
     if (id === "general") setConnectionType("local");
     else if (id === "link" || id === "system") setConnectionType("ssh");
-    // "display" is shared; leave connectionType as-is
+    // "display" and "common" are shared; leave connectionType as-is
   };
 
   const handleCreate = async () => {
@@ -235,6 +238,13 @@ export default function CreateSessionDialog({
             config={sshConfig}
             onChange={setSshConfig}
             section="system"
+          />
+        );
+      case "common":
+        return (
+          <CommonSettingsForm
+            config={displayConfig}
+            onChange={setDisplayConfig}
           />
         );
       case "display":
