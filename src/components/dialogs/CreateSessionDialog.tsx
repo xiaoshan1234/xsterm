@@ -12,6 +12,7 @@ import {
   LocalSessionIcon,
   SshSessionIcon,
   LayoutIcon,
+  LogIcon,
   SettingsIcon,
 } from "../icons/Icon";
 import { LocalSessionForm } from "./LocalSessionForm";
@@ -43,11 +44,17 @@ interface CreateSessionDialogProps {
 }
 
 type TopTab = "local" | "ssh";
-type SectionId = "general" | "link" | "system" | "display" | "common";
+type SectionId =
+  | "session"
+  | "displayLayout"
+  | "keyboard"
+  | "security"
+  | "logging"
+  | "process";
 
 const FIRST_SECTION: Record<TopTab, SectionId> = {
-  local: "general",
-  ssh: "link",
+  local: "session",
+  ssh: "session",
 };
 
 const DEFAULT_SSH: SSHSessionConfig = {
@@ -68,15 +75,19 @@ interface SidebarItemDef {
 
 const SIDEBAR_ITEMS: Record<TopTab, SidebarItemDef[]> = {
   local: [
-    { id: "general", label: "General", icon: <LocalSessionIcon size={16} /> },
-    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
-    { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
+    { id: "session", label: "会话", icon: <LocalSessionIcon size={16} /> },
+    { id: "displayLayout", label: "显示与布局", icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: "键盘与输入", icon: <SettingsIcon size={16} /> },
+    { id: "security", label: "安全", icon: <SettingsIcon size={16} /> },
+    { id: "logging", label: "日志", icon: <LogIcon size={16} /> },
+    { id: "process", label: "进程", icon: <SettingsIcon size={16} /> },
   ],
   ssh: [
-    { id: "link", label: "Link", icon: <SshSessionIcon size={16} /> },
-    { id: "system", label: "System", icon: <SettingsIcon size={16} /> },
-    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
-    { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
+    { id: "session", label: "会话", icon: <SshSessionIcon size={16} /> },
+    { id: "displayLayout", label: "显示与布局", icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: "键盘与输入", icon: <SettingsIcon size={16} /> },
+    { id: "security", label: "安全", icon: <SettingsIcon size={16} /> },
+    { id: "logging", label: "日志", icon: <LogIcon size={16} /> },
   ],
 };
 
@@ -94,11 +105,6 @@ export default function CreateSessionDialog({
   const [sectionId, setSectionId] = useState<SectionId>(
     FIRST_SECTION[initialTab],
   );
-  // Track which connection type the user is configuring so Create still works
-  // when they're on the (shared) Display panel.
-  const [connectionType, setConnectionType] = useState<"local" | "ssh">(
-    initialTab,
-  );
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [saveConfig, setSaveConfig] = useState(true);
   const [name, setName] = useState("");
@@ -113,7 +119,6 @@ export default function CreateSessionDialog({
     if (isOpen) {
       setTopTab(initialTab);
       setSectionId(FIRST_SECTION[initialTab]);
-      setConnectionType(initialTab);
       setSelectedGroupId(initialGroupId ?? null);
       setError("");
       setName("");
@@ -126,14 +131,10 @@ export default function CreateSessionDialog({
   const handleTopTabChange = (next: TopTab) => {
     setTopTab(next);
     setSectionId(FIRST_SECTION[next]);
-    setConnectionType(next);
   };
 
   const handleSectionChange = (id: SectionId) => {
     setSectionId(id);
-    if (id === "general") setConnectionType("local");
-    else if (id === "link" || id === "system") setConnectionType("ssh");
-    // "display" and "common" are shared; leave connectionType as-is
   };
 
   const handleCreate = async () => {
@@ -141,7 +142,7 @@ export default function CreateSessionDialog({
     let session: Session;
 
     try {
-      if (connectionType === "ssh") {
+      if (topTab === "ssh") {
         const validationError = validateSshConfig(sshConfig);
         if (validationError) {
           setError(validationError);
@@ -202,62 +203,85 @@ export default function CreateSessionDialog({
   );
 
   const renderPanelContent = () => {
-    switch (sectionId) {
-      case "general":
+    if (sectionId === "session") {
+      if (topTab === "ssh") {
         return (
           <>
-            {connectionType === "local" && error && (
-              <div className="dialog-error">{error}</div>
-            )}
+            {error && <div className="dialog-error">{error}</div>}
             {sessionNameField}
             {groupSelector}
-            <LocalSessionForm
-              config={localConfig}
-              onChange={setLocalConfig}
-            />
+            <SshSessionForm config={sshConfig} onChange={setSshConfig} />
           </>
         );
-      case "link":
-        return (
-          <>
-            {connectionType === "ssh" && error && (
-              <div className="dialog-error">{error}</div>
-            )}
-            {sessionNameField}
-            {groupSelector}
-            <SshSessionForm
-              config={sshConfig}
-              onChange={setSshConfig}
-              section="link"
-            />
-          </>
-        );
-      case "system":
-        return (
-          <SshSessionForm
-            config={sshConfig}
-            onChange={setSshConfig}
-            section="system"
+      }
+      return (
+        <>
+          {error && <div className="dialog-error">{error}</div>}
+          {sessionNameField}
+          {groupSelector}
+          <LocalSessionForm
+            config={localConfig}
+            onChange={setLocalConfig}
+            section="session"
           />
-        );
-      case "common":
-        return (
+        </>
+      );
+    }
+
+    if (sectionId === "displayLayout") {
+      return (
+        <div className="display-grid">
           <CommonSettingsForm
             config={displayConfig}
             onChange={setDisplayConfig}
+            section="display"
           />
-        );
-      case "display":
-      default:
-        return (
-          <div className="display-grid">
-            <DisplayConfigForm
-              config={displayConfig}
-              onChange={setDisplayConfig}
-            />
-          </div>
-        );
+          <DisplayConfigForm
+            config={displayConfig}
+            onChange={setDisplayConfig}
+          />
+        </div>
+      );
     }
+
+    if (sectionId === "keyboard") {
+      return (
+        <CommonSettingsForm
+          config={displayConfig}
+          onChange={setDisplayConfig}
+          section="keyboard"
+        />
+      );
+    }
+
+    if (sectionId === "security") {
+      return (
+        <CommonSettingsForm
+          config={displayConfig}
+          onChange={setDisplayConfig}
+          section="security"
+        />
+      );
+    }
+
+    if (sectionId === "logging") {
+      return (
+        <CommonSettingsForm
+          config={displayConfig}
+          onChange={setDisplayConfig}
+          section="logging"
+        />
+      );
+    }
+
+    // "process" (Shell only — SSH tab never reaches this branch).
+    return (
+      <LocalSessionForm
+        config={localConfig}
+        onChange={setLocalConfig}
+        section="process"
+      />
+    );
   };
 
   const sidebarItems = SIDEBAR_ITEMS[topTab];

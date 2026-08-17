@@ -37,6 +37,14 @@ interface LocalSessionFormProps {
   config: LocalSessionConfig;
   onChange: (config: LocalSessionConfig) => void;
   mode?: "create" | "edit";
+  /**
+   * When set, render only the matching sub-group:
+   *   - "session" → shellTemplate + conditional Shell Path
+   *   - "process" → terminal type / charset / startup command+delay /
+   *                  cwd / args / env vars
+   * When undefined, render all fields (backward-compatible default).
+   */
+  section?: "session" | "process";
 }
 
 interface EnvVar {
@@ -62,7 +70,7 @@ function parseOptionalInt(value: string): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSessionFormProps) {
+export function LocalSessionForm({ config, onChange, mode = "create", section }: LocalSessionFormProps) {
   const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
     const env = config.envConfig?.env || {};
     return (Object.entries(env) as [string, string][]).map(([key, value]) => ({ key, value }));
@@ -95,150 +103,161 @@ export function LocalSessionForm({ config, onChange, mode = "create" }: LocalSes
     return "";
   })();
 
+  const showSession = !section || section === "session";
+  const showProcess = !section || section === "process";
+
   return (
     <>
-      <FormField label="Shell Template">
-        <select
-          value={shellTemplateValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange({
-              ...config,
-              shellTemplate: v === ""
-                ? undefined
-                : (v as NonNullable<LocalSessionConfig["shellTemplate"]>),
-            });
-          }}
-        >
-          {SHELL_TEMPLATES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-      </FormField>
+      {showSession && (
+        <>
+          <FormField label="Shell Template">
+            <select
+              value={shellTemplateValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange({
+                  ...config,
+                  shellTemplate: v === ""
+                    ? undefined
+                    : (v as NonNullable<LocalSessionConfig["shellTemplate"]>),
+                });
+              }}
+            >
+              {SHELL_TEMPLATES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </FormField>
 
-      {shellTemplateValue === "custom" && (
-        <FormField label="Shell Path">
-          <input
-            type="text"
-            placeholder={SHELL_PATH_PLACEHOLDER}
-            value={config.shell || ""}
-            onChange={(e) =>
-              onChange({ ...config, shell: e.target.value || undefined })
-            }
-          />
-        </FormField>
+          {shellTemplateValue === "custom" && (
+            <FormField label="Shell Path">
+              <input
+                type="text"
+                placeholder={SHELL_PATH_PLACEHOLDER}
+                value={config.shell || ""}
+                onChange={(e) =>
+                  onChange({ ...config, shell: e.target.value || undefined })
+                }
+              />
+            </FormField>
+          )}
+        </>
       )}
 
-      <FormField label="Terminal Type">
-        <select
-          value={config.termType || "xterm-256color"}
-          onChange={(e) => onChange({ ...config, termType: e.target.value })}
-        >
-          {TERM_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
-      </FormField>
+      {showProcess && (
+        <>
+          <FormField label="Terminal Type">
+            <select
+              value={config.termType || "xterm-256color"}
+              onChange={(e) => onChange({ ...config, termType: e.target.value })}
+            >
+              {TERM_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </FormField>
 
-      <FormField label="Charset">
-        <select
-          value={config.charset || "utf-8"}
-          onChange={(e) => onChange({ ...config, charset: e.target.value })}
-        >
-          {CHARSETS.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-      </FormField>
+          <FormField label="Charset">
+            <select
+              value={config.charset || "utf-8"}
+              onChange={(e) => onChange({ ...config, charset: e.target.value })}
+            >
+              {CHARSETS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </FormField>
 
-      <FormField label="Startup Command">
-        <input
-          type="text"
-          placeholder='echo "Hello, world!"'
-          value={config.startupCommand || ""}
-          onChange={(e) =>
-            onChange({ ...config, startupCommand: e.target.value || undefined })
-          }
-        />
-      </FormField>
+          <FormField label="Startup Command">
+            <input
+              type="text"
+              placeholder='echo "Hello, world!"'
+              value={config.startupCommand || ""}
+              onChange={(e) =>
+                onChange({ ...config, startupCommand: e.target.value || undefined })
+              }
+            />
+          </FormField>
 
-      <FormField label="Startup Delay (ms)">
-        <input
-          type="number"
-          placeholder="0"
-          min={0}
-          value={config.startupDelayMs ?? ""}
-          onChange={(e) =>
-            onChange({ ...config, startupDelayMs: parseOptionalInt(e.target.value) })
-          }
-        />
-      </FormField>
+          <FormField label="Startup Delay (ms)">
+            <input
+              type="number"
+              placeholder="0"
+              min={0}
+              value={config.startupDelayMs ?? ""}
+              onChange={(e) =>
+                onChange({ ...config, startupDelayMs: parseOptionalInt(e.target.value) })
+              }
+            />
+          </FormField>
 
-      <FormField label="Initial Directory">
-        <input
-          type="text"
-          placeholder={CWD_PLACEHOLDER}
-          value={config.cwd || ""}
-          onChange={(e) => onChange({ ...config, cwd: e.target.value })}
-        />
-      </FormField>
+          <FormField label="Initial Directory">
+            <input
+              type="text"
+              placeholder={CWD_PLACEHOLDER}
+              value={config.cwd || ""}
+              onChange={(e) => onChange({ ...config, cwd: e.target.value })}
+            />
+          </FormField>
 
-      <FormField label="Arguments">
-        <input
-          type="text"
-          placeholder="--cd /home/user (space separated)"
-          value={config.args?.join(" ") || ""}
-          onChange={(e) => {
-            const value = e.target.value;
-            const args = value.trim() ? value.split(/\s+/) : undefined;
-            onChange({ ...config, args });
-          }}
-        />
-      </FormField>
+          <FormField label="Arguments">
+            <input
+              type="text"
+              placeholder="--cd /home/user (space separated)"
+              value={config.args?.join(" ") || ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                const args = value.trim() ? value.split(/\s+/) : undefined;
+                onChange({ ...config, args });
+              }}
+            />
+          </FormField>
 
-      <FormField label="Environment Variables">
-        <div className="env-vars-list">
-          {envVars.map((env, index) => (
-            <div key={index} className="env-var-row">
-              <input
-                type="text"
-                placeholder="KEY"
-                value={env.key}
-                onChange={(e) => {
-                  const next = [...envVars];
-                  next[index] = { ...env, key: e.target.value };
-                  updateEnvVars(next);
-                }}
-              />
-              <input
-                type="text"
-                placeholder="VALUE"
-                value={env.value}
-                onChange={(e) => {
-                  const next = [...envVars];
-                  next[index] = { ...env, value: e.target.value };
-                  updateEnvVars(next);
-                }}
-              />
+          <FormField label="Environment Variables">
+            <div className="env-vars-list">
+              {envVars.map((env, index) => (
+                <div key={index} className="env-var-row">
+                  <input
+                    type="text"
+                    placeholder="KEY"
+                    value={env.key}
+                    onChange={(e) => {
+                      const next = [...envVars];
+                      next[index] = { ...env, key: e.target.value };
+                      updateEnvVars(next);
+                    }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="VALUE"
+                    value={env.value}
+                    onChange={(e) => {
+                      const next = [...envVars];
+                      next[index] = { ...env, value: e.target.value };
+                      updateEnvVars(next);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = envVars.filter((_, i) => i !== index);
+                      updateEnvVars(next);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
               <button
                 type="button"
-                onClick={() => {
-                  const next = envVars.filter((_, i) => i !== index);
-                  updateEnvVars(next);
-                }}
+                onClick={() => updateEnvVars([...envVars, { key: "", value: "" }])}
               >
-                Remove
+                Add Variable
               </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => updateEnvVars([...envVars, { key: "", value: "" }])}
-          >
-            Add Variable
-          </button>
-        </div>
-      </FormField>
+          </FormField>
+        </>
+      )}
     </>
   );
 }

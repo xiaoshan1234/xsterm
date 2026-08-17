@@ -12,6 +12,7 @@ import {
   LocalSessionIcon,
   SshSessionIcon,
   LayoutIcon,
+  LogIcon,
   SettingsIcon,
 } from "../icons/Icon";
 import { LocalSessionForm } from "./LocalSessionForm";
@@ -33,11 +34,17 @@ interface EditSessionDialogProps {
   onSave: (config: SavedSessionConfig, groupId: number | null) => void;
 }
 
-type EditSectionId = "general" | "link" | "system" | "common" | "display";
+type EditSectionId =
+  | "session"
+  | "displayLayout"
+  | "keyboard"
+  | "security"
+  | "logging"
+  | "process";
 
 const FIRST_SECTION_BY_TYPE: Record<"local" | "ssh", EditSectionId> = {
-  local: "general",
-  ssh: "link",
+  local: "session",
+  ssh: "session",
 };
 
 const DEFAULT_SSH: SSHSessionConfig = {
@@ -58,15 +65,19 @@ interface SidebarDef {
 
 const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
   local: [
-    { id: "general", label: "General", icon: <LocalSessionIcon size={16} /> },
-    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
-    { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
+    { id: "session", label: "会话", icon: <LocalSessionIcon size={16} /> },
+    { id: "displayLayout", label: "显示与布局", icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: "键盘与输入", icon: <SettingsIcon size={16} /> },
+    { id: "security", label: "安全", icon: <SettingsIcon size={16} /> },
+    { id: "logging", label: "日志", icon: <LogIcon size={16} /> },
+    { id: "process", label: "进程", icon: <SettingsIcon size={16} /> },
   ],
   ssh: [
-    { id: "link", label: "Link", icon: <SshSessionIcon size={16} /> },
-    { id: "system", label: "System", icon: <SettingsIcon size={16} /> },
-    { id: "common", label: "Common", icon: <SettingsIcon size={16} /> },
-    { id: "display", label: "Display", icon: <LayoutIcon size={16} /> },
+    { id: "session", label: "会话", icon: <SshSessionIcon size={16} /> },
+    { id: "displayLayout", label: "显示与布局", icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: "键盘与输入", icon: <SettingsIcon size={16} /> },
+    { id: "security", label: "安全", icon: <SettingsIcon size={16} /> },
+    { id: "logging", label: "日志", icon: <LogIcon size={16} /> },
   ],
 };
 
@@ -114,7 +125,7 @@ export function EditSessionDialog({
       const validationError = validateSshConfig(sshConfig);
       if (validationError) {
         setSshError(validationError);
-        setSectionId("link");
+        setSectionId("session");
         return;
       }
     }
@@ -162,9 +173,43 @@ export function EditSessionDialog({
   );
 
   const renderPanelContent = () => {
-    if (sectionId === "display") {
+    if (sectionId === "session") {
+      if (config.type === "ssh") {
+        return (
+          <>
+            {sshError && <div className="dialog-error">{sshError}</div>}
+            {nameAndGroupFields}
+            <SshSessionForm
+              config={sshConfig}
+              onChange={(cfg) => {
+                setSshConfig(cfg);
+                setSshError("");
+              }}
+            />
+          </>
+        );
+      }
+      return (
+        <>
+          {nameAndGroupFields}
+          <LocalSessionForm
+            config={localConfig}
+            onChange={setLocalConfig}
+            mode="edit"
+            section="session"
+          />
+        </>
+      );
+    }
+
+    if (sectionId === "displayLayout") {
       return (
         <div className="display-grid">
+          <CommonSettingsForm
+            config={displayConfig}
+            onChange={setDisplayConfig}
+            section="display"
+          />
           <DisplayConfigForm
             config={displayConfig}
             onChange={setDisplayConfig}
@@ -173,52 +218,44 @@ export function EditSessionDialog({
       );
     }
 
-    if (sectionId === "link") {
-      return (
-        <>
-          {sshError && <div className="dialog-error">{sshError}</div>}
-          {nameAndGroupFields}
-          <SshSessionForm
-            config={sshConfig}
-            onChange={(cfg) => {
-              setSshConfig(cfg);
-              setSshError("");
-            }}
-            section="link"
-          />
-        </>
-      );
-    }
-
-    if (sectionId === "system") {
-      return (
-        <SshSessionForm
-          config={sshConfig}
-          onChange={setSshConfig}
-          section="system"
-        />
-      );
-    }
-
-    if (sectionId === "common") {
+    if (sectionId === "keyboard") {
       return (
         <CommonSettingsForm
           config={displayConfig}
           onChange={setDisplayConfig}
+          section="keyboard"
         />
       );
     }
 
-    // general (local)
-    return (
-      <>
-        {nameAndGroupFields}
-        <LocalSessionForm
-          config={localConfig}
-          onChange={setLocalConfig}
-          mode="edit"
+    if (sectionId === "security") {
+      return (
+        <CommonSettingsForm
+          config={displayConfig}
+          onChange={setDisplayConfig}
+          section="security"
         />
-      </>
+      );
+    }
+
+    if (sectionId === "logging") {
+      return (
+        <CommonSettingsForm
+          config={displayConfig}
+          onChange={setDisplayConfig}
+          section="logging"
+        />
+      );
+    }
+
+    // "process" (Shell only — config.type === "ssh" never reaches here).
+    return (
+      <LocalSessionForm
+        config={localConfig}
+        onChange={setLocalConfig}
+        mode="edit"
+        section="process"
+      />
     );
   };
 

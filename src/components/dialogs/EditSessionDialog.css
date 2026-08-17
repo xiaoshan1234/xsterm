@@ -13,7 +13,10 @@
   overflow: hidden;
 }
 
-.session-form-layout .dialog-sidebar,
-.session-form-layout .dialog-panel {
+.session-form-layout .dialog-sidebar {
   overflow: hidden;
+}
+.session-form-layout .dialog-panel {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
