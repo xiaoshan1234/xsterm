@@ -4,8 +4,8 @@
 .navbar {
   display: flex;
   align-items: center;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  background: var(--canvas);
+  border-bottom: 1px solid var(--hairline);
   height: 28px;
   line-height: 28px;
   flex-shrink: 0;
@@ -45,15 +45,17 @@
   height: 100%;
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  color: var(--body);
   font-size: 12px;
+  font-family: inherit;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .navbar-item:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
+  background: var(--bg-hover);
+  color: var(--ink);
 }
 
 .navbar-item:focus {
@@ -85,19 +87,21 @@
   height: 100%;
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  color: var(--body);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .window-control:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
+  background: var(--bg-hover);
+  color: var(--ink);
 }
 
+/* Windows-style close: keep the OS-conventional red. */
 .window-control--close:hover {
-  background: #e81123;
-  color: #ffffff;
+  background: var(--close-hover);
+  color: var(--text-on-accent);
 }
 
 .window-control:focus {

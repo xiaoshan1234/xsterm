@@ -1,7 +1,7 @@
 .dialog-tabs {
   display: flex;
   padding: 0 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--hairline);
   margin: 0 -20px;
   flex-shrink: 0;
 }
@@ -12,19 +12,22 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--body);
   font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
   text-align: center;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
 .dialog-tab:hover {
-  color: var(--text-primary);
+  color: var(--ink);
+  background: var(--bg-hover);
 }
 
 .dialog-tab.active {
-  color: var(--text-primary);
+  color: var(--ink);
   border-bottom-color: var(--accent);
 }
 

@@ -1,19 +1,68 @@
 :root {
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #252526;
-  --bg-tertiary: #2d2d2d;
-  --bg-hover: #3a3a3a;
-  --bg-active: #37373d;
-  --border-color: #3a3a3a;
-  --text-primary: #ffffff;
-  --text-secondary: #d4d4d4;
-  --text-muted: #808080;
-  --accent: #0e639c;
-  --accent-hover: #1177bb;
-  --error: #f14c4c;
-  --error-bg: rgba(249, 76, 76, 0.1);
-  --font-stack: "Segoe UI", "Noto Sans", sans-serif;
-  --font-mono: Menlo, Monaco, "Courier New", monospace;
+  /* === Surfaces (warm dark IDE, adapted from Cursor cream) === */
+  --canvas:           #1a1a1a;   /* base app bg */
+  --canvas-soft:      #1f1f1f;   /* IDE-pane style soft surface */
+  --surface-card:     #242424;   /* cards, dialog content */
+  --surface-strong:   #2e2e2e;   /* badges, tag pills */
+  --bg-hover:          #2a2a2a;   /* hover on interactive elements */
+  --bg-active:        #333333;   /* pressed/active */
+
+  /* === Hairlines (replaces borders + shadows) === */
+  --hairline:         #2e2e2e;   /* default 1px divider */
+  --hairline-soft:    #262626;   /* lighter divider */
+  --hairline-strong:  #3a3a3a;   /* panel outline, button border */
+
+  /* === Text === */
+  --ink:              #e8e6e0;   /* display, headings, primary text (warm) */
+  --body:             #b8b6b0;   /* default body */
+  --muted:            #7a7a78;   /* sub-titles */
+  --muted-soft:       #4a4a48;   /* disabled */
+  --text-on-accent:   #ffffff;
+
+  /* === Accent (Cursor Orange replaces VSCode blue) === */
+  --accent:           #f54e00;   /* primary CTA, links, focus */
+  --accent-hover:     #ff5e1a;
+  --accent-active:    #d04200;   /* pressed */
+  --accent-soft:      rgba(245, 78, 0, 0.12); /* focus halo, selection */
+
+  /* === Semantic === */
+  --error:            #cf2d56;   /* Cursor semantic-error */
+  --error-bg:         rgba(207, 45, 86, 0.12);
+  --success:          #1f8a65;
+  --success-bg:       rgba(31, 138, 101, 0.12);
+  --warning:          #f0a020;
+  --warning-bg:       rgba(240, 160, 32, 0.12);
+
+  /* === Typography === */
+  --font-ui:          "Inter", "Segoe UI", system-ui, -apple-system,
+                       "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono:        "JetBrains Mono", "Fira Code", "IBM Plex Mono",
+                       Menlo, Monaco, "Courier New", monospace;
+
+  /* === Spacing (4px base, matches Cursor) === */
+  --space-xxs:        4px;
+  --space-xs:         8px;
+  --space-sm:         12px;
+  --space-base:       16px;
+  --space-md:         20px;
+  --space-lg:         24px;
+  --space-xl:         32px;
+  --space-xxl:        48px;
+  --space-section:    80px;
+
+  /* === Radius (matches Cursor) === */
+  --radius-xs:        4px;   /* inline tags */
+  --radius-sm:        6px;   /* compact rows */
+  --radius-md:        8px;   /* buttons, inputs */
+  --radius-lg:        12px;  /* cards, dialogs */
+  --radius-xl:        16px;  /* feature cards (rare) */
+  --radius-pill:      9999px;
+
+  /* === Window control colors (special-case) === */
+  --close-hover:      #e81123;   /* keep Windows-style red on close hover */
+
+  /* === Overlay === */
+  --overlay:          rgba(0, 0, 0, 0.55);
 }
 
 * {
@@ -26,9 +75,9 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-primary);
-  font-family: var(--font-stack);
-  color: var(--text-secondary);
+  background: var(--canvas);
+  font-family: var(--font-ui);
+  color: var(--body);
 }
 
 .app-container {
@@ -55,30 +104,37 @@ html, body, #root {
 /* Buttons */
 .btn {
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   border: none;
+  font-family: inherit;
 }
 
 .btn--primary {
   background: var(--accent);
-  color: var(--text-primary);
+  color: var(--text-on-accent);
 }
 
 .btn--primary:hover {
   background: var(--accent-hover);
 }
 
+.btn--primary:active {
+  background: var(--accent-active);
+}
+
 .btn--secondary {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink);
 }
 
 .btn--secondary:hover {
   background: var(--bg-hover);
+  border-color: var(--muted-soft);
 }
 
 /* Form elements */
@@ -86,18 +142,23 @@ html, body, #root {
 .form-field select {
   width: 100%;
   padding: 8px 12px;
-  background: #3c3c3c;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink);
   font-size: 14px;
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
+  font-family: var(--font-ui);
 }
 
+/* NOTE: the SVG arrow inside the select's background-image embeds a
+ * literal hex (#b8b6b0 == --body). CSS variables cannot be expanded
+ * inside a data: URI, so this is the single intentional hardcoded
+ * color in the file -- it is an asset, not a style property. */
 .form-field select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23d4d4d4' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b8b6b0' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 32px;
@@ -110,7 +171,7 @@ html, body, #root {
 }
 
 .form-field input::placeholder {
-  color: var(--text-muted);
+  color: var(--muted);
 }
 
 /* Override the text-input styling for checkboxes inside .form-field, otherwise
@@ -147,5 +208,5 @@ html, body, #root {
 
 .checkbox-group span {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--body);
 }

@@ -10,22 +10,22 @@
   min-height: 0;
   padding: 32px;
   box-sizing: border-box;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 0px;
+  background: var(--canvas-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
   overflow: auto;
 }
 
 .pane-init-card-title {
   font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 500;
+  color: var(--ink);
   margin: 0;
 }
 
 .pane-init-card-subtitle {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--body);
   margin: 0;
 }
 
@@ -44,10 +44,10 @@
   gap: 12px;
   width: 120px;
   padding: 24px 16px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-secondary);
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  color: var(--body);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
@@ -55,7 +55,7 @@
 .pane-init-card-option:hover {
   background: var(--bg-hover);
   border-color: var(--accent);
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
 .pane-init-card-option-label {

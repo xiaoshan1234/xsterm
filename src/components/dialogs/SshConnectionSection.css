@@ -1,6 +1,6 @@
 /* SshConnectionSection — collapsible sub-groups for the SSH Connection
  * sidebar panel. Visual style mirrors the groups in
- * CommonSettingsForm.css (border + bg-tertiary + accent chevron). */
+ * CommonSettingsForm.css (border + surface-card + accent chevron). */
 
 .ssh-connection-section {
   display: flex;
@@ -9,26 +9,21 @@
 }
 
 .ssh-connection-group {
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--bg-tertiary);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 .ssh-connection-group__title {
   position: relative;
   padding: 11px 14px 11px 18px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.02em;
-  color: var(--text-primary);
-  background: linear-gradient(
-    180deg,
-    var(--bg-active) 0%,
-    color-mix(in srgb, var(--bg-active) 88%, var(--bg-primary) 12%) 100%
-  );
-  border-bottom: 1px solid var(--border-color);
+  color: var(--ink);
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--hairline);
   cursor: pointer;
   user-select: none;
   list-style: none;
@@ -46,33 +41,25 @@
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: 2px;
   background: var(--accent);
-  opacity: 0.65;
+  opacity: 0.7;
   transition: width 0.15s ease, opacity 0.15s ease;
 }
 
 .ssh-connection-group:hover .ssh-connection-group__title {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-active) 92%, var(--accent) 8%) 0%,
-    var(--bg-active) 100%
-  );
-  color: var(--text-primary);
+  background: var(--bg-hover);
+  color: var(--ink);
 }
 
 .ssh-connection-group:hover .ssh-connection-group__title::after,
 .ssh-connection-group[open] > .ssh-connection-group__title::after {
-  width: 4px;
+  width: 3px;
   opacity: 1;
 }
 
 .ssh-connection-group[open] > .ssh-connection-group__title {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-active) 88%, var(--accent) 12%) 0%,
-    var(--bg-active) 100%
-  );
+  background: var(--accent-soft);
 }
 
 /* Custom disclosure marker (replaces default triangle) */
@@ -87,7 +74,6 @@
   transition: transform 0.2s ease;
   display: inline-block;
   width: 10px;
-  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .ssh-connection-group[open] > .ssh-connection-group__title::before {

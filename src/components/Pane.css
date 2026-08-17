@@ -33,14 +33,11 @@
   z-index: 20;
   padding: 1px 4px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
-  color: var(--text-muted);
-  border-top: 1px solid transparent;
-  border-right: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
-  border-left: 1px solid var(--border-color);
-  border-radius: 0;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border-bottom-left-radius: var(--radius-xs);
   pointer-events: none;
   user-select: none;
   opacity: 0.9;

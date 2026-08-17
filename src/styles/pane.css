@@ -5,7 +5,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-primary);
+  background: var(--canvas);
 }
 
 .pane-tree-split {
@@ -47,7 +47,7 @@
 .pane-tree-resize-handle {
   position: absolute;
   z-index: 10;
-  background: var(--border-color);
+  background: var(--hairline-strong);
   transition: background 0.15s;
 }
 
@@ -83,7 +83,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  background: var(--bg-primary);
+  background: var(--canvas);
 }
 
 .workspace-pane > *:not(.context-menu):not(.pane-number-badge) {
@@ -122,8 +122,8 @@
 
 .select-session-section h3 {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-weight: 500;
+  color: var(--body);
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -142,17 +142,19 @@
   justify-content: space-between;
   width: 100%;
   padding: 8px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-primary);
+  background: var(--canvas-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  color: var(--ink);
   font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .select-session-item:hover {
   background: var(--bg-hover);
+  border-color: var(--muted-soft);
 }
 
 .select-session-item:disabled {
@@ -162,14 +164,12 @@
 
 .select-session-type {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted);
   text-transform: capitalize;
 }
 
 .select-session-empty {
-  color: var(--text-muted);
+  color: var(--muted);
   text-align: center;
   padding: 16px 0;
 }
-
-

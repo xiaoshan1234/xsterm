@@ -1,6 +1,6 @@
 .command-send-panel {
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  background: var(--canvas-soft);
+  border-top: 1px solid var(--hairline);
   padding: 6px 12px;
   display: flex;
   flex-direction: column;
@@ -20,7 +20,7 @@
   flex-wrap: nowrap;
   gap: 12px;
   padding-bottom: 4px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .panel-controls .btn {
@@ -28,17 +28,18 @@
   font-size: 12px;
   min-width: 32px;
   min-height: 28px;
+  border-radius: var(--radius-md);
   box-sizing: border-box;
 }
 
 .panel-stop--running {
-  background: var(--error-bg, rgba(239, 68, 68, 0.15));
-  color: var(--error, #ef4444);
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .panel-stop--running:hover {
-  background: var(--error, #ef4444);
-  color: var(--bg-primary, #ffffff);
+  background: var(--error);
+  color: var(--text-on-accent);
 }
 
 .panel-close {
@@ -52,11 +53,11 @@
   flex-direction: row;
   align-items: flex-start;
   overflow: auto;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
   scrollbar-width: thin;
-  scrollbar-color: var(--bg-hover) var(--bg-tertiary);
+  scrollbar-color: var(--bg-hover) var(--surface-card);
 }
 
 .panel-editor::-webkit-scrollbar {
@@ -65,14 +66,14 @@
 }
 
 .panel-editor::-webkit-scrollbar-track {
-  background: var(--bg-tertiary);
+  background: var(--surface-card);
   border-radius: 4px;
 }
 
 .panel-editor::-webkit-scrollbar-thumb {
   background: var(--bg-hover);
   border-radius: 4px;
-  border: 2px solid var(--bg-tertiary);
+  border: 2px solid var(--surface-card);
 }
 
 .panel-editor::-webkit-scrollbar-thumb:hover {
@@ -80,15 +81,15 @@
 }
 
 .panel-editor::-webkit-scrollbar-corner {
-  background: var(--bg-tertiary);
+  background: var(--surface-card);
 }
 
 .panel-gutter {
   width: 48px;
   min-width: 48px;
   min-height: 100%;
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
+  background: var(--surface-card);
+  color: var(--muted);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 20px;
@@ -118,7 +119,7 @@
 }
 
 .panel-gutter-line--active {
-  background: var(--accent-bg, rgba(59, 130, 246, 0.15));
+  background: var(--accent-soft);
 }
 
 .panel-breakpoint {
@@ -127,7 +128,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--error, #ef4444);
+  color: var(--error);
   font-size: 10px;
   line-height: 1;
 }
@@ -140,11 +141,11 @@
 .panel-textarea {
   flex: 1;
   width: 100%;
-  background: var(--bg-tertiary);
+  background: var(--surface-card);
   border: none;
-  border-left: 1px solid var(--border-color);
-  border-radius: 0 4px 4px 0;
-  color: var(--text-primary);
+  border-left: 1px solid var(--hairline);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--ink);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 20px;
@@ -163,7 +164,7 @@
 }
 
 .panel-textarea::placeholder {
-  color: var(--text-muted);
+  color: var(--muted);
 }
 
 .control-group {
@@ -178,7 +179,7 @@
   gap: 3px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--body);
   user-select: none;
 }
 
@@ -196,18 +197,19 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--body);
 }
 
 .input-label input[type="number"],
 .input-label select {
   width: 56px;
   padding: 3px 5px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink);
   font-size: 12px;
+  font-family: var(--font-ui);
 }
 
 .input-label input[type="number"]:focus,
@@ -222,6 +224,6 @@
 }
 
 .unit {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: 11px;
 }
