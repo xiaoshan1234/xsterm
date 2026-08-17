@@ -4,5 +4,21 @@
     "bash": {
       "*": "allow"
     }
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp",
+        "--browser",
+        "chromium",
+        "--executable-path",
+        "/home/loner/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome",
+        "--headless",
+        "--no-sandbox"
+      ]
+    }
   }
 }
