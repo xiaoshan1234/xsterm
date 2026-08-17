@@ -10,11 +10,11 @@ import { useTerminalResize } from "../hooks/useTerminalResize";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 
-// Props 说明：
-// - sessionId: Tauri session 句柄，所有 terminal 操作（写入、按键）都通过此 ID 路由到后端
-// - sessionType: 会话类型，local 为本地 shell，ssh 为远程连接
-// - isActive: 当前窗格是否为激活状态，决定 focus/blur
-// - onFocus: 被点击时触发，通知父组件切换激活窗格
+// Props:
+// - sessionId: Tauri session handle; all terminal operations (write, key) are routed to the backend via this ID
+// - sessionType: session type, "local" for local shell, "ssh" for remote connection
+// - isActive: whether the current pane is active, determines focus/blur
+// - onFocus: triggered when clicked, notifies parent to switch active pane
 interface TerminalProps {
   sessionId: number;
   sessionType?: "local" | "ssh";
@@ -44,11 +44,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   { sessionId, sessionType, isActive = true, isWindowActive = true, isConnected, configId: _configId, displayConfig, onFocus },
   ref
 ) {
-  // containerRef: xterm.js 的实际 DOM 挂载点，useXterm 会在此 div 内创建 Terminal 实例
+  // containerRef: xterm.js actual DOM mount point; useXterm creates the Terminal instance inside this div
   const containerRef = useRef<HTMLDivElement>(null);
   const { currentTheme } = useTheme();
   const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...displayConfig };
-  // useXterm: 初始化 xterm.js，加载主题和应用 xterm options；返回 termRef（xterm 实例）和 fitAddonRef（自适应尺寸插件）
+  // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
   const { writeSession, getEffectiveLocalEcho, reconnectSession } = useSession();
@@ -126,10 +126,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     if (!xterm) return;
 
     isReconnectingRef.current = false;
-    // 重新连接时创建了一个全新的 PTY/SSH session，xterm 实例却依旧保留旧 session 的
-    // 模式状态（如鼠标追踪模式）。如果不重置这些内部状态，xterm 仍会在鼠标移动时
-    // 生成鼠标事件转义序列并发送给新 PTY，而新的 PTY 没有启用对应模式，就会把这些
-    // 序列当普通字符显示，导致乱码。reset() 相当于 RIS，清除屏幕并重置所有模式。
+    // When reconnecting, a brand-new PTY/SSH session is created, but the xterm instance still retains
+    // the old session's mode state (e.g., mouse tracking mode). Without resetting these internal
+    // states, xterm will still generate mouse event escape sequences on mouse movement and send them
+    // to the new PTY, which has not enabled the corresponding mode, treating these sequences as
+    // regular characters and displaying garbled output. reset() is equivalent to RIS, clearing the
+    // screen and resetting all modes.
     xterm.reset();
 
     xterm.attachCustomKeyEventHandler((event) => {
@@ -226,8 +228,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     };
   }, [handlePaste]);
 
-  // useTauriTerminalOutput: 订阅 Tauri 后端 PTY 输出流，将数据写入 xterm 显示
-  // useTerminalResize: 监听容器尺寸变化，调用 fitAddon.fit() 让 xterm 自适应新尺寸
+  // useTauriTerminalOutput: subscribes to Tauri backend PTY output stream, writes data to xterm display
+  // useTerminalResize: listens for container size changes, calls fitAddon.fit() to make xterm adapt to the new size
   useTauriTerminalOutput(termRef, sessionId);
   useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, isWindowActive);
 

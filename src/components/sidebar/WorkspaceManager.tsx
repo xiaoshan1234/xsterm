@@ -16,9 +16,9 @@ interface WorkspaceManagerProps {
 const DEFAULT_WORKSPACE_ID = "default";
 
 /**
- * WorkspaceManager - 管理工作区列表，支持单击选中、双击加载/切换、右键菜单操作。
- * 单击：标记选中状态（高亮背景）。
- * 双击：若已存在同名实例则切换，否则加载新实例。
+ * WorkspaceManager - manages the workspace list, supports click to select, double-click to load/switch, right-click menu operations.
+ * Click: marks selection state (highlighted background).
+ * Double-click: switches if a same-name instance already exists, otherwise loads a new instance.
  */
 export function WorkspaceManager({
   savedWorkspaces,

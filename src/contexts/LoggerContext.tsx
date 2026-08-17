@@ -12,8 +12,8 @@ interface LoggerContextType {
 const LoggerContext = createContext<LoggerContextType | null>(null);
 
 /**
- * 全局日志器单例，供非 React 上下文（如 service 文件）使用。
- * LoggerProvider 挂载后会将实际实现注入到这里。
+ * Global logger singleton, for use outside React context (e.g., service files).
+ * LoggerProvider injects the actual implementation here once mounted.
  */
 export const logger: LoggerContextType = {
   debug: () => {},
@@ -73,7 +73,7 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
     log(LogLevel.ERROR, source, message, data);
   }, [log]);
 
-  // 将实际实现注入全局 logger 单例，使 service 文件等非 React 模块也能使用。
+  // Injects the actual implementation into the global logger singleton, so non-React modules (e.g., service files) can also use it.
   logger.debug = debug;
   logger.info = info;
   logger.warn = warn;

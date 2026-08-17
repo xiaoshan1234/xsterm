@@ -17,11 +17,11 @@ export function useTerminalResize(
     resizeSessionRef.current = resizeSession;
   }, [resizeSession]);
 
-  // 使用 ResizeObserver 监听容器尺寸变化，触发 fitAddon.fit() 使 xterm 自适应新尺寸，
-  // 并将 rows/cols 通知给 Tauri 后端以调整 PTY 大小。
-  // 防抖逻辑：容器变化时延迟 150ms 再执行 fitAndResize，避免频繁 resize。
-  // 初始化时通过多个 requestAnimationFrame/setTimeout 确保尺寸正确应用（延迟 0/300/800ms 各执行一次）。
-  // 清理时断开 ResizeObserver 并取消所有 pending 的 raf/timeout。
+  // Use ResizeObserver to listen for container size changes, trigger fitAddon.fit() to make xterm adapt to the new size,
+  // and notify Tauri backend of rows/cols to resize the PTY.
+  // Debounce logic: delays fitAndResize by 150ms after container changes to avoid frequent resizes.
+  // On init, multiple requestAnimationFrame/setTimeout calls ensure proper size application (at 0/300/800ms delays).
+  // On cleanup, disconnects ResizeObserver and cancels all pending raf/timeout.
   useEffect(() => {
     const container = containerRef.current;
     const xterm = termRef.current;

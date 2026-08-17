@@ -70,21 +70,21 @@ export default function NavBar({ onMenuAction }: NavBarProps) {
         <button
           className="window-control window-control--minimize"
           onClick={handleMinimize}
-          title="最小化"
+          title="Minimize"
         >
           <MinimizeIcon size={14} />
         </button>
         <button
           className="window-control window-control--maximize"
           onClick={handleMaximize}
-          title={isMaximized ? "还原" : "最大化"}
+          title={isMaximized ? "Restore" : "Maximize"}
         >
           {isMaximized ? <RestoreIcon size={14} /> : <MaximizeIcon size={14} />}
         </button>
         <button
           className="window-control window-control--close"
           onClick={handleClose}
-          title="关闭"
+          title="Close"
         >
           <CloseIcon size={14} />
         </button>

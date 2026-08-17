@@ -14,10 +14,10 @@ interface SessionManagerProps {
 }
 
 /**
- * SessionManager -管理会话配置的列表和分组，支持单击选中、双击打开、右键菜单操作。
- * 单击：标记选中状态（高亮背景）。
- * 双击：打开对应会话并建立连接。
- * 会话可按组（SessionGroup）归类，支持拖拽分组。
+ * SessionManager - manages the list and grouping of session configurations, supports click to select, double-click to open, right-click menu operations.
+ * Click: marks selection state (highlighted background).
+ * Double-click: opens the corresponding session and establishes a connection.
+  * Sessions can be grouped by SessionGroup, with drag-and-drop grouping support.
  */
 export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: SessionManagerProps) {
   const {
@@ -35,7 +35,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     moveConfigToGroup,
   } = useSession();
 
-  // selectedConfigId: 当前被单击选中的会话配置 ID，用于高亮显示
+  // selectedConfigId: the session config ID currently selected by single-click, used for highlight display
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -46,7 +46,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
 
-  // isConnected - 检查某配置是否已有活跃会话连接
+  // isConnected - checks whether a config already has an active session connection
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
 
@@ -66,12 +66,12 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     setShowNewGroupDialog(false);
   };
 
-  // handleConfigClick - 单击时设置选中状态（高亮背景），不影响已连接状态
+  // handleConfigClick - sets selection state on single-click (highlighted background), does not affect connected state
   const handleConfigClick = (config: SavedSessionConfig) => {
     setSelectedConfigId(config.id);
   };
 
-  // handleConfigDoubleClick - 双击时根据配置类型打开对应会话（本地/SSH）并建立连接
+  // handleConfigDoubleClick - opens the corresponding session (local/SSH) and establishes a connection on double-click
   const handleConfigDoubleClick = (config: SavedSessionConfig) => {
     createWindowFromSavedConfig(config.id).catch(console.error);
   };
@@ -141,7 +141,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
             onDragLeave={handleGroupDragLeave}
             onDrop={(e) => handleGroupDrop(e, group.id)}
           >
-            {/* 右键分组头菜单：Create Session（在组内新建）、Edit（重命名）、Delete（删除分组） */}
+            {/* Right-click group header menu: Create Session (new in group), Edit (rename), Delete (delete group) */}
             <ContextMenu
               items={[
                 { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
@@ -259,9 +259,9 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   );
 }
 
-// SessionItem - 单个会话条目组件，支持选中高亮和已连接状态区分
-// selected: 是否选中（单击选中），选中时添加 selected 类名高亮
-// connected: 是否已建立连接，未连接时 name 显示为 disconnected 样式
+// SessionItem - single session entry component, supports selection highlight and connected state distinction
+// selected: whether selected (single-click to select), adds "selected" class name for highlight when selected
+// connected: whether a connection has been established, name displays in disconnected style when not connected
 interface SessionItemProps {
   config: SavedSessionConfig;
   selected: boolean;

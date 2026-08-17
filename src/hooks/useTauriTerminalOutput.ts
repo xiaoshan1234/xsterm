@@ -49,10 +49,10 @@ export function useTauriTerminalOutput(
   termRef: RefObject<XTerm | null>,
   sessionId: number
 ): void {
-  // 监听 Tauri 后端事件，将终端输出写入 xterm 实例。
-  // 数据通过 requestAnimationFrame 批量写入，避免频繁调用 xterm.write()。
-  // 同时把输出追加到 sessionOutputBuffer，便于 pane remount 后恢复历史内容。
-  // 清理时取消事件监听，并将队列中剩余数据一次性写入后退出。
+  // Listen to Tauri backend events and write terminal output to the xterm instance.
+  // Data is batched via requestAnimationFrame to avoid frequent xterm.write() calls.
+  // Also appends output to sessionOutputBuffer to restore historical content after pane remount.
+  // On cleanup, cancels the event listener and flushes remaining queued data before exiting.
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;

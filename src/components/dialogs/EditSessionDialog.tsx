@@ -17,6 +17,7 @@ import {
 } from "../icons/Icon";
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
+import { SshConnectionSection } from "./SshConnectionSection";
 import { DisplayConfigForm } from "./DisplayConfigForm";
 import { CommonSettingsForm } from "./CommonSettingsForm";
 import {
@@ -36,6 +37,7 @@ interface EditSessionDialogProps {
 
 type EditSectionId =
   | "session"
+  | "sshConnection"
   | "displayLayout"
   | "keyboard"
   | "security"
@@ -65,19 +67,20 @@ interface SidebarDef {
 
 const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
   local: [
-    { id: "session", label: "会话", icon: <LocalSessionIcon size={16} /> },
-    { id: "displayLayout", label: "显示与布局", icon: <LayoutIcon size={16} /> },
-    { id: "keyboard", label: "键盘与输入", icon: <SettingsIcon size={16} /> },
-    { id: "security", label: "安全", icon: <SettingsIcon size={16} /> },
-    { id: "logging", label: "日志", icon: <LogIcon size={16} /> },
-    { id: "process", label: "进程", icon: <SettingsIcon size={16} /> },
+    { id: "session", label: "Session", icon: <LocalSessionIcon size={16} /> },
+    { id: "displayLayout", label: "Display & Layout", icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: "Keyboard & Input", icon: <SettingsIcon size={16} /> },
+    { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
+    { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
+    { id: "process", label: "Process", icon: <SettingsIcon size={16} /> },
   ],
   ssh: [
-    { id: "session", label: "会话", icon: <SshSessionIcon size={16} /> },
-    { id: "displayLayout", label: "显示与布局", icon: <LayoutIcon size={16} /> },
-    { id: "keyboard", label: "键盘与输入", icon: <SettingsIcon size={16} /> },
-    { id: "security", label: "安全", icon: <SettingsIcon size={16} /> },
-    { id: "logging", label: "日志", icon: <LogIcon size={16} /> },
+    { id: "session", label: "Session", icon: <SshSessionIcon size={16} /> },
+    { id: "sshConnection", label: "SSH Connection", icon: <SettingsIcon size={16} /> },
+    { id: "displayLayout", label: "Display & Layout", icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: "Keyboard & Input", icon: <SettingsIcon size={16} /> },
+    { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
+    { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
   ],
 };
 
@@ -125,7 +128,7 @@ export function EditSessionDialog({
       const validationError = validateSshConfig(sshConfig);
       if (validationError) {
         setSshError(validationError);
-        setSectionId("session");
+        setSectionId("sshConnection");
         return;
       }
     }
@@ -177,7 +180,6 @@ export function EditSessionDialog({
       if (config.type === "ssh") {
         return (
           <>
-            {sshError && <div className="dialog-error">{sshError}</div>}
             {nameAndGroupFields}
             <SshSessionForm
               config={sshConfig}
@@ -185,6 +187,7 @@ export function EditSessionDialog({
                 setSshConfig(cfg);
                 setSshError("");
               }}
+              section="system"
             />
           </>
         );
@@ -197,6 +200,21 @@ export function EditSessionDialog({
             onChange={setLocalConfig}
             mode="edit"
             section="session"
+          />
+        </>
+      );
+    }
+
+    if (sectionId === "sshConnection") {
+      return (
+        <>
+          {sshError && <div className="dialog-error">{sshError}</div>}
+          <SshConnectionSection
+            config={sshConfig}
+            onChange={(cfg) => {
+              setSshConfig(cfg);
+              setSshError("");
+            }}
           />
         </>
       );

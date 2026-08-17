@@ -1,6 +1,6 @@
 /**
- * 每个 session 的原始输出缓冲区。
- * 用于在 pane 被 split/remount 时恢复终端内容，避免历史输出丢失。
+ * Raw output buffer for each session.
+ * Used to restore terminal content when a pane is split/remounted, preventing loss of historical output.
  */
 
 const buffers = new Map<number, string>();

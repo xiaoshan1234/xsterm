@@ -244,7 +244,7 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
             <div className="pane-session-container">
               {!session.is_connected && (
                 <div className="pane-disconnect-banner">
-                  连接已经断开，输入回车重新进行连接
+                  Connection lost. Press Enter to reconnect.
                 </div>
               )}
               <div className="pane-terminal-wrapper">

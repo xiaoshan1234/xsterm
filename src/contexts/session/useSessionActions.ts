@@ -271,7 +271,7 @@ export function useSessionActions({
   );
 
   /**
-   * 在工作区中拆分面板（split pane）
+   * Split a pane in the workspace
    */
   const splitPane = useCallback(
     (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number, configId?: string) => {
@@ -516,14 +516,14 @@ export function useSessionActions({
   );
 
   /**
-   * 将工作区保存为快照（持久化到 sessions.json）
+   * Save a workspace as a snapshot (persisted to sessions.json)
    *
-   * 工作区保存流程：
-   * 1. 找到目标工作区（深拷贝 rootPane 结构，包含所有面板和会话引用 configId）
-   * 2. 生成新的 savedWorkspace 对象（带新 ID，与原工作区独立）
-   * 3. 追加到 savedWorkspaces 并通过 persistSavedWorkspaces 写入 sessions.json
+   * Workspace save flow:
+   * 1. Find the target workspace (deep copy the rootPane structure, including all pane and session configId references)
+   * 2. Generate a new savedWorkspace object (with a new ID, independent from the original workspace)
+   * 3. Append to savedWorkspaces and write to sessions.json via persistSavedWorkspaces
    *
-   * 注意：保存的是 configId 而非会话 ID，重启后通过 loadWorkspace 重建会话
+   * Note: configId is saved instead of session ID; sessions are reconstructed via loadWorkspace after restart
    */
   const saveWorkspace = useCallback(
     (workspaceId: string, name: string) => {
@@ -581,22 +581,22 @@ export function useSessionActions({
   );
 
   /**
-   * 从快照加载工作区（从 sessions.json 恢复）
+   * Load a workspace from a snapshot (restored from sessions.json)
    *
-   * 工作区加载完整流程：
-   * 1. 找到 savedWorkspace，遍历面板树（buildTree 递归）
-   * 2. 对每个 leaf 面板：若含 configId 则调用 openFromConfigInternal 重建会话（复用已有会话避免重复）
-   * 3. buildTree 返回新面板树（所有节点 ID 重新生成，与原快照独立）
-   * 4. 创建工作区，加入 workspaces，设为活跃
+   * Full workspace load flow:
+   * 1. Find savedWorkspace, traverse the pane tree (buildTree recursion)
+   * 2. For each leaf pane: if it contains a configId, call openFromConfigInternal to reconstruct the session (reuse existing sessions to avoid duplicates)
+   * 3. buildTree returns a new pane tree (all node IDs regenerated, independent from the original snapshot)
+   * 4. Create the workspace, add to workspaces, set as active
    *
-   * 异常处理：任何面板重建失败时 rollback（关闭已创建会话，回退 sessions 状态）
+   * Exception handling: if any pane reconstruction fails, rollback (close created sessions, revert sessions state)
    */
   const loadWorkspace = useCallback(
     async (savedWorkspaceId: string): Promise<Workspace> => {
       const saved = savedWorkspaces.find((w) => w.id === savedWorkspaceId);
       if (!saved) throw new Error("Saved workspace not found");
 
-      // configId → 已在本次加载中创建的会话（同一配置只创建一次）
+      // configId → session already created in this load (each config is created only once)
       const configIdToSession = new Map<string, Session>();
 
       const rollback = async () => {
@@ -875,14 +875,14 @@ export function useSessionActions({
   );
 
   /**
-   * 创建并激活会话的核心内部方法
+   * Core internal method for creating and activating a session
    *
-   * 创建会话的完整流程：
-   * 1. 生成 configId（作为持久化配置的唯一标识）
-   * 2. 调用后端服务 sessionService 创建真实会话
-   * 3. 构建前端 Session 对象，加入 sessions[]
-   * 4. 若 save=true，将配置保存到 savedConfigs（持久化，重启后可恢复）
-   * 5. 自动调用 createWorkspaceFromSession 创建默认工作区
+   * Full session creation flow:
+   * 1. Generate configId (as unique identifier for the persistent config)
+   * 2. Call backend sessionService to create the real session
+   * 3. Construct the frontend Session object, add to sessions[]
+   * 4. If save=true, persist the config to savedConfigs (survives restarts)
+   * 5. Automatically call createWorkspaceFromSession to create a default workspace
    */
   const createAndActivateSession = useCallback(
     async (
@@ -920,10 +920,10 @@ export function useSessionActions({
   );
 
   /**
-   * 创建本地会话并自动创建工作区
+   * Create a local session and automatically create a workspace
    *
-   * 调用链：createLocalSession → createAndActivateSession("local", ...)
-   *  → 后端 sessionService.createLocal(config) → sessions[] + 自动创建工作区
+   * Call chain: createLocalSession → createAndActivateSession("local", ...)
+   *  → backend sessionService.createLocal(config) → sessions[] + auto-create workspace
    */
   const createLocalSession = useCallback(
     async (config: LocalSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
@@ -933,10 +933,10 @@ export function useSessionActions({
   );
 
   /**
-   * 创建 SSH 会话并自动创建工作区
+   * Create an SSH session and automatically create a workspace
    *
-   * 调用链：createSshSession → createAndActivateSession("ssh", ...)
-   *  → 后端 sessionService.createSsh(config) → sessions[] + 自动创建工作区
+   * Call chain: createSshSession → createAndActivateSession("ssh", ...)
+   *  → backend sessionService.createSsh(config) → sessions[] + auto-create workspace
    */
   const createSshSession = useCallback(
     async (config: SSHSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
@@ -960,10 +960,10 @@ export function useSessionActions({
   );
 
   /**
-   * 从已保存配置打开会话（同时创建默认工作区）
+   * Open a session from a saved config (also creates a default workspace)
    *
-   * 与 createSessionFromSavedConfig 的区别：此方法额外调用 createWorkspaceFromSession，
-   * 用于侧边栏"打开"操作，同时展示会话界面
+   * Difference from createSessionFromSavedConfig: this method additionally calls createWorkspaceFromSession,
+   * used for the sidebar "open" operation, which also displays the session UI
    */
   const openFromConfig = useCallback(
     async (configId: string): Promise<Session> => {
@@ -1003,14 +1003,14 @@ export function useSessionActions({
   );
 
   /**
-   * 关闭会话
+   * Close a session
    *
-   * 关闭会话流程：
-   * 1. 调用后端 sessionService.closeSession(id) 关闭真实会话
-   * 2. 从 sessions[] 移除该会话
-   * 3. 在所有工作区中移除该会话对应的面板（removeSessionAndCollapse），并自动切换活跃面板
+   * Session close flow:
+   * 1. Call backend sessionService.closeSession(id) to close the real session
+   * 2. Remove the session from sessions[]
+   * 3. Remove panes corresponding to this session in all workspaces (removeSessionAndCollapse), and automatically switch active pane
    *
-   * 注意：不会自动删除 savedConfigs（配置保留，用户可重新打开）
+   * Note: savedConfigs are not automatically deleted (config is preserved, user can reopen)
    */
   const closeSession = useCallback(
     async (id: number): Promise<void> => {

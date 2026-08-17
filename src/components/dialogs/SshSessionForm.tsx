@@ -37,9 +37,17 @@ interface SshSessionFormProps {
   mode?: "create" | "edit";
   /**
    * When set, render only the fields that belong to that section.
-   * - "link"   → Host / Port / Username / Authentication
-   * - "system" → Terminal type / Initial rows+cols / Keepalive / Timeout / Compression
-   * - undefined → render all fields (default; used by EditSessionDialog)
+   *   - "link"   → Authentication (host / port / username / auth_type /
+   *                password or key_file + passphrase)
+   *   - "system" → Terminal (termType / initialRows / initialCols /
+   *                keepaliveInterval)
+   *   - undefined → render all fields (backward-compatible default; used
+   *                when this component is the only form on a page)
+   *
+   * Stream (charset / knownHostsPath / proxyJump) and Network
+   * (connectionTimeout / tcpNoDelay / soKeepalive / nullPacketKeepalive /
+   * enableCompression) options are rendered by `SshConnectionSection`
+   * instead and are intentionally not part of either `link` or `system`.
    */
   section?: "link" | "system";
 }
@@ -165,31 +173,6 @@ export function SshSessionForm({
               </FormField>
             </>
           )}
-          <FormField label="Known Hosts File">
-            <input
-              type="text"
-              placeholder="~/.ssh/known_hosts"
-              value={sshOpts.knownHostsPath || ""}
-              onChange={(e) => updateOpts({ knownHostsPath: e.target.value })}
-            />
-          </FormField>
-          <FormField label="ProxyJump (SSH bastion)">
-            <input
-              type="text"
-              placeholder="user@bastion:22"
-              value={sshOpts.proxyJump || ""}
-              onChange={(e) => updateOpts({ proxyJump: e.target.value })}
-            />
-          </FormField>
-          <FormField label="Charset">
-            <select
-              value={sshOpts.charset || "utf-8"}
-              onChange={(e) => updateOpts({ charset: e.target.value })}
-            >
-              <option value="utf-8">utf-8</option>
-              <option value="gbk">gbk</option>
-            </select>
-          </FormField>
         </>
       )}
       {showSystem && (
@@ -254,50 +237,6 @@ export function SshSessionForm({
                     updateOpts({
                       keepaliveInterval: parseOptionalInt(e.target.value),
                     })
-                  }
-                />
-              </FormField>
-              <FormField label="Connection Timeout (seconds)">
-                <input
-                  type="number"
-                  placeholder="30"
-                  value={sshOpts.connectionTimeout ?? ""}
-                  onChange={(e) =>
-                    updateOpts({
-                      connectionTimeout: parseOptionalInt(e.target.value),
-                    })
-                  }
-                />
-              </FormField>
-              <FormField label="TCP No Delay (disable Nagle)">
-                <input
-                  type="checkbox"
-                  checked={sshOpts.tcpNoDelay ?? true}
-                  onChange={(e) => updateOpts({ tcpNoDelay: e.target.checked })}
-                />
-              </FormField>
-              <FormField label="SO Keepalive">
-                <input
-                  type="checkbox"
-                  checked={sshOpts.soKeepalive ?? false}
-                  onChange={(e) => updateOpts({ soKeepalive: e.target.checked })}
-                />
-              </FormField>
-              <FormField label="Null Packet Keepalive">
-                <input
-                  type="checkbox"
-                  checked={sshOpts.nullPacketKeepalive ?? false}
-                  onChange={(e) =>
-                    updateOpts({ nullPacketKeepalive: e.target.checked })
-                  }
-                />
-              </FormField>
-              <FormField label="Enable Compression">
-                <input
-                  type="checkbox"
-                  checked={sshOpts.enableCompression ?? false}
-                  onChange={(e) =>
-                    updateOpts({ enableCompression: e.target.checked })
                   }
                 />
               </FormField>
