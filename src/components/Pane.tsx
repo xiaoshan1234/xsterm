@@ -197,7 +197,7 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
       }
     );
 
-    if (session.is_connected) {
+    if (session.isConnected) {
       contextMenuItems.push({
         label: "Paste",
         onClick: handlePaste,
@@ -242,13 +242,13 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
           )}
           {session ? (
             <div className="pane-session-container">
-              {!session.is_connected && (
+              {!session.isConnected && (
                 <div className="pane-disconnect-banner">
                   Connection lost. Press Enter to reconnect.
                 </div>
               )}
               <div className="pane-terminal-wrapper">
-                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.is_connected} configId={session.configId} displayConfig={session.displayConfig} />
+                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.isConnected} configId={session.configId} displayConfig={session.displayConfig} />
               </div>
             </div>
           ) : (

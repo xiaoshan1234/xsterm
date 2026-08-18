@@ -62,7 +62,7 @@ const tree: PaneNode = {
 };
 
 function session(id: number, name = `s${id}`): Session {
-  return { id, configId: `cfg-${id}`, name, type: "local", is_connected: true, session_type: { type: "local", config: { shell: "/bin/sh", cwd: "/" } } };
+  return { id, configId: `cfg-${id}`, name, type: "local", isConnected: true, sessionType: { type: "local", config: { shell: "/bin/sh", cwd: "/" } } };
 }
 
 function workspace(id: string, windows: Workspace["windows"]): Workspace {

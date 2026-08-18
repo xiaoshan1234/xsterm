@@ -27,7 +27,7 @@ export function useTauriListeners({
       const unlistenSessionDisconnected = await listen<number>("session-disconnected", (event) => {
         const sessionId = event.payload;
         establishingSessionsRef.current.delete(sessionId);
-        setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, is_connected: false } : s)));
+        setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s)));
       }).catch((e) => {
         console.error("Failed to listen session-disconnected:", e);
         return null;

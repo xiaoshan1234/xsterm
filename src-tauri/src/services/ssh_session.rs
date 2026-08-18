@@ -48,16 +48,23 @@ pub fn create_ssh_session(
 
     let backend_clone = backend.clone();
     thread::spawn(move || {
+        let mut seen_data = false;
         loop {
             match read_rx.recv() {
                 Ok(Some(data)) => {
+                    seen_data = true;
                     let payload = serde_json::to_vec(&(session_id, &data[..])).unwrap();
                     if let Err(e) = backend_clone.emit("session-output", &payload) {
-                        eprintln!("Failed to emit SSH output for session {}: {}", session_id, e);
+                        tracing::error!("Failed to emit SSH output for session {}: {}", session_id, e);
                         break;
                     }
                 }
                 Ok(None) | Err(_) => {
+                    tracing::info!(
+                        "SSH read channel closed for session {} (seen_data={}); notifying frontend",
+                        session_id,
+                        seen_data
+                    );
                     let payload = serde_json::to_vec(&session_id).unwrap();
                     let _ = backend_clone.emit("session-disconnected", &payload);
                     break;

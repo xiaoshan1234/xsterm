@@ -166,3 +166,77 @@ YES
 修复后重新运行 spike/UI 测试可正常创建本地会话。
 ## 是否解决
 YES
+
+
+# Bug 011
+## 现象
+每次新建本地 shell（PowerShell、bash 等）后，pane 顶部立刻出现橙色横幅 `Connection lost. Press Enter to reconnect.`，但 shell 提示符（`PS C:\Users\LONER>` 等）仍正常渲染在横幅下方，看起来"提示符活着却显示连接丢失"。
+## 理想效果
+打开新 shell 后横幅不应出现；只有当 PTY/SSH 真正断开时才显示。
+## BUG原因
+`src-tauri/src/services/local_session.rs` 的 `spawn_output_forwarder`（原 205–232 行）在 `reader.read()` 返回 `Ok(0)` 时**无条件**判定为"shell 退出"，立刻 emit `session-disconnected` 并 break 循环：
+```rust
+Ok(0) => {
+    let payload = serde_json::to_vec(&session_id).unwrap();
+    let _ = backend_clone.emit("session-disconnected", &payload);
+    break;
+}
+```
+Windows ConPTY（portable-pty）在 `pair.master_reader()`（`try_clone_reader()`）返回的克隆句柄上，**第一次** `read()` 在子进程产生任何输出之前可能返回 `Ok(0)`（EOF）—— 这是 ConPTY 初始化竞态的已知表现。之后 shell 正常把 prompt 写到 PTY，但 forwarder 线程已经在第一次 Ok(0) 时自杀、emit 过 `session-disconnected`，前端 listener (`src/contexts/session/useTauriListeners.ts:27`) 立即把 `session.is_connected` 置 `false`，触发 `src/components/Pane.tsx:245` 的横幅。
+
+附带次要问题：原代码 `Err(_) => break` 静默退出 forwarder，read 出错时前端永远看不到通知；SSH forwarder (`src-tauri/src/services/ssh_session.rs`) 有同样的 Ok(0)+silent-error 模式，虽然 SSH 用 `recv()` 阻塞而非 PTY 直读，但保留一致的 EOF 语义以便未来扩展。
+## 解决方案
+1. 在 `src-tauri/src/services/local_session.rs` 的 `spawn_output_forwarder` 引入 `seen_data: bool` 标志：
+   - `Ok(0)` 且 `!seen_data` → `tracing::debug!` 记录 + `std::thread::sleep(100ms)` 继续循环（**不** emit `session-disconnected`）。这覆盖 ConPTY 首读 EOF 场景；shell 真正活着时下一轮 `read()` 就能拿到数据。
+   - `Ok(0)` 且 `seen_data` → `tracing::info!` + emit `session-disconnected` + break。这是真正的 EOF（shell 已退出）。
+   - `Err(e)` → `tracing::error!` + emit `session-disconnected` + break。修复原来静默死亡的次要 bug。
+   - `Ok(n)` → `seen_data = true` + emit `session-output`（不变）。
+2. 同样为函数补上 docstring，说明三种 EOF 分支的语义，避免后人误改。
+3. `src-tauri/src/services/ssh_session.rs` 的 SSH forwarder 同步加 `seen_data`（写入 `tracing::info!` 时附带，便于定位"是首读就断还是运行中断"），`eprintln!` 升级为 `tracing::error!` 走统一日志通道。
+4. `cargo check` 干净通过，`cargo test --lib` 68 个原有 mockall 测试全部 pass（`spawn_output_forwarder` 在测试里走 `TestAppBackend::spawn` no-op，forwarder 闭包根本不执行，故原有断言不受影响）。
+## 是否解决
+YES
+
+
+# Bug 012
+## 现象
+每次新建本地 shell（PowerShell、bash 等）后，pane 顶部**始终**显示橙色横幅 `Connection lost. Press Enter to reconnect.`，无论 shell 是否在输出、用户是否操作。Bug 011 修过的 PTY forwarder EOF 路径走完后日志里所有 `createSession:result` 都是 `isConnected:true`，但横幅依然常驻；用户按 Enter 触发 reconnect → 创建新 session → 关闭旧 session → EOF → 横幅继续 → 死循环。日志证据：连续 4 次 `createSession` 紧跟 `closeSession` 前一个 id，`PTY EOF for session N after data — shell exited` 也按时打，但 `Transient PTY EOF before data` 一条都没有出现 —— 说明 forwarder 并没有"误判"提前断开。
+## 理想效果
+打开新 shell 后横幅不应出现；只有当 PTY/SSH 真正断开（且真的读出过数据之后 EOF）时才显示。
+## BUG原因
+Rust 后端的 `SessionInfo` 在 `src-tauri/src/models/session.rs:21-28` 标了 `#[serde(rename_all = "camelCase")]`：
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInfo {
+    pub id: u32,
+    pub name: String,
+    pub session_type: SessionType,
+    pub is_connected: bool,
+    pub capabilities: CapabilityFlags,
+}
+```
+所以 IPC 返回的 JSON 是 `{"id":1,"name":"pws","sessionType":{...},"isConnected":true,"capabilities":{...}}`（日志中可见 `"isConnected":true`）。但 TypeScript 这一侧的接口仍然是蛇形：
+- `src/services/sessionService.ts:11-17` 的 `SessionInfo.is_connected`、`SessionInfo.session_type`
+- `src/types/session.ts:46-55` 的 `Session.is_connected`、`Session.session_type`
+
+`invoke<SessionInfo>` 拿到的对象里 `info.is_connected === undefined`（字段名根本没匹配上），`info.session_type === undefined`。`buildFrontendSession`（`useSessionActions.ts:73-88`）把它原样拷到 React state：`{ is_connected: undefined, ... }`。`Pane.tsx:245` 渲染条件是 `!session.is_connected` —— `!undefined === true` —— 横幅从创建那一刻起就**永远**显示。同理 `Terminal.tsx` 的 `isConnectedRef.current` 也是 `undefined`，`onData` handler 在 `!isConnectedRef.current` 分支里吃掉所有非 `\r` 字符，用户输入根本进不到 PTY；只能按 Enter 触发 `reconnectSession`，导致日志里密集的 create+close 循环。
+
+Bug 011 是同一个表象的另一种成因（ConPTY 首读 EOF → forwarder 自杀 → emit `session-disconnected` → React state 真把 `is_connected` 设成 `false`），但本次用户日志里没有触发 Bug 011 路径（没有 `Transient` 日志）。所以 Bug 011 仍然保留作为防御性修复；Bug 012 才是主因。
+## 解决方案
+1. 把所有从 IPC JSON 读出的 snake_case 字段改成 camelCase，与 Rust `rename_all = "camelCase"` 对齐：
+   - `src/types/session.ts`：`Session.is_connected` → `isConnected`，`Session.session_type` → `sessionType`
+   - `src/services/sessionService.ts`：`SessionInfo.is_connected` → `isConnected`，`SessionInfo.session_type` → `sessionType`
+   - `src/contexts/session/useSessionActions.ts` `buildFrontendSession`：复制字段时同步改名
+   - `src/contexts/session/useTauriListeners.ts:30`：`{...s, is_connected: false}` → `{...s, isConnected: false}`（保持 listener 仍能正确把已断开的 session 标 false）
+   - `src/components/Pane.tsx`：3 处 `session.is_connected` / `isConnected={session.is_connected}` 同步改名
+   - `src/contexts/session/paneUtils.test.ts:65`：测试 fixture 同步改名
+2. 不要动 `Terminal.tsx` 里 `isConnected` 这个 prop 名字 —— 它本来就是 camelCase，命名跟 props 一致。
+3. Rust 端不动 —— `SessionInfo`、`LocalSessionConfig`、`SSHSessionConfig` 仍用 `rename_all = "camelCase"`，这是和 Tauri IPC 默认约定一致的方向；改前端让前端对齐。
+4. 验证：
+   - `npx tsc --noEmit`：TSC OK（0 errors）
+   - `npx vitest run src/contexts/session/paneUtils.test.ts`：47 passed, 1 todo
+   - `cargo test --lib`：68 passed（Bug 011 的 forwarder 修复依然在位）
+5. 手动验证：在 dev 环境打开新 shell，横幅应消失；按 Enter 走 reconnect 也应不再出现 `create+close+EOF` 死循环（除非用户真的关掉 shell）。
+## 是否解决
+YES

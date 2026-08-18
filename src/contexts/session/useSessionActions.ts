@@ -81,8 +81,8 @@ function buildFrontendSession(
     configId,
     name: info.name,
     type,
-    is_connected: info.is_connected,
-    session_type: info.session_type,
+    isConnected: info.isConnected,
+    sessionType: info.sessionType,
     displayConfig,
   };
 }

@@ -1,7 +1,13 @@
+/* Collapsible <details> groups used by CommonSettingsForm (Display /
+ * Keyboard / Security / Logging sections). Restrained Cursor-style —
+ * surface-card on hairline, weight-500 summary, accent chevron only when
+ * the group is open. No glow, no shadow, no gradient. */
+
 .common-settings-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* 32px between distinct section groups — magazine-like rhythm. */
+  gap: var(--space-xl);
 }
 
 .common-settings-group {
@@ -12,8 +18,8 @@
 }
 
 .common-settings-group__title {
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 11px 14px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--ink);
   background: var(--surface-card);
@@ -27,6 +33,16 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+.common-settings-group__title:hover {
+  background: var(--bg-hover);
+}
+
+.common-settings-group__title:focus-visible {
+  outline: none;
+  background: var(--bg-hover);
+  border-bottom-color: var(--accent);
+}
+
 /* Custom disclosure marker (replaces default triangle) */
 .common-settings-group__title::-webkit-details-marker {
   display: none;
@@ -35,19 +51,21 @@
 .common-settings-group__title::before {
   content: "▸";
   font-size: 11px;
-  color: var(--accent);
-  transition: transform 0.15s ease;
+  color: var(--muted);
+  transition: transform 0.15s ease, color 0.15s ease;
   display: inline-block;
   width: 10px;
 }
 
 .common-settings-group[open] > .common-settings-group__title::before {
   transform: rotate(90deg);
+  color: var(--accent);
 }
 
 .common-settings-group__content {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
+  /* 16px between fields inside a section — the editorial baseline. */
+  gap: var(--space-base);
+  padding: var(--space-base);
 }

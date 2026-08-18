@@ -1,29 +1,42 @@
+/* Tab bar at the top of the session form (Shell / SSH).
+ * Visual style: flat hairline divider + 2px Cursor-orange underline on the
+ * active tab. No gradient, no shadow — rest on the hairline + weight. */
+
 .dialog-tabs {
   display: flex;
-  padding: 0 20px;
+  padding: 0 var(--space-md);
   border-bottom: 1px solid var(--hairline);
-  margin: 0 -20px;
+  margin: 0 calc(-1 * var(--space-md));
   flex-shrink: 0;
 }
 
 .dialog-tab {
   flex: 1;
-  padding: 12px 16px;
+  padding: 12px 14px;
   background: transparent;
   border: none;
+  /* 2px transparent border-bottom reserves space for the active-tab
+   * underline so layout doesn't jump on toggle. */
   border-bottom: 2px solid transparent;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
   color: var(--body);
   font-size: 14px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   text-align: center;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
 .dialog-tab:hover {
   color: var(--ink);
   background: var(--bg-hover);
+}
+
+.dialog-tab:focus-visible {
+  outline: none;
+  color: var(--ink);
+  background: var(--bg-hover);
+  border-bottom-color: var(--accent);
 }
 
 .dialog-tab.active {
@@ -32,7 +45,8 @@
 }
 
 /* Layout wrapper: breaks out of .dialog-content padding so the
- * .dialog-body grid can use the full content area. */
+ * .dialog-body grid (sidebar + panel, defined in Dialog.css) can use the
+ * full content area. */
 .session-form-layout {
   margin: -20px;
   display: flex;

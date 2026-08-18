@@ -48,8 +48,8 @@ export interface Session {
   configId: string;
   name: string;
   type: "local" | "ssh";
-  is_connected: boolean;
-  session_type: SessionType;
+  isConnected: boolean;
+  sessionType: SessionType;
   displayConfig?: SessionDisplayConfig;
   capabilities?: CapabilityFlags;
 }

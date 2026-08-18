@@ -9,12 +9,12 @@
 .pane-disconnect-banner {
   flex-shrink: 0;
   padding: 8px 12px;
-  background: var(--error-bg);
-  color: var(--error);
+  background: var(--warning-bg);
+  color: var(--warning);
   font-size: 13px;
   font-weight: 500;
   text-align: center;
-  border-bottom: 1px solid var(--error);
+  border-bottom: 1px solid var(--warning);
   user-select: none;
   pointer-events: none;
 }

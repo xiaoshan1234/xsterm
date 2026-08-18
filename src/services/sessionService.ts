@@ -11,8 +11,8 @@ import type { CapabilityFlags } from "../types/capabilities";
 export interface SessionInfo {
   id: number;
   name: string;
-  session_type: Session["session_type"];
-  is_connected: boolean;
+  sessionType: Session["sessionType"];
+  isConnected: boolean;
   capabilities?: CapabilityFlags;
 }
 

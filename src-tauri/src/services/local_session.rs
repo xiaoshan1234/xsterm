@@ -202,6 +202,17 @@ fn apply_shell_flags(cmd: &mut portable_pty::CommandBuilder, shell_name: &str) {
 }
 
 /// Spawn a background thread that forwards PTY output to the frontend.
+///
+/// EOF semantics:
+/// - Before any data has been read, `Ok(0)` is treated as a transient PTY
+///   condition (ConPTY on Windows can briefly return EOF before data flows
+///   through the cloned master reader) and the read is retried after a short
+///   delay. Emitting `session-disconnected` here would mark a healthy
+///   session as disconnected the moment it opens.
+/// - Once data has been observed, a subsequent `Ok(0)` is treated as the
+///   genuine end-of-stream (the shell exited) and the frontend is notified.
+/// - Read errors are also surfaced as `session-disconnected` instead of
+///   silently killing the forwarder, so the UI reflects a broken PTY.
 fn spawn_output_forwarder(
     mut reader: Box<dyn Read + Send>,
     backend: impl AppBackend + 'static,
@@ -210,15 +221,27 @@ fn spawn_output_forwarder(
     let backend_clone = backend.clone();
     backend.spawn(Box::new(move || {
         let mut buf = [0u8; PTY_READ_BUFFER_SIZE];
+        let mut seen_data = false;
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => {
-                    // EOF: the shell process exited.
-                    let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-disconnected", &payload);
-                    break;
+                    if seen_data {
+                        tracing::info!(
+                            "PTY EOF for session {} after data — shell exited",
+                            session_id
+                        );
+                        let payload = serde_json::to_vec(&session_id).unwrap();
+                        let _ = backend_clone.emit("session-disconnected", &payload);
+                        break;
+                    }
+                    tracing::debug!(
+                        "Transient PTY EOF before data for session {}; retrying",
+                        session_id
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
                 Ok(n) => {
+                    seen_data = true;
                     let data = &buf[..n];
                     let payload = serde_json::to_vec(&(session_id, data)).unwrap();
                     if let Err(e) = backend_clone.emit("session-output", &payload) {
@@ -226,7 +249,16 @@ fn spawn_output_forwarder(
                         break;
                     }
                 }
-                Err(_) => break,
+                Err(e) => {
+                    tracing::error!(
+                        "PTY read error for session {}: {}; notifying frontend",
+                        session_id,
+                        e
+                    );
+                    let payload = serde_json::to_vec(&session_id).unwrap();
+                    let _ = backend_clone.emit("session-disconnected", &payload);
+                    break;
+                }
             }
         }
     }));
