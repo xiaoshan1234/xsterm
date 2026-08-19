@@ -8,6 +8,35 @@
   - `src/` — Vite frontend (React, xterm.js)
   - `src-tauri/` — Rust backend (Tauri, `portable-pty`, `russh`)
 
+## Design System — Standing Rule ⛔
+
+**The shell UI follows an adapted Cursor design language.** This is a **standing project rule**, not a suggestion. Every UI change (new component, dialog, panel, button, surface) **must** consult and follow [`doc/design-system.md`](doc/design-system.md).
+
+Quick reference:
+- Tokens live in `src/styles/global.css` `:root`. Reference via `var(--...)` — **no hex literals** in component CSS (documented exceptions in §10 of the doc).
+- Dark IDE palette: `--canvas` `#1a1a1a`, `--ink` `#e8e6e0`, `--accent: #f54e00` (Cursor Orange).
+- Typography: Inter / system sans for UI, JetBrains Mono only on code surfaces. Display weight **400–500**, never 600+ on chrome.
+- Radius: 8px (buttons / inputs), 12px (cards / dialogs), 6px (rows), pill (badges).
+- Depth: **hairline-only** (`var(--hairline*)`). No `box-shadow` on cards/sections/inputs. No gradients. No text-shadow glow.
+- Two independent theme systems: shell chrome (CSS vars) vs xterm terminal content (`src/types/theme.ts`). Do not mix them.
+- Terminal **content** themes (5 ANSI presets) are user-switchable and **out of scope** for shell chrome.
+
+**Pre-commit verification** (run all three before committing UI work):
+```bash
+# 1. No forbidden tokens / VSCode blue / gradients — MUST be empty.
+grep -rn -E "(--bg-primary|--bg-secondary|--bg-tertiary|--text-primary|--text-secondary|--text-muted|--border-color|#0e639c|#1177bb|linear-gradient)" src/ --include="*.ts" --include="*.tsx" --include="*.css"
+
+# 2. No bold weights on chrome — MUST be empty.
+grep -rn "font-weight: ?(600|700|bold)" src/ --include="*.ts" --include="*.tsx" --include="*.css"
+
+# 3. No drop shadows outside allowed floating overlays — MUST show only the
+#    5 documented exceptions in doc/design-system.md §10.2 + §10.3.
+#    If a new match appears, it is a violation: add an exception to §10 first.
+grep -rn "box-shadow:" src/components/ --include="*.css"
+```
+
+All three grep results must be reviewed against [`doc/design-system.md`](doc/design-system.md) §10 before merging UI work. (1) and (2) must return zero matches; (3) must match only the documented exceptions.
+
 ## Build Toolchain (WSL Environment)
 
 **When running in WSL, always use the Windows toolchain for compilation.** Do not use WSL-native `rustc`/`cargo`/`node`/`npm` for building.
