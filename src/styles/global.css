@@ -32,6 +32,8 @@
   --success-bg:       rgba(31, 138, 101, 0.12);
   --warning:          #f0a020;
   --warning-bg:       rgba(240, 160, 32, 0.12);
+  --info:             #5cb3ff;   /* line numbers, info labels (sky blue) */
+  --info-soft:        rgba(92, 179, 255, 0.18);
 
   /* === Typography === */
   --font-ui:          "Inter", "Segoe UI", system-ui, -apple-system,

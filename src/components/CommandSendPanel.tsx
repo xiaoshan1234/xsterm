@@ -15,6 +15,18 @@ interface CommandSendPanelProps {
 type SplitMode = "line" | "character";
 type RunState = "idle" | "running" | "paused";
 
+interface LineSendMeta {
+  timestamp: string;
+  number: number;
+}
+
+function formatTimestamp(date: Date): string {
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
 function getLeafPanesWithSession(root: PaneNode): PaneNode[] {
   const panes: PaneNode[] = [];
   forEachPane(root, (node) => {
@@ -50,8 +62,10 @@ export default function CommandSendPanel({
   const [targetPaneId, setTargetPaneId] = useState<string | null>("active");
   const [runState, setRunState] = useState<RunState>("idle");
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
+  const [lineMeta, setLineMeta] = useState<Record<number, LineSendMeta>>({});
 
   const stopRef = useRef(false);
+  const lineCounterRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -205,6 +219,14 @@ export default function CommandSendPanel({
       writeSessionRef.current(id, dataToSend).catch(console.error);
     });
 
+    if (splitModeRef.current === "line" && chunkToLineIndex.length > 0) {
+      const sentLineIndex = chunkToLineIndex[chunkIndex];
+      lineCounterRef.current += 1;
+      const number = lineCounterRef.current;
+      const timestamp = formatTimestamp(new Date());
+      setLineMeta((prev) => ({ ...prev, [sentLineIndex]: { timestamp, number } }));
+    }
+
     chunkIndexRef.current++;
     if (chunkIndexRef.current >= chunks.length) {
       chunkIndexRef.current = 0;
@@ -262,6 +284,14 @@ export default function CommandSendPanel({
     sessionIds.forEach((id) => {
       writeSession(id, dataToSend).catch(console.error);
     });
+
+    if (splitMode === "line" && chunkToLineIndexRef.current.length > 0) {
+      const sentLineIndex = chunkToLineIndexRef.current[chunkIndex];
+      lineCounterRef.current += 1;
+      const number = lineCounterRef.current;
+      const timestamp = formatTimestamp(new Date());
+      setLineMeta((prev) => ({ ...prev, [sentLineIndex]: { timestamp, number } }));
+    }
 
     chunkIndexRef.current++;
     if (chunkIndexRef.current >= chunks.length) {
@@ -347,6 +377,9 @@ export default function CommandSendPanel({
           {lines.map((_, lineIndex) => {
             const hasBreakpoint = breakpoints.has(lineIndex);
             const isActive = activeLineIndex === lineIndex && runState !== "idle";
+            const meta = lineMeta[lineIndex];
+            const displayNumber = meta ? meta.number : lineIndex + 1;
+            const displayTimestamp = meta ? meta.timestamp : "";
             return (
               <div
                 key={lineIndex}
@@ -354,10 +387,11 @@ export default function CommandSendPanel({
                 onClick={() => toggleBreakpoint(lineIndex)}
                 title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
               >
+              <span className="panel-timestamp">{displayTimestamp ? `[${displayTimestamp}]` : ""}</span>
               <span className="panel-breakpoint">
                 {hasBreakpoint ? "●" : ""}
               </span>
-              <span className="panel-line-number">{lineIndex + 1}</span>
+              <span className="panel-line-number">{displayNumber}</span>
             </div>
           );
         })}
