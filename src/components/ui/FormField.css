@@ -4,6 +4,21 @@
   gap: 6px;
 }
 
+/* Checkbox-only fields render label and checkbox on the same row (label first).
+ * Non-checkbox fields keep the column layout above. :has() targets the direct
+ * child input, so a checkbox nested deeper (e.g. inside a custom widget) won't
+ * accidentally trigger row mode. */
+.form-field:has(> input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-field:has(> input[type="checkbox"]) .form-field__label::after {
+  content: ":";
+  margin-left: 4px;
+}
+
 .form-field__label {
   font-size: 13px;
   font-weight: 500;

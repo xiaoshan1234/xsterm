@@ -61,15 +61,15 @@ const DEFAULT_SSH: SSHSessionConfig = {
 
 interface SidebarDef {
   id: EditSectionId;
-  label: string;
+  label: ReactNode;
   icon: ReactNode;
 }
 
 const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
   local: [
     { id: "session", label: "Session", icon: <LocalSessionIcon size={16} /> },
-    { id: "displayLayout", label: "Display & Layout", icon: <LayoutIcon size={16} /> },
-    { id: "keyboard", label: "Keyboard & Input", icon: <SettingsIcon size={16} /> },
+    { id: "displayLayout", label: <>Display<br/>& Layout</>, icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: <>Keyboard<br/>& Input</>, icon: <SettingsIcon size={16} /> },
     { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
     { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
     { id: "process", label: "Process", icon: <SettingsIcon size={16} /> },
@@ -77,8 +77,8 @@ const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
   ssh: [
     { id: "session", label: "Session", icon: <SshSessionIcon size={16} /> },
     { id: "sshConnection", label: "SSH Connection", icon: <SettingsIcon size={16} /> },
-    { id: "displayLayout", label: "Display & Layout", icon: <LayoutIcon size={16} /> },
-    { id: "keyboard", label: "Keyboard & Input", icon: <SettingsIcon size={16} /> },
+    { id: "displayLayout", label: <>Display<br/>& Layout</>, icon: <LayoutIcon size={16} /> },
+    { id: "keyboard", label: <>Keyboard<br/>& Input</>, icon: <SettingsIcon size={16} /> },
     { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
     { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
   ],

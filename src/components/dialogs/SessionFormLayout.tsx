@@ -10,7 +10,7 @@ export interface SessionFormTab {
 
 export interface SessionFormSidebarItem {
   id: string;
-  label: string;
+  label: ReactNode;
   icon: ReactNode;
   active: boolean;
   onClick: () => void;

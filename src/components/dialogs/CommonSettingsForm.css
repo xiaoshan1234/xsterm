@@ -1,7 +1,9 @@
-/* Collapsible <details> groups used by CommonSettingsForm (Display /
- * Keyboard / Security / Logging sections). Restrained Cursor-style —
- * surface-card on hairline, weight-500 summary, accent chevron only when
- * the group is open. No glow, no shadow, no gradient. */
+/* Section groups used by CommonSettingsForm (Display / Keyboard /
+ * Security / Logging). Built on <details open> for semantic structure
+ * and accessibility, but the chevron is suppressed and the title cursor
+ * is default — each group is a plain section header with content always
+ * fully expanded. Restrained Cursor-style: surface-card on hairline,
+ * weight-500 title. No glow, no shadow, no gradient. */
 
 .common-settings-form {
   display: flex;
@@ -24,7 +26,7 @@
   color: var(--ink);
   background: var(--surface-card);
   border-bottom: 1px solid var(--hairline);
-  cursor: pointer;
+  cursor: default;
   user-select: none;
   list-style: none;
   display: flex;
@@ -43,23 +45,16 @@
   border-bottom-color: var(--accent);
 }
 
-/* Custom disclosure marker (replaces default triangle) */
+/* Hide both default and custom disclosure markers — the group is always
+ * open, so the title is a plain section header with no collapse affordance.
+ * Keeping the ::-webkit-details-marker rule explicitly prevents the default
+ * browser triangle from leaking through in WebKit/Blink. */
 .common-settings-group__title::-webkit-details-marker {
   display: none;
 }
 
 .common-settings-group__title::before {
-  content: "▸";
-  font-size: 11px;
-  color: var(--muted);
-  transition: transform 0.15s ease, color 0.15s ease;
-  display: inline-block;
-  width: 10px;
-}
-
-.common-settings-group[open] > .common-settings-group__title::before {
-  transform: rotate(90deg);
-  color: var(--accent);
+  display: none;
 }
 
 .common-settings-group__content {
