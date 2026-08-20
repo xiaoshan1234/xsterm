@@ -130,4 +130,24 @@ There are **no** `npm run lint`, `npm run test`, or `npm run format` scripts. Th
 
 ## Bug Fix Documentation
 
-After a bug is fixed, update `doc/bug.md` with the root cause and the solution details. Mark the bug as resolved (`是否解决: YES`) and keep the record in the same format as existing entries.
+After a bug is fixed, update `doc/maintenance/bug.md` with the root cause and the solution details. Mark the bug as resolved (`是否解决: YES`) and keep the record in the same format as existing entries.
+
+## Documentation Map
+
+All project documentation lives under `doc/`, organized by purpose:
+
+| Path | Purpose | When to read |
+|---|---|---|
+| `doc/design-system.md` | Cursor 暗色 IDE 适配版 UI 设计系统（**必读**） | 任何 UI 改动前 |
+| `doc/arch/architecture-map.md` | 全栈架构地图 + 复杂度热点 + onboarding path | 新人入门、改 session/window/pane 前 |
+| `doc/maintenance/bug.md` | 已知 bug 历史 + 修复记录（按时间倒序） | 改 bug 前查历史 |
+| `doc/requirements/prd-0.1/` | v0.1 PRD 拆解 + 需求文档（req-*.md）+ session-config 字段详表 | 做产品决策、改字段行为前 |
+| `doc/requirements/prd-0.1/create-session-config.md` | Create Session 表单字段完整参考 | 改 CreateSessionDialog 前 |
+| `doc/requirements/prd-0.1/session-config-{common,shell,ssh}.md` | Session config 三类字段详表 | 改 LocalSessionForm / SshSessionForm / CommonSettingsForm 前 |
+
+**已删除/过期的旧文档**（不要再引用）：
+- ~~`doc/frontend-architecture.md`~~ —— 2026-07-02 目标态（含 tmux 相关文件），与实际仓库不符，已删除
+- ~~`doc/architecture-map.md`~~ —— 已迁移到 `doc/arch/architecture-map.md`
+- ~~`doc/bug.md`~~ —— 已迁移到 `doc/maintenance/bug.md`
+- ~~`doc/req-*.md`~~ —— 已迁移到 `doc/requirements/prd-0.1/req-*.md`
+- ~~`doc/version.md`~~ / ~~`doc/dev-manage.md`~~ —— 已删除
