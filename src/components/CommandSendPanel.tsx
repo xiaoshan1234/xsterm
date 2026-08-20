@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
-import { Session, Workspace, PaneNode, Window } from "../types/session";
+import { useEffect, useState, type CSSProperties } from "react";
+import { Session, Workspace } from "../types/session";
 import { useDragResize } from "../hooks/useDragResize";
-import { forEachPane, findPaneNode, findFirstLeafWithSession, getPaneNumber } from "../contexts/session/paneUtils";
+import { getDefaultPaneId, useCommandTargets } from "./useCommandTargets";
+import { useCommandExecutor } from "./useCommandExecutor";
 import "./CommandSendPanel.css";
 
 interface CommandSendPanelProps {
@@ -13,39 +14,6 @@ interface CommandSendPanelProps {
 }
 
 type SplitMode = "line" | "character";
-type RunState = "idle" | "running" | "paused";
-
-interface LineSendMeta {
-  timestamp: string;
-  number: number;
-}
-
-function formatTimestamp(date: Date): string {
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
-}
-
-function getLeafPanesWithSession(root: PaneNode): PaneNode[] {
-  const panes: PaneNode[] = [];
-  forEachPane(root, (node) => {
-    if (node.type === "leaf" && node.sessionId !== undefined) {
-      panes.push(node);
-    }
-  });
-  return panes;
-}
-
-function getDefaultPaneId(window: Window): string | null {
-  if (window.activePaneId) {
-    const pane = findPaneNode(window.rootPane, window.activePaneId);
-    if (pane?.type === "leaf" && pane.sessionId !== undefined) {
-      return pane.id;
-    }
-  }
-  return findFirstLeafWithSession(window.rootPane)?.id ?? null;
-}
 
 export default function CommandSendPanel({
   workspace,
@@ -58,51 +26,18 @@ export default function CommandSendPanel({
   const [splitMode, setSplitMode] = useState<SplitMode>("line");
   const [count, setCount] = useState(1);
   const [intervalMs, setIntervalMs] = useState(1000);
-  const [targetWindowId, setTargetWindowId] = useState<string>("active");
-  const [targetPaneId, setTargetPaneId] = useState<string | null>("active");
-  const [runState, setRunState] = useState<RunState>("idle");
-  const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
-  const [lineMeta, setLineMeta] = useState<Record<number, LineSendMeta>>({});
 
-  const stopRef = useRef(false);
-  const lineCounterRef = useRef(0);
-  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
-
-  const chunkIndexRef = useRef(0);
-  const repetitionRef = useRef(0);
-  const chunksRef = useRef<string[]>([]);
-  const chunkToLineIndexRef = useRef<number[]>([]);
-  const hasUserSetIntervalRef = useRef(false);
-  const isContinuingRef = useRef(false);
-
-  const getTargetSessions = useCallback((): number[] => {
-    const resolvedWindowId =
-      targetWindowId === "active" ? workspace.activeWindowId : targetWindowId;
-    const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
-    if (!selectedWindow) return [];
-
-    const resolvedPaneId =
-      targetPaneId === "active" ? selectedWindow.activePaneId : targetPaneId;
-    const pane = resolvedPaneId
-      ? findPaneNode(selectedWindow.rootPane, resolvedPaneId)
-      : null;
-    if (pane && pane.type === "leaf" && pane.sessionId !== undefined) {
-      return [pane.sessionId];
-    }
-    return [];
-  }, [workspace, targetWindowId, targetPaneId]);
-
-  const breakpointsRef = useRef(breakpoints);
-  const countRef = useRef(count);
-  const intervalValueRef = useRef(intervalMs);
-  const splitModeRef = useRef(splitMode);
-  const writeSessionRef = useRef(writeSession);
-  const getTargetSessionsRef = useRef(getTargetSessions);
+  const targets = useCommandTargets(workspace);
+  const executor = useCommandExecutor({
+    input,
+    splitMode,
+    count,
+    intervalMs,
+    writeSession,
+    getTargetSessions: targets.getTargetSessions,
+  });
 
   const initialHeight = typeof style?.height === "number" ? style.height : 160;
-
   const { start } = useDragResize({
     direction: "vertical",
     onDelta: ({ delta, initialValue }) => {
@@ -111,293 +46,17 @@ export default function CommandSendPanel({
   });
 
   useEffect(() => {
-    breakpointsRef.current = breakpoints;
-    countRef.current = count;
-    intervalValueRef.current = intervalMs;
-    splitModeRef.current = splitMode;
-    writeSessionRef.current = writeSession;
-    getTargetSessionsRef.current = getTargetSessions;
-  });
-
-  useEffect(() => {
-    const resolvedWindowId =
-      targetWindowId === "active" ? workspace.activeWindowId : targetWindowId;
-    const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
-
-    if (!selectedWindow) {
-      setTargetWindowId("active");
-      setTargetPaneId("active");
-      return;
-    }
-
-    const panes = getLeafPanesWithSession(selectedWindow.rootPane);
-    if (panes.length === 0) {
-      setTargetWindowId("active");
-      setTargetPaneId("active");
-      return;
-    }
-
-    if (targetPaneId !== "active") {
-      const paneExists = panes.some((p) => p.id === targetPaneId);
-      if (!paneExists) {
-        setTargetPaneId("active");
-      }
-    }
-  }, [workspace, targetWindowId, targetPaneId]);
-
-  const parseChunks = useCallback((): { chunks: string[]; chunkToLineIndex: number[] } => {
-    if (!input.trim()) {
-      return { chunks: [], chunkToLineIndex: [] };
-    }
-
-    if (splitMode === "line") {
-      const lines = input.split("\n");
-      const chunks: string[] = [];
-      const chunkToLineIndex: number[] = [];
-      lines.forEach((line, lineIndex) => {
-        if (line.length > 0) {
-          chunks.push(line);
-          chunkToLineIndex.push(lineIndex);
-        }
-      });
-      return { chunks, chunkToLineIndex };
-    }
-
-    return { chunks: input.split("").filter((c) => c.length > 0), chunkToLineIndex: [] };
-  }, [input, splitMode]);
-
-  const currentLineIndex = useCallback((): number | null => {
-    const idx = chunkIndexRef.current;
-    if (idx < 0 || idx >= chunkToLineIndexRef.current.length) return null;
-    return chunkToLineIndexRef.current[idx];
-  }, []);
-
-  const clearTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearTimeout(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
-  const resetExecution = useCallback(() => {
-    clearTimer();
-    stopRef.current = true;
-    isContinuingRef.current = false;
-    chunkIndexRef.current = 0;
-    repetitionRef.current = 0;
-    chunksRef.current = [];
-    chunkToLineIndexRef.current = [];
-    setRunState("idle");
-  }, [clearTimer]);
-
-  const runNext = useCallback(() => {
-    if (stopRef.current) return;
-
-    const chunks = chunksRef.current;
-    const chunkToLineIndex = chunkToLineIndexRef.current;
-
-    if (repetitionRef.current >= countRef.current || chunks.length === 0) {
-      resetExecution();
-      return;
-    }
-
-    const chunkIndex = chunkIndexRef.current;
-    const chunk = chunks[chunkIndex];
-
-    if (splitModeRef.current === "line" && chunkToLineIndex.length > 0) {
-      const lineIndex = chunkToLineIndex[chunkIndex];
-      if (breakpointsRef.current.has(lineIndex)) {
-        setRunState("paused");
-        return;
-      }
-    }
-
-    const dataToSend = splitModeRef.current === "line" ? chunk + "\r\n" : chunk;
-
-    const sessionIds = getTargetSessionsRef.current();
-    sessionIds.forEach((id) => {
-      writeSessionRef.current(id, dataToSend).catch(console.error);
-    });
-
-    if (splitModeRef.current === "line" && chunkToLineIndex.length > 0) {
-      const sentLineIndex = chunkToLineIndex[chunkIndex];
-      lineCounterRef.current += 1;
-      const number = lineCounterRef.current;
-      const timestamp = formatTimestamp(new Date());
-      setLineMeta((prev) => ({ ...prev, [sentLineIndex]: { timestamp, number } }));
-    }
-
-    chunkIndexRef.current++;
-    if (chunkIndexRef.current >= chunks.length) {
-      chunkIndexRef.current = 0;
-      repetitionRef.current++;
-    }
-
-    if (stopRef.current) return;
-
-    if (repetitionRef.current >= countRef.current) {
-      resetExecution();
-      return;
-    }
-
-    const currentInterval = intervalValueRef.current;
-    if (currentInterval > 0) {
-      intervalRef.current = setTimeout(runNext, currentInterval);
-    } else {
-      intervalRef.current = setTimeout(runNext, 0);
-    }
-  }, [resetExecution]);
-
-  const startExecution = useCallback(() => {
-    const { chunks, chunkToLineIndex } = parseChunks();
-    if (chunks.length === 0) return;
-
-    const sessionIds = getTargetSessions();
-    if (sessionIds.length === 0) return;
-
-    chunksRef.current = chunks;
-    chunkToLineIndexRef.current = chunkToLineIndex;
-    chunkIndexRef.current = 0;
-    repetitionRef.current = 0;
-    stopRef.current = false;
-
-    setRunState("running");
-    runNext();
-  }, [parseChunks, getTargetSessions, runNext]);
-
-  const handleContinue = useCallback(() => {
-    if (runState !== "paused" || isContinuingRef.current) return;
-    isContinuingRef.current = true;
-
-    const chunks = chunksRef.current;
-    const chunkIndex = chunkIndexRef.current;
-
-    if (chunkIndex >= chunks.length || chunks.length === 0) {
-      resetExecution();
-      return;
-    }
-
-    const chunk = chunks[chunkIndex];
-    const dataToSend = splitMode === "line" ? chunk + "\r\n" : chunk;
-
-    const sessionIds = getTargetSessions();
-    sessionIds.forEach((id) => {
-      writeSession(id, dataToSend).catch(console.error);
-    });
-
-    if (splitMode === "line" && chunkToLineIndexRef.current.length > 0) {
-      const sentLineIndex = chunkToLineIndexRef.current[chunkIndex];
-      lineCounterRef.current += 1;
-      const number = lineCounterRef.current;
-      const timestamp = formatTimestamp(new Date());
-      setLineMeta((prev) => ({ ...prev, [sentLineIndex]: { timestamp, number } }));
-    }
-
-    chunkIndexRef.current++;
-    if (chunkIndexRef.current >= chunks.length) {
-      chunkIndexRef.current = 0;
-      repetitionRef.current++;
-    }
-
-    if (repetitionRef.current >= count) {
-      resetExecution();
-      return;
-    }
-
-    setRunState("running");
-    stopRef.current = false;
-
-    isContinuingRef.current = false;
-
-    if (intervalMs > 0) {
-      intervalRef.current = setTimeout(runNext, intervalMs);
-    } else {
-      intervalRef.current = setTimeout(runNext, 0);
-    }
-  }, [count, getTargetSessions, intervalMs, resetExecution, runNext, runState, splitMode, writeSession]);
-
-  const handleStop = useCallback(() => {
-    if (runState === "running" || runState === "paused") {
-      isContinuingRef.current = false;
-      resetExecution();
-    }
-  }, [resetExecution, runState]);
-
-  const handlePlay = useCallback(() => {
-    if (runState === "running") return;
-    if (runState === "paused") {
-      handleContinue();
-      return;
-    }
-    startExecution();
-  }, [handleContinue, runState, startExecution]);
-
-  useEffect(() => {
-    if (!hasUserSetIntervalRef.current) {
+    if (!executor.intervalUserSet) {
       setIntervalMs(splitMode === "line" ? 1000 : 20);
     }
-  }, [splitMode]);
-
-  useEffect(() => {
-    return () => {
-      clearTimer();
-    };
-  }, [clearTimer]);
+  }, [splitMode, executor.intervalUserSet]);
 
   const adjustCount = (delta: number) => {
     setCount((prev) => Math.max(1, prev + delta));
   };
 
-  const toggleBreakpoint = (lineIndex: number) => {
-    setBreakpoints((prev) => {
-      const next = new Set(prev);
-      if (next.has(lineIndex)) {
-        next.delete(lineIndex);
-      } else {
-        next.add(lineIndex);
-      }
-      return next;
-    });
-  };
-
   const lines = input.split("\n");
-  const activeLineIndex = currentLineIndex();
-
-  const selectedWindow = workspace.windows.find((w) => w.id === targetWindowId);
-  const paneOptions = selectedWindow
-    ? getLeafPanesWithSession(selectedWindow.rootPane).map((pane) => ({
-        pane,
-        number: getPaneNumber(selectedWindow.rootPane, pane.id),
-      }))
-    : [];
-
-  const renderGutter = () => {
-    return (
-      <div className="panel-gutter" ref={gutterRef}>
-          {lines.map((_, lineIndex) => {
-            const hasBreakpoint = breakpoints.has(lineIndex);
-            const isActive = activeLineIndex === lineIndex && runState !== "idle";
-            const meta = lineMeta[lineIndex];
-            const displayNumber = meta ? meta.number : lineIndex + 1;
-            const displayTimestamp = meta ? meta.timestamp : "";
-            return (
-              <div
-                key={lineIndex}
-                className={`panel-gutter-line ${isActive ? "panel-gutter-line--active" : ""}`}
-                onClick={() => toggleBreakpoint(lineIndex)}
-                title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
-              >
-              <span className="panel-timestamp">{displayTimestamp ? `[${displayTimestamp}]` : ""}</span>
-              <span className="panel-breakpoint">
-                {hasBreakpoint ? "●" : ""}
-              </span>
-              <span className="panel-line-number">{displayNumber}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+  const activeLineIndex = executor.getActiveLineIndex();
 
   return (
     <div
@@ -421,15 +80,15 @@ export default function CommandSendPanel({
         <div className="control-group">
           <button
             className="btn btn--secondary"
-            onClick={handlePlay}
-            disabled={runState === "running"}
-            title={runState === "paused" ? "Continue" : "Play"}
+            onClick={executor.handlePlay}
+            disabled={executor.runState === "running"}
+            title={executor.runState === "paused" ? "Continue" : "Play"}
           >
             ▶
           </button>
           <button
-            className={`btn btn--secondary ${runState !== "idle" ? "panel-stop--running" : ""}`}
-            onClick={handleStop}
+            className={`btn btn--secondary ${executor.runState !== "idle" ? "panel-stop--running" : ""}`}
+            onClick={executor.handleStop}
             title="Stop"
           >
             ■
@@ -484,7 +143,7 @@ export default function CommandSendPanel({
               step={1}
               value={intervalMs}
               onChange={(e) => {
-                hasUserSetIntervalRef.current = true;
+                executor.markIntervalUserSet();
                 setIntervalMs(Math.max(0, parseInt(e.target.value) || 0));
               }}
             />
@@ -496,15 +155,15 @@ export default function CommandSendPanel({
           <label className="input-label">
             <span>Window</span>
             <select
-              value={targetWindowId}
+              value={targets.targetWindowId}
               onChange={(e) => {
                 const newWindowId = e.target.value;
-                setTargetWindowId(newWindowId);
+                targets.setTargetWindowId(newWindowId);
                 if (newWindowId === "active") {
-                  setTargetPaneId("active");
+                  targets.setTargetPaneId("active");
                 } else {
                   const newWindow = workspace.windows.find((w) => w.id === newWindowId);
-                  setTargetPaneId(newWindow ? getDefaultPaneId(newWindow) : null);
+                  targets.setTargetPaneId(newWindow ? getDefaultPaneId(newWindow) : null);
                 }
               }}
             >
@@ -522,11 +181,11 @@ export default function CommandSendPanel({
           <label className="input-label">
             <span>Pane</span>
             <select
-              value={targetPaneId ?? ""}
-              onChange={(e) => setTargetPaneId(e.target.value || null)}
+              value={targets.targetPaneId ?? ""}
+              onChange={(e) => targets.setTargetPaneId(e.target.value || null)}
             >
               <option value="active">Active</option>
-              {paneOptions.map(({ pane, number }) => {
+              {targets.paneOptions.map(({ pane, number }) => {
                 const session = sessions.find((s) => s.id === pane.sessionId);
                 return (
                   <option key={pane.id} value={pane.id}>
@@ -540,9 +199,28 @@ export default function CommandSendPanel({
       </div>
 
       <div className="panel-row panel-editor">
-        {renderGutter()}
+        <div className="panel-gutter">
+          {lines.map((_, lineIndex) => {
+            const hasBreakpoint = executor.breakpoints.has(lineIndex);
+            const isActive = activeLineIndex === lineIndex && executor.runState !== "idle";
+            const meta = executor.lineMeta[lineIndex];
+            const displayNumber = meta ? meta.number : lineIndex + 1;
+            const displayTimestamp = meta ? meta.timestamp : "";
+            return (
+              <div
+                key={lineIndex}
+                className={`panel-gutter-line ${isActive ? "panel-gutter-line--active" : ""}`}
+                onClick={() => executor.toggleBreakpoint(lineIndex)}
+                title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
+              >
+                <span className="panel-timestamp">{displayTimestamp ? `[${displayTimestamp}]` : ""}</span>
+                <span className="panel-breakpoint">{hasBreakpoint ? "●" : ""}</span>
+                <span className="panel-line-number">{displayNumber}</span>
+              </div>
+            );
+          })}
+        </div>
         <textarea
-          ref={textareaRef}
           className="panel-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
