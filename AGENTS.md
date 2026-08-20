@@ -78,6 +78,7 @@ There are **no** `npm run lint`, `npm run test`, or `npm run format` scripts. Th
 - Components import from these service modules, not directly from `@tauri-apps/api`.
 - Styling is plain CSS only (no Tailwind, CSS-in-JS, or UI framework). CSS files are colocated next to components.
 - The app has no router; view switching is state-driven inside `AppLayout`.
+- Full architecture overview, complexity hotspots, and onboarding path: [`doc/arch/architecture-map.md`](doc/arch/architecture-map.md).
 
 ### Backend
 
