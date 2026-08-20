@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { SSHSessionConfig } from "../../types/session";
-import { FormField } from "../ui/FormField";
+import { type SSHSessionConfig } from "../../types/session";
+import { FormNumberField } from "./FormNumberField";
+import { FormSelectField } from "./FormSelectField";
+import { FormTextField } from "./FormTextField";
 import "./SshSessionForm.css";
 
 const TERM_TYPES = [
@@ -25,11 +27,6 @@ interface SshOpts {
   proxyJump?: string;
 }
 
-// Empty input → undefined so backend #[serde(default)] takes over.
-function parseOptionalInt(value: string): number | undefined {
-  return value.trim() ? parseInt(value, 10) : undefined;
-}
-
 interface SshSessionFormProps {
   config: SSHSessionConfig;
   onChange: (config: SSHSessionConfig) => void;
@@ -52,11 +49,7 @@ interface SshSessionFormProps {
   section?: "link" | "system";
 }
 
-export function SshSessionForm({
-  config,
-  onChange,
-  section,
-}: SshSessionFormProps) {
+export function SshSessionForm({ config, onChange, section }: SshSessionFormProps) {
   const showLink = !section || section === "link";
   const showSystem = !section || section === "system";
 
@@ -96,81 +89,58 @@ export function SshSessionForm({
     <>
       {showLink && (
         <>
-          <FormField label="Host">
-            <input
-              type="text"
-              placeholder="example.com"
-              value={config.host}
-              onChange={(e) => onChange({ ...config, host: e.target.value })}
-            />
-          </FormField>
-          <FormField label="Port">
-            <input
-              type="number"
-              placeholder="22"
-              value={config.port}
-              onChange={(e) =>
-                onChange({ ...config, port: parseInt(e.target.value) || 22 })
-              }
-            />
-          </FormField>
-          <FormField label="Username">
-            <input
-              type="text"
-              placeholder="root"
-              value={config.username}
-              onChange={(e) =>
-                onChange({ ...config, username: e.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="Authentication">
-            <select
-              value={config.auth_type}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  auth_type: e.target.value as "password" | "key",
-                })
-              }
-            >
-              <option value="password">Password</option>
-              <option value="key">Key File</option>
-            </select>
-          </FormField>
+          <FormTextField
+            label="Host"
+            placeholder="example.com"
+            value={config.host}
+            onChange={(host) => onChange({ ...config, host: host ?? "" })}
+          />
+          <FormNumberField
+            label="Port"
+            placeholder="22"
+            min={1}
+            max={65535}
+            value={config.port}
+            onChange={(v) => onChange({ ...config, port: v ?? 22 })}
+          />
+          <FormTextField
+            label="Username"
+            placeholder="root"
+            value={config.username}
+            onChange={(username) => onChange({ ...config, username: username ?? "" })}
+          />
+          <FormSelectField
+            label="Authentication"
+            value={config.auth_type}
+            onChange={(v) => onChange({ ...config, auth_type: v as "password" | "key" })}
+            options={[
+              { value: "password", label: "Password" },
+              { value: "key", label: "Key File" },
+            ]}
+          />
           {config.auth_type === "password" ? (
-            <FormField label="Password">
-              <input
-                type="password"
-                placeholder="********"
-                value={config.password || ""}
-                onChange={(e) =>
-                  onChange({ ...config, password: e.target.value })
-                }
-              />
-            </FormField>
+            <FormTextField
+              label="Password"
+              placeholder="********"
+              type="password"
+              value={config.password}
+              onChange={(password) => onChange({ ...config, password })}
+            />
           ) : (
             <>
-              <FormField label="Key File Path">
-                <input
-                  type="text"
-                  placeholder="~/.ssh/id_rsa"
-                  value={config.key_file || ""}
-                  onChange={(e) =>
-                    onChange({ ...config, key_file: e.target.value })
-                  }
-                />
-              </FormField>
-              <FormField label="Passphrase (optional)">
-                <input
-                  type="password"
-                  placeholder="********"
-                  value={config.passphrase || ""}
-                  onChange={(e) =>
-                    onChange({ ...config, passphrase: e.target.value })
-                  }
-                />
-              </FormField>
+              <FormTextField
+                label="Key File Path"
+                placeholder="~/.ssh/id_rsa"
+                value={config.key_file}
+                onChange={(key_file) => onChange({ ...config, key_file })}
+              />
+              <FormTextField
+                label="Passphrase (optional)"
+                placeholder="********"
+                type="password"
+                value={config.passphrase}
+                onChange={(passphrase) => onChange({ ...config, passphrase })}
+              />
             </>
           )}
         </>
@@ -190,56 +160,33 @@ export function SshSessionForm({
             </span>
           </button>
           {showConnectionOptions && (
-            <div
-              id="ssh-opts-body"
-              className="ssh-opts-section__body"
-            >
-              <FormField label="Terminal Type">
-                <select
-                  value={sshOpts.termType || "xterm-256color"}
-                  onChange={(e) => updateOpts({ termType: e.target.value })}
-                >
-                  {TERM_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
+            <div id="ssh-opts-body" className="ssh-opts-section__body">
+              <FormSelectField
+                label="Terminal Type"
+                value={sshOpts.termType || "xterm-256color"}
+                onChange={(v) => updateOpts({ termType: v })}
+                options={TERM_TYPES}
+              />
               <div className="ssh-opts-row">
-                <FormField label="Initial Rows">
-                  <input
-                    type="number"
-                    placeholder="24"
-                    value={sshOpts.initialRows ?? ""}
-                    onChange={(e) =>
-                      updateOpts({ initialRows: parseOptionalInt(e.target.value) })
-                    }
-                  />
-                </FormField>
-                <FormField label="Initial Cols">
-                  <input
-                    type="number"
-                    placeholder="80"
-                    value={sshOpts.initialCols ?? ""}
-                    onChange={(e) =>
-                      updateOpts({ initialCols: parseOptionalInt(e.target.value) })
-                    }
-                  />
-                </FormField>
-              </div>
-              <FormField label="Keepalive Interval (seconds)">
-                <input
-                  type="number"
-                  placeholder="(disabled)"
-                  value={sshOpts.keepaliveInterval ?? ""}
-                  onChange={(e) =>
-                    updateOpts({
-                      keepaliveInterval: parseOptionalInt(e.target.value),
-                    })
-                  }
+                <FormNumberField
+                  label="Initial Rows"
+                  placeholder="24"
+                  value={sshOpts.initialRows}
+                  onChange={(initialRows) => updateOpts({ initialRows })}
                 />
-              </FormField>
+                <FormNumberField
+                  label="Initial Cols"
+                  placeholder="80"
+                  value={sshOpts.initialCols}
+                  onChange={(initialCols) => updateOpts({ initialCols })}
+                />
+              </div>
+              <FormNumberField
+                label="Keepalive Interval (seconds)"
+                placeholder="(disabled)"
+                value={sshOpts.keepaliveInterval}
+                onChange={(keepaliveInterval) => updateOpts({ keepaliveInterval })}
+              />
             </div>
           )}
         </div>

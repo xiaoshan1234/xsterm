@@ -1,14 +1,25 @@
 import { useCallback, useEffect } from "react";
 import * as sessionStorage from "../../services/sessionStorage";
-import { SavedSessionConfig, SavedWindowConfig, SavedWorkspace, SessionGroup } from "../../types/session";
-import { SessionPersistence } from "./types";
+import {
+  type SavedSessionConfig,
+  type SavedWindowConfig,
+  type SavedWorkspace,
+  type SessionGroup,
+} from "../../types/session";
+import { type SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {
-  setSavedConfigs: (value: SavedSessionConfig[] | ((prev: SavedSessionConfig[]) => SavedSessionConfig[])) => void;
+  setSavedConfigs: (
+    value: SavedSessionConfig[] | ((prev: SavedSessionConfig[]) => SavedSessionConfig[]),
+  ) => void;
   setGroups: (value: SessionGroup[] | ((prev: SessionGroup[]) => SessionGroup[])) => void;
   setNextGroupId: (value: number | ((prev: number) => number)) => void;
-  setSavedWorkspaces: (value: SavedWorkspace[] | ((prev: SavedWorkspace[]) => SavedWorkspace[])) => void;
-  setSavedWindowConfigs: (value: SavedWindowConfig[] | ((prev: SavedWindowConfig[]) => SavedWindowConfig[])) => void;
+  setSavedWorkspaces: (
+    value: SavedWorkspace[] | ((prev: SavedWorkspace[]) => SavedWorkspace[]),
+  ) => void;
+  setSavedWindowConfigs: (
+    value: SavedWindowConfig[] | ((prev: SavedWindowConfig[]) => SavedWindowConfig[]),
+  ) => void;
   setGlobalLocalEcho: (value: boolean | ((prev: boolean) => boolean)) => void;
   globalLocalEcho: boolean;
   nextGroupId: number;
@@ -40,7 +51,7 @@ export function useSessionPersistence({
         return updated;
       });
     },
-    [setSavedConfigs]
+    [setSavedConfigs],
   );
 
   const updateGroups = useCallback(
@@ -51,7 +62,7 @@ export function useSessionPersistence({
         return updated;
       });
     },
-    [nextGroupId, setGroups]
+    [nextGroupId, setGroups],
   );
 
   useEffect(() => {
@@ -79,7 +90,14 @@ export function useSessionPersistence({
       }
     };
     init();
-  }, [setSavedConfigs, setGroups, setNextGroupId, setSavedWorkspaces, setSavedWindowConfigs, setGlobalLocalEcho]);
+  }, [
+    setSavedConfigs,
+    setGroups,
+    setNextGroupId,
+    setSavedWorkspaces,
+    setSavedWindowConfigs,
+    setGlobalLocalEcho,
+  ]);
 
   useEffect(() => {
     let cancelled = false;

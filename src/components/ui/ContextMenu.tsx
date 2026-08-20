@@ -3,7 +3,7 @@ import {
   useEffect,
   useRef,
   useCallback,
-  ReactNode,
+  type ReactNode,
   forwardRef,
   useImperativeHandle,
 } from "react";
@@ -30,7 +30,7 @@ interface ContextMenuProps {
 
 export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function ContextMenu(
   { items, children, onOpen, className },
-  ref
+  ref,
 ) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -44,7 +44,7 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
       setIsOpen(true);
       onOpen?.();
     },
-    [items.length, onOpen]
+    [items.length, onOpen],
   );
 
   const closeMenu = useCallback(() => {
@@ -57,7 +57,7 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
       open: openMenu,
       close: closeMenu,
     }),
-    [openMenu, closeMenu]
+    [openMenu, closeMenu],
   );
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -97,13 +97,11 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
 
   return (
     <>
-      <div onContextMenu={handleContextMenu} className={className}>{children}</div>
+      <div onContextMenu={handleContextMenu} className={className}>
+        {children}
+      </div>
       {isOpen && (
-        <div
-          ref={menuRef}
-          className="context-menu"
-          style={{ left: position.x, top: position.y }}
-        >
+        <div ref={menuRef} className="context-menu" style={{ left: position.x, top: position.y }}>
           {items.map((item, index) => (
             <button
               key={item.id ?? item.label ?? index}

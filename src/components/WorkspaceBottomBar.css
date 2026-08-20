@@ -35,7 +35,9 @@
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .workspace-bottom-bar-button:hover {
@@ -158,7 +160,9 @@
   border-radius: var(--radius-xs);
   color: var(--body);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .workspace-switcher-item-close:hover {

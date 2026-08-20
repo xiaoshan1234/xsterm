@@ -13,7 +13,7 @@ export interface LogEntry {
 }
 
 export interface LoggerConfig {
-  maxFileSize: number;   // MB
+  maxFileSize: number; // MB
   maxLogFiles: number;
   logLevel: LogLevel;
 }

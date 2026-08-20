@@ -1,13 +1,14 @@
 import { useCallback, useRef, useState } from "react";
-import { PaneNode, SplitDirection, Workspace } from "../types/session";
+import { type PaneNode, type SplitDirection, type Workspace } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import * as paneTree from "../utils/paneTree";
 import { isSessionUsedInOtherWindow, getPaneNumber } from "../contexts/session/paneUtils";
 import { useTheme } from "../contexts/ThemeContext";
-import Terminal, { TerminalRef } from "./Terminal";
-import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
+import Terminal, { type TerminalRef } from "./Terminal";
+import { ContextMenu, type ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
 import { PaneInitCard } from "./PaneInitCard";
+import { buildPaneContextMenu } from "./paneContextMenu";
 import "./Pane.css";
 
 interface PaneProps {
@@ -21,7 +22,14 @@ interface PaneProps {
 
 type DialogMode = "split" | "attach";
 
-export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onActivate }: PaneProps) {
+export function Pane({
+  workspace,
+  windowId,
+  pane,
+  isActive,
+  isWindowActive,
+  onActivate,
+}: PaneProps) {
   const {
     sessions,
     workspaces,
@@ -52,7 +60,8 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
     setIsSubmitting(false);
   };
 
-  const session = pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
+  const session =
+    pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
   const selectedWindow = workspace.windows.find((w) => w.id === windowId);
   const paneNumber = selectedWindow ? getPaneNumber(selectedWindow.rootPane, pane.id) : null;
 
@@ -80,11 +89,11 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
           ...pane,
           sessionId,
           configId: attachedSession?.configId,
-        })
+        }),
       );
       onActivate();
     },
-    [workspaces, workspace.id, windowId, pane, sessions, updateWindowPaneTree, onActivate]
+    [workspaces, workspace.id, windowId, pane, sessions, updateWindowPaneTree, onActivate],
   );
 
   const handleSelectSession = useCallback(
@@ -110,7 +119,16 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
         endSubmitting();
       }
     },
-    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, attachSessionToPane, sessions]
+    [
+      dialogMode,
+      pendingSplit,
+      workspace.id,
+      windowId,
+      pane.id,
+      splitPane,
+      attachSessionToPane,
+      sessions,
+    ],
   );
 
   const handleSelectConfig = useCallback(
@@ -136,7 +154,16 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
         endSubmitting();
       }
     },
-    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, splitPane, createSessionFromSavedConfig, attachSessionToPane]
+    [
+      dialogMode,
+      pendingSplit,
+      workspace.id,
+      windowId,
+      pane.id,
+      splitPane,
+      createSessionFromSavedConfig,
+      attachSessionToPane,
+    ],
   );
 
   const handleCloseSession = useCallback(() => {
@@ -167,62 +194,20 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
     contextMenuRef.current?.open(e.clientX, e.clientY);
   }, []);
 
-  const contextMenuItems: ContextMenuItem[] = [
-    {
-      label: "Split Horizontal",
-      onClick: () => handleStartSplit("horizontal"),
-    },
-    {
-      label: "Split Vertical",
-      onClick: () => handleStartSplit("vertical"),
-    },
-  ];
+  const handleClosePane = useCallback(() => {
+    closePane(workspace.id, windowId, pane.id);
+  }, [closePane, workspace.id, windowId, pane.id]);
 
-  if (!session) {
-    contextMenuItems.push({
-      label: "Attach Session",
-      onClick: handleStartAttach,
-    });
-  }
-
-  if (session) {
-    contextMenuItems.push(
-      {
-        label: "Select All",
-        onClick: handleSelectAll,
-      },
-      {
-        label: "Copy",
-        onClick: handleCopy,
-      }
-    );
-
-    if (session.isConnected) {
-      contextMenuItems.push({
-        label: "Paste",
-        onClick: handlePaste,
-      });
-    }
-
-    contextMenuItems.push({
-      label: "Clear Pane",
-      onClick: handleClear,
-    });
-  }
-
-  contextMenuItems.push({
-    label: "Close Pane",
-    onClick: () => closePane(workspace.id, windowId, pane.id),
-    danger: true,
+  const contextMenuItems = buildPaneContextMenu(session, {
+    startSplit: handleStartSplit,
+    startAttach: handleStartAttach,
+    selectAll: handleSelectAll,
+    copy: handleCopy,
+    paste: handlePaste,
+    clear: handleClear,
+    closePane: handleClosePane,
+    closeSession: handleCloseSession,
   });
-
-  if (session) {
-    contextMenuItems.push({
-      label: "Close Session",
-      onClick: handleCloseSession,
-      danger: true,
-    });
-  }
 
   return (
     <>
@@ -233,10 +218,7 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
           onContextMenuCapture={handleContextMenuCapture}
         >
           {paneNumber !== null && (
-            <div
-              className="pane-number-badge"
-              style={{ background: currentTheme.background }}
-            >
+            <div className="pane-number-badge" style={{ background: currentTheme.background }}>
               {paneNumber}
             </div>
           )}
@@ -248,7 +230,17 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
                 </div>
               )}
               <div className="pane-terminal-wrapper">
-                <Terminal ref={terminalRef} sessionId={session.id} sessionType={session.type} isActive={isActive && isWindowActive} isWindowActive={isWindowActive} onFocus={onActivate} isConnected={session.isConnected} configId={session.configId} displayConfig={session.displayConfig} />
+                <Terminal
+                  ref={terminalRef}
+                  sessionId={session.id}
+                  sessionType={session.type}
+                  isActive={isActive && isWindowActive}
+                  isWindowActive={isWindowActive}
+                  onFocus={onActivate}
+                  isConnected={session.isConnected}
+                  configId={session.configId}
+                  displayConfig={session.displayConfig}
+                />
               </div>
             </div>
           ) : (
@@ -258,8 +250,8 @@ export function Pane({ workspace, windowId, pane, isActive, isWindowActive, onAc
               subtitle="Create or open a session"
             />
           )}
-          </div>
-        </ContextMenu>
+        </div>
+      </ContextMenu>
       <SelectSessionDialog
         isOpen={showSessionDialog}
         onClose={() => {

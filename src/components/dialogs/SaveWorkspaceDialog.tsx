@@ -1,5 +1,5 @@
 import { SaveDialog } from "./SaveDialog";
-import { SavedWorkspace } from "../../types/session";
+import { type SavedWorkspace } from "../../types/session";
 
 interface SaveWorkspaceDialogProps {
   isOpen: boolean;
@@ -9,7 +9,13 @@ interface SaveWorkspaceDialogProps {
   savedWorkspaces: SavedWorkspace[];
 }
 
-export function SaveWorkspaceDialog({ isOpen, onClose, onSave, defaultName, savedWorkspaces }: SaveWorkspaceDialogProps) {
+export function SaveWorkspaceDialog({
+  isOpen,
+  onClose,
+  onSave,
+  defaultName,
+  savedWorkspaces,
+}: SaveWorkspaceDialogProps) {
   return (
     <SaveDialog
       isOpen={isOpen}

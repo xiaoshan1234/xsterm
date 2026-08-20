@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { SessionGroup } from "../../types/session";
+import { type SessionGroup } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 
@@ -29,7 +29,7 @@ export function EditGroupDialog({ isOpen, onClose, group, groups, onSave }: Edit
       return;
     }
     const duplicate = groups.some(
-      (g) => g.id !== group.id && g.name.toLowerCase() === trimmed.toLowerCase()
+      (g) => g.id !== group.id && g.name.toLowerCase() === trimmed.toLowerCase(),
     );
     if (duplicate) {
       setError("A group with this name already exists");
@@ -47,8 +47,12 @@ export function EditGroupDialog({ isOpen, onClose, group, groups, onSave }: Edit
       size="small"
       footer={
         <div className="dialog-footer-buttons">
-          <button className="btn btn--secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn--primary" onClick={handleSave}>Save</button>
+          <button className="btn btn--secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn--primary" onClick={handleSave}>
+            Save
+          </button>
         </div>
       }
     >
@@ -57,7 +61,10 @@ export function EditGroupDialog({ isOpen, onClose, group, groups, onSave }: Edit
         <input
           type="text"
           value={name}
-          onChange={(e) => { setName(e.target.value); setError(""); }}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError("");
+          }}
           onKeyDown={(e) => e.key === "Enter" && handleSave()}
           autoFocus
         />

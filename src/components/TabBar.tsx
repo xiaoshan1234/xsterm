@@ -1,12 +1,7 @@
-import { MouseEvent, KeyboardEvent } from "react";
-import { Workspace, PaneNode, Session } from "../types/session";
-import {
-  CloseIcon,
-  LocalSessionIcon,
-  SshSessionIcon,
-  LayoutIcon,
-} from "./icons/Icon";
-import { ContextMenu, ContextMenuItem } from "./ui/ContextMenu";
+import { type MouseEvent, type KeyboardEvent } from "react";
+import { type Workspace, type PaneNode, type Session } from "../types/session";
+import { CloseIcon, LocalSessionIcon, SshSessionIcon, LayoutIcon } from "./icons/Icon";
+import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
 import "./TabBar.css";
 
 interface TabBarProps {
@@ -18,7 +13,14 @@ interface TabBarProps {
   onSave: (workspaceId: string) => void;
 }
 
-export default function TabBar({ workspaces, sessions, activeWorkspaceId, onSelect, onClose, onSave }: TabBarProps) {
+export default function TabBar({
+  workspaces,
+  sessions,
+  activeWorkspaceId,
+  onSelect,
+  onClose,
+  onSave,
+}: TabBarProps) {
   const sortedWorkspaces = [...workspaces].sort((a, b) => {
     if (a.name === "default") return -1;
     if (b.name === "default") return 1;
@@ -75,8 +77,12 @@ function getFirstLeafWithSession(root: PaneNode): PaneNode | null {
   return null;
 }
 
-function getWorkspaceSessionType(workspace: Workspace, sessions: Session[]): Session["type"] | null {
-  const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
+function getWorkspaceSessionType(
+  workspace: Workspace,
+  sessions: Session[],
+): Session["type"] | null {
+  const activeWindow =
+    workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
   if (!activeWindow) return null;
   let leaf: PaneNode | null = null;
   if (activeWindow.activePaneId) {
@@ -100,7 +106,15 @@ function SessionTypeIcon({ type, size }: { type: Session["type"]; size: number }
   }
 }
 
-function WorkspaceTab({ workspace, sessions, isActive, isDefault, onSelect, onClose, onSave }: WorkspaceTabProps) {
+function WorkspaceTab({
+  workspace,
+  sessions,
+  isActive,
+  isDefault,
+  onSelect,
+  onClose,
+  onSave,
+}: WorkspaceTabProps) {
   const handleCloseClick = (e: MouseEvent) => {
     e.stopPropagation();
     onClose();
@@ -137,7 +151,11 @@ function WorkspaceTab({ workspace, sessions, isActive, isDefault, onSelect, onCl
         onKeyDown={handleKeyDown}
       >
         <span className="tab-icon">
-          {sessionType ? <SessionTypeIcon type={sessionType} size={14} /> : <LayoutIcon size={14} />}
+          {sessionType ? (
+            <SessionTypeIcon type={sessionType} size={14} />
+          ) : (
+            <LayoutIcon size={14} />
+          )}
         </span>
         <span className="tab-title">{workspace.name}</span>
         {!isDefault && (

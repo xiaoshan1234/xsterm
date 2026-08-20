@@ -1,15 +1,17 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { findPaneNode, getLeafPaneIds, isSessionInPaneTree, removeSessionAndCollapse, withRecomputedSessionIds } from "./paneUtils";
-import { SessionState } from "./types";
+import {
+  findPaneNode,
+  getLeafPaneIds,
+  isSessionInPaneTree,
+  removeSessionAndCollapse,
+  withRecomputedSessionIds,
+} from "./paneUtils";
+import { type SessionState } from "./types";
 
 type ListenersState = Pick<
   SessionState,
-  | "setSessions"
-  | "setWorkspaces"
-  | "sessionsRef"
-  | "workspacesRef"
-  | "establishingSessionsRef"
+  "setSessions" | "setWorkspaces" | "sessionsRef" | "workspacesRef" | "establishingSessionsRef"
 >;
 
 export function useTauriListeners({
@@ -27,7 +29,9 @@ export function useTauriListeners({
       const unlistenSessionDisconnected = await listen<number>("session-disconnected", (event) => {
         const sessionId = event.payload;
         establishingSessionsRef.current.delete(sessionId);
-        setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s)));
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s)),
+        );
       }).catch((e) => {
         console.error("Failed to listen session-disconnected:", e);
         return null;
@@ -44,7 +48,7 @@ export function useTauriListeners({
         const stillExists = sessionsRef.current.some((s) => s.id === sessionId);
         if (!stillExists) return;
         const stillAttached = workspacesRef.current.some((workspace) =>
-          workspace.windows.some((window) => isSessionInPaneTree(window.rootPane, sessionId))
+          workspace.windows.some((window) => isSessionInPaneTree(window.rootPane, sessionId)),
         );
         if (!stillAttached) return;
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
@@ -59,8 +63,8 @@ export function useTauriListeners({
                   : (getLeafPaneIds(newRoot)[0] ?? null);
                 return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
               }),
-            })
-          )
+            }),
+          ),
         );
       }).catch((e) => {
         console.error("Failed to listen session-closed:", e);
@@ -77,11 +81,5 @@ export function useTauriListeners({
       cancelled = true;
       unlisteners.forEach((cleanup) => cleanup());
     };
-  }, [
-    setSessions,
-    setWorkspaces,
-    sessionsRef,
-    workspacesRef,
-    establishingSessionsRef,
-  ]);
+  }, [setSessions, setWorkspaces, sessionsRef, workspacesRef, establishingSessionsRef]);
 }

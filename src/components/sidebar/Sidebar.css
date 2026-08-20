@@ -21,7 +21,9 @@
   cursor: pointer;
   border-radius: var(--radius-sm);
   margin: 0 4px;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .workspace-list-item:hover {
@@ -111,7 +113,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .sidebar-session-btn {
@@ -159,7 +163,9 @@
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -207,7 +213,9 @@
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -296,7 +304,9 @@
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .session-group-header:hover {
@@ -328,7 +338,9 @@
   cursor: pointer;
   border-radius: var(--radius-sm);
   margin: 0 4px;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .session-item:hover {
@@ -370,7 +382,10 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    color 0.15s;
 }
 
 .session-item:hover .session-item-close {
@@ -393,7 +408,9 @@
 }
 
 .session-group {
-  transition: background 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
 }
 
 .session-group.drag-over {
@@ -451,7 +468,10 @@
   border-radius: var(--radius-sm);
   color: var(--body);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .layout-option:hover {

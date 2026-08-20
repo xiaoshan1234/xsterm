@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PaneNode, Session, Workspace } from "../../types/session";
+import { type PaneNode, type Session, type Workspace } from "../../types/session";
 import {
   collapseEmptySplits,
   collectSessionIdsFromPaneTree,
@@ -62,7 +62,14 @@ const tree: PaneNode = {
 };
 
 function session(id: number, name = `s${id}`): Session {
-  return { id, configId: `cfg-${id}`, name, type: "local", isConnected: true, sessionType: { type: "local", config: { shell: "/bin/sh", cwd: "/" } } };
+  return {
+    id,
+    configId: `cfg-${id}`,
+    name,
+    type: "local",
+    isConnected: true,
+    sessionType: { type: "local", config: { shell: "/bin/sh", cwd: "/" } },
+  };
 }
 
 function workspace(id: string, windows: Workspace["windows"]): Workspace {
@@ -73,9 +80,7 @@ function workspace(id: string, windows: Workspace["windows"]): Workspace {
 
 describe("generateId", () => {
   it("returns a UUID-shaped string", () => {
-    expect(generateId()).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    );
+    expect(generateId()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
 
   it("returns unique values on each call", () => {
@@ -219,9 +224,7 @@ describe("replaceSessionIdInPaneTree", () => {
     const leavesWithSession = collectSessionIdsFromPaneTree(result);
     expect(leavesWithSession.filter((i) => i === 999)).toHaveLength(1);
     // Sanity: at least two leaves were rewritten.
-    expect(
-      forEachPane(result, () => undefined),
-    ).toBeUndefined(); // forEachPane is void; this just exercises it without error
+    expect(forEachPane(result, () => undefined)).toBeUndefined(); // forEachPane is void; this just exercises it without error
     let count = 0;
     forEachPane(result, (n) => {
       if (n.sessionId === 999) count++;
@@ -379,7 +382,9 @@ describe("removePaneFromTree", () => {
 
 describe("getDefaultWindowName", () => {
   it("uses the first attached session's name", () => {
-    expect(getDefaultWindowName(tree, [session(1, "alpha"), session(2, "beta")], "fallback")).toBe("alpha");
+    expect(getDefaultWindowName(tree, [session(1, "alpha"), session(2, "beta")], "fallback")).toBe(
+      "alpha",
+    );
   });
 
   it("falls back when the session id is not in the list", () => {
@@ -422,9 +427,9 @@ describe("isSessionUsedInOtherWindow", () => {
   });
 
   // TODO: isSessionUsedInOtherWindow currently returns true even when the
-// only matching window IS the current window (early-return bug in paneUtils.ts).
-// Flip this to it() once the implementation is fixed.
-it.todo("isSessionUsedInOtherWindow returns false when session is only in the current window");
+  // only matching window IS the current window (early-return bug in paneUtils.ts).
+  // Flip this to it() once the implementation is fixed.
+  it.todo("isSessionUsedInOtherWindow returns false when session is only in the current window");
 
   it("treats null current ids as 'no current window' -> true if found anywhere", () => {
     expect(isSessionUsedInOtherWindow([ws1], null, null, 5)).toBe(true);

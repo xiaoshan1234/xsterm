@@ -55,8 +55,7 @@ export interface Session {
 }
 
 export type SessionType =
-  | { type: "local"; config: LocalSessionConfig }
-  | { type: "ssh"; config: SSHSessionConfig };
+  { type: "local"; config: LocalSessionConfig } | { type: "ssh"; config: SSHSessionConfig };
 
 export interface LocalSessionConfig {
   /** Optional display name. Falls back to the shell basename when omitted. */
@@ -199,10 +198,9 @@ export interface SessionEnvConfig {
   env?: Record<string, string>;
 }
 
-export type SavedSessionConfig =
-  ({ id: string; name: string; version: number } & SessionType) & {
-    displayConfig?: SessionDisplayConfig;
-  };
+export type SavedSessionConfig = ({ id: string; name: string; version: number } & SessionType) & {
+  displayConfig?: SessionDisplayConfig;
+};
 
 export interface SessionGroup {
   id: number;

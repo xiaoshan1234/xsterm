@@ -9,11 +9,7 @@ interface SidebarToolbarProps {
   onToggleLogs: () => void;
 }
 
-export function SidebarToolbar({
-  activeMenu,
-  onMenuClick,
-  onToggleLogs,
-}: SidebarToolbarProps) {
+export function SidebarToolbar({ activeMenu, onMenuClick, onToggleLogs }: SidebarToolbarProps) {
   return (
     <div className="sidebar-toolbar">
       <div className="sidebar-section">
@@ -38,11 +34,7 @@ export function SidebarToolbar({
         >
           <WindowIcon />
         </button>
-        <button
-          className="sidebar-btn"
-          onClick={onToggleLogs}
-          title="Toggle Logs (Ctrl+L)"
-        >
+        <button className="sidebar-btn" onClick={onToggleLogs} title="Toggle Logs (Ctrl+L)">
           <LogIcon />
         </button>
       </div>
@@ -70,17 +62,14 @@ export function ResizeHandle({ onResize, minWidth, maxWidth }: ResizeHandleProps
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isDragging.current = true;
-      dragStartX.current = e.clientX;
-      dragStartWidth.current = 0; // Will be set by parent before drag starts via onResize
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    []
-  );
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = 0; // Will be set by parent before drag starts via onResize
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -105,19 +94,10 @@ export function ResizeHandle({ onResize, minWidth, maxWidth }: ResizeHandleProps
     };
   }, [minWidth, maxWidth, onResize]);
 
-  return (
-    <div
-      className="sidebar-resize-handle"
-      onMouseDown={handleMouseDown}
-    />
-  );
+  return <div className="sidebar-resize-handle" onMouseDown={handleMouseDown} />;
 }
 
-export function useSidebarResize(
-  defaultWidth: number,
-  minWidth: number,
-  maxWidth: number
-) {
+export function useSidebarResize(defaultWidth: number, minWidth: number, maxWidth: number) {
   const [width, setWidth] = useState(defaultWidth);
 
   const handleResizeStart = useCallback((startWidth: number) => {
@@ -130,10 +110,14 @@ export function useSidebarResize(
     setWidth,
     handleResizeStart,
     ResizeHandleComponent: (
-      <ResizeHandle onResize={(newWidth) => {
-        handleResizeStart(width);
-        setWidth(newWidth);
-      }} minWidth={minWidth} maxWidth={maxWidth} />
+      <ResizeHandle
+        onResize={(newWidth) => {
+          handleResizeStart(width);
+          setWidth(newWidth);
+        }}
+        minWidth={minWidth}
+        maxWidth={maxWidth}
+      />
     ),
   };
 }

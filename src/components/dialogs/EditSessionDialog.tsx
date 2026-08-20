@@ -1,29 +1,20 @@
-import { useState, useEffect, ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
-  SavedSessionConfig,
-  LocalSessionConfig,
-  SSHSessionConfig,
-  SessionGroup,
-  SessionDisplayConfig,
+  type SavedSessionConfig,
+  type LocalSessionConfig,
+  type SSHSessionConfig,
+  type SessionGroup,
+  type SessionDisplayConfig,
 } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
-import {
-  LocalSessionIcon,
-  SshSessionIcon,
-  LayoutIcon,
-  LogIcon,
-  SettingsIcon,
-} from "../icons/Icon";
+import { LocalSessionIcon, SshSessionIcon, LayoutIcon, LogIcon, SettingsIcon } from "../icons/Icon";
 import { LocalSessionForm } from "./LocalSessionForm";
 import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
 import { SshConnectionSection } from "./SshConnectionSection";
 import { DisplayConfigForm } from "./DisplayConfigForm";
 import { CommonSettingsForm } from "./CommonSettingsForm";
-import {
-  SessionFormLayout,
-  SessionFormSidebarItem,
-} from "./SessionFormLayout";
+import { SessionFormLayout, type SessionFormSidebarItem } from "./SessionFormLayout";
 import "./EditSessionDialog.css";
 
 interface EditSessionDialogProps {
@@ -36,13 +27,7 @@ interface EditSessionDialogProps {
 }
 
 type EditSectionId =
-  | "session"
-  | "sshConnection"
-  | "displayLayout"
-  | "keyboard"
-  | "security"
-  | "logging"
-  | "process";
+  "session" | "sshConnection" | "displayLayout" | "keyboard" | "security" | "logging" | "process";
 
 const FIRST_SECTION_BY_TYPE: Record<"local" | "ssh", EditSectionId> = {
   local: "session",
@@ -68,8 +53,26 @@ interface SidebarDef {
 const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
   local: [
     { id: "session", label: "Session", icon: <LocalSessionIcon size={16} /> },
-    { id: "displayLayout", label: <>Display<br/>& Layout</>, icon: <LayoutIcon size={16} /> },
-    { id: "keyboard", label: <>Keyboard<br/>& Input</>, icon: <SettingsIcon size={16} /> },
+    {
+      id: "displayLayout",
+      label: (
+        <>
+          Display
+          <br />& Layout
+        </>
+      ),
+      icon: <LayoutIcon size={16} />,
+    },
+    {
+      id: "keyboard",
+      label: (
+        <>
+          Keyboard
+          <br />& Input
+        </>
+      ),
+      icon: <SettingsIcon size={16} />,
+    },
     { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
     { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
     { id: "process", label: "Process", icon: <SettingsIcon size={16} /> },
@@ -77,8 +80,26 @@ const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
   ssh: [
     { id: "session", label: "Session", icon: <SshSessionIcon size={16} /> },
     { id: "sshConnection", label: "SSH Connection", icon: <SettingsIcon size={16} /> },
-    { id: "displayLayout", label: <>Display<br/>& Layout</>, icon: <LayoutIcon size={16} /> },
-    { id: "keyboard", label: <>Keyboard<br/>& Input</>, icon: <SettingsIcon size={16} /> },
+    {
+      id: "displayLayout",
+      label: (
+        <>
+          Display
+          <br />& Layout
+        </>
+      ),
+      icon: <LayoutIcon size={16} />,
+    },
+    {
+      id: "keyboard",
+      label: (
+        <>
+          Keyboard
+          <br />& Input
+        </>
+      ),
+      icon: <SettingsIcon size={16} />,
+    },
     { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
     { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
   ],
@@ -100,13 +121,11 @@ export function EditSessionDialog({
   const [sshConfig, setSshConfig] = useState<SSHSessionConfig>(
     config.type === "ssh" ? config.config : DEFAULT_SSH,
   );
-  const [displayConfig, setDisplayConfig] = useState<
-    SessionDisplayConfig | undefined
-  >(config.displayConfig);
-  const [sshError, setSshError] = useState("");
-  const [sectionId, setSectionId] = useState<EditSectionId>(
-    FIRST_SECTION_BY_TYPE[config.type],
+  const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(
+    config.displayConfig,
   );
+  const [sshError, setSshError] = useState("");
+  const [sectionId, setSectionId] = useState<EditSectionId>(FIRST_SECTION_BY_TYPE[config.type]);
 
   useEffect(() => {
     if (isOpen) {
@@ -159,9 +178,7 @@ export function EditSessionDialog({
         <select
           value={selectedGroupId === null ? "none" : selectedGroupId}
           onChange={(e) =>
-            setSelectedGroupId(
-              e.target.value === "none" ? null : parseInt(e.target.value),
-            )
+            setSelectedGroupId(e.target.value === "none" ? null : parseInt(e.target.value))
           }
         >
           <option value="none">None</option>
@@ -228,41 +245,26 @@ export function EditSessionDialog({
             onChange={setDisplayConfig}
             section="display"
           />
-          <DisplayConfigForm
-            config={displayConfig}
-            onChange={setDisplayConfig}
-          />
+          <DisplayConfigForm config={displayConfig} onChange={setDisplayConfig} />
         </div>
       );
     }
 
     if (sectionId === "keyboard") {
       return (
-        <CommonSettingsForm
-          config={displayConfig}
-          onChange={setDisplayConfig}
-          section="keyboard"
-        />
+        <CommonSettingsForm config={displayConfig} onChange={setDisplayConfig} section="keyboard" />
       );
     }
 
     if (sectionId === "security") {
       return (
-        <CommonSettingsForm
-          config={displayConfig}
-          onChange={setDisplayConfig}
-          section="security"
-        />
+        <CommonSettingsForm config={displayConfig} onChange={setDisplayConfig} section="security" />
       );
     }
 
     if (sectionId === "logging") {
       return (
-        <CommonSettingsForm
-          config={displayConfig}
-          onChange={setDisplayConfig}
-          section="logging"
-        />
+        <CommonSettingsForm config={displayConfig} onChange={setDisplayConfig} section="logging" />
       );
     }
 
@@ -277,9 +279,7 @@ export function EditSessionDialog({
     );
   };
 
-  const sidebarItems: SessionFormSidebarItem[] = SIDEBAR_ITEMS_BY_TYPE[
-    config.type
-  ].map((item) => ({
+  const sidebarItems: SessionFormSidebarItem[] = SIDEBAR_ITEMS_BY_TYPE[config.type].map((item) => ({
     id: item.id,
     label: item.label,
     icon: item.icon,
@@ -310,9 +310,7 @@ export function EditSessionDialog({
       footer={footer}
       className="edit-session-dialog"
     >
-      <SessionFormLayout sidebarItems={sidebarItems}>
-        {renderPanelContent()}
-      </SessionFormLayout>
+      <SessionFormLayout sidebarItems={sidebarItems}>{renderPanelContent()}</SessionFormLayout>
     </Dialog>
   );
 }

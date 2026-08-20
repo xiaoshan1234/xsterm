@@ -56,11 +56,7 @@ export default function NavBar({ onMenuAction }: NavBarProps) {
       </div>
       <div className="navbar-menu">
         {MENU_ITEMS.map((item) => (
-          <button
-            key={item}
-            className="navbar-item"
-            onClick={() => onMenuAction?.(item)}
-          >
+          <button key={item} className="navbar-item" onClick={() => onMenuAction?.(item)}>
             {item}
           </button>
         ))}

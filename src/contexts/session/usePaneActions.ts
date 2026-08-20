@@ -28,7 +28,14 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
    * Split a pane in the workspace
    */
   const splitPane = useCallback(
-    (workspaceId: string, windowId: string, paneId: string, direction: SplitDirection, sessionId?: number, configId?: string) => {
+    (
+      workspaceId: string,
+      windowId: string,
+      paneId: string,
+      direction: SplitDirection,
+      sessionId?: number,
+      configId?: string,
+    ) => {
       if (sessionId !== undefined) {
         assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, sessionId);
       }
@@ -42,7 +49,8 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
         const target = findPaneNode(window.rootPane, paneId);
         if (!target || target.type !== "leaf") return prev;
 
-        const session = sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
+        const session =
+          sessionId !== undefined ? sessionsRef.current.find((s) => s.id === sessionId) : undefined;
         const halfSize = target.size / 2;
         const originalPane = { ...target, size: halfSize };
         const newPane = createLeafPane(halfSize, sessionId, configId ?? session?.configId);
@@ -55,14 +63,16 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
                 ...workspace,
                 activeWindowId: windowId,
                 windows: workspace.windows.map((win) =>
-                  win.id === windowId ? { ...win, rootPane: newRoot, activePaneId: newPane.id } : win
+                  win.id === windowId
+                    ? { ...win, rootPane: newRoot, activePaneId: newPane.id }
+                    : win,
                 ),
               })
-            : w
+            : w,
         );
       });
     },
-    [sessionsRef, workspacesRef, setWorkspaces]
+    [sessionsRef, workspacesRef, setWorkspaces],
   );
 
   const updateWindowPaneTree = useCallback(
@@ -73,14 +83,16 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
             ? withRecomputedSessionIds({
                 ...workspace,
                 windows: workspace.windows.map((window) =>
-                  window.id === windowId ? { ...window, rootPane: updater(window.rootPane) } : window
+                  window.id === windowId
+                    ? { ...window, rootPane: updater(window.rootPane) }
+                    : window,
                 ),
               })
-            : workspace
-        )
+            : workspace,
+        ),
       );
     },
-    [setWorkspaces]
+    [setWorkspaces],
   );
 
   const closePane = useCallback(
@@ -111,28 +123,28 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
             windows: workspace.windows.map((window) => {
               if (window.id !== windowId) return window;
               const newRoot = removePaneFromTree(window.rootPane, paneId);
-              const newActivePaneId = window.activePaneId === paneId ? (getLeafPaneIds(newRoot)[0] ?? null) : window.activePaneId;
+              const newActivePaneId =
+                window.activePaneId === paneId
+                  ? (getLeafPaneIds(newRoot)[0] ?? null)
+                  : window.activePaneId;
               return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
             }),
           });
-        })
+        }),
       );
     },
-    [workspacesRef, setSessions, setWorkspaces, establishingSessionsRef]
+    [workspacesRef, setSessions, setWorkspaces, establishingSessionsRef],
   );
 
-  const writeSession = useCallback(
-    async (id: number, data: string): Promise<void> => {
-      await sessionService.writeSession(id, data);
-    },
-    []
-  );
+  const writeSession = useCallback(async (id: number, data: string): Promise<void> => {
+    await sessionService.writeSession(id, data);
+  }, []);
 
   const resizeSession = useCallback(
     async (id: number, rows: number, cols: number): Promise<void> => {
       await sessionService.resizeSession(id, rows, cols);
     },
-    []
+    [],
   );
 
   return {

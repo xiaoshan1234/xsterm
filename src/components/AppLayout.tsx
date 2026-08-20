@@ -30,8 +30,12 @@ export default function AppLayout() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
-  const [activeSettingsCategory, setActiveSettingsCategory] = useState<"appearance" | "shortcuts" | "about">("appearance");
-  const [sidebarPanel, setSidebarPanel] = useState<"chat" | "settings" | "workspace" | "windows" | null>(null);
+  const [activeSettingsCategory, setActiveSettingsCategory] = useState<
+    "appearance" | "shortcuts" | "about"
+  >("appearance");
+  const [sidebarPanel, setSidebarPanel] = useState<
+    "chat" | "settings" | "workspace" | "windows" | null
+  >(null);
   const [showCommandPanel, setShowCommandPanel] = useState(false);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
@@ -56,7 +60,7 @@ export default function AppLayout() {
       if (!activeWorkspace) return;
       await loadWindow(savedWindowId, activeWorkspace.id);
     },
-    [activeWorkspace, loadWindow]
+    [activeWorkspace, loadWindow],
   );
 
   return (
@@ -64,8 +68,14 @@ export default function AppLayout() {
       <NavBar />
       <div className="content-area">
         <Sidebar
-          onCreateSession={() => { setCreateSessionGroupId(null); setShowCreateDialog(true); }}
-          onCreateSessionWithGroup={(groupId) => { setCreateSessionGroupId(groupId); setShowCreateDialog(true); }}
+          onCreateSession={() => {
+            setCreateSessionGroupId(null);
+            setShowCreateDialog(true);
+          }}
+          onCreateSessionWithGroup={(groupId) => {
+            setCreateSessionGroupId(groupId);
+            setShowCreateDialog(true);
+          }}
           onToggleLogs={() => {}}
           sidebarPanel={sidebarPanel}
           onSidebarPanelChange={(panel) => {
@@ -105,15 +115,15 @@ export default function AppLayout() {
             ))
           )}
           {activeWorkspace && activeView === "terminal" && (
-          <WorkspaceBottomBar
-            workspaceName={activeWorkspace.name}
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            onSelectWorkspace={setActiveWorkspace}
-            onCloseWorkspace={closeWorkspace}
-            commandPanelOpen={showCommandPanel}
-            onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
-          />
+            <WorkspaceBottomBar
+              workspaceName={activeWorkspace.name}
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onSelectWorkspace={setActiveWorkspace}
+              onCloseWorkspace={closeWorkspace}
+              commandPanelOpen={showCommandPanel}
+              onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
+            />
           )}
         </div>
       </div>

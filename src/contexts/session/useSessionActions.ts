@@ -7,11 +7,7 @@ import type {
   Window,
   Workspace,
 } from "../../types/session";
-import {
-  createLeafPane,
-  generateId,
-  withRecomputedSessionIds,
-} from "./paneUtils";
+import { createLeafPane, generateId, withRecomputedSessionIds } from "./paneUtils";
 import {
   assertSessionNotUsedElsewhere,
   buildFrontendSession,
@@ -60,16 +56,21 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
       setSessions((prev) => [...prev, session]);
       return session;
     },
-    [savedConfigs, setSessions]
+    [savedConfigs, setSessions],
   );
 
   const createSessionFromSavedConfig = useCallback(
     async (configId: string): Promise<Session> => openFromConfigInternal(configId),
-    [openFromConfigInternal]
+    [openFromConfigInternal],
   );
 
   const createWindowFromSession = useCallback(
-    (sessionId: number, configId: string, name?: string, targetWorkspaceIdParam?: string): Window => {
+    (
+      sessionId: number,
+      configId: string,
+      name?: string,
+      targetWorkspaceIdParam?: string,
+    ): Window => {
       assertSessionNotUsedElsewhere(workspacesRef.current, null, null, sessionId);
       const rootPane = createLeafPane(100, sessionId, configId);
       const baseName = name ?? "Window";
@@ -106,12 +107,12 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
                 windows: [...workspace.windows, finalWindow],
                 activeWindowId: finalWindow.id,
               })
-            : workspace
+            : workspace,
         );
       });
       return window;
     },
-    [sessionsRef, setWorkspaces, setActiveWorkspaceId, workspacesRef]
+    [sessionsRef, setWorkspaces, setActiveWorkspaceId, workspacesRef],
   );
 
   const createWorkspaceFromSession = useCallback(
@@ -136,7 +137,7 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
       setActiveWorkspaceId(workspace.id);
       return workspace;
     },
-    [sessionsRef, setWorkspaces, setActiveWorkspaceId]
+    [sessionsRef, setWorkspaces, setActiveWorkspaceId],
   );
 
   const lifecycle = useSessionLifecycle({

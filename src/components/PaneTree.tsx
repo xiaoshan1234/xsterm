@@ -1,5 +1,5 @@
-import { useCallback, useRef, MouseEvent as ReactMouseEvent } from "react";
-import { PaneNode, Workspace } from "../types/session";
+import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { type PaneNode, type Workspace } from "../types/session";
 import { useDragResize } from "../hooks/useDragResize";
 import { Pane } from "./Pane";
 
@@ -116,14 +116,11 @@ function SplitNode({
       const totalSize = children[childIndex].size + children[childIndex + 1].size;
       startResize(totalSize, e);
     },
-    [children, startResize]
+    [children, startResize],
   );
 
   return (
-    <div
-      ref={containerRef}
-      className={`pane-tree-split pane-tree-split--${direction}`}
-    >
+    <div ref={containerRef} className={`pane-tree-split pane-tree-split--${direction}`}>
       {children.map((child, index) => (
         <div
           key={child.id}

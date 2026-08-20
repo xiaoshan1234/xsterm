@@ -102,14 +102,25 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
     });
   });
 
-describe("SSHSessionConfig — round-trip with knownHostsPath and proxyJump", () => {
-  it("preserves knownHostsPath and proxyJump in a v1 ssh config pass-through", () => {
-    const raw = {
-      id: "cfg-ssh-new",
-      name: "bastion",
-      version: 1,
-      type: "ssh",
-      config: {
+  describe("SSHSessionConfig — round-trip with knownHostsPath and proxyJump", () => {
+    it("preserves knownHostsPath and proxyJump in a v1 ssh config pass-through", () => {
+      const raw = {
+        id: "cfg-ssh-new",
+        name: "bastion",
+        version: 1,
+        type: "ssh",
+        config: {
+          host: "bastion.example.com",
+          port: 22,
+          username: "alice",
+          auth_type: "key",
+          key_file: "/k",
+          knownHostsPath: "/home/alice/.ssh/known_hosts",
+          proxyJump: "jump@example.com",
+        },
+      };
+      const result = migrateSavedConfig(raw);
+      expect(result?.config).toMatchObject({
         host: "bastion.example.com",
         port: 22,
         username: "alice",
@@ -117,39 +128,28 @@ describe("SSHSessionConfig — round-trip with knownHostsPath and proxyJump", ()
         key_file: "/k",
         knownHostsPath: "/home/alice/.ssh/known_hosts",
         proxyJump: "jump@example.com",
-      },
-    };
-    const result = migrateSavedConfig(raw);
-    expect(result?.config).toMatchObject({
-      host: "bastion.example.com",
-      port: 22,
-      username: "alice",
-      auth_type: "key",
-      key_file: "/k",
-      knownHostsPath: "/home/alice/.ssh/known_hosts",
-      proxyJump: "jump@example.com",
+      });
+    });
+
+    it("preserves v1 ssh config when knownHostsPath and proxyJump are absent", () => {
+      const raw = {
+        id: "cfg-ssh-plain",
+        name: "plain-ssh",
+        version: 1,
+        type: "ssh",
+        config: {
+          host: "h",
+          port: 22,
+          username: "u",
+          auth_type: "password",
+          password: "p",
+        },
+      };
+      const result = migrateSavedConfig(raw);
+      expect(result?.config).not.toHaveProperty("knownHostsPath");
+      expect(result?.config).not.toHaveProperty("proxyJump");
     });
   });
-
-  it("preserves v1 ssh config when knownHostsPath and proxyJump are absent", () => {
-    const raw = {
-      id: "cfg-ssh-plain",
-      name: "plain-ssh",
-      version: 1,
-      type: "ssh",
-      config: {
-        host: "h",
-        port: 22,
-        username: "u",
-        auth_type: "password",
-        password: "p",
-      },
-    };
-    const result = migrateSavedConfig(raw);
-    expect(result?.config).not.toHaveProperty("knownHostsPath");
-    expect(result?.config).not.toHaveProperty("proxyJump");
-  });
-});
 
   it("accepts a v1 ssh config unchanged", () => {
     const raw = {
@@ -211,7 +211,13 @@ describe("SSHSessionConfig — round-trip with knownHostsPath and proxyJump", ()
     expect(result?.name).toBe("old-ssh");
     expect(result?.version).toBe(1);
     expect(result?.type).toBe("ssh");
-    expect(result?.config).toEqual({ host: "h", port: 22, username: "u", auth_type: "password", password: "p" });
+    expect(result?.config).toEqual({
+      host: "h",
+      port: 22,
+      username: "u",
+      auth_type: "password",
+      password: "p",
+    });
   });
 
   it("loads a v1 local config with all new fields and returns them unchanged", () => {
@@ -304,7 +310,7 @@ describe("migrateSavedConfig — malformed input", () => {
         version: 1,
         type: "tmux",
         config: {},
-      })
+      }),
     ).toBeNull();
   });
 
@@ -315,7 +321,7 @@ describe("migrateSavedConfig — malformed input", () => {
         name: "y",
         type: "local",
         localConfig: null,
-      })
+      }),
     ).toBeNull();
   });
 
@@ -326,7 +332,7 @@ describe("migrateSavedConfig — malformed input", () => {
         name: "y",
         type: "ssh",
         sshConfig: null,
-      })
+      }),
     ).toBeNull();
   });
 
@@ -338,20 +344,18 @@ describe("migrateSavedConfig — malformed input", () => {
         version: 1,
         type: "local",
         config: null,
-      })
+      }),
     ).toBeNull();
   });
 
   it("returns null when id is missing on legacy shape", () => {
     expect(
-      migrateSavedConfig({ name: "y", type: "local", localConfig: { shell: "sh" } })
+      migrateSavedConfig({ name: "y", type: "local", localConfig: { shell: "sh" } }),
     ).toBeNull();
   });
 
   it("returns null when name is missing on legacy shape", () => {
-    expect(
-      migrateSavedConfig({ id: "x", type: "local", localConfig: { shell: "sh" } })
-    ).toBeNull();
+    expect(migrateSavedConfig({ id: "x", type: "local", localConfig: { shell: "sh" } })).toBeNull();
   });
 
   it("returns null for null input", () => {
@@ -372,7 +376,7 @@ describe("migrateSavedConfig — malformed input", () => {
         version: 99,
         type: "local",
         config: {},
-      })
+      }),
     ).toBeNull();
   });
 });
@@ -381,9 +385,15 @@ describe("migrateSavedConfigList", () => {
   it("migrates a mixed list and drops malformed entries", () => {
     const raw = [
       { id: "1", name: "n1", type: "local", localConfig: { shell: "sh" } },
-      { id: "2", name: "n2", version: 1, type: "ssh", config: { host: "h", port: 22, username: "u", auth_type: "password", password: "p" } },
+      {
+        id: "2",
+        name: "n2",
+        version: 1,
+        type: "ssh",
+        config: { host: "h", port: 22, username: "u", auth_type: "password", password: "p" },
+      },
       { id: "3", name: "n3" }, // missing type — should be skipped
-      null,                    // not an object — should be skipped
+      null, // not an object — should be skipped
       { id: "4", name: "n4", type: "local", localConfig: null }, // null localConfig — skipped
     ];
     const list = migrateSavedConfigList(raw);

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SavedWorkspace, Workspace } from "../../types/session";
+import { type SavedWorkspace, type Workspace } from "../../types/session";
 import { useSession } from "../../contexts/SessionContext";
 import { LayoutIcon } from "../icons/Icon";
 import { Dialog } from "../ui/Dialog";
@@ -99,7 +99,11 @@ export function WorkspaceManager({
               items={[
                 { label: isLoaded ? "Switch" : "Load", onClick: () => handleOpen(workspace) },
                 { label: "Rename", onClick: () => handleStartRename(workspace) },
-                { label: "Delete", onClick: () => deleteSavedWorkspace(workspace.id), danger: true },
+                {
+                  label: "Delete",
+                  onClick: () => deleteSavedWorkspace(workspace.id),
+                  danger: true,
+                },
               ]}
             >
               <div
@@ -128,8 +132,12 @@ export function WorkspaceManager({
           size="small"
           footer={
             <div className="dialog-footer-buttons">
-              <button className="btn btn--secondary" onClick={() => setRenamingWorkspace(null)}>Cancel</button>
-              <button className="btn btn--primary" onClick={handleRenameSubmit}>Rename</button>
+              <button className="btn btn--secondary" onClick={() => setRenamingWorkspace(null)}>
+                Cancel
+              </button>
+              <button className="btn btn--primary" onClick={handleRenameSubmit}>
+                Rename
+              </button>
             </div>
           }
         >

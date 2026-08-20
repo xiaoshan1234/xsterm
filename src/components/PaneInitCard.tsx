@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useSession } from "../contexts/SessionContext";
-import { LocalSessionConfig, SSHSessionConfig, Session } from "../types/session";
+import { type LocalSessionConfig, type SSHSessionConfig, type Session } from "../types/session";
 import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -17,12 +17,8 @@ export function PaneInitCard({
   title = "Create a session",
   subtitle = "Create new or open a saved session",
 }: PaneInitCardProps) {
-  const {
-    sessions,
-    createLocalSessionOnly,
-    createSshSessionOnly,
-    createSessionFromSavedConfig,
-  } = useSession();
+  const { sessions, createLocalSessionOnly, createSshSessionOnly, createSessionFromSavedConfig } =
+    useSession();
   const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -1,16 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Workspace, PaneNode, Window } from "../types/session";
+import { useCallback, useRef, useState } from "react";
+import { type Workspace, type PaneNode } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
+import { useClampedPanelHeight } from "../hooks/useClampedPanelHeight";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
+import { WindowTabBar } from "./WindowTabBar";
 import CommandSendPanel from "./CommandSendPanel";
-import { ContextMenu, ContextMenuItem, ContextMenuRef } from "./ui/ContextMenu";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
-import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";
 import "./TabBar.css";
 
-function updateNodeInTree(root: PaneNode, nodeId: string, updater: (node: PaneNode) => PaneNode): PaneNode {
+function updateNodeInTree(
+  root: PaneNode,
+  nodeId: string,
+  updater: (node: PaneNode) => PaneNode,
+): PaneNode {
   if (root.id === nodeId) {
     return updater(root);
   }
@@ -42,35 +46,20 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     savedWorkspaces,
   } = useSession();
 
-  const activeWindow = workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0] ?? null;
+  const activeWindow =
+    workspace.windows.find((w) => w.id === workspace.activeWindowId) ??
+    workspace.windows[0] ??
+    null;
 
   const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
   const [renamingWindow, setRenamingWindow] = useState<{ id: string; name: string } | null>(null);
   const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [commandPanelHeight, setCommandPanelHeight] = useState(160);
-  const [maxPanelHeight, setMaxPanelHeight] = useState(800);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const updateMax = () => {
-      setMaxPanelHeight(el.clientHeight);
-    };
-
-    updateMax();
-
-    const observer = new ResizeObserver(updateMax);
-    observer.observe(el);
-
-    return () => observer.disconnect();
-  }, []);
-
-  const handlePanelHeightChange = useCallback((newHeight: number) => {
-    setCommandPanelHeight(Math.min(Math.max(newHeight, 120), Math.max(maxPanelHeight, 120)));
-  }, [maxPanelHeight]);
+  const { height: commandPanelHeight, onHeightChange: handlePanelHeightChange } =
+    useClampedPanelHeight({
+      containerRef,
+    });
 
   const handleActivatePane = useCallback(
     (windowId: string, paneId: string) => {
@@ -78,7 +67,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
       setActiveWindow(workspace.id, windowId);
       setActivePane(workspace.id, windowId, paneId);
     },
-    [workspace.id, setActiveWorkspace, setActiveWindow, setActivePane]
+    [workspace.id, setActiveWorkspace, setActiveWindow, setActivePane],
   );
 
   const handleUpdateNode = useCallback(
@@ -90,7 +79,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         return updateNodeInTree(root, nodeId, updater);
       });
     },
-    [workspace.id, updateWindowPaneTree]
+    [workspace.id, updateWindowPaneTree],
   );
 
   const handleSaveAll = useCallback(() => {
@@ -101,7 +90,10 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         saveWorkspace(workspace.id, workspace.name);
       } catch (e) {
         if (e instanceof Error) {
-          if (e.message === "Workspace name already exists" || e.message === "Workspace name is reserved") {
+          if (
+            e.message === "Workspace name already exists" ||
+            e.message === "Workspace name is reserved"
+          ) {
             window.alert(e.message);
           }
         }
@@ -110,7 +102,11 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   }, [workspace.name, workspace.id, saveWorkspace]);
 
   return (
-    <div className="workspace-container" ref={containerRef} onMouseDown={() => setActiveWorkspace(workspace.id)}>
+    <div
+      className="workspace-container"
+      ref={containerRef}
+      onMouseDown={() => setActiveWorkspace(workspace.id)}
+    >
       <WindowTabBar
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
@@ -192,108 +188,5 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         savedWorkspaces={savedWorkspaces}
       />
     </div>
-  );
-}
-
-interface WindowTabBarProps {
-  workspace: Workspace;
-  activeWindowId: string | null;
-  onSelect: (windowId: string) => void;
-  onAdd: () => void;
-  onSaveAll: () => void;
-  onSaveWindow: (windowId: string) => void;
-  onCloseWindow: (windowId: string) => void;
-  onRenameWindow: (windowId: string) => void;
-}
-
-function WindowTabBar({ workspace, activeWindowId, onSelect, onAdd, onSaveAll, onSaveWindow, onCloseWindow, onRenameWindow }: WindowTabBarProps) {
-  return (
-    <div className="workspace-tabs window-tabs">
-      {workspace.windows.map((window) => (
-        <WindowTab
-          key={window.id}
-          window={window}
-          isActive={window.id === activeWindowId}
-          onSelect={() => onSelect(window.id)}
-          onSave={() => onSaveWindow(window.id)}
-          onClose={() => onCloseWindow(window.id)}
-          onRename={() => onRenameWindow(window.id)}
-        />
-      ))}
-      <div className="window-tab-actions">
-        <button className="window-tab-action" type="button" onClick={onAdd} title="New window">
-          <PlusIcon size={14} />
-        </button>
-        <button className="window-tab-action" type="button" onClick={onSaveAll} title="Save all windows as workspace">
-          <SaveIcon size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-interface WindowTabProps {
-  window: Window;
-  isActive: boolean;
-  onSelect: () => void;
-  onSave: () => void;
-  onRename: () => void;
-  onClose: () => void;
-}
-
-function WindowTab({ window, isActive, onSelect, onSave, onRename, onClose }: WindowTabProps) {
-  const contextMenuRef = useRef<ContextMenuRef>(null);
-  const contextMenuItems: ContextMenuItem[] = [
-    { label: "Rename", onClick: onRename },
-    { label: "Save as Window Config", onClick: onSave },
-    { label: "Close", onClick: onClose, danger: true },
-  ];
-
-  const handleCloseClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClose();
-  };
-
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClose();
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1) {
-      e.preventDefault();
-      onClose();
-    }
-  };
-
-  return (
-    <ContextMenu ref={contextMenuRef} items={contextMenuItems}>
-      <div
-        className={`tab ${isActive ? "active" : ""}`}
-        role="tab"
-        aria-selected={isActive}
-        tabIndex={0}
-        onClick={onSelect}
-        onDoubleClick={handleDoubleClick}
-        onMouseDown={handleMouseDown}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
-      >
-        <span className="tab-title">{window.name}</span>
-        <button
-          className="tab-close"
-          type="button"
-          onClick={handleCloseClick}
-          aria-label={`Close window ${window.name}`}
-          title="Close window"
-        >
-          <CloseIcon size={12} />
-        </button>
-      </div>
-    </ContextMenu>
   );
 }

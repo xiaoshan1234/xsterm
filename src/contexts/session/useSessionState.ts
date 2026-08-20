@@ -1,6 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { SavedSessionConfig, SavedWindowConfig, SavedWorkspace, Session, SessionGroup, Workspace } from "../../types/session";
-import { SessionState } from "./types";
+import {
+  type SavedSessionConfig,
+  type SavedWindowConfig,
+  type SavedWorkspace,
+  type Session,
+  type SessionGroup,
+  type Workspace,
+} from "../../types/session";
+import { type SessionState } from "./types";
 
 export function useSessionState(): SessionState {
   const [savedConfigs, setSavedConfigs] = useState<SavedSessionConfig[]>([]);
@@ -42,7 +49,7 @@ export function useSessionState(): SessionState {
       }
       return globalLocalEcho;
     },
-    [sessionLocalEchoOverrides, globalLocalEcho]
+    [sessionLocalEchoOverrides, globalLocalEcho],
   );
 
   return {

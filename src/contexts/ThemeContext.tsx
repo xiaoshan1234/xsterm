@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from "react";
-import { TerminalTheme, PRESET_THEMES, THEME_KEYS } from "../types/theme";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { type TerminalTheme, PRESET_THEMES, THEME_KEYS } from "../types/theme";
 
 interface ThemeContextType {
   currentTheme: TerminalTheme;

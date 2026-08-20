@@ -17,32 +17,34 @@ export function useGroupActions(deps: UseGroupActionsDeps) {
       setNextGroupId((prev) => prev + 1);
       updateGroups((prev) => [...prev, { id, name, configIds: [], collapsed: false }], id + 1);
     },
-    [nextGroupId, setNextGroupId, updateGroups]
+    [nextGroupId, setNextGroupId, updateGroups],
   );
 
   const deleteGroup = useCallback(
     (id: number) => {
       updateGroups((prev) => prev.filter((g) => g.id !== id));
     },
-    [updateGroups]
+    [updateGroups],
   );
 
   const addToGroup = useCallback(
     (groupId: number, configId: string) => {
       updateGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g))
+        prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g)),
       );
     },
-    [updateGroups]
+    [updateGroups],
   );
 
   const removeFromGroup = useCallback(
     (groupId: number, configId: string) => {
       updateGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, configIds: g.configIds.filter((cid) => cid !== configId) } : g))
+        prev.map((g) =>
+          g.id === groupId ? { ...g, configIds: g.configIds.filter((cid) => cid !== configId) } : g,
+        ),
       );
     },
-    [updateGroups]
+    [updateGroups],
   );
 
   const moveConfigToGroup = useCallback(
@@ -51,36 +53,38 @@ export function useGroupActions(deps: UseGroupActionsDeps) {
         prev.map((g) => ({
           ...g,
           configIds: g.configIds.filter((id) => id !== configId),
-        }))
+        })),
       );
       if (groupId !== null) {
         updateGroups((prev) =>
-          prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g))
+          prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g)),
         );
       }
     },
-    [updateGroups]
+    [updateGroups],
   );
 
   const renameGroup = useCallback(
     (id: number, name: string) => {
       updateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name } : g)));
     },
-    [updateGroups]
+    [updateGroups],
   );
 
   const toggleGroup = useCallback(
     (id: number) => {
-      updateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)));
+      updateGroups((prev) =>
+        prev.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)),
+      );
     },
-    [updateGroups]
+    [updateGroups],
   );
 
   const updateConfig = useCallback(
     (config: SavedSessionConfig) => {
       updateConfigs((prev) => prev.map((c) => (c.id === config.id ? config : c)));
     },
-    [updateConfigs]
+    [updateConfigs],
   );
 
   return {

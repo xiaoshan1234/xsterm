@@ -5,7 +5,7 @@ import { readImage } from "@tauri-apps/plugin-clipboard-manager";
  */
 function collectImagesFromClipboardData(
   items: DataTransferItemList | null | undefined,
-  files: FileList | null | undefined
+  files: FileList | null | undefined,
 ): File[] {
   const result: File[] = [];
 
@@ -35,10 +35,7 @@ function collectImagesFromClipboardData(
  * Returns an empty array if no images are found.
  */
 export async function getClipboardImages(e: ClipboardEvent): Promise<File[]> {
-  const imageItems = collectImagesFromClipboardData(
-    e.clipboardData?.items,
-    e.clipboardData?.files
-  );
+  const imageItems = collectImagesFromClipboardData(e.clipboardData?.items, e.clipboardData?.files);
 
   if (imageItems.length > 0) {
     return imageItems;

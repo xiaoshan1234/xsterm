@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { type ReactNode } from "react";
 import "./SessionFormLayout.css";
 
 export interface SessionFormTab {
@@ -22,11 +22,7 @@ interface SessionFormLayoutProps {
   children: ReactNode;
 }
 
-export function SessionFormLayout({
-  topTabs,
-  sidebarItems,
-  children,
-}: SessionFormLayoutProps) {
+export function SessionFormLayout({ topTabs, sidebarItems, children }: SessionFormLayoutProps) {
   const hasTopTabs = !!topTabs && topTabs.length > 0;
   return (
     <div className="session-form-layout">
@@ -51,9 +47,7 @@ export function SessionFormLayout({
               role="button"
               tabIndex={0}
               aria-pressed={item.active}
-              className={`dialog-sidebar-item${
-                item.active ? " dialog-sidebar-item--active" : ""
-              }`}
+              className={`dialog-sidebar-item${item.active ? " dialog-sidebar-item--active" : ""}`}
               onClick={item.onClick}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {

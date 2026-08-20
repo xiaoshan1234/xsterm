@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { useSession } from "../../contexts/SessionContext";
-import { SavedSessionConfig, SessionGroup } from "../../types/session";
-import { LocalSessionIcon, SshSessionIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
-import { Dialog } from "../ui/Dialog";
-import { FormField } from "../ui/FormField";
+import { type SavedSessionConfig, type SessionGroup } from "../../types/session";
+import {
+  LocalSessionIcon,
+  SshSessionIcon,
+  FolderIcon,
+  ChevronIcon,
+  CloseIcon,
+  PlusIcon,
+} from "../icons/Icon";
 import { ContextMenu } from "../ui/ContextMenu";
 import { EditGroupDialog } from "../dialogs/EditGroupDialog";
 import { EditSessionDialog } from "../dialogs/EditSessionDialog";
+import { NewGroupDialog } from "../dialogs/NewGroupDialog";
+import { useSessionDragDrop } from "../useSessionDragDrop";
 
 interface SessionManagerProps {
   onCreateSession: () => void;
@@ -17,7 +24,7 @@ interface SessionManagerProps {
  * SessionManager - manages the list and grouping of session configurations, supports click to select, double-click to open, right-click menu operations.
  * Click: marks selection state (highlighted background).
  * Double-click: opens the corresponding session and establishes a connection.
-  * Sessions can be grouped by SessionGroup, with drag-and-drop grouping support.
+ * Sessions can be grouped by SessionGroup, with drag-and-drop grouping support.
  */
 export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: SessionManagerProps) {
   const {
@@ -35,43 +42,19 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     moveConfigToGroup,
   } = useSession();
 
-  // selectedConfigId: the session config ID currently selected by single-click, used for highlight display
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
-  const [newGroupName, setNewGroupName] = useState("");
-  const [groupError, setGroupError] = useState("");
-
   const [editingGroup, setEditingGroup] = useState<SessionGroup | null>(null);
   const [editingSession, setEditingSession] = useState<SavedSessionConfig | null>(null);
   const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
-  const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
 
-  // isConnected - checks whether a config already has an active session connection
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
 
-  const handleCreateGroup = () => {
-    setGroupError("");
-    const trimmed = newGroupName.trim();
-    if (!trimmed) {
-      setGroupError("Group name is required");
-      return;
-    }
-    if (groups.some((g) => g.name.toLowerCase() === trimmed.toLowerCase())) {
-      setGroupError("A group with this name already exists");
-      return;
-    }
-    createGroup(trimmed);
-    setNewGroupName("");
-    setShowNewGroupDialog(false);
-  };
-
-  // handleConfigClick - sets selection state on single-click (highlighted background), does not affect connected state
   const handleConfigClick = (config: SavedSessionConfig) => {
     setSelectedConfigId(config.id);
   };
 
-  // handleConfigDoubleClick - opens the corresponding session (local/SSH) and establishes a connection on double-click
   const handleConfigDoubleClick = (config: SavedSessionConfig) => {
     createWindowFromSavedConfig(config.id).catch(console.error);
   };
@@ -105,29 +88,15 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     moveConfigToGroup(config.id, groupId);
   };
 
-  const handleDragStart = (e: React.DragEvent, configId: string) => {
-    e.dataTransfer.setData("text/x-session-config-id", configId);
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  const handleGroupDragOver = (e: React.DragEvent, groupId: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverGroupId(groupId);
-  };
-
-  const handleGroupDragLeave = () => {
-    setDragOverGroupId(null);
-  };
-
-  const handleGroupDrop = (e: React.DragEvent, groupId: number) => {
-    e.preventDefault();
-    const configId = e.dataTransfer.getData("text/x-session-config-id");
-    if (configId) {
-      moveConfigToGroup(configId, groupId);
-    }
-    setDragOverGroupId(null);
-  };
+  const {
+    dragOverGroupId,
+    handleDragStart,
+    handleGroupDragOver,
+    handleGroupDragLeave,
+    handleGroupDrop,
+  } = useSessionDragDrop({
+    onDrop: (configId, groupId) => moveConfigToGroup(configId, groupId),
+  });
 
   return (
     <div className="session-manager">
@@ -141,7 +110,6 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
             onDragLeave={handleGroupDragLeave}
             onDrop={(e) => handleGroupDrop(e, group.id)}
           >
-            {/* Right-click group header menu: Create Session (new in group), Edit (rename), Delete (delete group) */}
             <ContextMenu
               items={[
                 { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
@@ -150,10 +118,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
               ]}
               onOpen={() => setSelectedConfigId(null)}
             >
-              <button
-                className="session-group-header"
-                onClick={() => toggleGroup(group.id)}
-              >
+              <button className="session-group-header" onClick={() => toggleGroup(group.id)}>
                 <span
                   className="session-group-chevron"
                   style={{ transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)" }}
@@ -169,29 +134,30 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
                 {savedConfigs
                   .filter((c) => group.configIds.includes(c.id))
                   .map((config) => (
-                <ContextMenu
-                  key={config.id}
-                  items={[
-                    { label: "Edit", onClick: () => handleEditSession(config) },
-                    { label: "Remove", onClick: () => removeOrCloseConfig(config), danger: true },
-                  ]}
-                  onOpen={() => handleConfigClick(config)}
-                >
-                  <div
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, config.id)}
-                  >
-                    <SessionItem
-                      config={config}
-                      selected={selectedConfigId === config.id}
-                      connected={isConnected(config)}
-                      indented
-                      onClick={() => handleConfigClick(config)}
-                      onDoubleClick={() => handleConfigDoubleClick(config)}
-                      onClose={(e) => handleConfigClose(config, e)}
-                    />
-                  </div>
-                </ContextMenu>
+                    <ContextMenu
+                      key={config.id}
+                      items={[
+                        { label: "Edit", onClick: () => handleEditSession(config) },
+                        {
+                          label: "Remove",
+                          onClick: () => removeOrCloseConfig(config),
+                          danger: true,
+                        },
+                      ]}
+                      onOpen={() => handleConfigClick(config)}
+                    >
+                      <div draggable onDragStart={(e) => handleDragStart(e, config.id)}>
+                        <SessionItem
+                          config={config}
+                          selected={selectedConfigId === config.id}
+                          connected={isConnected(config)}
+                          indented
+                          onClick={() => handleConfigClick(config)}
+                          onDoubleClick={() => handleConfigDoubleClick(config)}
+                          onClose={(e) => handleConfigClose(config, e)}
+                        />
+                      </div>
+                    </ContextMenu>
                   ))}
               </div>
             )}
@@ -210,30 +176,15 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
         </button>
       </div>
 
-      <Dialog
+      <NewGroupDialog
         isOpen={showNewGroupDialog}
-        onClose={() => { setShowNewGroupDialog(false); setGroupError(""); }}
-        title="Create Group"
-        size="small"
-        footer={
-          <div className="dialog-footer-buttons">
-            <button className="btn btn--secondary" onClick={() => setShowNewGroupDialog(false)}>Cancel</button>
-            <button className="btn btn--primary" onClick={handleCreateGroup}>Create</button>
-          </div>
-        }
-      >
-        {groupError && <div className="dialog-error">{groupError}</div>}
-        <FormField label="Group Name">
-          <input
-            type="text"
-            placeholder="e.g., Work, Personal"
-            value={newGroupName}
-            onChange={(e) => { setNewGroupName(e.target.value); setGroupError(""); }}
-            onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
-            autoFocus
-          />
-        </FormField>
-      </Dialog>
+        onClose={() => setShowNewGroupDialog(false)}
+        existingGroupNames={groups.map((g) => g.name)}
+        onCreate={(name) => {
+          createGroup(name);
+          setShowNewGroupDialog(false);
+        }}
+      />
 
       {editingGroup && (
         <EditGroupDialog
@@ -259,9 +210,6 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   );
 }
 
-// SessionItem - single session entry component, supports selection highlight and connected state distinction
-// selected: whether selected (single-click to select), adds "selected" class name for highlight when selected
-// connected: whether a connection has been established, name displays in disconnected style when not connected
 interface SessionItemProps {
   config: SavedSessionConfig;
   selected: boolean;
@@ -288,11 +236,7 @@ function SessionItem({
       onDoubleClick={onDoubleClick}
     >
       {indented && <span className="session-item-indent" />}
-      {config.type === "local" ? (
-        <LocalSessionIcon size={14} />
-      ) : (
-        <SshSessionIcon size={14} />
-      )}
+      {config.type === "local" ? <LocalSessionIcon size={14} /> : <SshSessionIcon size={14} />}
       <span className={`session-item-name ${!connected ? "disconnected" : ""}`}>{config.name}</span>
       <button className="session-item-close" onClick={onClose}>
         <CloseIcon size={12} />

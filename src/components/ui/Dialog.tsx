@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { CloseIcon } from "../icons/Icon";
 import "./Dialog.css";
 
@@ -34,16 +34,12 @@ export function Dialog({
   onTabChange,
   className,
 }: DialogProps) {
-  const [activeTabId, setActiveTabId] = useState<string | undefined>(
-    initialTab ?? tabs?.[0]?.id
-  );
+  const [activeTabId, setActiveTabId] = useState<string | undefined>(initialTab ?? tabs?.[0]?.id);
 
   if (!isOpen) return null;
 
   const hasTabs = !!tabs && tabs.length > 0;
-  const activeTab = hasTabs
-    ? tabs.find((t) => t.id === activeTabId) ?? tabs[0]
-    : null;
+  const activeTab = hasTabs ? (tabs.find((t) => t.id === activeTabId) ?? tabs[0]) : null;
 
   return (
     <div className="dialog-overlay" onClick={onClose}>

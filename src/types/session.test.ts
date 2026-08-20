@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type {
-  LocalSessionConfig,
-  SSHSessionConfig,
-  SavedSessionConfig,
-} from "./session";
+import type { LocalSessionConfig, SSHSessionConfig, SavedSessionConfig } from "./session";
 
 describe("LocalSessionConfig — name field", () => {
   it("accepts an explicit name", () => {

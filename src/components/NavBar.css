@@ -50,7 +50,9 @@
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .navbar-item:hover {
@@ -90,7 +92,9 @@
   border-radius: var(--radius-md);
   color: var(--body);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .window-control:hover {

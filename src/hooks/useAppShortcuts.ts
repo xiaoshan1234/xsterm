@@ -1,5 +1,6 @@
 import { useShortcuts } from "./useShortcut";
 import { useSession } from "../contexts/SessionContext";
+import type { PaneNode } from "../types/session";
 
 export function useAppShortcuts({
   onCreateSession,
@@ -10,7 +11,7 @@ export function useAppShortcuts({
 }) {
   const { workspaces, activeWorkspaceId, setActivePane, closeSession } = useSession();
 
-  const activeWindowFor = (workspace: typeof workspaces[number]) =>
+  const activeWindowFor = (workspace: (typeof workspaces)[number]) =>
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
 
   useShortcuts([
@@ -25,9 +26,7 @@ export function useAppShortcuts({
         if (!window) return;
         const leafIds = collectLeafIds(window.rootPane);
         if (leafIds.length <= 1) return;
-        const currentIndex = window.activePaneId
-          ? leafIds.indexOf(window.activePaneId)
-          : -1;
+        const currentIndex = window.activePaneId ? leafIds.indexOf(window.activePaneId) : -1;
         const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % leafIds.length : 0;
         setActivePane(workspace.id, window.id, leafIds[nextIndex]);
       },
@@ -43,12 +42,11 @@ export function useAppShortcuts({
         if (!window) return;
         const leafIds = collectLeafIds(window.rootPane);
         if (leafIds.length <= 1) return;
-        const currentIndex = window.activePaneId
-          ? leafIds.indexOf(window.activePaneId)
-          : -1;
-        const prevIndex = currentIndex >= 0
-          ? (currentIndex - 1 + leafIds.length) % leafIds.length
-          : leafIds.length - 1;
+        const currentIndex = window.activePaneId ? leafIds.indexOf(window.activePaneId) : -1;
+        const prevIndex =
+          currentIndex >= 0
+            ? (currentIndex - 1 + leafIds.length) % leafIds.length
+            : leafIds.length - 1;
         setActivePane(workspace.id, window.id, leafIds[prevIndex]);
       },
     },
@@ -74,9 +72,9 @@ export function useAppShortcuts({
   ]);
 }
 
-function collectLeafIds(root: import("../types/session").PaneNode): string[] {
+function collectLeafIds(root: PaneNode): string[] {
   const ids: string[] = [];
-  const traverse = (node: import("../types/session").PaneNode) => {
+  const traverse = (node: PaneNode) => {
     if (node.type === "leaf") {
       ids.push(node.id);
       return;
@@ -87,7 +85,7 @@ function collectLeafIds(root: import("../types/session").PaneNode): string[] {
   return ids;
 }
 
-function findPane(root: import("../types/session").PaneNode, id: string): import("../types/session").PaneNode | null {
+function findPane(root: PaneNode, id: string): PaneNode | null {
   if (root.id === id) return root;
   if (root.children) {
     for (const child of root.children) {

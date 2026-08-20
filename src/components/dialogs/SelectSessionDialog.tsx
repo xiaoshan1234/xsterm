@@ -82,11 +82,11 @@ export function SelectSessionDialog({
                 <ul className="select-session-list">
                   {availableConfigs.map((config) => (
                     <li key={config.id}>
-                    <button
-                      className="select-session-item"
-                      disabled={disabled}
-                      onClick={() => onSelectConfig(config.id)}
-                    >
+                      <button
+                        className="select-session-item"
+                        disabled={disabled}
+                        onClick={() => onSelectConfig(config.id)}
+                      >
                         <span className="select-session-name">{config.name}</span>
                         <span className="select-session-type">{config.type}</span>
                       </button>
@@ -101,4 +101,3 @@ export function SelectSessionDialog({
     </Dialog>
   );
 }
-

@@ -47,18 +47,41 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
 
       const session = await createSessionFromSavedConfig(configId);
       assertSessionNotUsedElsewhere(workspacesRef.current, null, null, session.id);
-      return createWindowFromSession(session.id, session.configId, name ?? config.name, activeWorkspaceId ?? undefined);
+      return createWindowFromSession(
+        session.id,
+        session.configId,
+        name ?? config.name,
+        activeWorkspaceId ?? undefined,
+      );
     },
-    [savedConfigs, createSessionFromSavedConfig, createWindowFromSession, workspacesRef, activeWorkspaceId]
+    [
+      savedConfigs,
+      createSessionFromSavedConfig,
+      createWindowFromSession,
+      workspacesRef,
+      activeWorkspaceId,
+    ],
   );
 
   const createWindow = useCallback(
-    (workspaceId: string, sessionId?: number, configId?: string, name?: string, windowType: "terminal" | "init" = "terminal"): Window => {
+    (
+      workspaceId: string,
+      sessionId?: number,
+      configId?: string,
+      name?: string,
+      windowType: "terminal" | "init" = "terminal",
+    ): Window => {
       if (sessionId !== undefined) {
         assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, null, sessionId);
       }
       const rootPane = createLeafPane(100, sessionId, configId);
-      const baseName = name ?? getDefaultWindowName(rootPane, sessionsRef.current, windowType === "init" ? "New Session" : "Window");
+      const baseName =
+        name ??
+        getDefaultWindowName(
+          rootPane,
+          sessionsRef.current,
+          windowType === "init" ? "New Session" : "Window",
+        );
       const window: Window = {
         id: crypto.randomUUID(),
         name: baseName,
@@ -76,12 +99,12 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
                 windows: [...workspace.windows, finalWindow],
                 activeWindowId: finalWindow.id,
               })
-            : workspace
+            : workspace,
         );
       });
       return window;
     },
-    [sessionsRef, workspacesRef, setWorkspaces]
+    [sessionsRef, workspacesRef, setWorkspaces],
   );
 
   const createInitWindow = useCallback((): Window => {
@@ -121,13 +144,13 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
                     activePaneId: rootPane.id,
                     windowType: "terminal",
                   }
-                : window
+                : window,
             ),
           });
-        })
+        }),
       );
     },
-    [workspacesRef, setWorkspaces]
+    [workspacesRef, setWorkspaces],
   );
 
   const closeWindow = useCallback(
@@ -156,15 +179,20 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
             nextActiveId = windows[0].id;
           } else if (nextActiveId === windowId) {
             const closedIndex = workspace.windows.findIndex((w) => w.id === windowId);
-            const fallback = remaining[closedIndex - 1] ?? remaining[closedIndex] ?? remaining[remaining.length - 1];
+            const fallback =
+              remaining[closedIndex - 1] ??
+              remaining[closedIndex] ??
+              remaining[remaining.length - 1];
             nextActiveId = fallback?.id ?? null;
           }
           return withRecomputedSessionIds({ ...workspace, windows, activeWindowId: nextActiveId });
-        })
+        }),
       );
 
       sessionIdsToClose.forEach((sessionId) => {
-        sessionService.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
+        sessionService
+          .closeSession(sessionId)
+          .catch((e) => console.error("Failed to close session:", e));
         establishingSessionsRef.current.delete(sessionId);
         clearSessionOutput(sessionId);
       });
@@ -172,18 +200,18 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
         setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
       }
     },
-    [workspacesRef, setWorkspaces, setSessions, establishingSessionsRef]
+    [workspacesRef, setWorkspaces, setSessions, establishingSessionsRef],
   );
 
   const setActiveWindow = useCallback(
     (workspaceId: string, windowId: string) => {
       setWorkspaces((prev) =>
         prev.map((workspace) =>
-          workspace.id === workspaceId ? { ...workspace, activeWindowId: windowId } : workspace
-        )
+          workspace.id === workspaceId ? { ...workspace, activeWindowId: windowId } : workspace,
+        ),
       );
     },
-    [setWorkspaces]
+    [setWorkspaces],
   );
 
   const setActivePane = useCallback(
@@ -195,14 +223,14 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
                 ...workspace,
                 activeWindowId: windowId,
                 windows: workspace.windows.map((window) =>
-                  window.id === windowId ? { ...window, activePaneId: paneId } : window
+                  window.id === windowId ? { ...window, activePaneId: paneId } : window,
                 ),
               }
-            : workspace
-        )
+            : workspace,
+        ),
       );
     },
-    [setWorkspaces]
+    [setWorkspaces],
   );
 
   const renameWindow = useCallback(
@@ -218,13 +246,13 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
           return {
             ...workspace,
             windows: workspace.windows.map((w) =>
-              w.id === windowId ? { ...w, name: uniqueName } : w
+              w.id === windowId ? { ...w, name: uniqueName } : w,
             ),
           };
-        })
+        }),
       );
     },
-    [setWorkspaces]
+    [setWorkspaces],
   );
 
   return {

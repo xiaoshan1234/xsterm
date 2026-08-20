@@ -1,4 +1,4 @@
-import { SessionDisplayConfig } from "../../types/session";
+import { type SessionDisplayConfig } from "../../types/session";
 import { FormField } from "../ui/FormField";
 
 interface DisplayConfigFormProps {
@@ -45,7 +45,9 @@ export function DisplayConfigForm({ config = {}, onChange }: DisplayConfigFormPr
         >
           <option value="">(use global default)</option>
           {FONT_FAMILIES.map((f) => (
-            <option key={f.value} value={f.value}>{f.label}</option>
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
           ))}
         </select>
       </FormField>
@@ -63,7 +65,9 @@ export function DisplayConfigForm({ config = {}, onChange }: DisplayConfigFormPr
         >
           <option value="">(use global default)</option>
           {CURSOR_STYLES.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
           ))}
         </select>
       </FormField>

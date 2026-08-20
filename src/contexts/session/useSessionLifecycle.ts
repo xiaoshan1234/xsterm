@@ -34,7 +34,7 @@ interface UseSessionLifecycleDeps {
   updateConfigs: (updater: (prev: SavedSessionConfig[]) => SavedSessionConfig[]) => void;
   updateGroups: (updater: (prev: SessionGroup[]) => SessionGroup[], nextId?: number) => void;
   openFromConfigInternal: (configId: string) => Promise<Session>;
-createWindowFromSession: (
+  createWindowFromSession: (
     sessionId: number,
     configId: string,
     name?: string,
@@ -73,7 +73,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       config: LocalSessionConfig | SSHSessionConfig,
       save: boolean,
       skipAutoWindow = false,
-      displayConfig?: SessionDisplayConfig
+      displayConfig?: SessionDisplayConfig,
     ): Promise<Session> => {
       const configId = crypto.randomUUID();
       const info = await create();
@@ -85,20 +85,39 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
         let savedConfig: SavedSessionConfig;
         if (type === "local") {
           const localConfig = config as LocalSessionConfig;
-          savedConfig = { id: configId, name: info.name, version: 1, type: "local", config: localConfig, displayConfig };
+          savedConfig = {
+            id: configId,
+            name: info.name,
+            version: 1,
+            type: "local",
+            config: localConfig,
+            displayConfig,
+          };
         } else {
           const sshConfig = config as SSHSessionConfig;
-          savedConfig = { id: configId, name: info.name, version: 1, type: "ssh", config: sshConfig, displayConfig };
+          savedConfig = {
+            id: configId,
+            name: info.name,
+            version: 1,
+            type: "ssh",
+            config: sshConfig,
+            displayConfig,
+          };
         }
         updateConfigs((prev) => [...prev, savedConfig]);
       }
 
       if (!skipAutoWindow) {
-        createWindowFromSession(session.id, session.configId, session.name, activeWorkspaceId ?? undefined);
+        createWindowFromSession(
+          session.id,
+          session.configId,
+          session.name,
+          activeWorkspaceId ?? undefined,
+        );
       }
       return session;
     },
-    [updateConfigs, createWindowFromSession, setSessions, activeWorkspaceId]
+    [updateConfigs, createWindowFromSession, setSessions, activeWorkspaceId],
   );
 
   /**
@@ -108,10 +127,21 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
    *  → backend sessionService.createLocal(config) → sessions[] + auto-create workspace
    */
   const createLocalSession = useCallback(
-    async (config: LocalSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
-      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, false, displayConfig);
+    async (
+      config: LocalSessionConfig,
+      save = true,
+      displayConfig?: SessionDisplayConfig,
+    ): Promise<Session> => {
+      return createAndActivateSession(
+        "local",
+        () => sessionService.createLocal(config),
+        config,
+        save,
+        false,
+        displayConfig,
+      );
     },
-    [createAndActivateSession]
+    [createAndActivateSession],
   );
 
   /**
@@ -121,24 +151,57 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
    *  → backend sessionService.createSsh(config) → sessions[] + auto-create workspace
    */
   const createSshSession = useCallback(
-    async (config: SSHSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
-      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, false, displayConfig);
+    async (
+      config: SSHSessionConfig,
+      save = true,
+      displayConfig?: SessionDisplayConfig,
+    ): Promise<Session> => {
+      return createAndActivateSession(
+        "ssh",
+        () => sessionService.createSsh(config),
+        config,
+        save,
+        false,
+        displayConfig,
+      );
     },
-    [createAndActivateSession]
+    [createAndActivateSession],
   );
 
   const createLocalSessionOnly = useCallback(
-    async (config: LocalSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
-      return createAndActivateSession("local", () => sessionService.createLocal(config), config, save, true, displayConfig);
+    async (
+      config: LocalSessionConfig,
+      save = true,
+      displayConfig?: SessionDisplayConfig,
+    ): Promise<Session> => {
+      return createAndActivateSession(
+        "local",
+        () => sessionService.createLocal(config),
+        config,
+        save,
+        true,
+        displayConfig,
+      );
     },
-    [createAndActivateSession]
+    [createAndActivateSession],
   );
 
   const createSshSessionOnly = useCallback(
-    async (config: SSHSessionConfig, save = true, displayConfig?: SessionDisplayConfig): Promise<Session> => {
-      return createAndActivateSession("ssh", () => sessionService.createSsh(config), config, save, true, displayConfig);
+    async (
+      config: SSHSessionConfig,
+      save = true,
+      displayConfig?: SessionDisplayConfig,
+    ): Promise<Session> => {
+      return createAndActivateSession(
+        "ssh",
+        () => sessionService.createSsh(config),
+        config,
+        save,
+        true,
+        displayConfig,
+      );
     },
-    [createAndActivateSession]
+    [createAndActivateSession],
   );
 
   /**
@@ -153,13 +216,15 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       createWindowFromSession(session.id, session.name, activeWorkspaceId ?? undefined);
       return session;
     },
-    [openFromConfigInternal, createWindowFromSession, activeWorkspaceId]
+    [openFromConfigInternal, createWindowFromSession, activeWorkspaceId],
   );
 
   const removeConfig = useCallback(
     (configId: string) => {
       updateConfigs((prev) => prev.filter((c) => c.id !== configId));
-      updateGroups((prev) => prev.map((g) => ({ ...g, configIds: g.configIds.filter((id) => id !== configId) })));
+      updateGroups((prev) =>
+        prev.map((g) => ({ ...g, configIds: g.configIds.filter((id) => id !== configId) })),
+      );
       const session = sessionsRef.current.find((s) => s.configId === configId);
       if (session) {
         sessionService.closeSession(session.id).catch(console.error);
@@ -176,12 +241,12 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
                   : (getLeafPaneIds(newRoot)[0] ?? null);
                 return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
               }),
-            })
-          )
+            }),
+          ),
         );
       }
     },
-    [updateConfigs, updateGroups, sessionsRef, setSessions, setWorkspaces]
+    [updateConfigs, updateGroups, sessionsRef, setSessions, setWorkspaces],
   );
 
   /**
@@ -214,12 +279,12 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
                   : (getLeafPaneIds(newRoot)[0] ?? null);
                 return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
               }),
-            })
-          )
+            }),
+          ),
         );
       }
     },
-    [setSessions, setWorkspaces]
+    [setSessions, setWorkspaces],
   );
 
   const reconnectSession = useCallback(
@@ -233,17 +298,19 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       const config = savedConfigs.find((c) => c.id === oldSession.configId);
       if (!config) throw new Error("Saved config not found for session");
 
-      let info: sessionService.SessionInfo;
-      let type: Session["type"];
-
-      info = await dispatchByType(
+      const info = await dispatchByType(
         config.type,
         () => sessionService.createLocal(config.config as LocalSessionConfig),
         () => sessionService.createSsh(config.config as SSHSessionConfig),
       );
-      type = config.type;
+      const type: Session["type"] = config.type;
 
-      const newSession = buildFrontendSession(info, oldSession.configId, type, config.displayConfig);
+      const newSession = buildFrontendSession(
+        info,
+        oldSession.configId,
+        type,
+        config.displayConfig,
+      );
       setSessions((prev) => [...prev, newSession]);
 
       setWorkspaces((prev) =>
@@ -254,8 +321,8 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
               ...window,
               rootPane: replaceSessionIdInPaneTree(window.rootPane, id, newSession.id),
             })),
-          })
-        )
+          }),
+        ),
       );
 
       establishingSessionsRef.current.delete(id);
@@ -271,7 +338,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
 
       return newSession;
     },
-    [savedConfigs, sessionsRef, setSessions, setWorkspaces, establishingSessionsRef]
+    [savedConfigs, sessionsRef, setSessions, setWorkspaces, establishingSessionsRef],
   );
 
   // NOTE: renameSession also lives here because it touches both sessions[] and savedConfigs.
@@ -284,7 +351,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
         updateConfigs((prev) => prev.map((c) => (c.id === session.configId ? { ...c, name } : c)));
       }
     },
-    [updateConfigs, sessionsRef, setSessions]
+    [updateConfigs, sessionsRef, setSessions],
   );
 
   return {

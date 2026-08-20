@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, MouseEvent as ReactMouseEvent } from "react";
-import { Workspace } from "../types/session";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { type Workspace } from "../types/session";
 import { CloseIcon } from "./icons/Icon";
 import "./WorkspaceBottomBar.css";
 
@@ -109,7 +109,11 @@ export function WorkspaceBottomBar({
                     onClick={() => handleSelect(w.id)}
                   >
                     <span className="workspace-switcher-item-left">
-                      {isActive && <span className="workspace-switcher-check" aria-hidden="true">●</span>}
+                      {isActive && (
+                        <span className="workspace-switcher-check" aria-hidden="true">
+                          ●
+                        </span>
+                      )}
                       <span className="workspace-switcher-item-name">{w.name}</span>
                     </span>
                     <span className="workspace-switcher-item-actions">

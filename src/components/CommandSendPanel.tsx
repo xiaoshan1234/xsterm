@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Session, Workspace } from "../types/session";
+import { type Session, type Workspace } from "../types/session";
 import { useDragResize } from "../hooks/useDragResize";
 import { getDefaultPaneId, useCommandTargets } from "./useCommandTargets";
 import { useCommandExecutor } from "./useCommandExecutor";
@@ -213,7 +213,9 @@ export default function CommandSendPanel({
                 onClick={() => executor.toggleBreakpoint(lineIndex)}
                 title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
               >
-                <span className="panel-timestamp">{displayTimestamp ? `[${displayTimestamp}]` : ""}</span>
+                <span className="panel-timestamp">
+                  {displayTimestamp ? `[${displayTimestamp}]` : ""}
+                </span>
                 <span className="panel-breakpoint">{hasBreakpoint ? "●" : ""}</span>
                 <span className="panel-line-number">{displayNumber}</span>
               </div>

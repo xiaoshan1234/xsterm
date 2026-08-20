@@ -28,7 +28,9 @@ export function SettingsView({ activeCategory = "appearance" }: SettingsViewProp
           <div className="settings-section">
             <h2 className="settings-section-title">Appearance</h2>
             <div className="settings-theme-field">
-              <label className="settings-theme-label" htmlFor="theme-select">Theme</label>
+              <label className="settings-theme-label" htmlFor="theme-select">
+                Theme
+              </label>
               <div className="settings-theme-select-wrapper">
                 <span
                   className="theme-color-preview"
@@ -62,7 +64,8 @@ export function SettingsView({ activeCategory = "appearance" }: SettingsViewProp
                 <span className="settings-toggle-label">Global local echo</span>
               </label>
               <p className="settings-toggle-hint">
-                Show typed characters locally before the remote echo arrives. Per-session overrides will take priority.
+                Show typed characters locally before the remote echo arrives. Per-session overrides
+                will take priority.
               </p>
             </div>
           </div>

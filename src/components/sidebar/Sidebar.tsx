@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
-import { SavedWindowConfig, SavedWorkspace, Workspace } from "../../types/session";
+import { type SavedWindowConfig, type SavedWorkspace, type Workspace } from "../../types/session";
 import { useDragResize } from "../../hooks/useDragResize";
-import { SidebarToolbar, SidebarMenu } from "./SidebarToolbar";
+import { SidebarToolbar, type SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { WindowManager } from "./WindowManager";
@@ -129,10 +129,7 @@ export default function Sidebar({
       )}
 
       {sidebarPanel && (
-        <div
-          className="sidebar-resize-handle"
-          onMouseDown={(e) => startResize(submenuWidth, e)}
-        />
+        <div className="sidebar-resize-handle" onMouseDown={(e) => startResize(submenuWidth, e)} />
       )}
     </div>
   );

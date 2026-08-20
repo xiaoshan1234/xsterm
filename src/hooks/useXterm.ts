@@ -1,7 +1,7 @@
-import { useEffect, useRef, RefObject } from "react";
-import { Terminal as XTerm, ITerminalOptions } from "@xterm/xterm";
+import { useEffect, useRef, type RefObject } from "react";
+import { Terminal as XTerm, type ITerminalOptions } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { TerminalTheme } from "../types/theme";
+import { type TerminalTheme } from "../types/theme";
 
 export function themeToXtermTheme(theme: TerminalTheme) {
   return {
@@ -58,7 +58,7 @@ const XTERM_OPTION_MAP: Record<string, string> = {
 export function useXterm(
   containerRef: RefObject<HTMLDivElement | null>,
   theme: TerminalTheme,
-  options: ITerminalOptions
+  options: ITerminalOptions,
 ): UseXtermResult {
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);

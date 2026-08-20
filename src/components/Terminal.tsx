@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { SessionDisplayConfig } from "../types/session";
+import { type SessionDisplayConfig } from "../types/session";
 import { uploadImageToSshSession } from "../services/sessionService";
 import { getClipboardImages } from "../utils/clipboard";
 import { useXterm } from "../hooks/useXterm";
@@ -41,8 +41,17 @@ const DEFAULT_XTERM_OPTIONS = {
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
-  { sessionId, sessionType, isActive = true, isWindowActive = true, isConnected, configId: _configId, displayConfig, onFocus },
-  ref
+  {
+    sessionId,
+    sessionType,
+    isActive = true,
+    isWindowActive = true,
+    isConnected,
+    configId: _configId,
+    displayConfig,
+    onFocus,
+  },
+  ref,
 ) {
   // containerRef: xterm.js actual DOM mount point; useXterm creates the Terminal instance inside this div
   const containerRef = useRef<HTMLDivElement>(null);
@@ -118,7 +127,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       }
     },
-    [sessionId, sessionType]
+    [sessionId, sessionType],
   );
 
   useEffect(() => {
@@ -137,7 +146,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     xterm.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
 
-      const copyShortcut = (event.ctrlKey && event.shiftKey && (event.key === "c" || event.key === "C")) ||
+      const copyShortcut =
+        (event.ctrlKey && event.shiftKey && (event.key === "c" || event.key === "C")) ||
         (event.ctrlKey && event.key === "Insert") ||
         (event.metaKey && (event.key === "c" || event.key === "C"));
 
@@ -159,13 +169,15 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
       if (isTerminalPasteShortcut && isConnectedRef.current) {
         event.preventDefault();
-        readText().then((text) => {
-          if (text && isConnectedRef.current) {
-            writeSessionRef.current(sessionId, text);
-          }
-        }).catch((err) => {
-          console.error("[xsterm] Failed to paste text from clipboard:", err);
-        });
+        readText()
+          .then((text) => {
+            if (text && isConnectedRef.current) {
+              writeSessionRef.current(sessionId, text);
+            }
+          })
+          .catch((err) => {
+            console.error("[xsterm] Failed to paste text from clipboard:", err);
+          });
         return false;
       }
 
@@ -263,7 +275,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       },
     }),
-    [sessionId]
+    [sessionId],
   );
 
   useEffect(() => {
@@ -276,13 +288,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     }
   }, [isActive]);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", height: "100%" }}
-      onMouseDown={onFocus}
-    />
-  );
+  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} onMouseDown={onFocus} />;
 });
 
 export default Terminal;

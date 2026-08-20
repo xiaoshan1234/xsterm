@@ -1,4 +1,9 @@
-import { PaneNode, Session, SplitDirection, Workspace } from "../../types/session";
+import {
+  type PaneNode,
+  type Session,
+  type SplitDirection,
+  type Workspace,
+} from "../../types/session";
 
 export function generateId(): string {
   return crypto.randomUUID();
@@ -14,7 +19,11 @@ export function createLeafPane(size: number, sessionId?: number, configId?: stri
   };
 }
 
-export function createSplitNode(direction: SplitDirection, first: PaneNode, second: PaneNode): PaneNode {
+export function createSplitNode(
+  direction: SplitDirection,
+  first: PaneNode,
+  second: PaneNode,
+): PaneNode {
   return {
     id: generateId(),
     type: "split",
@@ -72,7 +81,7 @@ export function removeSessionFromPaneTree(root: PaneNode, sessionId: number): Pa
 export function replaceSessionIdInPaneTree(
   root: PaneNode,
   oldSessionId: number,
-  newSessionId: number
+  newSessionId: number,
 ): PaneNode {
   return mapPaneTree(root, (node) => {
     if (node.type === "leaf" && node.sessionId === oldSessionId) {
@@ -124,7 +133,11 @@ export function findFirstLeafWithSession(root: PaneNode): PaneNode | null {
  * Derives the default window name from the first session attached to the root pane.
  * Falls back to `fallback` when no session is attached or the session can't be found.
  */
-export function getDefaultWindowName(rootPane: PaneNode, sessions: Session[], fallback: string): string {
+export function getDefaultWindowName(
+  rootPane: PaneNode,
+  sessions: Session[],
+  fallback: string,
+): string {
   const firstLeaf = findFirstLeafWithSession(rootPane);
   if (!firstLeaf || firstLeaf.sessionId === undefined) return fallback;
   const session = sessions.find((s) => s.id === firstLeaf.sessionId);
@@ -153,7 +166,7 @@ export function isSessionInPaneTree(root: PaneNode, sessionId: number): boolean 
  */
 export function findSessionWindow(
   workspaces: Workspace[],
-  sessionId: number
+  sessionId: number,
 ): { workspaceId: string; windowId: string } | null {
   for (const workspace of workspaces) {
     for (const window of workspace.windows) {
@@ -175,7 +188,7 @@ export function isSessionUsedInOtherWindow(
   workspaces: Workspace[],
   currentWorkspaceId: string | null,
   currentWindowId: string | null,
-  sessionId: number
+  sessionId: number,
 ): boolean {
   for (const workspace of workspaces) {
     for (const window of workspace.windows) {
@@ -228,7 +241,9 @@ export function withRecomputedSessionIds(workspace: Workspace): Workspace {
 }
 
 export function stripSessionIdFromPaneTree(root: PaneNode): PaneNode {
-  return mapPaneTree(root, (node) => (node.type === "leaf" ? { ...node, sessionId: undefined } : node));
+  return mapPaneTree(root, (node) =>
+    node.type === "leaf" ? { ...node, sessionId: undefined } : node,
+  );
 }
 
 function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
@@ -238,7 +253,10 @@ function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
   if (root.type === "leaf") {
     return root;
   }
-  const children = root.children?.map((child) => removePaneRecursive(child, paneId)).filter((child): child is PaneNode => child !== null) ?? [];
+  const children =
+    root.children
+      ?.map((child) => removePaneRecursive(child, paneId))
+      .filter((child): child is PaneNode => child !== null) ?? [];
   if (children.length === 0) {
     return null;
   }

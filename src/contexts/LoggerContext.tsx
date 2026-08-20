@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, ReactNode } from "react";
+import { createContext, useContext, useCallback, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { LogLevel } from "../types/log";
 
@@ -57,21 +57,33 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
     }).catch(() => {});
   }, []);
 
-  const debug = useCallback((source: string, message: string, data?: unknown) => {
-    log(LogLevel.DEBUG, source, message, data);
-  }, [log]);
+  const debug = useCallback(
+    (source: string, message: string, data?: unknown) => {
+      log(LogLevel.DEBUG, source, message, data);
+    },
+    [log],
+  );
 
-  const info = useCallback((source: string, message: string, data?: unknown) => {
-    log(LogLevel.INFO, source, message, data);
-  }, [log]);
+  const info = useCallback(
+    (source: string, message: string, data?: unknown) => {
+      log(LogLevel.INFO, source, message, data);
+    },
+    [log],
+  );
 
-  const warn = useCallback((source: string, message: string, data?: unknown) => {
-    log(LogLevel.WARN, source, message, data);
-  }, [log]);
+  const warn = useCallback(
+    (source: string, message: string, data?: unknown) => {
+      log(LogLevel.WARN, source, message, data);
+    },
+    [log],
+  );
 
-  const error = useCallback((source: string, message: string, data?: unknown) => {
-    log(LogLevel.ERROR, source, message, data);
-  }, [log]);
+  const error = useCallback(
+    (source: string, message: string, data?: unknown) => {
+      log(LogLevel.ERROR, source, message, data);
+    },
+    [log],
+  );
 
   // Injects the actual implementation into the global logger singleton, so non-React modules (e.g., service files) can also use it.
   logger.debug = debug;
@@ -80,9 +92,7 @@ export function LoggerProvider({ children }: { children: ReactNode }) {
   logger.error = error;
 
   return (
-    <LoggerContext.Provider value={{ debug, info, warn, error }}>
-      {children}
-    </LoggerContext.Provider>
+    <LoggerContext.Provider value={{ debug, info, warn, error }}>{children}</LoggerContext.Provider>
   );
 }
 

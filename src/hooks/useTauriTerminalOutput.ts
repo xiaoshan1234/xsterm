@@ -1,17 +1,15 @@
-import { useEffect, RefObject } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
+import { useEffect, type RefObject } from "react";
+import { type Terminal as XTerm } from "@xterm/xterm";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import {
-  appendSessionOutput,
-  getSessionOutput,
-} from "../utils/sessionOutputBuffer";
+import { appendSessionOutput, getSessionOutput } from "../utils/sessionOutputBuffer";
 
 function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
 }
 
 // OSC52: ESC ] 52 ; [clipboard] ; <base64-data> ; terminated by BEL or ESC \
+// eslint-disable-next-line no-control-regex -- ANSI escape sequences are required to detect OSC52.
 const OSC52_REGEX = /\x1b\]52;[^;\x07\x1b]*;([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)/g;
 
 function decodeBase64Utf8(encoded: string): string {
@@ -45,10 +43,7 @@ interface PendingWrite {
   resolve: () => void;
 }
 
-export function useTauriTerminalOutput(
-  termRef: RefObject<XTerm | null>,
-  sessionId: number
-): void {
+export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, sessionId: number): void {
   // Listen to Tauri backend events and write terminal output to the xterm instance.
   // Data is batched via requestAnimationFrame to avoid frequent xterm.write() calls.
   // Also appends output to sessionOutputBuffer to restore historical content after pane remount.

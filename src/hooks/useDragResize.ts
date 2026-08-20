@@ -75,7 +75,7 @@ export function useDragResize({ direction, onStart, onDelta, onEnd }: UseDragRes
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
     },
-    [handleMouseMove, handleMouseUp]
+    [handleMouseMove, handleMouseUp],
   );
 
   useEffect(() => {

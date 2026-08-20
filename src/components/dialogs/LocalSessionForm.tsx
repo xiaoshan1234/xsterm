@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { LocalSessionConfig } from "../../types/session";
-import { FormField } from "../ui/FormField";
+import { type LocalSessionConfig } from "../../types/session";
+import { FormNumberField } from "./FormNumberField";
+import { FormSelectField } from "./FormSelectField";
+import { FormTextField } from "./FormTextField";
 import "./LocalSessionForm.css";
 
-const isWindows = navigator.userAgent.toLowerCase().includes("windows") ||
+const isWindows =
+  navigator.userAgent.toLowerCase().includes("windows") ||
   navigator.platform.toLowerCase().includes("win");
 
 const SHELL_TEMPLATES: Array<{ value: string; label: string }> = [
@@ -62,15 +65,12 @@ function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-// Empty input → undefined so backend #[serde(default)] takes over.
-function parseOptionalInt(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = parseInt(trimmed, 10);
-  return Number.isNaN(parsed) ? undefined : parsed;
-}
-
-export function LocalSessionForm({ config, onChange, mode = "create", section }: LocalSessionFormProps) {
+export function LocalSessionForm({
+  config,
+  onChange,
+  mode = "create",
+  section,
+}: LocalSessionFormProps) {
   const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
     const env = config.envConfig?.env || {};
     return (Object.entries(env) as [string, string][]).map(([key, value]) => ({ key, value }));
@@ -110,110 +110,80 @@ export function LocalSessionForm({ config, onChange, mode = "create", section }:
     <>
       {showSession && (
         <>
-          <FormField label="Shell Template">
-            <select
-              value={shellTemplateValue}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange({
-                  ...config,
-                  shellTemplate: v === ""
-                    ? undefined
-                    : (v as NonNullable<LocalSessionConfig["shellTemplate"]>),
-                });
-              }}
-            >
-              {SHELL_TEMPLATES.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </FormField>
+          <FormSelectField
+            label="Shell Template"
+            value={shellTemplateValue}
+            onChange={(v) =>
+              onChange({
+                ...config,
+                shellTemplate:
+                  v === "" ? undefined : (v as NonNullable<LocalSessionConfig["shellTemplate"]>),
+              })
+            }
+            options={SHELL_TEMPLATES}
+          />
 
           {shellTemplateValue === "custom" && (
-            <FormField label="Shell Path">
-              <input
-                type="text"
-                placeholder={SHELL_PATH_PLACEHOLDER}
-                value={config.shell || ""}
-                onChange={(e) =>
-                  onChange({ ...config, shell: e.target.value || undefined })
-                }
-              />
-            </FormField>
+            <FormTextField
+              label="Shell Path"
+              placeholder={SHELL_PATH_PLACEHOLDER}
+              value={config.shell}
+              onChange={(shell) => onChange({ ...config, shell })}
+            />
           )}
         </>
       )}
 
       {showProcess && (
         <>
-          <FormField label="Terminal Type">
-            <select
-              value={config.termType || "xterm-256color"}
-              onChange={(e) => onChange({ ...config, termType: e.target.value })}
-            >
-              {TERM_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </FormField>
+          <FormSelectField
+            label="Terminal Type"
+            value={config.termType || "xterm-256color"}
+            onChange={(v) => onChange({ ...config, termType: v })}
+            options={TERM_TYPES}
+          />
 
-          <FormField label="Charset">
-            <select
-              value={config.charset || "utf-8"}
-              onChange={(e) => onChange({ ...config, charset: e.target.value })}
-            >
-              {CHARSETS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </FormField>
+          <FormSelectField
+            label="Charset"
+            value={config.charset || "utf-8"}
+            onChange={(v) => onChange({ ...config, charset: v })}
+            options={CHARSETS}
+          />
 
-          <FormField label="Startup Command">
-            <input
-              type="text"
-              placeholder='echo "Hello, world!"'
-              value={config.startupCommand || ""}
-              onChange={(e) =>
-                onChange({ ...config, startupCommand: e.target.value || undefined })
-              }
-            />
-          </FormField>
+          <FormTextField
+            label="Startup Command"
+            placeholder='echo "Hello, world!"'
+            value={config.startupCommand}
+            onChange={(startupCommand) => onChange({ ...config, startupCommand })}
+          />
 
-          <FormField label="Startup Delay (ms)">
-            <input
-              type="number"
-              placeholder="0"
-              min={0}
-              value={config.startupDelayMs ?? ""}
-              onChange={(e) =>
-                onChange({ ...config, startupDelayMs: parseOptionalInt(e.target.value) })
-              }
-            />
-          </FormField>
+          <FormNumberField
+            label="Startup Delay (ms)"
+            placeholder="0"
+            min={0}
+            value={config.startupDelayMs}
+            onChange={(startupDelayMs) => onChange({ ...config, startupDelayMs })}
+          />
 
-          <FormField label="Initial Directory">
-            <input
-              type="text"
-              placeholder={CWD_PLACEHOLDER}
-              value={config.cwd || ""}
-              onChange={(e) => onChange({ ...config, cwd: e.target.value })}
-            />
-          </FormField>
+          <FormTextField
+            label="Initial Directory"
+            placeholder={CWD_PLACEHOLDER}
+            value={config.cwd || undefined}
+            onChange={(cwd) => onChange({ ...config, cwd: cwd ?? "" })}
+          />
 
-          <FormField label="Arguments">
-            <input
-              type="text"
-              placeholder="--cd /home/user (space separated)"
-              value={config.args?.join(" ") || ""}
-              onChange={(e) => {
-                const value = e.target.value;
-                const args = value.trim() ? value.split(/\s+/) : undefined;
-                onChange({ ...config, args });
-              }}
-            />
-          </FormField>
+          <FormTextField
+            label="Arguments"
+            placeholder="--cd /home/user (space separated)"
+            value={config.args?.join(" ") ?? undefined}
+            onChange={(v) => {
+              const args = v?.trim() ? v.trim().split(/\s+/) : undefined;
+              onChange({ ...config, args });
+            }}
+          />
 
-          <FormField label="Environment Variables">
+          <div className="form-field">
+            <label className="form-field__label">Environment Variables</label>
             <div className="env-vars-list">
               {envVars.map((env, index) => (
                 <div key={index} className="env-var-row">
@@ -255,7 +225,7 @@ export function LocalSessionForm({ config, onChange, mode = "create", section }:
                 Add Variable
               </button>
             </div>
-          </FormField>
+          </div>
         </>
       )}
     </>

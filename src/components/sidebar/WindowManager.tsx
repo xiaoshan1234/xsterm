@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SavedWindowConfig } from "../../types/session";
+import { type SavedWindowConfig } from "../../types/session";
 import { WindowIcon } from "../icons/Icon";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
@@ -82,8 +82,12 @@ export function WindowManager({
           size="small"
           footer={
             <div className="dialog-footer-buttons">
-              <button className="btn btn--secondary" onClick={() => setRenamingWindow(null)}>Cancel</button>
-              <button className="btn btn--primary" onClick={handleRenameSubmit}>Rename</button>
+              <button className="btn btn--secondary" onClick={() => setRenamingWindow(null)}>
+                Cancel
+              </button>
+              <button className="btn btn--primary" onClick={handleRenameSubmit}>
+                Rename
+              </button>
             </div>
           }
         >

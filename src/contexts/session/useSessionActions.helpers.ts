@@ -1,10 +1,5 @@
-import * as sessionService from "../../services/sessionService";
-import type {
-  Session,
-  SessionDisplayConfig,
-  SessionType,
-  Workspace,
-} from "../../types/session";
+import type * as sessionService from "../../services/sessionService";
+import type { Session, SessionDisplayConfig, SessionType, Workspace } from "../../types/session";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 /**
@@ -37,12 +32,12 @@ export function getUniqueWindowName(
   workspaces: Workspace[],
   workspaceId: string,
   baseName: string,
-  excludeWindowId?: string
+  excludeWindowId?: string,
 ): string {
   const workspace = workspaces.find((w) => w.id === workspaceId);
   if (!workspace) return baseName;
   const existing = new Set(
-    workspace.windows.filter((w) => w.id !== excludeWindowId).map((w) => w.name)
+    workspace.windows.filter((w) => w.id !== excludeWindowId).map((w) => w.name),
   );
   if (!existing.has(baseName)) return baseName;
   let suffix = 2;
@@ -60,7 +55,7 @@ export function buildFrontendSession(
   info: sessionService.SessionInfo,
   configId: string,
   type: Session["type"],
-  displayConfig?: SessionDisplayConfig
+  displayConfig?: SessionDisplayConfig,
 ): Session {
   return {
     id: info.id,
@@ -81,7 +76,7 @@ export function assertSessionNotUsedElsewhere(
   workspaces: Workspace[],
   workspaceId: string | null,
   windowId: string | null,
-  sessionId: number
+  sessionId: number,
 ): void {
   if (isSessionUsedInOtherWindow(workspaces, workspaceId, windowId, sessionId)) {
     throw new Error("Session is already used in another window");

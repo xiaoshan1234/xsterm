@@ -1,8 +1,8 @@
-import { PaneNode } from "../types/session";
+import { type PaneNode } from "../types/session";
 
 export function findPaneNode<T extends { id: string; children?: T[] }>(
   node: T,
-  paneId: string
+  paneId: string,
 ): T | null {
   if (node.id === paneId) return node;
   if (node.children) {
@@ -34,7 +34,7 @@ export function getLeafPaneIds(node: PaneNode): string[] {
 export function replacePaneNode<T extends { id: string; children?: T[] }>(
   node: T,
   paneId: string,
-  newNode: T
+  newNode: T,
 ): T {
   if (node.id === paneId) return newNode;
   if (!node.children) return node;
@@ -46,7 +46,7 @@ export function replacePaneNode<T extends { id: string; children?: T[] }>(
 
 export function mapPaneTree<T extends { id: string; children?: T[] }>(
   node: T,
-  mapper: (node: T) => T
+  mapper: (node: T) => T,
 ): T {
   const mapped = mapper(node);
   if (mapped.children) {

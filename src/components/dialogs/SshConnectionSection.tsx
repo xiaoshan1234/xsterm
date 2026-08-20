@@ -1,5 +1,8 @@
-import { SSHSessionConfig } from "../../types/session";
-import { FormField } from "../ui/FormField";
+import { type SSHSessionConfig } from "../../types/session";
+import { FormCheckboxField } from "./FormCheckboxField";
+import { FormNumberField } from "./FormNumberField";
+import { FormSelectField } from "./FormSelectField";
+import { FormTextField } from "./FormTextField";
 import "./SshConnectionSection.css";
 
 interface SshConnectionSectionProps {
@@ -11,14 +14,6 @@ const CHARSETS = [
   { value: "utf-8", label: "UTF-8 (recommended)" },
   { value: "gbk", label: "GBK" },
 ];
-
-// Empty input → undefined so backend #[serde(default)] takes over.
-function parseOptionalInt(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = parseInt(trimmed, 10);
-  return Number.isNaN(parsed) ? undefined : parsed;
-}
 
 /**
  * Renders the SSH "SSH Connection" sidebar panel for the create/edit dialogs.
@@ -35,90 +30,64 @@ function parseOptionalInt(value: string): number | undefined {
  *   - Network: connectionTimeout, tcpNoDelay, soKeepalive, nullPacketKeepalive,
  *     enableCompression
  */
-export function SshConnectionSection({
-  config,
-  onChange,
-}: SshConnectionSectionProps) {
+export function SshConnectionSection({ config, onChange }: SshConnectionSectionProps) {
   return (
     <div className="ssh-connection-section">
       <details className="ssh-connection-group" open>
         <summary className="ssh-connection-group__title">Authentication</summary>
         <div className="ssh-connection-group__content">
-          <FormField label="Host">
-            <input
-              type="text"
-              placeholder="example.com"
-              value={config.host}
-              onChange={(e) => onChange({ ...config, host: e.target.value })}
-            />
-          </FormField>
-          <FormField label="Port">
-            <input
-              type="number"
-              placeholder="22"
-              value={config.port}
-              onChange={(e) =>
-                onChange({ ...config, port: parseInt(e.target.value) || 22 })
-              }
-            />
-          </FormField>
-          <FormField label="Username">
-            <input
-              type="text"
-              placeholder="root"
-              value={config.username}
-              onChange={(e) =>
-                onChange({ ...config, username: e.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="Authentication">
-            <select
-              value={config.auth_type}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  auth_type: e.target.value as "password" | "key",
-                })
-              }
-            >
-              <option value="password">Password</option>
-              <option value="key">Key File</option>
-            </select>
-          </FormField>
+          <FormTextField
+            label="Host"
+            placeholder="example.com"
+            value={config.host}
+            onChange={(host) => onChange({ ...config, host: host ?? "" })}
+          />
+          <FormNumberField
+            label="Port"
+            placeholder="22"
+            min={1}
+            max={65535}
+            value={config.port}
+            onChange={(v) => onChange({ ...config, port: v ?? 22 })}
+          />
+          <FormTextField
+            label="Username"
+            placeholder="root"
+            value={config.username}
+            onChange={(username) => onChange({ ...config, username: username ?? "" })}
+          />
+          <FormSelectField
+            label="Authentication"
+            value={config.auth_type}
+            onChange={(v) => onChange({ ...config, auth_type: v as "password" | "key" })}
+            options={[
+              { value: "password", label: "Password" },
+              { value: "key", label: "Key File" },
+            ]}
+          />
           {config.auth_type === "password" ? (
-            <FormField label="Password">
-              <input
-                type="password"
-                placeholder="********"
-                value={config.password || ""}
-                onChange={(e) =>
-                  onChange({ ...config, password: e.target.value })
-                }
-              />
-            </FormField>
+            <FormTextField
+              label="Password"
+              placeholder="********"
+              type="password"
+              value={config.password}
+              onChange={(password) => onChange({ ...config, password })}
+            />
           ) : (
             <>
-              <FormField label="Key File Path">
-                <input
-                  type="text"
-                  placeholder="~/.ssh/id_rsa"
-                  value={config.key_file || ""}
-                  onChange={(e) =>
-                    onChange({ ...config, key_file: e.target.value })
-                  }
-                />
-              </FormField>
-              <FormField label="Passphrase (optional)">
-                <input
-                  type="password"
-                  placeholder="********"
-                  value={config.passphrase || ""}
-                  onChange={(e) =>
-                    onChange({ ...config, passphrase: e.target.value })
-                  }
-                />
-              </FormField>
+              <FormTextField
+                label="Key File Path"
+                placeholder="~/.ssh/id_rsa"
+                value={config.key_file}
+                onChange={(key_file) => onChange({ ...config, key_file })}
+              />
+              <FormTextField
+                label="Passphrase (optional)"
+                placeholder="********"
+                type="password"
+                value={config.passphrase}
+                onChange={(passphrase) => onChange({ ...config, passphrase })}
+              />
             </>
           )}
         </div>
@@ -127,89 +96,56 @@ export function SshConnectionSection({
       <details className="ssh-connection-group" open>
         <summary className="ssh-connection-group__title">Stream</summary>
         <div className="ssh-connection-group__content">
-          <FormField label="Charset">
-            <select
-              value={config.charset || "utf-8"}
-              onChange={(e) => onChange({ ...config, charset: e.target.value })}
-            >
-              {CHARSETS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Known Hosts File">
-            <input
-              type="text"
-              placeholder="~/.ssh/known_hosts"
-              value={config.knownHostsPath || ""}
-              onChange={(e) =>
-                onChange({ ...config, knownHostsPath: e.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="ProxyJump (SSH bastion)">
-            <input
-              type="text"
-              placeholder="user@bastion:22"
-              value={config.proxyJump || ""}
-              onChange={(e) => onChange({ ...config, proxyJump: e.target.value })}
-            />
-          </FormField>
+          <FormSelectField
+            label="Charset"
+            value={config.charset || "utf-8"}
+            onChange={(v) => onChange({ ...config, charset: v })}
+            options={CHARSETS}
+          />
+          <FormTextField
+            label="Known Hosts File"
+            placeholder="~/.ssh/known_hosts"
+            value={config.knownHostsPath}
+            onChange={(knownHostsPath) => onChange({ ...config, knownHostsPath })}
+          />
+          <FormTextField
+            label="ProxyJump (SSH bastion)"
+            placeholder="user@bastion:22"
+            value={config.proxyJump}
+            onChange={(proxyJump) => onChange({ ...config, proxyJump })}
+          />
         </div>
       </details>
 
       <details className="ssh-connection-group" open>
         <summary className="ssh-connection-group__title">Network</summary>
         <div className="ssh-connection-group__content">
-          <FormField label="Connection Timeout (seconds)">
-            <input
-              type="number"
-              placeholder="30"
-              value={config.connectionTimeout ?? ""}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  connectionTimeout: parseOptionalInt(e.target.value),
-                })
-              }
-            />
-          </FormField>
-          <FormField label="TCP No Delay (disable Nagle)">
-            <input
-              type="checkbox"
-              checked={config.tcpNoDelay ?? true}
-              onChange={(e) => onChange({ ...config, tcpNoDelay: e.target.checked })}
-            />
-          </FormField>
-          <FormField label="SO Keepalive">
-            <input
-              type="checkbox"
-              checked={config.soKeepalive ?? false}
-              onChange={(e) =>
-                onChange({ ...config, soKeepalive: e.target.checked })
-              }
-            />
-          </FormField>
-          <FormField label="Null Packet Keepalive">
-            <input
-              type="checkbox"
-              checked={config.nullPacketKeepalive ?? false}
-              onChange={(e) =>
-                onChange({ ...config, nullPacketKeepalive: e.target.checked })
-              }
-            />
-          </FormField>
-          <FormField label="Enable Compression">
-            <input
-              type="checkbox"
-              checked={config.enableCompression ?? false}
-              onChange={(e) =>
-                onChange({ ...config, enableCompression: e.target.checked })
-              }
-            />
-          </FormField>
+          <FormNumberField
+            label="Connection Timeout (seconds)"
+            placeholder="30"
+            value={config.connectionTimeout}
+            onChange={(connectionTimeout) => onChange({ ...config, connectionTimeout })}
+          />
+          <FormCheckboxField
+            label="TCP No Delay (disable Nagle)"
+            checked={config.tcpNoDelay ?? true}
+            onChange={(tcpNoDelay) => onChange({ ...config, tcpNoDelay })}
+          />
+          <FormCheckboxField
+            label="SO Keepalive"
+            checked={config.soKeepalive ?? false}
+            onChange={(soKeepalive) => onChange({ ...config, soKeepalive })}
+          />
+          <FormCheckboxField
+            label="Null Packet Keepalive"
+            checked={config.nullPacketKeepalive ?? false}
+            onChange={(nullPacketKeepalive) => onChange({ ...config, nullPacketKeepalive })}
+          />
+          <FormCheckboxField
+            label="Enable Compression"
+            checked={config.enableCompression ?? false}
+            onChange={(enableCompression) => onChange({ ...config, enableCompression })}
+          />
         </div>
       </details>
     </div>

@@ -1,8 +1,9 @@
-import {
-  SessionDisplayConfig,
-  SessionLoggingConfig,
-} from "../../types/session";
-import { FormField } from "../ui/FormField";
+import { type SessionDisplayConfig, type SessionLoggingConfig } from "../../types/session";
+import { CollapsibleSection } from "./CollapsibleSection";
+import { FormCheckboxField } from "./FormCheckboxField";
+import { FormNumberField } from "./FormNumberField";
+import { FormSelectField } from "./FormSelectField";
+import { FormTextField } from "./FormTextField";
 import "./CommonSettingsForm.css";
 
 interface CommonSettingsFormProps {
@@ -21,9 +22,7 @@ interface CommonSettingsFormProps {
   section?: "display" | "keyboard" | "security" | "logging";
 }
 
-export type CommonSettingsSection = NonNullable<
-  CommonSettingsFormProps["section"]
->;
+export type CommonSettingsSection = NonNullable<CommonSettingsFormProps["section"]>;
 
 const KEY_ACTION_OPTIONS = [
   { value: "auto", label: "Auto" },
@@ -52,25 +51,7 @@ const CLIPBOARD_OPTIONS = [
   { value: "deny", label: "Deny" },
 ] as const;
 
-/**
- * Narrow an HTML `<select>` value (typed as `string`) to one of the literal
- * values declared in an `as const` option list. Falls back to the first
- * option for unknown values so the controlled-component contract holds.
- */
-function narrowToLiteral<T extends string>(
-  value: string,
-  options: ReadonlyArray<{ value: T }>,
-): T {
-  return options.some((o) => o.value === (value as T))
-    ? (value as T)
-    : options[0].value;
-}
-
-export function CommonSettingsForm({
-  config = {},
-  onChange,
-  section,
-}: CommonSettingsFormProps) {
+export function CommonSettingsForm({ config = {}, onChange, section }: CommonSettingsFormProps) {
   const update = (patch: Partial<SessionDisplayConfig>) => {
     onChange({ ...config, ...patch });
   };
@@ -88,294 +69,152 @@ export function CommonSettingsForm({
   return (
     <div className="common-settings-form">
       {showDisplay && (
-        <details className="common-settings-group" open>
-          <summary className="common-settings-group__title">Display</summary>
-          <div className="common-settings-group__content">
-            <FormField label="Line Timestamp">
-              <input
-                type="checkbox"
-                checked={config.lineTimestamp ?? false}
-                onChange={(e) => update({ lineTimestamp: e.target.checked })}
-              />
-            </FormField>
-            <FormField label="Time Format">
-              <input
-                type="text"
-                placeholder="[HH:mm:ss]"
-                value={config.timeFormat ?? ""}
-                onChange={(e) =>
-                  update({ timeFormat: e.target.value || undefined })
-                }
-              />
-            </FormField>
-            <FormField label="Date-Time Format">
-              <input
-                type="text"
-                placeholder="yyyy-MM-dd HH:mm:ss"
-                value={config.dateTimeFormat ?? ""}
-                onChange={(e) =>
-                  update({ dateTimeFormat: e.target.value || undefined })
-                }
-              />
-            </FormField>
-            <FormField label="Auto Wrap">
-              <input
-                type="checkbox"
-                checked={config.autoWrap ?? true}
-                onChange={(e) => update({ autoWrap: e.target.checked })}
-              />
-            </FormField>
-            <FormField label="Reverse Video">
-              <input
-                type="checkbox"
-                checked={config.reverseVideo ?? false}
-                onChange={(e) => update({ reverseVideo: e.target.checked })}
-              />
-            </FormField>
-            <FormField label="Mouse Wheel Scroll Lines">
-              <input
-                type="number"
-                placeholder="1"
-                value={config.mouseWheelScrollLines ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  update({
-                    mouseWheelScrollLines: v ? parseInt(v, 10) : undefined,
-                  });
-                }}
-              />
-            </FormField>
-            <FormField label="Fit On Resize">
-              <input
-                type="checkbox"
-                checked={config.fitOnResize ?? true}
-                onChange={(e) => update({ fitOnResize: e.target.checked })}
-              />
-            </FormField>
-            <FormField label="Sync Remote Title">
-              <input
-                type="checkbox"
-                checked={config.syncRemoteTitle ?? true}
-                onChange={(e) => update({ syncRemoteTitle: e.target.checked })}
-              />
-            </FormField>
-          </div>
-        </details>
+        <CollapsibleSection title="Display">
+          <FormCheckboxField
+            label="Line Timestamp"
+            checked={config.lineTimestamp ?? false}
+            onChange={(lineTimestamp) => update({ lineTimestamp })}
+          />
+          <FormTextField
+            label="Time Format"
+            placeholder="[HH:mm:ss]"
+            value={config.timeFormat}
+            onChange={(timeFormat) => update({ timeFormat })}
+          />
+          <FormTextField
+            label="Date-Time Format"
+            placeholder="yyyy-MM-dd HH:mm:ss"
+            value={config.dateTimeFormat}
+            onChange={(dateTimeFormat) => update({ dateTimeFormat })}
+          />
+          <FormCheckboxField
+            label="Auto Wrap"
+            checked={config.autoWrap ?? true}
+            onChange={(autoWrap) => update({ autoWrap })}
+          />
+          <FormCheckboxField
+            label="Reverse Video"
+            checked={config.reverseVideo ?? false}
+            onChange={(reverseVideo) => update({ reverseVideo })}
+          />
+          <FormNumberField
+            label="Mouse Wheel Scroll Lines"
+            placeholder="1"
+            value={config.mouseWheelScrollLines}
+            onChange={(mouseWheelScrollLines) => update({ mouseWheelScrollLines })}
+          />
+          <FormCheckboxField
+            label="Fit On Resize"
+            checked={config.fitOnResize ?? true}
+            onChange={(fitOnResize) => update({ fitOnResize })}
+          />
+          <FormCheckboxField
+            label="Sync Remote Title"
+            checked={config.syncRemoteTitle ?? true}
+            onChange={(syncRemoteTitle) => update({ syncRemoteTitle })}
+          />
+        </CollapsibleSection>
       )}
 
       {showKeyboard && (
-        <details className="common-settings-group" open>
-          <summary className="common-settings-group__title">Keyboard</summary>
-          <div className="common-settings-group__content">
-            <FormField label="Backspace Sends">
-              <select
-                value={config.backspaceSends ?? "auto"}
-                onChange={(e) =>
-                  update({
-                    backspaceSends: narrowToLiteral(
-                      e.target.value,
-                      KEY_ACTION_OPTIONS,
-                    ),
-                  })
-                }
-              >
-                {KEY_ACTION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Delete Sends">
-              <select
-                value={config.deleteSends ?? "auto"}
-                onChange={(e) =>
-                  update({
-                    deleteSends: narrowToLiteral(
-                      e.target.value,
-                      KEY_ACTION_OPTIONS,
-                    ),
-                  })
-                }
-              >
-                {KEY_ACTION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Line Feed Mode">
-              <input
-                type="checkbox"
-                checked={config.lineFeedMode ?? false}
-                onChange={(e) => update({ lineFeedMode: e.target.checked })}
-              />
-            </FormField>
-            <FormField label="Cursor Key Mode">
-              <select
-                value={config.cursorKeyMode ?? "normal"}
-                onChange={(e) =>
-                  update({
-                    cursorKeyMode: narrowToLiteral(
-                      e.target.value,
-                      CURSOR_KEY_OPTIONS,
-                    ),
-                  })
-                }
-              >
-                {CURSOR_KEY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Keypad Mode">
-              <select
-                value={config.keypadMode ?? "normal"}
-                onChange={(e) =>
-                  update({
-                    keypadMode: narrowToLiteral(e.target.value, KEYPAD_OPTIONS),
-                  })
-                }
-              >
-                {KEYPAD_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Modify Other Keys Format">
-              <select
-                value={config.modifyOtherKeysFormat ?? "xterm"}
-                onChange={(e) =>
-                  update({
-                    modifyOtherKeysFormat: narrowToLiteral(
-                      e.target.value,
-                      MODIFY_OTHER_KEYS_OPTIONS,
-                    ),
-                  })
-                }
-              >
-                {MODIFY_OTHER_KEYS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Alt Sends Escape">
-              <input
-                type="checkbox"
-                checked={config.altSendsEscape ?? true}
-                onChange={(e) => update({ altSendsEscape: e.target.checked })}
-              />
-            </FormField>
-          </div>
-        </details>
+        <CollapsibleSection title="Keyboard">
+          <FormSelectField
+            label="Backspace Sends"
+            value={config.backspaceSends ?? "auto"}
+            onChange={(v) =>
+              update({ backspaceSends: v as SessionDisplayConfig["backspaceSends"] })
+            }
+            options={KEY_ACTION_OPTIONS}
+          />
+          <FormSelectField
+            label="Delete Sends"
+            value={config.deleteSends ?? "auto"}
+            onChange={(v) => update({ deleteSends: v as SessionDisplayConfig["deleteSends"] })}
+            options={KEY_ACTION_OPTIONS}
+          />
+          <FormCheckboxField
+            label="Line Feed Mode"
+            checked={config.lineFeedMode ?? false}
+            onChange={(lineFeedMode) => update({ lineFeedMode })}
+          />
+          <FormSelectField
+            label="Cursor Key Mode"
+            value={config.cursorKeyMode ?? "normal"}
+            onChange={(v) => update({ cursorKeyMode: v as SessionDisplayConfig["cursorKeyMode"] })}
+            options={CURSOR_KEY_OPTIONS}
+          />
+          <FormSelectField
+            label="Keypad Mode"
+            value={config.keypadMode ?? "normal"}
+            onChange={(v) => update({ keypadMode: v as SessionDisplayConfig["keypadMode"] })}
+            options={KEYPAD_OPTIONS}
+          />
+          <FormSelectField
+            label="Modify Other Keys Format"
+            value={config.modifyOtherKeysFormat ?? "xterm"}
+            onChange={(v) =>
+              update({ modifyOtherKeysFormat: v as SessionDisplayConfig["modifyOtherKeysFormat"] })
+            }
+            options={MODIFY_OTHER_KEYS_OPTIONS}
+          />
+          <FormCheckboxField
+            label="Alt Sends Escape"
+            checked={config.altSendsEscape ?? true}
+            onChange={(altSendsEscape) => update({ altSendsEscape })}
+          />
+        </CollapsibleSection>
       )}
 
       {showSecurity && (
-        <details className="common-settings-group" open>
-          <summary className="common-settings-group__title">Security</summary>
-          <div className="common-settings-group__content">
-            <FormField label="Clipboard Read">
-              <select
-                value={config.clipboardRead ?? "ask"}
-                onChange={(e) =>
-                  update({
-                    clipboardRead: narrowToLiteral(
-                      e.target.value,
-                      CLIPBOARD_OPTIONS,
-                    ),
-                  })
-                }
-              >
-                {CLIPBOARD_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Clipboard Write">
-              <select
-                value={config.clipboardWrite ?? "ask"}
-                onChange={(e) =>
-                  update({
-                    clipboardWrite: narrowToLiteral(
-                      e.target.value,
-                      CLIPBOARD_OPTIONS,
-                    ),
-                  })
-                }
-              >
-                {CLIPBOARD_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
-        </details>
+        <CollapsibleSection title="Security">
+          <FormSelectField
+            label="Clipboard Read"
+            value={config.clipboardRead ?? "ask"}
+            onChange={(v) => update({ clipboardRead: v as SessionDisplayConfig["clipboardRead"] })}
+            options={CLIPBOARD_OPTIONS}
+          />
+          <FormSelectField
+            label="Clipboard Write"
+            value={config.clipboardWrite ?? "ask"}
+            onChange={(v) =>
+              update({ clipboardWrite: v as SessionDisplayConfig["clipboardWrite"] })
+            }
+            options={CLIPBOARD_OPTIONS}
+          />
+        </CollapsibleSection>
       )}
 
       {showLogging && (
-        <details className="common-settings-group" open>
-          <summary className="common-settings-group__title">Logging</summary>
-          <div className="common-settings-group__content">
-            <FormField label="Enabled">
-              <input
-                type="checkbox"
-                checked={logging.enabled ?? false}
-                onChange={(e) => updateLogging({ enabled: e.target.checked })}
-              />
-            </FormField>
-            <FormField label="Append (vs Overwrite)">
-              <input
-                type="checkbox"
-                checked={logging.append ?? true}
-                onChange={(e) => updateLogging({ append: e.target.checked })}
-              />
-            </FormField>
-            <FormField label="File Name Template">
-              <input
-                type="text"
-                placeholder="%n_%Y-%m-%d_%H-%M-%S.log"
-                value={logging.fileNameTemplate ?? ""}
-                onChange={(e) =>
-                  updateLogging({
-                    fileNameTemplate: e.target.value || undefined,
-                  })
-                }
-              />
-            </FormField>
-            <FormField label="Max Size (MB)">
-              <input
-                type="number"
-                placeholder="10"
-                value={logging.maxSizeMb ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  updateLogging({ maxSizeMb: v ? parseInt(v, 10) : undefined });
-                }}
-              />
-            </FormField>
-            <FormField label="Line Format">
-              <input
-                type="text"
-                placeholder="[%Y-%m-%d %H:%M:%S] %v"
-                value={logging.lineFormat ?? ""}
-                onChange={(e) =>
-                  updateLogging({ lineFormat: e.target.value || undefined })
-                }
-              />
-            </FormField>
-          </div>
-        </details>
+        <CollapsibleSection title="Logging">
+          <FormCheckboxField
+            label="Enabled"
+            checked={logging.enabled ?? false}
+            onChange={(enabled) => updateLogging({ enabled })}
+          />
+          <FormCheckboxField
+            label="Append (vs Overwrite)"
+            checked={logging.append ?? true}
+            onChange={(append) => updateLogging({ append })}
+          />
+          <FormTextField
+            label="File Name Template"
+            placeholder="%n_%Y-%m-%d_%H-%M-%S.log"
+            value={logging.fileNameTemplate}
+            onChange={(fileNameTemplate) => updateLogging({ fileNameTemplate })}
+          />
+          <FormNumberField
+            label="Max Size (MB)"
+            placeholder="10"
+            value={logging.maxSizeMb}
+            onChange={(maxSizeMb) => updateLogging({ maxSizeMb })}
+          />
+          <FormTextField
+            label="Line Format"
+            placeholder="[%Y-%m-%d %H:%M:%S] %v"
+            value={logging.lineFormat}
+            onChange={(lineFormat) => updateLogging({ lineFormat })}
+          />
+        </CollapsibleSection>
       )}
     </div>
   );

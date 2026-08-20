@@ -67,11 +67,8 @@ export function useCommandTargets(workspace: Workspace): CommandTargets {
     const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
     if (!selectedWindow) return [];
 
-    const resolvedPaneId =
-      targetPaneId === "active" ? selectedWindow.activePaneId : targetPaneId;
-    const pane = resolvedPaneId
-      ? findPaneNode(selectedWindow.rootPane, resolvedPaneId)
-      : null;
+    const resolvedPaneId = targetPaneId === "active" ? selectedWindow.activePaneId : targetPaneId;
+    const pane = resolvedPaneId ? findPaneNode(selectedWindow.rootPane, resolvedPaneId) : null;
     if (pane && pane.type === "leaf" && pane.sessionId !== undefined) {
       return [pane.sessionId];
     }

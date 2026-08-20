@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import "./SaveDialog.css";

@@ -1,5 +1,5 @@
-import { createContext, useContext, ReactNode } from "react";
-import { SessionContextType } from "./session/types";
+import { createContext, useContext, type ReactNode } from "react";
+import { type SessionContextType } from "./session/types";
 import { useSessionState } from "./session/useSessionState";
 import { useSessionPersistence } from "./session/useSessionPersistence";
 import { useSessionActions } from "./session/useSessionActions";
@@ -29,11 +29,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ...actions,
   };
 
-  return (
-    <SessionContext.Provider value={value}>
-      {children}
-    </SessionContext.Provider>
-  );
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
 export function useSession() {

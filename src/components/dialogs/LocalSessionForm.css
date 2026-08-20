@@ -24,7 +24,9 @@
   color: var(--ink);
   font-family: inherit;
   font-size: 13px;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .env-vars-list > button {
@@ -37,7 +39,10 @@
   font-family: inherit;
   font-size: 13px;
   align-self: flex-start;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .env-vars-list > button:hover,

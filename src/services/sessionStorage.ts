@@ -1,6 +1,14 @@
-import { load, Store } from "@tauri-apps/plugin-store";
+import { load, type Store } from "@tauri-apps/plugin-store";
 import { logger } from "../contexts/LoggerContext";
-import { LocalSessionConfig, SavedSessionConfig, SavedWindowConfig, SavedWorkspace, SessionGroup, SSHSessionConfig } from "../types/session";
+import {
+  type LocalSessionConfig,
+  type PaneNode,
+  type SavedSessionConfig,
+  type SavedWindowConfig,
+  type SavedWorkspace,
+  type SessionGroup,
+  type SSHSessionConfig,
+} from "../types/session";
 
 interface GroupStore {
   groups: SessionGroup[];
@@ -139,7 +147,7 @@ export function migrateSavedConfigList(raw: unknown): SavedSessionConfig[] {
     } else {
       console.warn(
         "sessionStorage: skipping malformed saved session config (missing 'type' or unrecognised shape)",
-        entry
+        entry,
       );
     }
   }
@@ -196,7 +204,10 @@ export async function loadSavedGroups(): Promise<GroupStore> {
     const groups = await store.get<SessionGroup[]>("groups");
     const nextGroupId = (await store.get<number>("nextGroupId")) || 1;
     const result = { groups: groups || [], nextGroupId };
-    logger.debug("sessionStorage", "loadSavedGroups:result", { groupCount: result.groups.length, nextGroupId });
+    logger.debug("sessionStorage", "loadSavedGroups:result", {
+      groupCount: result.groups.length,
+      nextGroupId,
+    });
     return result;
   } catch (e) {
     console.error("Failed to load groups:", e);
@@ -205,7 +216,10 @@ export async function loadSavedGroups(): Promise<GroupStore> {
 }
 
 export async function persistGroups(groupsData: GroupStore): Promise<void> {
-  logger.debug("sessionStorage", "persistGroups", { groupCount: groupsData.groups.length, nextGroupId: groupsData.nextGroupId });
+  logger.debug("sessionStorage", "persistGroups", {
+    groupCount: groupsData.groups.length,
+    nextGroupId: groupsData.nextGroupId,
+  });
   try {
     const store = await getStore();
     await store.set("groups", groupsData.groups);
@@ -260,10 +274,13 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
   logger.debug("sessionStorage", "loadSavedWorkspaces", undefined);
   try {
     const store = await getStore();
-    const raw = (await store.get<(SavedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) || [];
+    const raw =
+      (await store.get<(SavedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) || [];
     const workspaces = raw.map((w) => {
       if ("rootPane" in w && w.rootPane !== undefined) {
-        const legacy = w as SavedWorkspace & { rootPane: { id: string; type: "leaf" | "split"; size: number } };
+        const legacy = w as SavedWorkspace & {
+          rootPane: { id: string; type: "leaf" | "split"; size: number };
+        };
         return {
           id: legacy.id,
           name: legacy.name,
@@ -271,7 +288,7 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
             {
               id: crypto.randomUUID(),
               name: legacy.name || "Window",
-              rootPane: legacy.rootPane as import("../types/session").PaneNode,
+              rootPane: legacy.rootPane as PaneNode,
             },
           ],
         };

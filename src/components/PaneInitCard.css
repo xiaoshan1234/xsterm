@@ -49,7 +49,10 @@
   border-radius: var(--radius-lg);
   color: var(--body);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .pane-init-card-option:hover {

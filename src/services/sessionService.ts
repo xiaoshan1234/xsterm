@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { logger } from "../contexts/LoggerContext";
 import {
-  Session,
-  LocalSessionConfig,
-  SSHSessionConfig,
-  SessionType,
+  type Session,
+  type LocalSessionConfig,
+  type SSHSessionConfig,
+  type SessionType,
 } from "../types/session";
 import type { CapabilityFlags } from "../types/capabilities";
 
@@ -44,7 +44,7 @@ export function writeSession(id: number, data: string): Promise<void> {
     () => undefined,
     (e) => {
       console.error("[xsterm] write_session failed:", e);
-    }
+    },
   );
 }
 
@@ -63,10 +63,18 @@ export async function closeSession(id: number): Promise<void> {
 export async function uploadImageToSshSession(
   id: number,
   filename: string,
-  data: number[]
+  data: number[],
 ): Promise<string> {
-  logger.debug("sessionService", "uploadImageToSshSession", { id, filename, dataSize: data.length });
-  const result = await invoke<string>("upload_image_to_ssh_session", { sessionId: id, filename, data });
+  logger.debug("sessionService", "uploadImageToSshSession", {
+    id,
+    filename,
+    dataSize: data.length,
+  });
+  const result = await invoke<string>("upload_image_to_ssh_session", {
+    sessionId: id,
+    filename,
+    data,
+  });
   logger.debug("sessionService", "uploadImageToSshSession:result", result);
   return result;
 }

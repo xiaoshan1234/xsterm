@@ -1,6 +1,6 @@
-import { useEffect, useRef, RefObject } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
+import { useEffect, useRef, type RefObject } from "react";
+import { type Terminal as XTerm } from "@xterm/xterm";
+import { type FitAddon } from "@xterm/addon-fit";
 import { useSession } from "../contexts/SessionContext";
 
 export function useTerminalResize(
@@ -8,7 +8,7 @@ export function useTerminalResize(
   termRef: RefObject<XTerm | null>,
   fitAddonRef: RefObject<FitAddon | null>,
   sessionId: number,
-  isWindowActive: boolean = true
+  isWindowActive: boolean = true,
 ): void {
   const { resizeSession } = useSession();
   const resizeSessionRef = useRef(resizeSession);

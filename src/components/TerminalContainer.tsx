@@ -1,4 +1,4 @@
-import { Session } from "../types/session";
+import { type Session } from "../types/session";
 
 interface TerminalContainerProps {
   sessions: Session[];
