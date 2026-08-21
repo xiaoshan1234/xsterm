@@ -53,8 +53,10 @@ pub fn create_ssh_session(
             match read_rx.recv() {
                 Ok(Some(data)) => {
                     seen_data = true;
-                    let payload = serde_json::to_vec(&(session_id, &data[..])).unwrap();
-                    if let Err(e) = backend_clone.emit("session-output", &payload) {
+                    if let Err(e) = backend_clone.emit(
+                        "session-output",
+                        &serde_json::json!([session_id, &data[..]]),
+                    ) {
                         tracing::error!("Failed to emit SSH output for session {}: {}", session_id, e);
                         break;
                     }
@@ -65,8 +67,10 @@ pub fn create_ssh_session(
                         session_id,
                         seen_data
                     );
-                    let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-disconnected", &payload);
+                    let _ = backend_clone.emit(
+                        "session-disconnected",
+                        &serde_json::json!(session_id),
+                    );
                     break;
                 }
             }

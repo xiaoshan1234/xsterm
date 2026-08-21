@@ -115,8 +115,10 @@ impl SessionBackend for LocalSession {
 
     fn write(&mut self, data: &[u8]) -> Result<(), String> {
         let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
-        writer.write_all(data).map_err(|e| e.to_string())?;
-        writer.flush().map_err(|e| e.to_string())
+        // No flush: PTY is a stream; write_all pushes to kernel buffer and the
+        // slave side drains naturally. Per-keystroke flush is a perf hit — see
+        // doc/maintenance/perf.md Perf 002.
+        writer.write_all(data).map_err(|e| e.to_string())
     }
 
     fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {

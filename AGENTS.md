@@ -142,6 +142,7 @@ All project documentation lives under `doc/`, organized by purpose:
 | `doc/design-system.md` | Cursor 暗色 IDE 适配版 UI 设计系统（**必读**） | 任何 UI 改动前 |
 | `doc/arch/architecture-map.md` | 全栈架构地图 + 复杂度热点 + onboarding path | 新人入门、改 session/window/pane 前 |
 | `doc/maintenance/bug.md` | 已知 bug 历史 + 修复记录（按时间倒序） | 改 bug 前查历史 |
+| `doc/maintenance/perf.md` | 本地 PTY I/O 性能诊断 + 与 oxideterm 的架构对比 + 按 ROI 排序的修复计划（Perf 001-009） | 改 session I/O / 调 IPC / 排查"打字卡 / cat 大文件卡"前 |
 | `doc/requirements/prd-0.1/` | v0.1 PRD 拆解 + 需求文档（req-*.md）+ session-config 字段详表 | 做产品决策、改字段行为前 |
 | `doc/requirements/prd-0.1/create-session-config.md` | Create Session 表单字段完整参考 | 改 CreateSessionDialog 前 |
 | `doc/requirements/prd-0.1/session-config-{common,shell,ssh}.md` | Session config 三类字段详表 | 改 LocalSessionForm / SshSessionForm / CommonSettingsForm 前 |

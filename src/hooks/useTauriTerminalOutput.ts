@@ -22,6 +22,8 @@ function decodeBase64Utf8(encoded: string): string {
 }
 
 function extractAndCopyOsc52(text: string): string {
+  // Fast skip: most PTY output has no OSC52; avoid regex alloc. See Perf 007.
+  if (text.indexOf("\x1b]52;") === -1) return text;
   const matches = text.matchAll(OSC52_REGEX);
   for (const match of matches) {
     const encoded = match[1];

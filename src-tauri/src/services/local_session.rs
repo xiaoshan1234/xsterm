@@ -111,7 +111,7 @@ pub fn create_local_session(
             if let Ok(mut w) = startup_writer.lock() {
                 let _ = w.write_all(startup_command.as_bytes());
                 let _ = w.write_all(b"\n");
-                let _ = w.flush();
+                // No flush: same rationale as LocalSession::write (Perf 002).
             }
         }));
     }
@@ -230,8 +230,10 @@ fn spawn_output_forwarder(
                             "PTY EOF for session {} after data — shell exited",
                             session_id
                         );
-                        let payload = serde_json::to_vec(&session_id).unwrap();
-                        let _ = backend_clone.emit("session-disconnected", &payload);
+                        let _ = backend_clone.emit(
+                            "session-disconnected",
+                            &serde_json::json!(session_id),
+                        );
                         break;
                     }
                     tracing::debug!(
@@ -243,8 +245,10 @@ fn spawn_output_forwarder(
                 Ok(n) => {
                     seen_data = true;
                     let data = &buf[..n];
-                    let payload = serde_json::to_vec(&(session_id, data)).unwrap();
-                    if let Err(e) = backend_clone.emit("session-output", &payload) {
+                    if let Err(e) = backend_clone.emit(
+                        "session-output",
+                        &serde_json::json!([session_id, data]),
+                    ) {
                         tracing::error!("Failed to emit session output: {}", e);
                         break;
                     }
@@ -255,8 +259,10 @@ fn spawn_output_forwarder(
                         session_id,
                         e
                     );
-                    let payload = serde_json::to_vec(&session_id).unwrap();
-                    let _ = backend_clone.emit("session-disconnected", &payload);
+                    let _ = backend_clone.emit(
+                        "session-disconnected",
+                        &serde_json::json!(session_id),
+                    );
                     break;
                 }
             }

@@ -335,7 +335,7 @@ mod tests {
     }
 
     impl AppBackend for TestAppBackend {
-        fn emit(&self, _event: &str, _payload: &[u8]) -> Result<(), String> {
+        fn emit(&self, _event: &str, _payload: &serde_json::Value) -> Result<(), String> {
             self.emit_result.clone()
         }
         fn spawn(&self, _f: Box<dyn FnOnce() + Send>) {}

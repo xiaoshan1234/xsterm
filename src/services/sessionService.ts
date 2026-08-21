@@ -36,8 +36,9 @@ export async function createSsh(config: SSHSessionConfig): Promise<SessionInfo> 
   return createSession({ type: "ssh", config });
 }
 
-// Fire-and-forget: do not await. Keystroke writes are rAF-batched
-// upstream, so awaiting each IPC would defeat the batching.
+// Fire-and-forget: do not await. Keystroke writes are rAF-batched in
+// Terminal.tsx (Perf 003 in doc/maintenance/perf.md), so awaiting each IPC
+// would defeat the batching. Do not add rAF batching here.
 export function writeSession(id: number, data: string): Promise<void> {
   const encoded = new TextEncoder().encode(data);
   return invoke("write_session", { sessionId: id, data: encoded }).then(
