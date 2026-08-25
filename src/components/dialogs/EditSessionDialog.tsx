@@ -239,14 +239,7 @@ export function EditSessionDialog({
 
     if (sectionId === "displayLayout") {
       return (
-        <div className="display-grid">
-          <CommonSettingsForm
-            config={displayConfig}
-            onChange={setDisplayConfig}
-            section="display"
-          />
           <DisplayConfigForm config={displayConfig} onChange={setDisplayConfig} />
-        </div>
       );
     }
 
