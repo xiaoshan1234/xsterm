@@ -60,11 +60,8 @@ export const LayoutIcon = icon(
 export const WorkspaceIcon = icon(
   "0 0 24 24",
   <>
-    <path d="M 16 15 L 20.5 15 A 1.5 1.5 0 0 1 22 13.5 L 22 3.5 A 1.5 1.5 0 0 1 20.5 2 L 9.5 2 A 1.5 1.5 0 0 1 8 3.5 L 8 8" />
-    <rect x="2" y="8" width="14" height="13" rx="1.5" />
-    <line x1="2" y1="11" x2="16" y2="11" />
-    <line x1="5" y1="14" x2="13" y2="14" />
-    <line x1="5" y1="17" x2="11" y2="17" />
+    <rect x="2" y="6" width="14" height="14" rx="2" />
+    <path d="M6 2h12a2 2 0 0 1 2 2v12" />
   </>,
 );
 
