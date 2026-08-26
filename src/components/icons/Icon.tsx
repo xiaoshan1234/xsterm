@@ -23,24 +23,6 @@ function icon(viewBox: string, path: React.ReactNode) {
   };
 }
 
-export const LocalSessionIcon = icon(
-  "0 0 24 24",
-  <>
-    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-    <line x1="8" y1="21" x2="16" y2="21" />
-    <line x1="12" y1="17" x2="12" y2="21" />
-  </>,
-);
-
-export const SshSessionIcon = icon(
-  "0 0 24 24",
-  <>
-    <rect x="2" y="2" width="20" height="20" rx="2" />
-    <path d="M16 12h-8" />
-    <path d="M13 9l3 3-3 3" />
-  </>,
-);
-
 export const ChatIcon = icon(
   "0 0 24 24",
   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,

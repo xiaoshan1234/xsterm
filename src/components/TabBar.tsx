@@ -1,6 +1,6 @@
 import { type MouseEvent, type KeyboardEvent } from "react";
 import { type Workspace, type PaneNode, type Session } from "../types/session";
-import { CloseIcon, LocalSessionIcon, SshSessionIcon, LayoutIcon } from "./icons/Icon";
+import { CloseIcon, ShellIcon, SshIcon, LayoutIcon } from "./icons/Icon";
 import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
 import "./TabBar.css";
 
@@ -98,9 +98,9 @@ function getWorkspaceSessionType(
 function SessionTypeIcon({ type, size }: { type: Session["type"]; size: number }) {
   switch (type) {
     case "local":
-      return <LocalSessionIcon size={size} />;
+      return <ShellIcon size={size} />;
     case "ssh":
-      return <SshSessionIcon size={size} />;
+      return <SshIcon size={size} />;
     default:
       return <LayoutIcon size={size} />;
   }

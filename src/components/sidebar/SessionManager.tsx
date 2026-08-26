@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useSession } from "../../contexts/SessionContext";
 import { type SavedSessionConfig, type SessionGroup } from "../../types/session";
 import {
-  LocalSessionIcon,
-  SshSessionIcon,
+  ShellIcon,
+  SshIcon,
   FolderIcon,
   ChevronIcon,
   CloseIcon,
@@ -236,7 +236,7 @@ function SessionItem({
       onDoubleClick={onDoubleClick}
     >
       {indented && <span className="session-item-indent" />}
-      {config.type === "local" ? <LocalSessionIcon size={14} /> : <SshSessionIcon size={14} />}
+      {config.type === "local" ? <ShellIcon size={14} /> : <SshIcon size={14} />}
       <span className={`session-item-name ${!connected ? "disconnected" : ""}`}>{config.name}</span>
       <button className="session-item-close" onClick={onClose}>
         <CloseIcon size={12} />
