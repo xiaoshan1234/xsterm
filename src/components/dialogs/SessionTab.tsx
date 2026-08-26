@@ -1,12 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { type LocalSessionConfig, type SSHSessionConfig } from "../../types/session";
-import { FormCheckboxField } from "./FormCheckboxField";
 import { FormNumberField } from "./FormNumberField";
 import { FormSelectField } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";
 import "./SessionTab.css";
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 type ConnectionType = "local" | "ssh";
 
@@ -25,8 +22,6 @@ interface SessionTabProps {
   hideConnectionSwitcher?: boolean;
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const SHELL_TEMPLATES: Array<{ value: string; label: string }> = [
   { value: "", label: "Default (per OS)" },
   { value: "powershell", label: "PowerShell" },
@@ -43,27 +38,6 @@ const GROUP_OPTIONS_NONE: Array<{ value: string; label: string }> = [
   { value: "", label: "None" },
 ];
 
-// ── Initial Size helpers ─────────────────────────────────────────────────────
-
-/** Format initialCols + initialRows into the display string "80 × 24". */
-function formatInitialSize(cols: number | undefined, rows: number | undefined): string {
-  const c = cols ?? 80;
-  const r = rows ?? 24;
-  return `${c} \u00D7 ${r}`;
-}
-
-/** Parse "80 × 24" (or "80x24", "80 x 24") → { initialCols, initialRows }.
- *  Returns undefined for both when the input is empty or unparseable. */
-function parseInitialSize(value: string): { initialCols?: number; initialRows?: number } {
-  const trimmed = value.trim();
-  if (!trimmed) return { initialCols: undefined, initialRows: undefined };
-  const match = trimmed.match(/^(\d+)\s*[×xX]\s*(\d+)$/);
-  if (!match) return { initialCols: undefined, initialRows: undefined };
-  return { initialCols: parseInt(match[1], 10), initialRows: parseInt(match[2], 10) };
-}
-
-// ── Component ────────────────────────────────────────────────────────────────
-
 export function SessionTab({
   connectionType,
   onConnectionTypeChange,
@@ -78,31 +52,16 @@ export function SessionTab({
   onSshConfigChange,
   hideConnectionSwitcher,
 }: SessionTabProps) {
-  // Display buffer for the "80 × 24" formatted size field.
-  const [initialSizeDisplay, setInitialSizeDisplay] = useState(() =>
-    formatInitialSize(sshConfig.initialCols, sshConfig.initialRows),
-  );
-
-  const handleInitialSizeChange = (value: string | undefined) => {
-    const text = value ?? "";
-    setInitialSizeDisplay(text);
-    const { initialCols, initialRows } = parseInitialSize(text);
-    onSshConfigChange({ ...sshConfig, initialCols, initialRows });
-  };
-
-  // Dynamic group options: "None" + all user-created groups.
   const groupOptions = useMemo(
     () => [...GROUP_OPTIONS_NONE, ...groups.map((g) => ({ value: String(g.id), label: g.name }))],
     [groups],
   );
 
-  // Resolve shell template select value: explicit template > inferred "custom" > default.
   const shellTemplateValue: string = localConfig.shellTemplate
     ?? (localConfig.shell ? "custom" : "");
 
   return (
     <div className="session-tab">
-      {/* ── Common fields ─────────────────────────────────────────────── */}
       <div className="session-tab__common">
         <FormTextField
           label="Session Name"
@@ -118,7 +77,6 @@ export function SessionTab({
         />
       </div>
 
-      {/* ── Connection type segmented control ─────────────────────────── */}
       {!hideConnectionSwitcher && (
         <div className="session-type-switcher" role="group" aria-label="Connection type">
           <button
@@ -140,7 +98,6 @@ export function SessionTab({
         </div>
       )}
 
-      {/* ── Shell mode ────────────────────────────────────────────────── */}
       {connectionType === "local" && (
         <div className="session-section">
           <div className="session-section__title">Shell Configuration</div>
@@ -178,7 +135,6 @@ export function SessionTab({
         </div>
       )}
 
-      {/* ── SSH mode ──────────────────────────────────────────────────── */}
       {connectionType === "ssh" && (
         <div className="session-section">
           <div className="session-section__title">SSH Configuration</div>
@@ -248,86 +204,6 @@ export function SessionTab({
               />
             </>
           )}
-
-          <div className="session-row">
-            <FormTextField
-              label="Initial Size"
-              placeholder="80 × 24"
-              value={initialSizeDisplay}
-              onChange={handleInitialSizeChange}
-            />
-            <FormNumberField
-              label="Keepalive Interval"
-              placeholder="(disabled)"
-              value={sshConfig.keepaliveInterval}
-              onChange={(keepaliveInterval) =>
-                onSshConfigChange({ ...sshConfig, keepaliveInterval })
-              }
-            />
-          </div>
-
-          <FormTextField
-            label="Known Hosts File"
-            placeholder="~/.ssh/known_hosts"
-            value={sshConfig.knownHostsPath}
-            onChange={(knownHostsPath) =>
-              onSshConfigChange({ ...sshConfig, knownHostsPath })
-            }
-          />
-
-          <FormTextField
-            label="ProxyJump"
-            placeholder="user@bastion:22"
-            value={sshConfig.proxyJump}
-            onChange={(proxyJump) => onSshConfigChange({ ...sshConfig, proxyJump })}
-          />
-
-          {/* ── Advanced collapsible ─────────────────────────────────── */}
-          <div className="session-section__title session-section__title--spaced">
-            SSH Options
-          </div>
-
-          <details className="ssh-advanced-section">
-            <summary className="ssh-advanced-section__title">Advanced</summary>
-            <div className="ssh-advanced-section__content">
-              <FormNumberField
-                label="Connection Timeout"
-                placeholder="30"
-                value={sshConfig.connectionTimeout}
-                onChange={(connectionTimeout) =>
-                  onSshConfigChange({ ...sshConfig, connectionTimeout })
-                }
-              />
-              <FormCheckboxField
-                label="TCP No Delay"
-                checked={sshConfig.tcpNoDelay ?? true}
-                onChange={(tcpNoDelay) =>
-                  onSshConfigChange({ ...sshConfig, tcpNoDelay })
-                }
-              />
-              <FormCheckboxField
-                label="SO Keepalive"
-                checked={sshConfig.soKeepalive ?? false}
-                onChange={(soKeepalive) =>
-                  onSshConfigChange({ ...sshConfig, soKeepalive })
-                }
-              />
-              <FormCheckboxField
-                label="Null Packet Keepalive"
-                checked={sshConfig.nullPacketKeepalive ?? false}
-                onChange={(nullPacketKeepalive) =>
-                  onSshConfigChange({ ...sshConfig, nullPacketKeepalive })
-                }
-              />
-              <FormCheckboxField
-                label="Enable Compression"
-                checked={sshConfig.enableCompression ?? false}
-                onChange={(enableCompression) =>
-                  onSshConfigChange({ ...sshConfig, enableCompression })
-                }
-              />
-            </div>
-          </details>
         </div>
       )}
     </div>

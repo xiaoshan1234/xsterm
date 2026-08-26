@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useSession } from "../../contexts/SessionContext";
 import {
   type LocalSessionConfig,
@@ -7,8 +7,17 @@ import {
   type SessionDisplayConfig,
 } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
-import { LocalSessionIcon, LayoutIcon, SettingsIcon, LogIcon } from "../icons/Icon";
+import {
+  SessionIcon,
+  ShellIcon,
+  SshIcon,
+  LayoutIcon,
+  KeyboardIcon,
+  LogIcon,
+} from "../icons/Icon";
 import SessionTab from "./SessionTab";
+import ShellSettingsPanel from "./ShellSettingsPanel";
+import SSHSettingsPanel from "./SSHSettingsPanel";
 import AppearanceTab from "./AppearanceTab";
 import TerminalTab from "./TerminalTab";
 import LoggingTab from "./LoggingTab";
@@ -38,7 +47,7 @@ interface CreateSessionDialogProps {
 }
 
 type TopTab = "local" | "ssh";
-type SectionId = "session" | "appearance" | "terminal" | "logging";
+type SectionId = "session" | "shell" | "ssh" | "appearance" | "terminal" | "logging";
 
 const DEFAULT_SSH: SSHSessionConfig = {
   host: "",
@@ -56,10 +65,19 @@ interface SidebarItemDef {
   icon: ReactNode;
 }
 
-const SIDEBAR_ITEMS: SidebarItemDef[] = [
-  { id: "session", label: "Session", icon: <LocalSessionIcon size={16} /> },
+const SHELL_SIDEBAR_ITEMS: SidebarItemDef[] = [
+  { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
+  { id: "shell", label: "Shell", icon: <ShellIcon size={16} /> },
   { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
-  { id: "terminal", label: "Terminal", icon: <SettingsIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <KeyboardIcon size={16} /> },
+  { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
+];
+
+const SSH_SIDEBAR_ITEMS: SidebarItemDef[] = [
+  { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
+  { id: "ssh", label: "SSH", icon: <SshIcon size={16} /> },
+  { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <KeyboardIcon size={16} /> },
   { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
 ];
 
@@ -83,6 +101,11 @@ export default function CreateSessionDialog({
   const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(undefined);
   const [error, setError] = useState("");
 
+  const sidebarItems = useMemo(
+    () => (topTab === "ssh" ? SSH_SIDEBAR_ITEMS : SHELL_SIDEBAR_ITEMS),
+    [topTab],
+  );
+
   useEffect(() => {
     if (isOpen) {
       setTopTab(initialTab);
@@ -95,6 +118,11 @@ export default function CreateSessionDialog({
       setDisplayConfig(undefined);
     }
   }, [isOpen, initialGroupId, initialTab]);
+
+  const handleTopTabChange = (newTab: TopTab) => {
+    setTopTab(newTab);
+    setSectionId("session");
+  };
 
   const handleCreate = async () => {
     setError("");
@@ -149,7 +177,7 @@ export default function CreateSessionDialog({
         return (
           <SessionTab
             connectionType={topTab}
-            onConnectionTypeChange={setTopTab}
+            onConnectionTypeChange={handleTopTabChange}
             name={name}
             onNameChange={setName}
             selectedGroupId={selectedGroupId}
@@ -162,13 +190,27 @@ export default function CreateSessionDialog({
             hideConnectionSwitcher
           />
         );
+      case "shell":
+        return (
+          <ShellSettingsPanel
+            localConfig={localConfig}
+            onLocalConfigChange={setLocalConfig}
+            displayConfig={displayConfig}
+            onDisplayConfigChange={setDisplayConfig}
+          />
+        );
+      case "ssh":
+        return (
+          <SSHSettingsPanel
+            sshConfig={sshConfig}
+            onSshConfigChange={setSshConfig}
+          />
+        );
       case "appearance":
         return <AppearanceTab config={displayConfig} onChange={setDisplayConfig} />;
       case "terminal":
         return (
           <TerminalTab
-            config={localConfig}
-            onChange={setLocalConfig}
             displayConfig={displayConfig}
             onDisplayChange={setDisplayConfig}
           />
@@ -178,7 +220,7 @@ export default function CreateSessionDialog({
     }
   };
 
-  const sidebarItemProps: SessionFormSidebarItem[] = SIDEBAR_ITEMS.map((item) => ({
+  const sidebarItemProps: SessionFormSidebarItem[] = sidebarItems.map((item) => ({
     id: item.id,
     label: item.label,
     icon: item.icon,
@@ -194,13 +236,13 @@ export default function CreateSessionDialog({
       id: "local",
       label: "Shell",
       active: topTab === "local",
-      onClick: () => setTopTab("local"),
+      onClick: () => handleTopTabChange("local"),
     },
     {
       id: "ssh",
       label: "SSH",
       active: topTab === "ssh",
-      onClick: () => setTopTab("ssh"),
+      onClick: () => handleTopTabChange("ssh"),
     },
   ];
 

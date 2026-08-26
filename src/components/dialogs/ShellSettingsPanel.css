@@ -1,0 +1,83 @@
+.shell-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.shell-settings-panel__section {
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-settings-panel__section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0 0 8px 0;
+  margin: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.shell-settings-panel__section-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding-top: var(--space-base);
+}
+
+.shell-settings-panel__delay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+.shell-settings-panel__delay-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.shell-settings-panel__delay-input {
+  width: 80px;
+  padding: 4px 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.shell-settings-panel__delay-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.shell-settings-panel__delay-input::placeholder {
+  color: var(--muted);
+}
+
+.shell-settings-panel__delay-unit {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.shell-settings-panel__env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shell-settings-panel__env-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.shell-settings-panel__env-row input {
+  width: 100%;
+}
