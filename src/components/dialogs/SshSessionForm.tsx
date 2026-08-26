@@ -6,7 +6,7 @@ import { FormTextField } from "./FormTextField";
 import "./SshSessionForm.css";
 
 const TERM_TYPES = [
-  { value: "xterm-256color", label: "xterm-256color (recommended)" },
+  { value: "xterm-256color", label: "xterm-256color" },
   { value: "xterm", label: "xterm" },
   { value: "vt100", label: "vt100" },
   { value: "screen", label: "screen" },

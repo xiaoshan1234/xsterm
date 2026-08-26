@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { type SSHSessionConfig } from "../../types/session";
 import { FormCheckboxField } from "./FormCheckboxField";
 import { FormNumberField } from "./FormNumberField";
@@ -10,53 +9,20 @@ interface SSHSettingsPanelProps {
   onSshConfigChange: (config: SSHSessionConfig) => void;
 }
 
-function formatInitialSize(cols: number | undefined, rows: number | undefined): string {
-  const c = cols ?? 80;
-  const r = rows ?? 24;
-  return `${c} \u00D7 ${r}`;
-}
-
-function parseInitialSize(value: string): { initialCols?: number; initialRows?: number } {
-  const trimmed = value.trim();
-  if (!trimmed) return { initialCols: undefined, initialRows: undefined };
-  const match = trimmed.match(/^(\d+)\s*[×xX]\s*(\d+)$/);
-  if (!match) return { initialCols: undefined, initialRows: undefined };
-  return { initialCols: parseInt(match[1], 10), initialRows: parseInt(match[2], 10) };
-}
-
 export function SSHSettingsPanel({ sshConfig, onSshConfigChange }: SSHSettingsPanelProps) {
-  const [initialSizeDisplay, setInitialSizeDisplay] = useState(() =>
-    formatInitialSize(sshConfig.initialCols, sshConfig.initialRows),
-  );
-
-  const handleInitialSizeChange = (value: string | undefined) => {
-    const text = value ?? "";
-    setInitialSizeDisplay(text);
-    const { initialCols, initialRows } = parseInitialSize(text);
-    onSshConfigChange({ ...sshConfig, initialCols, initialRows });
-  };
-
   return (
     <div className="ssh-settings-panel">
       <div className="ssh-settings-panel__section">
         <h3 className="ssh-settings-panel__section-title">Connection Options</h3>
         <div className="ssh-settings-panel__section-content">
-          <div className="ssh-settings-panel__row">
-            <FormTextField
-              label="Initial Size"
-              placeholder="80 × 24"
-              value={initialSizeDisplay}
-              onChange={handleInitialSizeChange}
-            />
-            <FormNumberField
-              label="Keepalive Interval"
-              placeholder="(disabled)"
-              value={sshConfig.keepaliveInterval}
-              onChange={(keepaliveInterval) =>
-                onSshConfigChange({ ...sshConfig, keepaliveInterval })
-              }
-            />
-          </div>
+          <FormNumberField
+            label="Keepalive Interval"
+            placeholder="(disabled)"
+            value={sshConfig.keepaliveInterval}
+            onChange={(keepaliveInterval) =>
+              onSshConfigChange({ ...sshConfig, keepaliveInterval })
+            }
+          />
 
           <FormTextField
             label="Known Hosts File"

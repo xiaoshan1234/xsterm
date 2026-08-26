@@ -24,9 +24,3 @@
   gap: var(--space-base);
   padding-top: var(--space-base);
 }
-
-.ssh-settings-panel__row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-base);
-}

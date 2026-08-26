@@ -27,8 +27,8 @@
 }
 
 .dialog--medium {
-  min-width: 400px;
-  max-width: 500px;
+  width: 480px;
+  height: 600px;
 }
 
 .dialog--with-sidebar {
@@ -153,6 +153,8 @@
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .dialog-error {

@@ -75,6 +75,10 @@ export interface LocalSessionConfig {
   /** Milliseconds to wait after PTY spawn before sending startupCommand. */
   startupDelayMs?: number;
   envConfig?: SessionEnvConfig;
+  /** Initial terminal columns. @default 80 */
+  initialCols?: number;
+  /** Initial terminal rows. @default 24 */
+  initialRows?: number;
 }
 
 export interface SSHSessionConfig {

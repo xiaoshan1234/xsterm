@@ -11,7 +11,7 @@ interface SshConnectionSectionProps {
 }
 
 const CHARSETS = [
-  { value: "utf-8", label: "UTF-8 (recommended)" },
+  { value: "utf-8", label: "UTF-8" },
   { value: "gbk", label: "GBK" },
 ];
 

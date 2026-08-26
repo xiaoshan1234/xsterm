@@ -207,7 +207,17 @@ export default function CreateSessionDialog({
           />
         );
       case "appearance":
-        return <AppearanceTab config={displayConfig} onChange={setDisplayConfig} />;
+        return (
+          <AppearanceTab
+            config={displayConfig}
+            onChange={setDisplayConfig}
+            connectionType={topTab}
+            localConfig={localConfig}
+            onLocalConfigChange={setLocalConfig}
+            sshConfig={sshConfig}
+            onSshConfigChange={setSshConfig}
+          />
+        );
       case "terminal":
         return (
           <TerminalTab

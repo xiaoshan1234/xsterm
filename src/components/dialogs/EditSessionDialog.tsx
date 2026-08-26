@@ -215,7 +215,20 @@ export function EditSessionDialog({
           />
         );
       case "appearance":
-        return <AppearanceTab config={displayConfig} onChange={setDisplayConfig} />;
+        return (
+          <AppearanceTab
+            config={displayConfig}
+            onChange={setDisplayConfig}
+            connectionType={config.type === "ssh" ? "ssh" : "local"}
+            localConfig={localConfig}
+            onLocalConfigChange={setLocalConfig}
+            sshConfig={sshConfig}
+            onSshConfigChange={(cfg) => {
+              setSshConfig(cfg);
+              setError("");
+            }}
+          />
+        );
       case "terminal":
         return (
           <TerminalTab
