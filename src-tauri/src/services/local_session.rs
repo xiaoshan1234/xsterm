@@ -10,8 +10,6 @@ use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, PtySystem};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
 
-/// Default shell on Windows when no shell is configured.
-const WINDOWS_DEFAULT_SHELL: &str = "powershell.exe";
 /// Fallback shell on Unix-like systems when the `SHELL` env var is missing.
 const UNIX_FALLBACK_SHELL: &str = "/bin/bash";
 /// Buffer size for reading PTY output.
@@ -32,7 +30,7 @@ pub fn create_local_session(
     backend: impl AppBackend + 'static,
     session_id: u32,
 ) -> Result<LocalSession, String> {
-    let shell_path = resolve_shell_path(config.shell);
+    let shell_path = resolve_shell_path(config.shell, config.shell_template.as_deref());
     let (shell_exe, shell_extra_args) = parse_shell_command(&shell_path);
     let shell_name = extract_shell_name(&shell_exe);
     let cwd = resolve_working_directory(config.cwd);
@@ -127,14 +125,53 @@ pub fn create_local_session(
 }
 
 /// Determine the shell executable path from config or environment defaults.
-fn resolve_shell_path(configured: Option<String>) -> String {
-    configured.unwrap_or_else(|| {
-        if cfg!(target_os = "windows") {
-            WINDOWS_DEFAULT_SHELL.to_string()
-        } else {
-            std::env::var("SHELL").unwrap_or_else(|_| UNIX_FALLBACK_SHELL.to_string())
+///
+/// Priority:
+/// 1. Explicit `shell` path (when shell_template is "custom" or shell is set).
+/// 2. Resolve from `shell_template` (e.g. "powershell" -> "powershell.exe").
+/// 3. Fall back to OS default (cmd.exe on Windows, $SHELL on Unix).
+fn resolve_shell_path(configured: Option<String>, shell_template: Option<&str>) -> String {
+    if let Some(shell) = configured {
+        return shell;
+    }
+
+    match shell_template {
+        Some("powershell") => {
+            if cfg!(target_os = "windows") {
+                "powershell.exe".to_string()
+            } else {
+                "pwsh".to_string()
+            }
         }
-    })
+        Some("cmd") => {
+            if cfg!(target_os = "windows") {
+                "cmd.exe".to_string()
+            } else {
+                std::env::var("SHELL").unwrap_or_else(|_| UNIX_FALLBACK_SHELL.to_string())
+            }
+        }
+        Some("git-bash") => {
+            if cfg!(target_os = "windows") {
+                r"C:\Program Files\Git\bin\bash.exe".to_string()
+            } else {
+                "bash".to_string()
+            }
+        }
+        Some("wsl") => {
+            if cfg!(target_os = "windows") {
+                "wsl.exe".to_string()
+            } else {
+                std::env::var("SHELL").unwrap_or_else(|_| UNIX_FALLBACK_SHELL.to_string())
+            }
+        }
+        _ => {
+            if cfg!(target_os = "windows") {
+                "cmd.exe".to_string()
+            } else {
+                std::env::var("SHELL").unwrap_or_else(|_| UNIX_FALLBACK_SHELL.to_string())
+            }
+        }
+    }
 }
 
 /// Split a shell path into the executable and any inline arguments.

@@ -10,15 +10,11 @@ const isWindows =
   navigator.platform.toLowerCase().includes("win");
 
 const SHELL_TEMPLATES: Array<{ value: string; label: string }> = [
-  { value: "", label: "Default (per OS)" },
   { value: "powershell", label: "PowerShell" },
-  { value: "powershell7", label: "PowerShell 7" },
   { value: "cmd", label: "CMD" },
-  { value: "wsl", label: "WSL (Default Distro)" },
-  { value: "bash", label: "Bash" },
-  { value: "zsh", label: "Zsh" },
-  { value: "sh", label: "Sh" },
-  { value: "custom", label: "Custom (specify path)" },
+  { value: "git-bash", label: "Git Bash" },
+  { value: "wsl", label: "WSL" },
+  { value: "custom", label: "Custom" },
 ];
 
 const TERM_TYPES = [
@@ -96,11 +92,11 @@ export function LocalSessionForm({
   // Resolve the shellTemplate select value. Priority:
   //   1. Explicit shellTemplate on the config (e.g. "powershell", "bash").
   //   2. Infer "custom" when a free-form shell path is already set.
-  //   3. Empty string → "Default (per OS)" in the UI, undefined in state.
+  //   3. Default to "cmd" when no configuration exists.
   const shellTemplateValue: string = (() => {
     if (config.shellTemplate) return config.shellTemplate;
     if (config.shell) return "custom";
-    return "";
+    return "cmd";
   })();
 
   const showSession = !section || section === "session";
@@ -116,8 +112,7 @@ export function LocalSessionForm({
             onChange={(v) =>
               onChange({
                 ...config,
-                shellTemplate:
-                  v === "" ? undefined : (v as NonNullable<LocalSessionConfig["shellTemplate"]>),
+                shellTemplate: v as NonNullable<LocalSessionConfig["shellTemplate"]>,
               })
             }
             options={SHELL_TEMPLATES}

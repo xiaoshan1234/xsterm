@@ -60,8 +60,8 @@ export type SessionType =
 export interface LocalSessionConfig {
   /** Optional display name. Falls back to the shell basename when omitted. */
   name?: string;
-  /** Preset shell type. Use "custom" when providing an explicit shell path. @default 'powershell' on Windows, 'bash' otherwise */
-  shellTemplate?: "powershell" | "powershell7" | "cmd" | "wsl" | "bash" | "zsh" | "sh" | "custom";
+  /** Preset shell type. Use "custom" when providing an explicit shell path. @default 'cmd' */
+  shellTemplate?: "powershell" | "cmd" | "git-bash" | "wsl" | "custom";
   /** Explicit shell executable path (used when shellTemplate is "custom"). */
   shell?: string;
   cwd?: string;

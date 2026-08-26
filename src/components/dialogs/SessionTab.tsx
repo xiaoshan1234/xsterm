@@ -24,15 +24,11 @@ interface SessionTabProps {
 }
 
 const SHELL_TEMPLATES: Array<{ value: string; label: string }> = [
-  { value: "", label: "Default (per OS)" },
   { value: "powershell", label: "PowerShell" },
-  { value: "powershell7", label: "PowerShell 7" },
   { value: "cmd", label: "CMD" },
-  { value: "wsl", label: "WSL (Default Distro)" },
-  { value: "bash", label: "Bash" },
-  { value: "zsh", label: "Zsh" },
-  { value: "sh", label: "Sh" },
-  { value: "custom", label: "Custom (specify path)" },
+  { value: "git-bash", label: "Git Bash" },
+  { value: "wsl", label: "WSL" },
+  { value: "custom", label: "Custom" },
 ];
 
 const GROUP_OPTIONS_NONE: Array<{ value: string; label: string }> = [
@@ -60,7 +56,7 @@ export function SessionTab({
   );
 
   const shellTemplateValue: string = localConfig.shellTemplate
-    ?? (localConfig.shell ? "custom" : "");
+    ?? (localConfig.shell ? "custom" : "cmd");
 
   return (
     <div className="session-tab">
@@ -112,10 +108,7 @@ export function SessionTab({
             onChange={(v) =>
               onLocalConfigChange({
                 ...localConfig,
-                shellTemplate:
-                  v === ""
-                    ? undefined
-                    : (v as NonNullable<LocalSessionConfig["shellTemplate"]>),
+                shellTemplate: v as NonNullable<LocalSessionConfig["shellTemplate"]>,
               })
             }
             options={SHELL_TEMPLATES}
