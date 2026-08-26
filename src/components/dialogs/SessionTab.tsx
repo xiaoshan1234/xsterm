@@ -20,6 +20,7 @@ interface SessionTabProps {
   sshConfig: SSHSessionConfig;
   onSshConfigChange: (config: SSHSessionConfig) => void;
   hideConnectionSwitcher?: boolean;
+  hideNameAndGroup?: boolean;
 }
 
 const SHELL_TEMPLATES: Array<{ value: string; label: string }> = [
@@ -51,6 +52,7 @@ export function SessionTab({
   sshConfig,
   onSshConfigChange,
   hideConnectionSwitcher,
+  hideNameAndGroup,
 }: SessionTabProps) {
   const groupOptions = useMemo(
     () => [...GROUP_OPTIONS_NONE, ...groups.map((g) => ({ value: String(g.id), label: g.name }))],
@@ -62,20 +64,22 @@ export function SessionTab({
 
   return (
     <div className="session-tab">
-      <div className="session-tab__common">
-        <FormTextField
-          label="Session Name"
-          placeholder="Auto-generated if empty"
-          value={name || undefined}
-          onChange={(v) => onNameChange(v ?? "")}
-        />
-        <FormSelectField
-          label="Group"
-          value={selectedGroupId !== null ? String(selectedGroupId) : ""}
-          onChange={(v) => onGroupChange(v === "" ? null : parseInt(v, 10))}
-          options={groupOptions}
-        />
-      </div>
+      {!hideNameAndGroup && (
+        <div className="session-tab__common">
+          <FormTextField
+            label="Session Name"
+            placeholder="Auto-generated if empty"
+            value={name || undefined}
+            onChange={(v) => onNameChange(v ?? "")}
+          />
+          <FormSelectField
+            label="Group"
+            value={selectedGroupId !== null ? String(selectedGroupId) : ""}
+            onChange={(v) => onGroupChange(v === "" ? null : parseInt(v, 10))}
+            options={groupOptions}
+          />
+        </div>
+      )}
 
       {!hideConnectionSwitcher && (
         <div className="session-type-switcher" role="group" aria-label="Connection type">

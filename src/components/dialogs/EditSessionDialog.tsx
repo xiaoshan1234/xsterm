@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import {
   type SavedSessionConfig,
   type LocalSessionConfig,
@@ -8,12 +8,21 @@ import {
 } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
-import { LocalSessionIcon, SshSessionIcon, LayoutIcon, LogIcon, SettingsIcon } from "../icons/Icon";
-import { LocalSessionForm } from "./LocalSessionForm";
-import { SshSessionForm, validateSshConfig } from "./SshSessionForm";
-import { SshConnectionSection } from "./SshConnectionSection";
-import { DisplayConfigForm } from "./DisplayConfigForm";
-import { CommonSettingsForm } from "./CommonSettingsForm";
+import {
+  SessionIcon,
+  ShellIcon,
+  SshIcon,
+  LayoutIcon,
+  KeyboardIcon,
+  LogIcon,
+} from "../icons/Icon";
+import SessionTab from "./SessionTab";
+import ShellSettingsPanel from "./ShellSettingsPanel";
+import SSHSettingsPanel from "./SSHSettingsPanel";
+import AppearanceTab from "./AppearanceTab";
+import TerminalTab from "./TerminalTab";
+import LoggingTab from "./LoggingTab";
+import { validateSshConfig } from "./SshSessionForm";
 import { SessionFormLayout, type SessionFormSidebarItem } from "./SessionFormLayout";
 import "./EditSessionDialog.css";
 
@@ -26,13 +35,7 @@ interface EditSessionDialogProps {
   onSave: (config: SavedSessionConfig, groupId: number | null) => void;
 }
 
-type EditSectionId =
-  "session" | "sshConnection" | "displayLayout" | "keyboard" | "security" | "logging" | "process";
-
-const FIRST_SECTION_BY_TYPE: Record<"local" | "ssh", EditSectionId> = {
-  local: "session",
-  ssh: "session",
-};
+type SectionId = "session" | "shell" | "ssh" | "appearance" | "terminal" | "logging";
 
 const DEFAULT_SSH: SSHSessionConfig = {
   host: "",
@@ -44,66 +47,27 @@ const DEFAULT_SSH: SSHSessionConfig = {
   passphrase: "",
 };
 
-interface SidebarDef {
-  id: EditSectionId;
+interface SidebarItemDef {
+  id: SectionId;
   label: ReactNode;
   icon: ReactNode;
 }
 
-const SIDEBAR_ITEMS_BY_TYPE: Record<"local" | "ssh", SidebarDef[]> = {
-  local: [
-    { id: "session", label: "Session", icon: <LocalSessionIcon size={16} /> },
-    {
-      id: "displayLayout",
-      label: (
-        <>
-          Display
-          <br />& Layout
-        </>
-      ),
-      icon: <LayoutIcon size={16} />,
-    },
-    {
-      id: "keyboard",
-      label: (
-        <>
-          Keyboard
-          <br />& Input
-        </>
-      ),
-      icon: <SettingsIcon size={16} />,
-    },
-    { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
-    { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
-    { id: "process", label: "Process", icon: <SettingsIcon size={16} /> },
-  ],
-  ssh: [
-    { id: "session", label: "Session", icon: <SshSessionIcon size={16} /> },
-    { id: "sshConnection", label: "SSH Connection", icon: <SettingsIcon size={16} /> },
-    {
-      id: "displayLayout",
-      label: (
-        <>
-          Display
-          <br />& Layout
-        </>
-      ),
-      icon: <LayoutIcon size={16} />,
-    },
-    {
-      id: "keyboard",
-      label: (
-        <>
-          Keyboard
-          <br />& Input
-        </>
-      ),
-      icon: <SettingsIcon size={16} />,
-    },
-    { id: "security", label: "Security", icon: <SettingsIcon size={16} /> },
-    { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
-  ],
-};
+const SHELL_SIDEBAR_ITEMS: SidebarItemDef[] = [
+  { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
+  { id: "shell", label: "Shell", icon: <ShellIcon size={16} /> },
+  { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <KeyboardIcon size={16} /> },
+  { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
+];
+
+const SSH_SIDEBAR_ITEMS: SidebarItemDef[] = [
+  { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
+  { id: "ssh", label: "SSH", icon: <SshIcon size={16} /> },
+  { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <KeyboardIcon size={16} /> },
+  { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
+];
 
 export function EditSessionDialog({
   isOpen,
@@ -124,8 +88,13 @@ export function EditSessionDialog({
   const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(
     config.displayConfig,
   );
-  const [sshError, setSshError] = useState("");
-  const [sectionId, setSectionId] = useState<EditSectionId>(FIRST_SECTION_BY_TYPE[config.type]);
+  const [error, setError] = useState("");
+  const [sectionId, setSectionId] = useState<SectionId>("session");
+
+  const sidebarItems = useMemo(
+    () => (config.type === "ssh" ? SSH_SIDEBAR_ITEMS : SHELL_SIDEBAR_ITEMS),
+    [config.type],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -134,8 +103,8 @@ export function EditSessionDialog({
       setLocalConfig(config.type === "local" ? config.config : {});
       setSshConfig(config.type === "ssh" ? config.config : DEFAULT_SSH);
       setDisplayConfig(config.displayConfig);
-      setSshError("");
-      setSectionId(FIRST_SECTION_BY_TYPE[config.type]);
+      setError("");
+      setSectionId("session");
     }
   }, [isOpen, config, groupId]);
 
@@ -146,8 +115,8 @@ export function EditSessionDialog({
     if (config.type === "ssh") {
       const validationError = validateSshConfig(sshConfig);
       if (validationError) {
-        setSshError(validationError);
-        setSectionId("sshConnection");
+        setError(validationError);
+        setSectionId("session");
         return;
       }
     }
@@ -163,123 +132,110 @@ export function EditSessionDialog({
     onClose();
   };
 
-  const nameAndGroupFields = (
-    <>
-      <FormField label="Name">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSave()}
-          autoFocus
-        />
-      </FormField>
-      <FormField label="Group">
-        <select
-          value={selectedGroupId === null ? "none" : selectedGroupId}
-          onChange={(e) =>
-            setSelectedGroupId(e.target.value === "none" ? null : parseInt(e.target.value))
-          }
-        >
-          <option value="none">None</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </FormField>
-    </>
-  );
-
   const renderPanelContent = () => {
-    if (sectionId === "session") {
-      if (config.type === "ssh") {
+    if (error && sectionId === "session") {
+      return (
+        <>
+          <div className="dialog-error">{error}</div>
+          {renderSection()}
+        </>
+      );
+    }
+    return renderSection();
+  };
+
+  const renderSection = () => {
+    switch (sectionId) {
+      case "session":
         return (
           <>
-            {nameAndGroupFields}
-            <SshSessionForm
-              config={sshConfig}
-              onChange={(cfg) => {
+            <div className="edit-session-fields">
+              <FormField label="Name">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
+                  autoFocus
+                />
+              </FormField>
+              <FormField label="Group">
+                <select
+                  value={selectedGroupId === null ? "none" : selectedGroupId}
+                  onChange={(e) =>
+                    setSelectedGroupId(e.target.value === "none" ? null : parseInt(e.target.value))
+                  }
+                >
+                  <option value="none">None</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+            </div>
+            <SessionTab
+              connectionType={config.type === "ssh" ? "ssh" : "local"}
+              onConnectionTypeChange={() => {}}
+              name={name}
+              onNameChange={setName}
+              selectedGroupId={selectedGroupId}
+              onGroupChange={setSelectedGroupId}
+              groups={groups}
+              localConfig={localConfig}
+              onLocalConfigChange={setLocalConfig}
+              sshConfig={sshConfig}
+              onSshConfigChange={(cfg) => {
                 setSshConfig(cfg);
-                setSshError("");
+                setError("");
               }}
-              section="system"
+              hideConnectionSwitcher
+              hideNameAndGroup
             />
           </>
         );
-      }
-      return (
-        <>
-          {nameAndGroupFields}
-          <LocalSessionForm
-            config={localConfig}
-            onChange={setLocalConfig}
-            mode="edit"
-            section="session"
+      case "shell":
+        return (
+          <ShellSettingsPanel
+            localConfig={localConfig}
+            onLocalConfigChange={setLocalConfig}
+            displayConfig={displayConfig}
+            onDisplayConfigChange={setDisplayConfig}
           />
-        </>
-      );
-    }
-
-    if (sectionId === "sshConnection") {
-      return (
-        <>
-          {sshError && <div className="dialog-error">{sshError}</div>}
-          <SshConnectionSection
-            config={sshConfig}
-            onChange={(cfg) => {
+        );
+      case "ssh":
+        return (
+          <SSHSettingsPanel
+            sshConfig={sshConfig}
+            onSshConfigChange={(cfg) => {
               setSshConfig(cfg);
-              setSshError("");
+              setError("");
             }}
           />
-        </>
-      );
+        );
+      case "appearance":
+        return <AppearanceTab config={displayConfig} onChange={setDisplayConfig} />;
+      case "terminal":
+        return (
+          <TerminalTab
+            displayConfig={displayConfig}
+            onDisplayChange={setDisplayConfig}
+          />
+        );
+      case "logging":
+        return <LoggingTab config={displayConfig} onChange={setDisplayConfig} />;
     }
-
-    if (sectionId === "displayLayout") {
-      return (
-          <DisplayConfigForm config={displayConfig} onChange={setDisplayConfig} />
-      );
-    }
-
-    if (sectionId === "keyboard") {
-      return (
-        <CommonSettingsForm config={displayConfig} onChange={setDisplayConfig} section="keyboard" />
-      );
-    }
-
-    if (sectionId === "security") {
-      return (
-        <CommonSettingsForm config={displayConfig} onChange={setDisplayConfig} section="security" />
-      );
-    }
-
-    if (sectionId === "logging") {
-      return (
-        <CommonSettingsForm config={displayConfig} onChange={setDisplayConfig} section="logging" />
-      );
-    }
-
-    // "process" (Shell only — config.type === "ssh" never reaches here).
-    return (
-      <LocalSessionForm
-        config={localConfig}
-        onChange={setLocalConfig}
-        mode="edit"
-        section="process"
-      />
-    );
   };
 
-  const sidebarItems: SessionFormSidebarItem[] = SIDEBAR_ITEMS_BY_TYPE[config.type].map((item) => ({
+  const sidebarItemProps: SessionFormSidebarItem[] = sidebarItems.map((item) => ({
     id: item.id,
     label: item.label,
     icon: item.icon,
     active: item.id === sectionId,
     onClick: () => {
       setSectionId(item.id);
-      setSshError("");
+      setError("");
     },
   }));
 
@@ -303,7 +259,9 @@ export function EditSessionDialog({
       footer={footer}
       className="edit-session-dialog"
     >
-      <SessionFormLayout sidebarItems={sidebarItems}>{renderPanelContent()}</SessionFormLayout>
+      <SessionFormLayout sidebarItems={sidebarItemProps}>
+        {renderPanelContent()}
+      </SessionFormLayout>
     </Dialog>
   );
 }
