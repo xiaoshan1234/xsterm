@@ -176,6 +176,12 @@ export interface SessionDisplayConfig {
   /** Whether to allow the terminal to write to the clipboard. @default "ask" */
   clipboardWrite?: "ask" | "allow" | "deny";
 
+  // Terminal
+  /** Terminal type advertised to the PTY/SSH. @default "xterm-256color" */
+  terminalType?: string;
+  /** Character encoding for the terminal. @default "utf-8" */
+  charset?: string;
+
   // Logging
   /** Session output logging configuration. */
   logging?: SessionLoggingConfig;

@@ -14,6 +14,17 @@ export function parseOptionalInt(value: string): number | undefined {
 }
 
 /**
+ * Parse a string input into a float, treating blank input as `undefined`.
+ * Used by numeric fields that accept decimal values (line height, letter spacing).
+ */
+export function parseOptionalFloat(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = parseFloat(trimmed);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+/**
  * Narrow an HTML `<select>` value (which the DOM types as `string`) to one of
  * the literal values declared in an `as const` option list. Falls back to the
  * first option so the controlled-component contract is always honoured.

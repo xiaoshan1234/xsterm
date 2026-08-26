@@ -1,0 +1,30 @@
+/* AppearanceTab — two-column grid layout for display settings.
+ * Cursor-style: muted group title, hairline divider, 32px group gap.
+ * No shadow, no gradient, no hex literals. */
+
+.appearance-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.appearance-tab__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+.appearance-tab__group-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  user-select: none;
+  padding-bottom: var(--space-xxs);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.appearance-tab__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-base);
+}

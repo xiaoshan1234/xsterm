@@ -1,0 +1,16 @@
+/* LoggingTab — single-column log output settings.
+ * Cursor-style: muted group title, 16px field rhythm.
+ * No shadow, no gradient, no hex literals. */
+
+.logging-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+.logging-tab__group-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  user-select: none;
+}

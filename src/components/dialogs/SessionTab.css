@@ -1,0 +1,158 @@
+/* SessionTab — Shell/SSH segmented control + conditional field groups.
+ * Design tokens only: no hex literals, no box-shadow, no gradients,
+ * no font-weight above 500. Mirrors the editorial rhythm established
+ * in SshConnectionSection.css and CommonSettingsForm.css. */
+
+.session-tab {
+  display: flex;
+  flex-direction: column;
+  /* 32px between major sections — consistent magazine-like rhythm. */
+  gap: var(--space-xl);
+}
+
+/* ── Common fields (Session Name + Group) ─────────────────────────── */
+
+.session-tab__common {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+/* ── Segmented control (Shell / SSH switcher) ─────────────────────── */
+
+.session-type-switcher {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  width: fit-content;
+}
+
+.session-type-btn {
+  padding: 8px 24px;
+  background: transparent;
+  border: none;
+  color: var(--body);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.session-type-btn:not(:last-child) {
+  border-right: 1px solid var(--hairline-strong);
+}
+
+.session-type-btn:hover {
+  background: var(--bg-hover);
+}
+
+.session-type-btn:focus-visible {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+.session-type-btn--active {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/* ── Section content (Shell or SSH fields) ────────────────────────── */
+
+.session-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+/* Section group titles — muted 13px 500, matching the design spec. */
+.session-section__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  /* Small visual separation without decorative rails. */
+  padding-bottom: var(--space-xxs);
+  border-bottom: 1px solid var(--hairline-soft);
+  margin-bottom: var(--space-xxs);
+}
+
+/* Extra top margin for sub-section titles (e.g. "SSH Options" before Advanced). */
+.session-section__title--spaced {
+  margin-top: var(--space-sm);
+}
+
+/* ── Two-column row (Port + Username, Initial Size + Keepalive) ───── */
+
+.session-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-base);
+}
+
+/* ── SSH Advanced collapsible ─────────────────────────────────────── */
+
+.ssh-advanced-section {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+.ssh-advanced-section__title {
+  padding: 11px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface-card);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.ssh-advanced-section__title:hover {
+  background: var(--bg-hover);
+}
+
+.ssh-advanced-section__title:focus-visible {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+/* Hide default marker, use custom disclosure triangle. */
+.ssh-advanced-section__title::-webkit-details-marker {
+  display: none;
+}
+
+.ssh-advanced-section__title::before {
+  content: "▸";
+  font-size: 11px;
+  color: var(--muted);
+  transition:
+    transform 0.15s ease,
+    color 0.15s ease;
+  display: inline-block;
+  width: 10px;
+}
+
+.ssh-advanced-section[open] > .ssh-advanced-section__title::before {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+
+.ssh-advanced-section__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding: var(--space-base);
+  border-top: 1px solid var(--hairline);
+}

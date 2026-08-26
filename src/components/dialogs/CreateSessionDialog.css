@@ -55,12 +55,3 @@
 .session-form-layout .dialog-panel::-webkit-scrollbar-corner {
   background: transparent;
 }
-
-/* 2-column grid for the Display panel so all 8 fields fit in the locked
- * panel height without scrolling. Uses the token scale so vertical rhythm
- * matches the surrounding panel (16px gap = --space-base). */
-.display-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-base);
-}

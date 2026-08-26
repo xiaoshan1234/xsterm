@@ -1,0 +1,112 @@
+/* TerminalTab — session create/edit dialog tab
+ *
+ * Layout: three vertical sections (Startup / Keyboard / Clipboard)
+ * separated by --space-xl (32px). Each section has a muted title with
+ * a hairline divider, then fields stacked with --space-base gaps.
+ * Keyboard and Clipboard use two-column grids for paired selects.
+ * Cursor-style restrained: no shadow, no gradient, no bold weight. */
+
+.terminal-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+/* ── Section groups ── */
+
+.terminal-tab__section {
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-tab__section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0 0 8px 0;
+  margin: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.terminal-tab__section-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding-top: var(--space-base);
+}
+
+/* ── Two-column grid for paired fields ── */
+
+.terminal-tab__two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-base);
+}
+
+/* ── Inline delay row (below Startup Command) ── */
+
+.terminal-tab__delay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+.terminal-tab__delay-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.terminal-tab__delay-input {
+  width: 80px;
+  padding: 4px 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.terminal-tab__delay-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.terminal-tab__delay-input::placeholder {
+  color: var(--muted);
+}
+
+.terminal-tab__delay-unit {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── Environment Variables list ── */
+
+.terminal-tab__env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.terminal-tab__env-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.terminal-tab__env-row input {
+  width: 100%;
+}
+
+/* ── Compact button variant for Remove ── */
+
+.btn--compact {
+  padding: 4px 12px;
+  font-size: 13px;
+}

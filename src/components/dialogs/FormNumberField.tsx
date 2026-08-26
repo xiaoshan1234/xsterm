@@ -1,6 +1,6 @@
 import { type ChangeEvent } from "react";
 import { FormField } from "../ui/FormField";
-import { parseOptionalInt } from "./formParsers";
+import { parseOptionalInt, parseOptionalFloat } from "./formParsers";
 
 interface FormNumberFieldProps {
   label: string;
@@ -11,6 +11,8 @@ interface FormNumberFieldProps {
   max?: number;
   step?: number;
   disabled?: boolean;
+  /** When true, parse input as float instead of int. */
+  float?: boolean;
 }
 
 export function FormNumberField({
@@ -22,9 +24,10 @@ export function FormNumberField({
   max,
   step,
   disabled,
+  float,
 }: FormNumberFieldProps) {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    onChange(parseOptionalInt(e.target.value));
+    onChange(float ? parseOptionalFloat(e.target.value) : parseOptionalInt(e.target.value));
   };
   return (
     <FormField label={label}>
