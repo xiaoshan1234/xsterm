@@ -91,6 +91,32 @@ YES
 
 # Bug 006
 ## 现象
+在 UI 创建 SSH session 时，后端返回错误 `invalid args 'config' for command 'create_session': missing field 'authType'`，session 创建失败。
+## 理想效果
+前端通过 CreateSession的 SSH tab 提交配置后，`create_session` Tauri 命令应能成功反序列化配置并创建 SSH session，无 IPC 反序列化错误。
+## BUG 原因
+后端 `SSHSessionConfig` 的 `auth` 字段（`src-tauri/src/models/session.rs:67-103`）通过 `#[serde(flatten)]` 嵌入了一个 `SSHAuth` tagged enum（`session.rs:129-139`），该 enum 使用 `#[serde(tag = "authType", rename_all = "camelCase")]`。serde 反序列化时，`SSHAuth` 的 enum 判别 tag `authType` 成为 `SSHSessionConfig` 的必需字段。
+
+前端 `SSHSessionConfig`（`src/types/session.ts:84-118`）和 spec 文档（`doc/requirements/prd-0.1/create-session-config.md:112-117`）都把认证字段定义为扁平结构：`auth_type: "password" | "key"` + 独立 `password` / `key_file` / `passphrase`。前端发送的 JSON 形如 `{ "auth_type": "password", "password": "..." }`，但后端期望 `{ "authType": "password", "password": "..." }` —— 缺少 `authType` tag，serde 直接抛错。
+
+该不匹配在 commit `7dbfa27`（feat(rust): mirror spec fields to backend structs + Default derive + test fixture update）引入新 `SSHAuth` enum 时出现，TypeScript 侧、spec 文档、表单、持久化层均未同步更新。
+## 解决方案
+1. 删除 `src-tauri/src/models/session.rs` 中的 `SSHAuth` enum。
+2. 将 `SSHSessionConfig.auth: SSHAuth` 字段替换为 4 个扁平字段：`auth_type: String`、`password: Option<String>`、`key_file: Option<String>`、`passphrase: Option<String>`。在 `auth_type` 和 `key_file` 字段上加 `#[serde(rename = "...")]` 覆盖 `rename_all = "camelCase"`，保留 snake_case JSON key。
+3. 在 `SSHSessionConfig` 上加 `#[serde(deny_unknown_fields)]`，使旧 `authType` payload 被显式拒绝（不静默通过）。
+4. 更新 `Default` impl 用 `auth_type: "password".to_string()`。
+5. 更新 `models/session.rs::mod tests` 中所有 11 处 serde roundtrip 测试的 fixture 语法。
+6. 新增 2 个回归测试：`ssh_session_config_deserializes_flat_auth_type_field` 和 `ssh_session_config_deserializes_key_file_auth`，覆盖前端实际发送的 JSON 形状。
+7. 更新 `infrastructure/ssh.rs::authenticate` 函数（`ssh.rs:500-530`）：签名从 `(handle, username, &SSHAuth)` 改为 `(handle, &SSHSessionConfig)`，body 用 `match config.auth_type.as_str() { "password" => ..., "key" => ..., _ => Err(...) }`；密码/key-file/passphrase 直接从 `config.password` / `config.key_file` / `config.passphrase` 读取。
+8. 更新 `services/session_manager.rs` 中 7 处 mockall fixture 的语法。
+9. 保持前端、spec 文档、持久化层、表单代码均不动（它们本来就与 spec 一致）。
+
+修复 commit: `e42cec4 fix(ssh-config): flatten SSHAuth enum to match spec/frontend payload`
+## 是否解决
+YES
+
+# Bug 007
+## 现象
 `isSessionUsedInOtherWindow(workspaces, currentWorkspaceId, currentWindowId, sessionId)` 在"session 只存在于当前窗口"的情况下错误地返回 `true`。新增的单元测试套件（`src/contexts/session/paneUtils.test.ts`）中对应用例被标记为 `.todo` —— 其期望值为 `false` 而当前实现返回 `true`。
 ## 理想效果
 仅当 `sessionId` 出现在一个**不是**当前 workspace/window 的窗口中时返回 `true`；当 session 仅存在于当前窗口时返回 `false`；当 `currentWorkspaceId` 或 `currentWindowId` 为 `null` 时维持现有语义（视为"无当前窗口"，找到即返回 `true`）。
@@ -105,7 +131,7 @@ YES
 ## 是否解决
 NO
 
-# Bug 007
+# Bug 008
 ## 现象
 主工作区（workspace 容器）只占屏幕左侧约 40% 宽度，剩余约 60% 是空白背景。窗口越窄空白越明显，800×600 时主区只剩 ~350px。
 ## 理想效果
@@ -117,7 +143,7 @@ NO
 ## 是否解决
 YES
 
-# Bug 008
+# Bug 009
 ## 现象
 系统偏好为浅色时，AppBar / Drawer / SettingsView 走 MUI 浅色主题（白底），但 `PaneInitCard` / `InitWindowView` / `Pane` 等组件仍显示深色背景——出现"半白半黑"的撕裂 UI。把 Chrome theme 切到 Light 即可复现。
 ## 理想效果
@@ -137,7 +163,7 @@ YES
 ## 是否解决
 YES
 
-# Bug 009
+# Bug 010
 ## 现象
 新建窗口首次启动时默认 800×600，对终端模拟器来说太小，sidebar（48px）+ 左半边 workspace 实际只剩 ~350px 宽，根本看不清内容。
 ## 理想效果
@@ -150,7 +176,7 @@ YES
 ## 是否解决
 YES
 
-# Bug 010
+# Bug 011
 ## 现象
 点击侧边栏 "New Session" 打开新建会话对话框时，整个应用崩溃（React 根节点卸载，窗口变空白）。
 ## 理想效果
@@ -168,7 +194,7 @@ YES
 YES
 
 
-# Bug 011
+# Bug 012
 ## 现象
 每次新建本地 shell（PowerShell、bash 等）后，pane 顶部立刻出现橙色横幅 `Connection lost. Press Enter to reconnect.`，但 shell 提示符（`PS C:\Users\LONER>` 等）仍正常渲染在横幅下方，看起来"提示符活着却显示连接丢失"。
 ## 理想效果
@@ -198,9 +224,9 @@ Windows ConPTY（portable-pty）在 `pair.master_reader()`（`try_clone_reader()
 YES
 
 
-# Bug 012
+# Bug 013
 ## 现象
-每次新建本地 shell（PowerShell、bash 等）后，pane 顶部**始终**显示橙色横幅 `Connection lost. Press Enter to reconnect.`，无论 shell 是否在输出、用户是否操作。Bug 011 修过的 PTY forwarder EOF 路径走完后日志里所有 `createSession:result` 都是 `isConnected:true`，但横幅依然常驻；用户按 Enter 触发 reconnect → 创建新 session → 关闭旧 session → EOF → 横幅继续 → 死循环。日志证据：连续 4 次 `createSession` 紧跟 `closeSession` 前一个 id，`PTY EOF for session N after data — shell exited` 也按时打，但 `Transient PTY EOF before data` 一条都没有出现 —— 说明 forwarder 并没有"误判"提前断开。
+每次新建本地 shell（PowerShell、bash 等）后，pane 顶部**始终**显示橙色横幅 `Connection lost. Press Enter to reconnect.`，无论 shell 是否在输出、用户是否操作。Bug 012 修过的 PTY forwarder EOF 路径走完后日志里所有 `createSession:result` 都是 `isConnected:true`，但横幅依然常驻；用户按 Enter 触发 reconnect → 创建新 session → 关闭旧 session → EOF → 横幅继续 → 死循环。日志证据：连续 4 次 `createSession` 紧跟 `closeSession` 前一个 id，`PTY EOF for session N after data — shell exited` 也按时打，但 `Transient PTY EOF before data` 一条都没有出现 —— 说明 forwarder 并没有"误判"提前断开。
 ## 理想效果
 打开新 shell 后横幅不应出现；只有当 PTY/SSH 真正断开（且真的读出过数据之后 EOF）时才显示。
 ## BUG原因
@@ -222,7 +248,7 @@ pub struct SessionInfo {
 
 `invoke<SessionInfo>` 拿到的对象里 `info.is_connected === undefined`（字段名根本没匹配上），`info.session_type === undefined`。`buildFrontendSession`（`useSessionActions.ts:73-88`）把它原样拷到 React state：`{ is_connected: undefined, ... }`。`Pane.tsx:245` 渲染条件是 `!session.is_connected` —— `!undefined === true` —— 横幅从创建那一刻起就**永远**显示。同理 `Terminal.tsx` 的 `isConnectedRef.current` 也是 `undefined`，`onData` handler 在 `!isConnectedRef.current` 分支里吃掉所有非 `\r` 字符，用户输入根本进不到 PTY；只能按 Enter 触发 `reconnectSession`，导致日志里密集的 create+close 循环。
 
-Bug 011 是同一个表象的另一种成因（ConPTY 首读 EOF → forwarder 自杀 → emit `session-disconnected` → React state 真把 `is_connected` 设成 `false`），但本次用户日志里没有触发 Bug 011 路径（没有 `Transient` 日志）。所以 Bug 011 仍然保留作为防御性修复；Bug 012 才是主因。
+Bug 012 是同一个表象的另一种成因（ConPTY 首读 EOF → forwarder 自杀 → emit `session-disconnected` → React state 真把 `is_connected` 设成 `false`），但本次用户日志里没有触发 Bug 012 路径（没有 `Transient` 日志）。所以 Bug 012 仍然保留作为防御性修复；Bug 013 才是主因。
 ## 解决方案
 1. 把所有从 IPC JSON 读出的 snake_case 字段改成 camelCase，与 Rust `rename_all = "camelCase"` 对齐：
    - `src/types/session.ts`：`Session.is_connected` → `isConnected`，`Session.session_type` → `sessionType`
@@ -236,7 +262,7 @@ Bug 011 是同一个表象的另一种成因（ConPTY 首读 EOF → forwarder �
 4. 验证：
    - `npx tsc --noEmit`：TSC OK（0 errors）
    - `npx vitest run src/contexts/session/paneUtils.test.ts`：47 passed, 1 todo
-   - `cargo test --lib`：68 passed（Bug 011 的 forwarder 修复依然在位）
+   - `cargo test --lib`：68 passed（Bug 012 的 forwarder 修复依然在位）
 5. 手动验证：在 dev 环境打开新 shell，横幅应消失；按 Enter 走 reconnect 也应不再出现 `create+close+EOF` 死循环（除非用户真的关掉 shell）。
 ## 是否解决
 YES
