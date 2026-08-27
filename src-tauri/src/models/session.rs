@@ -63,7 +63,7 @@ pub struct LocalSessionConfig {
 
 /// Configuration for creating an SSH session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SSHSessionConfig {
     /// Optional display name for the session. Falls back to
     /// `format!("{}@{}", username, host)` when `None` or empty.
@@ -72,8 +72,19 @@ pub struct SSHSessionConfig {
     pub host: String,
     pub port: u16,
     pub username: String,
-    #[serde(flatten)]
-    pub auth: SSHAuth,
+
+    // SSH auth — flat fields matching spec (doc/requirements/prd-0.1/create-session-config.md:112-117)
+    // and frontend (src/types/session.ts:90). `rename = "auth_type"` and
+    // `rename = "key_file"` override `rename_all = "camelCase"` to keep the
+    // snake_case JSON keys the spec requires.
+    #[serde(rename = "auth_type")]
+    pub auth_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    #[serde(rename = "key_file", default, skip_serializing_if = "Option::is_none")]
+    pub key_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passphrase: Option<String>,
     #[serde(default)]
     pub term_type: Option<String>,
     #[serde(default)]
@@ -109,7 +120,10 @@ impl Default for SSHSessionConfig {
             host: String::new(),
             port: 22,
             username: String::new(),
-            auth: SSHAuth::Password { password: String::new() },
+            auth_type: "password".to_string(),
+            password: None,
+            key_file: None,
+            passphrase: None,
             term_type: None,
             initial_rows: None,
             initial_cols: None,
@@ -124,18 +138,6 @@ impl Default for SSHSessionConfig {
             proxy_jump: None,
         }
     }
-}
-
-/// Authentication method for an SSH session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "authType", rename_all = "camelCase")]
-pub enum SSHAuth {
-    /// Authenticate with a password.
-    #[serde(rename = "password")]
-    Password { password: String },
-    /// Authenticate with a private key file and optional passphrase.
-    #[serde(rename = "key")]
-    KeyFile { key_file: String, passphrase: Option<String> },
 }
 
 /// Discriminated union for the configuration required to create a session.
@@ -306,10 +308,10 @@ mod tests {
             host: "example.com".to_string(),
             port: 2222,
             username: "user".to_string(),
-            auth: SSHAuth::KeyFile {
-                key_file: "/home/user/.ssh/id_rsa".to_string(),
-                passphrase: Some("secret".to_string()),
-            },
+            auth_type: "key".to_string(),
+            password: None,
+            key_file: Some("/home/user/.ssh/id_rsa".to_string()),
+            passphrase: Some("secret".to_string()),
             term_type: Some("xterm-256color".to_string()),
             initial_rows: Some(24),
             initial_cols: Some(80),
@@ -352,9 +354,10 @@ mod tests {
             host: "localhost".to_string(),
             port: 22,
             username: "admin".to_string(),
-            auth: SSHAuth::Password {
-                password: "pass".to_string(),
-            },
+            auth_type: "password".to_string(),
+            password: Some("pass".to_string()),
+            key_file: None,
+            passphrase: None,
             term_type: None,
             initial_rows: None,
             initial_cols: None,
@@ -387,10 +390,10 @@ mod tests {
             host: "remote.example.com".to_string(),
             port: 22,
             username: "user".to_string(),
-            auth: SSHAuth::KeyFile {
-                key_file: "/path/to/key".to_string(),
-                passphrase: None,
-            },
+            auth_type: "key".to_string(),
+            password: None,
+            key_file: Some("/path/to/key".to_string()),
+            passphrase: None,
             term_type: None,
             initial_rows: None,
             initial_cols: None,
@@ -425,9 +428,10 @@ mod tests {
             host: "internal.example.com".to_string(),
             port: 22,
             username: "user".to_string(),
-            auth: SSHAuth::Password {
-                password: "pass".to_string(),
-            },
+            auth_type: "password".to_string(),
+            password: Some("pass".to_string()),
+            key_file: None,
+            passphrase: None,
             term_type: None,
             initial_rows: None,
             initial_cols: None,
@@ -462,9 +466,10 @@ mod tests {
             host: "prod.example.com".to_string(),
             port: 22,
             username: "deploy".to_string(),
-            auth: SSHAuth::Password {
-                password: "secret".to_string(),
-            },
+            auth_type: "password".to_string(),
+            password: Some("secret".to_string()),
+            key_file: None,
+            passphrase: None,
             term_type: None,
             initial_rows: None,
             initial_cols: None,
@@ -495,7 +500,10 @@ mod tests {
             host: "h.example.com".to_string(),
             port: 22,
             username: "u".to_string(),
-            auth: SSHAuth::Password { password: "p".to_string() },
+            auth_type: "password".to_string(),
+            password: Some("p".to_string()),
+            key_file: None,
+            passphrase: None,
             term_type: None,
             initial_rows: None,
             initial_cols: None,
@@ -567,7 +575,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_missing_name_field_defaults_to_none() {
-        let json_without_name = r#"{"host":"h","port":22,"username":"u","authType":"password","password":"p"}"#;
+        let json_without_name = r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p"}"#;
         let config: SSHSessionConfig = serde_json::from_str(json_without_name).expect("deserialize");
         assert!(config.name.is_none());
         assert_eq!(config.host, "h");
@@ -625,10 +633,10 @@ mod tests {
             host: "example.com".to_string(),
             port: 2222,
             username: "user".to_string(),
-            auth: SSHAuth::KeyFile {
-                key_file: "/home/user/.ssh/id_rsa".to_string(),
-                passphrase: Some("secret".to_string()),
-            },
+            auth_type: "key".to_string(),
+            password: None,
+            key_file: Some("/home/user/.ssh/id_rsa".to_string()),
+            passphrase: Some("secret".to_string()),
             term_type: Some("xterm-256color".to_string()),
             initial_rows: Some(24),
             initial_cols: Some(80),
@@ -660,7 +668,7 @@ mod tests {
         assert_eq!(roundtrip.host, "example.com");
         assert_eq!(roundtrip.port, 2222);
 
-        let json_with_snake = r#"{"host":"h","port":22,"username":"u","authType":"password","password":"p","tcpNodelay":true,"charset":"latin1"}"#;
+        let json_with_snake = r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p","tcpNodelay":true,"charset":"latin1"}"#;
         let from_snake: SSHSessionConfig =
             serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
         assert_eq!(from_snake.tcp_nodelay, Some(true));
@@ -796,6 +804,43 @@ mod tests {
             serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
         assert!(from_snake.file_name_template.is_none());
         assert!(from_snake.max_size_mb.is_none());
+    }
+
+    #[test]
+    fn ssh_session_config_deserializes_flat_auth_type_field() {
+        // Frontend sends snake_case auth_type; SSHSessionConfig uses flat fields
+        // with `#[serde(rename = "auth_type")]` to accept this payload.
+        let json = r#"{
+            "host": "example.com",
+            "port": 22,
+            "username": "user",
+            "auth_type": "password",
+            "password": "secret"
+        }"#;
+        let config: SSHSessionConfig =
+            serde_json::from_str(json).expect("frontend payload must deserialize");
+        assert_eq!(config.host, "example.com");
+        assert_eq!(config.port, 22);
+        assert_eq!(config.username, "user");
+        assert_eq!(config.auth_type, "password");
+        assert_eq!(config.password.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn ssh_session_config_deserializes_key_file_auth() {
+        let json = r#"{
+            "host": "example.com",
+            "port": 2222,
+            "username": "user",
+            "auth_type": "key",
+            "key_file": "/home/user/.ssh/id_rsa",
+            "passphrase": "secret"
+        }"#;
+        let config: SSHSessionConfig =
+            serde_json::from_str(json).expect("key auth payload must deserialize");
+        assert_eq!(config.auth_type, "key");
+        assert_eq!(config.key_file.as_deref(), Some("/home/user/.ssh/id_rsa"));
+        assert_eq!(config.passphrase.as_deref(), Some("secret"));
     }
 }
 

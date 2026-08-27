@@ -13,7 +13,7 @@ use crate::error::StringError;
 use crate::infrastructure::pty::default_pty_size;
 use crate::infrastructure::session_backend::SessionBackend;
 use crate::models::capabilities::CapabilityFlags;
-use crate::models::session::{SSHAuth, SSHSessionConfig, SessionInfo};
+use crate::models::session::{SSHSessionConfig, SessionInfo};
 
 // 60-second interval for application-layer null-packet keepalive when
 // `config.null_packet_keepalive = Some(true)`. Matches the OpenSSH-style
@@ -394,7 +394,7 @@ async fn run_ssh_session(
         connect_block.await?
     };
 
-    authenticate(&mut handle, &config.username, &config.auth)
+    authenticate(&mut handle, config)
         .await
         .map_err(|e| {
             format!(
@@ -498,13 +498,13 @@ async fn run_ssh_session(
 /// Authenticate the SSH session using either a password or a private key.
 async fn authenticate(
     handle: &mut russh::client::Handle<ClientHandler>,
-    username: &str,
-    auth: &SSHAuth,
+    config: &SSHSessionConfig,
 ) -> Result<(), String> {
-    match auth {
-        SSHAuth::Password { password } => {
+    match config.auth_type.as_str() {
+        "password" => {
+            let password = config.password.as_deref().unwrap_or("");
             let ok = handle
-                .authenticate_password(username, password)
+                .authenticate_password(&config.username, password)
                 .await
                 .map_err_string()?
                 .success();
@@ -512,20 +512,27 @@ async fn authenticate(
                 return Err("password authentication rejected".to_string());
             }
         }
-        SSHAuth::KeyFile { key_file, passphrase } => {
+        "key" => {
+            let key_file = config
+                .key_file
+                .as_deref()
+                .ok_or_else(|| "key_file required when auth_type is \"key\"".to_string())?;
             let key_data = std::fs::read_to_string(key_file)
                 .map_err(|e| format!("failed to read key file '{}': {}", key_file, e))?;
-            let key = decode_secret_key(&key_data, passphrase.as_deref())
+            let key = decode_secret_key(&key_data, config.passphrase.as_deref())
                 .map_err(|e| format!("failed to decode key '{}': {}", key_file, e))?;
             let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(key), None);
             let ok = handle
-                .authenticate_publickey(username, key_with_hash)
+                .authenticate_publickey(&config.username, key_with_hash)
                 .await
                 .map_err_string()?
                 .success();
             if !ok {
                 return Err("public key authentication rejected".to_string());
             }
+        }
+        other => {
+            return Err(format!("unknown ssh auth_type: {}", other));
         }
     }
     Ok(())
@@ -683,7 +690,7 @@ async fn exec_ssh_command(
         connect_block.await?
     };
 
-    authenticate(&mut handle, &config.username, &config.auth).await?;
+    authenticate(&mut handle, config).await?;
 
     let mut channel = handle
         .channel_open_session()
@@ -752,9 +759,10 @@ mod tests {
             host: "example.com".to_string(),
             port: 22,
             username: "user".to_string(),
-            auth: crate::models::session::SSHAuth::Password {
-                password: "pw".to_string(),
-            },
+            auth_type: "password".to_string(),
+            password: Some("pw".to_string()),
+            key_file: None,
+            passphrase: None,
             term_type: None,
             initial_rows: None,
             initial_cols: None,
