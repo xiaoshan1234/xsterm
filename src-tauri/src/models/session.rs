@@ -842,6 +842,26 @@ mod tests {
         assert_eq!(config.key_file.as_deref(), Some("/home/user/.ssh/id_rsa"));
         assert_eq!(config.passphrase.as_deref(), Some("secret"));
     }
+
+    #[test]
+    fn ssh_session_config_rejects_legacy_authtype_field() {
+        // Frontend BEFORE this fix sent { authType: "password", password: "..." }
+        // (broken because SSHAuth was tagged with authType). After fix,
+        // SSHSessionConfig uses auth_type (snake_case), and deny_unknown_fields
+        // explicitly rejects any legacy authType field.
+        let legacy_json = r#"{
+            "host": "h",
+            "port": 22,
+            "username": "u",
+            "authType": "password",
+            "password": "p"
+        }"#;
+        let result: Result<SSHSessionConfig, _> = serde_json::from_str(legacy_json);
+        assert!(
+            result.is_err(),
+            "deny_unknown_fields must reject legacy authType payload"
+        );
+    }
 }
 
 /// Build a remote path for an uploaded image file.
