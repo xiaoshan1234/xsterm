@@ -130,7 +130,7 @@ pub fn create_local_session(
 /// 1. Explicit `shell` path (when shell_template is "custom" or shell is set).
 /// 2. Resolve from `shell_template` (e.g. "powershell" -> "powershell.exe").
 /// 3. Fall back to OS default (cmd.exe on Windows, $SHELL on Unix).
-fn resolve_shell_path(configured: Option<String>, shell_template: Option<&str>) -> String {
+pub(crate) fn resolve_shell_path(configured: Option<String>, shell_template: Option<&str>) -> String {
     if let Some(shell) = configured {
         return shell;
     }
@@ -177,7 +177,7 @@ fn resolve_shell_path(configured: Option<String>, shell_template: Option<&str>) 
 /// Split a shell path into the executable and any inline arguments.
 ///
 /// Example: `"/bin/bash -l"` becomes `("/bin/bash", ["-l"])`.
-fn parse_shell_command(shell_path: &str) -> (String, Vec<String>) {
+pub(crate) fn parse_shell_command(shell_path: &str) -> (String, Vec<String>) {
     shell_path
         .split_once(' ')
         .map(|(exe, rest)| {
@@ -189,7 +189,7 @@ fn parse_shell_command(shell_path: &str) -> (String, Vec<String>) {
         .unwrap_or_else(|| (shell_path.to_string(), Vec::new()))
 }
 
-fn extract_shell_name(shell_exe: &str) -> String {
+pub(crate) fn extract_shell_name(shell_exe: &str) -> String {
     shell_exe
         .split(['/', '\\'])
         .next_back()
@@ -200,7 +200,7 @@ fn extract_shell_name(shell_exe: &str) -> String {
 
 /// Resolve the session display name: prefer an explicit user-supplied name,
 /// fall back to the auto-derived `default_name` when missing or empty.
-fn resolve_session_name(configured: Option<String>, default_name: &str) -> String {
+pub(crate) fn resolve_session_name(configured: Option<String>, default_name: &str) -> String {
     match configured {
         Some(name) if !name.trim().is_empty() => name,
         _ => default_name.to_string(),
@@ -208,7 +208,7 @@ fn resolve_session_name(configured: Option<String>, default_name: &str) -> Strin
 }
 
 /// Resolve the working directory from config or environment defaults.
-fn resolve_working_directory(configured: Option<String>) -> String {
+pub(crate) fn resolve_working_directory(configured: Option<String>) -> String {
     configured.unwrap_or_else(|| {
         if cfg!(target_os = "windows") {
             resolve_windows_home()
@@ -229,12 +229,23 @@ fn resolve_windows_home() -> String {
         .unwrap_or_else(|_: std::env::VarError| "C:\\".to_string())
 }
 
+/// Shell-specific startup flags (banner suppression / login shell). Shared
+/// with the elevated session path, which passes them to the helper as
+/// ordinary arguments instead of a `CommandBuilder`.
+pub(crate) fn shell_flag_args(shell_name: &str) -> Vec<String> {
+    if shell_name.contains("powershell") || shell_name.contains("pwsh") {
+        vec![POWERSHELL_NOLOGO_FLAG.to_string()]
+    } else if shell_name == "bash" && !cfg!(target_os = "windows") {
+        vec![BASH_LOGIN_FLAG.to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
 /// Apply shell-specific flags to suppress banners or start a login shell.
 fn apply_shell_flags(cmd: &mut portable_pty::CommandBuilder, shell_name: &str) {
-    if shell_name.contains("powershell") || shell_name.contains("pwsh") {
-        cmd.arg(POWERSHELL_NOLOGO_FLAG);
-    } else if shell_name == "bash" && !cfg!(target_os = "windows") {
-        cmd.arg(BASH_LOGIN_FLAG);
+    for arg in shell_flag_args(shell_name) {
+        cmd.arg(arg);
     }
 }
 

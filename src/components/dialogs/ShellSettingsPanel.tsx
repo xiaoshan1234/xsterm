@@ -1,8 +1,13 @@
 import { useState } from "react";
 import { type LocalSessionConfig, type SessionDisplayConfig } from "../../types/session";
+import { FormCheckboxField } from "./FormCheckboxField";
 import { FormSelectField } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";
 import "./ShellSettingsPanel.css";
+
+const isWindows =
+  navigator.userAgent.toLowerCase().includes("windows") ||
+  navigator.platform.toLowerCase().includes("win");
 
 interface ShellSettingsPanelProps {
   localConfig: LocalSessionConfig;
@@ -75,6 +80,14 @@ export function ShellSettingsPanel({
             onChange={(charset) => onDisplayConfigChange({ ...displayConfig, charset })}
             options={CHARSETS}
           />
+
+          {isWindows && (localConfig.shellTemplate === "powershell" || localConfig.shellTemplate === "cmd" || (!localConfig.shellTemplate && !localConfig.shell)) && (
+            <FormCheckboxField
+              label="Run as Administrator"
+              checked={localConfig.runAsAdmin ?? false}
+              onChange={(runAsAdmin) => onLocalConfigChange({ ...localConfig, runAsAdmin })}
+            />
+          )}
         </div>
       </div>
 

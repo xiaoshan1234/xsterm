@@ -79,6 +79,8 @@ export interface LocalSessionConfig {
   initialCols?: number;
   /** Initial terminal rows. @default 24 */
   initialRows?: number;
+  /** Run the shell with administrator privileges (Windows only, powershell/cmd). @default false */
+  runAsAdmin?: boolean;
 }
 
 export interface SSHSessionConfig {

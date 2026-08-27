@@ -6,9 +6,13 @@
 //! - `infrastructure`: Low-level adapters for PTY, SSH, and the Tauri app handle.
 //! - `models`: Plain data structures shared across layers.
 //! - `logging_setup`: Application logging configuration and initialization.
+//! - `elevated_protocol`: Named-pipe wire protocol shared with the
+//!   `xsterm-elevated-helper` binary (public because that binary is a
+//!   separate crate target linking against this library).
 
 mod commands;
 mod error;
+pub mod elevated_protocol;
 mod infrastructure;
 mod logging_setup;
 mod models;

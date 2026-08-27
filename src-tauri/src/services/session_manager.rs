@@ -7,6 +7,8 @@ use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl
 use crate::models::session::{
     build_remote_image_path, LocalSessionConfig, SessionInfo, SessionLoggingConfig, SSHSessionConfig,
 };
+#[cfg(target_os = "windows")]
+use crate::services::elevated_local_session::create_elevated_local_session;
 use crate::services::local_session::create_local_session;
 use crate::services::session_log::start_session_logging;
 use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
@@ -78,6 +80,10 @@ impl SessionManager {
     }
 
     /// Create a new local shell session.
+    ///
+    /// With `run_as_admin` set (Windows only) the shell runs elevated inside
+    /// the `xsterm-elevated-helper` process; otherwise the regular in-process
+    /// PTY path is used.
     pub fn create_local(
         &mut self,
         config: LocalSessionConfig,
@@ -85,12 +91,23 @@ impl SessionManager {
     ) -> Result<SessionInfo, String> {
         let id = self.allocate_session_id();
 
-        let session = create_local_session(
-            self.pty_system.as_ref(),
-            config,
-            backend,
-            id,
-        )?;
+        #[cfg(target_os = "windows")]
+        let session: Box<dyn SessionBackend + Send> = if config.run_as_admin.unwrap_or(false) {
+            Box::new(create_elevated_local_session(config, backend, id)?)
+        } else {
+            Box::new(create_local_session(self.pty_system.as_ref(), config, backend, id)?)
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let session: Box<dyn SessionBackend + Send> = {
+            if config.run_as_admin.unwrap_or(false) {
+                tracing::warn!(
+                    "run_as_admin is only supported on Windows; creating session {} without elevation",
+                    id
+                );
+            }
+            Box::new(create_local_session(self.pty_system.as_ref(), config, backend, id)?)
+        };
 
         // Acknowledge the session's logging configuration. The wiring of the
         // output stream into the log writer is deferred to a follow-up wave;
@@ -100,7 +117,7 @@ impl SessionManager {
             tracing::warn!("Failed to start session logging for session {}: {}", id, e);
         }
 
-        Ok(self.insert_session(id, ActiveSession::Pty(Box::new(session))))
+        Ok(self.insert_session(id, ActiveSession::Pty(session)))
     }
 
     /// Create a new SSH session.

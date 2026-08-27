@@ -1,9 +1,14 @@
 import { useMemo } from "react";
 import { type LocalSessionConfig, type SSHSessionConfig } from "../../types/session";
+import { FormCheckboxField } from "./FormCheckboxField";
 import { FormNumberField } from "./FormNumberField";
 import { FormSelectField } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";
 import "./SessionTab.css";
+
+const isWindows =
+  navigator.userAgent.toLowerCase().includes("windows") ||
+  navigator.platform.toLowerCase().includes("win");
 
 type ConnectionType = "local" | "ssh";
 
@@ -113,6 +118,14 @@ export function SessionTab({
             }
             options={SHELL_TEMPLATES}
           />
+
+          {isWindows && (shellTemplateValue === "powershell" || shellTemplateValue === "cmd") && (
+            <FormCheckboxField
+              label="Run as Administrator"
+              checked={localConfig.runAsAdmin ?? false}
+              onChange={(runAsAdmin) => onLocalConfigChange({ ...localConfig, runAsAdmin })}
+            />
+          )}
 
           {shellTemplateValue === "custom" && (
             <FormTextField

@@ -59,6 +59,9 @@ pub struct LocalSessionConfig {
     /// Initial PTY columns. Defaults to 80 when `None`.
     #[serde(default)]
     pub initial_cols: Option<u16>,
+    /// Run the shell with administrator privileges (Windows only).
+    #[serde(default)]
+    pub run_as_admin: Option<bool>,
 }
 
 /// Configuration for creating an SSH session.
@@ -588,6 +591,7 @@ mod tests {
             startup_delay_ms: Some(500),
             initial_rows: Some(30),
             initial_cols: Some(120),
+            run_as_admin: None,
         };
 
         let json = serde_json::to_string(&config).expect("serialize LocalSessionConfig");
