@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type LocalSessionConfig, type SessionDisplayConfig } from "../../types/session";
 import { FormSelectField } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";
@@ -48,6 +48,20 @@ export function ShellSettingsPanel({
     const env = localConfig.envConfig?.env || {};
     return (Object.entries(env) as [string, string][]).map(([key, value]) => ({ key, value }));
   });
+
+  // Defensive sync: re-derive `envVars` from `localConfig` whenever the parent
+  // updates `localConfig` externally (e.g. dialog reset, saved session load).
+  // `updateEnvVars` already syncs on user input; this protects against cases
+  // where the parent changes `localConfig` without going through this component.
+  // `setEnvVars(next)` with the same content is a no-op per React's Object.is
+  // comparison, so this won't loop when the user types.
+  useEffect(() => {
+    const env = localConfig.envConfig?.env || {};
+    const next = (Object.entries(env) as [string, string][]).map(
+      ([key, value]) => ({ key, value }),
+    );
+    setEnvVars(next);
+  }, [localConfig]);
 
   const updateEnvVars = (next: EnvVar[]) => {
     setEnvVars(next);
