@@ -59,8 +59,36 @@ pub fn create_local_session(
     }
     if let Some(env_config) = &config.env_config {
         if let Some(env) = &env_config.env {
+            // T-wsl: forward user-defined env vars across Win32→WSL boundary.
+            // wsl.exe inherits our process env but does NOT propagate vars to
+            // the inner Linux shell unless each name is listed in WSLENV.
+            // Microsoft Learn (wsl/filesystems): "WSLENV is a colon-delimited
+            // list of environment variables that should be included when
+            // launching WSL processes from Win32".
+            let user_keys: Vec<&str> = env.keys().map(String::as_str).collect();
             for (key, value) in env {
                 cmd.env(key, value);
+            }
+            // Only inject WSLENV when spawning wsl.exe — other shells use
+            // standard OS env inheritance and don't need it.
+            if is_wsl_exe(&shell_exe) && !user_keys.is_empty() {
+                // /u = Win32→WSL only (don't round-trip into Windows tools
+                // launched later from inside WSL). Preserve any pre-existing
+                // WSLENV so user/system forwarding config isn't clobbered.
+                let new_entries = user_keys
+                    .iter()
+                    .map(|k| format!("{}/u", k))
+                    .collect::<Vec<_>>()
+                    .join(":");
+                let existing = std::env::var("WSLENV").unwrap_or_default();
+                cmd.env(
+                    "WSLENV",
+                    if existing.is_empty() {
+                        new_entries
+                    } else {
+                        format!("{}:{}", existing, new_entries)
+                    },
+                );
             }
         }
     }
@@ -236,6 +264,15 @@ fn apply_shell_flags(cmd: &mut portable_pty::CommandBuilder, shell_name: &str) {
     } else if shell_name == "bash" && !cfg!(target_os = "windows") {
         cmd.arg(BASH_LOGIN_FLAG);
     }
+}
+
+/// True if `path` resolves to `wsl.exe`. Accepts bare `"wsl.exe"` and full
+/// paths (e.g. `C:\Windows\System32\wsl.exe`). Case-insensitive.
+fn is_wsl_exe(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower == "wsl.exe"
+        || lower.ends_with("\\wsl.exe")
+        || lower.ends_with("/wsl.exe")
 }
 
 /// Spawn a background thread that forwards PTY output to the frontend.
