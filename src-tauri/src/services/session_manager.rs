@@ -1160,4 +1160,137 @@ mod tests {
 
         assert!(cmd.get_env("PATH").is_some());
     }
+
+    #[test]
+    fn create_local_with_wsl_shell_template_sets_wslenv_for_user_vars() {
+        use crate::models::session::EnvConfig;
+        use std::ffi::OsStr;
+        use std::sync::Arc as StdArc;
+        use std::sync::Mutex as StdMutex;
+
+        let captured_cmd: StdArc<StdMutex<Option<portable_pty::CommandBuilder>>> =
+            StdArc::new(StdMutex::new(None));
+
+        let mut mock_pty_system = MockPtySystemM::new();
+        let captured = Arc::clone(&captured_cmd);
+        mock_pty_system.expect_openpty().returning(move |_| {
+            let cap = Arc::clone(&captured);
+            let mut pair = MockPtyPairM::new();
+            pair.expect_spawn().returning(move |cmd| {
+                *cap.lock().unwrap() = Some(cmd);
+                let mut child = MockChildM::new();
+                child.expect_kill().times(0..).returning(|| Ok(()));
+                Ok(Box::new(child))
+            });
+            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_resize().returning(|_, _| Ok(()));
+            Ok(Box::new(pair))
+        });
+
+        let mock_backend = TestAppBackend::default();
+        let mut manager = build_mock_manager(mock_pty_system);
+
+        // Use `shell: Some("wsl.exe")` directly so resolve_shell_path returns
+        // "wsl.exe" regardless of platform. The cfg!(target_os = "windows")
+        // gate in resolve_shell_path would otherwise route this case to
+        // /bin/bash on Unix dev hosts.
+        let mut env = HashMap::new();
+        env.insert("MY_VAR".to_string(), "test_value_xyz".to_string());
+        env.insert("OTHER_VAR".to_string(), "other_value".to_string());
+        let config = LocalSessionConfig {
+            name: None,
+            shell: Some("wsl.exe".to_string()),
+            cwd: None,
+            args: None,
+            env_config: Some(EnvConfig {
+                env: Some(env),
+            }),
+            ..Default::default()
+        };
+
+        let result = manager.create_local(config, mock_backend);
+        assert!(result.is_ok(), "create_local should succeed");
+
+        let cmd_guard = captured_cmd.lock().unwrap();
+        let cmd = cmd_guard.as_ref().expect("CommandBuilder was captured");
+
+        // WSLENV must contain both user var names with /u flag, colon-separated.
+        let wslenv = cmd
+            .get_env("WSLENV")
+            .expect("WSLENV should be set when spawning wsl.exe with user env vars");
+        let wslenv_str = wslenv.to_str().expect("WSLENV should be UTF-8");
+        assert!(
+            wslenv_str.contains("MY_VAR/u"),
+            "WSLENV should contain MY_VAR/u, got: {}",
+            wslenv_str
+        );
+        assert!(
+            wslenv_str.contains("OTHER_VAR/u"),
+            "WSLENV should contain OTHER_VAR/u, got: {}",
+            wslenv_str
+        );
+
+        // User vars themselves still set on cmd.
+        assert_eq!(cmd.get_env("MY_VAR"), Some(OsStr::new("test_value_xyz")));
+        assert_eq!(cmd.get_env("OTHER_VAR"), Some(OsStr::new("other_value")));
+    }
+
+    #[test]
+    fn create_local_with_non_wsl_shell_does_not_set_wslenv() {
+        use crate::models::session::EnvConfig;
+        use std::sync::Arc as StdArc;
+        use std::sync::Mutex as StdMutex;
+
+        let captured_cmd: StdArc<StdMutex<Option<portable_pty::CommandBuilder>>> =
+            StdArc::new(StdMutex::new(None));
+
+        let mut mock_pty_system = MockPtySystemM::new();
+        let captured = Arc::clone(&captured_cmd);
+        mock_pty_system.expect_openpty().returning(move |_| {
+            let cap = Arc::clone(&captured);
+            let mut pair = MockPtyPairM::new();
+            pair.expect_spawn().returning(move |cmd| {
+                *cap.lock().unwrap() = Some(cmd);
+                let mut child = MockChildM::new();
+                child.expect_kill().times(0..).returning(|| Ok(()));
+                Ok(Box::new(child))
+            });
+            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_resize().returning(|_, _| Ok(()));
+            Ok(Box::new(pair))
+        });
+
+        let mock_backend = TestAppBackend::default();
+        let mut manager = build_mock_manager(mock_pty_system);
+
+        // Use cmd.exe (non-WSL Windows shell). WSLENV must NOT be set.
+        let mut env = HashMap::new();
+        env.insert("MY_VAR".to_string(), "test_value_xyz".to_string());
+        let config = LocalSessionConfig {
+            name: None,
+            shell: Some("cmd.exe".to_string()),
+            cwd: None,
+            args: None,
+            env_config: Some(EnvConfig {
+                env: Some(env),
+            }),
+            ..Default::default()
+        };
+
+        let result = manager.create_local(config, mock_backend);
+        assert!(result.is_ok(), "create_local should succeed");
+
+        let cmd_guard = captured_cmd.lock().unwrap();
+        let cmd = cmd_guard.as_ref().expect("CommandBuilder was captured");
+
+        // WSLENV must NOT be set for cmd.exe (regression guard — we only set
+        // it for wsl.exe spawns).
+        assert!(
+            cmd.get_env("WSLENV").is_none(),
+            "WSLENV must not be set for non-wsl shells; got: {:?}",
+            cmd.get_env("WSLENV")
+        );
+    }
 }
