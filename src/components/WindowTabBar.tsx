@@ -27,10 +27,11 @@ export function WindowTabBar({
 }: WindowTabBarProps) {
   return (
     <div className="workspace-tabs window-tabs">
-      {workspace.windows.map((window) => (
+      {workspace.windows.map((window, index) => (
         <WindowTab
           key={window.id}
           window={window}
+          position={index + 1}
           isActive={window.id === activeWindowId}
           onSelect={() => onSelect(window.id)}
           onSave={() => onSaveWindow(window.id)}
@@ -57,6 +58,7 @@ export function WindowTabBar({
 
 interface WindowTabProps {
   window: Window;
+  position: number;
   isActive: boolean;
   onSelect: () => void;
   onSave: () => void;
@@ -66,6 +68,7 @@ interface WindowTabProps {
 
 export function WindowTab({
   window,
+  position,
   isActive,
   onSelect,
   onSave,
@@ -113,7 +116,7 @@ export function WindowTab({
           }
         }}
       >
-        <span className="tab-title">{window.name}</span>
+        <span className="tab-title">{position}. {window.name}</span>
         <button
           className="tab-close"
           type="button"
