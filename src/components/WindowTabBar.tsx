@@ -1,10 +1,12 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { Window } from "../types/session";
+import { useSession } from "../contexts/SessionContext";
 import { ContextMenu, type ContextMenuItem, type ContextMenuRef } from "./ui/ContextMenu";
 import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";
 import "./TabBar.css";
 
 interface WindowTabBarProps {
+  workspaceId: string;
   workspace: { windows: Window[]; name?: string };
   activeWindowId: string | null;
   onSelect: (windowId: string) => void;
@@ -16,6 +18,7 @@ interface WindowTabBarProps {
 }
 
 export function WindowTabBar({
+  workspaceId,
   workspace,
   activeWindowId,
   onSelect,
@@ -25,6 +28,50 @@ export function WindowTabBar({
   onCloseWindow,
   onRenameWindow,
 }: WindowTabBarProps) {
+  const { reorderWindows } = useSession();
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ index: number; position: "before" | "after" } | null>(
+    null,
+  );
+
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingIndex(index);
+  };
+
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const midpoint = rect.left + rect.width / 2;
+    const position: "before" | "after" = e.clientX < midpoint ? "before" : "after";
+    setDropTarget({ index, position });
+  };
+
+  const handleDrop = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggingIndex === null || draggingIndex === index) {
+      setDraggingIndex(null);
+      setDropTarget(null);
+      return;
+    }
+    const resolved = dropTarget?.index === index ? dropTarget : { index, position: "before" as const };
+    let toIndex = resolved.position === "before" ? index : index + 1;
+    // When dragging forward, removing the source shifts subsequent indices down by 1.
+    if (draggingIndex < toIndex) toIndex -= 1;
+    if (draggingIndex !== toIndex) {
+      reorderWindows(workspaceId, draggingIndex, toIndex);
+    }
+    setDraggingIndex(null);
+    setDropTarget(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingIndex(null);
+    setDropTarget(null);
+  };
+
   return (
     <div className="workspace-tabs window-tabs">
       {workspace.windows.map((window, index) => (
@@ -33,10 +80,16 @@ export function WindowTabBar({
           window={window}
           position={index + 1}
           isActive={window.id === activeWindowId}
+          isDragging={draggingIndex === index}
+          dropIndicatorPosition={dropTarget?.index === index ? dropTarget.position : null}
           onSelect={() => onSelect(window.id)}
           onSave={() => onSaveWindow(window.id)}
           onClose={() => onCloseWindow(window.id)}
           onRename={() => onRenameWindow(window.id)}
+          onDragStart={handleDragStart(index)}
+          onDragOver={handleDragOver(index)}
+          onDrop={handleDrop(index)}
+          onDragEnd={handleDragEnd}
         />
       ))}
       <div className="window-tab-actions">
@@ -60,20 +113,32 @@ interface WindowTabProps {
   window: Window;
   position: number;
   isActive: boolean;
+  isDragging?: boolean;
+  dropIndicatorPosition?: "before" | "after" | null;
   onSelect: () => void;
   onSave: () => void;
   onRename: () => void;
   onClose: () => void;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }
 
 export function WindowTab({
   window,
   position,
   isActive,
+  isDragging,
+  dropIndicatorPosition,
   onSelect,
   onSave,
   onRename,
   onClose,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: WindowTabProps) {
   const contextMenuRef = useRef<ContextMenuRef>(null);
   const contextMenuItems: ContextMenuItem[] = [
@@ -99,16 +164,41 @@ export function WindowTab({
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = "move";
+    onDragStart?.(e);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    onDragOver?.(e);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    onDrop?.(e);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    onDragEnd?.(e);
+  };
+
   return (
     <ContextMenu ref={contextMenuRef} items={contextMenuItems}>
       <div
-        className={`tab ${isActive ? "active" : ""}`}
+        className={`tab ${isActive ? "active" : ""} ${isDragging ? "dragging" : ""}`}
         role="tab"
         aria-selected={isActive}
         tabIndex={0}
+        draggable={true}
         onClick={onSelect}
         onDoubleClick={handleDoubleClick}
         onMouseDown={handleMouseDown}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onDragEnd={handleDragEnd}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -116,6 +206,7 @@ export function WindowTab({
           }
         }}
       >
+        {dropIndicatorPosition === "before" && <div className="tab-drop-indicator" />}
         <span className="tab-title">{position}. {window.name}</span>
         <button
           className="tab-close"
@@ -126,6 +217,7 @@ export function WindowTab({
         >
           <CloseIcon size={12} />
         </button>
+        {dropIndicatorPosition === "after" && <div className="tab-drop-indicator" />}
       </div>
     </ContextMenu>
   );

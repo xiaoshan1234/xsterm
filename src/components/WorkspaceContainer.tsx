@@ -108,6 +108,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
       onMouseDown={() => setActiveWorkspace(workspace.id)}
     >
       <WindowTabBar
+        workspaceId={workspace.id}
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
         onSelect={(windowId) => setActiveWindow(workspace.id, windowId)}
