@@ -29,6 +29,7 @@ export function WindowTabBar({
   onRenameWindow,
 }: WindowTabBarProps) {
   const { reorderWindows } = useSession();
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<{ index: number; position: "before" | "after" } | null>(
     null,
@@ -73,7 +74,21 @@ export function WindowTabBar({
   };
 
   return (
-    <div className="workspace-tabs window-tabs">
+    <div
+      ref={tabsContainerRef}
+      className="workspace-tabs window-tabs"
+      style={{ touchAction: "pan-y" }}
+      onWheel={(e) => {
+        // Respect native trackpad horizontal scroll
+        if (Math.abs(e.deltaX) > 0) return;
+        const el = tabsContainerRef.current;
+        if (!el) return;
+        // Only intercept when overflow exists
+        if (el.scrollWidth <= el.clientWidth) return;
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }}
+    >
       {workspace.windows.map((window, index) => (
         <WindowTab
           key={window.id}
