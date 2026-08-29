@@ -188,6 +188,7 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
     closeWindow: windowActions.closeWindow,
     setActiveWindow: windowActions.setActiveWindow,
     setActivePane: windowActions.setActivePane,
+    reorderWindows: windowActions.reorderWindows,
     renameWindow: windowActions.renameWindow,
     createDefaultWorkspace: workspaceActions.createDefaultWorkspace,
     setActiveWorkspace: workspaceActions.setActiveWorkspace,

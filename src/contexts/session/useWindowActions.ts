@@ -203,6 +203,24 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
     [workspacesRef, setWorkspaces, setSessions, establishingSessionsRef],
   );
 
+  const reorderWindows = useCallback(
+    (workspaceId: string, fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return;
+      if (fromIndex < 0 || toIndex < 0) return;
+      setWorkspaces((prev) =>
+        prev.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          const windows = [...workspace.windows];
+          if (fromIndex >= windows.length || toIndex >= windows.length) return workspace;
+          const [moved] = windows.splice(fromIndex, 1);
+          windows.splice(toIndex, 0, moved);
+          return { ...workspace, windows };
+        }),
+      );
+    },
+    [setWorkspaces],
+  );
+
   const setActiveWindow = useCallback(
     (workspaceId: string, windowId: string) => {
       setWorkspaces((prev) =>
@@ -261,6 +279,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
     createInitWindow,
     replaceInitWindowWithSession,
     closeWindow,
+    reorderWindows,
     setActiveWindow,
     setActivePane,
     renameWindow,
