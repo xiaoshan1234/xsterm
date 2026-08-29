@@ -25,26 +25,18 @@ export async function dispatchByType(
 }
 
 /**
- * Returns a window name guaranteed unique within a workspace (excluding a
- * given windowId when renaming). Appends `-2`, `-3`, ... until a free name is found.
+ * Returns the given `baseName` unchanged. Uniqueness is no longer enforced
+ * here — visual uniqueness comes from the position prefix rendered in
+ * WindowTabBar (`1.`, `2.`, `3.`). The signature is preserved so existing
+ * callers in `useWindowActions.ts` keep working.
  */
 export function getUniqueWindowName(
-  workspaces: Workspace[],
-  workspaceId: string,
+  _workspaces: Workspace[],
+  _workspaceId: string,
   baseName: string,
-  excludeWindowId?: string,
+  _excludeWindowId?: string,
 ): string {
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  if (!workspace) return baseName;
-  const existing = new Set(
-    workspace.windows.filter((w) => w.id !== excludeWindowId).map((w) => w.name),
-  );
-  if (!existing.has(baseName)) return baseName;
-  let suffix = 2;
-  while (existing.has(`${baseName}-${suffix}`)) {
-    suffix += 1;
-  }
-  return `${baseName}-${suffix}`;
+  return baseName;
 }
 
 /**

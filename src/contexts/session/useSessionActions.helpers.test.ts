@@ -125,16 +125,13 @@ describe("getUniqueWindowName", () => {
     leafWindow("w3", "Window-3", []),
   ]);
 
-  it("returns baseName when it does not collide with any window", () => {
-    expect(getUniqueWindowName([ws], "ws1", "NewWindow")).toBe("NewWindow");
+  it("returns baseName unchanged when there is no collision", () => {
+    expect(getUniqueWindowName([ws], "ws1", "New-Window")).toBe("New-Window");
   });
 
-  it("skips past every taken '-N' suffix to find the next free one", () => {
-    expect(getUniqueWindowName([ws], "ws1", "Window")).toBe("Window-4");
-  });
-
-  it("suffixes the candidate when the baseName itself is '-N' shaped", () => {
-    expect(getUniqueWindowName([ws], "ws1", "Window-2")).toBe("Window-2-2");
+  it("returns baseName even when the workspace has a window with the same name", () => {
+    // Collision does not trigger a suffix — visual uniqueness comes from position prefix.
+    expect(getUniqueWindowName([ws], "ws1", "Window")).toBe("Window");
   });
 
   it("returns the baseName when the workspace has no conflicting windows", () => {
