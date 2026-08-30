@@ -183,9 +183,10 @@
 .radio-label {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xs);
+  min-height: 32px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--body);
   user-select: none;
 }
@@ -202,21 +203,25 @@
 .input-label {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--space-xs);
+  font-size: 14px;
   color: var(--body);
 }
 
 .input-label input[type="number"],
 .input-label select {
-  width: 56px;
-  padding: 3px 5px;
+  min-height: 32px;
+  padding: 0 var(--space-sm);
   background: var(--surface-card);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-md);
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
   font-family: var(--font-ui);
+}
+
+.input-label input[type="number"] {
+  width: 56px;
 }
 
 .input-label input[type="number"]:focus,
@@ -226,11 +231,10 @@
 }
 
 .input-label select {
-  width: auto;
   min-width: 80px;
 }
 
 .unit {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
