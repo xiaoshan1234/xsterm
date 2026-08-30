@@ -15,6 +15,7 @@ import {
 
 export interface SessionContextType {
   sessions: Session[];
+  setSessions: SetSessions;
   savedConfigs: SavedSessionConfig[];
   workspaces: Workspace[];
   activeWorkspaceId: string | null;

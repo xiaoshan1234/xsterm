@@ -17,6 +17,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value: SessionContextType = {
     sessions: state.sessions,
+    setSessions: state.setSessions,
     savedConfigs: state.savedConfigs,
     workspaces: state.workspaces,
     activeWorkspaceId: state.activeWorkspaceId,

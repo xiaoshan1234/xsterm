@@ -52,6 +52,10 @@ export interface Session {
   sessionType: SessionType;
   displayConfig?: SessionDisplayConfig;
   capabilities?: CapabilityFlags;
+  /** ms epoch — set when PTY/SSH is established */
+  createdAt?: number;
+  /** ms epoch — updated on pane focus + terminal output */
+  lastActivityAt?: number;
 }
 
 export type SessionType =
@@ -189,6 +193,9 @@ export interface SessionDisplayConfig {
   // Logging
   /** Session output logging configuration. */
   logging?: SessionLoggingConfig;
+
+  /** Whether to render the per-pane sidebar. @default true */
+  showSidebar?: boolean;
 }
 
 export interface SessionLoggingConfig {

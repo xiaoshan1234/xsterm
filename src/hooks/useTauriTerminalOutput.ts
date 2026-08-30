@@ -2,7 +2,11 @@ import { useEffect, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { useSession } from "../contexts/SessionContext";
 import { appendSessionOutput, getSessionOutput } from "../utils/sessionOutputBuffer";
+
+const lastTouchRef = new Map<number, number>();
+const TOUCH_DEBOUNCE_MS = 500;
 
 function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
@@ -46,6 +50,8 @@ interface PendingWrite {
 }
 
 export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, sessionId: number): void {
+  const { setSessions } = useSession();
+
   // Listen to Tauri backend events and write terminal output to the xterm instance.
   // Data is batched via requestAnimationFrame to avoid frequent xterm.write() calls.
   // Also appends output to sessionOutputBuffer to restore historical content after pane remount.
@@ -91,6 +97,16 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
 
     const handleOutput = (text: string) => {
       appendSessionOutput(sessionId, text);
+
+      const now = Date.now();
+      const last = lastTouchRef.get(sessionId) ?? 0;
+      if (now - last >= TOUCH_DEBOUNCE_MS) {
+        lastTouchRef.set(sessionId, now);
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, lastActivityAt: now } : s)),
+        );
+      }
+
       if (!hasReplayed) return;
       queueWrite(text);
     };
@@ -143,5 +159,5 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
         }
       }
     };
-  }, [termRef, sessionId]);
+  }, [termRef, sessionId, setSessions]);
 }

@@ -1,0 +1,49 @@
+/*
+ * Terminal host + line-number gutter overlay.
+ *
+ * Flex layout puts the gutter and xterm mount ADJACENT (no overlay), so
+ * `PS C:\` content is no longer hidden behind the gutter. `useLineNumberOverlay`
+ * sets only `height` inline to keep it aligned with `.xterm-screen`; flex
+ * handles horizontal positioning.
+ */
+.terminal-host {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.terminal-line-number-overlay {
+  position: relative;
+  flex-shrink: 0;
+  /* Fits 4 digits of 12px mono plus the 8px right gutter padding. */
+  width: 48px;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.terminal-container {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+}
+
+.terminal-line-number-overlay .line-number-overlay-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: var(--space-xs);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}

@@ -169,6 +169,8 @@ describe("buildFrontendSession", () => {
       isConnected: true,
       sessionType: info.sessionType,
       displayConfig: undefined,
+      createdAt: expect.any(Number),
+      lastActivityAt: expect.any(Number),
     });
   });
 

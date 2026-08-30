@@ -49,6 +49,7 @@ export function buildFrontendSession(
   type: Session["type"],
   displayConfig?: SessionDisplayConfig,
 ): Session {
+  const now = Date.now();
   return {
     id: info.id,
     configId,
@@ -57,6 +58,8 @@ export function buildFrontendSession(
     isConnected: info.isConnected,
     sessionType: info.sessionType,
     displayConfig,
+    createdAt: now,
+    lastActivityAt: now,
   };
 }
 

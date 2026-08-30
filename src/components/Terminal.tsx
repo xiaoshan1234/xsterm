@@ -7,8 +7,10 @@ import { getClipboardImages } from "../utils/clipboard";
 import { useXterm } from "../hooks/useXterm";
 import { useTauriTerminalOutput } from "../hooks/useTauriTerminalOutput";
 import { useTerminalResize } from "../hooks/useTerminalResize";
+import { useLineNumberOverlay } from "../hooks/useLineNumberOverlay";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
+import "./Terminal.css";
 
 // Props:
 // - sessionId: Tauri session handle; all terminal operations (write, key) are routed to the backend via this ID
@@ -55,6 +57,9 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 ) {
   // containerRef: xterm.js actual DOM mount point; useXterm creates the Terminal instance inside this div
   const containerRef = useRef<HTMLDivElement>(null);
+  // hostRef: positioned ancestor the gutter overlay is measured against (see useLineNumberOverlay)
+  const hostRef = useRef<HTMLDivElement>(null);
+  const lineNumberOverlayRef = useRef<HTMLDivElement>(null);
   const { currentTheme } = useTheme();
   const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...displayConfig };
   // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
@@ -271,6 +276,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useTerminalResize: listens for container size changes, calls fitAddon.fit() to make xterm adapt to the new size
   useTauriTerminalOutput(termRef, sessionId);
   useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, isWindowActive);
+  useLineNumberOverlay({
+    termRef,
+    hostRef,
+    overlayRef: lineNumberOverlayRef,
+    sessionId,
+  });
 
   useImperativeHandle(
     ref,
@@ -315,7 +326,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     }
   }, [isActive]);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} onMouseDown={onFocus} />;
+  return (
+    <div ref={hostRef} className="terminal-host" onMouseDown={onFocus}>
+      <div ref={lineNumberOverlayRef} className="terminal-line-number-overlay" aria-hidden="true" />
+      <div ref={containerRef} className="terminal-container" />
+    </div>
+  );
 });
 
 export default Terminal;

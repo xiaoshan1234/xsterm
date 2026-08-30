@@ -1,7 +1,12 @@
 import { useCallback } from "react";
 import * as sessionService from "../../services/sessionService";
-import type { SavedSessionConfig, Session, Window, Workspace } from "../../types/session";
+import type { PaneNode, SavedSessionConfig, Session, Window, Workspace } from "../../types/session";
 import { clearSessionOutput } from "../../utils/sessionOutputBuffer";
+
+function findPaneSessionId(pane: PaneNode, paneId: string): number | undefined {
+  if (pane.id === paneId) return pane.sessionId;
+  return pane.children?.find((c) => findPaneSessionId(c, paneId))?.sessionId;
+}
 import {
   createLeafPane,
   forEachPane,
@@ -247,8 +252,18 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
             : workspace,
         ),
       );
+
+      const ws = workspacesRef.current.find((w) => w.id === workspaceId);
+      const win = ws?.windows.find((w) => w.id === windowId);
+      const targetSessionId = win ? findPaneSessionId(win.rootPane, paneId) : undefined;
+      if (targetSessionId !== undefined) {
+        const now = Date.now();
+        setSessions((prev) =>
+          prev.map((s) => (s.id === targetSessionId ? { ...s, lastActivityAt: now } : s)),
+        );
+      }
     },
-    [setWorkspaces],
+    [setWorkspaces, setSessions, workspacesRef],
   );
 
   const renameWindow = useCallback(
