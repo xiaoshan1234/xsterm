@@ -17,7 +17,6 @@ type SplitMode = "line" | "character";
 
 export default function CommandSendPanel({
   workspace,
-  sessions,
   writeSession,
   style,
   onHeightChange,
@@ -185,14 +184,11 @@ export default function CommandSendPanel({
               onChange={(e) => targets.setTargetPaneId(e.target.value || null)}
             >
               <option value="active">Active</option>
-              {targets.paneOptions.map(({ pane, number }) => {
-                const session = sessions.find((s) => s.id === pane.sessionId);
-                return (
-                  <option key={pane.id} value={pane.id}>
-                    #{number} {session?.name ?? pane.id}
-                  </option>
-                );
-              })}
+              {targets.paneOptions.map(({ pane, number }) => (
+                <option key={pane.id} value={pane.id}>
+                  P{number}
+                </option>
+              ))}
             </select>
           </label>
         </div>
