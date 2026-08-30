@@ -82,8 +82,8 @@
 }
 
 .panel-gutter {
-  width: 140px;
-  min-width: 140px;
+  width: 64px;
+  min-width: 64px;
   min-height: 100%;
   background: var(--surface-card);
   color: var(--muted);
@@ -101,9 +101,9 @@
 .panel-gutter-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 0 8px;
+  justify-content: flex-start;
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
   height: 20px;
   line-height: 20px;
   cursor: pointer;
