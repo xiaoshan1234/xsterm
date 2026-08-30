@@ -46,6 +46,17 @@ export function WindowTabBar({
   const handleMouseMove = (e: MouseEvent) => {
     const drag = dragStartRef.current;
     if (!drag) return;
+    // Promote to "dragging" state on first meaningful movement beyond the
+    // 4px click-vs-drag threshold. Until then, this is still effectively
+    // a click and draggingIndex stays null — so the .tab.dragging opacity
+    // (0.4) does not flash on plain clicks.
+    if (draggingIndex === null) {
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if (Math.hypot(dx, dy) > DRAG_CLICK_THRESHOLD_PX) {
+        setDraggingIndex(drag.index);
+      }
+    }
     // Find which tab is under the cursor via [data-tab-index] hit-testing.
     const tabs = tabsContainerRef.current?.querySelectorAll<HTMLElement>("[data-tab-index]");
     if (!tabs) return;
@@ -102,9 +113,13 @@ export function WindowTabBar({
     // Only left-click initiates drag. Right-click is owned by ContextMenu,
     // middle-click by the close-on-wheel handler.
     if (e.button !== 0) return;
-    e.preventDefault();
+    // Do NOT preventDefault — that would suppress the synthetic click event
+    // and break onClick → onSelect. Tab elements don't need text-selection
+    // prevention; focus shifting to the tab is desirable for keyboard nav.
     dragStartRef.current = { index, startX: e.clientX, startY: e.clientY };
-    setDraggingIndex(index);
+    // Don't setDraggingIndex here — wait until mousemove confirms actual
+    // movement. Otherwise a plain click would briefly flash the dragging
+    // opacity (0.4) before reverting.
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
   };
