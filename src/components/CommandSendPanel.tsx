@@ -168,9 +168,9 @@ export default function CommandSendPanel({
               }}
             >
               <option value="active">Active</option>
-              {workspace.windows.map((w) => (
+              {workspace.windows.map((w, index) => (
                 <option key={w.id} value={w.id}>
-                  {w.name}
+                  {index + 1}. {w.name}
                 </option>
               ))}
             </select>
