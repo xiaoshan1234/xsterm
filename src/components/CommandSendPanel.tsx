@@ -201,7 +201,6 @@ export default function CommandSendPanel({
             const isActive = activeLineIndex === lineIndex && executor.runState !== "idle";
             const meta = executor.lineMeta[lineIndex];
             const displayNumber = meta ? meta.number : lineIndex + 1;
-            const displayTimestamp = meta ? meta.timestamp : "";
             return (
               <div
                 key={lineIndex}
@@ -209,9 +208,6 @@ export default function CommandSendPanel({
                 onClick={() => executor.toggleBreakpoint(lineIndex)}
                 title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
               >
-                <span className="panel-timestamp">
-                  {displayTimestamp ? `[${displayTimestamp}]` : ""}
-                </span>
                 <span className="panel-breakpoint">{hasBreakpoint ? "●" : ""}</span>
                 <span className="panel-line-number">{displayNumber}</span>
               </div>
