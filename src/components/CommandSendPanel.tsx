@@ -186,7 +186,7 @@ export default function CommandSendPanel({
               <option value="active">Active</option>
               {targets.paneOptions.map(({ pane, number }) => (
                 <option key={pane.id} value={pane.id}>
-                  P{number}
+                  #{number}
                 </option>
               ))}
             </select>
