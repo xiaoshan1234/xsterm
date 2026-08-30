@@ -42,6 +42,13 @@ export function WindowTabBar({
   // Using a ref so the document-level mousemove/mouseup handlers always see
   // the value at the moment the drag began (avoids stale closure captures).
   const dragStartRef = useRef<{ index: number; startX: number; startY: number } | null>(null);
+  // Refs mirroring React state that are read by document-attached handlers.
+  // The mouseup listener is registered at mousedown time and captures the
+  // initial state via closure — subsequent setState() calls don't reach it.
+  // Writing a ref alongside setState lets the mouseup handler see the live
+  // value at the moment of release. State still drives UI rendering.
+  const draggingIndexRef = useRef<number | null>(null);
+  const dropTargetRef = useRef<{ index: number; position: "before" | "after" } | null>(null);
 
   const handleMouseMove = (e: MouseEvent) => {
     const drag = dragStartRef.current;
@@ -50,11 +57,12 @@ export function WindowTabBar({
     // 4px click-vs-drag threshold. Until then, this is still effectively
     // a click and draggingIndex stays null — so the .tab.dragging opacity
     // (0.4) does not flash on plain clicks.
-    if (draggingIndex === null) {
+    if (draggingIndexRef.current === null) {
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
       if (Math.hypot(dx, dy) > DRAG_CLICK_THRESHOLD_PX) {
         setDraggingIndex(drag.index);
+        draggingIndexRef.current = drag.index;
       }
     }
     // Find which tab is under the cursor via [data-tab-index] hit-testing.
@@ -71,7 +79,9 @@ export function WindowTabBar({
       ) {
         const midpoint = rect.left + rect.width / 2;
         const position: "before" | "after" = e.clientX < midpoint ? "before" : "after";
-        setDropTarget({ index: idx, position });
+        const newDropTarget = { index: idx, position };
+        setDropTarget(newDropTarget);
+        dropTargetRef.current = newDropTarget;
         return;
       }
     }
@@ -79,12 +89,19 @@ export function WindowTabBar({
 
   const handleMouseUp = (e: MouseEvent) => {
     const drag = dragStartRef.current;
+    // Read the live dropTarget from the ref, NOT from the React state closure.
+    // The mouseup listener was registered at mousedown time; if we read
+    // `dropTarget` here we'd get the value captured then (null), not the
+    // value most recently written by handleMouseMove.
+    const currentDropTarget = dropTargetRef.current;
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
 
     if (!drag) {
       setDraggingIndex(null);
       setDropTarget(null);
+      draggingIndexRef.current = null;
+      dropTargetRef.current = null;
       return;
     }
 
@@ -95,8 +112,8 @@ export function WindowTabBar({
     const dy = e.clientY - drag.startY;
     const movedFar = Math.hypot(dx, dy) > DRAG_CLICK_THRESHOLD_PX;
 
-    if (movedFar && dropTarget && dropTarget.index !== drag.index) {
-      let toIndex = dropTarget.position === "before" ? dropTarget.index : dropTarget.index + 1;
+    if (movedFar && currentDropTarget && currentDropTarget.index !== drag.index) {
+      let toIndex = currentDropTarget.position === "before" ? currentDropTarget.index : currentDropTarget.index + 1;
       // When dragging forward, removing the source shifts subsequent indices down by 1.
       if (drag.index < toIndex) toIndex -= 1;
       if (drag.index !== toIndex) {
@@ -106,6 +123,8 @@ export function WindowTabBar({
 
     setDraggingIndex(null);
     setDropTarget(null);
+    draggingIndexRef.current = null;
+    dropTargetRef.current = null;
     dragStartRef.current = null;
   };
 
