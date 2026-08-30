@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
-import { ContextMenu, type ContextMenuItem, type ContextMenuRef } from "./ui/ContextMenu";
+import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
 import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";
 import "./TabBar.css";
 
@@ -97,35 +97,32 @@ export function WindowTabBar({
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
 
-    if (!drag) {
+    try {
+      if (!drag) return;
+
+      // Click-vs-drag: only commit a reorder if the cursor moved beyond the
+      // threshold between mousedown and mouseup. Anything below = plain click
+      // (the synthetic onClick handler will still fire and run onSelect).
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      const movedFar = Math.hypot(dx, dy) > DRAG_CLICK_THRESHOLD_PX;
+
+      if (movedFar && currentDropTarget && currentDropTarget.index !== drag.index) {
+        let toIndex =
+          currentDropTarget.position === "before" ? currentDropTarget.index : currentDropTarget.index + 1;
+        // When dragging forward, removing the source shifts subsequent indices down by 1.
+        if (drag.index < toIndex) toIndex -= 1;
+        if (drag.index !== toIndex) {
+          reorderWindows(workspaceId, drag.index, toIndex);
+        }
+      }
+    } finally {
       setDraggingIndex(null);
       setDropTarget(null);
       draggingIndexRef.current = null;
       dropTargetRef.current = null;
-      return;
+      dragStartRef.current = null;
     }
-
-    // Click-vs-drag: only commit a reorder if the cursor moved beyond the
-    // threshold between mousedown and mouseup. Anything below = plain click
-    // (the synthetic onClick handler will still fire and run onSelect).
-    const dx = e.clientX - drag.startX;
-    const dy = e.clientY - drag.startY;
-    const movedFar = Math.hypot(dx, dy) > DRAG_CLICK_THRESHOLD_PX;
-
-    if (movedFar && currentDropTarget && currentDropTarget.index !== drag.index) {
-      let toIndex = currentDropTarget.position === "before" ? currentDropTarget.index : currentDropTarget.index + 1;
-      // When dragging forward, removing the source shifts subsequent indices down by 1.
-      if (drag.index < toIndex) toIndex -= 1;
-      if (drag.index !== toIndex) {
-        reorderWindows(workspaceId, drag.index, toIndex);
-      }
-    }
-
-    setDraggingIndex(null);
-    setDropTarget(null);
-    draggingIndexRef.current = null;
-    dropTargetRef.current = null;
-    dragStartRef.current = null;
   };
 
   const handleTabMouseDown = (index: number) => (e: React.MouseEvent) => {
@@ -218,7 +215,6 @@ export function WindowTab({
   onClose,
   onMouseDown,
 }: WindowTabProps) {
-  const contextMenuRef = useRef<ContextMenuRef>(null);
   const contextMenuItems: ContextMenuItem[] = [
     { label: "Rename", onClick: onRename },
     { label: "Save as Window Config", onClick: onSave },
@@ -244,7 +240,7 @@ export function WindowTab({
   };
 
   return (
-    <ContextMenu ref={contextMenuRef} items={contextMenuItems}>
+    <ContextMenu items={contextMenuItems}>
       <div
         className={`tab ${isActive ? "active" : ""} ${isDragging ? "dragging" : ""}`}
         role="tab"

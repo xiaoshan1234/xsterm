@@ -5,13 +5,16 @@
   overflow-x: auto;
   border-bottom: 1px solid var(--hairline);
   flex-shrink: 0;
+  scrollbar-width: none;
 }
 
-.workspace-tabs:empty {
+.workspace-tabs:empty,
+.window-tabs:empty {
   display: none;
 }
 
-.workspace-tabs::-webkit-scrollbar {
+.workspace-tabs::-webkit-scrollbar,
+.window-tabs::-webkit-scrollbar {
   display: none;
 }
 
@@ -89,26 +92,6 @@
   justify-content: flex-start;
   flex: 1;
   min-width: 0;
-  scrollbar-width: none;
-}
-
-.window-tabs:empty {
-  display: none;
-}
-
-.window-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.window-tabs .tab {
-  height: 36px;
-  min-width: 120px;
-  max-width: 200px;
-  background: transparent;
-}
-
-.window-tabs .tab.active {
-  background: var(--surface-card);
 }
 
 .window-tab-actions {
@@ -144,11 +127,6 @@
   color: var(--ink);
 }
 
-.tab-disconnected {
-  color: var(--error);
-  font-weight: 500;
-}
-
 .tab-close {
   width: 20px;
   height: 20px;
@@ -181,28 +159,5 @@
   width: 2px;
   height: 36px;
   background: var(--accent);
-  flex-shrink: 0;
-}
-
-.tab-title-input {
-  background: var(--surface-card);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-xs);
-  color: var(--ink);
-  font-size: 13px;
-  padding: 2px 4px;
-  width: 100%;
-  max-width: 150px;
-}
-
-.tab-title-input:focus {
-  outline: none;
-}
-
-.tab-settings-divider {
-  width: 1px;
-  align-self: stretch;
-  background: var(--hairline);
-  margin: 6px 0;
   flex-shrink: 0;
 }
