@@ -12,24 +12,21 @@
 
 .panel-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-xs);
   align-items: center;
 }
 
 .panel-controls {
   flex-wrap: nowrap;
-  gap: 12px;
-  padding-bottom: 4px;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-xxs);
   border-bottom: 1px solid var(--hairline);
 }
 
 .panel-controls .btn {
-  padding: 4px 8px;
-  font-size: 12px;
+  min-height: 32px;
   min-width: 32px;
-  min-height: 28px;
-  border-radius: var(--radius-md);
-  box-sizing: border-box;
+  padding: 0 var(--space-sm);
 }
 
 .panel-stop--running {
