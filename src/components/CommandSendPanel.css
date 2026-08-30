@@ -82,8 +82,8 @@
 }
 
 .panel-gutter {
-  width: 64px;
-  min-width: 64px;
+  width: 48px;
+  min-width: 48px;
   min-height: 100%;
   background: var(--surface-card);
   color: var(--muted);
@@ -103,7 +103,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: var(--space-xs);
-  padding: 0 var(--space-sm);
+  padding: 0 var(--space-xs);
   height: 20px;
   line-height: 20px;
   cursor: pointer;
@@ -132,7 +132,7 @@
 }
 
 .panel-line-number {
-  min-width: 32px;
+  min-width: 20px;
   text-align: right;
   color: var(--info);
   font-variant-numeric: tabular-nums;
