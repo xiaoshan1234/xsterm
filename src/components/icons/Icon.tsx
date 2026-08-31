@@ -170,3 +170,23 @@ export const KeyboardIcon = icon(
     <line x1="8" y1="16" x2="16" y2="16" />
   </>,
 );
+
+export const TerminalIcon = icon(
+  "0 0 24 24",
+  <>
+    <polyline points="7 11 9 13 7 15" />
+    <line x1="11" y1="15" x2="15" y2="15" />
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+  </>,
+);
+
+export const AppearanceIcon = icon(
+  "0 0 24 24",
+  <>
+    <circle cx="13.5" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
+    <circle cx="17.5" cy="10.5" r="0.5" fill="currentColor" stroke="none" />
+    <circle cx="8.5" cy="7.5" r="0.5" fill="currentColor" stroke="none" />
+    <circle cx="6.5" cy="12.5" r="0.5" fill="currentColor" stroke="none" />
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+  </>,
+);

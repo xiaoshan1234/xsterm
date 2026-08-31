@@ -3,7 +3,8 @@ import {
   SessionIcon,
   ShellIcon,
   SshIcon,
-  LayoutIcon,
+  TerminalIcon,
+  AppearanceIcon,
   KeyboardIcon,
   LogIcon,
 } from "../icons/Icon";
@@ -36,8 +37,8 @@ export interface SidebarItemDef {
 
 export const SHELL_SIDEBAR_ITEMS: SidebarItemDef[] = [
   { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
-  { id: "terminal", label: "Terminal", icon: <LayoutIcon size={16} /> },
-  { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <TerminalIcon size={16} /> },
+  { id: "appearance", label: "Appearance", icon: <AppearanceIcon size={16} /> },
   { id: "shell", label: "Shell", icon: <ShellIcon size={16} /> },
   { id: "input", label: "Input", icon: <KeyboardIcon size={16} /> },
   { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
@@ -45,8 +46,8 @@ export const SHELL_SIDEBAR_ITEMS: SidebarItemDef[] = [
 
 export const SSH_SIDEBAR_ITEMS: SidebarItemDef[] = [
   { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
-  { id: "terminal", label: "Terminal", icon: <LayoutIcon size={16} /> },
-  { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <TerminalIcon size={16} /> },
+  { id: "appearance", label: "Appearance", icon: <AppearanceIcon size={16} /> },
   { id: "ssh", label: "SSH", icon: <SshIcon size={16} /> },
   { id: "input", label: "Input", icon: <KeyboardIcon size={16} /> },
   { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },

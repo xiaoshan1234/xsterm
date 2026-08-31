@@ -10,7 +10,6 @@ interface AppearanceTabProps {
 }
 
 const FONT_FAMILIES = [
-  { value: "", label: "(use global default)" },
   { value: "Menlo, Monaco, 'Courier New', monospace", label: "Default (Menlo)" },
   { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
   { value: "'Fira Code', monospace", label: "Fira Code" },
@@ -19,7 +18,6 @@ const FONT_FAMILIES = [
 ];
 
 const CURSOR_STYLES = [
-  { value: "", label: "(use global default)" },
   { value: "block", label: "Block" },
   { value: "underline", label: "Underline" },
   { value: "bar", label: "Bar" },
@@ -46,15 +44,15 @@ export default function AppearanceTab({
           />
           <FormSelectField
             label="Font Family"
-            value={config.fontFamily ?? ""}
-            onChange={(fontFamily) => update({ fontFamily: fontFamily || undefined })}
+            value={config.fontFamily ?? FONT_FAMILIES[0].value}
+            onChange={(fontFamily) => update({ fontFamily })}
             options={FONT_FAMILIES}
           />
         </div>
         <div className="appearance-tab__row">
           <FormNumberField
             label="Line Height"
-            placeholder="(default)"
+            placeholder="1"
             step={0.1}
             float
             value={config.lineHeight}
@@ -62,7 +60,7 @@ export default function AppearanceTab({
           />
           <FormNumberField
             label="Letter Spacing"
-            placeholder="(default)"
+            placeholder="0"
             step={0.1}
             float
             value={config.letterSpacing}
@@ -76,10 +74,8 @@ export default function AppearanceTab({
         <div className="appearance-tab__row">
           <FormSelectField
             label="Cursor Style"
-            value={config.cursorStyle ?? ""}
-            onChange={(v) =>
-              update({ cursorStyle: (v || undefined) as SessionDisplayConfig["cursorStyle"] })
-            }
+            value={config.cursorStyle ?? CURSOR_STYLES[0].value}
+            onChange={(v) => update({ cursorStyle: v as SessionDisplayConfig["cursorStyle"] })}
             options={CURSOR_STYLES}
           />
           <FormCheckboxField
@@ -90,7 +86,7 @@ export default function AppearanceTab({
         </div>
         <FormNumberField
           label="Cursor Width"
-          placeholder="(default)"
+          placeholder="1"
           value={config.cursorWidth}
           onChange={(cursorWidth) => update({ cursorWidth })}
         />

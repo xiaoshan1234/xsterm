@@ -77,7 +77,7 @@ export default function TerminalTab({
         <div className="terminal-tab__row">
           <FormNumberField
             label="Scrollback Lines"
-            placeholder="(default)"
+            placeholder="1000"
             value={config.scrollback}
             onChange={(scrollback) => update({ scrollback })}
           />
