@@ -130,48 +130,6 @@ export default function AppearanceTab({
         />
       </div>
 
-      <div className="appearance-tab__group">
-        <span className="appearance-tab__group-title">Terminal</span>
-        <FormCheckboxField
-          label="Show Line Numbers"
-          checked={config.lineNumberEnabled ?? true}
-          onChange={(lineNumberEnabled) => update({ lineNumberEnabled })}
-        />
-        <div className="appearance-tab__row">
-          <FormNumberField
-            label="Columns"
-            placeholder="80"
-            value={terminalSize.cols}
-            onChange={(cols) => handleTerminalSizeChange(cols, terminalSize.rows)}
-          />
-          <FormNumberField
-            label="Rows"
-            placeholder="24"
-            value={terminalSize.rows}
-            onChange={(rows) => handleTerminalSizeChange(terminalSize.cols, rows)}
-          />
-        </div>
-        <div className="appearance-tab__row">
-          <FormNumberField
-            label="Scrollback Lines"
-            placeholder="(default)"
-            value={config.scrollback}
-            onChange={(scrollback) => update({ scrollback })}
-          />
-          <FormSelectField
-            label="Terminal Type"
-            value={config.terminalType ?? "xterm-256color"}
-            onChange={(terminalType) => update({ terminalType })}
-            options={TERMINAL_TYPES}
-          />
-        </div>
-        <FormSelectField
-          label="Charset"
-          value={config.charset ?? "utf-8"}
-          onChange={(charset) => update({ charset })}
-          options={CHARSETS}
-        />
-      </div>
     </div>
   );
 }
