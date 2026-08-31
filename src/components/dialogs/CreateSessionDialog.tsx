@@ -19,7 +19,7 @@ import SessionTab from "./SessionTab";
 import ShellSettingsPanel from "./ShellSettingsPanel";
 import SSHSettingsPanel from "./SSHSettingsPanel";
 import AppearanceTab from "./AppearanceTab";
-import TerminalTab from "./TerminalTab";
+import InputTab from "./InputTab";
 import LoggingTab from "./LoggingTab";
 import { validateSshConfig } from "./SshSessionForm";
 import {
@@ -47,7 +47,7 @@ interface CreateSessionDialogProps {
 }
 
 type TopTab = "local" | "ssh";
-type SectionId = "session" | "shell" | "ssh" | "appearance" | "terminal" | "logging";
+type SectionId = "session" | "shell" | "ssh" | "appearance" | "input" | "logging";
 
 const DEFAULT_SSH: SSHSessionConfig = {
   host: "",
@@ -67,17 +67,17 @@ interface SidebarItemDef {
 
 const SHELL_SIDEBAR_ITEMS: SidebarItemDef[] = [
   { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
-  { id: "shell", label: "Shell", icon: <ShellIcon size={16} /> },
   { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
-  { id: "terminal", label: "Terminal", icon: <KeyboardIcon size={16} /> },
+  { id: "shell", label: "Shell", icon: <ShellIcon size={16} /> },
+  { id: "input", label: "Input", icon: <KeyboardIcon size={16} /> },
   { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
 ];
 
 const SSH_SIDEBAR_ITEMS: SidebarItemDef[] = [
   { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
-  { id: "ssh", label: "SSH", icon: <SshIcon size={16} /> },
   { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
-  { id: "terminal", label: "Terminal", icon: <KeyboardIcon size={16} /> },
+  { id: "ssh", label: "SSH", icon: <SshIcon size={16} /> },
+  { id: "input", label: "Input", icon: <KeyboardIcon size={16} /> },
   { id: "logging", label: "Logging", icon: <LogIcon size={16} /> },
 ];
 
@@ -218,9 +218,9 @@ export default function CreateSessionDialog({
             onSshConfigChange={setSshConfig}
           />
         );
-      case "terminal":
+      case "input":
         return (
-          <TerminalTab
+          <InputTab
             displayConfig={displayConfig}
             onDisplayChange={setDisplayConfig}
           />

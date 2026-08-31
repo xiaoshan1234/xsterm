@@ -1,9 +1,9 @@
 import { type SessionDisplayConfig } from "../../types/session";
 import { FormCheckboxField } from "./FormCheckboxField";
 import { FormSelectField } from "./FormSelectField";
-import "./TerminalTab.css";
+import "./InputTab.css";
 
-interface TerminalTabProps {
+interface InputTabProps {
   displayConfig?: SessionDisplayConfig;
   onDisplayChange: (config: SessionDisplayConfig) => void;
 }
@@ -30,20 +30,20 @@ const CLIPBOARD_OPTIONS = [
   { value: "deny", label: "Deny" },
 ] as const;
 
-export default function TerminalTab({
+export default function InputTab({
   displayConfig = {},
   onDisplayChange,
-}: TerminalTabProps) {
+}: InputTabProps) {
   const updateDisplay = (patch: Partial<SessionDisplayConfig>) => {
     onDisplayChange({ ...displayConfig, ...patch });
   };
 
   return (
-    <div className="terminal-tab">
-      <div className="terminal-tab__section">
-        <h3 className="terminal-tab__section-title">Keyboard</h3>
-        <div className="terminal-tab__section-content">
-          <div className="terminal-tab__two-col">
+    <div className="input-tab">
+      <div className="input-tab__section">
+        <h3 className="input-tab__section-title">Keyboard</h3>
+        <div className="input-tab__section-content">
+          <div className="input-tab__two-col">
             <FormSelectField
               label="Backspace Sends"
               value={displayConfig.backspaceSends ?? "auto"}
@@ -62,7 +62,7 @@ export default function TerminalTab({
             />
           </div>
 
-          <div className="terminal-tab__two-col">
+          <div className="input-tab__two-col">
             <FormSelectField
               label="Cursor Key Mode"
               value={displayConfig.cursorKeyMode ?? "normal"}
@@ -89,10 +89,10 @@ export default function TerminalTab({
         </div>
       </div>
 
-      <div className="terminal-tab__section">
-        <h3 className="terminal-tab__section-title">Clipboard</h3>
-        <div className="terminal-tab__section-content">
-          <div className="terminal-tab__two-col">
+      <div className="input-tab__section">
+        <h3 className="input-tab__section-title">Clipboard</h3>
+        <div className="input-tab__section-content">
+          <div className="input-tab__two-col">
             <FormSelectField
               label="Clipboard Read"
               value={displayConfig.clipboardRead ?? "ask"}

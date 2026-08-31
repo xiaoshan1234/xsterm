@@ -1,4 +1,4 @@
-/* TerminalTab — session create/edit dialog tab
+/* InputTab — session create/edit dialog tab
  *
  * Layout: three vertical sections (Startup / Keyboard / Clipboard)
  * separated by --space-xl (32px). Each section has a muted title with
@@ -6,7 +6,7 @@
  * Keyboard and Clipboard use two-column grids for paired selects.
  * Cursor-style restrained: no shadow, no gradient, no bold weight. */
 
-.terminal-tab {
+.input-tab {
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
@@ -14,12 +14,12 @@
 
 /* ── Section groups ── */
 
-.terminal-tab__section {
+.input-tab__section {
   display: flex;
   flex-direction: column;
 }
 
-.terminal-tab__section-title {
+.input-tab__section-title {
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
@@ -28,7 +28,7 @@
   border-bottom: 1px solid var(--hairline);
 }
 
-.terminal-tab__section-content {
+.input-tab__section-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-base);
@@ -37,7 +37,7 @@
 
 /* ── Two-column grid for paired fields ── */
 
-.terminal-tab__two-col {
+.input-tab__two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-base);
@@ -45,21 +45,21 @@
 
 /* ── Inline delay row (below Startup Command) ── */
 
-.terminal-tab__delay-row {
+.input-tab__delay-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: -8px;
 }
 
-.terminal-tab__delay-label {
+.input-tab__delay-label {
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
 }
 
-.terminal-tab__delay-input {
+.input-tab__delay-input {
   width: 80px;
   padding: 4px 8px;
   background: var(--surface-card);
@@ -70,16 +70,16 @@
   font-family: var(--font-ui);
 }
 
-.terminal-tab__delay-input:focus {
+.input-tab__delay-input:focus {
   outline: none;
   border-color: var(--accent);
 }
 
-.terminal-tab__delay-input::placeholder {
+.input-tab__delay-input::placeholder {
   color: var(--muted);
 }
 
-.terminal-tab__delay-unit {
+.input-tab__delay-unit {
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
@@ -87,20 +87,20 @@
 
 /* ── Environment Variables list ── */
 
-.terminal-tab__env-list {
+.input-tab__env-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.terminal-tab__env-row {
+.input-tab__env-row {
   display: grid;
   grid-template-columns: 1fr 2fr auto;
   gap: 8px;
   align-items: center;
 }
 
-.terminal-tab__env-row input {
+.input-tab__env-row input {
   width: 100%;
 }
 
