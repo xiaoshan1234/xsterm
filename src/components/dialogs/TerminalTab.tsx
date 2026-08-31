@@ -2,9 +2,9 @@ import { type LocalSessionConfig, type SSHSessionConfig, type SessionDisplayConf
 import { FormNumberField } from "./FormNumberField";
 import { FormSelectField } from "./FormSelectField";
 import { FormCheckboxField } from "./FormCheckboxField";
-import "./AppearanceTab.css";
+import "./TerminalTab.css";
 
-interface AppearanceTabProps {
+interface TerminalTabProps {
   config?: SessionDisplayConfig;
   onChange: (config: SessionDisplayConfig) => void;
   connectionType: "local" | "ssh";
@@ -42,7 +42,7 @@ const CHARSETS = [
   { value: "gbk", label: "GBK" },
 ];
 
-export default function AppearanceTab({
+export default function TerminalTab({
   config = {},
   onChange,
   connectionType,
@@ -50,7 +50,7 @@ export default function AppearanceTab({
   onLocalConfigChange,
   sshConfig,
   onSshConfigChange,
-}: AppearanceTabProps) {
+}: TerminalTabProps) {
   const update = (patch: Partial<SessionDisplayConfig>) => {
     onChange({ ...config, ...patch });
   };
@@ -68,10 +68,10 @@ export default function AppearanceTab({
   };
 
   return (
-    <div className="appearance-tab">
-      <div className="appearance-tab__group">
-        <span className="appearance-tab__group-title">Typography</span>
-        <div className="appearance-tab__row">
+    <div className="terminal-tab">
+      <div className="terminal-tab__group">
+        <span className="terminal-tab__group-title">Typography</span>
+        <div className="terminal-tab__row">
           <FormNumberField
             label="Font Size"
             placeholder="14"
@@ -85,7 +85,7 @@ export default function AppearanceTab({
             options={FONT_FAMILIES}
           />
         </div>
-        <div className="appearance-tab__row">
+        <div className="terminal-tab__row">
           <FormNumberField
             label="Line Height"
             placeholder="(default)"
@@ -105,9 +105,9 @@ export default function AppearanceTab({
         </div>
       </div>
 
-      <div className="appearance-tab__group">
-        <span className="appearance-tab__group-title">Cursor</span>
-        <div className="appearance-tab__row">
+      <div className="terminal-tab__group">
+        <span className="terminal-tab__group-title">Cursor</span>
+        <div className="terminal-tab__row">
           <FormSelectField
             label="Cursor Style"
             value={config.cursorStyle ?? ""}
@@ -130,14 +130,14 @@ export default function AppearanceTab({
         />
       </div>
 
-      <div className="appearance-tab__group">
-        <span className="appearance-tab__group-title">Terminal</span>
+      <div className="terminal-tab__group">
+        <span className="terminal-tab__group-title">Terminal</span>
         <FormCheckboxField
           label="Show Line Numbers"
           checked={config.lineNumberEnabled ?? true}
           onChange={(lineNumberEnabled) => update({ lineNumberEnabled })}
         />
-        <div className="appearance-tab__row">
+        <div className="terminal-tab__row">
           <FormNumberField
             label="Columns"
             placeholder="80"
@@ -151,7 +151,7 @@ export default function AppearanceTab({
             onChange={(rows) => handleTerminalSizeChange(terminalSize.cols, rows)}
           />
         </div>
-        <div className="appearance-tab__row">
+        <div className="terminal-tab__row">
           <FormNumberField
             label="Scrollback Lines"
             placeholder="(default)"
