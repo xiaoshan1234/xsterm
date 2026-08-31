@@ -61,24 +61,6 @@ export function ShellSettingsPanel({
   return (
     <div className="shell-settings-panel">
       <div className="shell-settings-panel__section">
-        <h3 className="shell-settings-panel__section-title">Terminal</h3>
-        <div className="shell-settings-panel__section-content">
-          <FormSelectField
-            label="Terminal Type"
-            value={displayConfig.terminalType ?? "xterm-256color"}
-            onChange={(terminalType) => onDisplayConfigChange({ ...displayConfig, terminalType })}
-            options={TERMINAL_TYPES}
-          />
-          <FormSelectField
-            label="Charset"
-            value={displayConfig.charset ?? "utf-8"}
-            onChange={(charset) => onDisplayConfigChange({ ...displayConfig, charset })}
-            options={CHARSETS}
-          />
-        </div>
-      </div>
-
-      <div className="shell-settings-panel__section">
         <h3 className="shell-settings-panel__section-title">Startup</h3>
         <div className="shell-settings-panel__section-content">
           <FormTextField
