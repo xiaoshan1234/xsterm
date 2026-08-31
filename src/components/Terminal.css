@@ -47,6 +47,12 @@
   position: relative;
 }
 
+/* Override xterm's default #000 viewport to match the gutter's --canvas
+ * so the two regions read as one continuous surface. */
+.terminal-container .xterm-viewport {
+  background-color: var(--canvas);
+}
+
 .terminal-line-number-overlay .line-number-overlay-row {
   position: absolute;
   left: 0;
