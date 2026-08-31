@@ -132,6 +132,11 @@ export default function AppearanceTab({
 
       <div className="appearance-tab__group">
         <span className="appearance-tab__group-title">Terminal</span>
+        <FormCheckboxField
+          label="Show Line Numbers"
+          checked={config.lineNumberEnabled ?? true}
+          onChange={(lineNumberEnabled) => update({ lineNumberEnabled })}
+        />
         <div className="appearance-tab__row">
           <FormNumberField
             label="Columns"
