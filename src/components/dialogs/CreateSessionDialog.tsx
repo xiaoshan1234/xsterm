@@ -19,6 +19,7 @@ import SessionTab from "./SessionTab";
 import ShellSettingsPanel from "./ShellSettingsPanel";
 import SSHSettingsPanel from "./SSHSettingsPanel";
 import AppearanceTab from "./AppearanceTab";
+import TerminalTab from "./TerminalTab";
 import InputTab from "./InputTab";
 import LoggingTab from "./LoggingTab";
 import { validateSshConfig } from "./SshSessionForm";
@@ -47,7 +48,7 @@ interface CreateSessionDialogProps {
 }
 
 type TopTab = "local" | "ssh";
-type SectionId = "session" | "shell" | "ssh" | "appearance" | "input" | "logging";
+type SectionId = "session" | "shell" | "ssh" | "appearance" | "input" | "logging" | "terminal";
 
 const DEFAULT_SSH: SSHSessionConfig = {
   host: "",
@@ -67,6 +68,7 @@ interface SidebarItemDef {
 
 const SHELL_SIDEBAR_ITEMS: SidebarItemDef[] = [
   { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <LayoutIcon size={16} /> },
   { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
   { id: "shell", label: "Shell", icon: <ShellIcon size={16} /> },
   { id: "input", label: "Input", icon: <KeyboardIcon size={16} /> },
@@ -75,6 +77,7 @@ const SHELL_SIDEBAR_ITEMS: SidebarItemDef[] = [
 
 const SSH_SIDEBAR_ITEMS: SidebarItemDef[] = [
   { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
+  { id: "terminal", label: "Terminal", icon: <LayoutIcon size={16} /> },
   { id: "appearance", label: "Appearance", icon: <LayoutIcon size={16} /> },
   { id: "ssh", label: "SSH", icon: <SshIcon size={16} /> },
   { id: "input", label: "Input", icon: <KeyboardIcon size={16} /> },
@@ -209,6 +212,18 @@ export default function CreateSessionDialog({
       case "appearance":
         return (
           <AppearanceTab
+            config={displayConfig}
+            onChange={setDisplayConfig}
+            connectionType={topTab}
+            localConfig={localConfig}
+            onLocalConfigChange={setLocalConfig}
+            sshConfig={sshConfig}
+            onSshConfigChange={setSshConfig}
+          />
+        );
+      case "terminal":
+        return (
+          <TerminalTab
             config={displayConfig}
             onChange={setDisplayConfig}
             connectionType={topTab}
