@@ -4,18 +4,26 @@ import { FitAddon } from "@xterm/addon-fit";
 import { type TerminalTheme } from "../types/theme";
 
 export function themeToXtermTheme(theme: TerminalTheme) {
-  // background is intentionally omitted so empty cells stay transparent;
-  // the actual terminal surface color comes from .xterm-viewport's CSS
-  // background (var(--canvas)), keeping it in lock-step with the line-
-  // number gutter. Requires DEFAULT_XTERM_OPTIONS.allowTransparency = true.
-  // ANSI escapes that set a per-cell background still render via the
-  // theme's color slots (red, blue, etc.).
-  const { background: _unused, ...rest } = theme;
-  void _unused;
   return {
-    ...rest,
     foreground: theme.foreground,
+    background: theme.background,
     cursor: theme.cursor,
+    black: theme.black,
+    red: theme.red,
+    green: theme.green,
+    yellow: theme.yellow,
+    blue: theme.blue,
+    magenta: theme.magenta,
+    cyan: theme.cyan,
+    white: theme.white,
+    brightBlack: theme.brightBlack,
+    brightRed: theme.brightRed,
+    brightGreen: theme.brightGreen,
+    brightYellow: theme.brightYellow,
+    brightBlue: theme.brightBlue,
+    brightMagenta: theme.brightMagenta,
+    brightCyan: theme.brightCyan,
+    brightWhite: theme.brightWhite,
   };
 }
 

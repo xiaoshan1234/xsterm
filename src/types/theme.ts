@@ -25,7 +25,7 @@ export const PRESET_THEMES: Record<string, TerminalTheme> = {
   dark: {
     name: "Dark (VSCode-like)",
     foreground: "#D4D4D4",
-    background: "#1E1E1E",
+    background: "#1a1a1a",
     cursor: "#FFFFFF",
     black: "#000000",
     red: "#CD3131",
