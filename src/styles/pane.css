@@ -104,9 +104,13 @@
   min-height: 0;
 }
 
-.workspace-pane--active {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+.workspace-pane--active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  z-index: -1;
 }
 
 /* Select session dialog */

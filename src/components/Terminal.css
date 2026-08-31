@@ -1,29 +1,43 @@
 /*
  * Terminal host + line-number gutter overlay.
  *
- * Flex layout puts the gutter and xterm mount ADJACENT (no overlay), so
- * `PS C:\` content is no longer hidden behind the gutter. `useLineNumberOverlay`
- * sets only `height` inline to keep it aligned with `.xterm-screen`; flex
- * handles horizontal positioning.
+ * The gutter is `position: absolute` and anchored to the nearest positioned
+ * ancestor (.workspace-pane) — NOT to terminal-host — so it spans the pane's
+ * full height even when a banner or wrapper shrinks terminal-host. Without
+ * this, .workspace-pane--active's inset focus ring would be visible at the
+ * pane's bottom edge (the gutter sits flush with that edge and is opaque to
+ * cover it). terminal-host reserves a `padding-left: 48px` gutter so the
+ * xterm mount never slides under it. Line numbers are positioned from the
+ * gutter's top, which coincides with .xterm-screen's top in the flex column
+ * layout above this component.
  */
 .terminal-host {
-  position: relative;
   display: flex;
   flex-direction: row;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
+  /* Reserve space for the absolutely-positioned gutter so xterm never
+   * slides under it. See .terminal-line-number-overlay for why. */
+  padding-left: 48px;
 }
 
 .terminal-line-number-overlay {
-  position: relative;
-  flex-shrink: 0;
+  position: absolute;
+  /* Anchored to .workspace-pane (not terminal-host) so the gutter spans the
+   * pane's full height even when a banner / wrapper shrinks terminal-host.
+   * This is what covers .workspace-pane--active's inset focus ring at the
+   * bottom of the pane. */
+  top: 0;
+  bottom: 0;
+  left: 0;
   /* Fits 4 digits of 12px mono plus the 8px right gutter padding. */
   width: 48px;
   overflow: hidden;
   pointer-events: none;
   user-select: none;
+  background: var(--canvas);
 }
 
 .terminal-container {

@@ -297,6 +297,7 @@ Floating overlays (per §6) may carry a subtle drop shadow. Currently allowed:
 | File | Selector | Reason |
 |---|---|---|
 | `src/components/sidebar/Sidebar.css:401` | `.session-group.drag-over` | 1px inner accent rail indicating drag-over target. Uses `inset 0 0 0 1px var(--accent)`. |
+| `src/styles/pane.css:107` | `.workspace-pane--active::before` | 2px inner accent ring indicating focused pane. Implemented as an absolutely positioned pseudo-element with `inset: 0`, `z-index: -1`, and `box-shadow: inset 0 0 0 2px var(--accent)`. The negative z-index makes the ring paint before in-flow descendants, so the gutter overlay's opaque background covers the ring in its footprint. Must NOT use `outline` on `.workspace-pane` directly — `outline` paints on top of descendants and bleeds onto the gutter along the pane's edges. The companion rule in `src/components/Terminal.css` makes the gutter itself `position: absolute` anchored to `.workspace-pane` (not `.terminal-host`), with a `padding-left: 48px` reservation on `.terminal-host`, so the gutter reaches the pane's bottom edge even when a banner or wrapper shrinks the terminal host. |
 
 When you add a new exception, document it here with the file path, selector, and rationale.
 

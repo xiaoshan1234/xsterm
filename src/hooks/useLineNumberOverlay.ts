@@ -174,7 +174,6 @@ export function useLineNumberOverlay({
       lastSignature = signature;
 
       overlay.style.display = "block";
-      overlay.style.height = `${screenRect.height}px`;
 
       paintNormalRows(overlay, screenRect, viewportY, cellHeight, lastRow);
     };
