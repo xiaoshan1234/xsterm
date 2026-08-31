@@ -1,27 +1,12 @@
 import { useState } from "react";
-import { type LocalSessionConfig, type SessionDisplayConfig } from "../../types/session";
-import { FormSelectField } from "./FormSelectField";
+import { type LocalSessionConfig } from "../../types/session";
 import { FormTextField } from "./FormTextField";
 import "./ShellSettingsPanel.css";
 
 interface ShellSettingsPanelProps {
   localConfig: LocalSessionConfig;
   onLocalConfigChange: (config: LocalSessionConfig) => void;
-  displayConfig?: SessionDisplayConfig;
-  onDisplayConfigChange: (config: SessionDisplayConfig) => void;
 }
-
-const TERMINAL_TYPES = [
-  { value: "xterm-256color", label: "xterm-256color" },
-  { value: "xterm", label: "xterm" },
-  { value: "vt100", label: "vt100" },
-  { value: "screen", label: "screen" },
-];
-
-const CHARSETS = [
-  { value: "utf-8", label: "UTF-8" },
-  { value: "gbk", label: "GBK" },
-];
 
 interface EnvVar {
   key: string;
@@ -41,8 +26,6 @@ function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
 export function ShellSettingsPanel({
   localConfig,
   onLocalConfigChange,
-  displayConfig = {},
-  onDisplayConfigChange,
 }: ShellSettingsPanelProps) {
   const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
     const env = localConfig.envConfig?.env || {};

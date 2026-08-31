@@ -1,9 +1,9 @@
 /* InputTab — session create/edit dialog tab
  *
- * Layout: three vertical sections (Startup / Keyboard / Clipboard)
- * separated by --space-xl (32px). Each section has a muted title with
- * a hairline divider, then fields stacked with --space-base gaps.
- * Keyboard and Clipboard use two-column grids for paired selects.
+ * Layout: two vertical sections (Keyboard / Clipboard) separated by
+ * --space-xl (32px). Each section has a muted title with a hairline
+ * divider, then fields stacked with --space-base gaps. Keyboard and
+ * Clipboard use two-column grids for paired selects.
  * Cursor-style restrained: no shadow, no gradient, no bold weight. */
 
 .input-tab {
@@ -41,72 +41,4 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-base);
-}
-
-/* ── Inline delay row (below Startup Command) ── */
-
-.input-tab__delay-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: -8px;
-}
-
-.input-tab__delay-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.input-tab__delay-input {
-  width: 80px;
-  padding: 4px 8px;
-  background: var(--surface-card);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-md);
-  color: var(--ink);
-  font-size: 13px;
-  font-family: var(--font-ui);
-}
-
-.input-tab__delay-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.input-tab__delay-input::placeholder {
-  color: var(--muted);
-}
-
-.input-tab__delay-unit {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-/* ── Environment Variables list ── */
-
-.input-tab__env-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.input-tab__env-row {
-  display: grid;
-  grid-template-columns: 1fr 2fr auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.input-tab__env-row input {
-  width: 100%;
-}
-
-/* ── Compact button variant for Remove ── */
-
-.btn--compact {
-  padding: 4px 12px;
-  font-size: 13px;
 }

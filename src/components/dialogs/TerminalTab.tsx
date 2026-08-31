@@ -14,8 +14,6 @@ interface TerminalTabProps {
   onSshConfigChange: (config: SSHSessionConfig) => void;
 }
 
-
-
 const TERMINAL_TYPES = [
   { value: "xterm-256color", label: "xterm-256color" },
   { value: "xterm", label: "xterm" },

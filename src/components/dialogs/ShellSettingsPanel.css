@@ -81,3 +81,10 @@
 .shell-settings-panel__env-row input {
   width: 100%;
 }
+
+/* ── Compact button variant for Remove ── */
+
+.btn--compact {
+  padding: 4px 12px;
+  font-size: 13px;
+}
