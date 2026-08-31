@@ -40,6 +40,9 @@ const DEFAULT_XTERM_OPTIONS = {
   fontFamily: "Menlo, Monaco, 'Courier New', monospace",
   cursorBlink: true,
   screenReaderMode: false,
+  // Lets empty cells stay transparent so the .xterm-viewport CSS background
+  // (--canvas) shows through, matching the line-number gutter.
+  allowTransparency: true,
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
