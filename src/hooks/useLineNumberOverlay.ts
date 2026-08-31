@@ -38,6 +38,8 @@ interface UseLineNumberOverlayOptions {
   overlayRef: RefObject<HTMLDivElement | null>;
   /** Re-initialises the overlay when the pane is bound to another session. */
   sessionId: number;
+  /** Show or hide the line number gutter. @default true */
+  enabled?: boolean;
 }
 
 /**
@@ -113,8 +115,18 @@ export function useLineNumberOverlay({
   hostRef,
   overlayRef,
   sessionId,
+  enabled = true,
 }: UseLineNumberOverlayOptions): void {
   useEffect(() => {
+    if (enabled === false) {
+      const overlay = overlayRef.current;
+      if (overlay) {
+        overlay.replaceChildren();
+        overlay.style.display = "none";
+      }
+      return;
+    }
+
     const term = termRef.current;
     if (!term) return;
 
@@ -200,5 +212,5 @@ export function useLineNumberOverlay({
         overlay.style.display = "none";
       }
     };
-  }, [termRef, hostRef, overlayRef, sessionId]);
+  }, [termRef, hostRef, overlayRef, sessionId, enabled]);
 }

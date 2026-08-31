@@ -141,6 +141,8 @@ export interface SessionDisplayConfig {
   dateTimeFormat?: string;
 
   // Display
+  /** Show line numbers in the gutter on the left side of the terminal. @default true */
+  lineNumberEnabled?: boolean;
   /** Enable automatic line wrapping (DECAWM). @default true */
   autoWrap?: boolean;
   /** Invert foreground/background colors (DECSCNM). @default false */

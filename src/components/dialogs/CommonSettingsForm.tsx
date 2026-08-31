@@ -71,6 +71,11 @@ export function CommonSettingsForm({ config = {}, onChange, section }: CommonSet
       {showDisplay && (
         <CollapsibleSection title="Display">
           <FormCheckboxField
+            label="Show Line Numbers"
+            checked={config.lineNumberEnabled ?? true}
+            onChange={(lineNumberEnabled) => update({ lineNumberEnabled })}
+          />
+          <FormCheckboxField
             label="Line Timestamp"
             checked={config.lineTimestamp ?? false}
             onChange={(lineTimestamp) => update({ lineTimestamp })}

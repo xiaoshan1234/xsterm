@@ -281,6 +281,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     hostRef,
     overlayRef: lineNumberOverlayRef,
     sessionId,
+    enabled: displayConfig?.lineNumberEnabled ?? true,
   });
 
   useImperativeHandle(
