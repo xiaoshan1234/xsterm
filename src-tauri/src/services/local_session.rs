@@ -5,7 +5,6 @@ use portable_pty::PtySize;
 
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
-use crate::infrastructure::binary_frame::encode_session_output_frame;
 use crate::infrastructure::pty::{spawn_writer_thread, LocalSession, LocalSessionHandles, PtySystem};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
@@ -454,8 +453,16 @@ fn spawn_output_forwarder(
             };
 
             if !to_emit.is_empty() {
-                let frame = encode_session_output_frame(session_id, &to_emit);
-                if let Err(e) = backend_clone.emit_binary(frame) {
+                // TEMPORARY REVERT (Perf 001 follow-up): back to JSON
+                // emit while the Tauri 2 Channel-on-command production path
+                // is being investigated. Binary frame format code is
+                // retained at `infrastructure/binary_frame.rs` (kept under
+                // `#[allow(dead_code)]` in the encoder/decode module) for
+                // when we flip the switch back on.
+                if let Err(e) = backend_clone.emit(
+                    "session-output",
+                    &serde_json::json!([session_id, to_emit]),
+                ) {
                     tracing::error!("Failed to emit session output: {}", e);
                     break 'outer;
                 }

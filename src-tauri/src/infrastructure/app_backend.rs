@@ -22,6 +22,12 @@ pub trait AppBackend: Send + Sync + Clone {
     /// The Rust → JS handler attached to the underlying channel is a
     /// no-op (we never expect JS → Rust traffic on this channel); the
     /// handler is required by Tauri's `Channel::new` API.
+    ///
+    /// Temporarily disabled at the call sites while we investigate a
+    /// Tauri 2 production-binary issue with `Channel` returned from a
+    /// command. The test mock still implements it so the contract is
+    /// preserved for when the call sites flip back on.
+    #[allow(dead_code)]
     fn emit_binary(&self, bytes: Vec<u8>) -> Result<(), String>;
 
     /// Spawn a background thread.

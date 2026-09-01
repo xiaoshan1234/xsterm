@@ -1,12 +1,16 @@
 import { useEffect, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
+import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useSession } from "../contexts/SessionContext";
 import { appendSessionOutput, getSessionOutput } from "../utils/sessionOutputBuffer";
-import { getSessionOutputChannel, onSessionOutput } from "./sessionOutputChannel";
 
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
+
+function decodeOutput(data: number[]): string {
+  return new TextDecoder().decode(new Uint8Array(data));
+}
 
 // OSC52: ESC ] 52 ; [clipboard] ; <base64-data> ; terminated by BEL or ESC \
 // eslint-disable-next-line no-control-regex -- ANSI escape sequences are required to detect OSC52.
@@ -48,15 +52,23 @@ interface PendingWrite {
 export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, sessionId: number): void {
   const { setSessions } = useSession();
 
-  // Perf 001: subscribe to the global binary `session-output` Channel
-  // (one Tauri Channel for the whole app, dispatched by session_id inside
-  // the frame). Replaces the historical `listen<[number, number[]]>("session-output", ...)`
-  // path that serialized 1 MB of PTY output as a JSON array of numbers.
+  // TEMPORARY REVERT (Perf 001 follow-up): reverted from binary
+  // Channel<Vec<u8>> path back to listen<[number, number[]]>. The
+  // Tauri-2 production-binary path for `Channel` returned from a Tauri
+  // command could not be unwrapped to a JS-side `Channel<Uint8Array>`
+  // cleanly, which caused `useTauriTerminalOutput` to break and prevented
+  // the Terminal component from setting up its `xterm.onData` input
+  // listener — making the user unable to type. The binary wire format
+  // (`src-tauri/src/infrastructure/binary_frame.rs`,
+  // `src/hooks/sessionOutputFrame.ts`) stays in place under
+  // `#[allow(dead_code)]` so we can flip the switch back on once the
+  // Tauri 2 channel-on-command path is understood.
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;
 
     let listenerActive = true;
+    let unlisten: (() => void) | null = null;
     let rafId: number | null = null;
     let writeQueue: PendingWrite[] = [];
     let hasReplayed = false;
@@ -106,37 +118,33 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
       queueWrite(text);
     };
 
-    // Subscribe to this session's slice of the binary channel. The
-    // singleton channel is fetched lazily — first caller does the round
-    // trip to Rust, every subsequent caller joins the same channel.
-    const unsubscribe = onSessionOutput(sessionId, (data) => {
-      if (!listenerActive) return;
-      // Bytes → text. The session-output forwarder already trimmed to a
-      // UTF-8 safe boundary (see Perf 005), so a fresh TextDecoder per
-      // chunk is safe and avoids the streaming-decoder statefulness tax.
-      const text = new TextDecoder().decode(data);
-      handleOutput(extractAndCopyOsc52(text));
-    });
-
-    // Kick off (and cache) the channel fetch. We don't await — the
-    // channel setup is idempotent and lazily bound.
-    getSessionOutputChannel().catch((err) => {
-      if (listenerActive) {
-        console.error("[xsterm] Failed to fetch session-output channel:", err);
+    listen<[number, number[]]>("session-output", (event) => {
+      const [id, data] = event.payload;
+      if (id === sessionId) {
+        handleOutput(extractAndCopyOsc52(decodeOutput(data)));
       }
-    });
-
-    // Replay any buffered history for this session — same as the legacy
-    // listener did, decoupled from the channel subscription.
-    const buffer = getSessionOutput(sessionId);
-    if (buffer) {
-      queueWrite(buffer);
-    }
-    hasReplayed = true;
+    })
+      .then((fn) => {
+        if (!listenerActive) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+        const buffer = getSessionOutput(sessionId);
+        if (buffer) {
+          queueWrite(buffer);
+        }
+        hasReplayed = true;
+      })
+      .catch((err) => {
+        if (listenerActive) {
+          console.error("[xsterm] Failed to listen session-output:", err);
+        }
+      });
 
     return () => {
       listenerActive = false;
-      unsubscribe();
+      unlisten?.();
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }

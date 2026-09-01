@@ -30,6 +30,12 @@ pub const FRAME_VERSION: u8 = 0x01;
 pub const HEADER_LEN: usize = 1 + 1 + 4 + 4;
 
 /// Encode a `(session_id, data)` pair into the binary frame format.
+///
+/// Temporarily unused at call sites while we investigate a Tauri 2
+/// production-binary issue with the `Channel<Vec<u8>>` returned from a
+/// Tauri command. The function and the surrounding module are kept so
+/// flipping the switch back on is a one-line revert.
+#[allow(dead_code)]
 pub fn encode_session_output_frame(session_id: u32, data: &[u8]) -> Vec<u8> {
     let mut buf = Vec::with_capacity(HEADER_LEN + data.len());
     buf.push(FRAME_MAGIC);
