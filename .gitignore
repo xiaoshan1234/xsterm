@@ -31,3 +31,6 @@ dist-ssr
 test/sys-test/artifacts/
 # SSH credentials — never commit
 test/sys-test/ssh-config.json
+
+# Local reference repos (oxideterm, etc.) — read-only dev aids
+ref/

@@ -113,13 +113,17 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     return termRef.current?.modes.bracketedPasteMode === true;
   }, []);
 
-  // Threshold for showing the dialog: > 2 lines means ≥ 2 newlines.
-  // Below that the user almost certainly knows what they pasted.
+  // Threshold for showing the dialog (matches oxideterm):
+  // any paste containing a newline that spans more than 1 line OR more than
+  // 50 chars is considered risky enough to warrant confirmation. A single-
+  // line, short paste (e.g. `ls`, `pwd`, a copied URL) skips the dialog.
   const requestPaste = useCallback(
     (text: string) => {
       if (!isConnectedRef.current) return;
+      const hasNewline = text.includes("\n");
       const lineCount = countLines(text).length;
-      if (lineCount > 2) {
+      const isLargePaste = hasNewline && (lineCount > 1 || text.length > 50);
+      if (isLargePaste) {
         setPendingPasteText(text);
       } else {
         enqueuePaste(text, readBracketedPasteMode());

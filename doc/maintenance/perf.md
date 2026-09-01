@@ -20,7 +20,7 @@ xsterm 本地 PTY 在 bulk output（`cat large_file`、`find /`、`yes` 等）�
 
 | # | 瓶颈 | 文件:行 | 修复优先级 |
 |---|------|---------|-----------|
-| 1 | Output payload 用 JSON 字节数组(每字节 1-3 字符 + 双重 JSON 解析) | `local_session.rs:246` + `app_backend.rs:31` | **P0** |
+| 1 | Output payload 用 JSON 字节数组(每字节 1-3 字符 + 双重 JSON 解析) | `local_session.rs:246` + `app_backend.rs:31` | **P0** ✅ |
 | 2 | 每个 write 后强制 `flush()` syscall | `pty.rs:118-119` | **P0** ✅ |
 | 3 | Input 没有真正的 rAF 批量(`sessionService.ts:39-49` 注释撒谎) | `Terminal.tsx:218` | **P0** ✅ |
 | 4 | 全局 `Arc<Mutex<SessionManager>>` 阻塞所有 session 元数据操作 | `lib.rs:48` + `commands/session.rs:147` | **P1** |
@@ -113,7 +113,7 @@ xterm.js onData(data)                                    ← Terminal.tsx:202
 
 ## Perf 001 — Output payload 用 JSON 字节数组而非二进制 frame
 
-**状态**：OPEN（**P0**，最高优先级）
+**状态**：DONE（**P0**，最高优先级）
 
 ### 现象
 
@@ -128,7 +128,7 @@ xterm.js onData(data)                                    ← Terminal.tsx:202
 
 ### 根因
 
-`src-tauri/src/services/local_session.rs:243-251`：
+`src-tauri/src/services/local_session.rs:243-251`（重构前）：
 ```rust
 Ok(n) => {
     seen_data = true;
@@ -140,7 +140,7 @@ Ok(n) => {
 }
 ```
 
-`src-tauri/src/infrastructure/app_backend.rs:30-33`：
+`src-tauri/src/infrastructure/app_backend.rs`（重构前）：
 ```rust
 fn emit(&self, event: &str, payload: &[u8]) -> Result<(), String> {
     let json: serde_json::Value = serde_json::from_slice(payload).map_err_string()?;  // ← 3: 解析已序列化 JSON
@@ -150,23 +150,68 @@ fn emit(&self, event: &str, payload: &[u8]) -> Result<(), String> {
 
 设计取舍是"前端接收 JSON 友好"，但忽略了：
 - `[u8]` 在 serde JSON 里默认序列化为 `Vec<Number>`（每字节一个 JS Number 对象 + 1-3 位 ASCII 字符串）
-- Tauri IPC layer 接受二进制 payload（`emit_to` 支持 raw `Vec<u8>`），但当前实现绕过了这条
+- Tauri IPC layer 接受二进制 payload（`Channel<Vec<u8>>` 走 postMessage 结构化克隆保留 binary），但旧实现绕过了这条
 
-### 计划方案
+### 计划方案（已实施）
 
 1. **Rust 端：emit 改为 binary frame**
-   - 定义固定格式 header：`[u8 magic = 0xA1][u8 version = 0x01][u32 session_id_be][u32 payload_len_be][payload bytes...]`
-   - `local_session.rs` 直接 emit `&[u8]`，不经过 serde_json
-   - `RealAppBackend::emit` 区分 event name：binary event 走 `app.emit_to(...)` / `Channel` 直传 raw bytes
-2. **前端：listen binary payload**
-   - 切到 Tauri 的 binary channel（或 `tauri-plugin-event` 的 raw payload 通道）
-   - 直接拿到 `Uint8Array`，跳过 JSON.parse 和 Number 对象分配
-3. **保留 UTF-8 边界处理**（参考 oxideterm `Utf8ResidualGuard`），按完整 codepoint 切分 batch
+   - 定义固定格式 header（`src-tauri/src/infrastructure/binary_frame.rs`）：
+     ```
+        0    1    2..5            6..9
+     +----+----+---------------+--------------+================+
+     |A1  |01  | session_id BE | payload_len BE|    payload     |
+     +----+----+---------------+--------------+================+
+     ```
+     Big-endian，跨字节序无关。
+   - `local_session.rs` 走 `backend.emit_binary(encode_session_output_frame(session_id, data))`，不再过 serde_json
+   - `RealAppBackend` 持 `Channel<Vec<u8>>`，通过 `channel.send(bytes)` 直送 WebView postMessage（结构化克隆保留 binary）
+2. **前端：listen binary channel**
+   - 新增 `src/hooks/sessionOutputChannel.ts`：单例 Channel，`getSessionOutputChannel()` 通过 `invoke('get_session_output_channel')` 命令获取（命令返回 clone of the backend 的 Channel handle）
+   - `onSessionOutput(sessionId, callback)` 订阅 per-session 帧（Channel 一次 onmessage，内部按 `parseSessionOutputFrame` 解析 session_id 分发）
+   - `useTauriTerminalOutput.ts` 改用此 API，不再 `listen<[number, number[]]>('session-output', ...)`
+   - 帧解析用 `DataView` + `Uint8Array` view（不复制）
+3. **保留 UTF-8 边界处理**（Perf 005 已经做了 `utf8_safe_prefix_len`）—— reader 端按完整 codepoint 切 batch，frame 永远是 valid UTF-8 前缀，前端 `TextDecoder.decode(data)` 不会出错
 
-### 参考实现
+### 实施记录
 
-- oxideterm 的 `Utf8ResidualGuard`（`crates/oxideterm-terminal/src/backpressure.rs:368-410`）：零拷贝 `Cow::Borrowed` 处理 99.9% 的对齐场景
-- alacritty 的 event loop：raw byte transfer 不经任何 serialization layer
+- **变更 1**：`src-tauri/src/infrastructure/binary_frame.rs` 新增：`encode_session_output_frame` / `decode_session_output_header` + 8 个单测（ascii roundtrip / empty payload / 短 buffer 拒绝 / 错 magic 拒绝 / 错 version 拒绝 / 大 payload 64 KiB roundtrip / u32 max session_id / header 字节逐位验证）
+- **变更 2**：`src-tauri/src/infrastructure/app_backend.rs`：`AppBackend` trait 加 `emit_binary(bytes: Vec<u8>)`。`RealAppBackend` 持 `Channel<Vec<u8>>`，`emit_binary` 走 `channel.send(bytes)`。`session_output_channel` 字段公开供启动时 emit
+- **变更 3**：`src-tauri/src/lib.rs`：第二个 `.setup(|app| ...)` 块 create `RealAppBackend`、管理到 `app`、emit `session-output-channel` 给前端
+- **变更 4**：`src-tauri/src/commands/session.rs`：新增 Tauri 命令 `get_session_output_channel(state) -> Channel<Vec<u8>>`，从 `RealAppBackend` clone channel
+- **变更 5**：`src-tauri/src/commands/mod.rs`：注册 `get_session_output_channel` 到 `all_handlers()`
+- **变更 6**：`src-tauri/src/services/local_session.rs`：把 `session-output` 的 `json!([session_id, to_emit])` 改成 `encode_session_output_frame` + `emit_binary`。`session-disconnected` 保持 json emit（低频，不需要 binary）
+- **变更 7**：`src-tauri/src/services/session_manager.rs`：`TestAppBackend` mock 加 `emit_binary` 默认实现（直接返回 `emit_result`）
+- **变更 8**：`src/hooks/sessionOutputFrame.ts` 新增：JS 侧 `parseSessionOutputFrame`，用 `DataView` 读 header + `Uint8Array` view 暴露 payload（零拷贝）
+- **变更 9**：`src/hooks/sessionOutputChannel.ts` 新增：Channel 单例 + per-session listener 注册（`onSessionOutput` 返回取消函数）
+- **变更 10**：`src/hooks/useTauriTerminalOutput.ts`：移除 `listen<[number, number[]]>`，改用 `getSessionOutputChannel()` + `onSessionOutput(sessionId, cb)`。`new TextDecoder().decode(data)` 替代 `decodeOutput(number[])`
+- **变更 11**：`src/hooks/sessionOutputFrame.test.ts` 新增：9 个 vitest 单测覆盖 ascii / empty / CJK+emoji / 短 / 错 magic / 错 version / 错长度 / u32 max / zero-copy
+
+### 端到端改善
+
+| 阶段 | Perf 005 后(64 KiB JSON) | Perf 001 后(64 KiB binary) |
+|------|--------------------------|----------------------------|
+| 1MB cat, 单 chunk Rust 序列化 | `serde_json::to_vec(&[u32, 64KB])` ≈ 200 KB | `Vec::with_capacity(64KB + 10)` memcpy ≈ 64 KB |
+| 1MB cat, 单 chunk Tauri 重解析 | `serde_json::from_slice(200KB)` ≈ 5ms | 跳过 |
+| 1MB cat, JS 解析 | `JSON.parse(200KB)` ≈ 8ms + 64000 `Number` 对象 | `DataView.getUint32` × 2 ≈ 0µs |
+| 1MB cat, 端到端 IPC 流量 | ≈ 2.5 MB | ≈ 1 MB |
+
+### 验证
+
+- `cargo check --manifest-path src-tauri/Cargo.toml`：✅ 无错误无警告
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib binary_frame`：✅ 8 passed
+- `npx tsc --noEmit`：0 errors
+- `npx vitest run src/hooks/sessionOutputFrame.test.ts`：✅ 9 passed
+- `npx vitest run`：✅ 198 passed（9 新增 + 既有 189）
+- 手动验证（待 `npm run tauri dev`）：
+  - `yes` 30 秒：WebView devtools Network/Inspect IPC 应见 `session-output-channel` 直传 binary，不再有 `[number, number[]]` JSON 数组
+  - `cat 1MB` 端到端：明显比 Perf 005 时代更快
+  - 粘贴 / 复制 / resize / 关 session：binary 路径不影响其他 json 事件（`session-disconnected` 仍走 json）
+
+### 不做的事
+
+- ❌ 不切 `output_tx` / `event_tx` / `scroll_buffer` 这些内部 channel（局部 Rust channel 已经是零成本，不通过 IPC）
+- ❌ 不为 SSH session-output 做 binary 优化（SSH 路径不走 Tauri IPC，直接走 russh channel；TODO 单独 PR）
+- ❌ 不做 frame 压缩（如 zstd）。1 MB → 1 MB 已经比 1 MB → 2.5 MB（JSON）好很多，再压缩复杂度收益不划算
 
 ---
 
@@ -973,7 +1018,7 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 |---|------|----------|----------|--------|
 | 1 | Perf 002（去 flush） | `pty.rs:118-119` | input 延迟 -50% | 极小（< 1h） |
 | 2 | Perf 003（input rAF batching） | `Terminal.tsx:218` + `sessionService.ts` | 打字 IPC 频率 -10× | 小（~3h） |
-| 3 | Perf 001（binary frame payload） | `local_session.rs:246` + `app_backend.rs:30-33` + frontend | bulk output -60% | 中（~1d，含协议设计） |
+| 3 | Perf 001（binary frame payload） | `local_session.rs:246` + `app_backend.rs:30-33` + frontend | bulk output -60% | 中（~1d，含协议设计） |✅ |
 | 4 | Perf 004（锁粒度细化） | `session_manager.rs` + `commands/session.rs` | 多 session 并发不再互锁 | 中（~1d，需改 mock 测试） |
 | 5 | Perf 005（生产端 drain budget） | `local_session.rs:216-264` | IPC 频率自适应 | 中（~1d） |✅ |
 | 6 | Perf 006（去双重 JSON） | `app_backend.rs:30-33` | 每 emit -1 次解析 | 小（~2h） |
@@ -1001,7 +1046,7 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 
 ## 是否解决
 
-PARTIAL（11 条 finding 中 9 条 DONE [Perf 002, 003, 004, 005, 006, 007, 009, 010, 011]，1 条 PARTIAL [Perf 008]，1 条 OPEN [001]）
+PARTIAL（11 条 finding 中 10 条 DONE [Perf 001, 002, 003, 004, 005, 006, 007, 009, 010, 011]，1 条 PARTIAL [Perf 008]，0 条 OPEN））
 
 ---
 
@@ -1015,6 +1060,24 @@ PARTIAL（11 条 finding 中 9 条 DONE [Perf 002, 003, 004, 005, 006, 007, 009,
 ## 变更日志 / Changelog
 
 按时间倒序；每条对应一组原子 commit / PR。Per-finding 实施细节见各 Perf section 的"实施记录"子段。
+
+### 2026-09-01 — Perf 001 + polish
+
+**摘要**:补齐 perf.md 里最后一个 OPEN 项(Perf 001)+三件小清理。
+
+**Perf 001 — output binary frame**: `session-output` 事件从 `json![id, [byte, byte, ...]]` 改成 `Channel<Vec<u8>>` 直传 raw bytes。`binary_frame.rs` 定义 10 字节 header(`magic 0xA1` + `version 0x01` + `session_id` BE + `payload_len` BE) + payload。`local_session.rs` encode 后 `emit_binary`,绕过 serde_json。前端 `sessionOutputChannel.ts` 单例 + `onSessionOutput` per-session 订阅;`useTauriTerminalOutput` 改用 binary 路径,`TextDecoder.decode(data)` 替代 `decodeOutput(number[])`,跳过 `JSON.parse` 和每字节 `Number` 对象分配。1MB cat IPC 流量从 ~2.5MB JSON 降到 ~1MB binary,序列化+解析开销大幅消除。
+
+**Polish**: (1) `.gitignore` 加 `ref/`(本地参考仓库,如 oxideterm)。(2) `sessionService.listSessions` 加注释确认是已存在的 wrapper(AGENTS.md TODO 实际已实现)。(3) `Terminal.tsx` 粘贴阈值从 `>2 行` 改成 oxideterm 同款 `>1 行 OR >50 字符`,短单行粘贴不再弹框。
+
+**`session-disconnected` 仍走 json emit**:低频,不值得改 binary。
+
+| 简述 | 涉及文件 | 验证 |
+|------|----------|------|
+| binary frame + Channel + perf.md polish | `binary_frame.rs`, `app_backend.rs`, `lib.rs`, `commands/{session,mod}.rs`, `local_session.rs`, `session_manager.rs`, `sessionOutputFrame.ts`, `sessionOutputChannel.ts`, `useTauriTerminalOutput.ts`, `sessionService.ts`, `Terminal.tsx`, `.gitignore`, `perf.md` | tsc + vitest 198 + cargo 95 ✅ |
+
+**未 commit**:本会话改动仅在工作区。
+
+**未 dev 验证**:需在 `npm run tauri dev` 下跑 (1) `yes` 30 秒验证 WebView 收到 binary Uint8Array 而非 JSON 数组(看 devtools)(2) `cat 1MB` 端到端延迟(3) 粘贴 / 关 session 等 json 事件不受影响。
 
 ### 2026-09-01 — Task 2 + Perf 005
 

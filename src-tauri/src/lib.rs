@@ -17,7 +17,7 @@ mod services;
 use logging_setup::{cleanup_old_logs, get_log_config_impl, init_logging};
 use services::session_manager::SessionManager;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -49,6 +49,20 @@ pub fn run() {
         // outer Mutex is needed — concurrent IPC handlers touch different
         // shards in parallel without serialising on each other.
         .manage(Arc::new(SessionManager::new()))
+        // Perf 001: emit the binary `session-output` Channel to the frontend
+        // once at startup so it can listen for raw bytes instead of going
+        // through JSON `[id, [byte, byte, ...]]`. See binary_frame.rs for the
+        // wire format.
+        .setup(|app| {
+            use infrastructure::app_backend::RealAppBackend;
+            let backend = RealAppBackend::new(app.handle().clone());
+            let channel = backend.session_output_channel.clone();
+            app.manage(Arc::new(backend));
+            if let Err(e) = app.emit("session-output-channel", channel) {
+                tracing::error!("Failed to emit session-output channel: {e}");
+            }
+            Ok(())
+        })
         .invoke_handler(commands::all_handlers())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

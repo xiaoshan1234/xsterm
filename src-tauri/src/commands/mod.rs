@@ -12,6 +12,7 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::close_session,
         session::list_sessions,
         session::upload_image_to_ssh_session,
+        session::get_session_output_channel,
         persistence::save_sessions,
         persistence::load_sessions,
         persistence::save_groups,

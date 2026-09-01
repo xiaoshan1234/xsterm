@@ -5,6 +5,7 @@ use portable_pty::PtySize;
 
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
+use crate::infrastructure::binary_frame::encode_session_output_frame;
 use crate::infrastructure::pty::{spawn_writer_thread, LocalSession, LocalSessionHandles, PtySystem};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
@@ -453,10 +454,8 @@ fn spawn_output_forwarder(
             };
 
             if !to_emit.is_empty() {
-                if let Err(e) = backend_clone.emit(
-                    "session-output",
-                    &serde_json::json!([session_id, to_emit]),
-                ) {
+                let frame = encode_session_output_frame(session_id, &to_emit);
+                if let Err(e) = backend_clone.emit_binary(frame) {
                     tracing::error!("Failed to emit session output: {}", e);
                     break 'outer;
                 }

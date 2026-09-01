@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 
 use crate::infrastructure::app_backend::RealAppBackend;
@@ -128,4 +129,16 @@ pub fn upload_image_to_ssh_session(
     state: State<'_, Arc<SessionManager>>,
 ) -> Result<String, String> {
     state.upload_image(session_id, &filename, data)
+}
+
+/// Return the shared binary `session-output` channel. The frontend calls
+/// this once at startup and attaches a per-session dispatch handler. See
+/// `src/hooks/sessionOutputChannel.ts` for the consumer side and
+/// `src-tauri/src/infrastructure/binary_frame.rs` for the wire format
+/// (Perf 001).
+#[tauri::command]
+pub fn get_session_output_channel(
+    backend: State<'_, Arc<RealAppBackend>>,
+) -> Channel<Vec<u8>> {
+    backend.session_output_channel.clone()
 }

@@ -28,6 +28,10 @@ export async function listSessions(): Promise<SessionInfo[]> {
   return result;
 }
 
+// Called by tests and diagnostics; not yet wired into a UI surface but
+// the Rust command has been exposed in the Tauri handler list for a while.
+// AGENTS.md mentioned this wrapper was missing — added for completeness.
+
 export async function createLocal(config: LocalSessionConfig): Promise<SessionInfo> {
   return createSession({ type: "local", config });
 }

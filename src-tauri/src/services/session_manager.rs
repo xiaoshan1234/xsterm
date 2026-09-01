@@ -362,6 +362,9 @@ mod tests {
         fn emit(&self, _event: &str, _payload: &serde_json::Value) -> Result<(), String> {
             self.emit_result.clone()
         }
+        fn emit_binary(&self, _bytes: Vec<u8>) -> Result<(), String> {
+            self.emit_result.clone()
+        }
         fn spawn(&self, _f: Box<dyn FnOnce() + Send>) {}
     }
 
