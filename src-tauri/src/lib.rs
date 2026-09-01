@@ -32,7 +32,26 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Perf 004: SessionManager uses DashMap + AtomicU32 internally, so no
+        // outer Mutex is needed — concurrent IPC handlers touch different
+        // shards in parallel without serialising on each other.
+        .manage(Arc::new(SessionManager::new()))
+        // Tauri 2's `Builder::setup` is a single `Option<Box<F>>` slot — the
+        // *last* `.setup(...)` call wins, all earlier ones are silently
+        // discarded. Earlier drafts split this into two `.setup()` blocks
+        // (logging first, RealAppBackend second) and lost the logging
+        // initialisation; consolidate everything into one block so both
+        // `tracing` and the binary output channel get initialized.
+        //
+        // Perf 001: emit the binary `session-output` Channel to the frontend
+        // so it can listen for raw bytes instead of going through
+        // JSON `[id, [byte, byte, ...]]`. The emit fires before the frontend
+        // is loaded (no listener yet), so it's effectively a no-op — the
+        // frontend pulls the channel via the `get_session_output_channel`
+        // command after the WebView is up. See `binary_frame.rs` for the
+        // wire format.
         .setup(|app| {
+            // --- logging (was first setup block) ---
             let log_dir = app
                 .handle()
                 .path()
@@ -43,17 +62,8 @@ pub fn run() {
             let reload_handle = init_logging(&log_dir, &config);
             app.manage(Arc::new(reload_handle));
             tracing::info!("Application starting, log dir: {:?}", log_dir);
-            Ok(())
-        })
-        // Perf 004: SessionManager uses DashMap + AtomicU32 internally, so no
-        // outer Mutex is needed — concurrent IPC handlers touch different
-        // shards in parallel without serialising on each other.
-        .manage(Arc::new(SessionManager::new()))
-        // Perf 001: emit the binary `session-output` Channel to the frontend
-        // once at startup so it can listen for raw bytes instead of going
-        // through JSON `[id, [byte, byte, ...]]`. See binary_frame.rs for the
-        // wire format.
-        .setup(|app| {
+
+            // --- binary output channel (was second setup block) ---
             use infrastructure::app_backend::RealAppBackend;
             let backend = RealAppBackend::new(app.handle().clone());
             let channel = backend.session_output_channel.clone();
@@ -61,6 +71,7 @@ pub fn run() {
             if let Err(e) = app.emit("session-output-channel", channel) {
                 tracing::error!("Failed to emit session-output channel: {e}");
             }
+
             Ok(())
         })
         .invoke_handler(commands::all_handlers())
