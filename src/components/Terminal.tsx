@@ -144,10 +144,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     setPendingPasteText(null);
   }, []);
 
-  // Perf 003: input rAF batching — coalesce keystrokes per frame. See perf.md.
-  const pendingInputRef = useRef<string>("");
-  const inputRafIdRef = useRef<number | null>(null);
-
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
       const target = e.target as Node | null;
@@ -254,14 +250,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       return true;
     });
 
-    const flushInput = () => {
-      inputRafIdRef.current = null;
-      if (pendingInputRef.current.length === 0) return;
-      const batch = pendingInputRef.current;
-      pendingInputRef.current = "";
-      writeSessionRef.current(sessionId, batch);
-    };
-
     const dataDisposer = xterm.onData((data) => {
       if (!isFocusedRef.current) return;
 
@@ -278,12 +266,14 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (localEchoEnabledRef.current) {
         xterm.write(data);
       }
-      // Perf 003: coalesce keystrokes within the current animation frame
-      // into one IPC instead of one per keystroke.
-      pendingInputRef.current += data;
-      if (inputRafIdRef.current === null) {
-        inputRafIdRef.current = requestAnimationFrame(flushInput);
-      }
+      // Send the keystroke straight to the PTY. There used to be a
+      // requestAnimationFrame batch here (Perf 003) that coalesced
+      // multiple keystrokes per frame, but it also added a 1-frame
+      // (~16 ms) display delay that users perceived as a character
+      // showing up only on the *next* keystroke. With the Rust side
+      // already coalescing reads into 64 KiB chunks (Perf 005), the
+      // JS-side input batching buys nothing and only hurts latency.
+      writeSessionRef.current(sessionId, data);
     });
 
     const selectionDisposer = xterm.onSelectionChange(() => {
@@ -296,16 +286,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     });
 
     return () => {
-      // Flush any coalesced keystrokes before disposing; otherwise
-      // pendingInputRef would be silently dropped on sessionId change.
-      if (inputRafIdRef.current !== null) {
-        cancelAnimationFrame(inputRafIdRef.current);
-        inputRafIdRef.current = null;
-      }
-      if (pendingInputRef.current.length > 0) {
-        writeSessionRef.current(sessionId, pendingInputRef.current);
-        pendingInputRef.current = "";
-      }
       dataDisposer.dispose();
       selectionDisposer.dispose();
     };
