@@ -47,6 +47,12 @@ pub fn encode_session_output_frame(session_id: u32, data: &[u8]) -> Vec<u8> {
 /// Returns `None` for a malformed header: short buffer, wrong magic, or a
 /// version we don't understand. Callers should treat that as a protocol
 /// violation and drop the chunk.
+///
+/// The function is part of the wire format's public surface (mirrors the JS
+/// decoder in `src/hooks/sessionOutputFrame.ts`) so the `#[allow(dead_code)]`
+/// keeps it from triggering warnings in non-test builds where only the
+/// encoder is called.
+#[allow(dead_code)]
 pub fn decode_session_output_header(frame: &[u8]) -> Option<(u32, usize, usize)> {
     if frame.len() < HEADER_LEN {
         return None;
