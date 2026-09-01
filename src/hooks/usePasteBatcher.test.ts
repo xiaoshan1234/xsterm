@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
+  appendToPasteQueue,
   chunkBytes,
   formatPasteForBracketedMode,
 } from "./usePasteBatcher";
@@ -118,5 +119,76 @@ describe("formatPasteForBracketedMode", () => {
   it("returns empty string for empty input regardless of mode", () => {
     expect(formatPasteForBracketedMode("", false)).toBe("");
     expect(formatPasteForBracketedMode("", true)).toBe("");
+  });
+});
+
+describe("appendToPasteQueue", () => {
+  it("executes appended ops in append order, even when added in the same tick", async () => {
+    const queue = { current: Promise.resolve() as Promise<unknown> };
+    const order: number[] = [];
+
+    appendToPasteQueue(queue, async () => {
+      order.push(1);
+    });
+    appendToPasteQueue(queue, async () => {
+      order.push(2);
+    });
+    appendToPasteQueue(queue, async () => {
+      order.push(3);
+    });
+
+    await queue.current;
+    expect(order).toEqual([1, 2, 3]);
+  });
+
+  it("serializes async work — each op awaits the previous", async () => {
+    const queue = { current: Promise.resolve() as Promise<unknown> };
+    const events: string[] = [];
+
+    appendToPasteQueue(queue, async () => {
+      events.push("a-start");
+      await new Promise((r) => setTimeout(r, 20));
+      events.push("a-end");
+    });
+    appendToPasteQueue(queue, async () => {
+      events.push("b-start");
+      await new Promise((r) => setTimeout(r, 0));
+      events.push("b-end");
+    });
+
+    await queue.current;
+    expect(events).toEqual(["a-start", "a-end", "b-start", "b-end"]);
+  });
+
+  it("isolates a rejection so later ops still run", async () => {
+    const queue = { current: Promise.resolve() as Promise<unknown> };
+    const ran: string[] = [];
+
+    appendToPasteQueue(queue, async () => {
+      ran.push("first");
+    });
+    appendToPasteQueue(queue, async () => {
+      throw new Error("simulated write failure");
+    });
+    appendToPasteQueue(queue, async () => {
+      ran.push("third");
+    });
+
+    // Wait long enough for the whole chain to settle; the rejected middle
+    // op must not stop the third from running.
+    await new Promise((r) => setTimeout(r, 10));
+    await queue.current.catch(() => undefined);
+    expect(ran).toEqual(["first", "third"]);
+  });
+
+  it("appends onto a pre-existing rejection without leaking it", async () => {
+    const queue = { current: Promise.reject(new Error("boom")) as Promise<unknown> };
+    const ran: string[] = [];
+
+    appendToPasteQueue(queue, async () => {
+      ran.push("after-boom");
+    });
+    await queue.current.catch(() => undefined);
+    expect(ran).toEqual(["after-boom"]);
   });
 });

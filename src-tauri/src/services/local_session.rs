@@ -1,5 +1,5 @@
-use std::io::Read;
-use std::time::Duration;
+use std::io::{ErrorKind, Read};
+use std::time::{Duration, Instant};
 
 use portable_pty::PtySize;
 
@@ -11,12 +11,87 @@ use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
 
 /// Fallback shell on Unix-like systems when the `SHELL` env var is missing.
 const UNIX_FALLBACK_SHELL: &str = "/bin/bash";
-/// Buffer size for reading PTY output.
+/// Per-call buffer size for `reader.read` from the PTY master fd.
 const PTY_READ_BUFFER_SIZE: usize = 8192;
 /// PowerShell argument to suppress the logo banner.
 const POWERSHELL_NOLOGO_FLAG: &str = "-NoLogo";
 /// Bash argument to start a login shell.
 const BASH_LOGIN_FLAG: &str = "--login";
+
+/// Perf 005: how many bytes to accumulate before forcing an emit. Keeps
+/// `yes` / `find /` style floods from translating to per-read IPC events
+/// (oxideterm's `LOCAL_MAX_LOCKED_PARSE_BYTES`, which is also 64 KiB).
+const DRAIN_SIZE_BYTES: usize = 64 * 1024;
+
+/// Perf 005: how long to wait for the producer between reads before
+/// flushing whatever we have. Bounds tail latency for slow producers
+/// (e.g. `cat | less`) so the user sees something within ~8 ms of
+/// output rather than waiting for the 64 KiB threshold.
+const DRAIN_INTERVAL: Duration = Duration::from_millis(8);
+
+/// Decide whether the drain loop should stop accumulating and emit.
+///
+/// Exposed (not nested inside the function) so it can be unit-tested in
+/// isolation. Returns true when either the size budget OR the time budget
+/// has been reached. The `elapsed == 0` fast path means the very first
+/// read can never immediately satisfy the time budget — the burst must
+/// contain at least one byte before the timer starts ticking.
+fn drain_should_break(
+    accumulated_bytes: usize,
+    elapsed: Duration,
+    size_budget: usize,
+    time_budget: Duration,
+) -> bool {
+    accumulated_bytes >= size_budget || (elapsed > Duration::ZERO && elapsed >= time_budget)
+}
+
+/// Find the largest prefix length such that `bytes[..n]` is valid UTF-8
+/// with every codepoint complete.
+///
+/// UTF-8 codepoints are 1-4 bytes; the leading byte's high bits encode
+/// the expected length, and continuation bytes (`10xxxxxx`) must follow.
+/// If the trailing bytes form an incomplete codepoint, return the offset
+/// of that leading byte so the caller can carry it over to the next read.
+///
+/// Also defends against:
+/// - Stray continuation bytes (carry everything before them)
+/// - Buffer that is entirely continuation bytes (return 0)
+fn utf8_safe_prefix_len(bytes: &[u8]) -> usize {
+    if bytes.is_empty() {
+        return 0;
+    }
+    // Walk back past continuation bytes to find the most recent leading byte.
+    let mut i = bytes.len();
+    while i > 0 && (bytes[i - 1] & 0xC0) == 0x80 {
+        i -= 1;
+    }
+    if i == 0 {
+        return 0; // entire buffer is continuation bytes — carry everything
+    }
+    let leading_pos = i - 1;
+    let b = bytes[leading_pos];
+    let expected_len: usize = if b < 0x80 {
+        1
+    } else if b < 0xC0 {
+        // Stray continuation byte at a "leading" position — broken input.
+        // Emit everything before it; the frontend's decoder will produce a
+        // replacement character for the broken byte.
+        return leading_pos;
+    } else if b < 0xE0 {
+        2
+    } else if b < 0xF0 {
+        3
+    } else {
+        4
+    };
+    let available = bytes.len() - leading_pos;
+    if available < expected_len {
+        // Incomplete trailing codepoint — back up to before this leading byte
+        leading_pos
+    } else {
+        bytes.len()
+    }
+}
 
 /// Create a new local shell session backed by a PTY.
 ///
@@ -279,6 +354,19 @@ fn is_wsl_exe(path: &str) -> bool {
 
 /// Spawn a background thread that forwards PTY output to the frontend.
 ///
+/// Perf 005: drain budget. Each iteration accumulates reads into a local
+/// buffer until either the size budget (`DRAIN_SIZE_BYTES`) or the time
+/// budget (`DRAIN_INTERVAL`) is hit, then emits a single `session-output`
+/// event for the accumulated slice. This caps the per-burst emit rate at
+/// `1 / DRAIN_INTERVAL` (≈ 125 Hz) instead of one event per `read()`,
+/// which would otherwise flood the IPC channel for `yes` / `find /` /
+/// `cat large_file` style producers.
+///
+/// UTF-8 safe boundary: every emitted slice is a complete UTF-8 string;
+/// any trailing incomplete codepoint is held in `remainder` and prefixed
+/// onto the next burst, so multi-byte characters (CJK, emoji) never get
+/// split across events.
+///
 /// EOF semantics:
 /// - Before any data has been read, `Ok(0)` is treated as a transient PTY
 ///   condition (ConPTY on Windows can briefly return EOF before data flows
@@ -298,50 +386,230 @@ fn spawn_output_forwarder(
     backend.spawn(Box::new(move || {
         let mut buf = [0u8; PTY_READ_BUFFER_SIZE];
         let mut seen_data = false;
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) => {
-                    if seen_data {
-                        tracing::info!(
-                            "PTY EOF for session {} after data — shell exited",
-                            session_id
+        let mut remainder: Vec<u8> = Vec::new();
+
+        'outer: loop {
+            let mut accumulated: Vec<u8> = Vec::with_capacity(DRAIN_SIZE_BYTES);
+            let mut burst_start: Option<Instant> = None;
+            let mut eof_seen = false;
+
+            // Inner loop: drain reads until either budget is hit.
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => {
+                        eof_seen = true;
+                        break;
+                    }
+                    Ok(n) => {
+                        let now = Instant::now();
+                        let burst_start = burst_start.get_or_insert(now);
+
+                        if !remainder.is_empty() {
+                            accumulated.extend_from_slice(&remainder);
+                            remainder.clear();
+                        }
+                        accumulated.extend_from_slice(&buf[..n]);
+
+                        if drain_should_break(
+                            accumulated.len(),
+                            now.duration_since(*burst_start),
+                            DRAIN_SIZE_BYTES,
+                            DRAIN_INTERVAL,
+                        ) {
+                            break;
+                        }
+                    }
+                    Err(e)
+                        if matches!(
+                            e.kind(),
+                            ErrorKind::WouldBlock | ErrorKind::Interrupted
+                        ) =>
+                    {
+                        continue;
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "PTY read error for session {}: {}; notifying frontend",
+                            session_id,
+                            e
                         );
                         let _ = backend_clone.emit(
                             "session-disconnected",
                             &serde_json::json!(session_id),
                         );
-                        break;
+                        break 'outer;
                     }
-                    tracing::debug!(
-                        "Transient PTY EOF before data for session {}; retrying",
+                }
+            }
+
+            // Trim to a UTF-8 safe boundary; carry any trailing partial
+            // codepoint into the next burst.
+            let safe_len = utf8_safe_prefix_len(&accumulated);
+            let to_emit = if safe_len == accumulated.len() {
+                std::mem::take(&mut accumulated)
+            } else {
+                remainder = accumulated[safe_len..].to_vec();
+                accumulated[..safe_len].to_vec()
+            };
+
+            if !to_emit.is_empty() {
+                if let Err(e) = backend_clone.emit(
+                    "session-output",
+                    &serde_json::json!([session_id, to_emit]),
+                ) {
+                    tracing::error!("Failed to emit session output: {}", e);
+                    break 'outer;
+                }
+                seen_data = true;
+            }
+
+            if eof_seen {
+                if seen_data {
+                    tracing::info!(
+                        "PTY EOF for session {} after data — shell exited",
                         session_id
-                    );
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-                Ok(n) => {
-                    seen_data = true;
-                    let data = &buf[..n];
-                    if let Err(e) = backend_clone.emit(
-                        "session-output",
-                        &serde_json::json!([session_id, data]),
-                    ) {
-                        tracing::error!("Failed to emit session output: {}", e);
-                        break;
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(
-                        "PTY read error for session {}: {}; notifying frontend",
-                        session_id,
-                        e
                     );
                     let _ = backend_clone.emit(
                         "session-disconnected",
                         &serde_json::json!(session_id),
                     );
-                    break;
+                } else {
+                    tracing::debug!(
+                        "Transient PTY EOF before data for session {}; retrying",
+                        session_id
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    remainder.clear();
+                    continue 'outer;
                 }
+                break;
             }
         }
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drain_should_break_returns_false_on_empty_burst() {
+        // The very first read: elapsed == 0 and no bytes — must NOT break,
+        // otherwise we'd emit an empty event for every PTY open.
+        assert!(!drain_should_break(
+            0,
+            Duration::ZERO,
+            DRAIN_SIZE_BYTES,
+            DRAIN_INTERVAL,
+        ));
+    }
+
+    #[test]
+    fn drain_should_break_on_size_budget() {
+        assert!(drain_should_break(
+            DRAIN_SIZE_BYTES,
+            Duration::ZERO,
+            DRAIN_SIZE_BYTES,
+            DRAIN_INTERVAL,
+        ));
+        // Slightly over is fine — the >= check is inclusive.
+        assert!(drain_should_break(
+            DRAIN_SIZE_BYTES + 1,
+            Duration::ZERO,
+            DRAIN_SIZE_BYTES,
+            DRAIN_INTERVAL,
+        ));
+    }
+
+    #[test]
+    fn drain_should_break_on_time_budget() {
+        assert!(drain_should_break(
+            1024,
+            DRAIN_INTERVAL,
+            DRAIN_SIZE_BYTES,
+            DRAIN_INTERVAL,
+        ));
+        // Just under — still emit.
+        assert!(!drain_should_break(
+            1024,
+            DRAIN_INTERVAL - Duration::from_micros(1),
+            DRAIN_SIZE_BYTES,
+            DRAIN_INTERVAL,
+        ));
+    }
+
+    #[test]
+    fn drain_should_break_on_time_budget_regardless_of_byte_count() {
+        // The caller (drain loop) is responsible for not emitting an empty
+        // payload — this helper's contract is purely "size OR time", and
+        // a slow producer hitting the time budget with zero bytes is a valid
+        // signal to break out so we can poll again.
+        assert!(drain_should_break(
+            0,
+            DRAIN_INTERVAL,
+            DRAIN_SIZE_BYTES,
+            DRAIN_INTERVAL,
+        ));
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_for_ascii_returns_full_length() {
+        let s = b"hello world";
+        assert_eq!(utf8_safe_prefix_len(s), s.len());
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_for_2byte_codepoint_returns_full_length() {
+        // "é" = 0xC3 0xA9
+        assert_eq!(utf8_safe_prefix_len(&[0xC3, 0xA9]), 2);
+        assert_eq!(utf8_safe_prefix_len(b"a\xC3\xA9b"), 4);
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_for_3byte_codepoint_returns_full_length() {
+        // "中" = 0xE4 0xB8 0xAD
+        let s = b"a\xE4\xB8\xAD";
+        assert_eq!(utf8_safe_prefix_len(s), 4);
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_for_4byte_codepoint_returns_full_length() {
+        // "😀" = 0xF0 0x9F 0x98 0x80
+        let s = b"a\xF0\x9F\x98\x80";
+        assert_eq!(utf8_safe_prefix_len(s), 5);
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_trims_incomplete_trailing_codepoint() {
+        // "é" but only 1 byte — incomplete; back up to 0.
+        assert_eq!(utf8_safe_prefix_len(&[0xC3]), 0);
+        // "中" but only 2 bytes — incomplete; back up to 0.
+        assert_eq!(utf8_safe_prefix_len(&[0xE4, 0xB8]), 0);
+        // "😀" but only 3 bytes — incomplete; back up to 0.
+        assert_eq!(utf8_safe_prefix_len(&[0xF0, 0x9F, 0x98]), 0);
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_preserves_complete_prefix_then_trims() {
+        // "abé" but trailing 0xC3 is incomplete — boundary should be 2.
+        assert_eq!(utf8_safe_prefix_len(b"ab\xC3"), 2);
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_trims_at_stray_leading_byte_after_complete_codepoint() {
+        // "ab" (complete) + leading 0xC3 (start of a 2-byte sequence but
+        // missing its continuation). The function trims back to before the
+        // incomplete 0xC3, returning 2.
+        assert_eq!(utf8_safe_prefix_len(&[0x61, 0x62, 0xC3]), 2);
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_returns_zero_for_empty_input() {
+        assert_eq!(utf8_safe_prefix_len(&[]), 0);
+    }
+
+    #[test]
+    fn utf8_safe_prefix_len_returns_zero_for_all_continuation_bytes() {
+        assert_eq!(utf8_safe_prefix_len(&[0x80, 0x80, 0x80]), 0);
+    }
 }

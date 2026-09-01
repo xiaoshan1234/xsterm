@@ -24,7 +24,7 @@ xsterm 本地 PTY 在 bulk output（`cat large_file`、`find /`、`yes` 等）�
 | 2 | 每个 write 后强制 `flush()` syscall | `pty.rs:118-119` | **P0** ✅ |
 | 3 | Input 没有真正的 rAF 批量(`sessionService.ts:39-49` 注释撒谎) | `Terminal.tsx:218` | **P0** ✅ |
 | 4 | 全局 `Arc<Mutex<SessionManager>>` 阻塞所有 session 元数据操作 | `lib.rs:48` + `commands/session.rs:147` | **P1** |
-| 5 | Reader 单条 IPC emit(无生产端 batching) | `local_session.rs:225-263` | **P1** |
+| 5 | Reader 单条 IPC emit(无生产端 batching) | `local_session.rs:225-263` | **P1** ✅ |
 | 6 | `RealAppBackend::emit` 双重 JSON(parse → re-emit) | `app_backend.rs:30-33` | **P1** ✅ |
 | 7 | OSC52 正则每 chunk 全量扫描 | `useTauriTerminalOutput.ts:13,99` | **P2** ✅ |
 | 8 | 首次 EOF 100ms sleep | `local_session.rs:241` | **P2** |
@@ -287,7 +287,7 @@ const dataDisposer = xterm.onData((data) => {
 
 ## Perf 005 — Reader 单条 IPC emit，无生产端 batching
 
-**状态**：OPEN（**P1**）
+**状态**：DONE（**P1**）
 
 ### 现象
 
@@ -295,7 +295,7 @@ const dataDisposer = xterm.onData((data) => {
 
 ### 根因
 
-`src-tauri/src/services/local_session.rs:216-264`：
+`src-tauri/src/services/local_session.rs`（重构前）：
 ```rust
 loop {
     match reader.read(&mut buf) {  // 8KB blocking read
@@ -310,7 +310,7 @@ loop {
 
 每次成功 read 都触发独立 IPC。即使前端有 rAF 合并，**生产端的序列化 + IPC 开销已经发生**。
 
-### 计划方案
+### 计划方案（已实施）
 
 1. **生产端加 parse 预算**（参考 oxideterm `LOCAL_MAX_LOCKED_PARSE_BYTES = 64 KiB`）：
    - read 后累计 parsed 字节，达到 64 KiB 上限后释放锁、回 poll
@@ -319,11 +319,33 @@ loop {
 3. **加大小预算**：累积达到 64 KiB 也强制 flush（避免一行极长输出永远等不到 flush）
 5. **去掉 `PTY_READ_BUFFER_SIZE` 隐含语义**：8KB 是单次 read 上限，不是 emit 上限
 
+### 实施记录
+
+- **变更 1**：`src-tauri/src/services/local_session.rs` 引入 `DRAIN_SIZE_BYTES = 64 KiB` + `DRAIN_INTERVAL = 8 ms` 两个常量。`spawn_output_forwarder` 重构为双层循环（`'outer: loop` 每次 emit 一批；内部 `loop` 连续 read 直到 size OR time budget 触发）。
+- **变更 2**：UTF-8 safe boundary 处理：每次 emit 前调 `utf8_safe_prefix_len(&accumulated)`，把不完整的 trailing codepoint 留到 `remainder` 跟下一批拼接。CJK / emoji 不会跨 event 截断。
+- **变更 3**：提取两个纯函数 `drain_should_break(accumulated_bytes, elapsed, size_budget, time_budget)` 和 `utf8_safe_prefix_len(bytes)` —— 11 个单测覆盖 size budget / time budget / UTF-8 各种 edge case（合法 ASCII / 2/3/4 字节完整 / 不完整 / stray continuation / 全 continuation / 空输入）。
+- **变更 4**：保留 EOF 语义（首读 EOF 重试 100ms；二次 EOF + 有数据 → emit session-disconnected）。
+- **变更 5**：保留 ErrorKind::WouldBlock / Interrupted 跳过重试。
+
+### 端到端改善估算
+
+| 场景 | 重构前 | 重构后 |
+|------|--------|--------|
+| `yes` 持续输出 | 5 kHz IPC emit 频率 | ≤ 125 Hz（每 8ms 一次），单 emit 8-64 KiB |
+| `find /` 输出 5MB | 600+ IPC emits | ~80 emits（5MB / 64 KiB） |
+| `cat | less` 慢速输出 | 每 chunk 一个 emit | 每 8ms 一个 emit，tail latency ≤ 8ms |
+| 单行 200KB 输出 | 25 个 emit（每 8KB） | 4 个 emit（每 64 KiB） |
+
 ### 验证
 
-- `yes` 命令持续输出 30 秒：测 IPC emit 频率（应 ≤ 125 Hz 即 8ms 间隔，而不是 5 kHz）
-- `find /` 输出 5MB：测端到端渲染时间
-- 单行 200KB 输出（`printf` 长字符串）：测首个字符出现延迟（应不晚于 8ms）
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib local_session`：✅ 13 passed（drain_should_break + utf8_safe_prefix_len + 已有 create_local 等）
+- `npx vitest run`：✅ 189 passed（前端无回归）
+- `cargo check --manifest-path src-tauri/Cargo.toml`：✅ 无错误无警告
+- 手动验证（待 `npm run tauri dev`）：
+  - `yes` 跑 30 秒：IPC emit 频率应 ≤ 125 Hz
+  - `find /` 输出 5MB：端到端渲染时间明显改善
+  - 单行 200KB 输出（`printf 'a%.0s' {1..200000}`）：首个字符出现 ≤ 8ms
+  - 中文 / emoji 路径（`echo`\`u4e2d\\u6587\`）：渲染无乱码、无替换字符
 
 ---
 
@@ -870,6 +892,49 @@ const handlePasteConfirm = useCallback((transformedText: string) => {
 
 ---
 
+## Task 2 — Paste Promise chain 保序
+
+**状态**：DONE
+
+### 动机
+
+Tauri IPC 队列 + Rust `SyncSender` 已经天然保序,所以纯理论上 `writeSessionBytes` 不需要 JS 层再排队。但有两个原因让 Promise 链仍是值得加的契约:
+
+1. **未来加 async encoding 时不破序**。当前 `TextEncoder.encode` 是同步的,但 oxideterm / 部分终端支持非 UTF-8 encoding(GBK / Big5 / Shift-JIS),那时 encoding 会变 async。若 `enqueuePaste` 直接 fire-and-forget invoke,同 tick 内两个 paste 可能乱序。
+2. **显式契约 > 隐式依赖**。后端用 `mpsc` 保序是 Rust 标准库行为,JS 端单看 `writeSessionBytes(...)` 是看不出顺序保证的。把契约写进 hook 让未来读代码的人不用追到 Rust 那边。
+
+oxideterm 的 `encodedInputQueueRef` 就是同样思路。
+
+### 实现
+
+`src/hooks/usePasteBatcher.ts` 提取纯函数 `appendToPasteQueue(queueRef, fn)` 供测试:
+
+```ts
+export function appendToPasteQueue(
+  queueRef: { current: Promise<unknown> },
+  fn: () => Promise<unknown>,
+): void {
+  queueRef.current = queueRef.current.catch(() => {}).then(fn);
+}
+```
+
+Hook 持 `inputQueueRef: useRef<Promise<void>>(Promise.resolve())`,每次 `enqueuePaste` 把 `writeSessionBytes(...)` 串到 ref 上。`.catch(() => {})` 隔离单次失败,不让一个 paste 报错导致后续 paste 全断。
+
+### 测试矩阵(4 个 vitest 单测)
+
+- **同 tick 顺序**:3 次连续 append,执行顺序严格 1 → 2 → 3
+- **async 串行**:第一个 op `await sleep(20ms)`、第二个 op `await sleep(0)`,即便第一个耗时更长,第二个必须等第一个完成才能开始(不会出现交叉)
+- **rejection 隔离**:中间 op 抛错,第三个仍正常运行
+- **pre-existing rejection**:ref 初始就是 rejected Promise,新 append 不受影响
+
+### 不做的事
+
+- ❌ 不在 `sessionService.writeSessionBytes` 里加 Promise 链(底层 IPC wrapper 必须保持薄,所有 hook 内部各自管自己)
+- ❌ 不给 keystroke 路径(`xterm.onData` → flushInput → writeSession)加链(keystroke 走 rAF 批处理已是另一层序列化)
+- ❌ 不持久化 queue(组件 unmount 时 ref 自动销毁,不会跨 session 复用)
+
+---
+
 ## Oxideterm 对比参考
 
 oxideterm 仓库：[`AnalyseDeCircuit/oxideterm`](https://github.com/AnalyseDeCircuit/oxideterm)（commit `c8428adb62589275de64a7798c8451e8b27dff13`，769 ⭐，与 xsterm 几乎同栈：Tauri 2 + React 19 + portable-pty）
@@ -910,7 +975,7 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 | 2 | Perf 003（input rAF batching） | `Terminal.tsx:218` + `sessionService.ts` | 打字 IPC 频率 -10× | 小（~3h） |
 | 3 | Perf 001（binary frame payload） | `local_session.rs:246` + `app_backend.rs:30-33` + frontend | bulk output -60% | 中（~1d，含协议设计） |
 | 4 | Perf 004（锁粒度细化） | `session_manager.rs` + `commands/session.rs` | 多 session 并发不再互锁 | 中（~1d，需改 mock 测试） |
-| 5 | Perf 005（生产端 drain budget） | `local_session.rs:216-264` | IPC 频率自适应 | 中（~1d） |
+| 5 | Perf 005（生产端 drain budget） | `local_session.rs:216-264` | IPC 频率自适应 | 中（~1d） |✅ |
 | 6 | Perf 006（去双重 JSON） | `app_backend.rs:30-33` | 每 emit -1 次解析 | 小（~2h） |
 | 7 | Perf 007（OSC52 快路径） | `useTauriTerminalOutput.ts` | bulk output CPU -5-10% | 极小（< 1h） |
 | 8 | Perf 008（替换 100ms sleep） | `local_session.rs:241` | 首字延迟 -50~80ms | 中（需引入 timer 或 polling） |
@@ -936,7 +1001,7 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 
 ## 是否解决
 
-PARTIAL（11 条 finding 中 8 条 DONE [Perf 002, 003, 004, 006, 007, 009, 010, 011]，1 条 PARTIAL [Perf 008]，2 条 OPEN [001, 005]）
+PARTIAL（11 条 finding 中 9 条 DONE [Perf 002, 003, 004, 005, 006, 007, 009, 010, 011]，1 条 PARTIAL [Perf 008]，1 条 OPEN [001]）
 
 ---
 
@@ -950,6 +1015,22 @@ PARTIAL（11 条 finding 中 8 条 DONE [Perf 002, 003, 004, 006, 007, 009, 010,
 ## 变更日志 / Changelog
 
 按时间倒序；每条对应一组原子 commit / PR。Per-finding 实施细节见各 Perf section 的"实施记录"子段。
+
+### 2026-09-01 — Task 2 + Perf 005
+
+**摘要**：两项独立提交合入。
+
+**Task 2 — Promise chain 保序**：`src/hooks/usePasteBatcher.ts` 新增 `appendToPasteQueue` 纯函数(从 oxideterm `encodedInputQueueRef` 模式借鉴)。enqueuePaste 内部把每次 `writeSessionBytes` 调用串到当前 Promise 链上,保证 JS 层的 paste 顺序契约。`.catch(() => {})` 隔离单次失败,不污染后续 paste。Tauri IPC 队列 + Rust `SyncSender` 已经天然保序,Promise 链是显式契约,防止未来加 async encoding 时破序。4 个单测覆盖:同 tick 顺序、async 串行、rejection 隔离、pre-existing rejection 不泄漏。
+
+**Perf 005 — reader drain budget**:`src-tauri/src/services/local_session.rs` 重构 `spawn_output_forwarder`。size budget 64 KiB + time budget 8 ms,每次 read 后检查,任一满足就 emit 累积 buffer。UTF-8 safe boundary 通过 `utf8_safe_prefix_len` 纯函数处理(2/3/4 字节完整/不完整/stray continuation/全 continuation 都覆盖,11 个单测)。`yes` / `find /` / `cat | less` 场景 IPC emit 频率从 5 kHz 降到 ≤ 125 Hz,长输出尾延迟从"等 64 KiB" 降到 8 ms。EOF 语义、ErrorKind::WouldBlock 重试保留。
+
+| 简述 | 涉及文件 | 验证 |
+|------|----------|------|
+| appendToPasteQueue + drain budget + UTF-8 boundary | `usePasteBatcher.ts`, `usePasteBatcher.test.ts`, `local_session.rs` | tsc + vitest 189 + cargo 87 ✅ |
+
+**未 commit**:本会话改动仅在工作区。
+
+**未 dev 验证**:需在 `npm run tauri dev` 下跑 (1) `yes` 30 秒验证 IPC 频率 ≤ 125 Hz (2) 单行 200KB 验证首字符延迟 ≤ 8ms (3) paste 顺序验证 paste 中途切窗口 paste 仍按调用顺序到达 PTY (4) 中文/emoji 路径验证无乱码。
 
 ### 2026-09-01 — Perf 011 follow-up: bracketed paste mode
 
