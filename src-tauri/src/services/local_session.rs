@@ -1,12 +1,11 @@
 use std::io::Read;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use portable_pty::PtySize;
 
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
-use crate::infrastructure::pty::{LocalSession, LocalSessionHandles, PtySystem};
+use crate::infrastructure::pty::{spawn_writer_thread, LocalSession, LocalSessionHandles, PtySystem};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
 
@@ -108,10 +107,12 @@ pub fn create_local_session(
     let writer = pair.master_writer().map_err_string()?;
     let reader = pair.master_reader().map_err_string()?;
 
-    // Wrap the writer in Arc<Mutex<_>> so that both the foreground
-    // `SessionBackend::write` path and the optional `startup_command` background
-    // task can share the same PTY writer without conflicting.
-    let writer = Arc::new(Mutex::new(writer));
+    // Perf 011: hand the PTY master writer off to a dedicated writer thread.
+    // The IPC handler (`LocalSession::write`) and any background task
+    // (e.g. startup_command below) communicate with the thread via a
+    // bounded `mpsc::SyncSender`. The IPC layer never performs a blocking
+    // syscall — that was the root cause of UI freezes during large pastes.
+    let (writer_tx, writer_thread) = spawn_writer_thread(writer);
 
     let info = SessionInfo {
         id: session_id,
@@ -129,24 +130,25 @@ pub fn create_local_session(
     // `AppBackend::spawn`), so `std::thread::sleep` is the natural fit.
     if let Some(startup_command) = config.startup_command.clone() {
         let delay_ms = config.startup_delay_ms.unwrap_or(0);
-        let startup_writer = Arc::clone(&writer);
+        let startup_writer_tx = writer_tx.clone();
         backend.spawn(Box::new(move || {
             if delay_ms > 0 {
                 std::thread::sleep(Duration::from_millis(delay_ms));
             }
-            if let Ok(mut w) = startup_writer.lock() {
-                let _ = w.write_all(startup_command.as_bytes());
-                let _ = w.write_all(b"\n");
-                // No flush: same rationale as LocalSession::write (Perf 002).
-            }
+            let _ = startup_writer_tx.try_send(startup_command.into_bytes());
+            let _ = startup_writer_tx.try_send(b"\n".to_vec());
         }));
     }
 
     let session = LocalSession {
         info,
-        writer,
+        writer_tx,
         capabilities: CapabilityFlags::for_local(),
-        handles: LocalSessionHandles { child: Some(child), _pair: pair },
+        handles: LocalSessionHandles {
+            child: Some(child),
+            _pair: pair,
+            writer_thread: Some(writer_thread),
+        },
     };
 
     Ok(session)

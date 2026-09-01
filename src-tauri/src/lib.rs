@@ -16,7 +16,7 @@ mod services;
 
 use logging_setup::{cleanup_old_logs, get_log_config_impl, init_logging};
 use services::session_manager::SessionManager;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,11 +41,14 @@ pub fn run() {
             let config = get_log_config_impl(app.handle())?;
             cleanup_old_logs(&log_dir, config.max_file_size * config.max_log_files as u64);
             let reload_handle = init_logging(&log_dir, &config);
-            app.manage(Arc::new(Mutex::new(reload_handle)));
+            app.manage(Arc::new(reload_handle));
             tracing::info!("Application starting, log dir: {:?}", log_dir);
             Ok(())
         })
-        .manage(Arc::new(Mutex::new(SessionManager::new())))
+        // Perf 004: SessionManager uses DashMap + AtomicU32 internally, so no
+        // outer Mutex is needed — concurrent IPC handlers touch different
+        // shards in parallel without serialising on each other.
+        .manage(Arc::new(SessionManager::new()))
         .invoke_handler(commands::all_handlers())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

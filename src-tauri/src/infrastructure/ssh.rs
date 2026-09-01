@@ -28,7 +28,7 @@ const DEFAULT_TERMINAL_TYPE: &str = "xterm-256color";
 pub trait SshChannel: Send {}
 
 /// Backend capable of establishing an SSH connection.
-pub trait SshBackend: Send {
+pub trait SshBackend: Send + Sync {
     /// Connect using the full `SSHSessionConfig`, which carries host, port,
     /// auth, terminal options, and connection-level knobs (keepalive,
     /// timeout, compression).
@@ -67,13 +67,13 @@ impl SessionBackend for SshSessionWrapper {
         &self.capabilities
     }
 
-    fn write(&mut self, data: &[u8]) -> Result<(), String> {
+    fn write(&self, data: &[u8]) -> Result<(), String> {
         self.write_tx
             .send(data.to_vec())
             .map_err(|_| format!("SSH channel closed for session {}", self.info.id))
     }
 
-    fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
         match self.resize_tx.as_ref() {
             Some(tx) => tx
                 .send((rows, cols))

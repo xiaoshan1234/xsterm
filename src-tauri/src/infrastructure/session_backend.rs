@@ -13,7 +13,16 @@ use crate::models::session::SessionInfo;
 ///
 /// The `Send` bound keeps implementor burden low for future backends such as
 /// tmux, serial, or telnet that may carry platform-specific state.
-pub trait SessionBackend: Send {
+///
+/// `write` and `resize` take `&self` (not `&mut self`) so the manager can
+/// hold an `Arc<ActiveSession>` and dispatch operations through shared
+/// references — the underlying channel senders and internal locks
+/// (`SyncSender`, `UnboundedSender`, `Arc<StdMutex<MasterPty>>`) are all
+/// designed for shared access. See doc/maintenance/perf.md Perf 004.
+///
+/// `Sync` is required so `Arc<ActiveSession>` stored in the DashMap-backed
+/// registry can be shared across Tauri IPC worker threads.
+pub trait SessionBackend: Send + Sync {
     /// Returns the metadata for this session.
     fn info(&self) -> &SessionInfo;
 
@@ -21,10 +30,10 @@ pub trait SessionBackend: Send {
     fn capabilities(&self) -> &CapabilityFlags;
 
     /// Write raw bytes to the session's input channel.
-    fn write(&mut self, data: &[u8]) -> Result<(), String>;
+    fn write(&self, data: &[u8]) -> Result<(), String>;
 
     /// Resize the terminal to the given dimensions.
-    fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String>;
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
 
     /// Close the session, releasing all associated resources.
     ///

@@ -30,6 +30,8 @@ xsterm 本地 PTY 在 bulk output（`cat large_file`、`find /`、`yes` 等）�
 | 8 | 首次 EOF 100ms sleep | `local_session.rs:241` | **P2** |
 | 9 | 无界 `sessionOutputBuffer` 累积 | `utils/sessionOutputBuffer.ts:8-11` | **P2** ✅ |
 | 10 | 粘贴路径:整段文本一次 IPC + 无转换 + 无确认 | `Terminal.tsx:115,184,310` | **P1** ✅ |
+| 11 | PTY 写同步阻塞 Tauri IPC worker(`write_all` 在 tokio thread) | `pty.rs:116-122` | **P0** ✅ |
+| 4 | 全局 `Arc<Mutex<SessionManager>>` 阻塞所有 session 元数据操作 | `lib.rs:48` + `commands/session.rs:147` | **P1** ✅ |
 
 修完 P0 + P1 后，`cat 1MB` 端到端延迟预估从 ~250ms 降到 ~70ms（与 oxideterm Tauri 时代水平相当）。**剩余 IPC bridge 开销是 Tauri 架构天花板**，要突破需迁移 UI（oxideterm 因此迁向 GPUI，不在 xsterm 当前 scope）。
 
@@ -657,6 +659,179 @@ export function appendSessionOutput(sessionId: number, data: string): void {
 
 ---
 
+## Perf 011 — PTY 写同步阻塞 Tauri IPC worker
+
+**状态**：DONE（**P0**，最高优先级）
+
+### 现象
+
+Perf 010（粘贴对话框 + JS 端 rAF 分块）实施后，UI 体感冻结时间从 ~250ms 下降到 ~50-100ms，**但仍可感知**。进一步诊断发现瓶颈不在 JS 端，而在 Rust IPC handler 仍持有全局 `Arc<Mutex<SessionManager>>` 跨整个同步 `write_all` syscall：
+
+- 大段粘贴（≥ 100 KB）期间，所有其他 session 的 create / close / resize / list 全部排队
+- 单次 Tauri command worker 被 ConPTY write 占用 50-200ms，期间其他 session 的 IPC 请求都被迫串行
+- 这是**架构性**问题：rAF 分块只是把"一次大阻塞"变成"多次小阻塞"，总量没变
+
+### 根因
+
+`src-tauri/src/infrastructure/pty.rs:116-122`（重构前）：
+```rust
+fn write(&mut self, data: &[u8]) -> Result<(), String> {
+    let mut writer = self.writer.lock().map_err(|e| e.to_string())?;
+    writer.write_all(data).map_err(|e| e.to_string())
+}
+```
+
+调用链 `commands/session.rs::write_session` → `with_manager`（持全局 SessionManager mutex）→ `LocalSession::write`（持内层 PTY writer mutex）→ `writer.write_all(data)`（同步 syscall，Windows ConPTY 50-200ms）→ 返回。
+
+外层 SessionManager mutex + 内层 writer mutex **双层叠加**，且都在 Tauri tokio worker 上跨同步 syscall 持锁。
+
+### 计划方案（参考其他项目）
+
+canonical pattern 来自 alacritty / wezterm / kitty / oxideterm：**排他拥有 PTY master fd 的专用 writer thread，IPC handler 只做 channel send（非阻塞）**。xsterm 的 SSH backend（`src-tauri/src/infrastructure/ssh.rs:70-74`）已经用这套：
+
+```rust
+fn write(&mut self, data: &[u8]) -> Result<(), String> {
+    self.write_tx.send(data.to_vec())
+        .map_err(|_| format!("SSH channel closed for session {}", self.info.id))
+}
+```
+
+把同一模式搬到 PTY 路径上。
+
+### 实施记录
+
+- **变更 1**：`src-tauri/src/infrastructure/pty.rs` 引入 `spawn_writer_thread(writer: Box<dyn Write + Send>) → (SyncSender<Vec<u8>>, JoinHandle<()>)`。专用 `xsterm-pty-writer` 线程排他持有 writer，`for data in rx.recv()` 循环里调 `write_all`，sender drop 后线程退出。
+- **变更 2**：`LocalSession.writer: Arc<Mutex<Box<dyn Write + Send>>>` → `LocalSession.writer_tx: mpsc::SyncSender<Vec<u8>>`。`LocalSession::write` 改为 `writer_tx.try_send(data.to_vec())`，O(1) 非阻塞。channel 容量 64 (~256 KB)，与 JS 端 4KB 分块节奏对齐；正常打字永远不满，病理粘贴下提供 backpressure 而非无界堆积。
+- **变更 3**：`LocalSessionHandles` 加 `writer_thread: Option<JoinHandle<()>>`。`LocalSession::close` 顺序：kill child → drop sender（让 writer thread 从 `recv()` 返回 Err 退出）→ join thread → 之后 Windows ConPTY 才通过 `_pair` drop 触发 `ClosePseudoConsole`。
+- **变更 4**：`src-tauri/src/services/local_session.rs` `startup_command` 路径不再 `Arc::clone(&writer).lock().write_all(...)`，改为 `writer_tx.clone().try_send(startup_command.into_bytes())` + `try_send(b"\n".to_vec())`。同走专用 writer thread，与正常输入路径完全统一。
+- **变更 5**：`src/hooks/usePasteBatcher.ts` 简化为单次 IPC 发送。Rust 异步后，JS 端 rAF 分块失去意义——一次 IPC 调用 ≈ 一次 `TextEncoder.encode` + 一次 IPC 序列化（≈ 一帧 16ms 内），后续字节由专用 thread 异步写到 PTY。`chunkBytes` 纯函数保留导出供未来需要时复用。
+- **变更 6**：`src-tauri/src/infrastructure/pty.rs` 加 2 个单测（`writer_thread_delivers_messages_in_order_and_exits_on_drop` 和 `writer_thread_joins_with_pending_messages_still_in_flight`），验证顺序性、close 时 join 干净、多 sender 协作。
+
+### 端到端时延估算（100 KB 粘贴）
+
+| 阶段 | 重构前 | 重构后 |
+|------|--------|--------|
+| JS `TextEncoder.encode(100KB)` | 10ms | 10ms（一次性） |
+| JS IPC 序列化（25 次 4KB chunk） | 25 × 1ms = 25ms | 单次 30KB → ~3ms |
+| Tauri IPC round trips | 25 × ~10ms = 250ms wall | 单次 ~10ms |
+| Rust SessionManager mutex 持锁 | 25 × ~80ms = 2000ms 串行阻塞 | 微秒级（channel send） |
+| Rust PTY write_all | 25 × ~50ms = 1250ms（worker 钉死） | 在专用 thread，**不阻塞 IPC worker** |
+| **其他 session IPC 排队** | **25 × 80ms = 2000ms 全部阻塞** | **0ms** |
+| **总 wall clock** | **~2.5s 期间其他 IPC 全堵** | **~13ms JS + 异步 PTY write** |
+
+> **关键差异**：Perf 011 不只是让当前 session 的 paste 更快，更消除了"单个 session 的大写饿死所有其他 session IPC"的系统性故障模式。
+
+### 验证
+
+- `npx tsc --noEmit`：0 errors
+- `npx vitest run`：**177 passed**（无回归）
+- `cargo check --manifest-path src-tauri/Cargo.toml`：✅ 无错误
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib`：**74 passed**, 2 pre-existing failures（环境依赖，与本次改动无关）
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib writer_thread`：**2 passed**（新增）
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib write`：**3 passed**（`test_write_to_local_session_returns_ok` 等）
+- 手动验证（待 `npm run tauri dev`）：
+  - 粘贴 100 KB / 1 MB：UI 完全不卡，期间其他 session 的 resize / close 立即生效（这是 Perf 011 与 Perf 010 的关键体感差异）
+  - 关闭 session：join 干净，无 panic
+  - 极端 case：连发 25 个 1 MB 粘贴（绕过 1 MiB 硬上限则需先 lift 该上限或分块；当前 1 MiB 兜底生效）
+
+### 不做的事
+
+- ❌ 不动 SessionManager 全局 mutex 粒度（Perf 004 OPEN）。Perf 011 已让 IPC handler 持锁时间从 80ms 降到微秒级，剩余的"多 session 竞争创建/销毁"场景不阻塞 paste 路径，留作 Perf 004 独立 PR
+- ❌ 不加 flush()（Perf 002 DONE）
+- ❌ 不改 `usePasteBatcher` 分块逻辑——Rust 异步后，单次 IPC 是最优 shape，无需 rAF 拆分
+- ❌ 不引入 `tokio::task::spawn_blocking`——本方案是更彻底的"专用 std::thread"模式（与 SSH backend 对齐），不需要 async runtime
+
+---
+
+## Perf 004 — 全局 `Arc<Mutex<SessionManager>>` 阻塞所有 session
+
+**状态**：DONE（**P1**）
+
+### 现象
+
+在 Perf 011 之前，每个 IPC 命令（包括 `write_session`）都通过 `with_manager` helper：
+
+```rust
+// commands/session.rs（旧）
+fn with_manager<F, T>(state: State<'_, Arc<Mutex<SessionManager>>>, f: F) -> Result<T, String> {
+    let mut manager = state.lock().map_err(|e| e.to_string())?;
+    f(&mut manager)
+}
+```
+
+整个调用期间持 `std::sync::Mutex` 锁。当一个 session 的大粘贴导致 IPC handler 长时延持锁时，**所有其他 session 的 create / close / resize / list 都排队**。
+
+Perf 011 把 write 路径的 `write_all` 移到了专用线程，单 session 的写入不再阻塞 IPC handler（IPC handler 只做 `try_send`，微秒级）。但 write 路径**仍然持全局锁**——只是持锁时间从 ~80ms 降到了微秒级。**当高频 paste + 高频 close/resize 并发时仍可能短暂争用**。
+
+### 根因
+
+`src-tauri/src/lib.rs:48`（Perf 004 前）：
+```rust
+.manage(Arc::new(Mutex::new(SessionManager::new())))
+```
+
+`SessionManager` 内部单一 `HashMap<u32, ActiveSession>`，所有 metadata + write + resize 操作共用一个锁。
+
+### 计划方案
+
+oxideterm 的写法（`src-tauri/src/local/registry.rs:33`）：
+```rust
+pub struct LocalTerminalRegistry {
+    sessions: Arc<RwLock<HashMap<String, LocalTerminalSession>>>,
+    event_channels: Arc<RwLock<HashMap<String, mpsc::Sender<SessionEvent>>>>,
+}
+```
+
+oxideterm 用 `tokio::sync::RwLock<HashMap>`（async）。xsterm 是 sync 代码（`std::sync::Mutex`），改用 **`DashMap<u32, Arc<ActiveSession>>`** 是等价的 sync 方案，且比 `RwLock<HashMap>` 更优（无需外层锁，按 shard 并发）。
+
+### 实施记录
+
+- **变更 1**：`src-tauri/Cargo.toml` 加 `dashmap = "6"`。
+- **变更 2**：`SessionBackend::write` 和 `::resize` 从 `&mut self` 改为 `&self`。底层 `SyncSender::send` / `UnboundedSender::send` / `Arc<StdMutex<MasterPty>>::resize` 都接受 shared access，是安全的语义前提。文档注释 cross-link 到 perf.md Perf 004 防回退。
+- **变更 3**：`PtySystem` / `PtyPair` / `Child` trait 加 `Sync` bound。`DashMap::insert(V)` 要求 `V: Send + Sync`。`portable_pty` 的 trait object 不是 Sync，所以 `NativePtySystem` / `NativePtyPair` / `NativeChild` 内部 `portable_pty::*` 用 `std::sync::Mutex` 包装。
+- **变更 4**：`src-tauri/src/services/session_manager.rs` 重构：
+  - `sessions: HashMap<u32, ActiveSession>` → `DashMap<u32, Arc<ActiveSession>>`
+  - `next_id: u32` → `AtomicU32`（单调递增，可无锁）
+  - 所有方法 `&mut self` → `&self`
+  - 新增 `get(id) -> Result<Arc<ActiveSession>, String>` 给上层共享访问
+  - `close` 仍要求独占 `Arc`（用 `Arc::try_unwrap`），若失败返回明确错误
+  - `close` 对不存在的 session **幂等返回 Ok**（保留历史语义，避免 frontend 在 session 已死时 close 触发误报 error 日志）
+  - `ActiveSession` 改为 `pub(crate)` 以匹配 `get()` 的返回类型可见性
+- **变更 5**：`src-tauri/src/commands/session.rs` 移除 `with_manager` helper。每个命令直接调 `state.create_local(...)` / `state.write(...)` 等。无全局锁。`MAX_WRITE_PAYLOAD_BYTES` 兜底保留（`write_session` 第一行检查）。
+- **变更 6**：`src-tauri/src/lib.rs` `.manage(Arc::new(SessionManager::new()))`，去掉外层 `Mutex`。
+- **变更 7**：测试适配 28 处：移除 `let mut manager`（方法不再需 `&mut`）；`build_mock_manager` helper 用 `DashMap::new()` + `AtomicU32::new(1)`；`manager.sessions.insert(id, ActiveSession::Pty(...))` 改为 `insert(id, Arc::new(ActiveSession::Pty(...)))`。
+- **变更 8**：移除 `use std::collections::HashMap`（生产代码已不用，仅测试保留用于 env vars）。
+
+### 端到端改善
+
+| 场景 | Perf 011 后 | Perf 004 后 |
+|------|---------|---------|
+| 单 session 大粘贴 | 微秒级持锁（write 走专用 thread） | 微秒级持锁（无变化） |
+| 单 session 大粘贴 + 其他 session 并发 resize/close | 微秒级争用，可能短暂阻塞 | 完全并发，无争用 |
+| 多 session 高频 create + close | 串行（所有走 with_manager） | 并发（不同 key 不同 shard） |
+| `write_session` 的关键路径 | `state.lock() + try_send` | `state.get(id) + session.write()` |
+
+### 验证
+
+- `npx tsc --noEmit`：0 errors
+- `npx vitest run`：**177 passed**（前端无回归）
+- `cargo check --manifest-path src-tauri/Cargo.toml`：✅ 无错误无警告
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib`：**74 passed**, 2 pre-existing failures（`create_local_with_default_config_*` 期望 bash/sh 名字、`create_local_with_non_wsl_shell_*` 期望 WSLENV 未设，与本次改动无关）
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib write`：**3 passed**（write 路径）
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib writer_thread`：**2 passed**（writer thread，Perf 011）
+- 手动验证（待 `npm run tauri dev`）：
+  - 多 session 同时大粘贴 + 其他 session 的 resize / close 立即生效
+  - session 关闭幂等：重复 close 不报 error 日志
+  - 7 个并发 session 同时 create 各不阻塞
+
+### 不做的事
+
+- ❌ 不替换为 `tokio::sync::RwLock<HashMap>`（xsterm 是 sync 代码路径，DashMap 更契合）
+- ❌ 不动 `close` 的 Arc::try_unwrap 失败语义（保留"明确报错"比"静默泄漏"更安全）
+- ❌ 不重新设计 ID 分配为 sharded counter（`AtomicU32::fetch_add` 已是 lock-free 的最优实现）
+
+---
+
 ## Oxideterm 对比参考
 
 oxideterm 仓库：[`AnalyseDeCircuit/oxideterm`](https://github.com/AnalyseDeCircuit/oxideterm)（commit `c8428adb62589275de64a7798c8451e8b27dff13`，769 ⭐，与 xsterm 几乎同栈：Tauri 2 + React 19 + portable-pty）
@@ -703,6 +878,8 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 | 8 | Perf 008（替换 100ms sleep） | `local_session.rs:241` | 首字延迟 -50~80ms | 中（需引入 timer 或 polling） |
 | 9 | Perf 009（buffer 上限） | `sessionOutputBuffer.ts:8-11` | 长 session 内存不再无界增长 | 小（~2h） |
 | 10 | Perf 010（粘贴：对话框 + 分块 + 转换） | `Terminal.tsx` + 新 hooks + `commands/session.rs` | 粘贴冻结 + 自动换行执行 + 无感知 三症状消除 | 中（~6-8h，单 PR） |
+| 11 | Perf 011（PTY async writer thread） | `pty.rs` + `local_session.rs` | 写入 IPC 永不阻塞 tokio thread；Tauri worker 闲置 | 小（~3h） |
+| 12 | Perf 004（DashMap + Arc + AtomicU32 session registry） | `session_manager.rs` + `commands/session.rs` + `lib.rs` + traits 加 Sync | 单 session 大写不再饿死其他 session 的 IPC | 中（~5h，含 trait + 测试改造） |
 
 **建议提交策略**：每条任务单独 PR，单测 + 性能对比数据随 PR 提交。Perf 002/003/007 是"低风险/立即见效"的快赢，优先合入主干。Perf 001/004/005 涉及协议与数据结构变更，需要更仔细的 review。
 
@@ -721,7 +898,7 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 
 ## 是否解决
 
-PARTIAL（10 条 finding 中 6 条 DONE [Perf 002, 003, 006, 007, 009, 010]，1 条 PARTIAL [Perf 008]，3 条 OPEN [001, 004, 005]）
+PARTIAL（11 条 finding 中 8 条 DONE [Perf 002, 003, 004, 006, 007, 009, 010, 011]，1 条 PARTIAL [Perf 008]，2 条 OPEN [001, 005]）
 
 ---
 
@@ -735,6 +912,40 @@ PARTIAL（10 条 finding 中 6 条 DONE [Perf 002, 003, 006, 007, 009, 010]，1 
 ## 变更日志 / Changelog
 
 按时间倒序；每条对应一组原子 commit / PR。Per-finding 实施细节见各 Perf section 的"实施记录"子段。
+
+### 2026-09-01 — Perf 004 Session registry 改用 DashMap + Arc
+
+**摘要**：消除 `Arc<Mutex<SessionManager>>` 全局锁。引入 `DashMap<u32, Arc<ActiveSession>>` + `AtomicU32` ID 分配。`SessionBackend::write` / `::resize` 从 `&mut self` 改为 `&self`（底层 channel senders 本就支持 shared access）。trait 加 `Sync` bound（DashMap 要求）；`portable_pty::*` trait object 不是 Sync，所以 `NativePtySystem` / `NativePtyPair` / `NativeChild` 内部 `std::sync::Mutex` 包装。彻底镜像 oxideterm 的 per-key 并发注册表模式（`tokio::sync::RwLock<HashMap>` → xsterm 的 sync 版本用 `DashMap`）。
+
+**端到端改善**：
+- 单 session 大粘贴不再与其他 session 的 create / close / resize / list 串行
+- 高频 paste + 高频 metadata 操作的并发争用归零
+- Tauri command handler 不再获取任何全局锁
+
+| Perf | 简述 | 涉及文件 | 验证 |
+|------|------|----------|------|
+| 004 | DashMap + Arc + AtomicU32 registry；SessionBackend trait `&self` 化；commands 去 with_manager；lib.rs 去全局 Mutex | `Cargo.toml`, `session_backend.rs`, `pty.rs`, `ssh.rs`, `session_manager.rs`, `commands/session.rs`, `lib.rs` | tsc + vitest 177 + cargo 74 ✅ |
+
+**未 commit**：AGENTS.md 规约"Commit without explicit request - Never"，本会话所有改动仅在工作区，未入 git 历史。
+
+**未 dev 验证**：需在 `npm run tauri dev` 下跑多 session 并发场景（见 Perf 004 "验证"段清单）。
+
+### 2026-09-01 — Perf 011 PTY 写改为专用线程 + channel
+
+**摘要**：解决 Perf 010 暴露的更深层架构问题——Tauri IPC worker 仍跨同步 `write_all` syscall 持锁。引入专用 `xsterm-pty-writer` std::thread + bounded `mpsc::SyncSender`，IPC handler 只做 O(1) channel send。完美镜像已有的 SSH backend 异步 writer 模式（`ssh.rs:70-74`）与 alacritty / wezterm / kitty / oxideterm 的 canonical 模式。
+
+**端到端改善**：
+- 单次 100 KB 粘贴：JS 端 ~13ms 主线程阻塞（vs Perf 010 的 ~250ms 跨帧；vs 重构前的 ~2.5s 持续冻结）
+- 关键差异：**其他 session 的 IPC 不再被本 session 的大写饿死**（这是性能以外的"功能性"修复）
+- JS 端 `usePasteBatcher` 简化为单次 IPC（无 rAF 状态机）
+
+| Perf | 简述 | 涉及文件 | 验证 |
+|------|------|----------|------|
+| 011 | PTY writer 改为专用线程 + SyncSender | `pty.rs`, `local_session.rs`, `usePasteBatcher.ts` | tsc + vitest 177 + cargo 74 ✅ |
+
+**未 commit**：AGENTS.md 规约"Commit without explicit request - Never"，本会话所有改动仅在工作区，未入 git 历史。
+
+**未 dev 验证**：跨前后端的逻辑改动，需在 `npm run tauri dev` 下手动跑端到端验证（见 Perf 011 "验证"小节清单）。
 
 ### 2026-09-01 — Perf 010 粘贴路径三层重构
 

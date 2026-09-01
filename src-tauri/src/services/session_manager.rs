@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+
+use dashmap::DashMap;
 
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{NativePtySystem, PtySystem};
@@ -18,7 +21,7 @@ use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
 /// original `SSHSessionConfig` (which the trait does not expose). Both still
 /// dispatch via `SessionBackend` (the concrete box derefs to `SshSessionWrapper`,
 /// which implements the trait).
-enum ActiveSession {
+pub(crate) enum ActiveSession {
     Pty(Box<dyn SessionBackend + Send>),
     Ssh(Box<SshSessionWrapper>),
 }
@@ -29,14 +32,6 @@ impl ActiveSession {
         match self {
             ActiveSession::Pty(b) => &**b,
             ActiveSession::Ssh(b) => &**b,
-        }
-    }
-
-    /// Mutably borrow the underlying backend as a trait object.
-    fn backend_mut(&mut self) -> &mut (dyn SessionBackend + '_) {
-        match self {
-            ActiveSession::Pty(b) => &mut **b,
-            ActiveSession::Ssh(b) => &mut **b,
         }
     }
 
@@ -59,9 +54,20 @@ impl ActiveSession {
 }
 
 /// Manages the lifecycle of all terminal sessions.
+///
+/// Concurrency model (Perf 004, see doc/maintenance/perf.md):
+/// - Sessions live in a `DashMap<u32, Arc<ActiveSession>>`, so any operation
+///   that only needs a single session handle (`write`, `resize`, `info`,
+///   `close`) takes a `&self` borrow on the manager and a `DashMap::get` for
+///   per-key access — there is no global `Mutex` to acquire.
+/// - `next_id` is an `AtomicU32` since it is monotonically incremented and
+///   must not block other operations.
+/// - `create` and `close` are still the only mutating entry points; both
+///   touch the DashMap and (for `close`) need exclusive ownership of the
+///   inner backend via `Arc::try_unwrap`. All other ops read.
 pub struct SessionManager {
-    sessions: HashMap<u32, ActiveSession>,
-    next_id: u32,
+    sessions: DashMap<u32, Arc<ActiveSession>>,
+    next_id: AtomicU32,
     pty_system: Box<dyn PtySystem>,
     ssh_backend: Box<dyn SshBackend>,
 }
@@ -70,8 +76,8 @@ impl SessionManager {
     /// Create a new session manager with default platform backends.
     pub fn new() -> Self {
         Self {
-            sessions: HashMap::new(),
-            next_id: 1,
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(NativePtySystem::new()),
             ssh_backend: Box::new(SshBackendImpl::new()),
         }
@@ -79,7 +85,7 @@ impl SessionManager {
 
     /// Create a new local shell session.
     pub fn create_local(
-        &mut self,
+        &self,
         config: LocalSessionConfig,
         backend: impl AppBackend + 'static,
     ) -> Result<SessionInfo, String> {
@@ -105,7 +111,7 @@ impl SessionManager {
 
     /// Create a new SSH session.
     pub fn create_ssh(
-        &mut self,
+        &self,
         config: SSHSessionConfig,
         backend: impl AppBackend + 'static,
     ) -> Result<SessionInfo, String> {
@@ -130,43 +136,48 @@ impl SessionManager {
 
     /// Insert a newly created session into the manager and return its metadata
     /// (with `capabilities` populated from the backend).
-    fn insert_session(&mut self, id: u32, session: ActiveSession) -> SessionInfo {
+    fn insert_session(&self, id: u32, session: ActiveSession) -> SessionInfo {
         let info = session.to_session_info();
-        self.sessions.insert(id, session);
+        self.sessions.insert(id, Arc::new(session));
         info
     }
 
+    /// Look up a single session by id without holding any global lock. Returns
+    /// a cheaply-cloned `Arc<ActiveSession>` so the caller can dispatch
+    /// `write` / `resize` / `close` independently of the registry.
+    pub fn get(&self, id: u32) -> Result<Arc<ActiveSession>, String> {
+        self.sessions
+            .get(&id)
+            .map(|entry| entry.value().clone())
+            .ok_or_else(|| format!("Session {} not found", id))
+    }
+
     /// Return a clone of the SSH config for the session with the given `id`.
-    pub fn get_ssh_config(&self,
-        id: u32,
-    ) -> Result<SSHSessionConfig, String> {
-        match self.sessions.get(&id) {
-            Some(ActiveSession::Ssh(ssh)) => Ok(ssh.config.clone()),
-            Some(_) => Err(format!("Session {} is not an SSH session", id)),
-            None => Err(format!("Session {} not found", id)),
+    pub fn get_ssh_config(&self, id: u32) -> Result<SSHSessionConfig, String> {
+        match self.get(id)?.as_ref() {
+            ActiveSession::Ssh(ssh) => Ok(ssh.config.clone()),
+            _ => Err(format!("Session {} is not an SSH session", id)),
         }
     }
 
-    /// Write input data to an existing session.
-    pub fn write(&mut self, id: u32, data: &[u8]) -> Result<(), String> {
-        match self.sessions.get_mut(&id) {
-            Some(session) => session.backend_mut().write(data),
-            None => Err(format!("Session {} not found", id)),
-        }
+    /// Write input data to an existing session. Does not acquire any global
+    /// lock — only the per-session DashMap entry is touched, then dispatched
+    /// to the backend's shared `write(&self, ...)` impl.
+    pub fn write(&self, id: u32, data: &[u8]) -> Result<(), String> {
+        let session = self.get(id)?;
+        session.backend().write(data)
     }
 
     /// Resize the PTY of the session with the given `id`.
-    pub fn resize(&mut self, id: u32, rows: u16, cols: u16) -> Result<(), String> {
-        match self.sessions.get_mut(&id) {
-            Some(session) => session.backend_mut().resize(rows, cols),
-            None => Err(format!("Session {} not found", id)),
-        }
+    pub fn resize(&self, id: u32, rows: u16, cols: u16) -> Result<(), String> {
+        let session = self.get(id)?;
+        session.backend().resize(rows, cols)
     }
 
     /// Upload an image file to the SSH server for the given session and return
     /// the remote path where it was stored.
     pub fn upload_image(
-        &mut self,
+        &self,
         id: u32,
         filename: &str,
         data: Vec<u8>,
@@ -193,23 +204,35 @@ impl SessionManager {
     }
 
     /// Close and remove the session with the given `id`.
-    pub fn close(&mut self, id: u32) -> Result<(), String> {
-        if let Some(session) = self.sessions.remove(&id) {
-            session.into_backend().close()?;
-        }
-        Ok(())
+    ///
+    /// Idempotent: closing a non-existent session returns Ok (matches the
+    /// historical `HashMap::remove` semantics, and avoids spurious error
+    /// logs when the frontend tears down a session that already died).
+    ///
+    /// Requires exclusive ownership of the inner `Arc<ActiveSession>` so the
+    /// backend's `close(self: Box<Self>)` can consume the boxed dyn object.
+    /// If anything else still holds a clone of the Arc we surface that as an
+    /// error instead of silently leaking.
+    pub fn close(&self, id: u32) -> Result<(), String> {
+        let Some((_, arc)) = self.sessions.remove(&id) else {
+            return Ok(());
+        };
+        let session = Arc::try_unwrap(arc)
+            .map_err(|_| format!("Session {id} is still referenced; close aborted"))?;
+        session.into_backend().close()
     }
 
     /// Return metadata (including `capabilities`) for all active sessions.
     pub fn list(&self) -> Vec<SessionInfo> {
-        self.sessions.values().map(|s| s.to_session_info()).collect()
+        self.sessions
+            .iter()
+            .map(|entry| entry.value().to_session_info())
+            .collect()
     }
 
     /// Allocate the next unique session id.
-    fn allocate_session_id(&mut self) -> u32 {
-        let id = self.next_id;
-        self.next_id += 1;
-        id
+    fn allocate_session_id(&self) -> u32 {
+        self.next_id.fetch_add(1, Ordering::Relaxed)
     }
 }
 
@@ -229,8 +252,9 @@ mod tests {
     use crate::models::capabilities::CapabilityFlags;
     use crate::models::session::SessionType;
     use mockall::{mock, predicate::*};
+    use std::collections::HashMap;
     use std::io::{Read, Write};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
     use std::sync::mpsc as sync_mpsc;
     use std::sync::{Arc, Mutex};
 
@@ -361,7 +385,7 @@ mod tests {
         fn capabilities(&self) -> &CapabilityFlags {
             &self.capabilities
         }
-        fn write(&mut self, data: &[u8]) -> Result<(), String> {
+        fn write(&self, data: &[u8]) -> Result<(), String> {
             self.write_called.fetch_add(1, Ordering::SeqCst);
             self.write_data
                 .lock()
@@ -369,7 +393,7 @@ mod tests {
                 .extend_from_slice(data);
             Ok(())
         }
-        fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {
+        fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
             self.resize_called.fetch_add(1, Ordering::SeqCst);
             self.resize_dims.lock().unwrap().push((rows, cols));
             Ok(())
@@ -403,8 +427,8 @@ mod tests {
 
     fn build_mock_manager(mock_pty_system: MockPtySystemM) -> SessionManager {
         SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(mock_pty_system),
             ssh_backend: Box::new(MockSshBackendM::new()),
         }
@@ -430,7 +454,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
 
@@ -445,7 +469,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
             LocalSessionConfig { name: None, shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, env_config: None, ..Default::default() },
@@ -462,7 +486,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
             LocalSessionConfig { name: None, shell: None, cwd: Some("/tmp".to_string()), args: None, env_config: None, ..Default::default() },
@@ -482,7 +506,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
             LocalSessionConfig {
@@ -506,7 +530,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
             LocalSessionConfig {
@@ -530,7 +554,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         mock_pty_system.expect_openpty().returning(|_| Err("PTY open failed".to_string()));
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
 
@@ -540,7 +564,7 @@ mod tests {
 
     #[test]
     fn test_write_nonexistent_session_returns_err() {
-        let mut manager = SessionManager::new();
+        let manager = SessionManager::new();
         let result = manager.write(999, b"test");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Session 999 not found");
@@ -551,7 +575,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
@@ -563,7 +587,7 @@ mod tests {
 
     #[test]
     fn test_close_nonexistent_session_returns_ok() {
-        let mut manager = SessionManager::new();
+        let manager = SessionManager::new();
         let result = manager.close(999);
         assert!(result.is_ok());
     }
@@ -573,7 +597,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
@@ -587,7 +611,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
@@ -609,7 +633,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
@@ -622,7 +646,7 @@ mod tests {
         let mut mock_pty_system = MockPtySystemM::new();
         expect_openpty(&mut mock_pty_system);
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, mock_backend);
         assert!(result.is_ok());
@@ -634,7 +658,7 @@ mod tests {
 
     #[test]
     fn test_resize_nonexistent_session_returns_ok() {
-        let mut manager = SessionManager::new();
+        let manager = SessionManager::new();
         let result = manager.resize(999, 24, 80);
         assert!(result.is_err());
     }
@@ -654,9 +678,9 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+        let manager = SessionManager {
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Box::new(mock_ssh_backend),
         };
@@ -716,9 +740,9 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+        let manager = SessionManager {
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Box::new(mock_ssh_backend),
         };
@@ -769,9 +793,9 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+        let manager = SessionManager {
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Box::new(mock_ssh_backend),
         };
@@ -822,9 +846,9 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+        let manager = SessionManager {
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Box::new(mock_ssh_backend),
         };
@@ -874,9 +898,9 @@ mod tests {
         let mut mock_ssh_backend = MockSshBackendM::new();
         mock_ssh_backend.expect_connect().returning(|_| Err("Failed to connect".to_string()));
         let mock_backend = TestAppBackend::default();
-        let mut manager = SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+        let manager = SessionManager {
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Box::new(mock_ssh_backend),
         };
@@ -916,9 +940,9 @@ mod tests {
         let mut mock_ssh_backend = MockSshBackendM::new();
         mock_ssh_backend.expect_connect().returning(|_| Err("SSH auth failed".to_string()));
         let mock_backend = TestAppBackend::default();
-        let mut manager = SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+        let manager = SessionManager {
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Box::new(mock_ssh_backend),
         };
@@ -971,9 +995,9 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = SessionManager {
-            sessions: HashMap::new(),
-            next_id: 1,
+        let manager = SessionManager {
+            sessions: DashMap::new(),
+            next_id: AtomicU32::new(1),
             pty_system: Box::new(mock_pty_system),
             ssh_backend: Box::new(mock_ssh_backend),
         };
@@ -1048,10 +1072,10 @@ mod tests {
         let resize_dims = Arc::clone(&backend.resize_dims);
         let close_called = Arc::clone(&backend.close_called);
 
-        let mut manager = build_mock_manager(MockPtySystemM::new());
+        let manager = build_mock_manager(MockPtySystemM::new());
         manager
             .sessions
-            .insert(999, ActiveSession::Pty(Box::new(backend)));
+            .insert(999, Arc::new(ActiveSession::Pty(Box::new(backend))));
 
         manager.write(999, b"hello").unwrap();
         assert_eq!(write_called.load(Ordering::SeqCst), 1);
@@ -1074,10 +1098,10 @@ mod tests {
         let resize_dims = Arc::clone(&backend.resize_dims);
         let close_called = Arc::clone(&backend.close_called);
 
-        let mut manager = build_mock_manager(MockPtySystemM::new());
+        let manager = build_mock_manager(MockPtySystemM::new());
         manager
             .sessions
-            .insert(999, ActiveSession::Pty(Box::new(backend)));
+            .insert(999, Arc::new(ActiveSession::Pty(Box::new(backend))));
 
         // Unified info path: list() routes through to_session_info, which reads
         // both info() and capabilities() from the trait object.
@@ -1132,7 +1156,7 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         let mut env = HashMap::new();
         env.insert("TEST_VAR".to_string(), "test_value_xyz".to_string());
@@ -1189,7 +1213,7 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         // Use `shell: Some("wsl.exe")` directly so resolve_shell_path returns
         // "wsl.exe" regardless of platform. The cfg!(target_os = "windows")
@@ -1263,7 +1287,7 @@ mod tests {
         });
 
         let mock_backend = TestAppBackend::default();
-        let mut manager = build_mock_manager(mock_pty_system);
+        let manager = build_mock_manager(mock_pty_system);
 
         // Use cmd.exe (non-WSL Windows shell). WSLENV must NOT be set.
         let mut env = HashMap::new();
