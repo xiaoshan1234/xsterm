@@ -44,11 +44,6 @@ function extractAndCopyOsc52(text: string): string {
   return text.replace(OSC52_REGEX, "");
 }
 
-interface PendingWrite {
-  text: string;
-  resolve: () => void;
-}
-
 export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, sessionId: number): void {
   const { setSessions } = useSession();
 
@@ -63,44 +58,21 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
   // `src/hooks/sessionOutputFrame.ts`) stays in place under
   // `#[allow(dead_code)]` so we can flip the switch back on once the
   // Tauri 2 channel-on-command path is understood.
+  //
+  // ALSO: removed the rAF queueing that caused a 1-frame (~16 ms) display
+  // delay for each typed character. Before Perf 005 the rAF was useful
+  // because the Rust reader emitted one event per 8 KB read, so coalescing
+  // JS-side events amortised xterm.write cost. With Perf 005 the Rust side
+  // already coalesces into 64 KiB chunks (drain budget) and emits those
+  // ~125 Hz, so the JS-side rAF was adding 16 ms latency on every single
+  // keystroke echo with no remaining perf benefit. Each event now goes
+  // straight to xterm.write.
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;
 
     let listenerActive = true;
     let unlisten: (() => void) | null = null;
-    let rafId: number | null = null;
-    let writeQueue: PendingWrite[] = [];
-    let hasReplayed = false;
-
-    const flushWrites = () => {
-      rafId = null;
-      if (writeQueue.length === 0) return;
-      const pending = writeQueue;
-      writeQueue = [];
-      const text = pending.map((w) => w.text).join("");
-      try {
-        xterm.write(text, () => {
-          for (const w of pending) {
-            w.resolve();
-          }
-        });
-      } catch (e) {
-        console.error("[xsterm] Failed to write to terminal:", e);
-        for (const w of pending) {
-          w.resolve();
-        }
-      }
-    };
-
-    const queueWrite = (text: string): Promise<void> => {
-      return new Promise((resolve) => {
-        writeQueue.push({ text, resolve });
-        if (rafId === null) {
-          rafId = requestAnimationFrame(flushWrites);
-        }
-      });
-    };
 
     const handleOutput = (text: string) => {
       appendSessionOutput(sessionId, text);
@@ -114,8 +86,11 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
         );
       }
 
-      if (!hasReplayed) return;
-      queueWrite(text);
+      try {
+        xterm.write(text);
+      } catch (e) {
+        console.error("[xsterm] Failed to write to terminal:", e);
+      }
     };
 
     listen<[number, number[]]>("session-output", (event) => {
@@ -130,11 +105,18 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
           return;
         }
         unlisten = fn;
+        // Replay any history buffered before the listener was attached
+        // (e.g. shell prompt that arrived during the listen() Promise
+        // resolution window). The listener registers synchronously inside
+        // listen() so this is best-effort, not a strict race-free path.
         const buffer = getSessionOutput(sessionId);
         if (buffer) {
-          queueWrite(buffer);
+          try {
+            xterm.write(buffer);
+          } catch (e) {
+            console.error("[xsterm] Failed to replay session output buffer:", e);
+          }
         }
-        hasReplayed = true;
       })
       .catch((err) => {
         if (listenerActive) {
@@ -145,26 +127,6 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
     return () => {
       listenerActive = false;
       unlisten?.();
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
-      if (writeQueue.length > 0) {
-        const pending = writeQueue;
-        writeQueue = [];
-        const text = pending.map((w) => w.text).join("");
-        try {
-          xterm.write(text, () => {
-            for (const w of pending) {
-              w.resolve();
-            }
-          });
-        } catch (e) {
-          console.error("[xsterm] Failed to flush terminal writes:", e);
-          for (const w of pending) {
-            w.resolve();
-          }
-        }
-      }
     };
   }, [termRef, sessionId, setSessions]);
 }
