@@ -1,0 +1,49 @@
+.paste-dialog-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding: var(--space-base);
+}
+
+.paste-dialog-option {
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  /* Allow the inline number input to breathe without breaking the row. */
+  row-gap: var(--space-xs);
+}
+
+.paste-dialog-number {
+  width: 56px;
+  padding: 4px 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.paste-dialog-number:disabled {
+  color: var(--muted-soft);
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.paste-dialog-number:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.paste-dialog-meta {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.paste-dialog-stats {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}

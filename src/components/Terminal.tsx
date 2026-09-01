@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { type SessionDisplayConfig } from "../types/session";
@@ -8,6 +8,9 @@ import { useXterm } from "../hooks/useXterm";
 import { useTauriTerminalOutput } from "../hooks/useTauriTerminalOutput";
 import { useTerminalResize } from "../hooks/useTerminalResize";
 import { useLineNumberOverlay } from "../hooks/useLineNumberOverlay";
+import { usePasteBatcher } from "../hooks/usePasteBatcher";
+import { countLines } from "../utils/textTransform";
+import { PasteConfirmDialog } from "./dialogs/PasteConfirmDialog";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";
@@ -96,6 +99,40 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     writeSessionRef.current = writeSession;
   }, [writeSession]);
 
+  // Perf 010: paste chunking + confirmation. The batcher owns rAF pacing so
+  // a single paste doesn't hold the SessionManager mutex across one giant
+  // write_all; the dialog gives the user a chance to scrub line endings
+  // and tabs before any bytes reach the PTY.
+  const { enqueuePaste } = usePasteBatcher(sessionId);
+  const [pendingPasteText, setPendingPasteText] = useState<string | null>(null);
+
+  // Threshold for showing the dialog: > 2 lines means ≥ 2 newlines.
+  // Below that the user almost certainly knows what they pasted.
+  const requestPaste = useCallback(
+    (text: string) => {
+      if (!isConnectedRef.current) return;
+      const lineCount = countLines(text).length;
+      if (lineCount > 2) {
+        setPendingPasteText(text);
+      } else {
+        enqueuePaste(text);
+      }
+    },
+    [enqueuePaste],
+  );
+
+  const handlePasteConfirm = useCallback(
+    (transformedText: string) => {
+      setPendingPasteText(null);
+      enqueuePaste(transformedText);
+    },
+    [enqueuePaste],
+  );
+
+  const handlePasteCancel = useCallback(() => {
+    setPendingPasteText(null);
+  }, []);
+
   // Perf 003: input rAF batching — coalesce keystrokes per frame. See perf.md.
   const pendingInputRef = useRef<string>("");
   const inputRafIdRef = useRef<number | null>(null);
@@ -111,9 +148,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (text) {
         e.preventDefault();
         e.stopPropagation();
-        if (isConnectedRef.current) {
-          writeSessionRef.current(sessionId, text);
-        }
+        requestPaste(text);
         return;
       }
 
@@ -136,7 +171,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       }
     },
-    [sessionId, sessionType],
+    [sessionId, sessionType, requestPaste],
   );
 
   useEffect(() => {
@@ -181,7 +216,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         readText()
           .then((text) => {
             if (text && isConnectedRef.current) {
-              writeSessionRef.current(sessionId, text);
+              requestPaste(text);
             }
           })
           .catch((err) => {
@@ -307,14 +342,14 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         try {
           const text = await readText();
           if (text && isConnectedRef.current) {
-            writeSessionRef.current(sessionId, text);
+            requestPaste(text);
           }
         } catch (err) {
           console.error("[xsterm] Failed to paste from clipboard:", err);
         }
       },
     }),
-    [sessionId],
+    [sessionId, requestPaste],
   );
 
   useEffect(() => {
@@ -331,6 +366,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     <div ref={hostRef} className="terminal-host" onMouseDown={onFocus}>
       <div ref={lineNumberOverlayRef} className="terminal-line-number-overlay" aria-hidden="true" />
       <div ref={containerRef} className="terminal-container" />
+      <PasteConfirmDialog
+        isOpen={pendingPasteText !== null}
+        text={pendingPasteText ?? ""}
+        onConfirm={handlePasteConfirm}
+        onCancel={handlePasteCancel}
+      />
     </div>
   );
 });

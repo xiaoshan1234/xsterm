@@ -20,15 +20,16 @@ xsterm 本地 PTY 在 bulk output（`cat large_file`、`find /`、`yes` 等）�
 
 | # | 瓶颈 | 文件:行 | 修复优先级 |
 |---|------|---------|-----------|
-| 1 | Output payload 用 JSON 字节数组（每字节 1-3 字符 + 双重 JSON 解析） | `local_session.rs:246` + `app_backend.rs:31` | **P0** |
+| 1 | Output payload 用 JSON 字节数组(每字节 1-3 字符 + 双重 JSON 解析) | `local_session.rs:246` + `app_backend.rs:31` | **P0** |
 | 2 | 每个 write 后强制 `flush()` syscall | `pty.rs:118-119` | **P0** ✅ |
-| 3 | Input 没有真正的 rAF 批量（`sessionService.ts:39-49` 注释撒谎） | `Terminal.tsx:218` | **P0** ✅ |
+| 3 | Input 没有真正的 rAF 批量(`sessionService.ts:39-49` 注释撒谎) | `Terminal.tsx:218` | **P0** ✅ |
 | 4 | 全局 `Arc<Mutex<SessionManager>>` 阻塞所有 session 元数据操作 | `lib.rs:48` + `commands/session.rs:147` | **P1** |
-| 5 | Reader 单条 IPC emit（无生产端 batching） | `local_session.rs:225-263` | **P1** |
-| 6 | `RealAppBackend::emit` 双重 JSON（parse → re-emit） | `app_backend.rs:30-33` | **P1** ✅ |
+| 5 | Reader 单条 IPC emit(无生产端 batching) | `local_session.rs:225-263` | **P1** |
+| 6 | `RealAppBackend::emit` 双重 JSON(parse → re-emit) | `app_backend.rs:30-33` | **P1** ✅ |
 | 7 | OSC52 正则每 chunk 全量扫描 | `useTauriTerminalOutput.ts:13,99` | **P2** ✅ |
 | 8 | 首次 EOF 100ms sleep | `local_session.rs:241` | **P2** |
 | 9 | 无界 `sessionOutputBuffer` 累积 | `utils/sessionOutputBuffer.ts:8-11` | **P2** ✅ |
+| 10 | 粘贴路径:整段文本一次 IPC + 无转换 + 无确认 | `Terminal.tsx:115,184,310` | **P1** ✅ |
 
 修完 P0 + P1 后，`cat 1MB` 端到端延迟预估从 ~250ms 降到 ~70ms（与 oxideterm Tauri 时代水平相当）。**剩余 IPC bridge 开销是 Tauri 架构天花板**，要突破需迁移 UI（oxideterm 因此迁向 GPUI，不在 xsterm 当前 scope）。
 
@@ -587,6 +588,75 @@ export function appendSessionOutput(sessionId: number, data: string): void {
 
 ---
 
+## Perf 010 — 粘贴路径无分块 / 缺转换 / 用户无感知
+
+**状态**：DONE（**P1**）
+
+### 现象
+
+三类独立但叠加的症状：
+
+1. **冻结**：粘贴 ≥10 KB 文本时 UI 卡顿数百 ms，期间不能响应键盘。
+2. **自动换行执行**：粘贴带换行的文本到 vim / fzf / htop / less 等 TUI 时，每个 `\n` 被当成 Enter 触发，整段内容被"逐行执行"而非作为整体输入。
+3. **用户无感知**：粘贴大段代码时，用户看不到自己实际粘贴了多少字符 / 行，也没有机会在发送前做 tab 展开 / 行尾归一化。
+
+### 根因
+
+1. **前端一次性 IPC**：粘贴走 `Terminal.tsx` 三处入口（`handlePaste` / Ctrl+Shift+V / `pasteFromClipboard`），全部直接 `writeSessionRef.current(sessionId, text)`，整段 string 作为单次 IPC 的 `Vec<u8>` 负载。
+2. **链路串行阻塞**：JS 主线程 `TextEncoder.encode(100KB)`（~10ms）→ Tauri IPC JSON 序列化（~30ms）→ Rust `state.lock()` 拿 `Arc<Mutex<SessionManager>>` → 内层 PTY writer mutex → `write_all(100KB)` 阻塞 syscall（ConPTY ~100ms）。期间所有 session 的 create / close / resize / list 全部排队。
+3. **缺行尾归一**：粘贴内容里若含 CRLF / LF，被 shell 视为多行输入；TUIs 不在 bracketed paste 模式下按 Enter 处理。
+4. **缺转换 UI**：tab 字符粘贴到 shell 会按 8 空格（TERM 默认）展开，与编辑器实际宽度不一致，用户无法在粘贴前调整。
+
+### 计划方案（三层架构）
+
+```
+用户粘贴
+  │
+  ▼
+[第1层] PasteConfirmDialog （>2 行才弹）
+  │   - 显示 chars / lines / tabs 统计
+  │   - 选项 A：convert tabs to spaces（默认 N=4）
+  │   - 选项 B：convert CRLF/LF to CR（默认 ☑）
+  │   - 确认 / 取消按钮，Enter=确认 Esc=取消
+  ▼
+[第2层] usePasteBatcher
+  │   - TextEncoder 一次性编码
+  │   - 按 4 KiB 切 UTF-8 安全边界（永不切碎 multi-byte codepoint）
+  │   - 每帧 rAF 调度一个 chunk 调 writeSessionBytes
+  ▼
+[第3层] writeSessionBytes → invoke("write_session")
+  ▼
+[第4层] Rust write_session（MAX_WRITE_PAYLOAD = 1 MiB 兜底）
+```
+
+> **未做**：bracketed paste mode wrap（`\x1b[200~...\x1b[201~`）。对话框的 CRLF→CR 选项已解决"自动换行执行"的常见情况；bracketed paste 是协议级增强，需要正确追踪 `\x1b[?2004h` / `\x1b[?2004l` DEC 序列，留作独立任务。
+
+### 实施记录
+
+- **变更 1**：`src/utils/textTransform.ts` 新增纯函数 `convertTabs` / `convertLineEndings` / `countLines` / `countChars`。26 个 vitest 单测覆盖三种行尾、中文、emoji、边界值。
+- **变更 2**：`src/components/dialogs/pasteConfirm.ts` 新增纯 reducer：`DEFAULT_PASTE_OPTIONS` / `applyPasteTransforms` / `countTabs` / `patchPasteOptions`。15 个 vitest 单测覆盖默认开启、tab 优先于行尾、patch 不变性、checkbox 与 number 联动。
+- **变更 3**：`src/components/dialogs/PasteConfirmDialog.tsx`（+ `.css`）新增组件。基于现有 `Dialog` 原语（`size="small"`），两个 `checkbox-group` 选项 + 内联 number input + stats 显示。Enter=确认 Esc=取消。
+- **变更 4**：`src/hooks/usePasteBatcher.ts` 新增 hook + 纯函数 `chunkBytes`。10 个 vitest 单测覆盖 ASCII / 2-字节 / 3-字节 / 4-字节 UTF-8 字符、round-trip 不丢字节、oversize codepoint 单独成块。
+- **变更 5**：`src/services/sessionService.ts` 新增 `writeSessionBytes(id, Uint8Array)`，fire-and-forget 与 `writeSession` 同形。
+- **变更 6**：`src/components/Terminal.tsx` 引入 `usePasteBatcher` + `PasteConfirmDialog`，三处粘贴入口（`handlePaste` / Ctrl+Shift+V / `pasteFromClipboard`）改为 `requestPaste(text)` gate：`countLines(text).length > 2` 弹对话框，否则直发。`pendingPasteText` state 单一挂载点。
+- **变更 7**：`src-tauri/src/commands/session.rs::write_session` 加 `MAX_WRITE_PAYLOAD_BYTES = 1 MiB` 硬上限，超限返回明确错误。兜底，正常路径下 JS 4KB 分块不会触及。
+
+### 验证
+
+- `npx tsc --noEmit`：0 errors
+- `npx vitest run`：**177 passed**（51 新增 + 126 既有）
+- `cargo check --manifest-path src-tauri/Cargo.toml`：✅ 无错误
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib`：**72 passed**, 2 pre-existing failures (`create_local_with_default_config_...` 和 `create_local_with_non_wsl_shell_...` 在 Windows/WSL 环境假设 bash 与 WSLENV 未设，**未改动前就失败**)
+- 手动验证（待 `npm run tauri dev`）：
+  - 粘贴 1 KB / 100 KB / 1 MB 三档：UI 不卡，期间能响应键盘
+  - 粘贴 5 行以上：弹对话框，显示字符 / 行 / tab 统计
+  - 勾掉 CRLF→CR 选项，确认后 vim 等 TUI 仍按整段处理（依赖 TUI 自身的 bracketed paste 支持；若不支持，按 Enter 触发——这是用户主动选择）
+  - 粘贴中文 / emoji（多字节字符）：终端不显示乱码
+  - 粘贴中途切到别的 pane：旧 session 的 in-flight chunk 全部 flush 完毕
+  - 1.5 MiB 巨型粘贴：JS 端按 4KB 分块顺畅；如绕过 JS 直接发 `write_session`，Rust 端返回明确错误而非阻塞
+
+---
+
 ## Oxideterm 对比参考
 
 oxideterm 仓库：[`AnalyseDeCircuit/oxideterm`](https://github.com/AnalyseDeCircuit/oxideterm)（commit `c8428adb62589275de64a7798c8451e8b27dff13`，769 ⭐，与 xsterm 几乎同栈：Tauri 2 + React 19 + portable-pty）
@@ -632,6 +702,7 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 | 7 | Perf 007（OSC52 快路径） | `useTauriTerminalOutput.ts` | bulk output CPU -5-10% | 极小（< 1h） |
 | 8 | Perf 008（替换 100ms sleep） | `local_session.rs:241` | 首字延迟 -50~80ms | 中（需引入 timer 或 polling） |
 | 9 | Perf 009（buffer 上限） | `sessionOutputBuffer.ts:8-11` | 长 session 内存不再无界增长 | 小（~2h） |
+| 10 | Perf 010（粘贴：对话框 + 分块 + 转换） | `Terminal.tsx` + 新 hooks + `commands/session.rs` | 粘贴冻结 + 自动换行执行 + 无感知 三症状消除 | 中（~6-8h，单 PR） |
 
 **建议提交策略**：每条任务单独 PR，单测 + 性能对比数据随 PR 提交。Perf 002/003/007 是"低风险/立即见效"的快赢，优先合入主干。Perf 001/004/005 涉及协议与数据结构变更，需要更仔细的 review。
 
@@ -650,7 +721,7 @@ oxideterm 自己放弃 Tauri 不是没原因的——Tauri IPC bridge 是性能�
 
 ## 是否解决
 
-PARTIAL（9 条 finding 中 5 条 DONE [Perf 002, 003, 006, 007, 009]，1 条 PARTIAL [Perf 008]，3 条 OPEN [001, 004, 005]）
+PARTIAL（10 条 finding 中 6 条 DONE [Perf 002, 003, 006, 007, 009, 010]，1 条 PARTIAL [Perf 008]，3 条 OPEN [001, 004, 005]）
 
 ---
 
@@ -664,6 +735,23 @@ PARTIAL（9 条 finding 中 5 条 DONE [Perf 002, 003, 006, 007, 009]，1 条 PA
 ## 变更日志 / Changelog
 
 按时间倒序；每条对应一组原子 commit / PR。Per-finding 实施细节见各 Perf section 的"实施记录"子段。
+
+### 2026-09-01 — Perf 010 粘贴路径三层重构
+
+**摘要**：解决粘贴大段文本三重叠加症状（冻结 / 误执行换行 / 用户无感知）。引入对话框 + 分块 + 转换三层架构。
+
+**端到端 I/O 路径估算改善**：
+- Input：粘贴 100 KB 不再单次 IPC；改为按 4 KiB 切片 + 每帧 rAF 一个 chunk → 单 chunk IPC 处理 ~2ms，期间 UI 完全可交互
+- 转换：CRLF/LF → CR 解决大部分 TUI "自动换行执行"问题；tabs → N 空格允许用户在粘贴前归一化缩进
+- 用户感知：弹框显示 chars / lines / tabs 统计，用户对粘贴内容有可见预期
+
+| Perf | 简述 | 涉及文件 | 验证 |
+|------|------|----------|------|
+| 010 | PasteConfirmDialog + usePasteBatcher + Rust 1 MiB 兜底 | `Terminal.tsx`, `usePasteBatcher.ts`, `pasteConfirm.ts`, `textTransform.ts`, `PasteConfirmDialog.{tsx,css}`, `sessionService.ts`, `commands/session.rs` | tsc + vitest 177 + cargo 72 ✅ |
+
+**未 commit**：AGENTS.md 规约"Commit without explicit request - Never"，本会话所有改动仅在工作区，未入 git 历史。
+
+**未 dev 验证**：跨前后端的逻辑改动，需在 `npm run tauri dev` 下手动跑端到端验证（见 Perf 010 "验证"小节清单）。
 
 ### 2026-08-21 — Perf 002, 003, 006, 007, 009 集中修复
 

@@ -5,6 +5,13 @@ use crate::infrastructure::app_backend::RealAppBackend;
 use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo};
 use crate::services::session_manager::SessionManager;
 
+/// Hard ceiling on a single `write_session` payload. The frontend batches
+/// pastes into 4 KiB chunks (see usePasteBatcher), so a healthy client never
+/// reaches this — it's a defence-in-depth limit against a misbehaving caller
+/// pinning the global `SessionManager` mutex across a multi-megabyte
+/// `write_all`. See doc/maintenance/perf.md Perf 010.
+const MAX_WRITE_PAYLOAD_BYTES: usize = 1024 * 1024;
+
 /// Create a new local shell session.
 #[tauri::command]
 pub async fn create_local_session(
@@ -85,6 +92,13 @@ pub async fn write_session(
     data: Vec<u8>,
     state: State<'_, Arc<Mutex<SessionManager>>>,
 ) -> Result<(), String> {
+    if data.len() > MAX_WRITE_PAYLOAD_BYTES {
+        return Err(format!(
+            "write payload too large: {} bytes (max {})",
+            data.len(),
+            MAX_WRITE_PAYLOAD_BYTES
+        ));
+    }
     with_manager(state, |manager| manager.write(session_id, &data))
 }
 
