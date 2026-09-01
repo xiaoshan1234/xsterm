@@ -103,8 +103,15 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // a single paste doesn't hold the SessionManager mutex across one giant
   // write_all; the dialog gives the user a chance to scrub line endings
   // and tabs before any bytes reach the PTY.
+  // Bracketed-paste wrap (Perf 011 follow-up): xterm.js tracks DEC mode 2004
+  // automatically via `terminal.modes.bracketedPasteMode`; we read it here
+  // so vim/fzf/etc. receive the ESC[200~ / ESC[201~ markers when supported.
   const { enqueuePaste } = usePasteBatcher(sessionId);
   const [pendingPasteText, setPendingPasteText] = useState<string | null>(null);
+
+  const readBracketedPasteMode = useCallback((): boolean => {
+    return termRef.current?.modes.bracketedPasteMode === true;
+  }, []);
 
   // Threshold for showing the dialog: > 2 lines means ≥ 2 newlines.
   // Below that the user almost certainly knows what they pasted.
@@ -115,18 +122,18 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (lineCount > 2) {
         setPendingPasteText(text);
       } else {
-        enqueuePaste(text);
+        enqueuePaste(text, readBracketedPasteMode());
       }
     },
-    [enqueuePaste],
+    [enqueuePaste, readBracketedPasteMode],
   );
 
   const handlePasteConfirm = useCallback(
     (transformedText: string) => {
       setPendingPasteText(null);
-      enqueuePaste(transformedText);
+      enqueuePaste(transformedText, readBracketedPasteMode());
     },
-    [enqueuePaste],
+    [enqueuePaste, readBracketedPasteMode],
   );
 
   const handlePasteCancel = useCallback(() => {

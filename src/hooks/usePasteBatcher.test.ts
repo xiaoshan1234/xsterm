@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { chunkBytes } from "./usePasteBatcher";
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START,
+  chunkBytes,
+  formatPasteForBracketedMode,
+} from "./usePasteBatcher";
 
 function bytes(s: string): Uint8Array {
   return new TextEncoder().encode(s);
@@ -65,5 +70,53 @@ describe("chunkBytes", () => {
     const out = chunkBytes(bytes("😀"), 2);
     expect(out.length).toBe(1);
     expect(new TextDecoder().decode(out[0])).toBe("😀");
+  });
+});
+
+describe("formatPasteForBracketedMode", () => {
+  it("normalizes CRLF and LF to CR but does not wrap when mode is off", () => {
+    expect(formatPasteForBracketedMode("a\nb\r\nc", false)).toBe("a\rb\rc");
+  });
+
+  it("normalizes bare CR (idempotent) when mode is off", () => {
+    expect(formatPasteForBracketedMode("a\rb\rc", false)).toBe("a\rb\rc");
+  });
+
+  it("wraps with start/end markers when mode is on AND content contains a CR", () => {
+    expect(formatPasteForBracketedMode("a\nb", true)).toBe(
+      `${BRACKETED_PASTE_START}a\rb${BRACKETED_PASTE_END}`,
+    );
+  });
+
+  it("normalizes line endings even when wrapping", () => {
+    expect(formatPasteForBracketedMode("a\r\nb\nc", true)).toBe(
+      `${BRACKETED_PASTE_START}a\rb\rc${BRACKETED_PASTE_END}`,
+    );
+  });
+
+  it("does NOT wrap when mode is on but content has no CR (no newline)", () => {
+    // Mode on but single-line paste — wrap is unnecessary, sending raw is
+    // indistinguishable from typed input.
+    expect(formatPasteForBracketedMode("abc", true)).toBe("abc");
+  });
+
+  it("does NOT wrap when mode is off AND content has a CR (paste proceeds raw)", () => {
+    // Mode off: shell/PTY will treat CR as Enter on its own. The dialog's
+    // "Convert CRLF/LF to CR" option is the user-facing guard, not this fn.
+    expect(formatPasteForBracketedMode("a\nb", false)).toBe("a\rb");
+  });
+
+  it("preserves multibyte characters (CJK, emoji) in wrapped output", () => {
+    const wrapped = formatPasteForBracketedMode("echo 中\n😀", true);
+    expect(wrapped.startsWith(BRACKETED_PASTE_START)).toBe(true);
+    expect(wrapped.endsWith(BRACKETED_PASTE_END)).toBe(true);
+    expect(wrapped).toContain("中");
+    expect(wrapped).toContain("😀");
+    expect(wrapped).toContain("\r"); // normalized LF→CR
+  });
+
+  it("returns empty string for empty input regardless of mode", () => {
+    expect(formatPasteForBracketedMode("", false)).toBe("");
+    expect(formatPasteForBracketedMode("", true)).toBe("");
   });
 });

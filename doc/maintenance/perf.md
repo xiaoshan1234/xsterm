@@ -284,82 +284,6 @@ const dataDisposer = xterm.onData((data) => {
   - 测 vim normal mode `dd5j`：5 个 keystroke 应合并成 1-2 次 IPC
   - 测快速切换 pane：旧 session 的残留输入应被 flush 到旧 sessionId（不会跨 session 串字符）
 
----
-
-## Perf 004 — 全局 SessionManager mutex 阻塞所有 session
-
-**状态**：OPEN（**P1**）
-
-### 现象
-
-多 session 并发时，一个 session 的 write 卡顿会让所有其他 session 的 create/close/resize/list 也排队（用户感知："为什么我新建一个 tab 这么慢？"）。
-
-### 根因
-
-`src-tauri/src/lib.rs:48`：
-```rust
-.manage(Arc::new(Mutex::new(SessionManager::new())))
-```
-
-`src-tauri/src/services/session_manager.rs:62-67`：
-```rust
-pub struct SessionManager {
-    sessions: HashMap<u32, ActiveSession>,
-    next_id: u32,
-    pty_system: Box<dyn PtySystem>,
-    ssh_backend: Box<dyn SshBackend>,
-}
-```
-
-`src-tauri/src/commands/session.rs:140-148`（`with_manager` 辅助函数）：
-```rust
-fn with_manager<F, T>(
-    state: State<'_, Arc<Mutex<SessionManager>>>,
-    f: F,
-) -> Result<T, String>
-where
-    F: FnOnce(&mut SessionManager) -> Result<T, String>,
-{
-    let mut manager = state.lock().map_err(|e| e.to_string())?;  // ← 全局锁
-    f(&mut manager)  // ← 持锁跨整个 write_all + flush (blocking I/O)
-}
-```
-
-每个 Tauri command（`write_session` / `resize_session` / `close_session` / `list_sessions` / `create_local_session` / `create_ssh_session` / `upload_image_to_ssh_session`）都走 `with_manager`，持锁期间做完整 I/O。`async fn write_session` 持的是 `std::sync::Mutex`（同步阻塞），Tauri tokio runtime 的 worker 在 await 期间被这个锁挂死。
-
-加上 `src-tauri/src/infrastructure/pty.rs:102` 的内层 `Arc<Mutex<Box<dyn Write + Send>>>`，**双层互斥**叠加：
-
-```rust
-pub writer: Arc<Mutex<Box<dyn Write + Send>>>,  // pty.rs:102
-```
-
-write 路径：state.lock() → manager lock → backend_mut() → writer.lock() → write_all + flush。同一笔操作获取两个锁。
-
-### 计划方案
-
-1. **SessionManager 锁粒度细化**：
-   - 引入 `Arc<DashMap<u32, Arc<LocalSession>>>`（或 `RwLock<HashMap>`）作为 session registry
-   - 元数据操作（list / create id 分配）走 registry 锁
-   - **session write 路径直接拿 session handle**，不再持 manager 锁
-   - reader 线程不持任何 registry 锁（参考 oxideterm：PTY master 由 I/O 线程独占）
-2. **`write_session` 命令改造**：
-   - 通过 session_id 在 registry 里 `.get(&id)` 拿到 `Arc<LocalSession>`
-   - 直接调用其内部 writer 锁，跳过 manager 锁
-3. **保留向后兼容**：
-   - `with_manager` helper 仍可用于纯元数据操作（list / create / close 协调）
-   - `SessionManager` struct 仍然存在，但只持有 registry + factory，不持有 I/O 路径
-
-### 参考实现
-
-oxideterm 用 `Arc<FairMutex<Term<...>>>` per-session，配合 `FairMutex::lease()` fairness token。xsterm 不引入 alacritty_terminal 依赖的话，可以用 `parking_lot::Mutex` + 一个简单 fairness 计数器，或者直接接受 `std::sync::Mutex`（oxideterm 的核心收益来自 lease 而非公平锁本身）。
-
-### 验证
-
-- 多 session 并发 benchmark：6 session 同时 `cat large_file`，测单个 session 的端到端延迟
-- 测 write 期间能否并发 list sessions（应不阻塞）
-- mock test 全绿（`session_manager.rs` 内 28 个测试需同步适配新结构）
-
----
 
 ## Perf 005 — Reader 单条 IPC emit，无生产端 batching
 
@@ -832,6 +756,120 @@ oxideterm 用 `tokio::sync::RwLock<HashMap>`（async）。xsterm 是 sync 代码
 
 ---
 
+## Perf 011 follow-up — Bracketed paste mode 自适应
+
+**状态**：DONE（**P2**）
+
+### 现象
+
+Perf 011 完成后，paste 路径仍然把内容原 raw落到 PTY。对支持 DEC private mode 2004 (`\x1b[?2004h`) 的程序（vim / fzf / less / htop / bash with readline 等），这些程序期望粘贴内容被 `\x1b[200~` / `\x1b[201~` 包起来，否则换行符会被视作 Enter。
+
+### oxideterm 的契约
+
+oxideterm 在 `src/components/terminal/LocalTerminalView.tsx:1614` 调用 `formatTerminalPasteInput(text, terminalRef.current.modes.bracketedPasteMode === true)`。`formatTerminalPasteInput`（`src/lib/terminalInput.ts:19-27`）的逻辑：
+```ts
+export function formatTerminalPasteInput(content: string, bracketedPasteMode: boolean): string {
+  const prepared = prepareTerminalPasteText(content);  // CRLF/CR/LF → CR
+  if (!bracketedPasteMode || !prepared.includes('\r')) {
+    return prepared;
+  }
+  return `${BRACKETED_PASTE_START}${prepared}${BRACKETED_PASTE_END}`;
+}
+```
+
+两条不变量：
+1. **行尾永远归一为 CR**（readline / line discipline 期望）
+2. **只有当 mode 开启且内容含 CR 时**才包 markers（单行 paste 不需要 wrap；mode 关闭时不 wrap）
+
+### xsterm 实现
+
+`xterm.js` 自带 `terminal.modes.bracketedPasteMode` 跟踪：xterm 在收到 `\x1b[?2004h` 时自动置位，`\x1b[?2004l` 复位。**不需要前端再解析**。
+
+```ts
+// src/hooks/usePasteBatcher.ts
+export const BRACKETED_PASTE_START = '\x1b[200~';
+export const BRACKETED_PASTE_END = '\x1b[201~';
+
+export function formatPasteForBracketedMode(text: string, bracketedPasteMode: boolean): string {
+  const normalized = convertLineEndings(text);
+  if (!bracketedPasteMode || !normalized.includes('\r')) {
+    return normalized;
+  }
+  return `${BRACKETED_PASTE_START}${normalized}${BRACKETED_PASTE_END}`;
+}
+
+export function usePasteBatcher(sessionId: number) {
+  const enqueuePaste = useCallback((text: string, bracketedPasteMode: boolean) => {
+    const wrapped = formatPasteForBracketedMode(text, bracketedPasteMode);
+    writeSessionBytes(sessionIdRef.current, new TextEncoder().encode(wrapped));
+  }, []);
+  // ...
+}
+```
+
+`Terminal.tsx` 三处粘贴入口（`handlePaste` document 事件 / Ctrl+Shift+V / `pasteFromClipboard`）都通过 `requestPaste` / `handlePasteConfirm` 路径，调 batcher 时传入 `termRef.current?.modes.bracketedPasteMode === true`：
+
+```ts
+const readBracketedPasteMode = useCallback((): boolean => {
+  return termRef.current?.modes.bracketedPasteMode === true;
+}, []);
+
+const requestPaste = useCallback((text: string) => {
+  if (lineCount > 2) {
+    setPendingPasteText(text);  // 弹框；transformedText 在 dialog 确认后再传
+  } else {
+    enqueuePaste(text, readBracketedPasteMode());  // 单行直接发
+  }
+}, [enqueuePaste, readBracketedPasteMode]);
+
+const handlePasteConfirm = useCallback((transformedText: string) => {
+  enqueuePaste(transformedText, readBracketedPasteMode());  // 弹框确认后
+}, [enqueuePaste, readBracketedPasteMode]);
+```
+
+### 行为矩阵
+
+| Mode | 内容 | 输出 |
+|---|---|---|
+| off | `"abc"` | `"abc"` |
+| off | `"a\nb\r\nc"` | `"a\rb\rc"` |
+| on | `"abc"` | `"abc"`（无 wrap，无 CR） |
+| on | `"a\nb"` | `"\x1b[200~a\rb\x1b[201~"` |
+| on | `"a\r\nb\nc"` | `"\x1b[200~a\rb\rc\x1b[201~"` |
+| on | `"中\n😀"` | `"\x1b[200~中\r😀\x1b[201~"` |
+
+### 与 PasteConfirmDialog 的交互
+
+- Dialog 在用户确认前先调用 `applyPasteTransforms(text, options)`,其中 `options.convertLineEndings` 决定是否归一为 CR
+- Dialog 确认后,`handlePasteConfirm(transformedText)` 拿到的是**已转换的文本**,再传给 batcher
+- Batcher 不再重复转换,只决定 wrap
+- 结果:用户既可以"先转换再 wrap"(对话框处理转换,batcher 处理 wrap),也可以"只 wrap 不转换"(用户取消对话框的"Convert CRLF/LF to CR"选项)
+
+### 实施记录
+
+- **变更 1**:`src/hooks/usePasteBatcher.ts` 新增 `BRACKETED_PASTE_START` / `BRACKETED_PASTE_END` 常量 + `formatPasteForBracketedMode` 纯函数。`enqueuePaste` 签名变更为 `(text: string, bracketedPasteMode: boolean)`。
+- **变更 2**:`src/components/Terminal.tsx` 引入 `readBracketedPasteMode` 回调,在 `requestPaste` / `handlePasteConfirm` 中调 batcher 时传入当前 mode。
+- **变更 3**:`src/hooks/usePasteBatcher.test.ts` 新增 8 个 `formatPasteForBracketedMode` 单测:mode off 时只归一不 wrap、mode on 且有 CR 时 wrap、mode on 但无 CR 时不 wrap、multibyte 字符保留、空输入边界。
+
+### 验证
+
+- `npx tsc --noEmit`:0 errors
+- `npx vitest run`:**185 passed**(8 新增)
+- `cargo check`:无变化
+- 手动验证(待 `npm run tauri dev`):
+  - 进 vim,`:set paste` 模式(`bracketedPasteMode` on),粘贴多行文本——vim 进入 insert mode 后**整段**作为单个 paste 处理
+  - 不进 vim,直接在普通 bash 粘贴——`convertLineEndings` 归一为 CR,bash readline 行为正确
+  - 单字符粘贴(无 CR)——不 wrap,等价于键盘输入
+  - 粘贴中文 / emoji——wrap 内字节正确,xterm 不破坏
+
+### 未做的事
+
+- ❌ 不实现 DEC 模式序列解析(`xterm.js` 已自动跟踪)
+- ❌ 不持久化 mode 状态(每次 session 重连都从程序自身发起的 `\x1b[?2004h` 重新置位)
+- ❌ 不处理跨 chunk 的 `\x1b[?2004h`(Perf 005 不在本 PR scope)
+
+---
+
 ## Oxideterm 对比参考
 
 oxideterm 仓库：[`AnalyseDeCircuit/oxideterm`](https://github.com/AnalyseDeCircuit/oxideterm)（commit `c8428adb62589275de64a7798c8451e8b27dff13`，769 ⭐，与 xsterm 几乎同栈：Tauri 2 + React 19 + portable-pty）
@@ -912,6 +950,18 @@ PARTIAL（11 条 finding 中 8 条 DONE [Perf 002, 003, 004, 006, 007, 009, 010,
 ## 变更日志 / Changelog
 
 按时间倒序；每条对应一组原子 commit / PR。Per-finding 实施细节见各 Perf section 的"实施记录"子段。
+
+### 2026-09-01 — Perf 011 follow-up: bracketed paste mode
+
+**摘要**：补齐 Perf 010 / Perf 011 留下的"未做"项——支持 DEC private mode 2004 (`\x1b[?2004h`) 触发的 bracketed paste。xterm.js 自带 `modes.bracketedPasteMode` 跟踪，不需要前端解析。`usePasteBatcher.enqueuePaste(text, mode)` 增加第二个参数;`Terminal.tsx` 三处粘贴入口读 mode 后传入。完全镜像 oxideterm `formatTerminalPasteInput` 的契约:行尾永远归一为 CR,只有 mode on + 含 CR 时 wrap。
+
+| 简述 | 涉及文件 | 验证 |
+|------|----------|------|
+| formatPasteForBracketedMode + enqueuePaste 接受 mode 参数 + Terminal 读 mode | `usePasteBatcher.ts`, `usePasteBatcher.test.ts`, `Terminal.tsx`, `perf.md` | tsc + vitest 185 ✅ |
+
+**未 commit**：本会话改动仅在工作区。
+
+**未 dev 验证**：跨前后端的功能改动,需在 `npm run tauri dev` 下手动跑端到端验证(见 Perf 011 follow-up "验证"段清单)。
 
 ### 2026-09-01 — Perf 004 Session registry 改用 DashMap + Arc
 
