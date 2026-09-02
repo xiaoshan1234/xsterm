@@ -80,7 +80,7 @@ export default function AppearanceTab({
           />
           <FormCheckboxField
             label="Cursor Blink"
-            checked={config.cursorBlink ?? false}
+            checked={config.cursorBlink ?? true}
             onChange={(cursorBlink) => update({ cursorBlink })}
           />
         </div>
