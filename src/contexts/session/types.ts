@@ -7,6 +7,7 @@ import {
   type SavedWindowConfig,
   type SavedWorkspace,
   type Session,
+  type SessionDisplayConfig,
   type SessionGroup,
   type SplitDirection,
   type Window,
@@ -45,6 +46,10 @@ export interface SessionContextType {
   toggleGroup: (id: number) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
+  applyDisplayConfigToLiveSession: (
+    id: number,
+    patch: Partial<SessionDisplayConfig>,
+  ) => void;
   createWorkspaceFromSession: (sessionId: number, configId: string, name?: string) => Workspace;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
   createWindowFromSession: (
@@ -156,6 +161,10 @@ export interface SessionActions {
   toggleGroup: (id: number) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
+  applyDisplayConfigToLiveSession: (
+    id: number,
+    patch: Partial<SessionDisplayConfig>,
+  ) => void;
   createWorkspaceFromSession: (sessionId: number, configId: string, name?: string) => Workspace;
   createSessionFromSavedConfig: (configId: string) => Promise<Session>;
   createWindowFromSession: (

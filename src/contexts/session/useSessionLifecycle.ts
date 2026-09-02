@@ -354,6 +354,28 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     [updateConfigs, sessionsRef, setSessions],
   );
 
+  /**
+   * Merge a `displayConfig` patch into a running session's in-memory state
+   * so the new values (e.g. `sizingMode`, `cols`, `rows`) propagate via
+   * React to Terminal → `useTerminalResize` and apply without restart.
+   *
+   * Persistence is the caller's responsibility — callers should
+   * `updateConfig(...)` first so the saved config and the running session
+   * stay in sync.
+   */
+  const applyDisplayConfigToLiveSession = useCallback(
+    (id: number, patch: Partial<SessionDisplayConfig>) => {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, displayConfig: { ...(s.displayConfig ?? {}), ...patch } }
+            : s,
+        ),
+      );
+    },
+    [setSessions],
+  );
+
   return {
     createLocalSession,
     createSshSession,
@@ -364,6 +386,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     closeSession,
     reconnectSession,
     renameSession,
+    applyDisplayConfigToLiveSession,
   };
 }
 

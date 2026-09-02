@@ -34,10 +34,11 @@ export interface UseXtermResult {
 
 // Keys we forward to xterm.options.set(); theme is handled separately.
 // xterm-unsupported fields (lineTimestamp, reverseVideo, mouseWheelScrollLines,
-// fitOnResize, syncRemoteTitle, backspaceSends, deleteSends, lineFeedMode,
+// syncRemoteTitle, backspaceSends, deleteSends, lineFeedMode,
 // cursorKeyMode, keypadMode, modifyOtherKeysFormat, altSendsEscape,
 // wordSeparatorChars, altScreenWordSeparatorChars, clipboardRead, clipboardWrite,
-// logging) are intentionally kept in config but NOT applied (avoid xterm throw).
+// logging, sizingMode, cols, rows) are intentionally kept in config but NOT applied
+// (avoid xterm throw). sizingMode and cols/rows are processed by useTerminalResize.
 const SETTABLE_KEYS = [
   "fontSize",
   "fontFamily",

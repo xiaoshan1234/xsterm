@@ -40,6 +40,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     deleteGroup,
     updateConfig,
     moveConfigToGroup,
+    applyDisplayConfigToLiveSession,
   } = useSession();
 
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
@@ -86,6 +87,13 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   const handleSessionSave = (config: SavedSessionConfig, groupId: number | null) => {
     updateConfig(config);
     moveConfigToGroup(config.id, groupId);
+    // If this config corresponds to a currently-running session, push the
+    // new displayConfig into its in-memory state so Terminal →
+    // useTerminalResize applies the change live (no session restart).
+    const liveSession = sessions.find((s) => s.configId === config.id);
+    if (liveSession && config.displayConfig) {
+      applyDisplayConfigToLiveSession(liveSession.id, config.displayConfig);
+    }
   };
 
   const {

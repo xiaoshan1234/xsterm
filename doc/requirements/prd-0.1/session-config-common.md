@@ -12,7 +12,9 @@
 | 显示与布局 | 自动换行 (DECAWM)            | `bool` (开关)                      | `true` (启用)                | 超出列数的文本是否自动折行，默认开启。                                |                       |
 | 显示与布局 | 屏幕反色 (DECSCNM)           | `bool` (开关)                      | `false` (禁用)               | 反转前景/背景色，辅助功能。                                     |                       |
 | 显示与布局 | 鼠标滚轮滚动步长                 | `number`                         | `1`                        | 每次滚动滚轮移动的行数，可输入 1~10。                              |                       |
-| 显示与布局 | 调整窗口时自动调整行列              | `bool` (开关)                      | `true` (启用)                | 窗口尺寸变化时自动调整终端行列并通知 PTY。                            |                       |
+| 显示与布局 | 终端尺寸模式 (Sizing Mode)           | `enum` (auto, fixed)               | `auto`                      | 控制终端如何响应容器尺寸变化。`auto` 通过 ResizeObserver 自动跟随；`fixed` 锁定到下方的 `cols` × `rows`，容器调整不影响终端。                                           |
+| 显示与布局 | 列 (Columns) — Fixed 模式           | `number`                          | `80`（固定模式必填）             | 仅在 `Sizing Mode === "fixed"` 时生效，将终端与 PTY 锁定到该列数。Auto 模式下显示为仅作启动提示、不可编辑。                                                  |
+| 显示与布局 | 行 (Rows) — Fixed 模式              | `number`                          | `24`（固定模式必填）             | 仅在 `Sizing Mode === "fixed"` 时生效，将终端与 PTY 锁定到该行数。Auto 模式下显示为仅作启动提示、不可编辑。                                                  |                       |
 | 显示与布局 | 远程标题更改标签标题               | `bool` (开关)                      | `true` (启用)                | 远程程序修改终端标题时是否同步更新标签页标题。                            |                       |
 | 键盘与输入 | 退格键发送 (Backspace)        | `enum` (auto, backspace, delete) | `auto`                     | 选择退格键发送的 ASCII 码：`^H` (backspace) 或 `^?` (delete)。 |                       |
 | 键盘与输入 | 删除键发送 (Delete)           | `enum` (auto, backspace, delete) | `auto`                     | 极少需要调整，保持 auto 即可。                                 |                       |

@@ -38,7 +38,9 @@ Common 与 Display 都绑定到同一份 `displayConfig` 状态，两者是字�
 | `autoWrap` | `boolean` | `true` | `<input type="checkbox">` | 自动换行（DECAWM）；xterm 映射为 `convertEol` | `session-config-common.md` 自动换行 |
 | `reverseVideo` | `boolean` | `false` | `<input type="checkbox">` | 反转前景/背景色（DECSCNM） | `session-config-common.md` 屏幕反色 |
 | `mouseWheelScrollLines` | `number` | `1` | `<input type="number">` | 滚轮每 tick 滚动行数 | `session-config-common.md` 鼠标滚轮滚动步长 |
-| `fitOnResize` | `boolean` | `true` | `<input type="checkbox">` | 窗口缩放时自动调整行列（DECFRS） | `session-config-common.md` 调整窗口时自动调整行列 |
+| `sizingMode` | `"auto" \| "fixed"` | `"auto"` | `FormRadioGroup` | 窗口缩放时终端如何调整大小；Auto = 自动跟随，Fixed = 锁定行列 | `session-config-common.md` 终端尺寸模式 |
+| `cols` | `number` | （固定模式必填；自动模式仅作启动提示） | `<input type="number" min={1} max={500}>` | Fixed 模式下锁定的列数；Auto 模式下显示且不可编辑 | `session-config-common.md` 列 |
+| `rows` | `number` | （固定模式必填；自动模式仅作启动提示） | `<input type="number" min={1} max={200}>` | Fixed 模式下锁定的行数；Auto 模式下显示且不可编辑 | `session-config-common.md` 行 |
 | `syncRemoteTitle` | `boolean` | `true` | `<input type="checkbox">` | 同步远程终端标题到窗口（DCS title） | `session-config-common.md` 远程标题更改标签标题 |
 
 ### 1.2 Keyboard 分组（7 个字段）
@@ -144,8 +146,8 @@ Word separator 字段（`wordSeparatorChars` / `altScreenWordSeparatorChars`）�
 | `fontSize` | `number` | 14 | `<input type="number">` | xterm 字号 | `session-config-common.md` 显示与布局 |
 | `fontFamily` | `string` | `Menlo, Monaco, 'Courier New', monospace` | `<select>` | 字体栈；空选项 = 全局默认 | `session-config-common.md` 显示与布局 |
 | `cursorStyle` | `"block" \| "underline" \| "bar"` | `block` | `<select>` | 光标形状；空选项 = 全局默认 | `session-config-common.md` 光标样式 |
-| `cursorBlink` | `boolean` | `false` | `<input type="checkbox">` | 光标闪烁 | `session-config-common.md` 显示与布局 |
-| `scrollback` | `number` | `5000` | `<input type="number">` | 回滚行数 | `session-config-common.md` 回滚行数 |
+| `cursorBlink` | `boolean` | `true` | `<input type="checkbox">` | 光标闪烁 | `session-config-common.md` 显示与布局 |
+| `scrollback` | `number` | `20000` | `<input type="number">` | 回滚行数 | `session-config-common.md` 回滚行数 |
 | `lineHeight` | `number` | 全局默认 | `<input type="number" step="0.1">` | 行高 | `session-config-common.md` 显示与布局 |
 | `letterSpacing` | `number` | 全局默认 | `<input type="number" step="0.1">` | 字符间距 | `session-config-common.md` 显示与布局 |
 | `cursorWidth` | `number` | 全局默认 | `<input type="number">` | 光标宽度（block 以外） | `session-config-common.md` 光标样式 |

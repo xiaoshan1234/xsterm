@@ -1,8 +1,9 @@
 import { defineConfig } from "vitest/config";
 
-// Pure-logic modules only need a Node environment (no DOM).
-// Tests live next to source files (*.test.ts) so vitest picks them up
-// with the default include pattern.
+// Most tests are pure-logic and run in Node. The hook tests that touch
+// ResizeObserver / window.setTimeout / DOM refs need jsdom. The test files
+// themselves opt into the DOM environment via `/** @vitest-environment jsdom */`
+// at the top, so we keep the default cheap for all other suites.
 export default defineConfig({
   test: {
     environment: "node",

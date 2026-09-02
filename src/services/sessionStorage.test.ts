@@ -76,10 +76,10 @@ describe("migrateSavedConfig — legacy v0 → v1", () => {
       name: "prod-styled",
       type: "ssh",
       sshConfig: { host: "h", port: 22, username: "u", auth_type: "password", password: "p" },
-      displayConfig: { scrollback: 5000 },
+      displayConfig: { scrollback: 20000 },
     };
     const result = migrateSavedConfig(raw);
-    expect(result?.displayConfig).toEqual({ scrollback: 5000 });
+    expect(result?.displayConfig).toEqual({ scrollback: 20000 });
   });
 });
 

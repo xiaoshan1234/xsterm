@@ -176,6 +176,26 @@ pub struct SessionLoggingConfig {
 }
 
 /// Display configuration for terminal appearance.
+///
+/// Terminal sizing strategy.
+///
+/// `Auto` makes the terminal track its container size via the frontend
+/// `ResizeObserver` (the default, backward-compatible behavior). `Fixed`
+/// locks the terminal to a user-specified `cols` × `rows` and ignores
+/// container resizes at runtime. The PTY startup size is still set from
+/// `LocalSessionConfig::initial_rows` / `initial_cols` (or the SSH
+/// equivalents) regardless of this flag — it only affects runtime
+/// resizing behavior on the renderer side.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SizingMode {
+    /// Terminal auto-fits its container (default).
+    #[default]
+    Auto,
+    /// Terminal is locked to the user-specified cols × rows.
+    Fixed,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct DisplayConfig {
@@ -200,8 +220,6 @@ pub struct DisplayConfig {
     #[serde(default)]
     pub mouse_wheel_scroll_lines: Option<u32>,
     #[serde(default)]
-    pub fit_on_resize: Option<bool>,
-    #[serde(default)]
     pub sync_remote_title: Option<bool>,
     #[serde(default)]
     pub backspace_sends: Option<String>,
@@ -225,6 +243,18 @@ pub struct DisplayConfig {
     pub clipboard_read: Option<String>,
     #[serde(default)]
     pub clipboard_write: Option<String>,
+    /// Terminal sizing strategy. Backward compatible: missing or unknown
+    /// values deserialize as `Auto`. Old v1 payloads carrying the now-removed
+    /// `fitOnResize` field are silently dropped — `Auto` was always the
+    /// effective runtime behavior.
+    #[serde(default)]
+    pub sizing_mode: Option<SizingMode>,
+    /// Locked columns when `sizing_mode == Fixed`. Unused in `Auto` mode.
+    #[serde(default)]
+    pub cols: Option<u32>,
+    /// Locked rows when `sizing_mode == Fixed`. Unused in `Auto` mode.
+    #[serde(default)]
+    pub rows: Option<u32>,
     #[serde(default)]
     pub logging: Option<SessionLoggingConfig>,
 }
@@ -692,7 +722,6 @@ mod tests {
             auto_wrap: Some(true),
             reverse_video: Some(false),
             mouse_wheel_scroll_lines: Some(3),
-            fit_on_resize: Some(true),
             sync_remote_title: Some(false),
             backspace_sends: Some("backspace".to_string()),
             delete_sends: Some("delete".to_string()),
@@ -705,6 +734,9 @@ mod tests {
             alt_screen_word_separator_chars: Some("/".to_string()),
             clipboard_read: Some("auto".to_string()),
             clipboard_write: Some("auto".to_string()),
+            sizing_mode: Some(SizingMode::Fixed),
+            cols: Some(120),
+            rows: Some(40),
             logging: None,
         };
 
@@ -716,7 +748,6 @@ mod tests {
         assert!(json.contains("\"autoWrap\""));
         assert!(json.contains("\"reverseVideo\""));
         assert!(json.contains("\"mouseWheelScrollLines\""));
-        assert!(json.contains("\"fitOnResize\""));
         assert!(json.contains("\"syncRemoteTitle\""));
         assert!(json.contains("\"backspaceSends\""));
         assert!(json.contains("\"deleteSends\""));

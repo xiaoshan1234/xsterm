@@ -153,10 +153,15 @@ export interface SessionDisplayConfig {
   mouseWheelScrollLines?: number;
 
   // Window
-  /** Fit the terminal to the window on resize (DECFRS). @default true */
-  fitOnResize?: boolean;
   /** Sync the window title with the remote terminal (DCS title). @default true */
   syncRemoteTitle?: boolean;
+  /** Terminal sizing strategy. "auto" tracks the container via ResizeObserver;
+   * "fixed" locks to `cols` × `rows` regardless of container size. @default "auto" */
+  sizingMode?: "auto" | "fixed";
+  /** Locked column count when `sizingMode === "fixed"`. Ignored in "auto" mode. */
+  cols?: number;
+  /** Locked row count when `sizingMode === "fixed"`. Ignored in "auto" mode. */
+  rows?: number;
 
   // Keyboard
   /** Backspace key sends BS or DEL. @default "auto" */
@@ -187,10 +192,11 @@ export interface SessionDisplayConfig {
   clipboardWrite?: "ask" | "allow" | "deny";
 
   // Terminal
-  /** Terminal type advertised to the PTY/SSH. @default "xterm-256color" */
-  terminalType?: string;
-  /** Character encoding for the terminal. @default "utf-8" */
-  charset?: string;
+  // `terminalType` and `charset` intentionally live only on
+  // LocalSessionConfig / SSHSessionConfig (consumed by the Rust backend to
+  // set `TERM` / `LC_ALL` env on the PTY). The TerminalTab UI dispatches
+  // edits to the connection-specific config based on its `connectionType`
+  // prop — see src/components/dialogs/TerminalTab.tsx.
 
   // Logging
   /** Session output logging configuration. */

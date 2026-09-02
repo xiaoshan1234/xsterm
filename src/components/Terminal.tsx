@@ -43,6 +43,7 @@ const DEFAULT_XTERM_OPTIONS = {
   fontFamily: "Menlo, Monaco, 'Courier New', monospace",
   cursorBlink: true,
   screenReaderMode: false,
+  scrollback: 20000,
 };
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
@@ -301,7 +302,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useTauriTerminalOutput: subscribes to Tauri backend PTY output stream, writes data to xterm display
   // useTerminalResize: listens for container size changes, calls fitAddon.fit() to make xterm adapt to the new size
   useTauriTerminalOutput(termRef, sessionId);
-  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, isWindowActive);
+  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, displayConfig, isWindowActive);
   useLineNumberOverlay({
     termRef,
     hostRef,

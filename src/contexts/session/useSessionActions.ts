@@ -195,5 +195,6 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
     closeWorkspace: workspaceActions.closeWorkspace,
     ...persistence,
     ...group,
+    applyDisplayConfigToLiveSession: lifecycle.applyDisplayConfigToLiveSession,
   };
 }
