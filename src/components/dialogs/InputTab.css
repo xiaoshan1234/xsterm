@@ -2,9 +2,12 @@
  *
  * Layout: two vertical sections (Keyboard / Clipboard) separated by
  * --space-xl (32px). Each section has a muted title with a hairline
- * divider, then fields stacked with --space-base gaps. Keyboard and
- * Clipboard use two-column grids for paired selects.
- * Cursor-style restrained: no shadow, no gradient, no bold weight. */
+ * divider, then fields stacked with --space-base gaps. The Keyboard
+ * section leads with 4 full-width FormRadioGroup rows (Backspace,
+ * Delete, Cursor Key, Keypad), then a full-width FormCheckboxField.
+ * The Clipboard section has 2 full-width FormRadioGroup rows (Read,
+ * Write). Cursor-style restrained: no shadow, no gradient, no bold
+ * weight. */
 
 .input-tab {
   display: flex;
@@ -33,12 +36,4 @@
   flex-direction: column;
   gap: var(--space-base);
   padding-top: var(--space-base);
-}
-
-/* ── Two-column grid for paired fields ── */
-
-.input-tab__two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-base);
 }

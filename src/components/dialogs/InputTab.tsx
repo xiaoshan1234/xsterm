@@ -1,6 +1,6 @@
 import { type SessionDisplayConfig } from "../../types/session";
 import { FormCheckboxField } from "./FormCheckboxField";
-import { FormSelectField } from "./FormSelectField";
+import { FormRadioGroup } from "./FormRadioGroup";
 import "./InputTab.css";
 
 interface InputTabProps {
@@ -43,43 +43,42 @@ export default function InputTab({
       <div className="input-tab__section">
         <h3 className="input-tab__section-title">Keyboard</h3>
         <div className="input-tab__section-content">
-          <div className="input-tab__two-col">
-            <FormSelectField
-              label="Backspace Sends"
-              value={displayConfig.backspaceSends ?? "auto"}
-              onChange={(v) =>
-                updateDisplay({ backspaceSends: v as SessionDisplayConfig["backspaceSends"] })
-              }
-              options={KEY_ACTION_OPTIONS}
-            />
-            <FormSelectField
-              label="Delete Sends"
-              value={displayConfig.deleteSends ?? "auto"}
-              onChange={(v) =>
-                updateDisplay({ deleteSends: v as SessionDisplayConfig["deleteSends"] })
-              }
-              options={KEY_ACTION_OPTIONS}
-            />
-          </div>
+          {/* Backspace + Delete — full-width radio rows, stacked.
+           * Each row uses the same --space-base gap (16px) that other rows
+           * in this section get from .input-tab__section-content. */}
+          <FormRadioGroup
+            label="Backspace Sends"
+            value={displayConfig.backspaceSends ?? "auto"}
+            onChange={(v) =>
+              updateDisplay({ backspaceSends: v as SessionDisplayConfig["backspaceSends"] })
+            }
+            options={KEY_ACTION_OPTIONS}
+          />
+          <FormRadioGroup
+            label="Delete Sends"
+            value={displayConfig.deleteSends ?? "auto"}
+            onChange={(v) =>
+              updateDisplay({ deleteSends: v as SessionDisplayConfig["deleteSends"] })
+            }
+            options={KEY_ACTION_OPTIONS}
+          />
 
-          <div className="input-tab__two-col">
-            <FormSelectField
-              label="Cursor Key Mode"
-              value={displayConfig.cursorKeyMode ?? "normal"}
-              onChange={(v) =>
-                updateDisplay({ cursorKeyMode: v as SessionDisplayConfig["cursorKeyMode"] })
-              }
-              options={CURSOR_KEY_OPTIONS}
-            />
-            <FormSelectField
-              label="Keypad Mode"
-              value={displayConfig.keypadMode ?? "normal"}
-              onChange={(v) =>
-                updateDisplay({ keypadMode: v as SessionDisplayConfig["keypadMode"] })
-              }
-              options={KEYPAD_OPTIONS}
-            />
-          </div>
+          <FormRadioGroup
+            label="Cursor Key Mode"
+            value={displayConfig.cursorKeyMode ?? "normal"}
+            onChange={(v) =>
+              updateDisplay({ cursorKeyMode: v as SessionDisplayConfig["cursorKeyMode"] })
+            }
+            options={CURSOR_KEY_OPTIONS}
+          />
+          <FormRadioGroup
+            label="Keypad Mode"
+            value={displayConfig.keypadMode ?? "normal"}
+            onChange={(v) =>
+              updateDisplay({ keypadMode: v as SessionDisplayConfig["keypadMode"] })
+            }
+            options={KEYPAD_OPTIONS}
+          />
 
           <FormCheckboxField
             label="Alt Sends Escape"
@@ -92,24 +91,22 @@ export default function InputTab({
       <div className="input-tab__section">
         <h3 className="input-tab__section-title">Clipboard</h3>
         <div className="input-tab__section-content">
-          <div className="input-tab__two-col">
-            <FormSelectField
-              label="Clipboard Read"
-              value={displayConfig.clipboardRead ?? "ask"}
-              onChange={(v) =>
-                updateDisplay({ clipboardRead: v as SessionDisplayConfig["clipboardRead"] })
-              }
-              options={CLIPBOARD_OPTIONS}
-            />
-            <FormSelectField
-              label="Clipboard Write"
-              value={displayConfig.clipboardWrite ?? "ask"}
-              onChange={(v) =>
-                updateDisplay({ clipboardWrite: v as SessionDisplayConfig["clipboardWrite"] })
-              }
-              options={CLIPBOARD_OPTIONS}
-            />
-          </div>
+          <FormRadioGroup
+            label="Clipboard Read"
+            value={displayConfig.clipboardRead ?? "ask"}
+            onChange={(v) =>
+              updateDisplay({ clipboardRead: v as SessionDisplayConfig["clipboardRead"] })
+            }
+            options={CLIPBOARD_OPTIONS}
+          />
+          <FormRadioGroup
+            label="Clipboard Write"
+            value={displayConfig.clipboardWrite ?? "ask"}
+            onChange={(v) =>
+              updateDisplay({ clipboardWrite: v as SessionDisplayConfig["clipboardWrite"] })
+            }
+            options={CLIPBOARD_OPTIONS}
+          />
         </div>
       </div>
     </div>

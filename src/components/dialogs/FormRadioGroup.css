@@ -1,0 +1,39 @@
+/* FormRadioGroup — horizontal radio row inside a form field.
+ *
+ * Reuses .form-field's column layout (label on top, 6px gap) and lays
+ * the radios out in a single horizontal row below the label. The native
+ * <input type="radio"> is tinted with `accent-color: var(--accent)` so
+ * the project's Cursor orange shows through without re-drawing the
+ * radio circle. No box-shadow, no gradient, no bold weight. */
+
+.form-radio-group__options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+}
+
+.form-radio-group__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  cursor: pointer;
+  user-select: none;
+  color: var(--body);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.form-radio-group__option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
