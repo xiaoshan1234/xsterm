@@ -1,4 +1,5 @@
 use std::io::{ErrorKind, Read};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use portable_pty::PtySize;
@@ -30,12 +31,6 @@ const DRAIN_SIZE_BYTES: usize = 64 * 1024;
 const DRAIN_INTERVAL: Duration = Duration::from_millis(8);
 
 /// Decide whether the drain loop should stop accumulating and emit.
-///
-/// Exposed (not nested inside the function) so it can be unit-tested in
-/// isolation. Returns true when either the size budget OR the time budget
-/// has been reached. The `elapsed == 0` fast path means the very first
-/// read can never immediately satisfy the time budget — the burst must
-/// contain at least one byte before the timer starts ticking.
 fn drain_should_break(
     accumulated_bytes: usize,
     elapsed: Duration,
@@ -47,35 +42,22 @@ fn drain_should_break(
 
 /// Find the largest prefix length such that `bytes[..n]` is valid UTF-8
 /// with every codepoint complete.
-///
-/// UTF-8 codepoints are 1-4 bytes; the leading byte's high bits encode
-/// the expected length, and continuation bytes (`10xxxxxx`) must follow.
-/// If the trailing bytes form an incomplete codepoint, return the offset
-/// of that leading byte so the caller can carry it over to the next read.
-///
-/// Also defends against:
-/// - Stray continuation bytes (carry everything before them)
-/// - Buffer that is entirely continuation bytes (return 0)
 fn utf8_safe_prefix_len(bytes: &[u8]) -> usize {
     if bytes.is_empty() {
         return 0;
     }
-    // Walk back past continuation bytes to find the most recent leading byte.
     let mut i = bytes.len();
     while i > 0 && (bytes[i - 1] & 0xC0) == 0x80 {
         i -= 1;
     }
     if i == 0 {
-        return 0; // entire buffer is continuation bytes — carry everything
+        return 0;
     }
     let leading_pos = i - 1;
     let b = bytes[leading_pos];
     let expected_len: usize = if b < 0x80 {
         1
     } else if b < 0xC0 {
-        // Stray continuation byte at a "leading" position — broken input.
-        // Emit everything before it; the frontend's decoder will produce a
-        // replacement character for the broken byte.
         return leading_pos;
     } else if b < 0xE0 {
         2
@@ -86,18 +68,12 @@ fn utf8_safe_prefix_len(bytes: &[u8]) -> usize {
     };
     let available = bytes.len() - leading_pos;
     if available < expected_len {
-        // Incomplete trailing codepoint — back up to before this leading byte
         leading_pos
     } else {
         bytes.len()
     }
 }
 
-/// Create a new local shell session backed by a PTY.
-///
-/// Determines the shell and working directory from `config`, opens a PTY,
-/// spawns the shell, and starts a background thread that forwards PTY output
-/// to the frontend via `backend`.
 pub fn create_local_session(
     pty_system: &dyn PtySystem,
     config: LocalSessionConfig,
@@ -109,10 +85,6 @@ pub fn create_local_session(
     let shell_name = extract_shell_name(&shell_exe);
     let cwd = resolve_working_directory(config.cwd);
 
-    // Apply T6 + T-size fields to PTY creation.
-    // - `initial_rows` / `initial_cols` replace the previous hardcoded 24x80
-    //   default. `unwrap_or(24)` / `unwrap_or(80)` preserve the existing
-    //   fallback when the config leaves these unset.
     let pty_size = PtySize {
         rows: config.initial_rows.unwrap_or(24),
         cols: config.initial_cols.unwrap_or(80),
@@ -133,22 +105,11 @@ pub fn create_local_session(
     }
     if let Some(env_config) = &config.env_config {
         if let Some(env) = &env_config.env {
-            // T-wsl: forward user-defined env vars across Win32→WSL boundary.
-            // wsl.exe inherits our process env but does NOT propagate vars to
-            // the inner Linux shell unless each name is listed in WSLENV.
-            // Microsoft Learn (wsl/filesystems): "WSLENV is a colon-delimited
-            // list of environment variables that should be included when
-            // launching WSL processes from Win32".
             let user_keys: Vec<&str> = env.keys().map(String::as_str).collect();
             for (key, value) in env {
                 cmd.env(key, value);
             }
-            // Only inject WSLENV when spawning wsl.exe — other shells use
-            // standard OS env inheritance and don't need it.
             if is_wsl_exe(&shell_exe) && !user_keys.is_empty() {
-                // /u = Win32→WSL only (don't round-trip into Windows tools
-                // launched later from inside WSL). Preserve any pre-existing
-                // WSLENV so user/system forwarding config isn't clobbered.
                 let new_entries = user_keys
                     .iter()
                     .map(|k| format!("{}/u", k))
@@ -166,13 +127,9 @@ pub fn create_local_session(
             }
         }
     }
-    // T6 `term_type` → TERM env var (advertises terminal capabilities to the
-    // spawned shell, e.g. xterm-256color for color support).
     if let Some(term_type) = &config.term_type {
         cmd.env("TERM", term_type);
     }
-    // T6 `charset` → LC_ALL env var (locale setting the child shell inherits;
-    // e.g. "en_US.UTF-8" enables UTF-8 input/output).
     if let Some(charset) = &config.charset {
         cmd.env("LC_ALL", charset);
     }
@@ -182,11 +139,6 @@ pub fn create_local_session(
     let writer = pair.master_writer().map_err_string()?;
     let reader = pair.master_reader().map_err_string()?;
 
-    // Perf 011: hand the PTY master writer off to a dedicated writer thread.
-    // The IPC handler (`LocalSession::write`) and any background task
-    // (e.g. startup_command below) communicate with the thread via a
-    // bounded `mpsc::SyncSender`. The IPC layer never performs a blocking
-    // syscall — that was the root cause of UI freezes during large pastes.
     let (writer_tx, writer_thread) = spawn_writer_thread(writer);
 
     let info = SessionInfo {
@@ -199,10 +151,6 @@ pub fn create_local_session(
 
     spawn_output_forwarder(reader, backend.clone(), session_id);
 
-    // T6 `startup_command` + `startup_delay_ms` → fire-and-forget background
-    // task that writes the startup command (followed by `\n`) to the PTY after
-    // the configured delay. The closure runs on a `std::thread` (via
-    // `AppBackend::spawn`), so `std::thread::sleep` is the natural fit.
     if let Some(startup_command) = config.startup_command.clone() {
         let delay_ms = config.startup_delay_ms.unwrap_or(0);
         let startup_writer_tx = writer_tx.clone();
@@ -229,17 +177,10 @@ pub fn create_local_session(
     Ok(session)
 }
 
-/// Determine the shell executable path from config or environment defaults.
-///
-/// Priority:
-/// 1. Explicit `shell` path (when shell_template is "custom" or shell is set).
-/// 2. Resolve from `shell_template` (e.g. "powershell" -> "powershell.exe").
-/// 3. Fall back to OS default (cmd.exe on Windows, $SHELL on Unix).
 fn resolve_shell_path(configured: Option<String>, shell_template: Option<&str>) -> String {
     if let Some(shell) = configured {
         return shell;
     }
-
     match shell_template {
         Some("powershell") => {
             if cfg!(target_os = "windows") {
@@ -279,9 +220,6 @@ fn resolve_shell_path(configured: Option<String>, shell_template: Option<&str>) 
     }
 }
 
-/// Split a shell path into the executable and any inline arguments.
-///
-/// Example: `"/bin/bash -l"` becomes `("/bin/bash", ["-l"])`.
 fn parse_shell_command(shell_path: &str) -> (String, Vec<String>) {
     shell_path
         .split_once(' ')
@@ -303,8 +241,6 @@ fn extract_shell_name(shell_exe: &str) -> String {
         .to_string()
 }
 
-/// Resolve the session display name: prefer an explicit user-supplied name,
-/// fall back to the auto-derived `default_name` when missing or empty.
 fn resolve_session_name(configured: Option<String>, default_name: &str) -> String {
     match configured {
         Some(name) if !name.trim().is_empty() => name,
@@ -312,7 +248,6 @@ fn resolve_session_name(configured: Option<String>, default_name: &str) -> Strin
     }
 }
 
-/// Resolve the working directory from config or environment defaults.
 fn resolve_working_directory(configured: Option<String>) -> String {
     configured.unwrap_or_else(|| {
         if cfg!(target_os = "windows") {
@@ -323,7 +258,6 @@ fn resolve_working_directory(configured: Option<String>) -> String {
     })
 }
 
-/// Resolve the Windows home directory from environment variables.
 fn resolve_windows_home() -> String {
     std::env::var("USERPROFILE")
         .or_else(|_: std::env::VarError| {
@@ -334,7 +268,6 @@ fn resolve_windows_home() -> String {
         .unwrap_or_else(|_: std::env::VarError| "C:\\".to_string())
 }
 
-/// Apply shell-specific flags to suppress banners or start a login shell.
 fn apply_shell_flags(cmd: &mut portable_pty::CommandBuilder, shell_name: &str) {
     if shell_name.contains("powershell") || shell_name.contains("pwsh") {
         cmd.arg(POWERSHELL_NOLOGO_FLAG);
@@ -343,8 +276,6 @@ fn apply_shell_flags(cmd: &mut portable_pty::CommandBuilder, shell_name: &str) {
     }
 }
 
-/// True if `path` resolves to `wsl.exe`. Accepts bare `"wsl.exe"` and full
-/// paths (e.g. `C:\Windows\System32\wsl.exe`). Case-insensitive.
 fn is_wsl_exe(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     lower == "wsl.exe"
@@ -362,6 +293,14 @@ fn is_wsl_exe(path: &str) -> bool {
 /// which would otherwise flood the IPC channel for `yes` / `find /` /
 /// `cat large_file` style producers.
 ///
+/// **Threading model**: the blocking `Read::read()` is performed on a
+/// dedicated reader thread; chunks are sent over a bounded `sync_channel`
+/// (capacity 16, i.e. 128 KiB). The main drain loop calls
+/// `recv_timeout(DRAIN_INTERVAL)` so the time budget fires even when no
+/// data has arrived — fixing the original bug where a slow producer
+/// (e.g. one character typed, then a 1-second pause) would be held in
+/// the read syscall indefinitely until the next byte arrived.
+///
 /// UTF-8 safe boundary: every emitted slice is a complete UTF-8 string;
 /// any trailing incomplete codepoint is held in `remainder` and prefixed
 /// onto the next burst, so multi-byte characters (CJK, emoji) never get
@@ -378,13 +317,50 @@ fn is_wsl_exe(path: &str) -> bool {
 /// - Read errors are also surfaced as `session-disconnected` instead of
 ///   silently killing the forwarder, so the UI reflects a broken PTY.
 fn spawn_output_forwarder(
-    mut reader: Box<dyn Read + Send>,
+    reader: Box<dyn Read + Send>,
     backend: impl AppBackend + 'static,
     session_id: u32,
 ) {
+    const CHANNEL_CAPACITY: usize = 16;
+    let (data_tx, data_rx) = mpsc::sync_channel::<Vec<u8>>(CHANNEL_CAPACITY);
+
+    std::thread::spawn(move || {
+        let mut reader = reader;
+        let mut buf = [0u8; PTY_READ_BUFFER_SIZE];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => {
+                    break;
+                }
+                Ok(n) => {
+                    let chunk = buf[..n].to_vec();
+                    if data_tx.send(chunk).is_err() {
+                        break;
+                    }
+                }
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        ErrorKind::WouldBlock | ErrorKind::Interrupted
+                    ) =>
+                {
+                    continue;
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "PTY read error for session {}: {}; notifying frontend",
+                        session_id,
+                        e
+                    );
+                    let _ = data_tx.send(Vec::new());
+                    break;
+                }
+            }
+        }
+    });
+
     let backend_clone = backend.clone();
     backend.spawn(Box::new(move || {
-        let mut buf = [0u8; PTY_READ_BUFFER_SIZE];
         let mut seen_data = false;
         let mut remainder: Vec<u8> = Vec::new();
 
@@ -393,22 +369,22 @@ fn spawn_output_forwarder(
             let mut burst_start: Option<Instant> = None;
             let mut eof_seen = false;
 
-            // Inner loop: drain reads until either budget is hit.
             loop {
-                match reader.read(&mut buf) {
-                    Ok(0) => {
-                        eof_seen = true;
-                        break;
-                    }
-                    Ok(n) => {
-                        let now = Instant::now();
+                let now = Instant::now();
+                match data_rx.recv_timeout(DRAIN_INTERVAL) {
+                    Ok(chunk) => {
+                        if chunk.is_empty() {
+                            eof_seen = true;
+                            break;
+                        }
+
                         let burst_start = burst_start.get_or_insert(now);
 
                         if !remainder.is_empty() {
                             accumulated.extend_from_slice(&remainder);
                             remainder.clear();
                         }
-                        accumulated.extend_from_slice(&buf[..n]);
+                        accumulated.extend_from_slice(&chunk);
 
                         if drain_should_break(
                             accumulated.len(),
@@ -419,31 +395,16 @@ fn spawn_output_forwarder(
                             break;
                         }
                     }
-                    Err(e)
-                        if matches!(
-                            e.kind(),
-                            ErrorKind::WouldBlock | ErrorKind::Interrupted
-                        ) =>
-                    {
-                        continue;
+                    Err(RecvTimeoutError::Timeout) => {
+                        break;
                     }
-                    Err(e) => {
-                        tracing::error!(
-                            "PTY read error for session {}: {}; notifying frontend",
-                            session_id,
-                            e
-                        );
-                        let _ = backend_clone.emit(
-                            "session-disconnected",
-                            &serde_json::json!(session_id),
-                        );
-                        break 'outer;
+                    Err(RecvTimeoutError::Disconnected) => {
+                        eof_seen = true;
+                        break;
                     }
                 }
             }
 
-            // Trim to a UTF-8 safe boundary; carry any trailing partial
-            // codepoint into the next burst.
             let safe_len = utf8_safe_prefix_len(&accumulated);
             let to_emit = if safe_len == accumulated.len() {
                 std::mem::take(&mut accumulated)
@@ -453,12 +414,6 @@ fn spawn_output_forwarder(
             };
 
             if !to_emit.is_empty() {
-                // TEMPORARY REVERT (Perf 001 follow-up): back to JSON
-                // emit while the Tauri 2 Channel-on-command production path
-                // is being investigated. Binary frame format code is
-                // retained at `infrastructure/binary_frame.rs` (kept under
-                // `#[allow(dead_code)]` in the encoder/decode module) for
-                // when we flip the switch back on.
                 if let Err(e) = backend_clone.emit(
                     "session-output",
                     &serde_json::json!([session_id, to_emit]),
@@ -484,7 +439,7 @@ fn spawn_output_forwarder(
                         "Transient PTY EOF before data for session {}; retrying",
                         session_id
                     );
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    std::thread::sleep(Duration::from_millis(100));
                     remainder.clear();
                     continue 'outer;
                 }
@@ -497,11 +452,15 @@ fn spawn_output_forwarder(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Barrier, Condvar, Mutex};
+    use std::time::{Duration, Instant};
+
+    // -------------------------------------------------------------------------
+    // drain_should_break helpers
+    // -------------------------------------------------------------------------
 
     #[test]
     fn drain_should_break_returns_false_on_empty_burst() {
-        // The very first read: elapsed == 0 and no bytes — must NOT break,
-        // otherwise we'd emit an empty event for every PTY open.
         assert!(!drain_should_break(
             0,
             Duration::ZERO,
@@ -518,7 +477,6 @@ mod tests {
             DRAIN_SIZE_BYTES,
             DRAIN_INTERVAL,
         ));
-        // Slightly over is fine — the >= check is inclusive.
         assert!(drain_should_break(
             DRAIN_SIZE_BYTES + 1,
             Duration::ZERO,
@@ -535,7 +493,6 @@ mod tests {
             DRAIN_SIZE_BYTES,
             DRAIN_INTERVAL,
         ));
-        // Just under — still emit.
         assert!(!drain_should_break(
             1024,
             DRAIN_INTERVAL - Duration::from_micros(1),
@@ -546,10 +503,6 @@ mod tests {
 
     #[test]
     fn drain_should_break_on_time_budget_regardless_of_byte_count() {
-        // The caller (drain loop) is responsible for not emitting an empty
-        // payload — this helper's contract is purely "size OR time", and
-        // a slow producer hitting the time budget with zero bytes is a valid
-        // signal to break out so we can poll again.
         assert!(drain_should_break(
             0,
             DRAIN_INTERVAL,
@@ -558,54 +511,45 @@ mod tests {
         ));
     }
 
+    // -------------------------------------------------------------------------
+    // utf8_safe_prefix_len helpers
+    // -------------------------------------------------------------------------
+
     #[test]
     fn utf8_safe_prefix_len_for_ascii_returns_full_length() {
-        let s = b"hello world";
-        assert_eq!(utf8_safe_prefix_len(s), s.len());
+        assert_eq!(utf8_safe_prefix_len(b"hello world"), 11);
     }
 
     #[test]
     fn utf8_safe_prefix_len_for_2byte_codepoint_returns_full_length() {
-        // "é" = 0xC3 0xA9
         assert_eq!(utf8_safe_prefix_len(&[0xC3, 0xA9]), 2);
         assert_eq!(utf8_safe_prefix_len(b"a\xC3\xA9b"), 4);
     }
 
     #[test]
     fn utf8_safe_prefix_len_for_3byte_codepoint_returns_full_length() {
-        // "中" = 0xE4 0xB8 0xAD
-        let s = b"a\xE4\xB8\xAD";
-        assert_eq!(utf8_safe_prefix_len(s), 4);
+        assert_eq!(utf8_safe_prefix_len(b"a\xE4\xB8\xAD"), 4);
     }
 
     #[test]
     fn utf8_safe_prefix_len_for_4byte_codepoint_returns_full_length() {
-        // "😀" = 0xF0 0x9F 0x98 0x80
-        let s = b"a\xF0\x9F\x98\x80";
-        assert_eq!(utf8_safe_prefix_len(s), 5);
+        assert_eq!(utf8_safe_prefix_len(b"a\xF0\x9F\x98\x80"), 5);
     }
 
     #[test]
     fn utf8_safe_prefix_len_trims_incomplete_trailing_codepoint() {
-        // "é" but only 1 byte — incomplete; back up to 0.
         assert_eq!(utf8_safe_prefix_len(&[0xC3]), 0);
-        // "中" but only 2 bytes — incomplete; back up to 0.
         assert_eq!(utf8_safe_prefix_len(&[0xE4, 0xB8]), 0);
-        // "😀" but only 3 bytes — incomplete; back up to 0.
         assert_eq!(utf8_safe_prefix_len(&[0xF0, 0x9F, 0x98]), 0);
     }
 
     #[test]
     fn utf8_safe_prefix_len_preserves_complete_prefix_then_trims() {
-        // "abé" but trailing 0xC3 is incomplete — boundary should be 2.
         assert_eq!(utf8_safe_prefix_len(b"ab\xC3"), 2);
     }
 
     #[test]
     fn utf8_safe_prefix_len_trims_at_stray_leading_byte_after_complete_codepoint() {
-        // "ab" (complete) + leading 0xC3 (start of a 2-byte sequence but
-        // missing its continuation). The function trims back to before the
-        // incomplete 0xC3, returning 2.
         assert_eq!(utf8_safe_prefix_len(&[0x61, 0x62, 0xC3]), 2);
     }
 
@@ -617,5 +561,188 @@ mod tests {
     #[test]
     fn utf8_safe_prefix_len_returns_zero_for_all_continuation_bytes() {
         assert_eq!(utf8_safe_prefix_len(&[0x80, 0x80, 0x80]), 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // spawn_output_forwarder tests
+    // -------------------------------------------------------------------------
+
+    /// A minimal AppBackend for unit tests — records emits via Arc+Mutex+Condvar.
+    #[derive(Clone)]
+    struct RecordingBackend {
+        events: Arc<(Mutex<Vec<(String, serde_json::Value)>>, Condvar)>,
+    }
+
+    impl RecordingBackend {
+        fn new() -> Self {
+            Self {
+                events: Arc::new((Mutex::new(Vec::new()), Condvar::new())),
+            }
+        }
+
+        /// Block until at least one emit has been recorded, then return all.
+        fn wait_for_emits(&self, timeout: Duration) -> Vec<(String, serde_json::Value)> {
+            let (lock, cvar) = &*self.events;
+            let mut events = lock.lock().unwrap();
+            while events.is_empty() {
+                let (guard, wait_result) = cvar.wait_timeout(events, timeout).unwrap();
+                events = guard;
+                if wait_result.timed_out() {
+                    return Vec::new();
+                }
+            }
+            events.clone()
+        }
+    }
+
+    impl AppBackend for RecordingBackend {
+        fn emit(&self, event: &str, payload: &serde_json::Value) -> Result<(), String> {
+            let (lock, cvar) = &*self.events;
+            lock.lock().unwrap().push((event.to_string(), payload.clone()));
+            cvar.notify_one();
+            Ok(())
+        }
+
+        fn emit_binary(&self, _bytes: Vec<u8>) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn spawn(&self, f: Box<dyn FnOnce() + Send>) {
+            // Matches RealAppBackend: runs on a real background thread.
+            std::thread::spawn(f);
+        }
+    }
+
+    /// A mock `Read` that returns `Ok(1)` on the first call, waits on
+    /// `barrier`, then blocks forever on the second call.
+    ///
+    /// The barrier ensures the reader sends the first byte *before* the drain
+    /// loop enters `recv_timeout`, eliminating the race where the 8 ms timeout
+    /// fires before any data has been sent (causing an empty burst and no emit).
+    struct SlowReader {
+        first_call: std::sync::atomic::AtomicBool,
+        barrier: Arc<Barrier>,
+    }
+
+    impl SlowReader {
+        fn new(barrier: Arc<Barrier>) -> Self {
+            Self {
+                first_call: std::sync::atomic::AtomicBool::new(true),
+                barrier,
+            }
+        }
+    }
+
+    impl Read for SlowReader {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.first_call.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                buf[0] = b'a';
+                Ok(1)
+            } else {
+                // Wait for the main drain loop to be inside recv_timeout before
+                // blocking. This ensures the timer fires *after* we have already
+                // sent the data, so the drain loop definitely has something to
+                // emit. See the test comment for the full synchronization plan.
+                self.barrier.wait();
+                // Now block indefinitely (simulating a 1-second pause between
+                // keystrokes). Duration::MAX is interruptible and won't panic
+                // on Drop, unlike a true syscall blocking read.
+                std::thread::sleep(Duration::MAX);
+                Ok(0)
+            }
+        }
+    }
+
+    #[test]
+    fn forwarder_flushes_first_char_before_second_arrives() {
+        // Regression test for the blocking-read bug:
+        //
+        //   Bug: reader.read() blocked indefinitely in the inner drain loop,
+        //   so the 8 ms time check never fired until the 2nd byte arrived.
+        //   User types 'a' → nothing shown. Types 'b' → 'ab' shown.
+        //
+        //   Fix: reader runs on a dedicated thread; the drain loop uses
+        //   recv_timeout(DRAIN_INTERVAL) which fires regardless of input.
+        //
+        // Synchronization plan (using a Barrier):
+        //
+        //   Reader thread                 Main drain loop (in forwarder thread)
+        //   ---------------               ------------------------------------
+        //   read() returns Ok(1)          channel created + recv_timeout started
+        //   send(chunk) → channel         recv_timeout running
+        //   barrier.wait() ──────┐        ┌─ barrier.wait()
+        //                        │        │
+        //   (both threads here before proceeding)
+        //
+        //   After barrier:                After barrier:
+        //   read() blocks forever         recv_timeout already received chunk
+        //                                 drain fires (1 byte ≥ time budget)
+        //                                 emit "a"
+        //
+        // The barrier guarantees the chunk is already in the channel before
+        // recv_timeout starts, so the drain loop has data to emit.
+        //
+        // Test: SlowReader+Barrier returns 'a' on first call, waits on barrier,
+        // then blocks. Assert the forwarder emits 'a' within DRAIN_INTERVAL + 50ms.
+
+        // 2-party barrier: reader thread + forwarder main loop.
+        let barrier = Arc::new(Barrier::new(2));
+        let barrier_clone = Arc::clone(&barrier);
+
+        let backend = RecordingBackend::new();
+        let reader = Box::new(SlowReader::new(barrier_clone));
+        let session_id = 1;
+
+        let start = Instant::now();
+        spawn_output_forwarder(reader, backend.clone(), session_id);
+
+        // The forwarder is now running on a real background thread (because
+        // RecordingBackend::spawn uses std::thread::spawn). We can safely
+        // return from this function and wait for the event.
+        //
+        // Wait for the emit. It must arrive within the drain interval plus
+        // a modest scheduling margin (50 ms). The original blocking-read bug
+        // would cause this to wait forever — the 2nd read never returns in
+        // this test because SlowReader blocks indefinitely at the barrier.
+        let deadline = DRAIN_INTERVAL + Duration::from_millis(50);
+        let events = backend.wait_for_emits(deadline);
+
+        let elapsed = start.elapsed();
+
+        assert!(
+            !events.is_empty(),
+            "Expected at least one emit within {:?}, but nothing arrived after {:?}",
+            deadline,
+            elapsed,
+        );
+
+        let (event, payload) = &events[0];
+        assert_eq!(
+            event.as_str(),
+            "session-output",
+            "Expected session-output event, got {:?}",
+            event
+        );
+
+        // Payload is [session_id, data] per the emit contract.
+        let arr = payload.as_array().expect("payload must be a JSON array");
+        assert_eq!(arr.len(), 2, "payload must be [session_id, data]");
+        assert_eq!(arr[0].as_i64().unwrap() as u32, session_id);
+        let data = arr[1].as_array().expect("data must be a byte array");
+        assert_eq!(data.len(), 1, "expected exactly 1 byte in first emit");
+        assert_eq!(
+            data[0].as_i64().unwrap() as u8,
+            b'a',
+            "expected byte b'a', got {:?}",
+            data[0]
+        );
+
+        // Must have fired within the drain interval — not waiting for the
+        // second (indefinitely blocked) read.
+        assert!(
+            elapsed < Duration::from_millis(50),
+            "Emit arrived in {:?} — drain timer did not fire in time",
+            elapsed,
+        );
     }
 }
