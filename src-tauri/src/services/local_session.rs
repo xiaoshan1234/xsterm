@@ -133,6 +133,32 @@ pub fn create_local_session(
     if let Some(charset) = &config.charset {
         cmd.env("LC_ALL", charset);
     }
+    // WSL: `cmd.env("TERM", …)` only places it in `wsl.exe`'s own env block.
+    // wsl.exe does NOT forward arbitrary vars to the inner Linux bash unless
+    // they're listed in WSLENV with the `/w` (Windows → WSL) flag. Without
+    // this, WSL bash inherits TERM from the Windows parent (or not at all)
+    // and the user's Terminal Type / Charset settings are silently ignored.
+    if is_wsl_exe(&shell_exe) {
+        let mut entries: Vec<&str> = Vec::new();
+        if config.term_type.is_some() {
+            entries.push("TERM/w");
+        }
+        if config.charset.is_some() {
+            entries.push("LC_ALL/w");
+        }
+        if !entries.is_empty() {
+            let new_entries = entries.join(":");
+            let existing = std::env::var("WSLENV").unwrap_or_default();
+            cmd.env(
+                "WSLENV",
+                if existing.is_empty() {
+                    new_entries
+                } else {
+                    format!("{}:{}", existing, new_entries)
+                },
+            );
+        }
+    }
     cmd.cwd(&cwd);
 
     let child = pair.spawn(cmd).map_err_string()?;
