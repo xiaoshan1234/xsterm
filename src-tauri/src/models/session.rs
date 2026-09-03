@@ -771,7 +771,9 @@ mod tests {
         assert_eq!(roundtrip.auto_wrap, Some(true));
         assert_eq!(roundtrip.reverse_video, Some(false));
         assert_eq!(roundtrip.mouse_wheel_scroll_lines, Some(3));
-        assert_eq!(roundtrip.fit_on_resize, Some(true));
+        assert_eq!(roundtrip.sizing_mode, Some(SizingMode::Fixed));
+        assert_eq!(roundtrip.cols, Some(120));
+        assert_eq!(roundtrip.rows, Some(40));
         assert_eq!(roundtrip.sync_remote_title, Some(false));
         assert_eq!(roundtrip.backspace_sends.as_deref(), Some("backspace"));
         assert_eq!(roundtrip.delete_sends.as_deref(), Some("delete"));
@@ -892,6 +894,64 @@ mod tests {
             result.is_err(),
             "deny_unknown_fields must reject legacy authType payload"
         );
+    }
+
+    /// Regression test: frontend's TerminalTab dispatches Term Type / Charset
+    /// changes to LocalSessionConfig / SSHSessionConfig. Verify the camelCase
+    /// JSON payload the frontend sends (via `sessionService.createLocal` /
+    /// `sessionService.createSsh`) round-trips through `SessionConfig` (the
+    /// create-session input enum) into the snake_case Rust fields that
+    /// `local_session.rs:130` and `ssh.rs:427` consume. If this breaks, the
+    /// user's Terminal Type setting will be silently dropped on the wire.
+    #[test]
+    fn session_config_payload_term_type_roundtrip() {
+        // Mirrors what the frontend sends: discriminated union with the
+        // local/ssh variant tagged by `type` and the payload under `config`,
+        // plus camelCase `termType` / `charset` inside.
+        let local_json = r#"{
+            "type": "local",
+            "config": {
+                "name": "my-local",
+                "shellTemplate": "bash",
+                "termType": "xterm-256color",
+                "charset": "utf-8",
+                "initialCols": 100,
+                "initialRows": 30
+            }
+        }"#;
+        let parsed: SessionConfig =
+            serde_json::from_str(local_json).expect("deserialize SessionConfig::Local");
+        match parsed {
+            SessionConfig::Local(local) => {
+                assert_eq!(local.term_type.as_deref(), Some("xterm-256color"));
+                assert_eq!(local.charset.as_deref(), Some("utf-8"));
+                assert_eq!(local.initial_cols, Some(100));
+                assert_eq!(local.initial_rows, Some(30));
+            }
+            SessionConfig::Ssh(_) => panic!("expected Local variant"),
+        }
+
+        let ssh_json = r#"{
+            "type": "ssh",
+            "config": {
+                "host": "example.com",
+                "port": 22,
+                "username": "u",
+                "auth_type": "password",
+                "password": "p",
+                "termType": "screen",
+                "charset": "gbk"
+            }
+        }"#;
+        let parsed: SessionConfig =
+            serde_json::from_str(ssh_json).expect("deserialize SessionConfig::Ssh");
+        match parsed {
+            SessionConfig::Ssh(ssh) => {
+                assert_eq!(ssh.term_type.as_deref(), Some("screen"));
+                assert_eq!(ssh.charset.as_deref(), Some("gbk"));
+            }
+            SessionConfig::Local(_) => panic!("expected Ssh variant"),
+        }
     }
 }
 
