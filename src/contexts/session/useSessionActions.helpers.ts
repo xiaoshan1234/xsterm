@@ -11,12 +11,15 @@ export async function dispatchByType(
   type: SessionType["type"],
   local: () => Promise<sessionService.SessionInfo>,
   ssh: () => Promise<sessionService.SessionInfo>,
+  tmux: () => Promise<sessionService.SessionInfo>,
 ): Promise<sessionService.SessionInfo> {
   switch (type) {
     case "local":
       return local();
     case "ssh":
       return ssh();
+    case "tmux-cc":
+      return tmux();
     default: {
       const _exhaustive: never = type;
       throw new Error(`Unknown session type: ${String(_exhaustive)}`);
@@ -41,7 +44,9 @@ export function getUniqueWindowName(
 
 /**
  * Builds the frontend `Session` object from a backend `SessionInfo` returned
- * by `sessionService.createLocal` / `createSsh`.
+ * by `sessionService.createLocal` / `createSsh` / `createTmux`. The tmux
+ * fields (`tmuxPaneId`, `tmuxControllerId`, `isHidden`, `tmuxWindowId`,
+ * `xstermWindowId`) are forwarded when present.
  */
 export function buildFrontendSession(
   info: sessionService.SessionInfo,
@@ -60,6 +65,11 @@ export function buildFrontendSession(
     displayConfig,
     createdAt: now,
     lastActivityAt: now,
+    ...(info.tmuxPaneId !== undefined ? { tmuxPaneId: info.tmuxPaneId } : {}),
+    ...(info.tmuxControllerId !== undefined
+      ? { tmuxControllerId: info.tmuxControllerId }
+      : {}),
+    ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),
   };
 }
 

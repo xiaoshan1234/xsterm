@@ -30,6 +30,16 @@ impl CapabilityFlags {
             supports_multiplex: false,
         }
     }
+
+    /// Capabilities for a pane owned by a tmux `-CC` controller.
+    pub fn for_tmux() -> Self {
+        Self {
+            supports_resize: true,
+            supports_reconnect: true,
+            supports_local_echo: false,
+            supports_multiplex: true,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -52,5 +62,26 @@ mod tests {
         assert_eq!(caps.supports_reconnect, true);
         assert_eq!(caps.supports_local_echo, false);
         assert_eq!(caps.supports_multiplex, false);
+    }
+
+    #[test]
+    fn for_tmux_advertises_multiplex_and_reconnect() {
+        let caps = CapabilityFlags::for_tmux();
+        assert!(
+            caps.supports_resize,
+            "tmux panes must support resize so the frontend can drive SIGWINCH"
+        );
+        assert!(
+            caps.supports_reconnect,
+            "tmux pane must advertise reconnect — the tmux server outlives the xsterm session"
+        );
+        assert!(
+            !caps.supports_local_echo,
+            "tmux pane echoes via the inner shell, not the xsterm renderer"
+        );
+        assert!(
+            caps.supports_multiplex,
+            "supports_multiplex is the unlock flag for split / kill pane UI in Pane.tsx"
+        );
     }
 }

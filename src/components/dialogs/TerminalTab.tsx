@@ -8,7 +8,10 @@ import "./TerminalTab.css";
 interface TerminalTabProps {
   config?: SessionDisplayConfig;
   onChange: (config: SessionDisplayConfig) => void;
-  connectionType: "local" | "ssh";
+  // tmux control-mode sessions share the Local config column for
+  // TERM / charset / initial-rows / initial-cols — the same way a local
+  // shell picks its env. SSH-specific values stay SSH-only.
+  connectionType: "local" | "ssh" | "tmux-cc";
   localConfig: LocalSessionConfig;
   onLocalConfigChange: (config: LocalSessionConfig) => void;
   sshConfig: SSHSessionConfig;

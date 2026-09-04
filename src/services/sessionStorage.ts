@@ -8,6 +8,7 @@ import {
   type SavedWorkspace,
   type SessionGroup,
   type SSHSessionConfig,
+  type TmuxCcConfig,
 } from "../types/session";
 
 interface GroupStore {
@@ -78,6 +79,21 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
         version: SAVED_SESSION_CONFIG_VERSION,
         type: "ssh",
         config: obj.config as SSHSessionConfig,
+        ...displayConfig,
+      };
+    }
+    // tmux control-mode saved configs pass through unchanged. The
+    // migration matrix above only matched `local` / `ssh` previously, so
+    // tmux-cc entries would silently drop. Add the branch here so a user
+    // who ticked "Save config" on the Tmux tab can reload and find their
+    // session again.
+    if (obj.type === "tmux-cc") {
+      return {
+        id,
+        name,
+        version: SAVED_SESSION_CONFIG_VERSION,
+        type: "tmux-cc",
+        config: obj.config as TmuxCcConfig,
         ...displayConfig,
       };
     }

@@ -1,5 +1,5 @@
 import type { ContextMenuItem } from "./ui/ContextMenu";
-import type { Session, SplitDirection } from "../types/session";
+import type { Session, SplitDirection, Window } from "../types/session";
 
 export interface PaneMenuActions {
   startSplit: (direction: SplitDirection) => void;
@@ -10,6 +10,16 @@ export interface PaneMenuActions {
   clear: () => void;
   closePane: () => void;
   closeSession: () => void;
+  /** create a new tmux window on the pane's controller. */
+  createTmuxWindow?: () => void;
+  /**
+   * kill the pane's tmux window. Only enabled when the
+   * containing Window has a known `xstermWindowId` (i.e. it was
+   * created via `create_tmux_window`, not the bootstrap window).
+   */
+  killTmuxWindow?: () => void;
+  /** rename the pane's tmux window. */
+  renameTmuxWindow?: () => void;
 }
 
 /**
@@ -21,10 +31,12 @@ export interface PaneMenuActions {
  *  - If session attached: Select All, Copy, (Paste if connected), Clear Pane
  *  - Always: Close Pane (danger)
  *  - If session attached: Close Session (danger)
+ *  - tmux session: New Tmux Window, Rename Tmux Window, Close Tmux Window
  */
 export function buildPaneContextMenu(
   session: Session | undefined,
   actions: PaneMenuActions,
+  containingWindow?: Window,
 ): ContextMenuItem[] {
   const items: ContextMenuItem[] = [
     { label: "Split Horizontal", onClick: () => actions.startSplit("horizontal") },
@@ -44,6 +56,26 @@ export function buildPaneContextMenu(
       items.push({ label: "Paste", onClick: actions.paste });
     }
     items.push({ label: "Clear Pane", onClick: actions.clear });
+  }
+
+  // tmux window management (only when the session is a tmux pane
+  // and the optional tmux handlers are provided by the caller).
+  const isTmux = session?.type === "tmux-cc";
+  const hasTmuxWindowId = containingWindow?.xstermWindowId !== undefined;
+  if (isTmux) {
+    if (actions.createTmuxWindow) {
+      items.push({ label: "New Tmux Window", onClick: actions.createTmuxWindow });
+    }
+    if (actions.renameTmuxWindow) {
+      items.push({ label: "Rename Tmux Window…", onClick: actions.renameTmuxWindow });
+    }
+    if (actions.killTmuxWindow && hasTmuxWindowId) {
+      items.push({
+        label: "Close Tmux Window",
+        onClick: actions.killTmuxWindow,
+        danger: true,
+      });
+    }
   }
 
   items.push({ label: "Close Pane", onClick: actions.closePane, danger: true });

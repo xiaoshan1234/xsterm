@@ -25,7 +25,7 @@ const NULL_PACKET_KEEPALIVE_SECS: u64 = 60;
 const DEFAULT_TERMINAL_TYPE: &str = "xterm-256color";
 
 /// Marker trait for SSH channel handles.
-pub trait SshChannel: Send {}
+pub trait SshChannel: Send + Sync {}
 
 /// Backend capable of establishing an SSH connection.
 pub trait SshBackend: Send + Sync {
@@ -37,6 +37,23 @@ pub trait SshBackend: Send + Sync {
     fn connect(
         &self,
         config: &SSHSessionConfig,
+    ) -> Result<SshConnectResult, String>;
+
+    /// open a single SSH exec channel and run `command` on the
+    /// remote host. Returns the same `SshConnectResult` shape as
+    /// [`SshBackend::connect`] so callers can bridge the resulting byte
+    /// stream into a `tokio::io::AsyncRead` / `tokio::io::AsyncWrite`
+    /// pair (e.g. for running `tmux -CC` on the remote side).
+    ///
+    /// Unlike `connect`, the channel has **no PTY** (so `resize_tx` is
+    /// always `None`) and **no shell** — `command` is the single thing
+    /// the channel will execute. Closing the write side (dropping all
+    /// `write_tx` clones) sends `eof()` on the channel and the data
+    /// loop then drains any remaining output and exits.
+    fn connect_exec(
+        &self,
+        config: &SSHSessionConfig,
+        command: &str,
     ) -> Result<SshConnectResult, String>;
 }
 
@@ -155,6 +172,14 @@ impl SshBackend for RusshBackend {
         }
 
         connect_ssh(config)
+    }
+
+    fn connect_exec(
+        &self,
+        config: &SSHSessionConfig,
+        command: &str,
+    ) -> Result<SshConnectResult, String> {
+        connect_ssh_exec(config, command)
     }
 }
 
@@ -495,6 +520,170 @@ async fn run_ssh_session(
     Ok(())
 }
 
+/// spawn a thread that runs an async russh **exec** connection.
+///
+/// Mirrors [`connect_ssh`] but requests `channel.exec(true, command)`
+/// instead of `request_pty` + `request_shell`. The exec channel has no
+/// PTY (so `resize_tx` is `None` on the returned [`SshConnectResult`])
+/// and the channel runs **only** the supplied `command`. Once `command`
+/// exits (or the write side is closed and EOF is signalled), the data
+/// loop drains and the channel closes.
+///
+/// Intended for [`crate::infrastructure::tmux::backend::SshTmuxBackend`]
+/// which runs `tmux -CC` on the remote host and bridges its byte stream
+/// into the local tmux controller's reader/writer tasks.
+fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConnectResult, String> {
+    let (result_tx, result_rx) = sync_mpsc::channel::<Result<(), String>>();
+    let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
+    let (write_tx, mut write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+
+    let config_clone = config.clone();
+    let command_owned = command.to_string();
+
+    thread::spawn(move || {
+        let rt = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime for SSH exec connection");
+
+        rt.block_on(async move {
+            let result = run_ssh_exec_session(
+                &config_clone,
+                &command_owned,
+                &result_tx,
+                &read_tx,
+                &mut write_rx,
+            )
+            .await;
+
+            let _ = result;
+        });
+    });
+
+    result_rx
+        .recv()
+        .map_err(|_| "SSH exec connection thread panicked before handshake".to_string())??;
+
+    Ok(SshConnectResult {
+        channel: Box::new(BridgedChannel),
+        write_tx,
+        read_rx,
+        resize_tx: None,
+    })
+}
+
+/// run the SSH exec-channel lifecycle (TCP + auth + exec +
+/// data loop), parallel to [`run_ssh_session`] but skipping PTY + shell.
+///
+/// The data loop is identical to the shell path: incoming `Data` /
+/// `ExtendedData` are forwarded to `read_tx`, and outgoing bytes from
+/// `write_rx` are sent through the channel. When `write_rx` returns
+/// `None` (all senders dropped) the loop signals `eof()` on the
+/// channel — tmux on the remote side then sees EOF on its stdin and
+/// can finish cleanly.
+async fn run_ssh_exec_session(
+    config: &SSHSessionConfig,
+    command: &str,
+    result_tx: &sync_mpsc::Sender<Result<(), String>>,
+    read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
+    write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
+) -> Result<(), String> {
+    let mut russh_config = russh::client::Config::default();
+    if let Some(secs) = config.keepalive_interval {
+        russh_config.keepalive_interval = Some(Duration::from_secs(secs as u64));
+    }
+    if config.enable_compression.unwrap_or(false) {
+        russh_config.preferred.compression =
+            std::borrow::Cow::Borrowed(&[russh::compression::ZLIB]);
+    }
+    let russh_config = Arc::new(russh_config);
+
+    let connect_block = async {
+        let stream = open_configured_tcp_stream(config).await?;
+        russh::client::connect_stream(russh_config.clone(), stream, ClientHandler)
+            .await
+            .map_err(|e| {
+                format!(
+                    "SSH connection to {}:{} failed: {}",
+                    config.host, config.port, e
+                )
+            })
+    };
+    let mut handle = if let Some(secs) = config.connection_timeout {
+        match tokio::time::timeout(Duration::from_secs(secs as u64), connect_block).await {
+            Ok(result) => result?,
+            Err(_) => {
+                return Err(format!(
+                    "SSH connection to {}:{} timed out after {} seconds",
+                    config.host, config.port, secs
+                ));
+            }
+        }
+    } else {
+        connect_block.await?
+    };
+
+    authenticate(&mut handle, config)
+        .await
+        .map_err(|e| {
+            format!(
+                "SSH authentication failed for {}@{}: {}",
+                config.username, config.host, e
+            )
+        })?;
+
+    let mut channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|e| format!("Failed to open SSH exec channel: {}", e))?;
+
+    // Apply `charset` via SSH environment variable. Same logic as the
+    // shell path; tmux on the remote side benefits from a consistent
+    // LC_ALL for its child shells.
+    if let Some(cs) = config.charset.as_deref() {
+        if !cs.is_empty() {
+            if let Err(e) = channel.set_env(false, "LC_ALL", cs.to_string()).await {
+                tracing::warn!(
+                    "SSH server rejected LC_ALL={} via env: {} (charset may not take effect)",
+                    cs, e
+                );
+            }
+        }
+    }
+
+    channel
+        .exec(true, command)
+        .await
+        .map_err(|e| format!("SSH exec request failed for command {:?}: {}", command, e))?;
+
+    result_tx.send(Ok(())).ok();
+    tracing::info!(
+        "SSH exec channel established for command {:?} on {}@{}",
+        command,
+        config.username,
+        config.host
+    );
+
+    // Same data loop semantics as the shell path — exec channels also
+    // carry Data / ExtendedData / Eof / Close messages. Resize is a
+    // no-op (no PTY), so we pass `None` for `resize_rx` and a fresh
+    // empty `keepalive_rx` (the exec path doesn't use null-packet
+    // keepalive because the channel lifetime is bounded by the remote
+    // command, not the local shell session).
+    let (_keepalive_unused_tx, mut keepalive_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    run_data_loop(
+        &mut handle,
+        &mut channel,
+        read_tx,
+        write_rx,
+        None,
+        &mut keepalive_rx,
+    )
+    .await;
+    tracing::info!("SSH exec data loop ended for command {:?}", command);
+    Ok(())
+}
+
 /// Authenticate the SSH session using either a password or a private key.
 async fn authenticate(
     handle: &mut russh::client::Handle<ClientHandler>,
@@ -606,6 +795,13 @@ async fn run_data_loop(
     keepalive_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
 ) {
     let channel_id = channel.id();
+    // Track whether the keepalive side has closed (e.g. exec channel
+    // path which doesn't use null-packet keepalive). Once closed, stop
+    // selecting on it so the `tokio::select!` doesn't see a perpetually
+    // ready branch that immediately exits the loop. The shell path
+    // keeps `keepalive_tx` alive in scope so this branch never closes
+    // while `null_packet_keepalive == Some(true)`.
+    let mut keepalive_alive = true;
     loop {
         tokio::select! {
             msg = channel.wait() => {
@@ -618,7 +814,12 @@ async fn run_data_loop(
                     break;
                 }
             }
-            data = keepalive_rx.recv() => {
+            data = keepalive_rx.recv(), if keepalive_alive => {
+                if data.is_none() {
+                    tracing::debug!("SSH keepalive channel closed; disabling branch");
+                    keepalive_alive = false;
+                    continue;
+                }
                 if forward_write_data(handle, channel_id, data).await {
                     break;
                 }
@@ -641,7 +842,10 @@ async fn run_data_loop(
 }
 
 /// Empty channel implementation used to satisfy the [`SshChannel`] trait.
-struct BridgedChannel;
+///
+/// `pub(crate)` so sibling modules (e.g. `tmux::backend` tests) can
+/// construct one without going through a real russh session.
+pub(crate) struct BridgedChannel;
 
 impl SshChannel for BridgedChannel {}
 

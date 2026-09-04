@@ -2,9 +2,12 @@ use std::sync::Arc;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 
-use crate::infrastructure::app_backend::RealAppBackend;
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo};
-use crate::services::session_manager::SessionManager;
+use crate::infrastructure::app_backend::{AppBackend, RealAppBackend};
+use crate::models::session::{
+    AttachedTmuxServer, LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo,
+    TmuxCcConfig,
+};
+use crate::services::session_manager::{AutoAttachOutcome, SessionManager};
 
 /// Hard ceiling on a single `write_session` payload. The frontend sends one
 /// IPC call per paste (Perf 011 made that feasible by offloading the actual
@@ -21,7 +24,8 @@ pub async fn create_local_session(
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     tracing::info!("Creating local session");
-    let backend = RealAppBackend::new(app);
+    let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
+        Arc::new(RealAppBackend::new(app));
     state.create_local(config, backend).inspect(|info| {
         tracing::info!("Local session created: id={}", info.id);
     })
@@ -40,7 +44,8 @@ pub async fn create_ssh_session(
         config.host,
         config.port
     );
-    let backend = RealAppBackend::new(app);
+    let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
+        Arc::new(RealAppBackend::new(app));
     state.create_ssh(config, backend).inspect(|info| {
         tracing::info!("SSH session created: id={}", info.id);
     })
@@ -59,10 +64,12 @@ pub async fn create_session(
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     tracing::info!("Creating session via generic SessionConfig");
-    let backend = RealAppBackend::new(app);
+    let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
+        Arc::new(RealAppBackend::new(app));
     match config {
         SessionConfig::Local(local) => state.create_local(local, backend),
         SessionConfig::Ssh(ssh) => state.create_ssh(ssh, backend),
+        SessionConfig::TmuxCc(tmux) => state.create_tmux(&tmux, backend).await,
     }
     .inspect(|info| {
         tracing::info!("Session created via generic command: id={}", info.id);
@@ -131,6 +138,51 @@ pub fn upload_image_to_ssh_session(
     state.upload_image(session_id, &filename, data)
 }
 
+/// Create a new tmux `-CC` controller session.
+///
+/// Spawns a `tmux -CC` child process and waits for the first pane to be
+/// reported before returning. The registered pane is the bootstrap pane
+/// tmux occupies on `tmux -CC new` (D3 in
+/// `doc/requirements/prd-0.1/req-006-tmux.md`) and is marked
+/// `is_hidden = true` so the frontend suppresses it.
+#[tauri::command]
+pub async fn create_tmux_session(
+    config: TmuxCcConfig,
+    state: State<'_, Arc<SessionManager>>,
+    backend: State<'_, Arc<RealAppBackend>>,
+    app: AppHandle,
+) -> Result<SessionInfo, String> {
+    tracing::info!(
+        "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?}",
+        config.name,
+        config.tmux_session_name,
+        config.socket_name,
+    );
+    let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
+    let dyn_backend: Arc<dyn AppBackend> = arc_real;
+    let result = state.create_tmux(&config, dyn_backend).await;
+    if result.is_ok() {
+        // refresh `attached_tmux.json` with the up-to-date list.
+        // Best-effort: a transient store failure must not mask a successful
+        // create.
+        let servers = state.list_attached_tmux_servers();
+        if let Err(e) =
+            crate::commands::persistence::save_attached_tmux_servers_impl(&app, &servers)
+        {
+            tracing::warn!("create_tmux_session: persistence failed: {e}");
+        }
+    }
+    result.inspect(|info| {
+        tracing::info!(
+            "tmux session created: id={} controller_id={} pane={:?} hidden={}",
+            info.id,
+            info.tmux_controller_id.unwrap_or(0),
+            info.tmux_pane_id,
+            info.is_hidden,
+        );
+    })
+}
+
 /// Return the shared binary `session-output` channel. The frontend calls
 /// this once at startup and attaches a per-session dispatch handler. See
 /// `src/hooks/sessionOutputChannel.ts` for the consumer side and
@@ -141,4 +193,242 @@ pub fn get_session_output_channel(
     backend: State<'_, Arc<RealAppBackend>>,
 ) -> Channel<Vec<u8>> {
     backend.session_output_channel.clone()
+}
+
+/// Split a tmux pane via `split-window`.
+///
+/// Parameters mirror req-006 §4.5:
+/// - `controller_id` — id of the `tmux -CC` controller that owns the
+///   parent pane.
+/// - `parent_pane_id` — **xsterm** session id of the parent pane (NOT
+///   the tmux pane id). The frontend tracks xsterm ids in React state
+///   and passes them through.
+/// - `direction` — `"horizontal"` (`split-window -h`, right of parent)
+///   or `"vertical"` (`split-window -v`, below parent).
+///
+/// Returns a [`SessionInfo`] for the newly created pane, with
+/// `is_hidden = false` because user-driven splits must render normally.
+/// The controller also fires a `tmux-pane-added` event with the
+/// `parentTmuxWindowId` field; the frontend listener for that event is
+/// idempotent (skips if a Session with the new id already exists).
+#[tauri::command]
+pub async fn create_tmux_pane(
+    controller_id: u32,
+    parent_pane_id: u32,
+    direction: String,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<SessionInfo, String> {
+    tracing::info!(
+        "create_tmux_pane: controller_id={} parent_pane_id={} direction={:?}",
+        controller_id,
+        parent_pane_id,
+        direction,
+    );
+    state
+        .create_tmux_pane(controller_id, parent_pane_id, &direction)
+        .await
+        .inspect(|info| {
+            tracing::info!(
+                "create_tmux_pane: new pane xsterm_id={} tmux_pane_id={:?}",
+                info.id,
+                info.tmux_pane_id,
+            );
+        })
+}
+
+/// Kill a tmux pane via `kill-pane`.
+///
+/// `pane_id` is the **xsterm** session id (matches `killTmuxPane` on
+/// the frontend). On success the controller eventually emits a
+/// `tmux-pane-removed` event when tmux sends `%pane-exited`; the
+/// frontend listener drops the matching `Session` from React state at
+/// that point.
+#[tauri::command]
+pub async fn kill_tmux_pane(
+    pane_id: u32,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<(), String> {
+    tracing::info!("kill_tmux_pane: pane_id={}", pane_id);
+    state.kill_tmux_pane(pane_id)
+}
+
+/// Attach to an existing tmux server (Wave 4 §D4, req-006 §5).
+///
+/// Spawns `tmux -CC attach-session -t <name>` and waits for the first
+/// pane before returning. The bootstrap pane is registered with
+/// `is_hidden = true` (iTerm2 D3 pattern) so the frontend suppresses it
+/// until the user opens a real working pane via `create_tmux_window` /
+/// `create_tmux_pane`.
+///
+/// `tmux_session_name` is required; attaching to "the server's current
+/// session" is non-deterministic when several exist on the same socket.
+#[tauri::command]
+pub async fn attach_tmux_session(
+    config: TmuxCcConfig,
+    state: State<'_, Arc<SessionManager>>,
+    backend: State<'_, Arc<RealAppBackend>>,
+    app: AppHandle,
+) -> Result<SessionInfo, String> {
+    tracing::info!(
+        "Attaching to tmux server: name={:?} tmux_session={:?} socket={:?}",
+        config.name,
+        config.tmux_session_name,
+        config.socket_name,
+    );
+    let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
+    let dyn_backend: Arc<dyn AppBackend> = arc_real;
+    let result = state.attach_tmux(&config, dyn_backend).await;
+    if result.is_ok() {
+        let servers = state.list_attached_tmux_servers();
+        if let Err(e) =
+            crate::commands::persistence::save_attached_tmux_servers_impl(&app, &servers)
+        {
+            tracing::warn!("attach_tmux_session: persistence failed: {e}");
+        }
+    }
+    result.inspect(|info| {
+        tracing::info!(
+            "tmux attach succeeded: id={} controller_id={} pane={:?} hidden={}",
+            info.id,
+            info.tmux_controller_id.unwrap_or(0),
+            info.tmux_pane_id,
+            info.is_hidden,
+        );
+    })
+}
+
+/// open a new tmux window on the given controller.
+///
+/// Parameters mirror req-006 §4.5:
+/// - `controller_id` — id of the `tmux -CC` controller that owns the
+///   current session.
+/// - `name` — optional display name for the new window. `None` lets
+///   tmux pick a default name based on the running command.
+///
+/// Returns the [`SessionInfo`] for the first pane of the new window;
+/// the controller also emits `tmux-window-added` and `tmux-pane-added`
+/// events which the frontend listener uses to keep its state in sync
+/// (idempotent — if the Session already exists, the listener short-
+/// circuits).
+#[tauri::command]
+pub async fn create_tmux_window(
+    controller_id: u32,
+    name: Option<String>,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<SessionInfo, String> {
+    tracing::info!(
+        "create_tmux_window: controller_id={} name={:?}",
+        controller_id,
+        name,
+    );
+    state
+        .create_tmux_window(controller_id, name.as_deref())
+        .await
+        .inspect(|info| {
+            tracing::info!(
+                "create_tmux_window: new window pane xsterm_id={} tmux_window_id={:?}",
+                info.id,
+                info.tmux_window_id,
+            );
+        })
+}
+
+/// kill a tmux window via `kill-window`.
+///
+/// `xsterm_window_id` is the **xsterm** window id (matches
+/// `killTmuxWindow` on the frontend). On success the controller
+/// eventually emits a `tmux-window-closed` event when tmux sends
+/// `%window-close`; the frontend listener drops the matching
+/// xsterm Window and every Session in it at that point.
+#[tauri::command]
+pub async fn kill_tmux_window(
+    xsterm_window_id: u32,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<(), String> {
+    tracing::info!("kill_tmux_window: xsterm_window_id={}", xsterm_window_id);
+    state.kill_tmux_window(xsterm_window_id)
+}
+
+/// rename a tmux window via `rename-window`.
+///
+/// On success the controller eventually emits a `tmux-window-renamed`
+/// event when tmux sends `%window-renamed`; the frontend listener
+/// updates the matching xsterm Window's `name` at that point.
+/// capture scrollback text from a tmux pane (req-006 §D4).
+///
+/// Frontend wrapper: `sessionService.captureTmuxPane(sessionId, lines)`.
+/// The returned text is the body of tmux's `%begin..%end` reply block for
+/// `capture-pane -p -e -J -S -<lines> -t %<pane>`, joined with `\n`.
+/// Returns `Err` if the session is unknown / not a tmux pane / tmux
+/// itself reports `%error` / the call times out after 5 s.
+#[tauri::command]
+pub async fn capture_tmux_pane(
+    xsterm_session_id: u32,
+    lines: i32,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<String, String> {
+    tracing::info!(
+        "capture_tmux_pane: xsterm_session_id={} lines={}",
+        xsterm_session_id,
+        lines
+    );
+    state.capture_tmux_pane(xsterm_session_id, lines).await
+}
+
+/// list every tmux server currently attached via this manager.
+///
+/// Frontend wrapper: `sessionService.getAttachedTmuxServers()`. Returns
+/// the same shape as the on-disk `attached_tmux.json` store so the
+/// frontend can render the persisted list.
+#[tauri::command]
+pub async fn get_attached_tmux_servers(
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<Vec<AttachedTmuxServer>, String> {
+    Ok(state.list_attached_tmux_servers())
+}
+
+/// re-attach every tmux server from the persisted
+/// `attached_tmux.json` store.
+///
+/// Frontend wrapper: `sessionService.autoAttachTmuxServers()`. Called
+/// once on app startup to restore previous tmux sessions. The returned
+/// list carries one entry per previously-attached server — successful
+/// re-attachs expose the new `SessionInfo`; failures surface the error
+/// string so the frontend can show partial-failure UI.
+///
+/// Note: This is NOT full state restore — attach merely reconnects the
+/// controller to the tmux server; the user opens new panes/windows
+/// afterwards. See Wave 4 spec §D4 / req-006 §5 for the rationale.
+#[tauri::command]
+pub async fn auto_attach_tmux_servers(
+    state: State<'_, Arc<SessionManager>>,
+    backend: State<'_, Arc<RealAppBackend>>,
+    app: AppHandle,
+) -> Result<Vec<AutoAttachOutcome>, String> {
+    let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
+    let dyn_backend: Arc<dyn AppBackend> = arc_real;
+    let stored =
+        crate::commands::persistence::load_attached_tmux_servers(app.clone()).await?;
+    let results = state.auto_attach_on_startup(&stored, dyn_backend).await;
+    // Persist the (possibly reduced) live list so a failed server that
+    // got dropped does not keep haunting subsequent startups.
+    let live = state.list_attached_tmux_servers();
+    if let Err(e) = crate::commands::persistence::save_attached_tmux_servers_impl(&app, &live) {
+        tracing::warn!("auto_attach_tmux_servers: persistence failed: {e}");
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+pub async fn rename_tmux_window(
+    xsterm_window_id: u32,
+    name: String,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<(), String> {
+    tracing::info!(
+        "rename_tmux_window: xsterm_window_id={} name={:?}",
+        xsterm_window_id,
+        name,
+    );
+    state.rename_tmux_window(xsterm_window_id, &name)
 }

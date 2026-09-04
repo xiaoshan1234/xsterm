@@ -22,7 +22,10 @@ import "./Terminal.css";
 // - onFocus: triggered when clicked, notifies parent to switch active pane
 interface TerminalProps {
   sessionId: number;
-  sessionType?: "local" | "ssh";
+  // tmux control-mode sessions use the same write/resize/close IPC
+  // surface as local; the `sessionType` prop is informational (e.g. for
+  // the `useClipboardImagePaste` branch on the `sessionType === "ssh"` path).
+  sessionType?: "local" | "ssh" | "tmux-cc";
   isActive?: boolean;
   isWindowActive?: boolean;
   isConnected: boolean;

@@ -44,6 +44,14 @@ const displayConfig: SessionDisplayConfig = { lineTimestamp: true };
 // ---------- dispatchByType --------------------------------------------------
 
 describe("dispatchByType", () => {
+  const tmux = async () =>
+    ({
+      id: 3,
+      name: "T",
+      isConnected: true,
+      sessionType: { type: "tmux-cc", config: {} },
+    }) as const;
+
   it("invokes the local creator for type 'local'", async () => {
     const local = async () =>
       ({
@@ -63,7 +71,7 @@ describe("dispatchByType", () => {
         },
       }) as const;
 
-    const result = await dispatchByType("local", local, ssh);
+    const result = await dispatchByType("local", local, ssh, tmux);
     expect(result.id).toBe(1);
   });
 
@@ -86,8 +94,31 @@ describe("dispatchByType", () => {
         },
       }) as const;
 
-    const result = await dispatchByType("ssh", local, ssh);
+    const result = await dispatchByType("ssh", local, ssh, tmux);
     expect(result.id).toBe(2);
+  });
+
+  it("invokes the tmux creator for type 'tmux-cc'", async () => {
+    const local = async () =>
+      ({
+        id: 1,
+        name: "L",
+        isConnected: true,
+        sessionType: { type: "local", config: { shell: "", cwd: "" } },
+      }) as const;
+    const ssh = async () =>
+      ({
+        id: 2,
+        name: "S",
+        isConnected: true,
+        sessionType: {
+          type: "ssh",
+          config: { host: "", username: "", port: 22, auth_type: "password" },
+        },
+      }) as const;
+
+    const result = await dispatchByType("tmux-cc", local, ssh, tmux);
+    expect(result.id).toBe(3);
   });
 
   it("throws on an unknown type", async () => {
@@ -110,6 +141,13 @@ describe("dispatchByType", () => {
               type: "ssh",
               config: { host: "", username: "", port: 22, auth_type: "password" },
             },
+          }) as const,
+        async () =>
+          ({
+            id: 3,
+            name: "T",
+            isConnected: true,
+            sessionType: { type: "tmux-cc", config: {} },
           }) as const,
       ),
     ).rejects.toThrow(/Unknown session type/);

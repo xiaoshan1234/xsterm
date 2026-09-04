@@ -7,6 +7,7 @@ import type {
   SessionDisplayConfig,
   SessionGroup,
   SSHSessionConfig,
+  TmuxCcConfig,
   Window,
   Workspace,
 } from "../../types/session";
@@ -40,6 +41,10 @@ interface UseSessionLifecycleDeps {
     name?: string,
     targetWorkspaceId?: string,
   ) => Window;
+  /** persistent map keyed by controller id so the retry banner
+   * can hand the original config back to the backend after a
+   * `tmux-controller-exit`. */
+  tmuxControllerConfigsRef?: React.MutableRefObject<Map<number, import("../../types/session").TmuxCcConfig>>;
 }
 
 export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
@@ -54,6 +59,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     updateGroups,
     openFromConfigInternal,
     createWindowFromSession,
+    tmuxControllerConfigsRef,
   } = deps;
 
   /**
@@ -70,7 +76,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     async (
       type: Session["type"],
       create: () => Promise<sessionService.SessionInfo>,
-      config: LocalSessionConfig | SSHSessionConfig,
+      config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig,
       save: boolean,
       skipAutoWindow = false,
       displayConfig?: SessionDisplayConfig,
@@ -78,6 +84,17 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       const configId = crypto.randomUUID();
       const info = await create();
       const session = buildFrontendSession(info, configId, type, displayConfig);
+
+      // stash the tmux-cc config so a future retry banner can
+      // re-call the backend with the same args. We do this AFTER the
+      // backend call so the controllerId is known (the backend assigns
+      // it; we don't get it from the frontend).
+      if (type === "tmux-cc" && tmuxControllerConfigsRef && session.tmuxControllerId !== undefined) {
+        tmuxControllerConfigsRef.current.set(
+          session.tmuxControllerId,
+          config as TmuxCcConfig,
+        );
+      }
 
       setSessions((prev) => [...prev, session]);
 
@@ -93,7 +110,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
             config: localConfig,
             displayConfig,
           };
-        } else {
+        } else if (type === "ssh") {
           const sshConfig = config as SSHSessionConfig;
           savedConfig = {
             id: configId,
@@ -101,6 +118,18 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
             version: 1,
             type: "ssh",
             config: sshConfig,
+            displayConfig,
+          };
+        } else {
+          // tmux-cc saved config persists TmuxCcConfig verbatim.
+          // Migration in services/sessionStorage.ts recognises type "tmux-cc".
+          const tmuxConfig = config as TmuxCcConfig;
+          savedConfig = {
+            id: configId,
+            name: info.name,
+            version: 1,
+            type: "tmux-cc",
+            config: tmuxConfig,
             displayConfig,
           };
         }
@@ -195,6 +224,53 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       return createAndActivateSession(
         "ssh",
         () => sessionService.createSsh(config),
+        config,
+        save,
+        true,
+        displayConfig,
+      );
+    },
+    [createAndActivateSession],
+  );
+
+  /**
+   * create a local tmux control-mode session and a default workspace.
+   *
+   * Call chain: createTmuxSession → createAndActivateSession("tmux-cc", ...)
+   * → backend sessionService.createTmux(config) → sessions[] + auto-create window.
+   */
+  const createTmuxSession = useCallback(
+    async (
+      config: TmuxCcConfig,
+      save = true,
+      displayConfig?: SessionDisplayConfig,
+    ): Promise<Session> => {
+      return createAndActivateSession(
+        "tmux-cc",
+        () => sessionService.createTmux(config),
+        config,
+        save,
+        false,
+        displayConfig,
+      );
+    },
+    [createAndActivateSession],
+  );
+
+  /**
+   * create a tmux session without auto-creating a default window.
+   * Used by the PaneInitCard / Split flows where the consumer attaches the
+   * resulting session to an existing pane.
+   */
+  const createTmuxSessionOnly = useCallback(
+    async (
+      config: TmuxCcConfig,
+      save = true,
+      displayConfig?: SessionDisplayConfig,
+    ): Promise<Session> => {
+      return createAndActivateSession(
+        "tmux-cc",
+        () => sessionService.createTmux(config),
         config,
         save,
         true,
@@ -302,6 +378,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
         config.type,
         () => sessionService.createLocal(config.config as LocalSessionConfig),
         () => sessionService.createSsh(config.config as SSHSessionConfig),
+        () => sessionService.createTmux(config.config as TmuxCcConfig),
       );
       const type: Session["type"] = config.type;
 
@@ -381,6 +458,8 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     createSshSession,
     createLocalSessionOnly,
     createSshSessionOnly,
+    createTmuxSession,
+    createTmuxSessionOnly,
     openFromConfig,
     removeConfig,
     closeSession,

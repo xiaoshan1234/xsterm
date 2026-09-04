@@ -1,6 +1,11 @@
 import { useRef, useState } from "react";
 import { useSession } from "../contexts/SessionContext";
-import { type LocalSessionConfig, type SSHSessionConfig, type Session } from "../types/session";
+import {
+  type LocalSessionConfig,
+  type SSHSessionConfig,
+  type Session,
+  type TmuxCcConfig,
+} from "../types/session";
 import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
@@ -17,9 +22,16 @@ export function PaneInitCard({
   title = "Create a session",
   subtitle = "Create new or open a saved session",
 }: PaneInitCardProps) {
-  const { sessions, createLocalSessionOnly, createSshSessionOnly, createSessionFromSavedConfig } =
-    useSession();
-  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
+  const {
+    sessions,
+    createLocalSessionOnly,
+    createSshSessionOnly,
+    createTmuxSessionOnly,
+    createSessionFromSavedConfig,
+  } = useSession();
+  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux-cc" | null>(
+    null,
+  );
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -55,6 +67,9 @@ export function PaneInitCard({
 
   const handleCreateSsh = (config: SSHSessionConfig, save: boolean) =>
     handleCreate(() => createSshSessionOnly(config, save));
+
+  const handleCreateTmux = (config: TmuxCcConfig, save: boolean) =>
+    handleCreate(() => createTmuxSessionOnly(config, save));
 
   const handleSelectSession = (sessionId: number) => {
     if (!startSubmitting()) return;
@@ -122,6 +137,7 @@ export function PaneInitCard({
         onClose={() => setCreateDialogTab(null)}
         onCreateLocal={handleCreateLocal}
         onCreateSsh={handleCreateSsh}
+        onCreateTmux={handleCreateTmux}
         initialTab={createDialogTab ?? "local"}
       />
       <SelectSessionDialog

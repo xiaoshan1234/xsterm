@@ -10,6 +10,7 @@ import {
   type SessionDisplayConfig,
   type SessionGroup,
   type SplitDirection,
+  type TmuxCcConfig,
   type Window,
   type Workspace,
 } from "../../types/session";
@@ -26,10 +27,18 @@ export interface SessionContextType {
   globalLocalEcho: boolean;
   setGlobalLocalEcho: (enabled: boolean) => void;
   getEffectiveLocalEcho: (sessionId: number) => boolean;
+  // tmux retry-banner state. Exposed here (not just on
+  // SessionState) so the listener and the banner can read/write
+  // it through the regular `useSession()` API.
+  tmuxControllerErrors: Map<number, TmuxControllerError>;
+  setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
+  tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxCcConfig>>;
   createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createLocalSessionOnly: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
+  createTmuxSession: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
+  createTmuxSessionOnly: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -107,6 +116,20 @@ export type SetSavedWorkspaces = Dispatch<SetStateAction<SavedWorkspace[]>>;
 export type SetSavedWindowConfigs = Dispatch<SetStateAction<SavedWindowConfig[]>>;
 export type SetGroups = Dispatch<SetStateAction<SessionGroup[]>>;
 
+/**
+ * a tmux controller that has exited unexpectedly (e.g. tmux
+ * died with a `%exit reason` message). Holds the config that can be
+ * passed back to `attachTmux` / `createTmux` for a retry.
+ */
+export interface TmuxControllerError {
+  /** The original config the controller was built from. */
+  config: TmuxCcConfig;
+  /** Reported reason (the `reason` field from the `tmux-controller-exit` event). */
+  reason?: string;
+  /** ms epoch when the error was first surfaced. */
+  timestamp: number;
+}
+
 export interface SessionState {
   savedConfigs: SavedSessionConfig[];
   setSavedConfigs: SetSavedConfigs;
@@ -131,6 +154,21 @@ export interface SessionState {
   workspacesRef: MutableRefObject<Workspace[]>;
   establishingSessionsRef: MutableRefObject<Set<number>>;
   getEffectiveLocalEcho: (sessionId: number) => boolean;
+  /**
+   * pending tmux-controller errors keyed by `controllerId`.
+   * Populated by the `tmux-controller-exit` listener; the retry
+   * banner reads it to render the Retry / Dismiss affordances.
+   */
+  tmuxControllerErrors: Map<number, TmuxControllerError>;
+  setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
+  /**
+   * `controllerId → TmuxCcConfig` map. Populated by
+   * `createTmuxSession` / `attachTmuxSession` so the retry banner
+   * can re-call the backend with the same config. Survives pane
+   * teardown so the banner can still retry after the `Session`
+   * rows are gone.
+   */
+  tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxCcConfig>>;
 }
 
 export interface SessionPersistence {
@@ -145,6 +183,8 @@ export interface SessionActions {
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createLocalSessionOnly: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
+  createTmuxSession: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
+  createTmuxSessionOnly: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;

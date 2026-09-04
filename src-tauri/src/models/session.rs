@@ -14,6 +14,16 @@ pub enum SessionType {
     /// A remote session connected over SSH.
     #[serde(rename = "ssh")]
     Ssh { host: String, port: u16, user: String },
+
+    /// A pane owned by a local `tmux -CC` controller.
+    #[serde(rename = "tmux-cc")]
+    TmuxCc {
+        controller_id: u32,
+        pane_id: String,
+        session_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        socket_name: Option<String>,
+    },
 }
 
 /// Metadata describing a terminal session.
@@ -25,6 +35,22 @@ pub struct SessionInfo {
     pub session_type: SessionType,
     pub is_connected: bool,
     pub capabilities: CapabilityFlags,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tmux_pane_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tmux_controller_id: Option<u32>,
+    /// tmux window id (e.g. `@1`) the pane belongs to. The frontend
+    /// uses this to map a `Session` back to its containing `xsterm Window`.
+    /// `None` for non-tmux sessions (local PTY / SSH).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tmux_window_id: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_hidden: bool,
+}
+
+#[inline]
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Configuration for creating a local shell session.
@@ -140,6 +166,161 @@ impl Default for SSHSessionConfig {
     }
 }
 
+/// Direction for a tmux pane split.
+///
+/// Mirrors the TypeScript `SplitDirection = "horizontal" | "vertical"`
+/// (see `src/types/session.ts`). `Horizontal` corresponds to tmux's
+/// `split-window -h` (right of the parent pane), `Vertical` corresponds
+/// to `split-window -v` (below the parent pane).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SplitDirection {
+    /// Split right of the parent pane (`-h`).
+    Horizontal,
+    /// Split below the parent pane (`-v`).
+    Vertical,
+}
+
+impl SplitDirection {
+    /// Parse from a frontend-supplied string. Returns `None` for anything
+    /// other than `"horizontal"` / `"vertical"` so the Tauri command layer
+    /// can surface a clear validation error instead of silently defaulting.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "horizontal" => Some(Self::Horizontal),
+            "vertical" => Some(Self::Vertical),
+            _ => None,
+        }
+    }
+
+    /// Convert to the corresponding tmux `-h` / `-v` flag.
+    pub fn flag(self) -> &'static str {
+        match self {
+            Self::Horizontal => "-h",
+            Self::Vertical => "-v",
+        }
+    }
+}
+
+/// Result of a successful tmux attach (Wave 4 `attachedTmuxServers`).
+///
+/// Mirrors the TypeScript `AttachedTmuxServer` interface exactly. The frontend
+/// reads this list on app startup to know which tmux servers to auto-attach
+/// to; the backend rewrites it on every successful `create_tmux` /
+/// `attach_tmux` and whenever the last pane on a controller is closed.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachedTmuxServer {
+    /// tmux session name (the `-s <name>` arg). Required to re-attach.
+    pub session_name: String,
+    /// tmux socket name (the `-L <socket>` arg). When `None`, callers fall
+    /// back to tmux's default socket.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socket_name: Option<String>,
+    /// ms epoch when the user last attached (or created) this server. Used
+    /// to order re-attach: most-recent first.
+    pub attached_at: u64,
+}
+
+/// Configuration for creating a tmux `-CC` controller session.
+///
+/// Spawns a `tmux -CC` child process which then creates and owns one or
+/// more panes (each of which xsterm maps to a leaf [`SessionInfo`]). See
+/// `doc/requirements/prd-0.1/req-006-tmux.md` §2 (D1) for the
+/// one-controller-N-panes design rationale.
+///
+/// ## SSH + tmux -CC
+///
+/// When [`TmuxCcConfig::ssh`] is `Some(_)`, the controller is run on the
+/// remote host via an SSH exec channel — the SSH session opens
+/// `tmux -CC` on the remote side and its byte stream is bridged into the
+/// controller's I/O task the same way a local child process would be.
+/// When `ssh` is `None`, the controller spawns a local
+/// `tokio::process::Command` child.
+///
+/// The frontend mirrors this shape with `TmuxCcConfig.ssh?: SSHSessionConfig`
+/// in `src/types/session.ts`; the Create Session dialog exposes a
+/// dedicated "Tmux (SSH)" top tab that fills both halves of the payload.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TmuxCcConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tmux_session_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socket_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_config: Option<EnvConfig>,
+    #[serde(default)]
+    pub initial_rows: Option<u16>,
+    #[serde(default)]
+    pub initial_cols: Option<u16>,
+    /// SSH connection config. When `Some(_)`, the controller runs
+    /// `tmux -CC` on the remote host via an SSH exec channel. When
+    /// `None` (the default), the controller spawns a local `tmux -CC`
+    /// child process. Mirrors `doc/requirements/prd-0.1/req-006-tmux.md`
+    /// §4.4 D5 + §4.7 (the `ssh` field on `TmuxCcConfig`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh: Option<SSHSessionConfig>,
+}
+
+/// Build a [`SessionInfo`] for a tmux pane freshly registered with
+/// `controller_id` and `tmux_pane_id`.
+///
+/// `display_name` is the user-visible name (falls back to the
+/// `tmux_session_name` or `"tmux <controller_id>:<pane_id>"`).
+///
+/// `is_hidden` is a caller-driven flag. The MVP (`tmux -CC new`) always
+/// passes `false` because the first pane IS the user's working shell. The
+/// `true` is used for `tmux -CC attach`, where the
+/// original pane becomes the tmux control connection and should be
+/// suppressed in the UI. See D3 in
+/// `doc/requirements/prd-0.1/req-006-tmux.md`.
+///
+/// `tmux_window_id` is the tmux window id (e.g. `@1`) the pane belongs to.
+/// Wave 3 propagates this so the frontend can map a `Session` to its
+/// containing `xsterm Window`. Pass `None` if the pane is not yet attached
+/// to a tmux window (rare — only used by tests that construct a synthetic
+/// pane without a window).
+pub fn tmux_pane_info(
+    xsterm_session_id: u32,
+    controller_id: u32,
+    tmux_pane_id: impl Into<String>,
+    tmux_session_name: Option<&str>,
+    display_name: Option<&str>,
+    is_hidden: bool,
+    tmux_window_id: Option<&str>,
+) -> SessionInfo {
+    let tmux_pane_id = tmux_pane_id.into();
+    let session_name = tmux_session_name
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("tmux-{controller_id}"));
+    let default_display = format!("{session_name}:{tmux_pane_id}");
+    let name = display_name
+        .filter(|n| !n.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or(default_display);
+    SessionInfo {
+        id: xsterm_session_id,
+        name,
+        session_type: SessionType::TmuxCc {
+            controller_id,
+            pane_id: tmux_pane_id.clone(),
+            session_name,
+            socket_name: None,
+        },
+        is_connected: true,
+        capabilities: CapabilityFlags::for_tmux(),
+        tmux_pane_id: Some(tmux_pane_id),
+        tmux_controller_id: Some(controller_id),
+        tmux_window_id: tmux_window_id.map(str::to_string),
+        is_hidden,
+    }
+}
+
 /// Discriminated union for the configuration required to create a session.
 ///
 /// Used by the generic `create_session` Tauri command so the frontend can pass
@@ -158,6 +339,9 @@ pub enum SessionConfig {
     /// Configuration for an SSH session.
     #[serde(rename = "ssh")]
     Ssh(SSHSessionConfig),
+    /// Configuration for a tmux `-CC` controller session.
+    #[serde(rename = "tmuxCc")]
+    TmuxCc(TmuxCcConfig),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -904,6 +1088,123 @@ mod tests {
     /// `local_session.rs:130` and `ssh.rs:427` consume. If this breaks, the
     /// user's Terminal Type setting will be silently dropped on the wire.
     #[test]
+    fn tmux_cc_config_json_roundtrip_preserves_all_fields() {
+        let config = TmuxCcConfig {
+            name: Some("my tmux".to_string()),
+            tmux_session_name: Some("work".to_string()),
+            socket_name: Some("dev".to_string()),
+            start_command: Some("clear\n".to_string()),
+            env_config: Some(EnvConfig {
+                env: Some(HashMap::from([("FOO".to_string(), "bar".to_string())])),
+            }),
+            initial_rows: Some(40),
+            initial_cols: Some(132),
+            ssh: None,
+        };
+
+        let json = serde_json::to_string(&config).expect("serialize TmuxCcConfig");
+        assert!(json.contains("\"tmuxSessionName\":\"work\""));
+        assert!(json.contains("\"socketName\":\"dev\""));
+        assert!(json.contains("\"startCommand\":\"clear\\n\""));
+        assert!(json.contains("\"initialRows\":40"));
+        assert!(json.contains("\"initialCols\":132"));
+
+        let roundtrip: TmuxCcConfig =
+            serde_json::from_str(&json).expect("deserialize TmuxCcConfig");
+        assert_eq!(roundtrip.name.as_deref(), Some("my tmux"));
+        assert_eq!(roundtrip.tmux_session_name.as_deref(), Some("work"));
+        assert_eq!(roundtrip.socket_name.as_deref(), Some("dev"));
+        assert_eq!(roundtrip.start_command.as_deref(), Some("clear\n"));
+        assert_eq!(roundtrip.initial_rows, Some(40));
+        assert_eq!(roundtrip.initial_cols, Some(132));
+    }
+
+    #[test]
+    fn tmux_cc_config_json_default_roundtrip_when_all_fields_missing() {
+        let json = "{}";
+        let config: TmuxCcConfig = serde_json::from_str(json).expect("empty JSON must deserialize");
+        assert!(config.name.is_none());
+        assert!(config.tmux_session_name.is_none());
+        assert!(config.socket_name.is_none());
+        assert!(config.start_command.is_none());
+        assert!(config.env_config.is_none());
+        assert!(config.initial_rows.is_none());
+        assert!(config.initial_cols.is_none());
+    }
+
+    #[test]
+    fn session_config_tmux_variant_roundtrip() {
+        let json = r#"{"type":"tmuxCc","config":{"name":"work","tmuxSessionName":"main","socketName":"dev"}}"#;
+        let parsed: SessionConfig = serde_json::from_str(json).expect("TmuxCc SessionConfig");
+        match parsed {
+            SessionConfig::TmuxCc(cfg) => {
+                assert_eq!(cfg.name.as_deref(), Some("work"));
+                assert_eq!(cfg.tmux_session_name.as_deref(), Some("main"));
+                assert_eq!(cfg.socket_name.as_deref(), Some("dev"));
+            }
+            other => panic!("expected SessionConfig::TmuxCc, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tmux_pane_info_populates_all_tmux_fields() {
+        let info = tmux_pane_info(42, 7, "%13", Some("main"), Some("editor pane"), false, Some("@3"));
+        assert_eq!(info.id, 42);
+        assert_eq!(info.name, "editor pane");
+        assert!(info.is_connected);
+        assert!(info.capabilities.supports_multiplex);
+        assert_eq!(info.tmux_pane_id.as_deref(), Some("%13"));
+        assert_eq!(info.tmux_controller_id, Some(7));
+        assert_eq!(info.tmux_window_id.as_deref(), Some("@3"));
+        assert!(!info.is_hidden);
+        match info.session_type {
+            SessionType::TmuxCc { controller_id, pane_id, session_name, socket_name } => {
+                assert_eq!(controller_id, 7);
+                assert_eq!(pane_id, "%13");
+                assert_eq!(session_name, "main");
+                assert!(socket_name.is_none());
+            }
+            other => panic!("expected SessionType::TmuxCc, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tmux_pane_info_propagates_caller_supplied_is_hidden_flag() {
+        // The function is a generic constructor — the hidden flag is a
+        // caller decision, not something the helper computes. MVP callers
+        // (`tmux -CC new`) pass `false`; attach callers pass
+        // `true`. This test locks in both directions.
+        let hidden = tmux_pane_info(1, 1, "%0", None, None, true, None);
+        assert!(hidden.is_hidden, "caller passed true → is_hidden must be true");
+        let visible = tmux_pane_info(2, 1, "%5", None, None, false, None);
+        assert!(!visible.is_hidden, "caller passed false → is_hidden must be false");
+        assert_eq!(
+            visible.name, "tmux-1:%5",
+            "missing display_name falls back to controller:pane",
+        );
+    }
+
+    #[test]
+    fn tmux_pane_info_serializes_is_hidden_only_when_true() {
+        let hidden = tmux_pane_info(1, 1, "%0", None, None, true, None);
+        let visible = tmux_pane_info(2, 1, "%5", None, None, false, None);
+        let hidden_json = serde_json::to_string(&hidden).unwrap();
+        let visible_json = serde_json::to_string(&visible).unwrap();
+        assert!(hidden_json.contains("\"isHidden\":true"));
+        assert!(!visible_json.contains("isHidden"));
+    }
+
+    #[test]
+    fn tmux_pane_info_serializes_tmux_window_id_only_when_some() {
+        let with_window = tmux_pane_info(1, 1, "%5", None, None, false, Some("@2"));
+        let without_window = tmux_pane_info(2, 1, "%6", None, None, false, None);
+        let with_json = serde_json::to_string(&with_window).unwrap();
+        let without_json = serde_json::to_string(&without_window).unwrap();
+        assert!(with_json.contains("\"tmuxWindowId\":\"@2\""));
+        assert!(!without_json.contains("tmuxWindowId"));
+    }
+
+    #[test]
     fn session_config_payload_term_type_roundtrip() {
         // Mirrors what the frontend sends: discriminated union with the
         // local/ssh variant tagged by `type` and the payload under `config`,
@@ -929,6 +1230,7 @@ mod tests {
                 assert_eq!(local.initial_rows, Some(30));
             }
             SessionConfig::Ssh(_) => panic!("expected Local variant"),
+            SessionConfig::TmuxCc(_) => panic!("expected Local variant"),
         }
 
         let ssh_json = r#"{
@@ -951,6 +1253,7 @@ mod tests {
                 assert_eq!(ssh.charset.as_deref(), Some("gbk"));
             }
             SessionConfig::Local(_) => panic!("expected Ssh variant"),
+            SessionConfig::TmuxCc(_) => panic!("expected Ssh variant"),
         }
     }
 }
@@ -969,4 +1272,48 @@ pub fn build_remote_image_path(filename: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?
         .as_millis();
     Ok(format!("/tmp/paste_image_{}.{}", timestamp, extension))
+}
+
+#[cfg(test)]
+mod split_direction_tests {
+    use super::SplitDirection;
+
+    #[test]
+    fn parse_horizontal_returns_horizontal_variant() {
+        assert_eq!(SplitDirection::parse("horizontal"), Some(SplitDirection::Horizontal));
+    }
+
+    #[test]
+    fn parse_vertical_returns_vertical_variant() {
+        assert_eq!(SplitDirection::parse("vertical"), Some(SplitDirection::Vertical));
+    }
+
+    #[test]
+    fn parse_returns_none_for_unknown_string() {
+        assert_eq!(SplitDirection::parse("diagonal"), None);
+        assert_eq!(SplitDirection::parse(""), None);
+        assert_eq!(SplitDirection::parse("Horizontal"), None, "must be lowercase exactly");
+    }
+
+    #[test]
+    fn flag_returns_correct_tmux_argument() {
+        assert_eq!(SplitDirection::Horizontal.flag(), "-h");
+        assert_eq!(SplitDirection::Vertical.flag(), "-v");
+    }
+
+    #[test]
+    fn serializes_as_lowercase_string() {
+        let json = serde_json::to_string(&SplitDirection::Horizontal).unwrap();
+        assert_eq!(json, "\"horizontal\"");
+        let json = serde_json::to_string(&SplitDirection::Vertical).unwrap();
+        assert_eq!(json, "\"vertical\"");
+    }
+
+    #[test]
+    fn deserializes_from_lowercase_string() {
+        let horizontal: SplitDirection = serde_json::from_str("\"horizontal\"").unwrap();
+        assert_eq!(horizontal, SplitDirection::Horizontal);
+        let vertical: SplitDirection = serde_json::from_str("\"vertical\"").unwrap();
+        assert_eq!(vertical, SplitDirection::Vertical);
+    }
 }

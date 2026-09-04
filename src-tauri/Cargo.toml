@@ -29,6 +29,7 @@ tracing-appender = "0.2"
 chrono = "0.4"
 tauri-plugin-clipboard-manager = "2"
 dashmap = "6"
+futures-core = "0.3"
 
 [dev-dependencies]
 mockall = "0.12"

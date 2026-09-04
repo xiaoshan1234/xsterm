@@ -4,9 +4,18 @@ import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useSession } from "../contexts/SessionContext";
 import { appendSessionOutput, getSessionOutput } from "../utils/sessionOutputBuffer";
+import { captureTmuxPane } from "../services/sessionService";
 
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
+/**
+ * scrollback replay happens **once per tmux pane per mount**.
+ * Module-level set so React strict-mode double-mounts do not double-replay
+ * (which would visibly duplicate the scrollback on the focused pane).
+ */
+const scrollbackReplayedRef = new Set<number>();
+
+const SCROLLBACK_LINES = 2000;
 
 function decodeOutput(data: number[]): string {
   return new TextDecoder().decode(new Uint8Array(data));
@@ -45,7 +54,34 @@ function extractAndCopyOsc52(text: string): string {
 }
 
 export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, sessionId: number): void {
-  const { setSessions } = useSession();
+  const { setSessions, sessions } = useSession();
+  // tmux scrollback replay applies only to tmux-backed panes.
+  const isTmuxPane = !!sessions.find((s) => s.id === sessionId && !!s.tmuxPaneId);
+
+  // replay tmux scrollback once per pane per app session. The
+  // replay happens BEFORE the live listener attaches so the user sees
+  // historical content first, then live output streams on top. The
+  // `scrollbackReplayedRef` Set gates re-runs so a sessions-list update
+  // that re-fires this effect does not double-replay. Errors are
+  // non-fatal (the pane still works without replay).
+  useEffect(() => {
+    if (!isTmuxPane || scrollbackReplayedRef.has(sessionId)) return;
+    const xterm = termRef.current;
+    if (!xterm) return;
+    scrollbackReplayedRef.add(sessionId);
+    captureTmuxPane(sessionId, SCROLLBACK_LINES)
+      .then((text) => {
+        if (!text) return;
+        try {
+          xterm.write(text);
+        } catch (e) {
+          console.error("[xsterm] Failed to write tmux scrollback to terminal:", e);
+        }
+      })
+      .catch((err) => {
+        console.error("[xsterm] captureTmuxPane failed:", err);
+      });
+  }, [isTmuxPane, sessionId, termRef]);
 
   // TEMPORARY REVERT (Perf 001 follow-up): reverted from binary
   // Channel<Vec<u8>> path back to listen<[number, number[]]>. The

@@ -11,7 +11,7 @@ use crate::models::session::{SessionInfo, SessionType, SSHSessionConfig};
 pub fn create_ssh_session(
     ssh_backend: &dyn SshBackend,
     config: SSHSessionConfig,
-    backend: impl AppBackend + 'static,
+    backend: Arc<dyn AppBackend>,
     session_id: u32,
 ) -> Result<SshSessionWrapper, String> {
     let SshConnectResult { channel: _channel, write_tx, read_rx, resize_tx } =
@@ -36,6 +36,10 @@ pub fn create_ssh_session(
         },
         is_connected: true,
         capabilities: CapabilityFlags::for_ssh(),
+        tmux_pane_id: None,
+        tmux_controller_id: None,
+        tmux_window_id: None,
+        is_hidden: false,
     };
 
     let wrapper = SshSessionWrapper {
@@ -46,7 +50,7 @@ pub fn create_ssh_session(
         capabilities: CapabilityFlags::for_ssh(),
     };
 
-    let backend_clone = backend.clone();
+    let backend_clone = Arc::clone(&backend);
     thread::spawn(move || {
         let mut seen_data = false;
         loop {

@@ -66,16 +66,24 @@ xsterm/
 │       │   ├── persistence.rs    # save_sessions / load_sessions / save_groups / load_groups
 │       │   └── logging.rs        # log_message / get_log_config / set_log_config / get_log_dir
 │       ├── services/             # 业务逻辑
-│       │   ├── session_manager.rs    # 中枢：所有会话注册表 + trait-based 可测试（1090 行含测试）
+│       │   ├── session_manager.rs    # 中枢：所有会话注册表 + trait-based 可测试（~2545 行含测试）
 │       │   ├── local_session.rs      # 本地 PTY session
 │       │   ├── ssh_session.rs        # SSH session（919 行的 ssh.rs 由它消费）
 │       │   └── session_log.rs        # per-session 日志模块
 │       ├── infrastructure/       # 外部资源抽象（trait）
 │       │   ├── pty.rs                # PtySystem trait（portable-pty 实现）
 │       │   ├── ssh.rs                # SshBackend trait（russh 实现，919 行）
-│       │   └── app_backend.rs        # AppBackend trait（解耦 emit from Tauri）
+│       │   ├── app_backend.rs        # AppBackend trait（解耦 emit from Tauri）
+│       │   └── tmux/                 # tmux -CC 集成（详见 §5.7）
+│       │       ├── mod.rs
+│       │       ├── controller.rs     # 主状态机：socket I/O + command queue
+│       │       ├── backend.rs        # Wave 5: TmuxBackend trait + Local / SSH impls
+│       │       ├── parser.rs         # line → ControlEvent 纯函数
+│       │       ├── escape.rs         # unescape_output (octal → bytes)
+│       │       ├── commands.rs       # 高层 API: send_keys / split_window / ...
+│       │       └── events.rs         # ControlEvent enum
 │       └── models/               # 数据模型
-│           ├── session.rs            # LocalSessionConfig / SSHSessionConfig / SessionInfo
+│           ├── session.rs            # LocalSessionConfig / SSHSessionConfig / TmuxCcConfig / SessionInfo
 │           ├── group.rs
 │           ├── capabilities.rs
 │           └── log.rs
@@ -311,6 +319,144 @@ useTauriTerminalOutput.ts: listen("session-output")
 
 2026-08 完成的 session-config-enhancement 把 LocalSessionConfig / SSHSessionConfig / SessionDisplayConfig / SessionLoggingConfig 扩展成完整 spec。详见 `doc/create-session-config.md`、`doc/session-config-{shell,ssh,common}.md`。对应字段全部在 Rust 端镜像 + 默认值 + 持久化兼容（commit `7dbfa27` / `367b383` / `d8b4103` / `b292056`）。
 
+### 5.7 tmux -CC 集成（Wave 0–5）
+
+需求与设计见 [`doc/requirements/prd-0.1/req-006-tmux.md`](../requirements/prd-0.1/req-006-tmux.md)。本节只描述实际落地的架构。
+
+#### 5.7.1 `TmuxBackend` 抽象（Wave 5）
+
+`infrastructure/tmux/backend.rs` 定义 trait：
+
+```rust
+pub trait TmuxBackend: Send + Sync + 'static {
+    fn take_stdout(&mut self) -> Result<Box<dyn AsyncRead + Send + Unpin>, String>;
+    fn take_stdin(&mut self)  -> Result<Box<dyn AsyncWrite + Send + Unpin>, String>;
+    fn take_stderr(&mut self) -> Result<Box<dyn AsyncRead + Send + Unpin>, String>;
+    fn wait(&mut self)         -> BoxFuture<'_, Result<i32, String>>;
+    fn kill(&mut self)         -> Result<(), String>;
+}
+```
+
+| 实现 | 来源 | 用途 |
+|---|---|---|
+| `LocalTmuxBackend` | `tokio::process::Child` | `TmuxController::spawn_local` (Wave 1 路径，spawn `tmux -CC`) |
+| `SshTmuxBackend` | `SshConnectResult` (russh exec channel) | `TmuxController::spawn_with_ssh` (Wave 5 路径，远端 `tmux -CC`) |
+
+`take_*` 是一次性的：`controller` 在 `spawn_*` 时各取一次后把 stream 交给 reader / writer / drain 三个 task。所有权转移由 trait 自身强制，避免重复消费同一个 `Child` / russh 通道。
+
+#### 5.7.2 `TmuxController`（central orchestrator）
+
+`TmuxController` 自身不是 `SessionBackend` —— 它**拥有** N 个 xsterm session。`SessionManager` 通过 `TmuxPaneHandle`（薄壳，见 §5.7.6）注册每个 pane。
+
+| 字段 / 方法 | 作用 |
+|---|---|
+| `pane_bindings: HashMap<tmux_pane_id, xsterm_id>` | 主映射表 |
+| `pane_window_bindings: HashMap<tmux_pane_id, tmux_window_id>` | 桥接 `WindowPaneChanged → WindowAdd` |
+| `window_bindings: HashMap<tmux_window_id, xsterm_window_id>` | 主窗口映射 |
+| `spawn_local(argv)` | 启动本地 `tmux -CC` 子进程（Wave 1） |
+| `spawn_attach(session_name)` | 启动本地 `tmux -CC attach-session` 子进程（Wave 4） |
+| `spawn_with_ssh(connect_result)` | 复用 russh exec channel（Wave 5） |
+| `send_keys / resize_pane / capture_pane` | 入栈到 writer task |
+| `split_window / kill_pane / new_window / kill_window / rename_window` | 高级 API；带 Promise 协调 |
+| `close()` | 关闭 backend、清空所有 pending Promise |
+
+Controller 启动后 spawn 三个长期 task：
+- **reader task**：`stdout` → 行解析 → `mpsc::UnboundedSender<ControlEvent>` → dispatch task
+- **writer task**：从 `mpsc::UnboundedReceiver<String>` 取命令 → `stdin.write_all`
+- **stderr drain task**：`stderr` 字节流丢弃（不应有内容；落 rolling log）
+- **monitor task**：`backend.wait()` → `tmux-controller-exit` 事件
+
+加 dispatch task：消费 `ControlEvent` → 应用路由规则 → emit Tauri 事件 / 解析 Promise。
+
+#### 5.7.3 Promise 协调（4 种）
+
+所有 Promise 用 `tokio::sync::oneshot` + `std::sync::Mutex`：
+
+| 字段 | 用途 | 来源 Wave |
+|---|---|---|
+| `pending_splits: Mutex<VecDeque<oneshot::Sender<SplitResult>>>` | `split-window` 命令的 round-trip：`%window-pane-changed` for the new pane 解析 front sender | Wave 2 |
+| `pending_windows: Mutex<VecDeque<oneshot::Sender<NewWindowResult>>>` | `new-window` 命令的 round-trip：`%window-add` 解析 front sender | Wave 3 |
+| `pending_window_pane: Mutex<HashMap<tmux_window_id, PendingWindow>>` | 桥接 `WindowAdd → WindowPaneChanged`：前者 push sender，后者 pop sender + 注册 pane + emit `tmux-pane-added` + (user-driven only) emit `tmux-window-added` | Wave 3 |
+| `pending_capture: Mutex<Option<oneshot::Sender<CaptureResult>>>` + `pending_capture_body: Mutex<Vec<String>>` | `capture-pane` 单飞（一次只允许一个 capture in flight）：body lines 累积在 `pending_capture_body`，`%end` 触发并清空 | Wave 4 |
+
+`close()` 在终止前 `drain_pending_*_with_error` 唤醒所有等待者，避免前端 Promise 永远 hang。
+
+#### 5.7.4 Dispatch 路由（三分支 / 五级 case fallthrough）
+
+`dispatch_event` 对每个 `ControlEvent` 走不同路径。最复杂的两条：
+
+**`%window-pane-changed`**（Wave 2 §4.4 五级 fallthrough）：
+1. **already-bound**：`pane_bindings` 已有此 pane id → ignore（tmux 在 active pane 切换时会重复 emit）
+2. **split-result**：`pending_splits` front pop → 分配 xsterm id → emit `tmux-pane-added` → resolve oneshot
+3. **new-window / bootstrap**：`pending_window_pane` remove for this window id → 分配 xsterm id → emit `tmux-pane-added` + (if user-driven) emit `tmux-window-added` + resolve oneshot；bootstrap 路径只 emit `tmux-pane-added`（前端已经有对应 Window）
+4. **bootstrap fallback**（Wave 1/2 legacy）：`first_pane_result` 仍 `None` → 同上但走 `record_first_pane` 而非 emit `tmux-window-added`
+5. **external pane**：tmux 报告了我们没请求的新 pane（用户在 inner shell 跑了 `splitw` 等）→ 不 auto-bind，只 log。**已知缺口** —— 没有 re-bind UI。
+
+**`%window-add`**（Wave 3 三分支 trichotomy）：
+- (a) `pending_windows` 非空 → user-driven `new-window` reply：pop front → 分配 xsterm window id → 存 `pending_window_pane` 等 `%window-pane-changed`
+- (b) `pending_windows` 空 AND `window_bindings` + `pending_window_pane` 都空 → bootstrap window（`tmux -CC new-session` 创建的第一个 window）：同 (a) 但 sender = None
+- (c) 否则 → external new-window（用户在 tmux 内手动 `:new-window`）→ 不 auto-bind，只 log
+
+#### 5.7.5 `SessionManager::create_tmux` / `attach_tmux`
+
+两个入口（`services/session_manager.rs`）：
+
+| 方法 | 调用 | 行为 |
+|---|---|---|
+| `create_tmux(config: TmuxCcConfig)` | `create_tmux_session` Tauri 命令 | `TmuxController::spawn_local` 或 `spawn_with_ssh`（取决于 `TmuxCcConfig.ssh`）→ 等第一个 pane 上来 → 构造 `TmuxPaneHandle` + `SessionInfo` → 注册到 `sessions` + `tmux_controllers` |
+| `attach_tmux(config: TmuxCcConfig)` | `attach_tmux_session` Tauri 命令 | 同上，但走 `spawn_attach(session_name)` 而非 `spawn_local` |
+
+`list_attached_tmux_servers` / `auto_attach_all`（Wave 4）从 `attached_tmux.json` 读 → 对每条调用 `attach_tmux`。
+
+#### 5.7.6 `ActiveSession::TmuxPane(TmuxPaneHandle)`
+
+`TmuxPaneHandle` 实现 `SessionBackend`，但 `write` / `resize` / `close` 全部转发到 controller：
+
+```rust
+impl SessionBackend for TmuxPaneHandle {
+    fn write(&self, data: &[u8]) -> Result<(), String> {
+        self.controller.send_keys(&self.tmux_pane_id, data)
+    }
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
+        self.controller.resize_pane(&self.tmux_pane_id, rows, cols)
+    }
+    fn close(self: Box<Self>) -> Result<(), String> {
+        // Dropping one pane binding must NOT kill the controller —
+        // other panes owned by the same tmux -CC process may still be live.
+        self.controller.unbind_pane(&self.tmux_pane_id)
+    }
+}
+```
+
+`TmuxPaneHandle` 持有 `Arc<TmuxController>`，所以 `SessionManager::sessions[id].controller` 与 `SessionManager::tmux_controllers[id]` 是同一个引用，`Arc::clone` 廉价。
+
+#### 5.7.7 事件表面
+
+复用 + 新增：
+
+| 事件 | payload | 触发 |
+|---|---|---|
+| `session-output` | `[sessionId, bytes]` (UTF-8 byte array) | `%output` / `%extended-output`（复用 Wave 1 之前的事件名） |
+| `tmux-pane-added` | `{controllerId, tmuxPaneId, xstermSessionId, parentTmuxWindowId}` | dispatch path case 2/3/4 |
+| `tmux-pane-removed` | `{controllerId, tmuxPaneId, xstermSessionId}` | `%pane-exited` / `%pane-died` / 主动 kill-pane round-trip |
+| `tmux-window-added` | `{controllerId, tmuxWindowId, xstermWindowId, xstermSessionId, xstermPaneId}` | dispatch path case 3 user-driven only |
+| `tmux-window-closed` | `{controllerId, tmuxWindowId, xstermWindowId}` | `%window-close` for bound window |
+| `tmux-window-renamed` | `{controllerId, tmuxWindowId, xstermWindowId, name}` | `%window-renamed` for bound window |
+| `tmux-paused` | `{tmuxPaneId}` | `%pause`（read-only marker，Wave 1+） |
+| `tmux-continued` | `{tmuxPaneId}` | `%continue` |
+| `tmux-controller-exit` | `{controllerId, reason?}` | `%exit` 或 monitor task 看到 backend wait 失败 |
+
+所有 `tmux-*` 事件 payload schema 见 `src/types/session.ts`（`TmuxPaneAddedEvent` 等 interface），与 Rust 端 `serde_json::json!({...})` 构造一一对应。
+
+#### 5.7.8 已知架构特性 / 债务
+
+| 特性 / 债务 | 位置 | 说明 |
+|---|---|---|
+| 外部 pane 不自动绑定 | `controller.rs::dispatch_event` case 5 | `splitw` 等 inner-shell 动作产生的 pane 只 log；future iteration 加 re-bind UI |
+| 外部 window 不自动绑定 | `controller.rs::dispatch_event` case 3c | 用户在 tmux 内手动 `:new-window` 同理；MVP 用户用 in-app 的 `New Tmux Window` 命令 |
+| Bootstrap window id 未暴露前端 | `models/session.rs::SessionInfo` | `xsterm_window_id` 仅 backend 持有；前端无法 `kill_tmux_window` bootstrap window |
+| 6 个 Wave-0 命令 builder 保留 dead-code | `commands.rs::split_window` / `new_window` / `list_panes` / `list_sessions` / `refresh_client` | spec'd in req-006 §3.4 + 单元测试覆盖；production 走 inline wire payload |
+
 ---
 
 ## 6. 持久化
@@ -328,20 +474,22 @@ useTauriTerminalOutput.ts: listen("session-output")
 
 ## 7. 复杂度热点（必读）
 
-按"修改风险 × 复杂度"排序（**2026-08 数据**）：
+按"修改风险 × 复杂度"排序（**2026-09 数据，Wave 0–5 后**）：
 
 | 文件 | 行数 | 为什么是热点 |
 |---|---|---|
-| `src-tauri/src/services/session_manager.rs` | 1090（含测试） | **当前最大单文件**。所有 session 注册表 + trait-based dispatch + Wave 1-3 spec 字段处理 + 大型 mockall 测试。修改前必须读完整文件。 |
+| `src-tauri/src/infrastructure/tmux/controller.rs` | ~3700（含测试） | **当前最大单文件**。tmux -CC 主状态机：reader / writer / monitor / dispatch 四个 task + 4 种 Promise 协调（split / window / window-pane / capture）+ dispatch 路由（5 级 `%window-pane-changed` fallthrough + 3 分支 `%window-add` trichotomy）。改 dispatch 路由前必须读完整文件 + 跑 Wave 2/3/4 测试套件。 |
+| `src-tauri/src/services/session_manager.rs` | ~2545（含测试） | **当前最大业务文件**。所有 session 注册表（含 tmux_controllers / tmux_pane_bindings）+ trait-based dispatch + Wave 1–5 spec 字段处理 + 大型 mockall 测试 + `create_tmux` / `attach_tmux` / `create_tmux_pane` / `kill_tmux_pane` / `create_tmux_window` / `capture_tmux_pane` / `list_attached_tmux_servers` / `auto_attach_all` 共 8 个 tmux 相关方法。修改前必须读完整文件。 |
 | `src-tauri/src/infrastructure/ssh.rs` | 919 | russh 异步生命周期 + Wave 1-3 SSH 配置字段（keepalive / TCP nodelay / so_keepalive / null_packet_keepalive / known_hosts_path / proxy_jump 等）。**安全债**：`ClientHandler::check_server_key` 无条件 `return true`（不验证主机密钥）。 |
+| `src-tauri/src/infrastructure/tmux/backend.rs` | 666（含测试） | Wave 5 `TmuxBackend` trait + `LocalTmuxBackend`（`tokio::process::Child`）+ `SshTmuxBackend`（russh exec channel 适配）+ `SshAsyncRead` / `SshAsyncWrite` 适配器（`sync_mpsc` ↔ `tokio::io` 桥接）。 |
 | `src/contexts/session/useWorkspaceActions.ts` | 370 | **前端最大 hook**。Workspace 持久化（带回滚）+ save/load + window 重组。复杂度仅次于 useSessionActions 拆分前。 |
 | `src/contexts/session/paneUtils.ts` | 271 | 25 个**纯函数**，整个布局系统的核心。已加 Vitest 覆盖（48 个用例），行为已锁定。**已知 bug 006**：`isSessionUsedInOtherWindow` 早返回逻辑错误。 |
 | `src/components/Terminal.tsx` | 294 | xterm 生命周期 + 输入/输出/粘贴/选择 + 断连检测（仅 Enter 触发重连）。**粘贴去重（bug 003）**、**reset on sessionId change（bug 004）**、**断连横幅 UI** 三处修复都在这里。 |
 | `src/components/Pane.tsx` | 269 | 会话绑定 vs. 分屏的二选一流，配合 `SelectSessionDialog` 协同时序复杂。**Bug 002** 的 `isSubmittingRef` 防线在这里。 |
 | `src/contexts/session/useSessionLifecycle.ts` | 268 | **会话生命周期**（create / openFromConfig / close / reconnect）。**Bug fix `937e4fb`** 统一了连接 banner 命名约定并修复了 connection banner 状态判断。 |
-| `src/contexts/session/usePaneActions.ts` | 258 | Pane 树变更（split / attach / setActive / close）的核心算法。 |
+| `src/contexts/session/usePaneActions.ts` | 258 | Pane 树变更（split / attach / setActive / close）的核心算法。tmux-aware split 分支走 `splitTmuxPane`。 |
 | `src/components/WorkspaceContainer.tsx` | 192 | 多 window 管理 + 命令面板 + window 级 save/rename（已经瘦身，从 299 → 192）。 |
-| `src/components/dialogs/CreateSessionDialog.tsx` | 369 | 7 个 sidebar sections × 2 个 top tabs（Shell/SSH）+ 大量 sub-form 组合。**Bug fix `937e4fb`** 涉及这里。 |
+| `src/components/dialogs/CreateSessionDialog.tsx` | 369 | 4 个 sidebar sections × 4 个 top tabs（Shell / SSH / Tmux Local / Tmux SSH）+ 大量 sub-form 组合。**Bug fix `937e4fb`** 涉及这里。 |
 
 ---
 
@@ -362,7 +510,20 @@ useTauriTerminalOutput.ts: listen("session-output")
 12. **`src-tauri/src/infrastructure/pty.rs` / `ssh.rs`** —— 理解 PTY/SSH 怎么跑（trait 抽象很优雅）。
 13. **`src/contexts/session/paneUtils.ts`** + `paneUtils.test.ts` —— 布局系统的核心算法（**先看测试再看实现**，因为测试就是规范）。
 
-读完后想动手改：先翻 `doc/bug.md` 看历史教训，再翻 `doc/req-*.md` 看需求文档。任何 UI 改动必须查 [`doc/design-system.md`](design-system.md) §2 token 表 + §10 允许例外清单。
+读完后想动手改：先翻 `doc/maintenance/bug.md` 看历史教训，再翻 `doc/requirements/prd-0.1/req-*.md` 看需求文档。任何 UI 改动必须查 [`doc/design-system.md`](design-system.md) §2 token 表 + §10 允许例外清单。
+
+### 8.1 tmux 集成专项阅读
+
+如果改动涉及 tmux -CC，按这个顺序读（基于上面 1–13 节）：
+
+1. 本文件 §5.7 — tmux 集成整体架构（必读）
+2. [`doc/requirements/prd-0.1/req-006-tmux.md`](../requirements/prd-0.1/req-006-tmux.md) — 需求 + 协议摘要 + 决策记录
+3. `src-tauri/src/infrastructure/tmux/mod.rs` — 模块布局 + 公开 API
+4. `src-tauri/src/infrastructure/tmux/parser.rs` + `events.rs` — 协议解码（纯函数，**先看测试**）
+5. `src-tauri/src/infrastructure/tmux/controller.rs::dispatch_event` — 路由规则（**§5.7.4 三分支 / 五级 case**）
+6. `src-tauri/src/services/session_manager.rs::create_tmux` / `attach_tmux` / `create_tmux_pane` — 注册路径
+7. `src/contexts/session/useTauriListeners.ts` — 前端事件 reducer
+8. `src/types/session.ts::TmuxPaneAddedEvent` 等 — 事件 payload schema
 
 ---
 
@@ -373,8 +534,8 @@ useTauriTerminalOutput.ts: listen("session-output")
 | 风险 | 位置 | 建议 |
 |---|---|---|
 | **SSH 主机密钥验证关闭** | `src-tauri/src/infrastructure/ssh.rs:check_server_key` | 上线前必须加 known_hosts |
-| **CSP 关闭** | `src-tauri/tauri.conf.json: "csp": null` | 加 remote script/asset 时必须先恢复 CSP |
-| **`session_manager.rs` 1090 行单文件** | `src-tauri/src/services/session_manager.rs` | trait 已经分好；可考虑拆 `LocalSessionRegistry` / `SshSessionRegistry` / `SessionBackend` 默认 impl |
+| **`session_manager.rs` 2545 行单文件** | `src-tauri/src/services/session_manager.rs` | trait 已经分好；可考虑拆 `LocalSessionRegistry` / `SshSessionRegistry` / `TmuxPaneRegistry` / `SessionBackend` 默认 impl |
+| **`tmux/controller.rs` 3700 行单文件** | `src-tauri/src/infrastructure/tmux/controller.rs` | 当前 dispatch + reader/writer/monitor task + Promise 协调全在一个文件；可拆 `dispatch.rs` / `tasks.rs` / `promises.rs` |
 | **`invoke()` 无类型安全** | 整个前端 | 接入 `tauri-specta` 或同类生成 TypeScript binding |
 | **版本号不一致** | `package.json` / `Cargo.toml` 是 0.1.1，`tauri.conf.json` 是 0.1.3 | 发版前统一 |
 | **`list_sessions` 命令有 wrapper 但无调用点** | `src/services/sessionService.ts:listSessions` | 要么删掉 wrapper，要么加 settings/health-check UI 调用 |
@@ -382,7 +543,9 @@ useTauriTerminalOutput.ts: listen("session-output")
 | **`logging_setup` 故意泄漏 guard** | `src-tauri/src/logging_setup.rs` | 这是有意为之（保持 rolling writer alive），但新人读代码容易误解 |
 | **Bug 006 未修** | `src/contexts/session/paneUtils.ts:isSessionUsedInOtherWindow` | 测试有 `.todo` 占位 |
 | **WebView2 SVG `<text>` 静默失败** | `src/components/NavBar.tsx` 等使用 `<img src="*.svg>` 处 | **2026-08 已修复**：`logo.svg` / `logo-icon.svg` 全部用 path，避免字体回退链断开 |
-| **Disconnect banner 状态依赖 React state** | `src/components/Pane.tsx:245` + `src/components/Terminal.tsx:193-201` | 当前文案已软化为 `var(--warning)`（可恢复），但根因诊断（PowerShell 实际退出 vs PTY 误判）需要 `doc/bug.md` 跟踪 |
+| **Disconnect banner 状态依赖 React state** | `src/components/Pane.tsx:245` + `src/components/Terminal.tsx:193-201` | 当前文案已软化为 `var(--warning)`（可恢复），但根因诊断（PowerShell 实际退出 vs PTY 误判）需要 `doc/maintenance/bug.md` 跟踪 |
+| **tmux 外部 pane / window 不自动绑定** | `controller.rs::dispatch_event` case 5 / case 3c | 用户在 inner shell 跑 `splitw` 或在 tmux 内手动 `:new-window` 产生的 pane/window 只 log 不绑定；future iteration 加 re-bind UI |
+| **CSP scope 限于本地** | `src-tauri/tauri.conf.json: csp` | 已开启严格 CSP（Wave 6），但策略目前允许 `ipc:` + `http://ipc.localhost`；引入任何远程脚本/asset 前需重新评估 |
 
 ---
 
@@ -407,6 +570,16 @@ useTauriTerminalOutput.ts: listen("session-output")
 ## 11. 重构记录（2026-07-27 之后）
 
 按时间倒序：
+
+### 2026-09 — tmux -CC 集成 Wave 0–5 完成
+
+- **Wave 0**：基础设施先行。`infrastructure/tmux/{parser,escape,events,commands,controller}.rs`；parser 40+ 测试；escape round-trip；controller skeleton（spawn child + reader + writer，不接 SessionManager）
+- **Wave 1**：单 pane MVP。`ActiveSession::TmuxPane(TmuxPaneHandle)` + `create_tmux_session` / `write_session` / `resize_session` / `close_session` tmux 分支 + bootstrap pane `is_hidden = true` + `CapabilityFlags::for_tmux()` + 前端 `tmux-cc` SessionType + CreateSessionDialog "Tmux (Local)" tab
+- **Wave 2**：split / kill pane + Promise 协调 (`pending_splits`)。前端 `Pane.tsx` 启用 split 右键菜单项（capability 检查）+ `Ctrl+\` / `Ctrl+Shift+\` 快捷键 + `usePaneActions.splitPane` tmux-aware 分支
+- **Wave 3**：tabs & windows 映射。`create_tmux_window` / `kill_tmux_window` / `rename_tmux_window` + `%window-add` / `%window-close` / `%window-renamed` 事件 + `pending_windows` + `pending_window_pane` 桥接 + dispatch 3 分支 trichotomy
+- **Wave 4**：scrollback & reconnect。`capture_tmux_pane` 单飞（`pending_capture` + `pending_capture_body`）+ `attach_tmux_session` + `attached_tmux.json` 持久化 + `auto_attach_all` + `TmuxControllerErrorBanner` + `useTmuxAutoAttach`
+- **Wave 5**：SSH + tmux。`TmuxBackend` trait 抽象 + `LocalTmuxBackend` / `SshTmuxBackend` impls + `SshAsyncRead` / `SshAsyncWrite` 适配器（`sync_mpsc` ↔ `tokio::io` 桥接）+ `TmuxCcConfig.ssh` 字段 + CreateSessionDialog "Tmux (SSH)" tab
+- **Wave 6**（本波）：抛光。详见 §5.7.8 + 重新启用 CSP + `tmux/` 模块级 `#[allow(dead_code)]` 拆为 per-item + doc sync
 
 ### 2026-08-20 — 设计系统永久化 + 文档同步
 - 新建 `doc/design-system.md`（302 行）—— Cursor 暗色 IDE 适配版的完整规范
@@ -439,5 +612,5 @@ useTauriTerminalOutput.ts: listen("session-output")
 
 ---
 
-*文档生成时间：2026-08-20*
-*基础来源：仓库实际文件清单 + 实际 grep/ls/wc 核验 + 最近 15 个 commit 历史 + 已合并的设计系统重构*
+*文档生成时间：2026-09-04（Wave 6 抛光 + tmux §5.7 + CSP 重新启用）*
+*基础来源：仓库实际文件清单 + 实际 grep/ls/wc 核验 + 最近 30 个 commit 历史 + 已合并的设计系统重构 + Wave 0–5 tmux 集成落地*

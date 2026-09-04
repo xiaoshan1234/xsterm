@@ -96,7 +96,6 @@ async function main(): Promise<void> {
     if (specFiles.length === 0) {
       console.log(
         "\nℹ️  No spec files found in test/sys-test/specs/.\n" +
-          "    This is expected until Wave 2 spec files are added.\n" +
           "    Create .spec.ts files alongside this message to execute them.\n",
       );
       process.exit(0);

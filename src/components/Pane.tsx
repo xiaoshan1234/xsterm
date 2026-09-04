@@ -9,6 +9,8 @@ import { ContextMenu, type ContextMenuRef } from "./ui/ContextMenu";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
+import { TmuxControllerErrorBanner } from "./TmuxControllerErrorBanner";
+import * as sessionService from "../services/sessionService";
 import "./Pane.css";
 
 interface PaneProps {
@@ -65,11 +67,30 @@ export function Pane({
   const selectedWindow = workspace.windows.find((w) => w.id === windowId);
   const paneNumber = selectedWindow ? getPaneNumber(selectedWindow.rootPane, pane.id) : null;
 
-  const handleStartSplit = useCallback((direction: SplitDirection) => {
-    setPendingSplit(direction);
-    setDialogMode("split");
-    setShowSessionDialog(true);
-  }, []);
+  // hidden panes (from tmux -CC attach) are suppressed. MVP panes have is_hidden = false.
+  if (session?.isHidden) {
+    return null;
+  }
+
+  const handleStartSplit = useCallback(
+    (direction: SplitDirection) => {
+      // tmux panes (supportsMultiplex) split immediately
+      // through the backend — no "pick a session from the dialog"
+      // step because the new pane IS the new tmux pane. The
+      // `tmux-pane-added` listener / `splitTmuxPaneInternal` updates
+      // React state and the pane tree.
+      if (session?.capabilities?.supportsMultiplex && session.id !== undefined && pane.sessionId !== undefined) {
+        splitPane(workspace.id, windowId, pane.id, direction, pane.sessionId);
+        return;
+      }
+      // Non-multiplex path: open the dialog so the user picks what
+      // session to attach to the new leaf.
+      setPendingSplit(direction);
+      setDialogMode("split");
+      setShowSessionDialog(true);
+    },
+    [session, pane.sessionId, splitPane, workspace.id, windowId, pane.id],
+  );
 
   const handleStartAttach = useCallback(() => {
     setPendingSplit(null);
@@ -198,16 +219,57 @@ export function Pane({
     closePane(workspace.id, windowId, pane.id);
   }, [closePane, workspace.id, windowId, pane.id]);
 
-  const contextMenuItems = buildPaneContextMenu(session, {
-    startSplit: handleStartSplit,
-    startAttach: handleStartAttach,
-    selectAll: handleSelectAll,
-    copy: handleCopy,
-    paste: handlePaste,
-    clear: handleClear,
-    closePane: handleClosePane,
-    closeSession: handleCloseSession,
-  });
+  const handleCreateTmuxWindow = useCallback(async () => {
+    if (session?.tmuxControllerId === undefined) return;
+    try {
+      await sessionService.createTmuxWindow(session.tmuxControllerId);
+    } catch (e) {
+      console.error("Failed to create tmux window:", e);
+      window.alert(`Failed to create tmux window: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [session?.tmuxControllerId]);
+
+  const handleKillTmuxWindow = useCallback(async () => {
+    const xid = selectedWindow?.xstermWindowId;
+    if (xid === undefined) return;
+    try {
+      await sessionService.killTmuxWindow(xid);
+    } catch (e) {
+      console.error("Failed to kill tmux window:", e);
+      window.alert(`Failed to kill tmux window: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [selectedWindow?.xstermWindowId]);
+
+  const handleRenameTmuxWindow = useCallback(async () => {
+    const xid = selectedWindow?.xstermWindowId;
+    if (xid === undefined) return;
+    const name = window.prompt("Rename tmux window:");
+    if (name === null || name.trim() === "") return;
+    try {
+      await sessionService.renameTmuxWindow(xid, name.trim());
+    } catch (e) {
+      console.error("Failed to rename tmux window:", e);
+      window.alert(`Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [selectedWindow?.xstermWindowId]);
+
+  const contextMenuItems = buildPaneContextMenu(
+    session,
+    {
+      startSplit: handleStartSplit,
+      startAttach: handleStartAttach,
+      selectAll: handleSelectAll,
+      copy: handleCopy,
+      paste: handlePaste,
+      clear: handleClear,
+      closePane: handleClosePane,
+      closeSession: handleCloseSession,
+      createTmuxWindow: handleCreateTmuxWindow,
+      killTmuxWindow: handleKillTmuxWindow,
+      renameTmuxWindow: handleRenameTmuxWindow,
+    },
+    selectedWindow,
+  );
 
   return (
     <>
@@ -229,6 +291,7 @@ export function Pane({
                   Connection lost. Press Enter to reconnect.
                 </div>
               )}
+              <TmuxControllerErrorBanner paneSessions={[session]} />
               <div className="pane-terminal-wrapper">
                 <Terminal
                   ref={terminalRef}

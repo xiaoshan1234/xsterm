@@ -5,9 +5,12 @@ import {
   type SSHSessionConfig,
   type Session,
   type SessionDisplayConfig,
+  type TmuxCcConfig,
 } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import SessionTab from "./SessionTab";
+import TmuxLocalForm from "./TmuxLocalForm";
+import TmuxSshForm from "./TmuxSshForm";
 import ShellSettingsPanel from "./ShellSettingsPanel";
 import SSHSettingsPanel from "./SSHSettingsPanel";
 import AppearanceTab from "./AppearanceTab";
@@ -24,6 +27,7 @@ import {
   DEFAULT_SSH,
   SHELL_SIDEBAR_ITEMS,
   SSH_SIDEBAR_ITEMS,
+  TMUX_SIDEBAR_ITEMS,
   type SectionId,
 } from "./sessionDialogItems";
 import "./CreateSessionDialog.css";
@@ -41,17 +45,23 @@ interface CreateSessionDialogProps {
     save: boolean,
     displayConfig?: SessionDisplayConfig,
   ) => Promise<Session>;
-  initialTab?: "local" | "ssh";
+  onCreateTmux: (
+    config: TmuxCcConfig,
+    save: boolean,
+    displayConfig?: SessionDisplayConfig,
+  ) => Promise<Session>;
+  initialTab?: "local" | "ssh" | "tmux-cc" | "tmux-ssh";
   initialGroupId?: number | null;
 }
 
-type TopTab = "local" | "ssh";
+type TopTab = "local" | "ssh" | "tmux-cc" | "tmux-ssh";
 
 export default function CreateSessionDialog({
   isOpen,
   onClose,
   onCreateLocal,
   onCreateSsh,
+  onCreateTmux,
   initialTab = "local",
   initialGroupId,
 }: CreateSessionDialogProps) {
@@ -64,13 +74,15 @@ export default function CreateSessionDialog({
   const [name, setName] = useState("");
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>({});
   const [sshConfig, setSshConfig] = useState<SSHSessionConfig>(DEFAULT_SSH);
+  const [tmuxConfig, setTmuxConfig] = useState<TmuxCcConfig>({});
   const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(undefined);
   const [error, setError] = useState("");
 
-  const sidebarItems = useMemo(
-    () => (topTab === "ssh" ? SSH_SIDEBAR_ITEMS : SHELL_SIDEBAR_ITEMS),
-    [topTab],
-  );
+  const sidebarItems = useMemo(() => {
+    if (topTab === "ssh") return SSH_SIDEBAR_ITEMS;
+    if (topTab === "tmux-cc" || topTab === "tmux-ssh") return TMUX_SIDEBAR_ITEMS;
+    return SHELL_SIDEBAR_ITEMS;
+  }, [topTab]);
 
   useEffect(() => {
     if (isOpen) {
@@ -81,6 +93,7 @@ export default function CreateSessionDialog({
       setName("");
       setLocalConfig({});
       setSshConfig(DEFAULT_SSH);
+      setTmuxConfig({});
       setDisplayConfig(undefined);
     }
   }, [isOpen, initialGroupId, initialTab]);
@@ -107,6 +120,34 @@ export default function CreateSessionDialog({
           ? { ...sshConfig, name: trimmedName }
           : sshConfig;
         session = await onCreateSsh(sshConfigWithName, saveConfig, displayConfig);
+      } else if (topTab === "tmux-cc") {
+        const trimmedName = name.trim();
+        const tmuxConfigWithName: TmuxCcConfig = trimmedName
+          ? { ...tmuxConfig, name: trimmedName }
+          : tmuxConfig;
+        session = await onCreateTmux(tmuxConfigWithName, saveConfig, displayConfig);
+      } else if (topTab === "tmux-ssh") {
+        // tmux-over-SSH. Validate the embedded SSH sub-config
+        // (the `ssh` field on the TmuxCcConfig) and forward the
+        // composite config to onCreateTmux; the backend will route
+        // through the SSH exec channel.
+        const sshSub = tmuxConfig.ssh;
+        if (!sshSub) {
+          setError("SSH configuration is required for tmux over SSH");
+          setSectionId("session");
+          return;
+        }
+        const validationError = validateSshConfig(sshSub);
+        if (validationError) {
+          setError(validationError);
+          setSectionId("session");
+          return;
+        }
+        const trimmedName = name.trim();
+        const tmuxConfigWithName: TmuxCcConfig = trimmedName
+          ? { ...tmuxConfig, name: trimmedName }
+          : tmuxConfig;
+        session = await onCreateTmux(tmuxConfigWithName, saveConfig, displayConfig);
       } else {
         const trimmedName = name.trim();
         const localConfigWithName: LocalSessionConfig = trimmedName
@@ -140,6 +181,26 @@ export default function CreateSessionDialog({
   const renderSection = () => {
     switch (sectionId) {
       case "session":
+        if (topTab === "tmux-cc") {
+          return (
+            <TmuxLocalForm
+              name={name}
+              onNameChange={setName}
+              config={tmuxConfig}
+              onConfigChange={setTmuxConfig}
+            />
+          );
+        }
+        if (topTab === "tmux-ssh") {
+          return (
+            <TmuxSshForm
+              name={name}
+              onNameChange={setName}
+              config={tmuxConfig}
+              onConfigChange={setTmuxConfig}
+            />
+          );
+        }
         return (
           <SessionTab
             connectionType={topTab}
@@ -182,7 +243,9 @@ export default function CreateSessionDialog({
           <TerminalTab
             config={displayConfig}
             onChange={setDisplayConfig}
-            connectionType={topTab}
+            connectionType={
+              topTab === "tmux-ssh" ? "ssh" : (topTab as "local" | "ssh" | "tmux-cc")
+            }
             localConfig={localConfig}
             onLocalConfigChange={setLocalConfig}
             sshConfig={sshConfig}
@@ -224,6 +287,18 @@ export default function CreateSessionDialog({
       label: "SSH",
       active: topTab === "ssh",
       onClick: () => handleTopTabChange("ssh"),
+    },
+    {
+      id: "tmux-cc",
+      label: "Tmux",
+      active: topTab === "tmux-cc",
+      onClick: () => handleTopTabChange("tmux-cc"),
+    },
+    {
+      id: "tmux-ssh",
+      label: "Tmux (SSH)",
+      active: topTab === "tmux-ssh",
+      onClick: () => handleTopTabChange("tmux-ssh"),
     },
   ];
 

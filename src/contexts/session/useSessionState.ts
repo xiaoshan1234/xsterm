@@ -5,9 +5,10 @@ import {
   type SavedWorkspace,
   type Session,
   type SessionGroup,
+  type TmuxCcConfig,
   type Workspace,
 } from "../../types/session";
-import { type SessionState } from "./types";
+import { type SessionState, type TmuxControllerError } from "./types";
 
 export function useSessionState(): SessionState {
   const [savedConfigs, setSavedConfigs] = useState<SavedSessionConfig[]>([]);
@@ -20,6 +21,17 @@ export function useSessionState(): SessionState {
   const [nextGroupId, setNextGroupId] = useState(1);
   const [globalLocalEcho, setGlobalLocalEcho] = useState(false);
   const [sessionLocalEchoOverrides] = useState<Map<number, boolean>>(new Map());
+  // one entry per tmux controller that has exited unexpectedly.
+  // Kept separate from `sessions` so its lifecycle is not affected by the
+  // `tmux-controller-exit` listener's `setSessions((prev) => prev.filter(...))`.
+  const [tmuxControllerErrors, setTmuxControllerErrors] = useState<Map<number, TmuxControllerError>>(
+    new Map(),
+  );
+  // `controllerId → config` map. Populated by the create / attach
+  // tmux flows so the retry banner can hand the original config back to
+  // `createTmux` / `attachTmux`. Survives pane teardown (which only removes
+  // `sessions` entries, not the controller's persistent metadata).
+  const tmuxControllerConfigsRef = useRef<Map<number, TmuxCcConfig>>(new Map());
 
   const sessionsRef = useRef(sessions);
   const workspacesRef = useRef(workspaces);
@@ -76,5 +88,8 @@ export function useSessionState(): SessionState {
     workspacesRef,
     establishingSessionsRef,
     getEffectiveLocalEcho,
+    tmuxControllerErrors,
+    setTmuxControllerErrors,
+    tmuxControllerConfigsRef,
   };
 }

@@ -4,6 +4,7 @@ import type {
   LocalSessionConfig,
   SSHSessionConfig,
   Session,
+  TmuxCcConfig,
   Window,
   Workspace,
 } from "../../types/session";
@@ -51,6 +52,7 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
         config.type,
         () => sessionService.createLocal(config.config as LocalSessionConfig),
         () => sessionService.createSsh(config.config as SSHSessionConfig),
+        () => sessionService.createTmux(config.config as TmuxCcConfig),
       );
       const session = buildFrontendSession(info, configId, config.type, config.displayConfig);
       setSessions((prev) => [...prev, session]);

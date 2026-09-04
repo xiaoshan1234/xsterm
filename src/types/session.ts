@@ -32,6 +32,16 @@ export interface Window {
   rootPane: PaneNode;
   activePaneId: string | null;
   windowType?: "terminal" | "init";
+  /**
+   * backend's xsterm window id (a u32) for tmux-backed windows.
+   * Used by the `tmux-window-closed` / `tmux-window-renamed` listeners
+   * to find the matching frontend Window. Undefined for non-tmux
+   * windows and for tmux bootstrap windows (the bootstrap window's
+   * xsterm_window_id is tracked by the backend but not exposed to the
+   * frontend, so the bootstrap window cannot be killed via
+   * `kill_tmux_window` from the frontend).
+   */
+  xstermWindowId?: number;
 }
 
 export interface Workspace {
@@ -47,7 +57,7 @@ export interface Session {
   id: number;
   configId: string;
   name: string;
-  type: "local" | "ssh";
+  type: "local" | "ssh" | "tmux-cc";
   isConnected: boolean;
   sessionType: SessionType;
   displayConfig?: SessionDisplayConfig;
@@ -56,10 +66,30 @@ export interface Session {
   createdAt?: number;
   /** ms epoch — updated on pane focus + terminal output */
   lastActivityAt?: number;
+  /** tmux pane id (e.g. "%5") when this session is backed by a tmux pane. */
+  tmuxPaneId?: string;
+  /** controller id that owns this tmux pane; set when `type === "tmux-cc"`. */
+  tmuxControllerId?: number;
+  /**
+   * tmux window id (e.g. "@1") the pane belongs to. Used by the
+   * frontend to map a `Session` to its containing `xsterm Window` when
+   * processing `tmux-window-closed` (to find every Session that belongs
+   * to a closing window). Set for both bootstrap panes and panes
+   * created via `create_tmux_window` / `create_tmux_pane`.
+   */
+  tmuxWindowId?: string;
+  /**
+   * hidden (bootstrap) tmux panes are not rendered. `tmux -CC new`
+   * panes have `is_hidden = false` so they render normally; tmux
+   * attaches flag the bootstrap pane as hidden.
+   */
+  isHidden?: boolean;
 }
 
 export type SessionType =
-  { type: "local"; config: LocalSessionConfig } | { type: "ssh"; config: SSHSessionConfig };
+  | { type: "local"; config: LocalSessionConfig }
+  | { type: "ssh"; config: SSHSessionConfig }
+  | { type: "tmux-cc"; config: TmuxCcConfig };
 
 export interface LocalSessionConfig {
   /** Optional display name. Falls back to the shell basename when omitted. */
@@ -119,6 +149,42 @@ export interface SSHSessionConfig {
   knownHostsPath?: string;
   /** SSH proxy jump host (user@host:port) for cascading connections. */
   proxyJump?: string;
+}
+
+/**
+ * tmux control mode (`tmux -CC`) session config. Mirrors the Rust
+ * `TmuxCcConfig` struct exactly. All fields optional — empty `TmuxCcConfig {}`
+ * produces a `tmux -CC new-session` with default socket and auto-generated name.
+ *
+ * when `ssh` is set, the controller runs `tmux -CC` on the remote
+ * host via an SSH exec channel; the existing fields below still apply
+ * (tmux session name, socket name, initial geometry) but the **transport**
+ * is now SSH rather than a local `tokio::process::Command` child.
+ * Mirrors `doc/requirements/prd-0.1/req-006-tmux.md` §4.4 D5 + §4.7.
+ */
+export interface TmuxCcConfig {
+  /** Optional display name. Falls back to tmux session name when omitted. */
+  name?: string;
+  /** tmux session name. Leave blank to auto-generate a new session. */
+  tmuxSessionName?: string;
+  /** tmux socket name (`-L` flag). Leave blank for tmux's default socket. */
+  socketName?: string;
+  /** Initial shell command (passed to `tmux -CC new-session -d <cmd>`). */
+  startCommand?: string;
+  /** Initial environment overrides applied to the tmux pane. */
+  envConfig?: SessionEnvConfig;
+  /** Initial terminal rows advertised to tmux. @default 24 */
+  initialRows?: number;
+  /** Initial terminal columns advertised to tmux. @default 80 */
+  initialCols?: number;
+  /**
+   * SSH connection config. When set, the controller runs
+   * `tmux -CC` on the remote host via an SSH exec channel. When
+   * `undefined` (the default), the controller spawns a local
+   * `tmux -CC` child. Wired by the Create Session dialog's
+   * dedicated "Tmux (SSH)" top tab.
+   */
+  ssh?: SSHSessionConfig;
 }
 
 export interface SessionDisplayConfig {
@@ -232,4 +298,102 @@ export interface SessionGroup {
   name: string;
   configIds: string[];
   collapsed: boolean;
+}
+
+/**
+ * Payload of the `tmux-pane-added` event emitted by the
+ * `TmuxController` dispatch task on `%window-pane-changed`.
+ *
+ * The frontend listener in `useTauriListeners.ts` is idempotent: if a
+ * `Session` with the same `xstermSessionId` already exists (because
+ * the backend's `create_tmux_session` return value populated React
+ * state for the bootstrap pane), the listener short-circuits. This
+ * means the same payload shape covers BOTH the bootstrap pane and
+ * user-driven split panes; only the listener's behavior differs.
+ *
+ * Mirrors req-006 §4.6.
+ */
+export interface TmuxPaneAddedEvent {
+  controllerId: number;
+  tmuxPaneId: string;
+  xstermSessionId: number;
+  parentTmuxWindowId: string;
+}
+
+/**
+ * Payload of the `tmux-pane-removed` event emitted by the
+ * `TmuxController` dispatch task on `%pane-exited` /
+ * `%pane-died` (and on a successful `kill_pane` round-trip). The
+ * frontend listener drops the matching `Session` from React state and
+ * collapses the corresponding leaf in the pane tree.
+ *
+ * Mirrors req-006 §4.6.
+ */
+export interface TmuxPaneRemovedEvent {
+  controllerId: number;
+  tmuxPaneId: string;
+  xstermSessionId: number;
+}
+
+/**
+ * Payload of the `tmux-window-added` event emitted by the
+ * `TmuxController` dispatch task when a user-driven `new-window`
+ * request resolves. The frontend listener creates a new xsterm Window
+ * in the same workspace as the controller's other panes (if any) and
+ * attaches the Session to it. Bootstrap windows do NOT fire this
+ * event (the frontend already owns the corresponding xsterm Window).
+ *
+ * Mirrors req-006 §4.6.
+ */
+export interface TmuxWindowAddedEvent {
+  controllerId: number;
+  tmuxWindowId: string;
+  xstermWindowId: number;
+  xstermSessionId: number;
+  xstermPaneId: string;
+}
+
+/**
+ * Payload of the `tmux-window-closed` event emitted by the
+ * `TmuxController` dispatch task on `%window-close`. The frontend
+ * listener finds every Session with `tmuxWindowId === payload.tmuxWindowId`,
+ * drops them from React state, then drops the matching xsterm Window
+ * (collapsing the workspace to an init window if it becomes empty).
+ *
+ * Mirrors req-006 §4.6.
+ */
+export interface TmuxWindowClosedEvent {
+  controllerId: number;
+  tmuxWindowId: string;
+  xstermWindowId: number;
+}
+
+/**
+ * Payload of the `tmux-window-renamed` event emitted by the
+ * `TmuxController` dispatch task on `%window-renamed`. The frontend
+ * listener updates the matching xsterm Window's `name`.
+ *
+ * Mirrors req-006 §4.6.
+ */
+export interface TmuxWindowRenamedEvent {
+  controllerId: number;
+  tmuxWindowId: string;
+  xstermWindowId: number;
+  name: string;
+}
+
+/**
+ * record of a tmux server the user has attached to (or
+ * `create_tmux`'d). Persisted by the backend in `attached_tmux.json`;
+ * the frontend reads it at startup to drive the auto-attach flow and
+ * `sessionService.getAttachedTmuxServers` projects the live
+ * `TmuxController` registry into the same shape.
+ */
+export interface AttachedTmuxServer {
+  /** tmux session name (the `-s <name>` arg) — required to re-attach. */
+  sessionName: string;
+  /** Optional tmux socket name (the `-L <socket>` arg). */
+  socketName?: string;
+  /** ms epoch when the user last attached / created this server. */
+  attachedAt: number;
 }

@@ -1,5 +1,6 @@
 use std::io::{ErrorKind, Read};
 use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use portable_pty::PtySize;
@@ -77,7 +78,7 @@ fn utf8_safe_prefix_len(bytes: &[u8]) -> usize {
 pub fn create_local_session(
     pty_system: &dyn PtySystem,
     config: LocalSessionConfig,
-    backend: impl AppBackend + 'static,
+    backend: Arc<dyn AppBackend>,
     session_id: u32,
 ) -> Result<LocalSession, String> {
     let shell_path = resolve_shell_path(config.shell, config.shell_template.as_deref());
@@ -173,6 +174,10 @@ pub fn create_local_session(
         session_type: SessionType::Local { shell: shell_path, cwd },
         is_connected: true,
         capabilities: CapabilityFlags::for_local(),
+        tmux_pane_id: None,
+        tmux_controller_id: None,
+        tmux_window_id: None,
+        is_hidden: false,
     };
 
     spawn_output_forwarder(reader, backend.clone(), session_id);
@@ -344,7 +349,7 @@ fn is_wsl_exe(path: &str) -> bool {
 ///   silently killing the forwarder, so the UI reflects a broken PTY.
 fn spawn_output_forwarder(
     reader: Box<dyn Read + Send>,
-    backend: impl AppBackend + 'static,
+    backend: Arc<dyn AppBackend>,
     session_id: u32,
 ) {
     const CHANNEL_CAPACITY: usize = 16;
@@ -720,7 +725,7 @@ mod tests {
         let session_id = 1;
 
         let start = Instant::now();
-        spawn_output_forwarder(reader, backend.clone(), session_id);
+        spawn_output_forwarder(reader, Arc::new(backend.clone()), session_id);
 
         // The forwarder is now running on a real background thread (because
         // RecordingBackend::spawn uses std::thread::spawn). We can safely

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "../contexts/SessionContext";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
+import { useTmuxAutoAttach } from "../hooks/useTmuxAutoAttach";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
 import { WorkspaceContainer } from "./WorkspaceContainer";
@@ -19,6 +20,7 @@ export default function AppLayout() {
     createDefaultWorkspace,
     createLocalSession,
     createSshSession,
+    createTmuxSession,
     loadWorkspace,
     deleteSavedWorkspace,
     renameSavedWorkspace,
@@ -54,6 +56,7 @@ export default function AppLayout() {
     onCreateSession: () => setShowCreateDialog(true),
     onToggleLogs: () => {},
   });
+  useTmuxAutoAttach();
 
   const handleLoadWindow = useCallback(
     async (savedWindowId: string) => {
@@ -132,6 +135,7 @@ export default function AppLayout() {
         onClose={() => setShowCreateDialog(false)}
         onCreateLocal={createLocalSession}
         onCreateSsh={createSshSession}
+        onCreateTmux={createTmuxSession}
         initialGroupId={createSessionGroupId}
       />
     </div>

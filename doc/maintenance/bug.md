@@ -266,3 +266,70 @@ Bug 012 是同一个表象的另一种成因（ConPTY 首读 EOF → forwarder �
 5. 手动验证：在 dev 环境打开新 shell，横幅应消失；按 Enter 走 reconnect 也应不再出现 `create+close+EOF` 死循环（除非用户真的关掉 shell）。
 ## 是否解决
 YES
+
+# Bug 014
+## 现象
+读 `services/session_manager.rs::create_tmux` 的代码会发现：新建的 tmux pane 始终带 `is_hidden = false`，即使 req-006 §D3 明确说 "bootstrap pane 应被埋掉（`is_hidden = true`）"。读者容易把它当成 bug 改掉。
+## 理想效果
+代码注释 / spec 文档应一致说明：`tmux -CC new` 路径下没有"无用"的 bootstrap pane 要藏（第一个 pane 就是用户 shell），`is_hidden = true` 只在 `tmux -CC attach` 路径下生效。
+## BUG原因
+设计决策，不是 bug。MVP (`tmux -CC new`) 的第一个 pane IS 用户的工作 shell，所以 `is_hidden = false`。`is_hidden = true` 的语义只对 attach (Wave 5) 有意义：attach 时 tmux 占用原 pty，那个 pane 才是真正的 bootstrap pane，要埋掉。该决策在 req-006 §D3 写明，代码注释也提了（`session_manager.rs:281-285`），但注释里混了 "Wave 1 MVP" / "Wave 5 attach" 的版本演进说明，读者容易断章取义。
+## 解决方案
+1. 不改 `is_hidden = false` 默认值 —— 当前行为符合 req-006。
+2. 重写 `session_manager.rs:281-285` 的注释，去掉版本演进措辞，明确两个路径的语义区别。
+3. 在 `models/session.rs::tmux_pane_info` 的 doc comment 也同步措辞（`is_hidden` 是 caller-driven flag，新 session 路径默认 false，attach 路径传 true）。
+4. 此条作为 **设计决策记录** 保留，不算 bug —— 但明确写出来防止未来重复被 "修" 一次。
+## 是否解决
+YES（设计上无 bug，仅文档同步）
+
+# Bug 015
+## 现象
+在 tmux pane 里手动跑 `tmux split-window -h`，或者在 tmux 内手动 `:new-window`，xsterm UI 不显示新 pane / window。tmux 控制台显示事件到达了后端（log 里能找到 `external %window-pane-changed ... not auto-binding`），但前端 pane tree 没变化。
+## 理想效果
+读者期望："xsterm 作为 tmux 控制客户端，应当实时反映 tmux server 的全部变化"。
+## BUG原因
+**不是 bug，是有意为之的范围限制。** Wave 6 决策：不在 backend 自动绑定外部 pane / window。理由：
+- 前端 pane tree 不知道这些 pane 的存在；backend 自动绑定后再 emit `tmux-pane-added`，前端没有对应的 parent / slot 放它们，会 desync React state
+- 真正合理的做法是 backend 只 log，等用户通过 in-app 的 "New Tmux Window" / 右键 split 等入口显式触发（这些入口 backend 有完整的状态信息）
+- Wave 6 spec 没承诺 "100% 镜像 tmux server 状态"，只承诺 "xsterm 用户显式创建的资源保持同步"
+
+代码侧三个证据：
+1. `controller.rs:1606` log: `"external %window-pane-changed for pane {} in window {} — not auto-binding"`
+2. `controller.rs:1690` log: `"external %window-add for window {} — not auto-binding"`
+3. `controller.rs:1603-1606` + `1634-1636` 注释明确："Out of scope to auto-bind ... a future iteration may add a re-bind UI."
+## 解决方案
+1. 短期：用户用 in-app 命令（`New Tmux Window`、`Split Right` 等右键菜单项）显式创建 —— backend 完整跟踪。
+2. 中期：如果用户报告 "我手动创建的 window 看不到"，可以加一个 "Refresh from tmux server" 按钮触发 backend 重新 `list-windows` + 重新同步。
+3. 长期：实现 re-bind UI（Wave 6 spec 文档列为 out-of-scope）。需要先决定：
+   - external pane 应插到哪个 parent split？
+   - 新 window 应放到哪个 workspace？
+   - 状态不一致时的合并策略？
+## 是否解决
+YES（设计上限，不是 bug）
+
+# Bug 016
+## 现象
+读 Wave 0 时代写的示例代码 / 早期测试时会发现 `TmuxController` 上有 `events()` receiver / `take_events()` 之类的方法，Wave 1 之后这些方法消失了。
+## 理想效果
+理解为什么 Wave 0 → Wave 1 时 `TmuxController` 的公开 API 收缩了。
+## BUG原因
+**架构调整，不是 bug。** Wave 0 的 skeleton 让 `TmuxController` 自己持有一个 `mpsc::Receiver<ControlEvent>` 暴露给外部 —— 早期假设是 SessionManager 拿走 receiver 自己 dispatch。但实际编写 Wave 1 时发现：
+- SessionManager 不应该知道 `ControlEvent` 的内部 enum 形状（耦合 + 难测）
+- Dispatch 逻辑（Promise 路由、window-pane 桥接、外部事件处理）天然属于 controller
+- 需要一个 `AppBackend` trait 来解耦 "emit Tauri 事件" 和 controller 本体（也让 mockall 测试不依赖 Tauri）
+
+Wave 1 改成：
+- `TmuxController` 内部消费 `ControlEvent`（reader task 直接发到 dispatch task）
+- dispatch task 通过 `Arc<dyn AppBackend>` emit Tauri 事件
+- 公开 API 只剩 `send_keys` / `resize_pane` / `split_pane` / `new_window` 等命令入口 + `close` / `await_first_pane` 生命周期方法
+
+代码侧证据：
+- `controller.rs:159-172` 头注释："Wave 1 changed the public surface: there is no longer an `events()` receiver to take — the controller consumes its own events and forwards them to the injected [`AppBackend`]."
+- `infrastructure/app_backend.rs` 定义 `AppBackend` trait
+- `services/session_manager.rs::create_tmux` 注入 `Arc<dyn AppBackend>` 而不是消费 receiver
+## 解决方案
+1. 不改代码 —— Wave 1 之后所有调用方都通过命令入口 + 事件监听工作。
+2. 保留 `controller.rs:159-172` 的注释作为历史决策记录。
+3. 本条作为 **架构演进记录** 保留，避免未来有人误以为 `events()` 是 "丢失的方法" 重新加回来（会破坏 dispatch 集中化 + AppBackend 解耦）。
+## 是否解决
+YES（架构变更已完成，文档同步）

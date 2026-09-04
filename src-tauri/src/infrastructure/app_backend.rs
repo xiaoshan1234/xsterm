@@ -7,7 +7,14 @@ use crate::error::StringError;
 ///
 /// Allows services to emit events to the frontend and spawn background tasks
 /// without depending on Tauri directly.
-pub trait AppBackend: Send + Sync + Clone {
+///
+/// `Clone` is intentionally **not** a super-trait bound here — that would
+/// make `dyn AppBackend` non-object-safe and break the `Arc<dyn AppBackend>`
+/// storage the tmux controller (and any future long-lived fan-out consumer)
+/// relies on. Services that previously called `backend.clone()` to share a
+/// backend with a background thread should take `Arc<dyn AppBackend>` by
+/// value and use `Arc::clone` for the second copy.
+pub trait AppBackend: Send + Sync {
     /// Emit an event to the frontend with a JSON payload. Callers pass a
     /// pre-built `serde_json::Value` (typically via `serde_json::json!`) so
     /// the backend can hand it directly to Tauri's emitter without a

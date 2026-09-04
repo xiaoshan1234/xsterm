@@ -1,6 +1,6 @@
 import { useShortcuts } from "./useShortcut";
 import { useSession } from "../contexts/SessionContext";
-import type { PaneNode } from "../types/session";
+import type { PaneNode, SplitDirection } from "../types/session";
 
 export function useAppShortcuts({
   onCreateSession,
@@ -9,10 +9,25 @@ export function useAppShortcuts({
   onCreateSession: () => void;
   onToggleLogs: () => void;
 }) {
-  const { workspaces, activeWorkspaceId, setActivePane, closeSession } = useSession();
+  const { workspaces, activeWorkspaceId, setActivePane, closeSession, splitPane } = useSession();
 
   const activeWindowFor = (workspace: (typeof workspaces)[number]) =>
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
+
+  // Ctrl+\ / Ctrl+Shift+\ split the active pane (vertical /
+  // horizontal). The split is routed through `splitPane` which detects
+  // tmux sessions via `supportsMultiplex` and dispatches to the
+  // backend; non-multiplex sessions fall through to the existing
+  // "open dialog and let the user pick a session" flow.
+  const splitActivePane = (direction: SplitDirection): void => {
+    const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!workspace) return;
+    const window = activeWindowFor(workspace);
+    if (!window || !window.activePaneId) return;
+    const pane = findPane(window.rootPane, window.activePaneId);
+    if (!pane || pane.type !== "leaf" || pane.sessionId === undefined) return;
+    splitPane(workspace.id, window.id, pane.id, direction, pane.sessionId);
+  };
 
   useShortcuts([
     { key: "n", ctrl: true, shift: true, handler: onCreateSession },
@@ -68,6 +83,17 @@ export function useAppShortcuts({
       key: "l",
       ctrl: true,
       handler: onToggleLogs,
+    },
+    {
+      key: "\\",
+      ctrl: true,
+      handler: () => splitActivePane("vertical"),
+    },
+    {
+      key: "\\",
+      ctrl: true,
+      shift: true,
+      handler: () => splitActivePane("horizontal"),
     },
   ]);
 }
