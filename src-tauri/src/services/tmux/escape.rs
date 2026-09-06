@@ -52,7 +52,7 @@ pub fn unescape_output(s: &str) -> Vec<u8> {
 /// remaining printable ASCII bytes are pushed through verbatim.
 ///
 /// This is the exact function used by
-/// [`crate::infrastructure::tmux::commands::send_keys`]. Callers that need
+/// [`crate::services::tmux::commands::send_keys`]. Callers that need
 /// to embed arbitrary UTF-8 text should send it through `escape_output`
 /// first so tmux's decoder sees the same `\nnn` sequences we encode here.
 pub fn escape_output(bytes: &[u8]) -> String {

@@ -5,7 +5,7 @@
 //! `'\n'`-terminated and ready to be written directly to a tmux
 //! `-CC` child's stdin. The mapping is intentionally one-directional: xsterm
 //! doesn't read these strings back — it dispatches the wire payload to the
-//! server and lets [`crate::infrastructure::tmux::parser`] decode the
+//! server and lets [`crate::services::tmux::parser`] decode the
 //! asynchronous reply.
 //!
 //! ## Argument safety
@@ -29,7 +29,7 @@
 //! `-x`/`-y` for resize dimensions, `-p -e -J` for capture-pane) so the
 //! command line is independent of any tmux user-level config / aliases.
 
-use crate::infrastructure::tmux::escape::escape_output;
+use super::escape::escape_output;
 
 fn quote_arg(s: &str) -> String {
     if !s.bytes().any(needs_quoting) {
@@ -95,7 +95,7 @@ pub fn new_window(session: &str, name: Option<&str>) -> String {
 }
 
 /// `new-window [-n <name>]` — open a new window in the current tmux
-/// session. Used by [`TmuxController::new_window`](crate::infrastructure::tmux::controller::TmuxController::new_window)
+/// session. Used by [`TmuxController::new_window`](crate::services::tmux::controller::TmuxController::new_window)
 /// because the `tmux -CC` controller is attached to its own tmux
 /// session; targeting it explicitly with `-t <session>` would force us to
 /// store the session name on the controller and pass it through, which is

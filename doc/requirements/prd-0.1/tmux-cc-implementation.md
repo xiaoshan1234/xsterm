@@ -699,15 +699,19 @@ tmux pane %5 → shell
 
 ### 12.1 后端
 
+> **模块分层（2026-09 重构）**：tmux 实现按"业务/编排在 services，trait 抽象在 infrastructure"分层（类比 `services/local_session.rs` + `infrastructure/pty.rs`）。
+
 | 文件 | LOC | 角色 |
 |---|---|---|
-| `src-tauri/src/infrastructure/tmux/mod.rs` | 36 | 模块门面 + 公开 API 重导出 |
-| `src-tauri/src/infrastructure/tmux/escape.rs` | 236 | 八进制转义 |
-| `src-tauri/src/infrastructure/tmux/parser.rs` | 1042 | line → ControlEvent 状态机 |
-| `src-tauri/src/infrastructure/tmux/events.rs` | 167 | 强类型枚举 |
-| `src-tauri/src/infrastructure/tmux/commands.rs` | 315 | 命令构造器 |
-| `src-tauri/src/infrastructure/tmux/backend.rs` | 666 | transport 抽象 + 适配器 |
-| `src-tauri/src/infrastructure/tmux/controller.rs` | ~3700 | 主状态机 |
+| `src-tauri/src/services/tmux/mod.rs` | 36 | tmux 业务模块门面 + 重导出 `TmuxController` |
+| `src-tauri/src/services/tmux/controller.rs` | ~3218 | `TmuxController` struct + 公开 API + 4 个 `spawn_*_task`（reader / writer / stderr drain / monitor） |
+| `src-tauri/src/services/tmux/dispatch.rs` | ~640 | `dispatch_event` + `spawn_dispatch_task`（从 controller.rs 拆出，专注 4 种 Promise 协调 + 28 种事件路由） |
+| `src-tauri/src/services/tmux/parser.rs` | 1042 | line → ControlEvent 纯函数状态机 |
+| `src-tauri/src/services/tmux/events.rs` | 167 | `ControlEvent` 强类型枚举 |
+| `src-tauri/src/services/tmux/commands.rs` | 315 | 命令构造器 |
+| `src-tauri/src/services/tmux/escape.rs` | 236 | octal 编解码 |
+| `src-tauri/src/infrastructure/tmux/mod.rs` | 12 | transport 模块门面（精简为只导出 backend） |
+| `src-tauri/src/infrastructure/tmux/backend.rs` | 666 | `TmuxBackend` trait + `LocalTmuxBackend` / `SshTmuxBackend` impls + `SshAsyncRead` / `SshAsyncWrite` 适配器 |
 | `src-tauri/src/services/session_manager.rs` | ~2545 | 8 个 tmux 方法 + `TmuxPaneHandle` + `ActiveSession::TmuxPane` |
 | `src-tauri/src/commands/session.rs` | – | 12 个 `#[command]` |
 | `src-tauri/src/models/session.rs` | – | `TmuxCcConfig` / `tmux_pane_info` / `AttachedTmuxServer` |
@@ -745,9 +749,9 @@ tmux pane %5 → shell
 1. 本文件 §1–3 — 形成心智模型
 2. [`req-006-tmux.md`](req-006-tmux.md) — 需求 + 协议 + 决策
 3. `architecture-map.md` §5.7 — 架构概览
-4. `src-tauri/src/infrastructure/tmux/mod.rs` — 模块门面
-5. `src-tauri/src/infrastructure/tmux/parser.rs` + `events.rs` + `escape.rs` — **先看测试**再看实现（parser 单测即规范）
-6. `src-tauri/src/infrastructure/tmux/controller.rs::dispatch_event` — §4.6.4 路由规则
+4. `src-tauri/src/services/tmux/mod.rs` — 模块门面
+5. `src-tauri/src/services/tmux/parser.rs` + `events.rs` + `escape.rs` — **先看测试**再看实现（parser 单测即规范）
+6. `src-tauri/src/services/tmux/dispatch.rs::dispatch_event` — §4.6.4 路由规则
 7. `src-tauri/src/services/session_manager.rs::create_tmux` / `attach_tmux` / `create_tmux_pane` — 注册路径
 8. `src/contexts/session/useTauriListeners.ts` — 前端 reducer
 9. `src/types/session.ts` — 事件 payload schema
@@ -760,3 +764,4 @@ tmux pane %5 → shell
 |---|---|
 | 2026-09-06 | 初稿。基于 req-006-tmux.md + architecture-map.md §5.7 + 仓库实际文件清单生成；覆盖后端 6 模块 + SessionManager 8 方法 + 前端 9 wrapper + 8 listener + 5 UI/hook + SSH path + 端到端数据流。 |
 | 2026-09-06 | **概念厘清修订**：明确 xsterm session（backend 连接）/ xsterm pane（UI 容器）/ tmux pane（tmux leaf）三概念；xsterm pane ↔ tmux pane（1:1 渲染关系），xsterm session 背后代理 tmux pane。D1 决策表述改为"每个 xsterm session 背后代理一个 tmux pane"。`TmuxPaneHandle` 改为说明是 xsterm session 的 backend 实现。Tauri 命令表 + 前端 wrapper 表 + 数据流图加概念标注。 |
+| 2026-09-06 | **目录分层重构**：tmux 实现从 `infrastructure/tmux/` 移到 `services/tmux/`，按"业务/编排在 services，trait 抽象在 infrastructure"分层（与 `services/local_session.rs` + `infrastructure/pty.rs` 对齐）。`controller.rs` 中 566 行 `dispatch_event` + `spawn_dispatch_task` 拆到独立 `dispatch.rs` 提高可读性。`backend.rs`（`TmuxBackend` trait + impls）保留在 `infrastructure/tmux/`。`TmuxController` 私有字段改为 `pub(crate)` 以支持子模块 `dispatch` 的访问。`cargo check` + `cargo test --lib` 通过（246 个测试，0 failed）；`npx tsc --noEmit` 通过。 |

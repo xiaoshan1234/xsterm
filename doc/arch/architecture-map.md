@@ -69,19 +69,22 @@ xsterm/
 │       │   ├── session_manager.rs    # 中枢：所有会话注册表 + trait-based 可测试（~2545 行含测试）
 │       │   ├── local_session.rs      # 本地 PTY session
 │       │   ├── ssh_session.rs        # SSH session（919 行的 ssh.rs 由它消费）
-│       │   └── session_log.rs        # per-session 日志模块
-│       ├── infrastructure/       # 外部资源抽象（trait）
-│       │   ├── pty.rs                # PtySystem trait（portable-pty 实现）
-│       │   ├── ssh.rs                # SshBackend trait（russh 实现，919 行）
-│       │   ├── app_backend.rs        # AppBackend trait（解耦 emit from Tauri）
-│       │   └── tmux/                 # tmux -CC 集成（详见 §5.7）
-│       │       ├── mod.rs
-│       │       ├── controller.rs     # 主状态机：socket I/O + command queue
-│       │       ├── backend.rs        # Wave 5: TmuxBackend trait + Local / SSH impls
+│       │   ├── session_log.rs        # per-session 日志模块
+│       │   └── tmux/                 # tmux -CC 集成（详见 §5.7）—— 类比 local_session / ssh_session 放在 services
+│       │       ├── mod.rs            # facade + 重导出 TmuxController
+│       │       ├── controller.rs     # 主状态机：TmuxController struct + 公开 API + 4 个 spawn_*_task
+│       │       ├── dispatch.rs       # dispatch_event + spawn_dispatch_task（独立出来提高可读性）
 │       │       ├── parser.rs         # line → ControlEvent 纯函数
 │       │       ├── escape.rs         # unescape_output (octal → bytes)
 │       │       ├── commands.rs       # 高层 API: send_keys / split_window / ...
 │       │       └── events.rs         # ControlEvent enum
+│       ├── infrastructure/       # 外部资源抽象（trait）
+│       │   ├── pty.rs                # ptySystem trait（portable-pty 实现）
+│       │   ├── ssh.rs                # SshBackend trait（russh 实现，919 行）
+│       │   ├── app_backend.rs        # AppBackend trait（解耦 emit from Tauri）
+│       │   └── tmux/                 # tmux transport 抽象（与 PtySystem / SshBackend 对齐）
+│       │       ├── mod.rs
+│       │       └── backend.rs        # Wave 5: TmuxBackend trait + Local / SSH impls
 │       └── models/               # 数据模型
 │           ├── session.rs            # LocalSessionConfig / SSHSessionConfig / TmuxCcConfig / SessionInfo
 │           ├── group.rs
@@ -322,6 +325,15 @@ useTauriTerminalOutput.ts: listen("session-output")
 ### 5.7 tmux -CC 集成（Wave 0–5）
 
 需求与设计见 [`doc/requirements/prd-0.1/req-006-tmux.md`](../requirements/prd-0.1/req-006-tmux.md)。本节只描述实际落地的架构。
+
+**模块分层**（与 local / ssh 的分层方式一致）：
+
+| 层 | 模块 | 职责 |
+|---|---|---|
+| 服务（业务/编排） | `services/tmux/` | tmux 客户端完整模块：协议解析 + 状态机 + 4 个 spawn task + dispatch + Promise 协调。**类比**：`services/local_session.rs`（PTY session 业务）/ `services/ssh_session.rs`（SSH session 业务）。 |
+| 抽象（transport） | `infrastructure/tmux/backend.rs` | `TmuxBackend` trait + `LocalTmuxBackend` / `SshTmuxBackend` 实现。**类比**：`infrastructure/pty.rs`（`PtySystem`）/ `infrastructure/ssh.rs`（`SshBackend`）。 |
+
+**为什么这么分**：local / ssh 的现有约定是"业务编排在 services，trait 抽象在 infrastructure"。tmux 因为有"多 pane controller + 协议编解码"，自然变成 services 子目录（5 个文件 + 1 facade），与单文件 `local_session.rs` / `ssh_session.rs` 形式不同但**分层逻辑一致**。
 
 #### 5.7.1 `TmuxBackend` 抽象（Wave 5）
 

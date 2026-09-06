@@ -2,7 +2,7 @@
 //! strongly-typed [`ControlEvent`]s.
 //!
 //! `ControlParser` is deliberately **pure**: it has no I/O, no channels, no
-//! threading. The reader task in [`crate::infrastructure::tmux::controller`]
+//! threading. The reader task in [`crate::services::tmux::controller`]
 //! splits tmux's stdout into lines and feeds them one by one; the parser
 //! returns `Option<ControlEvent>` for each line. This separation makes the
 //! parser trivial to unit-test — wrap a fixture in `BufReader<Cursor<&[u8]>>`
@@ -34,8 +34,8 @@
 //!   └────────────────────────────────────────────────────┘
 //! ```
 
-use crate::infrastructure::tmux::escape::unescape_output;
-use crate::infrastructure::tmux::events::ControlEvent;
+use super::escape::unescape_output;
+use super::events::ControlEvent;
 
 /// State machine for the tmux `-CC` line protocol.
 ///

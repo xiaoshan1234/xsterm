@@ -7,7 +7,7 @@ use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{NativePtySystem, PtySystem};
 use crate::infrastructure::session_backend::SessionBackend;
 use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
-use crate::infrastructure::tmux::TmuxController;
+use crate::services::tmux::TmuxController;
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{
     build_remote_image_path, AttachedTmuxServer, LocalSessionConfig, SessionInfo,
@@ -2033,14 +2033,14 @@ manager.create_local(
         controller_id: u32,
         base_xsterm_id: u32,
     ) -> (
-        Arc<crate::infrastructure::tmux::TmuxController>,
+        Arc<crate::services::tmux::TmuxController>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
         tokio::sync::mpsc::UnboundedSender<
-            crate::infrastructure::tmux::events::ControlEvent,
+            crate::services::tmux::events::ControlEvent,
         >,
     ) {
         use crate::infrastructure::app_backend::AppBackend;
-        use crate::infrastructure::tmux::controller::spawn_dispatch_task;
+        use crate::services::tmux::dispatch::spawn_dispatch_task;
 
         // Hand-rolled backend stub — `RecordingBackend` lives in the
         // controller.rs tests module and is not `pub`. Re-roll a
@@ -2059,8 +2059,8 @@ manager.create_local(
 
         let (stdin_tx, stdin_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let (dispatch_tx, dispatch_rx) =
-            tokio::sync::mpsc::unbounded_channel::<crate::infrastructure::tmux::events::ControlEvent>();
-        let controller = crate::infrastructure::tmux::TmuxController::new_for_tests(
+            tokio::sync::mpsc::unbounded_channel::<crate::services::tmux::events::ControlEvent>();
+        let controller = crate::services::tmux::TmuxController::new_for_tests(
             controller_id,
             base_xsterm_id,
             stdin_tx,
@@ -2119,7 +2119,7 @@ manager.create_local(
         tokio::time::sleep(std::time::Duration::from_millis(30)).await;
 
         dispatch_tx
-            .send(crate::infrastructure::tmux::events::ControlEvent::WindowPaneChanged {
+            .send(crate::services::tmux::events::ControlEvent::WindowPaneChanged {
                 window_id: "@7".to_string(),
                 pane_id: "%11".to_string(),
             })
@@ -2315,7 +2315,7 @@ manager.create_local(
 
         // Feed the matching WindowAdd reply.
         dispatch_tx
-            .send(crate::infrastructure::tmux::events::ControlEvent::WindowAdd {
+            .send(crate::services::tmux::events::ControlEvent::WindowAdd {
                 window_id: "@3".to_string(),
             })
             .expect("dispatch channel must accept WindowAdd");
@@ -2323,7 +2323,7 @@ manager.create_local(
 
         // Feed the matching WindowPaneChanged reply.
         dispatch_tx
-            .send(crate::infrastructure::tmux::events::ControlEvent::WindowPaneChanged {
+            .send(crate::services::tmux::events::ControlEvent::WindowPaneChanged {
                 window_id: "@3".to_string(),
                 pane_id: "%7".to_string(),
             })
@@ -2379,12 +2379,12 @@ manager.create_local(
         // the matching WindowPaneChanged).
         let dispatch_tx_clone = _dispatch_tx.clone();
         dispatch_tx_clone
-            .send(crate::infrastructure::tmux::events::ControlEvent::WindowAdd {
+            .send(crate::services::tmux::events::ControlEvent::WindowAdd {
                 window_id: "@11".to_string(),
             })
             .unwrap();
         dispatch_tx_clone
-            .send(crate::infrastructure::tmux::events::ControlEvent::WindowPaneChanged {
+            .send(crate::services::tmux::events::ControlEvent::WindowPaneChanged {
                 window_id: "@11".to_string(),
                 pane_id: "%99".to_string(),
             })
@@ -2464,20 +2464,20 @@ manager.create_local(
 
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         dispatch_tx
-            .send(crate::infrastructure::tmux::events::ControlEvent::CommandBegin {
+            .send(crate::services::tmux::events::ControlEvent::CommandBegin {
                 id: 1,
                 timestamp: 0,
                 flags: 0,
             })
             .unwrap();
         dispatch_tx
-            .send(crate::infrastructure::tmux::events::ControlEvent::CommandOutput {
+            .send(crate::services::tmux::events::ControlEvent::CommandOutput {
                 id: 1,
                 line: "scrollback line".to_string(),
             })
             .unwrap();
         dispatch_tx
-            .send(crate::infrastructure::tmux::events::ControlEvent::CommandEnd {
+            .send(crate::services::tmux::events::ControlEvent::CommandEnd {
                 id: 1,
                 timestamp: 0,
                 flags: 0,

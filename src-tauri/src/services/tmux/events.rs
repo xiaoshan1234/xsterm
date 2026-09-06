@@ -5,7 +5,7 @@
 //! `doc/requirements/prd-0.1/req-006-tmux.md` §3.2 / §3.3 for the source
 //! grammar. Every variant carries **decoded** payload data: octal escapes in
 //! `%output` / `%extended-output` are unescaped into raw `Vec<u8>` by
-//! [`crate::infrastructure::tmux::parser::ControlParser`] before this enum is
+//! [`crate::services::tmux::parser::ControlParser`] before this enum is
 //! constructed, so downstream consumers never have to think about escaping.
 //!
 //! Fields are intentionally `String` (not `&str`) and `Vec<u8>` (not `&[u8]`)
@@ -15,8 +15,8 @@
 
 /// One event produced by the tmux control-mode line parser.
 ///
-/// Lifetime: events are produced by [`ControlParser::feed`](crate::infrastructure::tmux::parser::ControlParser::feed)
-/// and sent over an unbounded channel to the [`TmuxController`](crate::infrastructure::tmux::controller::TmuxController)
+/// Lifetime: events are produced by [`ControlParser::feed`](crate::services::tmux::parser::ControlParser::feed)
+/// and sent over an unbounded channel to the [`TmuxController`](crate::services::tmux::controller::TmuxController)
 /// dispatch task, which translates them into Tauri events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControlEvent {
