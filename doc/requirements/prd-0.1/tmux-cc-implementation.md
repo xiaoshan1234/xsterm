@@ -68,7 +68,7 @@ xsterm 通过 tmux 的 `-CC`（**Control Mode**）协议，让 xsterm 的 **Tmux
    │           └─ ...                                              │
    │                                                              │
    │  CreateSessionDialog (4 top tabs)                            │
-   │   └─ TmuxLocalForm / TmuxSshForm                              │
+   │   └─ TmuxForm (Base Configuration 下拉框 + tmux 字段)        │
    │  Pane 右键菜单 / 快捷键 Ctrl+\ / Ctrl+Shift+\                 │
    │  TmuxControllerErrorBanner（崩溃后 Retry）                    │
    └─────────────────────────────────────────────────────────────┘
@@ -517,9 +517,8 @@ split 的端到端：
 
 | 文件 | 职责 |
 |---|---|
-| `src/components/dialogs/CreateSessionDialog.tsx` | 4 个 top tab（Shell / SSH / **Tmux (Local)** / **Tmux (SSH)**） |
-| `src/components/dialogs/TmuxLocalForm.tsx` | 4 字段：Display Name / Tmux Session Name / Socket Name / Start Command |
-| `src/components/dialogs/TmuxSshForm.tsx` | 组合 `SshSessionForm` + tmux 字段；`config.ssh` 作为嵌套配置 |
+| `src/components/dialogs/CreateSessionDialog.tsx` | 3 个 top tab（Shell / SSH / **Tmux**） |
+| `src/components/dialogs/TmuxForm.tsx` | 整合 Local/SSH：Radio 切换 transport + 条件渲染 `SshSessionForm` + 4 个 tmux 字段（Display Name / Tmux Session Name / Socket Name / Start Command） |
 | `src/components/TmuxControllerErrorBanner.tsx` | controller 挂掉时显示，提供 Retry（重调 `attachTmux` / `createTmux`）和 Dismiss |
 | `src/components/TmuxControllerErrorBanner.css` | banner 样式（参考 `pane-disconnect-banner` 但用 `--warning` 琥珀色） |
 | `src/hooks/useTmuxAutoAttach.ts` | app mount 时调一次 `autoAttachTmuxServers()`；用 `useRef` 防 React strict-mode 二次触发 |
@@ -727,8 +726,7 @@ tmux pane %5 → shell
 | `src/contexts/session/useSessionState.ts` | – | `tmuxControllerErrors` / `tmuxControllerConfigsRef` 字段 |
 | `src/hooks/useTmuxAutoAttach.ts` | 34 | 重连 hook |
 | `src/components/TmuxControllerErrorBanner.tsx` | 98 | 错误 banner + Retry |
-| `src/components/dialogs/TmuxLocalForm.tsx` | 76 | 本地表单 |
-| `src/components/dialogs/TmuxSshForm.tsx` | 106 | SSH + tmux 组合表单 |
+| `src/components/dialogs/TmuxForm.tsx` | ~110 | 整合 tmux 创建表单（Base Configuration 下拉框 + tmux 字段；transport 由 base config 隐含） |
 | `src/components/dialogs/CreateSessionDialog.tsx` | 369 | 4 top tabs |
 | `src/components/Pane.tsx` | 269 | 右键菜单 capability 分支 |
 
@@ -766,3 +764,5 @@ tmux pane %5 → shell
 | 2026-09-06 | **概念厘清修订**：明确 xsterm session（backend 连接）/ xsterm pane（UI 容器）/ tmux pane（tmux leaf）三概念；xsterm pane ↔ tmux pane（1:1 渲染关系），xsterm session 背后代理 tmux pane。D1 决策表述改为"每个 xsterm session 背后代理一个 tmux pane"。`TmuxPaneHandle` 改为说明是 xsterm session 的 backend 实现。Tauri 命令表 + 前端 wrapper 表 + 数据流图加概念标注。 |
 | 2026-09-06 | **目录分层重构**：tmux 实现从 `infrastructure/tmux/` 移到 `services/tmux/`，按"业务/编排在 services，trait 抽象在 infrastructure"分层（与 `services/local_session.rs` + `infrastructure/pty.rs` 对齐）。`controller.rs` 中 566 行 `dispatch_event` + `spawn_dispatch_task` 拆到独立 `dispatch.rs` 提高可读性。`backend.rs`（`TmuxBackend` trait + impls）保留在 `infrastructure/tmux/`。`TmuxController` 私有字段改为 `pub(crate)` 以支持子模块 `dispatch` 的访问。`cargo check` + `cargo test --lib` 通过（246 个测试，0 failed）；`npx tsc --noEmit` 通过。 |
 | 2026-09-06 | **统一为目录形式**：与 tmux 对齐，`services/local_session.rs` → `services/local_session/{mod,resolution,spawn,bytes,tests}.rs`（779 行按"PTY 准备 / PTY spawn + 转发 / 字节工具 / 测试"切分），`services/ssh_session.rs` → `services/ssh_session/mod.rs`（94 行包成文件夹，薄壳保持不变）。三个会话业务模块在 `services/` 下统一为目录形式。`cargo check` + `cargo test --lib` 通过（246 个测试，0 failed）；`npx tsc --noEmit` 通过。 |
+| 2026-09-06 | **整合 Create Session Tmux tab**：`TmuxLocalForm` + `TmuxSshForm` 合并为 `TmuxForm.tsx`，通过 `FormRadioGroup<ConnectionMode>` 在 Local / SSH 间二选一；SSH 选中时条件渲染 `SshSessionForm`（用 `config.ssh` 字段驱动）。CreateSessionDialog topTab 从 4 个 (`local` / `ssh` / `tmux-cc` / `tmux-ssh`) 减为 3 个 (`local` / `ssh` / `tmux-cc`)，所有 `tmux-ssh` 分支合并到 `tmux-cc`（SSH 子配置由 form 内部处理，submit 时统一调 `onCreateTmux`）。`cargo check` + `cargo test --lib` 通过；`npx tsc --noEmit` 通过。 |
+| 2026-09-06 | **以 saved config 为基础创建 tmux**：取消 `TmuxForm` 的 transport Radio + SSH 子表单；改为 `FormSelectField` 下拉框选 savedConfigs（filter `local` / `ssh` 类型）。`TmuxCcConfig` 新增 `baseConfigId?: string` 字段；提交时 `CreateSessionDialog` 从 savedConfigs 查 base config，当 base 是 SSH 时把 SSH 子配置 copy 进 `TmuxCcConfig.ssh`（保留为后端 transport 决定因素）；tmux-cc 不能嵌套（base config 必须是 SSH 或 Local）。transport 字段不再让用户手动切换，由 base config 隐含决定。 |

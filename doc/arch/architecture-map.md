@@ -592,11 +592,11 @@ impl SessionBackend for TmuxPaneHandle {
 ### 2026-09 — tmux -CC 集成 Wave 0–5 完成
 
 - **Wave 0**：基础设施先行。`infrastructure/tmux/{parser,escape,events,commands,controller}.rs`；parser 40+ 测试；escape round-trip；controller skeleton（spawn child + reader + writer，不接 SessionManager）
-- **Wave 1**：单 pane MVP。`ActiveSession::TmuxPane(TmuxPaneHandle)` + `create_tmux_session` / `write_session` / `resize_session` / `close_session` tmux 分支 + bootstrap pane `is_hidden = true` + `CapabilityFlags::for_tmux()` + 前端 `tmux-cc` SessionType + CreateSessionDialog "Tmux (Local)" tab
+- **Wave 1**：单 pane MVP。`ActiveSession::TmuxPane(TmuxPaneHandle)` + `create_tmux_session` / `write_session` / `resize_session` / `close_session` tmux 分支 + bootstrap pane `is_hidden = true` + `CapabilityFlags::for_tmux()` + 前端 `tmux-cc` SessionType + CreateSessionDialog "Tmux" tab
 - **Wave 2**：split / kill pane + Promise 协调 (`pending_splits`)。前端 `Pane.tsx` 启用 split 右键菜单项（capability 检查）+ `Ctrl+\` / `Ctrl+Shift+\` 快捷键 + `usePaneActions.splitPane` tmux-aware 分支
 - **Wave 3**：tabs & windows 映射。`create_tmux_window` / `kill_tmux_window` / `rename_tmux_window` + `%window-add` / `%window-close` / `%window-renamed` 事件 + `pending_windows` + `pending_window_pane` 桥接 + dispatch 3 分支 trichotomy
 - **Wave 4**：scrollback & reconnect。`capture_tmux_pane` 单飞（`pending_capture` + `pending_capture_body`）+ `attach_tmux_session` + `attached_tmux.json` 持久化 + `auto_attach_all` + `TmuxControllerErrorBanner` + `useTmuxAutoAttach`
-- **Wave 5**：SSH + tmux。`TmuxBackend` trait 抽象 + `LocalTmuxBackend` / `SshTmuxBackend` impls + `SshAsyncRead` / `SshAsyncWrite` 适配器（`sync_mpsc` ↔ `tokio::io` 桥接）+ `TmuxCcConfig.ssh` 字段 + CreateSessionDialog "Tmux (SSH)" tab
+- **Wave 5**：SSH + tmux。`TmuxBackend` trait 抽象 + `LocalTmuxBackend` / `SshTmuxBackend` impls + `SshAsyncRead` / `SshAsyncWrite` 适配器（`sync_mpsc` ↔ `tokio::io` 桥接）+ `TmuxCcConfig.ssh` 字段 + Create Session dialog 单一 "Tmux" tab，下拉框选 saved SSH/Local config 作 base，`baseConfigId` 决定 transport（不再有 Radio 切换）
 - **Wave 6**（本波）：抛光。详见 §5.7.8 + 重新启用 CSP + `tmux/` 模块级 `#[allow(dead_code)]` 拆为 per-item + doc sync
 
 ### 2026-08-20 — 设计系统永久化 + 文档同步

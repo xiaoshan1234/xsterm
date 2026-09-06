@@ -357,7 +357,7 @@ interface TmuxCcConfig {
 
 ### 5.4 CreateSessionDialog 新增 tab
 
-`Shell` / `SSH` / `Tmux (Local)` / `Tmux (SSH)` 四个 top tab。最简化表单：name / startCommand / initialCols / size。复用 `CommonSettingsForm` 显示配置。
+`Shell` / `SSH` / `Tmux` 三个 top tab。`Tmux` tab 内用 Radio 切换 Local vs SSH transport（当 SSH 选中时折叠展开 `SshSessionForm`），其余 tmux 字段（name / startCommand / initialCols / size）共用。复用 `CommonSettingsForm` 显示配置。
 
 ### 5.5 bootstrap pane 渲染
 
@@ -418,7 +418,7 @@ grep -rn "box-shadow:" src/components/
 - CapabilityFlags::for_tmux()
 - 前端：`Session` 类型加 `tmuxPaneId` / `tmuxControllerId` / `isHidden` 字段
 - 前端：`SessionType` 加 `tmux-cc` variant
-- 前端：CreateSessionDialog 加 "Tmux (Local)" tab
+- 前端：CreateSessionDialog 加 "Tmux" tab（内含 Local/SSH transport Radio 选择）
 
 **DoD**：开 app → 创建 local tmux session → 键入字符正常 → resize 正常 → 关 app。
 

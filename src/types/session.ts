@@ -156,15 +156,29 @@ export interface SSHSessionConfig {
  * `TmuxCcConfig` struct exactly. All fields optional — empty `TmuxCcConfig {}`
  * produces a `tmux -CC new-session` with default socket and auto-generated name.
  *
- * when `ssh` is set, the controller runs `tmux -CC` on the remote
- * host via an SSH exec channel; the existing fields below still apply
- * (tmux session name, socket name, initial geometry) but the **transport**
- * is now SSH rather than a local `tokio::process::Command` child.
+ * **Transport is derived from `baseConfigId`** — a tmux session must be
+ * created on top of an already-saved SSH or Local shell config; the
+ * transport (local PTY vs SSH exec channel) follows the base config's
+ * type. The user never picks a transport explicitly when creating a
+ * tmux session. The frontend `TmuxForm` lists the user's saved configs
+ * filtered to `local` / `ssh` and copies the SSH sub-config (when the
+ * base is an SSH config) into the request that reaches the backend.
+ *
  * Mirrors `doc/requirements/prd-0.1/req-006-tmux.md` §4.4 D5 + §4.7.
  */
 export interface TmuxCcConfig {
   /** Optional display name. Falls back to tmux session name when omitted. */
   name?: string;
+  /**
+   * Required for any tmux session the user creates through the dialog:
+   * id of the saved SSH or Local shell config this tmux session should
+   * ride on. The frontend copies the SSH sub-config from the base
+   * config into the request that reaches the backend (see
+   * `CreateSessionDialog.handleCreate`); the backend then routes
+   * through the SSH exec channel when the base was an SSH config and
+   * through a local `tokio::process::Command` child otherwise.
+   */
+  baseConfigId?: string;
   /** tmux session name. Leave blank to auto-generate a new session. */
   tmuxSessionName?: string;
   /** tmux socket name (`-L` flag). Leave blank for tmux's default socket. */
@@ -175,7 +189,7 @@ export interface TmuxCcConfig {
   envConfig?: SessionEnvConfig;
   /** Initial terminal rows advertised to tmux. @default 24 */
   initialRows?: number;
-  /** Initial terminal columns advertised to tmux. @default 80 */
+  /** initial terminal columns advertised to tmux. @default 80 */
   initialCols?: number;
   /**
    * SSH connection config. When set, the controller runs

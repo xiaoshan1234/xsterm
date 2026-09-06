@@ -57,8 +57,9 @@ export const SSH_SIDEBAR_ITEMS: SidebarItemDef[] = [
  * sidebar items for the tmux control-mode top tab. The tmux path has
  * no `Shell` or `SSH` section — tmux itself owns the spawned process — so
  * the sidebar is just the shared session / terminal / appearance / input /
- * logging entries. `tmux-cc` specific knobs (session name, socket name,
- * start command) live inside the `session` section's `TmuxLocalForm`.
+ * logging entries. `tmux-cc` specific knobs (base saved-config id,
+ * session name, socket name, start command) live inside the `session`
+ * section's `TmuxForm`.
  */
 export const TMUX_SIDEBAR_ITEMS: SidebarItemDef[] = [
   { id: "session", label: "Session", icon: <SessionIcon size={16} /> },
