@@ -67,8 +67,14 @@ xsterm/
 │       │   └── logging.rs        # log_message / get_log_config / set_log_config / get_log_dir
 │       ├── services/             # 业务逻辑
 │       │   ├── session_manager.rs    # 中枢：所有会话注册表 + trait-based 可测试（~2545 行含测试）
-│       │   ├── local_session.rs      # 本地 PTY session
-│       │   ├── ssh_session.rs        # SSH session（919 行的 ssh.rs 由它消费）
+│       │   ├── local_session/        # 本地 PTY session（详见 §5 业务模块统一为目录）
+│       │   │   ├── mod.rs            # 公开 API: create_local_session
+│       │   │   ├── resolution.rs     # shell path / cwd / WSL detection 等 pre-spawn 纯函数
+│       │   │   ├── spawn.rs          # PTY output forwarder（含 drain budget + UTF-8 边界处理）
+│       │   │   ├── bytes.rs          # drain_should_break + utf8_safe_prefix_len 纯工具
+│       │   │   └── tests.rs          # 单元测试（RecordingBackend fixture + 所有 tests）
+│       │   ├── ssh_session/          # SSH session（919 行的 ssh.rs 由它消费）
+│       │   │   └── mod.rs            # 公开 API: create_ssh_session（薄壳，与 tmux 对称）
 │       │   ├── session_log.rs        # per-session 日志模块
 │       │   └── tmux/                 # tmux -CC 集成（详见 §5.7）—— 类比 local_session / ssh_session 放在 services
 │       │       ├── mod.rs            # facade + 重导出 TmuxController

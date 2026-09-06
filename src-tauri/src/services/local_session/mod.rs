@@ -112,7 +112,7 @@ pub fn create_local_session(
     }
     if let Some(env_config) = &config.env_config {
         if let Some(env) = &env_config.env {
-            let user_keys: Vec<&str> = env.keys().map(string::as_str).collect();
+            let user_keys: Vec<&str> = env.keys().map(String::as_str).collect();
             for (key, value) in env {
                 cmd.env(key, value);
             }
