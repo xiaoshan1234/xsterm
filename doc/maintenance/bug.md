@@ -333,3 +333,230 @@ Wave 1 改成：
 3. 本条作为 **架构演进记录** 保留，避免未来有人误以为 `events()` 是 "丢失的方法" 重新加回来（会破坏 dispatch 集中化 + AppBackend 解耦）。
 ## 是否解决
 YES（架构变更已完成，文档同步）
+
+# Bug 011
+## 现象
+创建 tmux -CC session 时，前端偶发 5 秒后弹错误：`tmux controller N: timed out waiting for first pane`。重启 xsterm 偶尔能成功，但大部分时间失败。
+## 理想效果
+首次创建 tmux -CC session 立即返回 SessionInfo，无超时。
+## BUG 原因
+`infrastructure/tmux/controller.rs::await_first_pane` 存在 `tokio::sync::Notify` 经典 race：
+1. `await_first_pane` 先检查 `first_pane_result`（fast path），若 None 则 fallthrough；
+2. （窗口期）dispatch task 已完成 `record_first_pane`：把 `first_pane_result` 置 `Some` 并调用 `notify_waiters()`；
+3. `Notify::notify_waiters()` 只通知**当前已注册**的 waiter —— 此时没有 waiter；
+4. `await_first_pane` 才创建 `notified()` future，notification 已丢失；
+5. 5 秒后 timeout 触发，报错。
+
+窗口期在纳秒级，单元测试难复现，但生产负载下频繁发生 —— tmux child 启动 + bootstrap `WindowPaneChanged` 事件抵达 + 调用 `record_first_pane` 的整条链路都在 await 之前能跑完。
+## 解决方案
+在 `await_first_pane` 中**先**创建 `notified()` future（注册 waiter），**再**做 fast-path 检查 result：
+
+```rust
+let notified = self.first_pane_notify.notified(); // 先注册
+if let Some(result) = self.first_pane_result.lock()...cloned() {
+    return Ok(result); // 已存：直接返回
+}
+tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, notified).await // 等待
+```
+
+两种时序都正确：record_first_pane 在 await 之前 → fast path 命中；record_first_pane 在 await 之中 → waiter 已注册 → `notify_waiters()` 唤醒。
+
+加回归测试 `await_first_pane_resolves_when_record_first_pane_runs_before_caller`（dispatcher 抢赢场景，无 sleep）锁住正确顺序，防止未来"简化"回 bug 顺序。
+
+## 是否解决
+YES（修复 + 回归测试 + 244/244 单测通过）
+
+# Bug 012
+## 现象
+创建 SSH tmux session（或任何 SSH session 失败时）报错 "SSH exec connection thread panicked before handshake" / "SSH connection thread panicked before handshake"，但实际上 SSH 失败原因是 DNS / TCP / auth / exec 等常见错误。错误消息误导为 panic，丢失真实原因。
+## 理想效果
+SSH 失败时显示具体原因（"SSH authentication failed for user@host" / "DNS resolution failed" / "SSH exec request failed: ..."）。
+## BUG 原因
+`infrastructure/ssh.rs::connect_ssh` 和 `connect_ssh_exec` 的 spawn 线程闭包里：
+
+```rust
+rt.block_on(async move {
+    let result = run_ssh_session(...).await;
+    let _ = result;   // ← Err 被静默丢弃！
+});
+```
+
+`run_ssh_session` / `run_ssh_exec_session` 返回 `Result<(), String>`，函数体中所有错误通过 `?` 早返回。但 spawn 闭包的 `let _ = result` 不发送 `Err` 到 `result_tx`，所以：
+- handshake 失败 → 函数返回 Err → spawn 闭包退出（不 panic）→ `result_tx` 被 drop → 父线程 `result_rx.recv()` 返回 `RecvError`（channel disconnected）→ 被解读为 "panicked before handshake"
+
+实际从未 panic，错误消息完全是误导。
+## 解决方案
+1. spawn 闭包转发结果到 `result_tx`：
+   ```rust
+   let _ = result_tx.send(result);
+   ```
+2. 父线程 `RecvError` 消息改写为 "SSH ... thread died before handshake (panic or runtime build failure)"——区分真 panic vs 早返回 Err。
+3. 当 `run_ssh_session` / `run_ssh_exec_session` 早返回 Err 时，错误消息会经过 `?` 正确链上来，父线程的最终错误就是真实原因（如 "SSH authentication failed for user@host: ..."）。
+## 是否解决
+YES（修复 + 244/244 单测通过）
+
+# Bug 013
+## 现象
+创建 SSH tmux session（或任意 SSH exec 路径）时，SSH 通道成功建立后立即 `PANIC: panicked at src\infrastructure\ssh.rs:833:41: called Option::unwrap() on a None value`，前端报 "tmux reader: stdout EOF" + "tmux controller N: dispatch channel closed"。
+## 理想效果
+SSH exec channel 路径正常工作，不 panic。
+## BUG 原因
+`infrastructure/ssh.rs::run_data_loop` 的 `tokio::select!` 里：
+
+```rust
+resize = resize_rx.as_mut().unwrap().recv(), if resize_rx.is_some() => {
+```
+
+**tokio::select! 会急切求值未来表达式（忽视 guard）**。`resize_rx.as_mut().unwrap()` 在 select! 进入时立刻被求值。对 exec 路径（`resize_rx: None`），unwrap 在第一轮迭代就 panic。
+
+`if resize_rx.is_some()` guard 只控制 branch 的 polling 启用/禁用，**不防止未来表达式求值**。这是 Tokio select! 的常见误解——以为 guard 像 match guard 那样同时控制求值。
+
+Bug 一直在 SSH exec 路径上（Wave 5 引入），只是 `run_data_loop` 没有单元测试覆盖，cargo test 全绿掩盖了 panic。
+## 解决方案
+1. 用 `async {}` block 包裹 resize 未来，延迟 `as_mut().unwrap()` 求值到 poll-time：
+
+   ```rust
+   let resize_recv = async {
+       match resize_rx.as_mut() {
+           Some(rx) => rx.recv().await,
+           None => std::future::pending().await,  // 永不 resolve
+       }
+   };
+   ```
+
+2. 去掉 `if resize_rx.is_some()` guard（guard 与 async block 的 mutable borrow 冲突，且 `pending()` 已经确保 None 时 arm 永远不 fire）。arm 现在总启用；对 `Some(rx)` 正常 resolve，对 `None` 永远 pending。
+
+3. handler 里的 `resize_rx = None` 在 future resolve 后执行——此时 borrow 已释放，无冲突。
+
+4. 加回归测试 `resize_future_construction_does_not_panic_when_resize_rx_is_none` 锁住修复。
+
+## 是否解决
+YES（修复 + 2 个回归测试 + 246/246 单测通过）
+
+# Bug 014（Notify race — 重开）
+## 现象
+Bug 011 的"重排修复"上线后，生产 SSH `tmux -CC` 会话创建仍然每 5s 超时；任何 dispatch 任务与 `create_tmux` 的 await 抢跑的路径都会卡到 `AWAIT_FIRST_PANE_TIMEOUT`。
+## 理想效果
+`await_first_pane` 在任何 race 顺序下都能可靠 resolve，无论是 dispatcher 先到还是 caller 先到。
+## BUG 原因
+Bug 011 的 fix 把 `notified()` future 的创建移到 fast-path result check 之前，但这只关掉了 T1→T2 的窗口，**没有关掉 T2→T3 的窗口**：
+
+```rust
+let notified = self.first_pane_notify.notified();   // (T1) future created
+if let Some(result) = self.first_pane_result.lock()...cloned() {  // (T2) fast path
+    return Ok(result);
+}
+match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, notified).await { ... }
+// (T3) future polled for the first time — waiter registered NOW
+```
+
+`tokio::sync::Notify::notify_waiters()` **只唤醒已经注册过的 waiter**。`notified()` future 在被 poll 之前并不注册为 waiter。Race：
+1. Caller 完成 T2（result 还是 None）。
+2. Dispatcher 抢进 `record_first_pane`：写入 `first_pane_result = Some(...)`，调 `notify_waiters()` — 但当前没有 waiter，信号丢失。
+3. Caller 进入 T3，第一次 poll `notified()` — 此时才注册 waiter，但 notify 已经 fire 完了。
+4. 永远等，直到 5s timeout 触发。
+## 解决方案
+把 `tokio::sync::Notify + Mutex<Option<(u32, String)>>` 换成 buffered 的 `tokio::sync::oneshot`：
+
+- 字段 `first_pane_tx: std::sync::Mutex<Option<oneshot::Sender<(u32, String)>>>` — dispatch 持有 sender；`record_first_pane` 用 `.lock().take()` 拿出 sender 并 `.send((xsterm_id, pane_id))`。oneshot 的 sender **buffer 住值**，等 receiver 来拿。
+- 字段 `first_pane_rx: tokio::sync::Mutex<Option<oneshot::Receiver<(u32, String)>>>` — `await_first_pane` 用 `.lock().await.take()` 拿出 receiver，再 `tokio::time::timeout(...).await`。
+
+oneshot buffer 关掉了 T2→T3 整个 race：dispatcher 在 caller poll 之前 send，值会被 buffer 住，receiver 一旦 await 立即拿到。`await_first_pane` 不再需要 fast-path result check——receiver.await 本身已经统一处理"已 send"和"未 send"两种情况。
+
+改动集中在 `src-tauri/src/infrastructure/tmux/controller.rs`：
+
+1. **字段定义**（`first_pane_notify: Notify` + `first_pane_result: Mutex<Option<...>>` → `first_pane_tx` + `first_pane_rx` oneshot 两半）。
+2. **生产 spawn initializer**（`Notify::new()` + `Mutex::new(None)` → `oneshot::channel()`）。
+3. **`await_first_pane` 整段重写**（Notify + Mutex fast-path → oneshot receiver.await with timeout）。
+4. **`record_first_pane` 整段重写**（Mutex set + notify_waiters → Mutex take + sender.send）。
+5. **Dispatch case 4 fallback check** 反转语义：`first_pane_result.lock().map(|m| m.is_none())` → `first_pane_tx.lock().map(|m| m.is_some())`（"sender 还在 = 还没 record"）。
+6. **24 个测试 struct literal**（包括 `new_for_tests` + 23 个 `Arc::new(TmuxController { ... })` 直构体）改用 `let (first_pane_tx, first_pane_rx) = oneshot::channel();` 在 struct literal 之前预声明。
+7. `register_pane_idempotent_and_lookup_round_trip` 的 assertion 改成：sender 是 `None`（first call won）+ `blocking_lock` + `try_recv` 验证 buffered 值匹配 first call 的 args（证明 second call 是 no-op）。
+
+T2→T3 race 完全消除：oneshot::Sender 在 `tx.send(...)` 时把值存进 channel buffer，无论 receiver 是否已经被 poll，buffer 都保留值直到 receiver 取走。
+
+## 是否解决
+YES（246/246 单测通过，cargo check 0 warning，cargo test 0 failed；`await_first_pane_resolves_when_record_first_pane_runs_before_caller`（Bug 011 回归测试）仍 pass，`await_first_pane_resolves_after_record_first_pane` 也 pass）
+
+# Bug 014
+## 现象
+rebuild xsterm 后创建 SSH tmux session（或任何 backend 路径），持续 5 秒后报 "tmux controller N: timed out waiting for first pane"。Bug 011 修复未生效。
+## 理想效果
+首次 await_first_pane 在 dispatch task 完成 record_first_pane 后立即返回，无超时。
+## BUG 原因
+Bug 011 的修复未真正关闭 race。`tokio::sync::Notify` **非 buffered**：
+
+```rust
+pub async fn await_first_pane(&self) -> Result<(u32, String), String> {
+    let notified = self.first_pane_notify.notified();  // T1: future 创建，未注册 waiter
+    if let Some(result) = self.first_pane_result.lock()...cloned() {  // T2: fast-path 检查
+        return Ok(result);
+    }
+    match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, notified).await { ... }  // T3: 首次 poll，注册 waiter
+}
+```
+
+Race 窗口（record_first_pane 在 T2 和 T3 之间跑）：
+1. T2 看到 result=None，await_first_pane 进入 timeout
+2. record_first_pane：set first_pane_result=Some + `notify_waiters()` —— **此时没有已注册 waiter**（T3 还没发生），通知丢失
+3. T3：future 首次 poll，注册 waiter —— 但通知已丢
+4. 永远等 5 秒，timeout
+
+Bug 011 的"fast-path 检查"只覆盖"record 在 T2 之前跑完"的场景。T2-T3 之间的窗口期是真实存在但被忽略的 race。
+## 解决方案
+替换为 `oneshot::channel`（**天然 buffered**）：
+
+```rust
+// struct 字段替换 first_pane_notify + first_pane_result 为：
+first_pane_rx: tokio::sync::Mutex<Option<oneshot::Receiver<Result<(u32, String), String>>>>,
+first_pane_tx: std::sync::Mutex<Option<oneshot::Sender<Result<(u32, String), String>>>>,
+
+// await_first_pane: 直接 await receiver，无 fast-path（不需要）
+let rx = self.first_pane_rx.lock().await.take()
+    .ok_or_else(...)?;
+match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, rx).await {
+    Ok(Ok(result)) => Ok(result),
+    ...
+}
+
+// record_first_pane: take + send
+if let Some(tx) = self.first_pane_tx.lock()...take() {
+    let _ = tx.send(Ok((xsterm_id, pane_id)));
+}
+```
+
+`oneshot::Sender::send()` 在 receiver 未 await 时**也缓冲**值（无 notifier 失去通知的窗口）。整个 T2-T3 窗口期不再有 race。
+
+dispatch case 4 fallback 中 `first_pane_result.lock().is_none()` 改为 `first_pane_tx.lock().is_some()`（语义反转：sender 还在 = 还没 record）。
+
+## 是否解决
+YES（修复 + 246/246 单测通过；Bug 011 的回归测试也通过 —— 之前只是 Bug 011 没真正修，现在 oneshot 一次性关掉 race）
+
+# Bug 015
+## 现象
+`SelectSessionDialog`（`dialog dialog--medium`）的 "Existing unused sessions" 段会出现一些 session，但 `session-history` 侧边栏里看不到这些 session 的对应配置 —— 用户视角下"凭空多出来一批孤立 session"。
+## 理想效果
+`session-history` 必须显示全部 `savedConfigs`（含未分组的归入 Default group）；任何运行中的 `Session` 必须挂在某个 pane 上，不允许出现"在 `sessions[]` state 里、但不在任何 pane 树引用"的孤儿；create / edit session 时 group 下拉不允许 "None" 选项，新建 session 必有归属组。
+## BUG原因
+三部分叠加：
+
+1. **session-history 只渲染分组的 savedConfigs**：`src/components/sidebar/SessionManager.tsx` 的 `groups.map(...)` 内部用 `savedConfigs.filter((c) => group.configIds.includes(c.id))`，任何没进用户组的 config 在侧栏完全不可见。
+2. **孤儿 running session 不被清理**：`src/contexts/session/useTauriListeners.ts` 的 `session-closed` 和 `tmux-pane-removed` 监听器在收到后端关闭事件后，先做 `if (!stillExists) return`，再做 `if (!stillAttached) return` 然后才从 `sessions[]` 移除。当 session 在 frontend state 但已不在任何 pane 树（即 orphan）时，提前 return 让它永远留在 `sessions[]` 里，`isConnected` 仍可能是 true，于是 SelectSessionDialog 的 `availableSessions = sessions.filter((s) => !usedSessionIds.has(s.id))` 把它列出来。
+3. **create / edit session 的 group 下拉提供 "None" 选项**：默认组策略下还允许 `selectedGroupId = null`，与"默认组为所有未显式分组 config 的归属"矛盾 —— 用户可以创建一个既不在任何用户组、也不在默认组的 config（持久化时存为 null），编辑老数据时也只能表达"无分组"，没有"归入 Default"的入口。
+## 解决方案
+1. `src/contexts/session/useTauriListeners.ts`：删除 `session-closed` 和 `tmux-pane-removed` 两个监听器里的 `if (!stillAttached) return;` 早返回。后端的关闭事件是权威信号 —— 不论该 session 是否还挂在 pane 树，都必须从 `sessions[]` 移除。`removeSessionAndCollapse` 在 leaf 没匹配时是 no-op，安全。同时删除不再使用的 `isSessionInPaneTree` import。
+2. 新建 `src/contexts/session/constants.ts` 定义 `DEFAULT_GROUP_ID = 0`、`DEFAULT_GROUP_NAME = "Default"`，以及 `isDefaultGroup(group)` 谓词函数。
+3. `src/contexts/session/useSessionPersistence.ts`：从磁盘加载 groups 后，若没有 `id === DEFAULT_GROUP_ID` 的组则在最前面插入一个 `id: 0, name: "Default", configIds: [], collapsed: false` 的默认组。`nextGroupId` 不动（始终 ≥ 1，用户组 id 不会撞车）。
+4. `src/contexts/session/useGroupActions.ts`：`deleteGroup(id)` 在 `id === DEFAULT_GROUP_ID` 时直接 return，禁止删除默认组。`createGroup` 的 `nextGroupId` 起点为 1，天然不和 0 冲突。
+5. `src/components/sidebar/SessionManager.tsx`：
+   - `ungroupedConfigs = savedConfigs.filter(c => !userGroups.some(g => g.configIds.includes(c.id)))`（计算默认组的成员：不在任何用户组里的 config）。
+   - `groups.map(group)` 改用块体：当 `group.id === DEFAULT_GROUP_ID` 时 `items = ungroupedConfigs`（持久化的 `group.configIds` 被忽略），其它组沿用 `savedConfigs.filter(c => group.configIds.includes(c.id))`。
+   - 默认组的 ContextMenu 不渲染 `Delete` 项（保留 `Create Session`、`Edit`），其它组保留三项。
+   - 默认组支持拖入：现有 `useSessionDragDrop` 把 groupId=0 透传到 `moveConfigToGroup(configId, 0)`，后者先把 configId 从所有组剔除，再 append 到 group 0 的持久化 `configIds`；因为渲染忽略 group 0 的持久化 configIds，效果等价于"从所有用户组移出"。
+6. 删 create / edit dialog 的 "None" 选项：
+   - `src/components/dialogs/SessionTab.tsx`：删除 `GROUP_OPTIONS_NONE` 常量与 `""` 解析；`selectedGroupId` / `onGroupChange` 类型收紧为 `number`。
+   - `src/components/dialogs/CreateSessionDialog.tsx`：`selectedGroupId` 默认 `DEFAULT_GROUP_ID`，`initialGroupId` 类型改为 `number`；`handleCreate` / `handleSaveOnly` 去掉 `selectedGroupId !== null` 分支，直接 `addToGroup(selectedGroupId, configId)`。
+   - `src/components/dialogs/EditSessionDialog.tsx`：内联 group `<select>` 删 `<option value="none">None</option>`；`selectedGroupId` 默认 `groupId ?? DEFAULT_GROUP_ID`，类型收紧为 `number`。
+   - `src/components/AppLayout.tsx`：`createSessionGroupId` 状态默认 `DEFAULT_GROUP_ID`，`onCreateSession` 把 `setCreateSessionGroupId(null)` 改为 `setCreateSessionGroupId(DEFAULT_GROUP_ID)`，与新的 `initialGroupId: number` 类型对齐。
+## 是否解决
+YES

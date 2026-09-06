@@ -31,6 +31,7 @@ import {
   type SectionId,
 } from "./sessionDialogItems";
 import "./CreateSessionDialog.css";
+import { DEFAULT_GROUP_ID } from "../../contexts/session/constants";
 
 interface CreateSessionDialogProps {
   isOpen: boolean;
@@ -51,7 +52,7 @@ interface CreateSessionDialogProps {
     displayConfig?: SessionDisplayConfig,
   ) => Promise<Session>;
   initialTab?: "local" | "ssh" | "tmux-cc" | "tmux-ssh";
-  initialGroupId?: number | null;
+  initialGroupId?: number;
 }
 
 type TopTab = "local" | "ssh" | "tmux-cc" | "tmux-ssh";
@@ -65,11 +66,11 @@ export default function CreateSessionDialog({
   initialTab = "local",
   initialGroupId,
 }: CreateSessionDialogProps) {
-  const { groups, addToGroup } = useSession();
+  const { groups, addToGroup, saveConfigOnly } = useSession();
 
   const [topTab, setTopTab] = useState<TopTab>(initialTab);
   const [sectionId, setSectionId] = useState<SectionId>("session");
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<number>(DEFAULT_GROUP_ID);
   const [saveConfig, setSaveConfig] = useState(true);
   const [name, setName] = useState("");
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>({});
@@ -88,7 +89,7 @@ export default function CreateSessionDialog({
     if (isOpen) {
       setTopTab(initialTab);
       setSectionId("session");
-      setSelectedGroupId(initialGroupId ?? null);
+      setSelectedGroupId(initialGroupId ?? DEFAULT_GROUP_ID);
       setError("");
       setName("");
       setLocalConfig({});
@@ -156,12 +157,61 @@ export default function CreateSessionDialog({
         session = await onCreateLocal(localConfigWithName, saveConfig, displayConfig);
       }
 
-      if (selectedGroupId !== null) {
-        addToGroup(selectedGroupId, session.configId);
-      }
+      addToGroup(selectedGroupId, session.configId);
       onClose();
     } catch (err) {
       console.error("Failed to create session:", err);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleSaveOnly = () => {
+    setError("");
+    try {
+      let type: Session["type"];
+      let config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig;
+
+      if (topTab === "ssh") {
+        const validationError = validateSshConfig(sshConfig);
+        if (validationError) {
+          setError(validationError);
+          setSectionId("session");
+          return;
+        }
+        type = "ssh";
+        const trimmedName = name.trim();
+        config = trimmedName ? { ...sshConfig, name: trimmedName } : sshConfig;
+      } else if (topTab === "tmux-cc") {
+        type = "tmux-cc";
+        const trimmedName = name.trim();
+        config = trimmedName ? { ...tmuxConfig, name: trimmedName } : tmuxConfig;
+      } else if (topTab === "tmux-ssh") {
+        const sshSub = tmuxConfig.ssh;
+        if (!sshSub) {
+          setError("SSH configuration is required for tmux over SSH");
+          setSectionId("session");
+          return;
+        }
+        const validationError = validateSshConfig(sshSub);
+        if (validationError) {
+          setError(validationError);
+          setSectionId("session");
+          return;
+        }
+        type = "tmux-cc";
+        const trimmedName = name.trim();
+        config = trimmedName ? { ...tmuxConfig, name: trimmedName } : tmuxConfig;
+      } else {
+        type = "local";
+        const trimmedName = name.trim();
+        config = trimmedName ? { ...localConfig, name: trimmedName } : localConfig;
+      }
+
+      const saved = saveConfigOnly(type, config, displayConfig);
+      addToGroup(selectedGroupId, saved.id);
+      onClose();
+    } catch (err) {
+      console.error("Failed to save config:", err);
       setError(err instanceof Error ? err.message : String(err));
     }
   };
@@ -315,6 +365,9 @@ export default function CreateSessionDialog({
       <div className="dialog-footer-buttons">
         <button className="btn btn--secondary" onClick={onClose}>
           Cancel
+        </button>
+        <button className="btn btn--secondary" onClick={handleSaveOnly}>
+          Save Only
         </button>
         <button className="btn btn--primary" onClick={handleCreate}>
           Create

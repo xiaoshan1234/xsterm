@@ -281,6 +281,77 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
   );
 
   /**
+   * Persist a session configuration WITHOUT creating a backend session
+   * or auto-opening a window.
+   *
+   * Used by the Create Session dialog's "Save Only" button — the user
+   * configures the form fields but does not want a live session yet;
+   * the config is parked in `savedConfigs` so it can be opened later
+   * via the Session Manager sidebar.
+   *
+   * Differs from `createXxxSession`: no `create_session` IPC call, no
+   * `setSessions`, no `createWindowFromSession`. Only `updateConfigs`
+   * runs, mirroring the `save === true` branch of `createAndActivateSession`.
+   *
+   * The caller is responsible for SSH/tmux-over-SSH validation
+   * (matching `createAndActivateSession`'s expectations) before calling
+   * this method — saving an invalid SSH config would block a future
+   * "Open" via `createSessionFromSavedConfig`.
+   *
+   * Display config is persisted as-is so the saved entry round-trips
+   * through `createSessionFromSavedConfig` exactly like a config saved
+   * via the Create button.
+   */
+  const saveConfigOnly = useCallback(
+    (
+      type: Session["type"],
+      config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig,
+      displayConfig?: SessionDisplayConfig,
+    ): SavedSessionConfig => {
+      const configId = crypto.randomUUID();
+      // Fallback name mirrors `create_session`'s defaults so sidebar labels stay consistent.
+      const configName = config.name?.trim();
+      const idAndVersion = { id: configId, version: 1 } as const;
+
+      let savedConfig: SavedSessionConfig;
+      if (type === "local") {
+        const localConfig = config as LocalSessionConfig;
+        savedConfig = {
+          ...idAndVersion,
+          name: configName || "Local",
+          type: "local",
+          config: localConfig,
+          displayConfig,
+        };
+      } else if (type === "ssh") {
+        const sshConfig = config as SSHSessionConfig;
+        const user = sshConfig.username?.trim() || "user";
+        const host = sshConfig.host?.trim() || "host";
+        savedConfig = {
+          ...idAndVersion,
+          name: configName || `${user}@${host}`,
+          type: "ssh",
+          config: sshConfig,
+          displayConfig,
+        };
+      } else {
+        const tmuxConfig = config as TmuxCcConfig;
+        savedConfig = {
+          ...idAndVersion,
+          name: configName || tmuxConfig.tmuxSessionName?.trim() || "Tmux",
+          type: "tmux-cc",
+          config: tmuxConfig,
+          displayConfig,
+        };
+      }
+
+      updateConfigs((prev) => [...prev, savedConfig]);
+      return savedConfig;
+    },
+    [updateConfigs],
+  );
+
+  /**
    * Open a session from a saved config (also creates a default workspace)
    *
    * Difference from createSessionFromSavedConfig: this method additionally calls createWindowFromSession,
@@ -460,6 +531,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     createSshSessionOnly,
     createTmuxSession,
     createTmuxSessionOnly,
+    saveConfigOnly,
     openFromConfig,
     removeConfig,
     closeSession,

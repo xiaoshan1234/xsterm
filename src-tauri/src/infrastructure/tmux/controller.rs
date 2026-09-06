@@ -91,7 +91,7 @@ use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot, Mutex, Notify};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
@@ -229,13 +229,21 @@ pub struct TmuxController {
     /// `controller_id * 1_000_000 + 1` offset to keep window ids out of the
     /// pane-id space.
     next_xsterm_window_id: AtomicU32,
-    /// Notified once the first pane has been registered; consumed by
-    /// [`TmuxController::await_first_pane`].
-    first_pane_notify: Notify,
-    /// Stored alongside the notify so [`TmuxController::await_first_pane`]
-    /// can return both the xsterm id and the tmux pane id of the first
-    /// pane.
-    first_pane_result: std::sync::Mutex<Option<(u32, String)>>,
+    /// Signalled by the dispatch task on the first `WindowPaneChanged` and
+    /// consumed by [`TmuxController::await_first_pane`]. Implemented as a
+    /// buffered `oneshot` channel rather than `tokio::sync::Notify` to
+    /// close a T2→T3 race: `Notify::notify_waiters()` only wakes currently-
+    /// registered waiters, but a `notified()` future isn't registered until
+    /// it is first polled, so a dispatcher firing between result-check and
+    /// await would lose the signal. `oneshot::Sender` buffers the value
+    /// until the receiver awaits, closing the race completely.
+    first_pane_rx:
+        tokio::sync::Mutex<Option<oneshot::Receiver<(u32, String)>>>,
+    /// Sender half of `first_pane_rx`. Held in a `std::sync::Mutex` so the
+    /// dispatch task can `.take()` it on `record_first_pane` (one-shot
+    /// semantics — second call is a no-op).
+    first_pane_tx:
+        std::sync::Mutex<Option<oneshot::Sender<(u32, String)>>>,
     /// FIFO queue of [`oneshot::Sender`]s awaiting the result of a
     /// [`TmuxController::split_pane`] request. The dispatch task pushes
     /// `split_pane` callers onto this queue (before writing `split-window`
@@ -401,6 +409,8 @@ impl TmuxController {
 
         let (stdin_tx, stdin_rx) = mpsc::unbounded_channel::<String>();
         let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (pane_tx_init, pane_rx_init) =
+            oneshot::channel::<(u32, String)>();
 
         let killed = Arc::new(AtomicBool::new(false));
         let backend_slot: Arc<tokio::sync::Mutex<Option<Box<dyn TmuxBackend>>>> =
@@ -425,8 +435,8 @@ impl TmuxController {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(controller_id.saturating_mul(1_000_000) + 1),
             next_xsterm_window_id: AtomicU32::new(controller_id.saturating_mul(1_000_000) + 1),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(pane_tx_init)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(pane_rx_init)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -737,30 +747,27 @@ impl TmuxController {
     /// cached first-pane result if available, otherwise the same timeout
     /// error.
     pub async fn await_first_pane(&self) -> Result<(u32, String), String> {
-        // Fast path: the dispatch task already ran and stored a result.
-        if let Some(result) = self
-            .first_pane_result
-            .lock()
-            .map_err_string()?
-            .as_ref()
-            .cloned()
-        {
-            return Ok(result);
-        }
-        match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, self.first_pane_notify.notified())
-            .await
-        {
-            Ok(()) => self
-                .first_pane_result
-                .lock()
-                .map_err_string()?
-                .clone()
-                .ok_or_else(|| {
-                    format!(
-                        "tmux controller {}: first pane notify fired but no result stored",
-                        self.controller_id
-                    )
-                }),
+        // Take the receiver (one-shot). If already taken, return an error.
+        let rx = {
+            let mut guard = self.first_pane_rx.lock().await;
+            guard.take()
+        };
+        let rx = rx.ok_or_else(|| {
+            format!(
+                "tmux controller {}: first pane already awaited",
+                self.controller_id
+            )
+        })?;
+        // Await with the standard 5s timeout. The receiver buffers the
+        // dispatcher's `.send()`, so this doesn't lose notifications the
+        // way `Notify` did (Notify's `notified()` future is only
+        // registered as a waiter on first poll, leaving a T2→T3 race).
+        match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, rx).await {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(_)) => Err(format!(
+                "tmux controller {}: first pane channel closed unexpectedly",
+                self.controller_id
+            )),
             Err(_) => Err(format!(
                 "tmux controller {}: timed out waiting for first pane",
                 self.controller_id
@@ -1141,6 +1148,8 @@ impl TmuxController {
         app_backend: Arc<dyn AppBackend>,
     ) -> Arc<Self> {
         use std::collections::VecDeque;
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         Arc::new(Self {
             controller_id,
             backend: Arc::new(Mutex::new(None)),
@@ -1154,8 +1163,8 @@ impl TmuxController {
             // so tests that share a controller never collide with the
             // pane-id allocator.
             next_xsterm_window_id: AtomicU32::new(base_xsterm_id + 500_000),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -1193,13 +1202,10 @@ impl TmuxController {
     /// of [`TmuxController::await_first_pane`]. Idempotent: subsequent
     /// calls are no-ops.
     pub(crate) fn record_first_pane(&self, xsterm_id: u32, pane_id: String) {
-        let mut slot = match self.first_pane_result.lock() {
-            Ok(m) => m,
-            Err(_) => return,
-        };
-        if slot.is_none() {
-            *slot = Some((xsterm_id, pane_id));
-            self.first_pane_notify.notify_waiters();
+        if let Ok(mut slot) = self.first_pane_tx.lock() {
+            if let Some(tx) = slot.take() {
+                let _ = tx.send((xsterm_id, pane_id));
+            }
         }
     }
 
@@ -1567,9 +1573,9 @@ fn dispatch_event(
             //    some reason (e.g. an old test that drives the dispatch
             //    task without going through a real tmux binary).
             let first = controller
-                .first_pane_result
+                .first_pane_tx
                 .lock()
-                .map(|m| m.is_none())
+                .map(|m| m.is_some())
                 .unwrap_or(false);
             if first {
                 let xsterm_id = controller.allocate_xsterm_id();
@@ -2190,6 +2196,8 @@ mod tests {
     #[test]
     fn register_pane_idempotent_and_lookup_round_trip() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 1,
             backend: Arc::new(Mutex::new(None)),
@@ -2200,8 +2208,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(1_000_001),
             next_xsterm_window_id: AtomicU32::new(1_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2224,8 +2232,17 @@ mod tests {
         controller.record_first_pane(1_000_001, "%5".to_string());
         // Idempotent: second call is a no-op.
         controller.record_first_pane(1_000_002, "%6".to_string());
+        // Sender must be taken (first call won).
+        assert!(controller.first_pane_tx.lock().unwrap().is_none());
+        // The buffered value on the receiver side must match the FIRST
+        // call's args, proving the second call was a no-op.
+        let mut rx = controller
+            .first_pane_rx
+            .blocking_lock()
+            .take()
+            .expect("receiver must still be present");
         assert_eq!(
-            controller.first_pane_result.lock().unwrap().clone(),
+            rx.try_recv().ok(),
             Some((1_000_001, "%5".to_string()))
         );
     }
@@ -2233,6 +2250,8 @@ mod tests {
     #[test]
     fn unbind_pane_removes_entry_and_errors_for_unknown() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 2,
             backend: Arc::new(Mutex::new(None)),
@@ -2243,8 +2262,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(2_000_001),
             next_xsterm_window_id: AtomicU32::new(2_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2270,6 +2289,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_emits_session_output_for_registered_pane() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 3,
             backend: Arc::new(Mutex::new(None)),
@@ -2280,8 +2301,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(3_000_001),
             next_xsterm_window_id: AtomicU32::new(3_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2335,6 +2356,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_emits_pane_added_and_records_first_pane() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 4,
             backend: Arc::new(Mutex::new(None)),
@@ -2345,8 +2368,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(4_000_001),
             next_xsterm_window_id: AtomicU32::new(4_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2435,6 +2458,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_forwards_pause_continue_and_exit() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 5,
             backend: Arc::new(Mutex::new(None)),
@@ -2445,8 +2470,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(5_000_001),
             next_xsterm_window_id: AtomicU32::new(5_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2503,8 +2528,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn await_first_pane_resolves_after_record_first_pane() {
+    async fn await_first_pane_resolves_when_record_first_pane_runs_before_caller() {
+        // Regression: when the dispatch task records the first pane BEFORE
+        // the caller invokes `await_first_pane`, the reorder fix ensures the
+        // fast-path check inside `await_first_pane` reads the stored result
+        // and returns immediately. Without the reorder, the buggy code
+        // would re-create the `notified()` future *after* the result check,
+        // racing against the dispatcher's `notify_waiters()` and risking a
+        // lost notification. This test exercises the order where
+        // `record_first_pane` runs strictly before `await_first_pane` is
+        // awaited, which is the common production path (the dispatcher
+        // records the first pane as soon as the bootstrap `WindowPaneChanged`
+        // arrives, even if `create_tmux_session` hasn't reached the await
+        // yet).
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 6,
             backend: Arc::new(Mutex::new(None)),
@@ -2515,8 +2554,44 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(6_000_001),
             next_xsterm_window_id: AtomicU32::new(6_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            pending_splits: std::sync::Mutex::new(VecDeque::new()),
+            pending_windows: std::sync::Mutex::new(VecDeque::new()),
+            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            session_name: std::sync::Mutex::new(None),
+            pending_capture: std::sync::Mutex::new(None),
+            pending_capture_body: std::sync::Mutex::new(Vec::new()),
+            capture_lock: tokio::sync::Mutex::new(()),
+            split_pane_timeout: SPLIT_PANE_TIMEOUT,
+        });
+
+        // Fire record_first_pane FIRST, with no sleep — simulate the
+        // dispatcher winning the race over `await_first_pane`.
+        controller.record_first_pane(6_000_042, "%42".to_string());
+
+        let result = controller.await_first_pane().await;
+        assert_eq!(result, Ok((6_000_042, "%42".to_string())));
+    }
+
+    #[tokio::test]
+    async fn await_first_pane_resolves_after_record_first_pane() {
+        let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
+        let controller = Arc::new(TmuxController {
+            controller_id: 6,
+            backend: Arc::new(Mutex::new(None)),
+            killed: Arc::new(AtomicBool::new(false)),
+            stdin_tx: mpsc::unbounded_channel::<String>().0,
+            app_backend: backend,
+            pane_bindings: std::sync::Mutex::new(HashMap::new()),
+            pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
+            next_xsterm_id: AtomicU32::new(6_000_001),
+            next_xsterm_window_id: AtomicU32::new(6_500_001),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2545,6 +2620,8 @@ mod tests {
     #[test]
     fn pane_bindings_snapshot_contains_all_registered_panes() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 7,
             backend: Arc::new(Mutex::new(None)),
@@ -2555,8 +2632,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(7_000_001),
             next_xsterm_window_id: AtomicU32::new(7_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2592,6 +2669,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_routes_pane_exited_to_tmux_pane_removed() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 8,
             backend: Arc::new(Mutex::new(None)),
@@ -2602,8 +2681,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(8_000_001),
             next_xsterm_window_id: AtomicU32::new(8_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2654,6 +2733,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_routes_pane_died_to_tmux_pane_removed() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 9,
             backend: Arc::new(Mutex::new(None)),
@@ -2664,8 +2745,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(9_000_001),
             next_xsterm_window_id: AtomicU32::new(9_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2711,6 +2792,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_does_not_emit_removed_for_unbound_pane() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 10,
             backend: Arc::new(Mutex::new(None)),
@@ -2721,8 +2804,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(10_000_001),
             next_xsterm_window_id: AtomicU32::new(10_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2769,6 +2852,8 @@ mod tests {
     async fn split_pane_resolves_when_dispatch_sees_window_pane_changed() {
         let backend = Arc::new(RecordingBackend::new());
         let (stdin_tx, mut _stdin_rx) = mpsc::unbounded_channel::<String>();
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 11,
             backend: Arc::new(Mutex::new(None)),
@@ -2779,8 +2864,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(11_000_001),
             next_xsterm_window_id: AtomicU32::new(11_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2866,6 +2951,8 @@ mod tests {
     async fn split_pane_times_out_when_no_response() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
         let (stdin_tx, _stdin_rx) = mpsc::unbounded_channel::<String>();
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let mut controller = TmuxController {
             controller_id: 12,
             backend: Arc::new(Mutex::new(None)),
@@ -2876,8 +2963,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(12_000_001),
             next_xsterm_window_id: AtomicU32::new(12_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2919,6 +3006,8 @@ mod tests {
     async fn kill_pane_writes_correct_command_to_stdin() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
         let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<String>();
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = TmuxController {
             controller_id: 13,
             backend: Arc::new(Mutex::new(None)),
@@ -2929,8 +3018,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(13_000_001),
             next_xsterm_window_id: AtomicU32::new(13_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -2966,6 +3055,8 @@ mod tests {
     #[tokio::test]
     async fn close_drains_pending_splits_with_error() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 14,
             backend: Arc::new(Mutex::new(None)),
@@ -2976,8 +3067,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(14_000_001),
             next_xsterm_window_id: AtomicU32::new(14_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3033,6 +3124,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_resolves_new_window_via_window_add_then_pane_changed() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 15,
             backend: Arc::new(Mutex::new(None)),
@@ -3043,8 +3136,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(15_000_001),
             next_xsterm_window_id: AtomicU32::new(15_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3164,6 +3257,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_handles_bootstrap_window_without_pending_sender() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 16,
             backend: Arc::new(Mutex::new(None)),
@@ -3174,8 +3269,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(16_000_001),
             next_xsterm_window_id: AtomicU32::new(16_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3263,6 +3358,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_routes_window_close_to_tmux_window_closed() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 17,
             backend: Arc::new(Mutex::new(None)),
@@ -3273,8 +3370,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(17_000_001),
             next_xsterm_window_id: AtomicU32::new(17_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3357,6 +3454,8 @@ mod tests {
     #[tokio::test]
     async fn dispatch_routes_window_renamed_to_tmux_window_renamed() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 18,
             backend: Arc::new(Mutex::new(None)),
@@ -3367,8 +3466,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(18_000_001),
             next_xsterm_window_id: AtomicU32::new(18_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3423,6 +3522,8 @@ mod tests {
     async fn kill_window_and_rename_window_write_correct_commands_to_stdin() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
         let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<String>();
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = TmuxController {
             controller_id: 19,
             backend: Arc::new(Mutex::new(None)),
@@ -3433,8 +3534,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(19_000_001),
             next_xsterm_window_id: AtomicU32::new(19_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3488,6 +3589,8 @@ mod tests {
     async fn capture_pane_resolves_on_command_end_after_command_output() {
         let backend = Arc::new(RecordingBackend::new());
         let (stdin_tx, _stdin_rx) = mpsc::unbounded_channel::<String>();
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 100,
             backend: Arc::new(Mutex::new(None)),
@@ -3498,8 +3601,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(100_000_001),
             next_xsterm_window_id: AtomicU32::new(100_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3545,6 +3648,8 @@ mod tests {
     async fn capture_pane_resolves_with_err_on_command_error() {
         let backend = Arc::new(RecordingBackend::new());
         let (stdin_tx, _stdin_rx) = mpsc::unbounded_channel::<String>();
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 101,
             backend: Arc::new(Mutex::new(None)),
@@ -3555,8 +3660,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(101_000_001),
             next_xsterm_window_id: AtomicU32::new(101_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3603,6 +3708,8 @@ mod tests {
     async fn capture_pane_errors_on_unbound_pane() {
         let backend = Arc::new(RecordingBackend::new());
         let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<String>();
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = TmuxController {
             controller_id: 102,
             backend: Arc::new(Mutex::new(None)),
@@ -3613,8 +3720,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(102_000_001),
             next_xsterm_window_id: AtomicU32::new(102_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),
@@ -3648,6 +3755,8 @@ mod tests {
     #[tokio::test]
     async fn close_drains_pending_capture_with_error() {
         let backend = Arc::new(RecordingBackend::new());
+        let (first_pane_tx, first_pane_rx) =
+            oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
             controller_id: 103,
             backend: Arc::new(Mutex::new(None)),
@@ -3658,8 +3767,8 @@ mod tests {
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
             next_xsterm_id: AtomicU32::new(103_000_001),
             next_xsterm_window_id: AtomicU32::new(103_500_001),
-            first_pane_notify: Notify::new(),
-            first_pane_result: std::sync::Mutex::new(None),
+            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
             pending_splits: std::sync::Mutex::new(VecDeque::new()),
             pending_windows: std::sync::Mutex::new(VecDeque::new()),
             pending_window_pane: std::sync::Mutex::new(HashMap::new()),

@@ -39,6 +39,11 @@ export interface SessionContextType {
   createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createTmuxSession: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
   createTmuxSessionOnly: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
+  saveConfigOnly: (
+    type: Session["type"],
+    config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig,
+    displayConfig?: SessionDisplayConfig,
+  ) => SavedSessionConfig;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -185,6 +190,11 @@ export interface SessionActions {
   createSshSessionOnly: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createTmuxSession: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
   createTmuxSessionOnly: (config: TmuxCcConfig, save?: boolean) => Promise<Session>;
+  saveConfigOnly: (
+    type: Session["type"],
+    config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig,
+    displayConfig?: SessionDisplayConfig,
+  ) => SavedSessionConfig;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;

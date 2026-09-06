@@ -6,6 +6,7 @@ import {
   type SavedWorkspace,
   type SessionGroup,
 } from "../../types/session";
+import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "./constants";
 import { type SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {
@@ -74,7 +75,19 @@ export function useSessionPersistence({
         sessionStorage.loadSavedWindowConfigs(),
       ]);
       setSavedConfigs(configs);
-      setGroups(savedGroups.groups);
+      if (savedGroups.groups.some((g) => g.id === DEFAULT_GROUP_ID)) {
+        setGroups(savedGroups.groups);
+      } else {
+        setGroups([
+          {
+            id: DEFAULT_GROUP_ID,
+            name: DEFAULT_GROUP_NAME,
+            configIds: [],
+            collapsed: false,
+          },
+          ...savedGroups.groups,
+        ]);
+      }
       setNextGroupId(savedGroups.nextGroupId);
       setSavedWorkspaces(workspacesData);
       setSavedWindowConfigs(windowConfigs);

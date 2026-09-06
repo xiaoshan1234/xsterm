@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSession } from "../../contexts/SessionContext";
+import { DEFAULT_GROUP_ID } from "../../contexts/session/constants";
 import { type SavedSessionConfig, type SessionGroup } from "../../types/session";
 import {
   ShellIcon,
@@ -48,6 +49,16 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   const [editingGroup, setEditingGroup] = useState<SessionGroup | null>(null);
   const [editingSession, setEditingSession] = useState<SavedSessionConfig | null>(null);
   const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
+
+  const ungroupedConfigs = useMemo(() => {
+    const grouped = new Set<string>();
+    groups.forEach((g) => {
+      if (g.id !== DEFAULT_GROUP_ID) {
+        g.configIds.forEach((id) => grouped.add(id));
+      }
+    });
+    return savedConfigs.filter((c) => !grouped.has(c.id));
+  }, [savedConfigs, groups]);
 
   const isConnected = (config: SavedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
@@ -110,38 +121,44 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     <div className="session-manager">
       <div className="submenu-header">Session Manager</div>
       <div className="session-history">
-        {groups.map((group) => (
-          <div
-            key={group.id}
-            className={`session-group ${dragOverGroupId === group.id ? "drag-over" : ""}`}
-            onDragOver={(e) => handleGroupDragOver(e, group.id)}
-            onDragLeave={handleGroupDragLeave}
-            onDrop={(e) => handleGroupDrop(e, group.id)}
-          >
-            <ContextMenu
-              items={[
+        {groups.map((group) => {
+          const isDefault = group.id === DEFAULT_GROUP_ID;
+          const items = isDefault
+            ? ungroupedConfigs
+            : savedConfigs.filter((c) => group.configIds.includes(c.id));
+          const contextMenuItems = isDefault
+            ? [
+                { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
+                { label: "Edit", onClick: () => setEditingGroup(group) },
+              ]
+            : [
                 { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
                 { label: "Edit", onClick: () => setEditingGroup(group) },
                 { label: "Delete", onClick: () => deleteGroup(group.id), danger: true },
-              ]}
-              onOpen={() => setSelectedConfigId(null)}
+              ];
+          return (
+            <div
+              key={group.id}
+              className={`session-group ${dragOverGroupId === group.id ? "drag-over" : ""}`}
+              onDragOver={(e) => handleGroupDragOver(e, group.id)}
+              onDragLeave={handleGroupDragLeave}
+              onDrop={(e) => handleGroupDrop(e, group.id)}
             >
-              <button className="session-group-header" onClick={() => toggleGroup(group.id)}>
-                <span
-                  className="session-group-chevron"
-                  style={{ transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)" }}
-                >
-                  <ChevronIcon size={14} />
-                </span>
-                <FolderIcon size={14} />
-                <span className="session-group-name">{group.name}</span>
-              </button>
-            </ContextMenu>
-            {!group.collapsed && (
-              <div className="session-group-items">
-                {savedConfigs
-                  .filter((c) => group.configIds.includes(c.id))
-                  .map((config) => (
+              <ContextMenu items={contextMenuItems} onOpen={() => setSelectedConfigId(null)}>
+                <button className="session-group-header" onClick={() => toggleGroup(group.id)}>
+                  <span
+                    className="session-group-chevron"
+                    style={{ transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)" }}
+                  >
+                    <ChevronIcon size={14} />
+                  </span>
+                  <FolderIcon size={14} />
+                  <span className="session-group-name">{group.name}</span>
+                </button>
+              </ContextMenu>
+              {!group.collapsed && (
+                <div className="session-group-items">
+                  {items.map((config) => (
                     <ContextMenu
                       key={config.id}
                       items={[
@@ -167,10 +184,11 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
                       </div>
                     </ContextMenu>
                   ))}
-              </div>
-            )}
-          </div>
-        ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="session-actions">

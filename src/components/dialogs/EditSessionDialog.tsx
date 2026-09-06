@@ -24,6 +24,7 @@ import {
   type SectionId,
 } from "./sessionDialogItems";
 import "./EditSessionDialog.css";
+import { DEFAULT_GROUP_ID } from "../../contexts/session/constants";
 
 interface EditSessionDialogProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ export function EditSessionDialog({
   onSave,
 }: EditSessionDialogProps) {
   const [name, setName] = useState(config.name);
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(groupId);
+  const [selectedGroupId, setSelectedGroupId] = useState<number>(groupId ?? DEFAULT_GROUP_ID);
   const [localConfig, setLocalConfig] = useState<LocalSessionConfig>(
     config.type === "local" ? config.config : {},
   );
@@ -64,7 +65,7 @@ export function EditSessionDialog({
   useEffect(() => {
     if (isOpen) {
       setName(config.name);
-      setSelectedGroupId(groupId);
+      setSelectedGroupId(groupId ?? DEFAULT_GROUP_ID);
       setLocalConfig(config.type === "local" ? config.config : {});
       setSshConfig(config.type === "ssh" ? config.config : DEFAULT_SSH);
       setDisplayConfig(config.displayConfig);
@@ -126,12 +127,9 @@ export function EditSessionDialog({
               </FormField>
               <FormField label="Group">
                 <select
-                  value={selectedGroupId === null ? "none" : selectedGroupId}
-                  onChange={(e) =>
-                    setSelectedGroupId(e.target.value === "none" ? null : parseInt(e.target.value))
-                  }
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(parseInt(e.target.value, 10))}
                 >
-                  <option value="none">None</option>
                   {groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "../contexts/SessionContext";
+import { DEFAULT_GROUP_ID } from "../contexts/session/constants";
 import { useAppShortcuts } from "../hooks/useAppShortcuts";
 import { useTmuxAutoAttach } from "../hooks/useTmuxAutoAttach";
 import NavBar from "./NavBar";
@@ -30,7 +31,7 @@ export default function AppLayout() {
     closeWorkspace,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [createSessionGroupId, setCreateSessionGroupId] = useState<number | null>(null);
+  const [createSessionGroupId, setCreateSessionGroupId] = useState<number>(DEFAULT_GROUP_ID);
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<
     "appearance" | "shortcuts" | "about"
@@ -72,7 +73,7 @@ export default function AppLayout() {
       <div className="content-area">
         <Sidebar
           onCreateSession={() => {
-            setCreateSessionGroupId(null);
+            setCreateSessionGroupId(DEFAULT_GROUP_ID);
             setShowCreateDialog(true);
           }}
           onCreateSessionWithGroup={(groupId) => {

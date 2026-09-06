@@ -14,7 +14,6 @@ import {
   createLeafPane,
   findPaneNode,
   getLeafPaneIds,
-  isSessionInPaneTree,
   removeSessionAndCollapse,
   withRecomputedSessionIds,
 } from "./paneUtils";
@@ -112,10 +111,6 @@ export function useTauriListeners({
         establishingSessionsRef.current.delete(sessionId);
         const stillExists = sessionsRef.current.some((s) => s.id === sessionId);
         if (!stillExists) return;
-        const stillAttached = workspacesRef.current.some((workspace) =>
-          workspace.windows.some((window) => isSessionInPaneTree(window.rootPane, sessionId)),
-        );
-        if (!stillAttached) return;
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         setWorkspaces((prev) =>
           prev.map((workspace) =>
@@ -296,12 +291,6 @@ export function useTauriListeners({
           establishingSessionsRef.current.delete(xstermSessionId);
           const stillExists = sessionsRef.current.some((s) => s.id === xstermSessionId);
           if (!stillExists) return;
-          const stillAttached = workspacesRef.current.some((workspace) =>
-            workspace.windows.some((window) =>
-              isSessionInPaneTree(window.rootPane, xstermSessionId),
-            ),
-          );
-          if (!stillAttached) return;
           setSessions((prev) => prev.filter((s) => s.id !== xstermSessionId));
           setWorkspaces((prev) =>
             prev.map((workspace) =>

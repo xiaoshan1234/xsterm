@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type { SavedSessionConfig, SessionGroup } from "../../types/session";
+import { DEFAULT_GROUP_ID } from "./constants";
 
 interface UseGroupActionsDeps {
   nextGroupId: number;
@@ -22,6 +23,7 @@ export function useGroupActions(deps: UseGroupActionsDeps) {
 
   const deleteGroup = useCallback(
     (id: number) => {
+      if (id === DEFAULT_GROUP_ID) return;
       updateGroups((prev) => prev.filter((g) => g.id !== id));
     },
     [updateGroups],

@@ -12,8 +12,8 @@ interface SessionTabProps {
   onConnectionTypeChange: (type: ConnectionType) => void;
   name: string;
   onNameChange: (name: string) => void;
-  selectedGroupId: number | null;
-  onGroupChange: (groupId: number | null) => void;
+  selectedGroupId: number;
+  onGroupChange: (groupId: number) => void;
   groups: Array<{ id: number; name: string }>;
   localConfig: LocalSessionConfig;
   onLocalConfigChange: (config: LocalSessionConfig) => void;
@@ -29,10 +29,6 @@ const SHELL_TEMPLATES: Array<{ value: string; label: string }> = [
   { value: "git-bash", label: "Git Bash" },
   { value: "wsl", label: "WSL" },
   { value: "custom", label: "Custom" },
-];
-
-const GROUP_OPTIONS_NONE: Array<{ value: string; label: string }> = [
-  { value: "", label: "None" },
 ];
 
 export function SessionTab({
@@ -51,7 +47,7 @@ export function SessionTab({
   hideNameAndGroup,
 }: SessionTabProps) {
   const groupOptions = useMemo(
-    () => [...GROUP_OPTIONS_NONE, ...groups.map((g) => ({ value: String(g.id), label: g.name }))],
+    () => groups.map((g) => ({ value: String(g.id), label: g.name })),
     [groups],
   );
 
@@ -70,8 +66,8 @@ export function SessionTab({
           />
           <FormSelectField
             label="Group"
-            value={selectedGroupId !== null ? String(selectedGroupId) : ""}
-            onChange={(v) => onGroupChange(v === "" ? null : parseInt(v, 10))}
+            value={String(selectedGroupId)}
+            onChange={(v) => onGroupChange(parseInt(v, 10))}
             options={groupOptions}
           />
         </div>
