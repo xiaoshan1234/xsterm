@@ -195,14 +195,18 @@ pub fn get_session_output_channel(
     backend.session_output_channel.clone()
 }
 
-/// Split a tmux pane via `split-window`.
+/// Split the tmux pane backing an xsterm session via `split-window`.
 ///
-/// Parameters mirror req-006 §4.5:
+/// Returns a [`SessionInfo`] for the newly created pane (a fresh
+/// xsterm session whose backend is a new tmux pane); the frontend
+/// binds it to a new xsterm pane leaf in the PaneTree.
+///
+/// Parameters:
 /// - `controller_id` — id of the `tmux -CC` controller that owns the
-///   parent pane.
-/// - `parent_pane_id` — **xsterm** session id of the parent pane (NOT
-///   the tmux pane id). The frontend tracks xsterm ids in React state
-///   and passes them through.
+///   parent session's tmux pane.
+/// - `parent_xsterm_session_id` — **xsterm** session id (`Session.id`
+///   in React state) of the parent. NOT a tmux pane id, NOT an xsterm
+///   pane UUID.
 /// - `direction` — `"horizontal"` (`split-window -h`, right of parent)
 ///   or `"vertical"` (`split-window -v`, below parent).
 ///
@@ -214,18 +218,18 @@ pub fn get_session_output_channel(
 #[tauri::command]
 pub async fn create_tmux_pane(
     controller_id: u32,
-    parent_pane_id: u32,
+    parent_xsterm_session_id: u32,
     direction: String,
     state: State<'_, Arc<SessionManager>>,
 ) -> Result<SessionInfo, String> {
     tracing::info!(
-        "create_tmux_pane: controller_id={} parent_pane_id={} direction={:?}",
+        "create_tmux_pane: controller_id={} parent_xsterm_session_id={} direction={:?}",
         controller_id,
-        parent_pane_id,
+        parent_xsterm_session_id,
         direction,
     );
     state
-        .create_tmux_pane(controller_id, parent_pane_id, &direction)
+        .create_tmux_pane(controller_id, parent_xsterm_session_id, &direction)
         .await
         .inspect(|info| {
             tracing::info!(
@@ -236,20 +240,22 @@ pub async fn create_tmux_pane(
         })
 }
 
-/// Kill a tmux pane via `kill-pane`.
+/// Kill the tmux pane backing an xsterm session via `kill-pane`.
 ///
-/// `pane_id` is the **xsterm** session id (matches `killTmuxPane` on
-/// the frontend). On success the controller eventually emits a
-/// `tmux-pane-removed` event when tmux sends `%pane-exited`; the
-/// frontend listener drops the matching `Session` from React state at
-/// that point.
+/// `xsterm_session_id` is the **xsterm** session id (the leaf-bound
+/// `Session.id` from React state), NOT a tmux pane id or xsterm pane
+/// UUID. The command name reflects the tmux-side effect (`kill-pane`);
+/// the argument reflects the xsterm-side caller identifier. On success
+/// the controller eventually emits a `tmux-pane-removed` event when tmux
+/// sends `%pane-exited`; the frontend listener drops the matching
+/// `Session` from React state at that point.
 #[tauri::command]
 pub async fn kill_tmux_pane(
-    pane_id: u32,
+    xsterm_session_id: u32,
     state: State<'_, Arc<SessionManager>>,
 ) -> Result<(), String> {
-    tracing::info!("kill_tmux_pane: pane_id={}", pane_id);
-    state.kill_tmux_pane(pane_id)
+    tracing::info!("kill_tmux_pane: xsterm_session_id={}", xsterm_session_id);
+    state.kill_tmux_pane(xsterm_session_id)
 }
 
 /// Attach to an existing tmux server (Wave 4 §D4, req-006 §5).

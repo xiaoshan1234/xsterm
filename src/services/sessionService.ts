@@ -182,29 +182,33 @@ export async function uploadImageToSshSession(
 }
 
 /**
- * split a tmux pane. The backend invokes `create_tmux_pane`,
- * which sends `split-window` to the tmux controller, waits for tmux's
- * matching `%window-pane-changed` reply (with a 5 s timeout), and
- * returns the new pane's metadata. The frontend uses the returned
- * `xstermSessionId` to update the pane tree.
+ * split an xsterm session (whose backend is a tmux pane) into two panes.
  *
- * The `controllerId` and `parentPaneId` arguments are the **xsterm**
- * session ids — not the tmux pane ids (those stay internal to the
- * Rust controller). Mirrors req-006 §4.5.
+ * The backend invokes `create_tmux_pane`, which sends `split-window`
+ * to the tmux controller, waits for tmux's matching
+ * `%window-pane-changed` reply (with a 5 s timeout), and returns the
+ * new pane's metadata. The frontend uses the returned
+ * `xstermSessionId` to bind the new tmux pane to a new xsterm pane
+ * leaf in the PaneTree.
+ *
+ * Both `controllerId` and `parentXstermSessionId` are **xsterm**
+ * identifiers (controller id and `Session.id` from React state) — NOT
+ * tmux pane ids (those stay internal to the Rust controller). Mirrors
+ * req-006 §4.5.
  */
 export async function createTmuxPane(
   controllerId: number,
-  parentPaneId: number,
+  parentXstermSessionId: number,
   direction: "horizontal" | "vertical",
 ): Promise<SessionInfo> {
   logger.debug("sessionService", "createTmuxPane", {
     controllerId,
-    parentPaneId,
+    parentXstermSessionId,
     direction,
   });
   const result = await invoke<SessionInfo>("create_tmux_pane", {
     controllerId,
-    parentPaneId,
+    parentXstermSessionId,
     direction,
   });
   logger.debug("sessionService", "createTmuxPane:result", result);
@@ -212,15 +216,22 @@ export async function createTmuxPane(
 }
 
 /**
- * kill a tmux pane via `kill-pane`. The backend returns
- * immediately after writing the command to the controller's stdin FIFO;
- * the resulting `%pane-exited` reply drives the `tmux-pane-removed`
- * event which the frontend listener uses to drop the matching
- * `Session` from React state.
+ * kill the tmux pane backing an xsterm session via `kill-pane`.
+ *
+ * `xstermSessionId` is the **xsterm** session id (the `Session.id`
+ * from React state that was bound to this tmux pane), NOT a tmux pane
+ * id and NOT an xsterm pane UUID. The function name reflects the
+ * tmux-side effect (`kill-pane`); the parameter name reflects the
+ * xsterm-side caller identifier.
+ *
+ * The backend returns immediately after writing the command to the
+ * controller's stdin FIFO; the resulting `%pane-exited` reply drives
+ * the `tmux-pane-removed` event which the frontend listener uses to
+ * drop the matching `Session` from React state.
  */
-export async function killTmuxPane(paneId: number): Promise<void> {
-  logger.debug("sessionService", "killTmuxPane", { paneId });
-  await invoke("kill_tmux_pane", { paneId });
+export async function killTmuxPane(xstermSessionId: number): Promise<void> {
+  logger.debug("sessionService", "killTmuxPane", { xstermSessionId });
+  await invoke("kill_tmux_pane", { xstermSessionId });
   logger.debug("sessionService", "killTmuxPane:result", undefined);
 }
 

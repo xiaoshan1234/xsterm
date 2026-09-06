@@ -236,17 +236,19 @@ tmux server → shell
 
 ### 4.5 新 Tauri 命令
 
+> **命名约定**：命令后缀 `_tmux_pane` / `_tmux_window` 反映**该命令的 tmux 视角效果**（如 `split-window` / `kill-pane`），但**参数是 xsterm 视角**（`xsterm_session_id` = `Session.id` u32）。**没有命令接收 tmux 内部 pane id 作为参数** —— tmux id 在 backend 内部消化，外部传 `xsterm_session_id` 即可。
+
 | 命令 | 作用 | Wave |
 |---|---|---|
 | `create_tmux_session(config)` | 启动本地 / SSH 上的 tmux -CC controller | 1 |
 | `attach_tmux_session(config)` | attach 到已有 tmux server（reconnect） | 4 |
-| `create_tmux_pane(controllerId, parentPaneId, direction)` | split-window，返回 promise | 2 |
-| `kill_tmux_pane(paneId)` | kill-pane | 2 |
-| `resize_tmux_pane(paneId, rows, cols)` | resize-pane | 1 |
-| `capture_tmux_pane(paneId, lines)` | scrollback 抓取 | 4 |
+| `create_tmux_pane(controllerId, parentXstermSessionId, direction)` | split-window，返回 promise | 2 |
+| `kill_tmux_pane(xstermSessionId)` | kill-pane | 2 |
+| `resize_tmux_pane(xstermSessionId, rows, cols)` | resize-pane | 1 |
+| `capture_tmux_pane(xstermSessionId, lines)` | scrollback 抓取 | 4 |
 | `create_tmux_window(controllerId)` | new-window | 3 |
-| `kill_tmux_window(windowId)` | kill-window | 3 |
-| `rename_tmux_window(windowId, name)` | rename-window | 3 |
+| `kill_tmux_window(xstermWindowId)` | kill-window | 3 |
+| `rename_tmux_window(xstermWindowId, name)` | rename-window | 3 |
 | `close_tmux_controller(controllerId)` | detach / 关 controller | 1 |
 
 ### 4.6 新事件
@@ -330,7 +332,9 @@ interface TmuxCcConfig {
   <MenuItem onClick={() => splitPane(wsId, winId, paneId, 'vertical')}>
     Split Down
   </MenuItem>
-  <MenuItem onClick={() => killTmuxPane(paneId)}>
+  // paneId = xsterm pane UUID（string），session.id = xsterm session id（u32）。
+  // killTmuxPane 接收 xsterm session id —— 杀的是该 session 背后的 tmux pane。
+  <MenuItem onClick={() => killTmuxPane(session.id)}>
     Kill Pane
   </MenuItem>
 ) : (
