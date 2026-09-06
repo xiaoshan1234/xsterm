@@ -1359,6 +1359,7 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
             })
         });
 
@@ -1423,6 +1424,7 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
             })
         });
 
@@ -1478,6 +1480,7 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
             })
         });
 
@@ -1533,6 +1536,7 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
             })
         });
 
@@ -1688,6 +1692,7 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
             })
         });
 
@@ -2542,4 +2547,4 @@ manager.create_local(
         manager.tmux_controllers.insert(51, plain);
         assert_eq!(manager.list_attached_tmux_servers().len(), 1);
     }
-}
+}

@@ -38,6 +38,7 @@
 //! `Box<dyn TmuxBackend>` on the controller.
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::thread;
 
@@ -209,6 +210,15 @@ pub struct SshTmuxBackend {
     /// (through the data loop's `write_rx.recv() == None` path) and
     /// ends the bridge thread.
     _lifetime: SshBackendLifetime,
+    /// Remote command's exit code (captured from
+    /// `SSH_MSG_CHANNEL_EXIT_STATUS` and stored by the SSH data loop).
+    /// `None` until the server sends the status; the [`wait`] impl
+    /// reads it and returns it to the tmux controller so the monitor
+    /// task can distinguish a clean tmux exit (0) from a startup
+    /// failure (non-zero).
+    ///
+    /// [`wait`]: TmuxBackend::wait
+    exit_code: Arc<std::sync::Mutex<Option<i32>>>,
 }
 
 /// Bundles the lifetime-tied bits of an [`SshTmuxBackend`] — the
@@ -237,6 +247,7 @@ impl SshTmuxBackend {
             write_tx,
             read_rx,
             resize_tx: _resize_tx,
+            exit_code,
         } = result;
 
         // Spawn the bridge thread: read from the SSH `sync_mpsc`,
@@ -272,6 +283,7 @@ impl SshTmuxBackend {
             stdout_rx: Some(tokio_rx),
             stdin_tx: write_tx,
             stderr_rx: Some(stderr_rx),
+            exit_code,
             _lifetime: SshBackendLifetime {
                 _channel: channel,
                 _keepalive_unused_tx: keepalive_tx,
@@ -314,16 +326,29 @@ impl TmuxBackend for SshTmuxBackend {
         // a "channel closed" sentinel (the reader task observing EOF
         // is itself the wait signal in practice; `close()` calls
         // `kill()` and the dispatch task picks up the orphan state).
+        //
+        // On EOF (the `recv() -> None` branch) we return the captured
+        // exit code if the SSH data loop has stored one — that lets
+        // the tmux controller distinguish a clean tmux exit (0) from
+        // a startup failure (non-zero). When the data loop never
+        // reported an exit code (e.g. the channel was closed via
+        // `kill()` instead of letting tmux exit normally) we fall
+        // back to `-1` so the caller can still detect "unknown".
         let mut rx = self.stdout_rx.take();
+        let exit_code = Arc::clone(&self.exit_code);
         Box::pin(async move {
             let rx = match rx.as_mut() {
                 Some(r) => r,
-                None => return Ok(0),
+                None => {
+                    // stdout was already consumed — fall back to the
+                    // stored exit code only.
+                    return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1));
+                }
             };
             loop {
                 match rx.recv().await {
                     Some(_) => continue,
-                    None => return Ok(0),
+                    None => return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1)),
                 }
             }
         })
@@ -598,6 +623,7 @@ mod tests {
             write_tx,
             read_rx,
             resize_tx: Some(_resize_tx),
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
         };
         let mut backend = SshTmuxBackend::from_connect_result(result);
 
@@ -628,6 +654,7 @@ mod tests {
             write_tx,
             read_rx,
             resize_tx: Some(_resize_tx),
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
         };
         let mut backend = SshTmuxBackend::from_connect_result(result);
 
@@ -651,6 +678,7 @@ mod tests {
             write_tx,
             read_rx,
             resize_tx: Some(_resize_tx),
+            exit_code: Arc::new(std::sync::Mutex::new(None)),
         };
         let mut backend = SshTmuxBackend::from_connect_result(result);
 

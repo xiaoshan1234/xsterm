@@ -188,6 +188,15 @@ pub fn refresh_client() -> String {
     "refresh-client -A\n".to_string()
 }
 
+/// `refresh-client -C` — register the calling client as a **control
+/// client**. This is the first command every tmux `-CC` integration
+/// must send after starting the child process; without it tmux
+/// server closes the control session and the client process exits
+/// with code 0 immediately after the initial `%begin` block.
+pub fn refresh_client_control() -> String {
+    "refresh-client -C\n".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -560,3 +560,91 @@ YES（修复 + 246/246 单测通过；Bug 011 的回归测试也通过 —— �
    - `src/components/AppLayout.tsx`：`createSessionGroupId` 状态默认 `DEFAULT_GROUP_ID`，`onCreateSession` 把 `setCreateSessionGroupId(null)` 改为 `setCreateSessionGroupId(DEFAULT_GROUP_ID)`，与新的 `initialGroupId: number` 类型对齐。
 ## 是否解决
 YES
+
+# Bug 007
+## 现象
+在 Windows 上第一次创建 tmux 会话时，对话框弹出 "program not found" 错误，看不出是哪个程序找不到，也没指引去哪里安装。
+## 理想效果
+错误信息明确告诉用户 tmux 找不到，并列出 Windows 常见安装路径（WSL / MSYS2 / git-bash）。
+## BUG原因
+`tokio::process::Command::new("tmux").spawn()` 在 Windows 上找不到 `tmux.exe` 时返回 `std::io::Error { kind: NotFound, .. }`，其 `Display` 是 `program not found`。`StringError::map_err_string()` 透传 `to_string()`，错误一路传到 `CreateSessionDialog` 显示。
+## 解决方案
+1. `src-tauri/src/services/tmux/controller.rs` 新增 `tmux_spawn_err` helper：检测 `io::ErrorKind::NotFound` → 返回包含 Windows 安装路径的友好消息，其他错误透传 `to_string()`。
+2. `spawn_local` / `spawn_attach` / `spawn_with_args` 三处的 `cmd.spawn().map_err_string()` 改用 `cmd.spawn().map_err(|e| tmux_spawn_err(e, &argv_refs))?`。
+3. 错误信息携带被尝试的 argv（如 `tmux -CC -L default new-session -d -x 80 -y 24`），便于用户排查。
+## 是否解决
+YES
+
+# Bug 008
+## 现象
+创建 SSH 上的 tmux 会话 (`baseConfigId` 指向 SSH config)，tmux 子进程在远端立刻秒退，stderr 输出 `tcgetattr failed: Inappropriate ioctl for device`，前端会话提示"EOF" / session 创建失败。控制台日志最后一行是 `tmux reader: stdout EOF`。
+## 理想效果
+SSH 上的 tmux 会话正常创建，远端 `tmux -CC` 启动后保持运行，能正确回送 `%output` / `%window-pane-changed` 等 control-mode 通知。
+## BUG原因
+`tmux -CC`（control mode）**要求 stdin/stdout 是真实的 TTY** —— 它启动时立即 `tcgetattr(0, ...)` 来查询 terminal attributes，如果 stdin 不是 TTY，tmux 报错并退出。
+SSH `exec` channel 默认**不分配 PTY**（与 `shell` channel 不同 —— shell path 走 `request_pty` + `request_shell`，会分配伪终端）。`SshTmuxBackend` 走的 `connect_ssh_exec` 路径只发了 `channel.exec(true, command)`，没发 `pty-req` channel request。
+## 解决方案
+1. `src-tauri/src/infrastructure/ssh.rs::run_ssh_exec_session` 在 `channel.exec(...)` 之前先 `channel.request_pty(true, term_type, cols, rows, 0, 0, &[])`，参考 shell path 已有逻辑。
+2. pty 大小 / term_type 读自 `SSHSessionConfig.term_type / initial_rows / initial_cols`，未填则用 `default_pty_size()` + `DEFAULT_TERMINAL_TYPE`（`xterm-256color`）。
+3. SSH `exec` + `pty-req` 是 OpenSSH 支持的标准模式，russh 接受；server 端按 exec semantics 执行命令，但 stdin/stdout 走分配的 pty。
+## 是否解决
+YES
+
+# Bug 009
+## 现象
+Bug 008 修复后 SSH 上的 tmux 子进程不再秒退，但 control-mode 通知全部丢失 —— 日志里 `tmux controller N: ignoring event Unknown { line: "ESC P 1000p%begin ..." }` 出现多次，前端会话永远拿不到第一个 pane。日志最后是 `tmux reader: stdout EOF` / `dispatch channel closed, exiting`。
+## 理想效果
+SSH 上的 tmux 会话正常建立，能收到 `%begin` / `%output` / `%end` / `%window-pane-changed` 等 control-mode 通知，第一个 pane 注册成功。
+## BUG原因
+`tmux -CC` 把整个 control-mode wire protocol 包在 **DCS（Device Control String）passthrough 序列**里：
+```
+ESC P 1000 p %begin 1788701964 296 0 \n
+%output %5 hello\n
+%end 1788701964 296 0 \n
+ESC \
+```
+**DCS start `ESC P 1000 p`（7 字节）和第一行通知之间没有 `\n`**，reader 的 `BufReader::lines()` 按 `\n` 切行得到 `"ESC P 1000p%begin 1788701964 296 0"` 整行 —— parser 看到不以 `%` 开头，丢 `Unknown`，整个 `%begin` 失效；后续 `%end` 也成 `Unknown`；command block 永远不开，dispatch 没有事件 emit。
+## 解决方案
+1. `src-tauri/src/services/tmux/controller.rs::spawn_reader_task` 在 `parser.feed` 之前做 DCS passthrough stripping：
+   - `line.strip_prefix("\x1bP1000p")` 去掉 DCS start 前缀
+   - `.trim_end_matches("\x1b\\")` 去掉 DCS end 后缀
+2. 加单测 `reader_task_strips_dcs_passthrough_start_marker` + `reader_task_strips_dcs_passthrough_end_marker`（`src-tauri/src/services/tmux/controller.rs::tests`）锁定修复。
+3. 与 wezterm 的实现对比：wezterm 也是按 `\n` 切行 + 手动识别 DCS 包裹 —— 我们用更小的"只 strip 起止 9 字节"方案，避免完整 DCS state machine 的复杂度。
+## 是否解决
+YES
+
+# Bug 010
+## 现象
+Bug 009 修复后 SSH 上的 tmux 子进程能发出 DCS-wrapped 通知、parser 正确识别 `%begin 308` / `%end 308` / `SessionsChanged`，但会话仍然 EOF 立即退出，且日志里看不到 tmux 自己的 stderr 输出（日志只有 `SSH exec channel established` → 几个通知 → `channel_eof`，中间没有任何 `tcgetattr failed` 之类的诊断信息），用户无法判断 tmux 为什么秒退。
+## 理想效果
+SSH 上的 tmux 子进程 EOF 后，`tmux-controller-exit` 事件 reason 字段携带真实 exit code（如 `exit code: 1`），用户能区分"正常退出（0）"vs"启动失败（非 0）"vs"网络中断（未知）"。同时 tmux 自己的 stderr 输出在 rolling log 里可见（不必进入 xterm）。
+## BUG原因
+1. **ExitStatus 被丢弃**：`ssh.rs::handle_channel_msg` 的 catch-all arm `_ => false` 把 `russh::ChannelMsg::ExitStatus { exit_status }` 静默丢弃 —— tmux 子进程的退出码从未被记录，monitor_task 看到的总是 `Ok(0)`（因为 `SshTmuxBackend::wait()` 把 stdout EOF 当成"clean exit"）。
+2. **stderr 被合并 + 但没接收**：ssh.rs line 784-785 把 `ChannelMsg::ExtendedData`（stderr）合并到 `read_tx`（stdout 流）—— 但 `SshTmuxBackend::from_connect_result` 创建的 stderr_rx 是**空的**（stderr_tx 直接 drop），所以 stderr 数据在 SSH data loop 写入 read_tx 后没人接收，stdout reader 可能看到它们（与 stdout 混在一起），也可能不看到（取决于时序）。
+3. **`SshTmuxBackend::wait()` 始终返回 0**：因为 stdout rx EOF 时 `wait()` 返回 `Ok(0)`，但实际是 tmux 启动失败非 0 退出。
+## 解决方案
+1. `ssh.rs::SshConnectResult` 加 `pub exit_code: Arc<std::sync::Mutex<Option<i32>>>` 字段（共享让 monitor_task 看到真实退出码）。
+2. `run_data_loop` + `run_ssh_session` + `run_ssh_exec_session` 多一个 `&Arc<Mutex<Option<i32>>>` 参数。
+3. `handle_channel_msg` 新增 `ChannelMsg::ExitStatus { exit_status }` 分支 → 写入 `exit_code` 并 log 一行 `INFO SSH channel received ExitStatus: N`（之前完全丢）。
+4. `SshTmuxBackend` 字段加 `exit_code: Arc<Mutex<Option<i32>>>`（从 `SshConnectResult` 接过来）。
+5. `SshTmuxBackend::wait()` 在 EOF 时返回 `exit_code.lock().unwrap_or(-1)` —— 之前永远返回 0；现在 tmux 启动失败时返回真实 exit code。
+6. 现有 monitor_task 已经把 `Ok(code)` 转成 `ControlEvent::Exit { reason: Some(format!("exit code: {code}")) }`，无需改动 —— 一旦 wait() 返回真实 code，dispatch 就发带 reason 的事件，前端 `TmuxControllerErrorBanner` 显示。
+## 是否解决
+YES
+
+# Bug 011
+## 现象
+Bug 010 修复后 SSH 上的 tmux 退出码真实可见（`INFO SSH channel received ExitStatus: 0` —— tmux 主动 clean exit），但 tmux -CC 启动后不应该立即 clean exit。前端 tmux 会话依旧 EOF 无 pane。
+## 理想效果
+SSH 上的 tmux -CC 启动后保持运行，server 推送 `%session-changed` / `%window-add` / `%window-pane-changed` 等 control-mode 通知给 client，xsterm 注册第一个 pane。
+## BUG原因
+`tmux -CC`（control mode）启动时 tmux server 端会**立即创建一个 control session**，但**该 control session 默认关联到一个 auto-attached session**（通常：当前用户最近活跃 session）。**如果 client 不主动接管这个 control session**（iTerm2 / wezterm 启动时立即发 `refresh-client -C`），server 会把 control session 关闭 —— tmux 子进程主动 exit code 0。
+
+我们的 controller 在 `spawn_with_backend` 末尾**没有发任何命令**，导致 tmux -CC "启动后立即 clean exit"。
+## 解决方案
+1. `src-tauri/src/services/tmux/commands.rs` 新增 `refresh_client_control() -> "refresh-client -C\n"`，doc 注释说明这是 `-CC` 集成**必须**发的第一个命令。
+2. `src-tauri/src/services/tmux/controller.rs::spawn_with_backend` 末尾 `controller.stdin_tx.send(refresh_client_control())` —— writer task 启动后会从 `stdin_rx` FIFO 读取并写入 tmux stdin。
+## 是否解决
+YES（待重启 `npm run tauri dev` 验证）
+---END---
+

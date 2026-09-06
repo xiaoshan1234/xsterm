@@ -359,7 +359,7 @@ impl TmuxController {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let child = cmd.spawn().map_err_string()?;
+        let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, &argv_refs))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
         Self::spawn_with_backend(backend, app_backend, controller_id)
     }
@@ -382,7 +382,7 @@ impl TmuxController {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let child = cmd.spawn().map_err_string()?;
+        let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, args))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
         Self::spawn_with_backend(backend, app_backend, controller_id)
     }
@@ -460,6 +460,17 @@ impl TmuxController {
             controller_id,
         );
 
+        // Register this child process as a tmux control client. tmux
+        // server closes the control session and exits the client with
+        // code 0 if no client sends `refresh-client -C` after the
+        // initial `%begin` block, so we push it onto the writer
+        // task's FIFO *before* returning — the writer task is the
+        // sole owner of `stdin_rx`, and `stdin_tx.send` is non-blocking.
+        controller
+            .stdin_tx
+            .send(tmux_cmd::refresh_client_control())
+            .map_err(|e| format!("failed to enqueue refresh-client -C: {e}"))?;
+
         Ok(controller)
     }
 
@@ -515,7 +526,7 @@ impl TmuxController {
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
-            let child = cmd.spawn().map_err_string()?;
+            let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, &argv_refs))?;
             Box::new(LocalTmuxBackend::new(child))
         };
 
@@ -1268,6 +1279,34 @@ fn build_tmux_argv(config: &TmuxCcConfig) -> Result<Vec<String>, String> {
     Ok(argv)
 }
 
+/// Translate a `std::io::Error` from spawning the `tmux` child into
+/// a user-friendly message.
+///
+/// The most common failure on Windows is `tmux` not being on `PATH`
+/// — users who have not installed tmux via WSL / MSYS2 / git-bash
+/// yet hit this when they try to create their first tmux session.
+/// `tokio::process::Command::spawn` reports that as
+/// `io::ErrorKind::NotFound`, whose `Display` is the unhelpful
+/// `"program not found"` — there is no hint of *which* program was
+/// missing. This helper upgrades that single case into an actionable
+/// error that names `tmux`, points to common Windows install paths,
+/// and shows the argv that was being attempted.
+fn tmux_spawn_err(e: std::io::Error, argv: &[&str]) -> String {
+    if e.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "tmux executable not found in PATH. Please install tmux (>= 3.0) and \
+             ensure `tmux -V` works from your shell. On Windows, common sources are \
+             WSL (`wsl --install`, then install tmux inside the distro), MSYS2 \
+             (`pacman -S tmux`), or git-bash (which bundles tmux on newer \
+             releases). \
+             (Original error: {e}; argv: tmux {})",
+            argv.join(" "),
+        )
+    } else {
+        e.to_string()
+    }
+}
+
 /// POSIX shell-style single-quote escape. Used to compose a single
 /// `tmux -CC ...` command string for the SSH exec path. tmux argv
 /// arguments may contain spaces (session names with spaces, socket
@@ -1284,6 +1323,25 @@ fn shell_quote(s: &str) -> String {
 /// [`ControlParser`], and pushes the resulting [`ControlEvent`]s into
 /// `dispatch_tx`. Exits when `stdout` returns EOF (tmux closed the pipe,
 /// e.g. on `kill -9`) or when the consumer drops `dispatch_tx`.
+///
+/// **`tmux -CC` wraps its wire protocol in a DCS (Device Control
+/// String) passthrough sequence**: stdout looks like
+///
+/// ```text
+/// ESC P 1000 p %begin 1788701964 296 0 \n
+/// %output %5 hello\n
+/// %end 1788701964 296 0 \n
+/// ESC \
+/// ```
+///
+/// The DCS start marker (`ESC P 1000 p`, 7 bytes) is concatenated
+/// to the first notification line with no intervening newline, and
+/// the DCS end marker (`ESC \`, 2 bytes) may be appended to the last
+/// notification. A naive `\n`-line splitter therefore hands the
+/// parser a line like `"ESC P 1000 p%begin ..."` — the leading
+/// `ESC P 1000 p` prefix causes the parser's `Unknown` branch to
+/// drop the *entire* line (including the `%begin` notification
+/// inside it). Strip both markers before feeding the parser.
 fn spawn_reader_task<R>(stdout: R, dispatch_tx: mpsc::UnboundedSender<ControlEvent>)
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
@@ -1294,7 +1352,16 @@ where
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
-                    if let Some(event) = parser.feed(&line) {
+                    // Strip DCS passthrough markers so the parser sees
+                    // a clean `%xxx` line stream. See the function
+                    // doc above for the byte sequence.
+                    const DCS_START: &str = "\u{1b}P1000p";
+                    const DCS_END: &str = "\u{1b}\\";
+                    let stripped = line
+                        .strip_prefix(DCS_START)
+                        .unwrap_or(&line)
+                        .trim_end_matches(DCS_END);
+                    if let Some(event) = parser.feed(stripped) {
                         if dispatch_tx.send(event).is_err() {
                             tracing::debug!("tmux reader: dispatch channel closed, exiting");
                             break;
@@ -1486,6 +1553,70 @@ mod tests {
             timestamp: 1,
             flags: 0
         }));
+        assert!(events.contains(&ControlEvent::SessionsChanged));
+    }
+
+    /// `tmux -CC` wraps its wire protocol in a DCS passthrough
+    /// sequence (`ESC P 1000 p ... ESC \`). The DCS start marker is
+    /// concatenated to the first notification line with no
+    /// intervening newline, so the reader's `BufReader::lines()`
+    /// splits as one line: `"ESC P 1000 p%begin 1 7 0"`. Without
+    /// DCS stripping the parser would drop the whole line as
+    /// `Unknown` and miss the `%begin` — the corresponding
+    /// command block never opens, the `%end` falls back to
+    /// `Unknown`, and no events are emitted.
+    ///
+    /// Regression test for Bug 009.
+    #[tokio::test]
+    async fn reader_task_strips_dcs_passthrough_start_marker() {
+        let stdout = Cursor::new(
+            b"\x1bP1000p%begin 1 7 0\nline one\nline two\n%end 1 7 0\n%sessions-changed\n".to_vec(),
+        );
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        spawn_reader_task(stdout, event_tx);
+
+        let mut events = Vec::new();
+        while let Some(ev) = event_rx.recv().await {
+            events.push(ev);
+        }
+
+        assert!(events.contains(&ControlEvent::CommandBegin {
+            id: 7,
+            timestamp: 1,
+            flags: 0
+        }));
+        assert!(events.contains(&ControlEvent::CommandOutput {
+            id: 7,
+            line: "line one".to_string()
+        }));
+        assert!(events.contains(&ControlEvent::CommandOutput {
+            id: 7,
+            line: "line two".to_string()
+        }));
+        assert!(events.contains(&ControlEvent::CommandEnd {
+            id: 7,
+            timestamp: 1,
+            flags: 0
+        }));
+        assert!(events.contains(&ControlEvent::SessionsChanged));
+    }
+
+    /// The DCS end marker (`ESC \`, 2 bytes) may be concatenated
+    /// to the final notification line. After stripping it the
+    /// parser should still see a clean `%xxx` line.
+    #[tokio::test]
+    async fn reader_task_strips_dcs_passthrough_end_marker() {
+        let stdout = Cursor::new(
+            b"%sessions-changed\x1b\\\n".to_vec(),
+        );
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        spawn_reader_task(stdout, event_tx);
+
+        let mut events = Vec::new();
+        while let Some(ev) = event_rx.recv().await {
+            events.push(ev);
+        }
+
         assert!(events.contains(&ControlEvent::SessionsChanged));
     }
 

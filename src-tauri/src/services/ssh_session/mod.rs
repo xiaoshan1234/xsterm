@@ -14,7 +14,7 @@ pub fn create_ssh_session(
     backend: Arc<dyn AppBackend>,
     session_id: u32,
 ) -> Result<SshSessionWrapper, String> {
-    let SshConnectResult { channel: _channel, write_tx, read_rx, resize_tx } =
+    let SshConnectResult { channel: _channel, write_tx, read_rx, resize_tx, exit_code: _exit_code } =
         ssh_backend.connect(&config)?;
 
     // Keep the channel alive for the lifetime of the session. It is never used

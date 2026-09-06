@@ -64,6 +64,17 @@ pub struct SshConnectResult {
     pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub read_rx: sync_mpsc::Receiver<Option<Vec<u8>>>,
     pub resize_tx: Option<mpsc::UnboundedSender<(u16, u16)>>,
+    /// Exit code captured from the remote command's
+    /// `SSH_MSG_CHANNEL_EXIT_STATUS` (msg type 98). `None` until the
+    /// server sends the status; populated *before* the channel EOF so
+    /// `backend.wait()` can return it.
+    ///
+    /// The exec path previously discarded `ChannelMsg::ExitStatus`
+    /// (caught by the catch-all `_ => false` arm), so we had no way to
+    /// tell why the remote tmux exited. Surfacing it here lets the
+    /// tmux controller log / surface real exit codes. See
+    /// `doc/maintenance/bug.md` Bug 010.
+    pub exit_code: Arc<std::sync::Mutex<Option<i32>>>,
 }
 
 /// Holds the metadata and write channel for an established SSH session.
@@ -337,6 +348,8 @@ fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
         let (tx, rx) = mpsc::unbounded_channel::<(u16, u16)>();
         (Some(tx), Some(rx))
     };
+    let exit_code = Arc::new(std::sync::Mutex::new(None));
+    let exit_code_for_thread = Arc::clone(&exit_code);
 
     let config_clone = config.clone();
 
@@ -353,6 +366,7 @@ fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
                 &read_tx,
                 &mut write_rx,
                 resize_rx,
+                &exit_code_for_thread,
             )
             .await;
 
@@ -372,6 +386,7 @@ fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
         write_tx,
         read_rx,
         resize_tx,
+        exit_code,
     })
 }
 
@@ -383,6 +398,7 @@ async fn run_ssh_session(
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     resize_rx: Option<mpsc::UnboundedReceiver<(u16, u16)>>,
+    exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
 ) -> Result<(), String> {
     let mut russh_config = russh::client::Config::default();
     if let Some(secs) = config.keepalive_interval {
@@ -517,6 +533,7 @@ async fn run_ssh_session(
         write_rx,
         resize_rx,
         &mut keepalive_rx,
+        exit_code,
     )
     .await;
     tracing::info!("SSH data loop ended");
@@ -539,6 +556,8 @@ fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConne
     let (result_tx, result_rx) = sync_mpsc::channel::<Result<(), String>>();
     let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
     let (write_tx, mut write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let exit_code = Arc::new(std::sync::Mutex::new(None));
+    let exit_code_for_thread = Arc::clone(&exit_code);
 
     let config_clone = config.clone();
     let command_owned = command.to_string();
@@ -556,6 +575,7 @@ fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConne
                 &result_tx,
                 &read_tx,
                 &mut write_rx,
+                &exit_code_for_thread,
             )
             .await;
 
@@ -575,6 +595,7 @@ fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConne
         write_tx,
         read_rx,
         resize_tx: None,
+        exit_code,
     })
 }
 
@@ -593,6 +614,7 @@ async fn run_ssh_exec_session(
     result_tx: &sync_mpsc::Sender<Result<(), String>>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
+    exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
 ) -> Result<(), String> {
     let mut russh_config = russh::client::Config::default();
     if let Some(secs) = config.keepalive_interval {
@@ -657,6 +679,43 @@ async fn run_ssh_exec_session(
         }
     }
 
+    // Request a PTY for the exec channel. `tmux -CC` (control mode)
+    // requires stdin/stdout to be a real TTY; without this the
+    // remote tmux process spawns with stdin not connected to a
+    // terminal and immediately exits with
+    // `tcgetattr failed: Inappropriate ioctl for device` (Bug 008 —
+    // see `doc/maintenance/bug.md`). SSH `exec` + `pty-req` is the
+    // standard OpenSSH pattern for running an interactive command
+    // non-interactively.
+    let term_type = config
+        .term_type
+        .as_deref()
+        .unwrap_or(DEFAULT_TERMINAL_TYPE);
+    let mut pty_size = default_pty_size();
+    if let Some(rows) = config.initial_rows {
+        pty_size.rows = rows as u16;
+    }
+    if let Some(cols) = config.initial_cols {
+        pty_size.cols = cols as u16;
+    }
+    channel
+        .request_pty(
+            true,
+            term_type,
+            u32::from(pty_size.cols),
+            u32::from(pty_size.rows),
+            u32::from(pty_size.pixel_width),
+            u32::from(pty_size.pixel_height),
+            &[],
+        )
+        .await
+        .map_err(|e| {
+            format!(
+                "SSH exec PTY request failed for command {:?}: {}",
+                command, e
+            )
+        })?;
+
     channel
         .exec(true, command)
         .await
@@ -684,6 +743,7 @@ async fn run_ssh_exec_session(
         write_rx,
         None,
         &mut keepalive_rx,
+        exit_code,
     )
     .await;
     tracing::info!("SSH exec data loop ended for command {:?}", command);
@@ -738,6 +798,7 @@ async fn authenticate(
 async fn handle_channel_msg(
     msg: Option<russh::ChannelMsg>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
+    exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
 ) -> bool {
     match msg {
         Some(russh::ChannelMsg::Data { data }) => {
@@ -757,6 +818,19 @@ async fn handle_channel_msg(
             tracing::info!("SSH channel received Close");
             read_tx.send(None).ok();
             true
+        }
+        // Capture the remote command's exit status — the server
+        // sends `SSH_MSG_CHANNEL_EXIT_STATUS` (msg type 98) on the
+        // channel just before EOF, with the 32-bit exit code as
+        // its single u32 payload. Previously the catch-all arm
+        // silently dropped this; the tmux controller therefore had
+        // no way to tell why a remote tmux exited (Bug 010).
+        Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
+            tracing::info!("SSH channel received ExitStatus: {}", exit_status);
+            if let Ok(mut slot) = exit_code.lock() {
+                *slot = Some(exit_status as i32);
+            }
+            false
         }
         None => {
             tracing::info!("SSH channel wait returned None");
@@ -799,6 +873,7 @@ async fn run_data_loop(
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     mut resize_rx: Option<mpsc::UnboundedReceiver<(u16, u16)>>,
     keepalive_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
+    exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
 ) {
     let channel_id = channel.id();
     // Track whether the keepalive side has closed (e.g. exec channel
@@ -825,7 +900,7 @@ async fn run_data_loop(
         };
         tokio::select! {
             msg = channel.wait() => {
-                if handle_channel_msg(msg, read_tx).await {
+                if handle_channel_msg(msg, read_tx, exit_code).await {
                     break;
                 }
             }
