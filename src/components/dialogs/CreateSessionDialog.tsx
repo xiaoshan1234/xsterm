@@ -10,12 +10,6 @@ import {
 import { Dialog } from "../ui/Dialog";
 import SessionTab from "./SessionTab";
 import TmuxForm from "./TmuxForm";
-import ShellSettingsPanel from "./ShellSettingsPanel";
-import SSHSettingsPanel from "./SSHSettingsPanel";
-import AppearanceTab from "./AppearanceTab";
-import TerminalTab from "./TerminalTab";
-import InputTab from "./InputTab";
-import LoggingTab from "./LoggingTab";
 import { validateSshConfig } from "./SshSessionForm";
 import {
   SessionFormLayout,
@@ -27,8 +21,9 @@ import {
   SHELL_SIDEBAR_ITEMS,
   SSH_SIDEBAR_ITEMS,
   TMUX_SIDEBAR_ITEMS,
-  type SectionId,
 } from "./sessionDialogItems";
+import { useSessionForm } from "./useSessionForm";
+import { SessionFormPanels } from "./SessionFormPanels";
 import "./CreateSessionDialog.css";
 import { DEFAULT_GROUP_ID } from "../../contexts/session/constants";
 
@@ -68,15 +63,17 @@ export default function CreateSessionDialog({
   const { groups, addToGroup, saveConfigOnly, savedConfigs } = useSession();
 
   const [topTab, setTopTab] = useState<TopTab>(initialTab);
-  const [sectionId, setSectionId] = useState<SectionId>("session");
-  const [selectedGroupId, setSelectedGroupId] = useState<number>(DEFAULT_GROUP_ID);
-  const [saveConfig, setSaveConfig] = useState(true);
-  const [name, setName] = useState("");
-  const [localConfig, setLocalConfig] = useState<LocalSessionConfig>({});
-  const [sshConfig, setSshConfig] = useState<SSHSessionConfig>(DEFAULT_SSH);
   const [tmuxConfig, setTmuxConfig] = useState<TmuxCcConfig>({});
-  const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(undefined);
-  const [error, setError] = useState("");
+  const [saveConfig, setSaveConfig] = useState(true);
+
+  const form = useSessionForm({
+    isOpen,
+    initialName: "",
+    initialGroupId: initialGroupId ?? DEFAULT_GROUP_ID,
+    initialLocalConfig: {},
+    initialSshConfig: DEFAULT_SSH,
+    initialDisplayConfig: undefined,
+  });
 
   const sidebarItems = useMemo(() => {
     if (topTab === "ssh") return SSH_SIDEBAR_ITEMS;
@@ -87,60 +84,48 @@ export default function CreateSessionDialog({
   useEffect(() => {
     if (isOpen) {
       setTopTab(initialTab);
-      setSectionId("session");
-      setSelectedGroupId(initialGroupId ?? DEFAULT_GROUP_ID);
-      setError("");
-      setName("");
-      setLocalConfig({});
-      setSshConfig(DEFAULT_SSH);
       setTmuxConfig({});
-      setDisplayConfig(undefined);
     }
-  }, [isOpen, initialGroupId, initialTab]);
+  }, [isOpen, initialTab]);
 
   const handleTopTabChange = (newTab: TopTab) => {
     setTopTab(newTab);
-    setSectionId("session");
+    form.setSectionId("session");
   };
 
   const handleCreate = async () => {
-    setError("");
+    form.setError("");
     let session: Session;
 
     try {
       if (topTab === "ssh") {
-        const validationError = validateSshConfig(sshConfig);
+        const validationError = validateSshConfig(form.sshConfig);
         if (validationError) {
-          setError(validationError);
-          setSectionId("session");
+          form.setError(validationError);
+          form.setSectionId("session");
           return;
         }
-        const trimmedName = name.trim();
+        const trimmedName = form.name.trim();
         const sshConfigWithName: SSHSessionConfig = trimmedName
-          ? { ...sshConfig, name: trimmedName }
-          : sshConfig;
-        session = await onCreateSsh(sshConfigWithName, saveConfig, displayConfig);
+          ? { ...form.sshConfig, name: trimmedName }
+          : form.sshConfig;
+        session = await onCreateSsh(sshConfigWithName, saveConfig, form.displayConfig);
       } else if (topTab === "tmux-cc") {
-        // The user picks a base SSH / Local saved config in TmuxForm.
-        // Look it up here and copy the SSH sub-config into the request
-        // when the base is an SSH config; the backend routes through
-        // the SSH exec channel when `ssh` is set, otherwise it spawns a
-        // local `tmux -CC` child.
         const baseConfigId = tmuxConfig.baseConfigId;
         if (!baseConfigId) {
-          setError("Please pick a base SSH or Shell saved config.");
-          setSectionId("session");
+          form.setError("Please pick a base SSH or Shell saved config.");
+          form.setSectionId("session");
           return;
         }
         const base = savedConfigs.find((c) => c.id === baseConfigId);
         if (!base) {
-          setError("Saved base config not found — it may have been deleted.");
-          setSectionId("session");
+          form.setError("Saved base config not found — it may have been deleted.");
+          form.setSectionId("session");
           return;
         }
         if (base.type !== "local" && base.type !== "ssh") {
-          setError("Base config must be a Shell or SSH saved config.");
-          setSectionId("session");
+          form.setError("Base config must be a Shell or SSH saved config.");
+          form.setSectionId("session");
           return;
         }
         const sshSub: SSHSessionConfig | undefined =
@@ -148,12 +133,12 @@ export default function CreateSessionDialog({
         if (sshSub) {
           const validationError = validateSshConfig(sshSub);
           if (validationError) {
-            setError(validationError);
-            setSectionId("session");
+            form.setError(validationError);
+            form.setSectionId("session");
             return;
           }
         }
-        const trimmedName = name.trim();
+        const trimmedName = form.name.trim();
         const baseTmuxConfig: TmuxCcConfig = {
           ...tmuxConfig,
           ...(sshSub ? { ssh: sshSub } : {}),
@@ -161,56 +146,56 @@ export default function CreateSessionDialog({
         const tmuxConfigWithName: TmuxCcConfig = trimmedName
           ? { ...baseTmuxConfig, name: trimmedName }
           : baseTmuxConfig;
-        session = await onCreateTmux(tmuxConfigWithName, saveConfig, displayConfig);
+        session = await onCreateTmux(tmuxConfigWithName, saveConfig, form.displayConfig);
       } else {
-        const trimmedName = name.trim();
+        const trimmedName = form.name.trim();
         const localConfigWithName: LocalSessionConfig = trimmedName
-          ? { ...localConfig, name: trimmedName }
-          : localConfig;
-        session = await onCreateLocal(localConfigWithName, saveConfig, displayConfig);
+          ? { ...form.localConfig, name: trimmedName }
+          : form.localConfig;
+        session = await onCreateLocal(localConfigWithName, saveConfig, form.displayConfig);
       }
 
-      addToGroup(selectedGroupId, session.configId);
+      addToGroup(form.selectedGroupId, session.configId);
       onClose();
     } catch (err) {
       console.error("Failed to create session:", err);
-      setError(err instanceof Error ? err.message : String(err));
+      form.setError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleSaveOnly = () => {
-    setError("");
+    form.setError("");
     try {
       let type: Session["type"];
       let config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig;
 
       if (topTab === "ssh") {
-        const validationError = validateSshConfig(sshConfig);
+        const validationError = validateSshConfig(form.sshConfig);
         if (validationError) {
-          setError(validationError);
-          setSectionId("session");
+          form.setError(validationError);
+          form.setSectionId("session");
           return;
         }
         type = "ssh";
-        const trimmedName = name.trim();
-        config = trimmedName ? { ...sshConfig, name: trimmedName } : sshConfig;
+        const trimmedName = form.name.trim();
+        config = trimmedName ? { ...form.sshConfig, name: trimmedName } : form.sshConfig;
       } else if (topTab === "tmux-cc") {
         type = "tmux-cc";
         const baseConfigId = tmuxConfig.baseConfigId;
         if (!baseConfigId) {
-          setError("Please pick a base SSH or Shell saved config.");
-          setSectionId("session");
+          form.setError("Please pick a base SSH or Shell saved config.");
+          form.setSectionId("session");
           return;
         }
         const base = savedConfigs.find((c) => c.id === baseConfigId);
         if (!base) {
-          setError("Saved base config not found — it may have been deleted.");
-          setSectionId("session");
+          form.setError("Saved base config not found — it may have been deleted.");
+          form.setSectionId("session");
           return;
         }
         if (base.type !== "local" && base.type !== "ssh") {
-          setError("Base config must be a Shell or SSH saved config.");
-          setSectionId("session");
+          form.setError("Base config must be a Shell or SSH saved config.");
+          form.setSectionId("session");
           return;
         }
         const sshSub: SSHSessionConfig | undefined =
@@ -218,8 +203,8 @@ export default function CreateSessionDialog({
         if (sshSub) {
           const validationError = validateSshConfig(sshSub);
           if (validationError) {
-            setError(validationError);
-            setSectionId("session");
+            form.setError(validationError);
+            form.setSectionId("session");
             return;
           }
         }
@@ -227,128 +212,72 @@ export default function CreateSessionDialog({
           ...tmuxConfig,
           ...(sshSub ? { ssh: sshSub } : {}),
         };
-        const trimmedName = name.trim();
+        const trimmedName = form.name.trim();
         config = trimmedName
           ? { ...baseTmuxConfig, name: trimmedName }
           : baseTmuxConfig;
       } else {
         type = "local";
-        const trimmedName = name.trim();
-        config = trimmedName ? { ...localConfig, name: trimmedName } : localConfig;
+        const trimmedName = form.name.trim();
+        config = trimmedName ? { ...form.localConfig, name: trimmedName } : form.localConfig;
       }
 
-      const saved = saveConfigOnly(type, config, displayConfig);
-      addToGroup(selectedGroupId, saved.id);
+      const saved = saveConfigOnly(type, config, form.displayConfig);
+      addToGroup(form.selectedGroupId, saved.id);
       onClose();
     } catch (err) {
       console.error("Failed to save config:", err);
-      setError(err instanceof Error ? err.message : String(err));
+      form.setError(err instanceof Error ? err.message : String(err));
     }
   };
 
-  const renderPanelContent = () => {
-    if (error && sectionId === "session") {
+  const renderSessionSection = () => {
+    if (topTab === "tmux-cc") {
       return (
-        <>
-          <div className="dialog-error">{error}</div>
-          {renderSection()}
-        </>
+        <TmuxForm
+          name={form.name}
+          onNameChange={form.setName}
+          config={tmuxConfig}
+          onConfigChange={setTmuxConfig}
+        />
       );
     }
-    return renderSection();
+    return (
+      <SessionTab
+        connectionType={topTab}
+        onConnectionTypeChange={handleTopTabChange}
+        name={form.name}
+        onNameChange={form.setName}
+        selectedGroupId={form.selectedGroupId}
+        onGroupChange={form.setSelectedGroupId}
+        groups={groups}
+        localConfig={form.localConfig}
+        onLocalConfigChange={form.setLocalConfig}
+        sshConfig={form.sshConfig}
+        onSshConfigChange={form.setSshConfig}
+        hideConnectionSwitcher
+      />
+    );
   };
 
-  const renderSection = () => {
-    switch (sectionId) {
-      case "session":
-        if (topTab === "tmux-cc") {
-          return (
-            <TmuxForm
-              name={name}
-              onNameChange={setName}
-              config={tmuxConfig}
-              onConfigChange={setTmuxConfig}
-            />
-          );
-        }
-        return (
-          <SessionTab
-            connectionType={topTab}
-            onConnectionTypeChange={handleTopTabChange}
-            name={name}
-            onNameChange={setName}
-            selectedGroupId={selectedGroupId}
-            onGroupChange={setSelectedGroupId}
-            groups={groups}
-            localConfig={localConfig}
-            onLocalConfigChange={setLocalConfig}
-            sshConfig={sshConfig}
-            onSshConfigChange={setSshConfig}
-            hideConnectionSwitcher
-          />
-        );
-      case "shell":
-        return (
-          <ShellSettingsPanel
-            localConfig={localConfig}
-            onLocalConfigChange={setLocalConfig}
-          />
-        );
-      case "ssh":
-        return (
-          <SSHSettingsPanel
-            sshConfig={sshConfig}
-            onSshConfigChange={setSshConfig}
-          />
-        );
-      case "appearance":
-        return (
-          <AppearanceTab
-            config={displayConfig}
-            onChange={setDisplayConfig}
-          />
-        );
-      case "terminal":
-        return (
-          <TerminalTab
-            config={displayConfig}
-            onChange={setDisplayConfig}
-            connectionType={
-              topTab === "tmux-cc"
-                ? (() => {
-                    const base = tmuxConfig.baseConfigId
-                      ? savedConfigs.find((c) => c.id === tmuxConfig.baseConfigId)
-                      : undefined;
-                    return base?.type === "ssh" ? "ssh" : "tmux-cc";
-                  })()
-                : (topTab as "local" | "ssh")
-            }
-            localConfig={localConfig}
-            onLocalConfigChange={setLocalConfig}
-            sshConfig={sshConfig}
-            onSshConfigChange={setSshConfig}
-          />
-        );
-      case "input":
-        return (
-          <InputTab
-            displayConfig={displayConfig}
-            onDisplayChange={setDisplayConfig}
-          />
-        );
-      case "logging":
-        return <LoggingTab config={displayConfig} onChange={setDisplayConfig} />;
-    }
-  };
+  const terminalConnectionType: "local" | "ssh" | "tmux-cc" =
+    topTab === "tmux-cc"
+      ? (() => {
+          const base = tmuxConfig.baseConfigId
+            ? savedConfigs.find((c) => c.id === tmuxConfig.baseConfigId)
+            : undefined;
+          return base?.type === "ssh" ? "ssh" : "tmux-cc";
+        })()
+      : topTab;
 
   const sidebarItemProps: SessionFormSidebarItem[] = sidebarItems.map((item) => ({
     id: item.id,
     label: item.label,
     icon: item.icon,
-    active: item.id === sectionId,
+    active: item.id === form.sectionId,
     onClick: () => {
-      setSectionId(item.id);
-      setError("");
+      form.setSectionId(item.id);
+      form.setError("");
     },
   }));
 
@@ -406,7 +335,11 @@ export default function CreateSessionDialog({
       className="create-session-dialog"
     >
       <SessionFormLayout topTabs={topTabItems} sidebarItems={sidebarItemProps}>
-        {renderPanelContent()}
+        <SessionFormPanels
+          form={form}
+          connectionType={terminalConnectionType}
+          renderSessionSection={renderSessionSection}
+        />
       </SessionFormLayout>
     </Dialog>
   );

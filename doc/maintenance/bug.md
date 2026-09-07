@@ -579,7 +579,22 @@ YES
    - `"session"` 面板：抽出 inline name+group 字段到局部变量 `inlineFields`；tmux-cc 分支只渲染 `{inlineFields}` + `<p className="edit-session-note">` 一句说明；其他分支保持 `{inlineFields}` + `<SessionTab>`。
    - `"terminal"` 面板：`connectionType={config.type}` 直接透传，让 `TerminalTab` 自带的 tmux-cc 分支生效（其内部对 TERM/charset 走 localConfig 仍不写回，但 lineNumberEnabled / sizingMode / scrollback / cols / rows 这些 `displayConfig` 字段能正常持久化）。
    - `handleSave`：`if (config.type === "local") ... else if (config.type === "ssh") ... else` —— tmux-cc 走 else 分支，`updatedConfig = { ...config, name: trimmedName, displayConfig }`，原 `config` 字段（`TmuxCcConfig`）保持不变。
-2. `EditSessionDialog.css`：新增 `.edit-session-note` —— muted 色 + canvas-soft 底 + hairline 边 + radius-md，符合 §5 卡片规范；`font-weight: 500` 在设计系统允许范围（§4）。
+2. `EditSessionDialog.css`：新增 `.edit-session-note` —— muted色 + canvas-soft 底 + hairline 边 + radius-md，符合 §5 卡片规范；`font-weight: 500` 在设计系统允许范围（§4）。
+## 是否解决
+YES
+
+# Bug 017
+## 现象
+`CreateSessionDialog.tsx` 和 `EditSessionDialog.tsx` 各自重复声明了同一组 form state（`name` / `selectedGroupId` / `localConfig` / `sshConfig` / `displayConfig` / `sectionId` / `error`）、各自的 `useEffect` 初始化逻辑、相同的 6 个 panel 渲染分支（`shell` / `ssh` / `appearance` / `terminal` / `input` / `logging`）、相同的错误包壳 `if (error && sectionId === "session") ...`。任何 panel 的 prop 调整或新增第六个 panel，都必须同时改两份，否则两边漂移。
+## 理想效果
+两份 dialog 共享一份 form state + 6 个 panel 的渲染入口；后续修改一处即同时作用于两个 dialog。
+## BUG原因
+两份 dialog 都是从早期的 "edit dialog forked from create dialog" 演化而来——共享结构未被提取，每个 panel 直接 `<ShellSettingsPanel ... />` 等写在两份 dialog 的 `renderSection` switch 里，加上各自的 7 个 `useState` 和重置 `useEffect`。
+## 解决方案
+1. 新建 `src/components/dialogs/useSessionForm.ts`：把 7 个 `useState`（name / selectedGroupId / localConfig / sshConfig / displayConfig / sectionId / error）和重置 `useEffect` 抽到一个 hook。`useEffect` 仅依赖 `[isOpen, initialConfigId]`，初始值用 `useRef` 抓最新（避开父组件每次渲染都传新 object literal 导致 in-flight 输入被擦掉的问题）。Edit 用 `initialConfigId: config.id` 以便用户切到不同 config 时表单同步重置；Create 不传 `initialConfigId`，仅依赖 `isOpen`。
+2. 新建 `src/components/dialogs/SessionFormPanels.tsx`：把 6 个 panel 的 switch 分支 + 错误包壳抽到一个组件，接收 `form`、`connectionType`、`renderSessionSection` props。`session` 槽留给 dialog 自己填（Create 用 `SessionTab` / `TmuxForm`，Edit 用 inline name+group + `SessionTab` 或 tmux-cc 说明）。
+3. `CreateSessionDialog.tsx`：去掉 7 个 `useState` 改用 `useSessionForm`，去掉 6 个 panel import 和它们的 switch 分支；保留 `topTab` / `tmuxConfig` / `saveConfig` 这些 Create 独有 state、top tabs、`handleCreate` / `handleSaveOnly`、footer（Save Config 复选框 + Cancel + Save Only + Create）。`renderSessionSection` 根据 `topTab` 渲染 `SessionTab` 或 `TmuxForm`。
+4. `EditSessionDialog.tsx`：同样去掉 7 个 `useState` 改用 `useSessionForm`（带 `initialConfigId: config.id`），去掉 6 个 panel import 和 switch 分支；保留 inline name+group 局部变量 `inlineFields`、`handleSave`、footer（Cancel + Save）。`renderSessionSection` 对 tmux-cc 渲染 `{inlineFields} + <p className="edit-session-note">`，其他渲染 `{inlineFields} + <SessionTab hideNameAndGroup>`。
 ## 是否解决
 YES
 

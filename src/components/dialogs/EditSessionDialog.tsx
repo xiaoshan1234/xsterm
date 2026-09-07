@@ -1,20 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import {
   type SavedSessionConfig,
-  type LocalSessionConfig,
-  type SSHSessionConfig,
   type SessionGroup,
-  type SessionDisplayConfig,
 } from "../../types/session";
 import { Dialog } from "../ui/Dialog";
 import { FormField } from "../ui/FormField";
 import SessionTab from "./SessionTab";
-import ShellSettingsPanel from "./ShellSettingsPanel";
-import SSHSettingsPanel from "./SSHSettingsPanel";
-import AppearanceTab from "./AppearanceTab";
-import TerminalTab from "./TerminalTab";
-import InputTab from "./InputTab";
-import LoggingTab from "./LoggingTab";
 import { validateSshConfig } from "./SshSessionForm";
 import { SessionFormLayout, type SessionFormSidebarItem } from "./SessionFormLayout";
 import "./EditSessionDialog.css";
@@ -24,8 +15,9 @@ import {
   SHELL_SIDEBAR_ITEMS,
   SSH_SIDEBAR_ITEMS,
   TMUX_SIDEBAR_ITEMS,
-  type SectionId,
 } from "./sessionDialogItems";
+import { useSessionForm } from "./useSessionForm";
+import { SessionFormPanels } from "./SessionFormPanels";
 
 interface EditSessionDialogProps {
   isOpen: boolean;
@@ -44,19 +36,16 @@ export function EditSessionDialog({
   groupId,
   onSave,
 }: EditSessionDialogProps) {
-  const [name, setName] = useState(config.name);
-  const [selectedGroupId, setSelectedGroupId] = useState<number>(groupId ?? DEFAULT_GROUP_ID);
-  const [localConfig, setLocalConfig] = useState<LocalSessionConfig>(
-    config.type === "local" ? config.config : {},
-  );
-  const [sshConfig, setSshConfig] = useState<SSHSessionConfig>(
-    config.type === "ssh" ? config.config : DEFAULT_SSH,
-  );
-  const [displayConfig, setDisplayConfig] = useState<SessionDisplayConfig | undefined>(
-    config.displayConfig,
-  );
-  const [error, setError] = useState("");
-  const [sectionId, setSectionId] = useState<SectionId>("session");
+  const form = useSessionForm({
+    isOpen,
+    initialConfigId: config.id,
+    initialName: config.name,
+    initialGroupId: groupId ?? DEFAULT_GROUP_ID,
+    initialLocalConfig: config.type === "local" ? config.config : {},
+    initialSshConfig:
+      config.type === "ssh" ? config.config : DEFAULT_SSH,
+    initialDisplayConfig: config.displayConfig,
+  });
 
   const sidebarItems = useMemo(() => {
     if (config.type === "tmux-cc") return TMUX_SIDEBAR_ITEMS;
@@ -64,179 +53,114 @@ export function EditSessionDialog({
     return SHELL_SIDEBAR_ITEMS;
   }, [config.type]);
 
-  useEffect(() => {
-    if (isOpen) {
-      setName(config.name);
-      setSelectedGroupId(groupId ?? DEFAULT_GROUP_ID);
-      setLocalConfig(config.type === "local" ? config.config : {});
-      setSshConfig(config.type === "ssh" ? config.config : DEFAULT_SSH);
-      setDisplayConfig(config.displayConfig);
-      setError("");
-      setSectionId("session");
-    }
-  }, [isOpen, config, groupId]);
-
   const handleSave = () => {
-    const trimmedName = name.trim();
+    const trimmedName = form.name.trim();
     if (!trimmedName) return;
 
     if (config.type === "ssh") {
-      const validationError = validateSshConfig(sshConfig);
+      const validationError = validateSshConfig(form.sshConfig);
       if (validationError) {
-        setError(validationError);
-        setSectionId("session");
+        form.setError(validationError);
+        form.setSectionId("session");
         return;
       }
     }
 
     let updatedConfig: SavedSessionConfig;
     if (config.type === "local") {
-      updatedConfig = { ...config, name: trimmedName, config: localConfig, displayConfig };
+      updatedConfig = {
+        ...config,
+        name: trimmedName,
+        config: form.localConfig,
+        displayConfig: form.displayConfig,
+      };
     } else if (config.type === "ssh") {
-      updatedConfig = { ...config, name: trimmedName, config: sshConfig, displayConfig };
+      updatedConfig = {
+        ...config,
+        name: trimmedName,
+        config: form.sshConfig,
+        displayConfig: form.displayConfig,
+      };
     } else {
-      updatedConfig = { ...config, name: trimmedName, displayConfig };
+      updatedConfig = { ...config, name: trimmedName, displayConfig: form.displayConfig };
     }
 
-    onSave(updatedConfig, selectedGroupId);
+    onSave(updatedConfig, form.selectedGroupId);
     onClose();
   };
 
-  const renderPanelContent = () => {
-    if (error && sectionId === "session") {
+  const inlineFields = (
+    <div className="edit-session-fields">
+      <FormField label="Name">
+        <input
+          type="text"
+          value={form.name}
+          onChange={(e) => form.setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSave()}
+          autoFocus
+        />
+      </FormField>
+      <FormField label="Group">
+        <select
+          value={form.selectedGroupId}
+          onChange={(e) => form.setSelectedGroupId(parseInt(e.target.value, 10))}
+        >
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+      </FormField>
+    </div>
+  );
+
+  const renderSessionSection = () => {
+    if (config.type === "tmux-cc") {
       return (
         <>
-          <div className="dialog-error">{error}</div>
-          {renderSection()}
+          {inlineFields}
+          <p className="edit-session-note">
+            Tmux setup (base configuration, socket name, start command) is
+            fixed at creation time and cannot be changed. Use the other
+            sidebar tabs to edit display settings.
+          </p>
         </>
       );
     }
-    return renderSection();
-  };
-
-  const renderSection = () => {
-    switch (sectionId) {
-      case "session": {
-        const inlineFields = (
-          <div className="edit-session-fields">
-            <FormField label="Name">
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                autoFocus
-              />
-            </FormField>
-            <FormField label="Group">
-              <select
-                value={selectedGroupId}
-                onChange={(e) => setSelectedGroupId(parseInt(e.target.value, 10))}
-              >
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
-        );
-        if (config.type === "tmux-cc") {
-          return (
-            <>
-              {inlineFields}
-              <p className="edit-session-note">
-                Tmux setup (base configuration, socket name, start command) is
-                fixed at creation time and cannot be changed. Use the other
-                sidebar tabs to edit display settings.
-              </p>
-            </>
-          );
-        }
-        return (
-          <>
-            {inlineFields}
-            <SessionTab
-              connectionType={config.type === "ssh" ? "ssh" : "local"}
-              onConnectionTypeChange={() => {}}
-              name={name}
-              onNameChange={setName}
-              selectedGroupId={selectedGroupId}
-              onGroupChange={setSelectedGroupId}
-              groups={groups}
-              localConfig={localConfig}
-              onLocalConfigChange={setLocalConfig}
-              sshConfig={sshConfig}
-              onSshConfigChange={(cfg) => {
-                setSshConfig(cfg);
-                setError("");
-              }}
-              hideConnectionSwitcher
-              hideNameAndGroup
-            />
-          </>
-        );
-      }
-      case "shell":
-        return (
-          <ShellSettingsPanel
-            localConfig={localConfig}
-            onLocalConfigChange={setLocalConfig}
-          />
-        );
-      case "ssh":
-        return (
-          <SSHSettingsPanel
-            sshConfig={sshConfig}
-            onSshConfigChange={(cfg) => {
-              setSshConfig(cfg);
-              setError("");
-            }}
-          />
-        );
-      case "appearance":
-        return (
-          <AppearanceTab
-            config={displayConfig}
-            onChange={setDisplayConfig}
-          />
-        );
-      case "terminal":
-        return (
-          <TerminalTab
-            config={displayConfig}
-            onChange={setDisplayConfig}
-            connectionType={config.type}
-            localConfig={localConfig}
-            onLocalConfigChange={setLocalConfig}
-            sshConfig={sshConfig}
-            onSshConfigChange={(cfg) => {
-              setSshConfig(cfg);
-              setError("");
-            }}
-          />
-        );
-      case "input":
-        return (
-          <InputTab
-            displayConfig={displayConfig}
-            onDisplayChange={setDisplayConfig}
-          />
-        );
-      case "logging":
-        return <LoggingTab config={displayConfig} onChange={setDisplayConfig} />;
-    }
+    return (
+      <>
+        {inlineFields}
+        <SessionTab
+          connectionType={config.type === "ssh" ? "ssh" : "local"}
+          onConnectionTypeChange={() => {}}
+          name={form.name}
+          onNameChange={form.setName}
+          selectedGroupId={form.selectedGroupId}
+          onGroupChange={form.setSelectedGroupId}
+          groups={groups}
+          localConfig={form.localConfig}
+          onLocalConfigChange={form.setLocalConfig}
+          sshConfig={form.sshConfig}
+          onSshConfigChange={(cfg) => {
+            form.setSshConfig(cfg);
+            form.setError("");
+          }}
+          hideConnectionSwitcher
+          hideNameAndGroup
+        />
+      </>
+    );
   };
 
   const sidebarItemProps: SessionFormSidebarItem[] = sidebarItems.map((item) => ({
     id: item.id,
     label: item.label,
     icon: item.icon,
-    active: item.id === sectionId,
+    active: item.id === form.sectionId,
     onClick: () => {
-      setSectionId(item.id);
-      setError("");
+      form.setSectionId(item.id);
+      form.setError("");
     },
   }));
 
@@ -261,7 +185,11 @@ export function EditSessionDialog({
       className="edit-session-dialog"
     >
       <SessionFormLayout sidebarItems={sidebarItemProps}>
-        {renderPanelContent()}
+        <SessionFormPanels
+          form={form}
+          connectionType={config.type}
+          renderSessionSection={renderSessionSection}
+        />
       </SessionFormLayout>
     </Dialog>
   );
