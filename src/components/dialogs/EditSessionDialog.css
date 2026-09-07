@@ -29,3 +29,15 @@
   margin-bottom: var(--space-lg);
   border-bottom: 1px solid var(--hairline);
 }
+
+.edit-session-note {
+  margin: 0;
+  padding: var(--space-base);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  background: var(--canvas-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}

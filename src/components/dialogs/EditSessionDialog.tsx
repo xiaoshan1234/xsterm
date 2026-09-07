@@ -17,14 +17,15 @@ import InputTab from "./InputTab";
 import LoggingTab from "./LoggingTab";
 import { validateSshConfig } from "./SshSessionForm";
 import { SessionFormLayout, type SessionFormSidebarItem } from "./SessionFormLayout";
+import "./EditSessionDialog.css";
+import { DEFAULT_GROUP_ID } from "../../contexts/session/constants";
 import {
   DEFAULT_SSH,
   SHELL_SIDEBAR_ITEMS,
   SSH_SIDEBAR_ITEMS,
+  TMUX_SIDEBAR_ITEMS,
   type SectionId,
 } from "./sessionDialogItems";
-import "./EditSessionDialog.css";
-import { DEFAULT_GROUP_ID } from "../../contexts/session/constants";
 
 interface EditSessionDialogProps {
   isOpen: boolean;
@@ -57,10 +58,11 @@ export function EditSessionDialog({
   const [error, setError] = useState("");
   const [sectionId, setSectionId] = useState<SectionId>("session");
 
-  const sidebarItems = useMemo(
-    () => (config.type === "ssh" ? SSH_SIDEBAR_ITEMS : SHELL_SIDEBAR_ITEMS),
-    [config.type],
-  );
+  const sidebarItems = useMemo(() => {
+    if (config.type === "tmux-cc") return TMUX_SIDEBAR_ITEMS;
+    if (config.type === "ssh") return SSH_SIDEBAR_ITEMS;
+    return SHELL_SIDEBAR_ITEMS;
+  }, [config.type]);
 
   useEffect(() => {
     if (isOpen) {
@@ -90,8 +92,10 @@ export function EditSessionDialog({
     let updatedConfig: SavedSessionConfig;
     if (config.type === "local") {
       updatedConfig = { ...config, name: trimmedName, config: localConfig, displayConfig };
-    } else {
+    } else if (config.type === "ssh") {
       updatedConfig = { ...config, name: trimmedName, config: sshConfig, displayConfig };
+    } else {
+      updatedConfig = { ...config, name: trimmedName, displayConfig };
     }
 
     onSave(updatedConfig, selectedGroupId);
@@ -112,32 +116,47 @@ export function EditSessionDialog({
 
   const renderSection = () => {
     switch (sectionId) {
-      case "session":
+      case "session": {
+        const inlineFields = (
+          <div className="edit-session-fields">
+            <FormField label="Name">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSave()}
+                autoFocus
+              />
+            </FormField>
+            <FormField label="Group">
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(parseInt(e.target.value, 10))}
+              >
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+        );
+        if (config.type === "tmux-cc") {
+          return (
+            <>
+              {inlineFields}
+              <p className="edit-session-note">
+                Tmux setup (base configuration, socket name, start command) is
+                fixed at creation time and cannot be changed. Use the other
+                sidebar tabs to edit display settings.
+              </p>
+            </>
+          );
+        }
         return (
           <>
-            <div className="edit-session-fields">
-              <FormField label="Name">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                  autoFocus
-                />
-              </FormField>
-              <FormField label="Group">
-                <select
-                  value={selectedGroupId}
-                  onChange={(e) => setSelectedGroupId(parseInt(e.target.value, 10))}
-                >
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-            </div>
+            {inlineFields}
             <SessionTab
               connectionType={config.type === "ssh" ? "ssh" : "local"}
               onConnectionTypeChange={() => {}}
@@ -158,6 +177,7 @@ export function EditSessionDialog({
             />
           </>
         );
+      }
       case "shell":
         return (
           <ShellSettingsPanel
@@ -187,7 +207,7 @@ export function EditSessionDialog({
           <TerminalTab
             config={displayConfig}
             onChange={setDisplayConfig}
-            connectionType={config.type === "ssh" ? "ssh" : "local"}
+            connectionType={config.type}
             localConfig={localConfig}
             onLocalConfigChange={setLocalConfig}
             sshConfig={sshConfig}

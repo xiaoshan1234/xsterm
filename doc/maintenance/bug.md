@@ -561,6 +561,28 @@ YES（修复 + 246/246 单测通过；Bug 011 的回归测试也通过 —— �
 ## 是否解决
 YES
 
+# Bug 016
+## 现象
+编辑一个 `tmux-cc` 类型的 session 时，侧栏显示 Shell / SSH 等与 tmux 无关的 section，"session" 面板错误地回退到 Local 配置（shell template / initial directory 等），可改但写回的是无关字段；Terminal 面板 `connectionType` 强制为 `"local"`，导致 Term / charset / initialRows/Cols 等都改不到 tmux 配置。
+## 理想效果
+编辑 tmux-cc session 时用专属侧栏（无 Shell / SSH）；`session` 面板只展示 Name / Group + 一句"tmux setup 不可改"的说明；Terminal 等 display settings 面板透传 `connectionType="tmux-cc"`；保存时 `config` 字段保留原 `TmuxCcConfig`，不被 `localConfig` / `sshConfig` 覆盖。
+## BUG原因
+`src/components/dialogs/EditSessionDialog.tsx` 三个地方把 tmux-cc 当成 local/ssh 的特例：
+1. `sidebarItems` 写死 `config.type === "ssh" ? SSH : SHELL`，tmux-cc 走到 else → 拿到 SHELL_SIDEBAR_ITEMS（含 Shell 入口）。
+2. `"session"` 面板固定渲染 `<SessionTab connectionType={config.type === "ssh" ? "ssh" : "local"}>`，tmux-cc 走到 "local" 分支，显示 shell template 等。
+3. `"terminal"` 面板 `connectionType={config.type === "ssh" ? "ssh" : "local"}` —— 同样回退；保存路径里 `if (config.type === "local") ... else ...` 把 tmux-cc 的 `config` 字段替换成 sshConfig（错位类型）。
+
+同时 tmux 的 setup-time 字段（`baseConfigId` / `tmuxSessionName` / `socketName` / `startCommand`）即使渲染出来也无法生效 —— 这些字段决定的是 `tmux -CC new-session` 时的命令行参数，已运行的 tmux 进程不接受改动。
+## 解决方案
+1. `EditSessionDialog.tsx`：
+   - `sidebarItems` 改为三分支：`tmux-cc` → `TMUX_SIDEBAR_ITEMS`（已在 `sessionDialogItems.tsx` 定义，无 Shell / SSH），`ssh` → `SSH_SIDEBAR_ITEMS`，其余 → `SHELL_SIDEBAR_ITEMS`。
+   - `"session"` 面板：抽出 inline name+group 字段到局部变量 `inlineFields`；tmux-cc 分支只渲染 `{inlineFields}` + `<p className="edit-session-note">` 一句说明；其他分支保持 `{inlineFields}` + `<SessionTab>`。
+   - `"terminal"` 面板：`connectionType={config.type}` 直接透传，让 `TerminalTab` 自带的 tmux-cc 分支生效（其内部对 TERM/charset 走 localConfig 仍不写回，但 lineNumberEnabled / sizingMode / scrollback / cols / rows 这些 `displayConfig` 字段能正常持久化）。
+   - `handleSave`：`if (config.type === "local") ... else if (config.type === "ssh") ... else` —— tmux-cc 走 else 分支，`updatedConfig = { ...config, name: trimmedName, displayConfig }`，原 `config` 字段（`TmuxCcConfig`）保持不变。
+2. `EditSessionDialog.css`：新增 `.edit-session-note` —— muted 色 + canvas-soft 底 + hairline 边 + radius-md，符合 §5 卡片规范；`font-weight: 500` 在设计系统允许范围（§4）。
+## 是否解决
+YES
+
 # Bug 007
 ## 现象
 在 Windows 上第一次创建 tmux 会话时，对话框弹出 "program not found" 错误，看不出是哪个程序找不到，也没指引去哪里安装。
