@@ -185,30 +185,28 @@ impl ControlParser {
             "output" => parse_output_event(line, rest),
             "extended-output" => parse_extended_output_event(line, rest),
 
-            "session-changed" => split_after_first(rest).map(|(session_id, name)| {
-                ControlEvent::SessionChanged {
+            "session-changed" => {
+                split_after_first(rest).map(|(session_id, name)| ControlEvent::SessionChanged {
                     session_id: session_id.to_string(),
                     name: name.to_string(),
-                }
-            }),
-            "session-renamed" => split_after_first(rest).map(|(session_id, name)| {
-                ControlEvent::SessionRenamed {
+                })
+            }
+            "session-renamed" => {
+                split_after_first(rest).map(|(session_id, name)| ControlEvent::SessionRenamed {
                     session_id: session_id.to_string(),
                     name: name.to_string(),
-                }
-            }),
-            "session-closed" => first_token(rest).map(|session_id| {
-                ControlEvent::SessionClosed {
-                    session_id: session_id.to_string(),
-                }
+                })
+            }
+            "session-closed" => first_token(rest).map(|session_id| ControlEvent::SessionClosed {
+                session_id: session_id.to_string(),
             }),
             "session-window-changed" => {
-                first_two(rest).map(|(session_id, window_id)| {
-                    ControlEvent::SessionWindowChanged {
+                first_two(rest).map(
+                    |(session_id, window_id)| ControlEvent::SessionWindowChanged {
                         session_id: session_id.to_string(),
                         window_id: window_id.to_string(),
-                    }
-                })
+                    },
+                )
             }
             "sessions-changed" => Some(ControlEvent::SessionsChanged),
 
@@ -218,35 +216,33 @@ impl ControlParser {
             "window-close" => first_token(rest).map(|window_id| ControlEvent::WindowClose {
                 window_id: window_id.to_string(),
             }),
-            "window-renamed" => split_after_first(rest).map(|(window_id, name)| {
-                ControlEvent::WindowRenamed {
+            "window-renamed" => {
+                split_after_first(rest).map(|(window_id, name)| ControlEvent::WindowRenamed {
                     window_id: window_id.to_string(),
                     name: name.to_string(),
-                }
-            }),
+                })
+            }
             "window-pane-changed" => {
                 first_two(rest).map(|(window_id, pane_id)| ControlEvent::WindowPaneChanged {
                     window_id: window_id.to_string(),
                     pane_id: pane_id.to_string(),
                 })
             }
-            "unlinked-window-add" => first_token(rest).map(|window_id| {
-                ControlEvent::UnlinkedWindowAdd {
+            "unlinked-window-add" => {
+                first_token(rest).map(|window_id| ControlEvent::UnlinkedWindowAdd {
                     window_id: window_id.to_string(),
-                }
-            }),
-            "unlinked-window-close" => first_token(rest).map(|window_id| {
-                ControlEvent::UnlinkedWindowClose {
+                })
+            }
+            "unlinked-window-close" => {
+                first_token(rest).map(|window_id| ControlEvent::UnlinkedWindowClose {
                     window_id: window_id.to_string(),
-                }
-            }),
+                })
+            }
 
             "layout-change" => parse_layout_change(line, rest),
 
-            "pane-mode-changed" => first_token(rest).map(|pane_id| {
-                ControlEvent::PaneModeChanged {
-                    pane_id: pane_id.to_string(),
-                }
+            "pane-mode-changed" => first_token(rest).map(|pane_id| ControlEvent::PaneModeChanged {
+                pane_id: pane_id.to_string(),
             }),
             "pane-exited" => first_token(rest).map(|pane_id| ControlEvent::PaneExited {
                 pane_id: pane_id.to_string(),
@@ -279,7 +275,11 @@ impl ControlParser {
             "exit" => {
                 let reason = rest.join(" ");
                 Some(ControlEvent::Exit {
-                    reason: if reason.is_empty() { None } else { Some(reason) },
+                    reason: if reason.is_empty() {
+                        None
+                    } else {
+                        Some(reason)
+                    },
                 })
             }
             "config-error" => Some(ControlEvent::ConfigError {
@@ -334,7 +334,9 @@ fn first_two<'a>(rest: &'a [&'a str]) -> Option<(&'a str, &'a str)> {
 /// `(first, rest_joined_with_spaces)` for the simple `<id> <name...>`
 /// pattern. Returns `None` if `rest` is empty.
 fn split_after_first<'a>(rest: &'a [&'a str]) -> Option<(&'a str, String)> {
-    rest.first().copied().map(|first| (first, rest[1..].join(" ")))
+    rest.first()
+        .copied()
+        .map(|first| (first, rest[1..].join(" ")))
 }
 
 fn parse_output_event(line: &str, rest: &[&str]) -> Option<ControlEvent> {
@@ -445,7 +447,12 @@ mod tests {
     fn non_percent_line_outside_block_is_unknown() {
         let mut p = ControlParser::new();
         let ev = feed_one(&mut p, "hello");
-        assert_eq!(ev, ControlEvent::Unknown { line: "hello".into() });
+        assert_eq!(
+            ev,
+            ControlEvent::Unknown {
+                line: "hello".into()
+            }
+        );
     }
 
     #[test]
@@ -541,7 +548,10 @@ mod tests {
     #[test]
     fn sessions_changed_bare() {
         let mut p = ControlParser::new();
-        assert_eq!(feed_one(&mut p, "%sessions-changed"), ControlEvent::SessionsChanged);
+        assert_eq!(
+            feed_one(&mut p, "%sessions-changed"),
+            ControlEvent::SessionsChanged
+        );
     }
 
     #[test]
@@ -783,11 +793,26 @@ mod tests {
     fn popup_lines_carry_remainder() {
         let mut p = ControlParser::new();
         let ev1 = feed_one(&mut p, "%popup-open some-raw-payload");
-        assert_eq!(ev1, ControlEvent::PopupOpen { line: "some-raw-payload".into() });
+        assert_eq!(
+            ev1,
+            ControlEvent::PopupOpen {
+                line: "some-raw-payload".into()
+            }
+        );
         let ev2 = feed_one(&mut p, "%popup-output other things");
-        assert_eq!(ev2, ControlEvent::PopupOutput { line: "other things".into() });
+        assert_eq!(
+            ev2,
+            ControlEvent::PopupOutput {
+                line: "other things".into()
+            }
+        );
         let ev3 = feed_one(&mut p, "%popup-close last");
-        assert_eq!(ev3, ControlEvent::PopupClose { line: "last".into() });
+        assert_eq!(
+            ev3,
+            ControlEvent::PopupClose {
+                line: "last".into()
+            }
+        );
     }
 
     // ----- Command block: begin / output / end -------------------------

@@ -155,7 +155,9 @@ impl RecordingBackend {
 impl AppBackend for RecordingBackend {
     fn emit(&self, event: &str, payload: &serde_json::Value) -> Result<(), String> {
         let (lock, cvar) = &*self.events;
-        lock.lock().unwrap().push((event.to_string(), payload.clone()));
+        lock.lock()
+            .unwrap()
+            .push((event.to_string(), payload.clone()));
         cvar.notify_one();
         Ok(())
     }
@@ -192,7 +194,10 @@ impl SlowReader {
 
 impl Read for SlowReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.first_call.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        if self
+            .first_call
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
             buf[0] = b'a';
             Ok(1)
         } else {

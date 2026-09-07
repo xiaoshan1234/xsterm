@@ -78,10 +78,9 @@ fn dispatch_event(
     match event {
         ControlEvent::Output { pane_id, data } => {
             if let Some(xsterm_id) = controller.xsterm_id_for_pane(&pane_id) {
-                if let Err(e) = backend.emit(
-                    "session-output",
-                    &serde_json::json!([xsterm_id, data]),
-                ) {
+                if let Err(e) =
+                    backend.emit("session-output", &serde_json::json!([xsterm_id, data]))
+                {
                     tracing::error!(
                         "tmux controller {}: session-output emit failed for pane {}: {}",
                         controller_id,
@@ -98,10 +97,7 @@ fn dispatch_event(
                 );
             }
         }
-        ControlEvent::WindowPaneChanged {
-            window_id,
-            pane_id,
-        } => {
+        ControlEvent::WindowPaneChanged { window_id, pane_id } => {
             // 1. Re-sighting of an already-bound pane → ignore (tmux
             //    re-emits `%window-pane-changed` whenever the active pane
             //    of a window changes, including panes we already own).
@@ -119,17 +115,13 @@ fn dispatch_event(
             //    `split-window` request. Pop the front sender, allocate a
             //    fresh xsterm id, register the binding, emit
             //    `tmux-pane-added`, and resolve the oneshot.
-            let pending_tx = controller
-                .pending_splits
-                .lock()
-                .ok()
-                .and_then(|mut q| {
-                    if q.is_empty() {
-                        None
-                    } else {
-                        q.pop_front()
-                    }
-                });
+            let pending_tx = controller.pending_splits.lock().ok().and_then(|mut q| {
+                if q.is_empty() {
+                    None
+                } else {
+                    q.pop_front()
+                }
+            });
             if let Some(tx) = pending_tx {
                 let xsterm_id = controller.allocate_xsterm_id();
                 controller.register_pane(pane_id.clone(), xsterm_id);
@@ -295,17 +287,13 @@ fn dispatch_event(
             //    in tmux manually, or some other out-of-band path).
             //    Out of scope to auto-bind (see case 4/5 above); we log
             //    and skip.
-            let pending_tx = controller
-                .pending_windows
-                .lock()
-                .ok()
-                .and_then(|mut q| {
-                    if q.is_empty() {
-                        None
-                    } else {
-                        q.pop_front()
-                    }
-                });
+            let pending_tx = controller.pending_windows.lock().ok().and_then(|mut q| {
+                if q.is_empty() {
+                    None
+                } else {
+                    q.pop_front()
+                }
+            });
             if let Some(tx) = pending_tx {
                 let xsterm_window_id = controller.allocate_xsterm_window_id();
                 if let Ok(mut pending) = controller.pending_window_pane.lock() {
@@ -323,7 +311,11 @@ fn dispatch_event(
                 // `xsterm_pane_id` / `xsterm_session_id`.
                 return;
             }
-            let is_first_window = controller.window_bindings.lock().map(|m| m.is_empty()).unwrap_or(true)
+            let is_first_window = controller
+                .window_bindings
+                .lock()
+                .map(|m| m.is_empty())
+                .unwrap_or(true)
                 && controller
                     .pending_window_pane
                     .lock()
@@ -553,17 +545,15 @@ fn dispatch_event(
             }
         }
         ControlEvent::CommandOutput { id, ref line } => {
-            // Route body lines to whichever consumer (capture-pane
-            // promise or bootstrap list-panes promise) is currently
-            // expecting them. Falls through to "no consumer, log and
-            // drop" if neither is set.
+            // Route body lines to whichever consumer is currently
+            // expecting them:
+            //   1. `pending_capture` is set (capture-pane promise).
+            //   2. Otherwise, accumulate into `current_command_lines`
+            //      for end-of-block classification (WindowList /
+            //      PaneList / generic CommandResponse) via
+            //      `handle_classified_response`.
             let has_capture = controller
                 .pending_capture
-                .lock()
-                .map(|s| s.is_some())
-                .unwrap_or(false);
-            let has_bootstrap = controller
-                .pending_bootstrap
                 .lock()
                 .map(|s| s.is_some())
                 .unwrap_or(false);
@@ -571,10 +561,8 @@ fn dispatch_event(
                 if let Ok(mut body) = controller.pending_capture_body.lock() {
                     body.push(line.clone());
                 }
-            } else if has_bootstrap {
-                if let Ok(mut body) = controller.pending_capture_body.lock() {
-                    body.push(line.clone());
-                }
+            } else if let Ok(mut body) = controller.current_command_lines.lock() {
+                body.push(line.clone());
             } else {
                 tracing::debug!(
                     "tmux controller {}: %output for command {} (no pending capture, body line dropped)",
@@ -608,38 +596,20 @@ fn dispatch_event(
                 return;
             }
             drop(capture_slot);
-            // No capture in flight — try the bootstrap consumer.
-            let mut bootstrap_slot = match controller.pending_bootstrap.lock() {
-                Ok(s) => s,
-                Err(_) => return,
-            };
-            if let Some(tx) = bootstrap_slot.take() {
-                let body = controller
-                    .pending_capture_body
-                    .lock()
-                    .map(|mut b| std::mem::take(&mut *b))
-                    .unwrap_or_default();
-                let body_len = body.len();
-                let _ = tx.send(body);
-                tracing::debug!(
-                    "tmux controller {}: bootstrap %end id={} ({} body lines)",
-                    controller_id,
-                    id,
-                    body_len
-                );
-            } else {
-                tracing::debug!(
-                    "tmux controller {}: %end for command {} (no pending capture)",
-                    controller_id,
-                    id
-                );
-            }
+            // No capture in flight — fall through to generic
+            // command-response classification: emit a `tmux-window-list`
+            // / `tmux-pane-list` event from the accumulated body, or
+            // drop the body silently if it doesn't look like a list
+            // query.
+            handle_classified_response(
+                controller,
+                backend,
+                controller_id,
+                id,
+                take_command_body(controller),
+            );
         }
-        ControlEvent::CommandError {
-            id,
-            message,
-            ..
-        } => {
+        ControlEvent::CommandError { id, message, .. } => {
             let mut slot = match controller.pending_capture.lock() {
                 Ok(s) => s,
                 Err(_) => return,
@@ -671,4 +641,212 @@ fn dispatch_event(
             );
         }
     }
+}
+
+/// Snapshot of one window row produced by `tmux list-windows -F`:
+/// `#{window_id}\t#{session_id}\t#{window_name}\t#{window_active}\t#{window_layout}`.
+struct WindowListRow {
+    window_id: String,
+    session_id: String,
+    name: String,
+    active: bool,
+    layout: String,
+}
+
+/// Snapshot of one pane row produced by `tmux list-panes -F`:
+/// `#{pane_id}\t#{window_id}\t#{session_id}\t#{pane_active}\t
+///  #{pane_width}\t#{pane_height}\t#{pane_current_path}\t#{pane_title}`.
+struct PaneListRow {
+    pane_id: String,
+    window_id: String,
+    session_id: String,
+    active: bool,
+    width: u16,
+    height: u16,
+    cwd: String,
+    title: String,
+}
+
+fn parse_window_list_row(line: &str) -> Option<WindowListRow> {
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() < 5 {
+        return None;
+    }
+    Some(WindowListRow {
+        window_id: parts[0].to_string(),
+        session_id: parts[1].to_string(),
+        name: parts[2].to_string(),
+        active: parts[3] == "1",
+        layout: parts[4].to_string(),
+    })
+}
+
+fn parse_pane_list_row(line: &str) -> Option<PaneListRow> {
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() < 8 {
+        return None;
+    }
+    Some(PaneListRow {
+        pane_id: parts[0].to_string(),
+        window_id: parts[1].to_string(),
+        session_id: parts[2].to_string(),
+        active: parts[3] == "1",
+        width: parts[4].parse().unwrap_or(0),
+        height: parts[5].parse().unwrap_or(0),
+        cwd: parts[6].to_string(),
+        title: parts[7].to_string(),
+    })
+}
+
+fn emit_window_list(
+    backend: &dyn AppBackend,
+    session_id: u32,
+    _controller: &TmuxController,
+    cmd_id: u32,
+    lines: &[String],
+) {
+    let entries: Vec<WindowListRow> = lines
+        .iter()
+        .filter_map(|l| parse_window_list_row(l))
+        .collect();
+    if entries.is_empty() {
+        tracing::debug!("command {} body had no parseable list rows", cmd_id);
+        return;
+    }
+    let payload = serde_json::json!({
+        "cmd_id": cmd_id,
+        "windows": entries.iter().map(|e| serde_json::json!({
+            "windowId": e.window_id,
+            "sessionId": e.session_id,
+            "name": e.name,
+            "active": e.active,
+            "layout": e.layout,
+        })).collect::<Vec<_>>(),
+    });
+    let wrapped = serde_json::json!([session_id, payload]);
+    if let Err(e) = backend.emit("tmux-window-list", &wrapped) {
+        tracing::error!("Failed to emit tmux-window-list: {}", e);
+    }
+}
+
+fn emit_pane_list(
+    backend: &dyn AppBackend,
+    session_id: u32,
+    controller: &TmuxController,
+    cmd_id: u32,
+    lines: &[String],
+) {
+    let entries: Vec<PaneListRow> = lines
+        .iter()
+        .filter_map(|l| parse_pane_list_row(l))
+        .collect();
+    if entries.is_empty() {
+        tracing::debug!("command {} body had no parseable list rows", cmd_id);
+        return;
+    }
+    // Best-effort: register the first pane with `await_first_pane` so
+    // the bootstrap path doesn't have to wait for
+    // `%window-pane-changed` (some tmux versions never send it).
+    if let Some(first) = entries.first() {
+        if let Ok(mut pending) = controller.pending_window_pane.lock() {
+            if let Some(pw) = pending.get_mut(&first.window_id) {
+                if pw.sender.is_none() {
+                    let xsterm_id = controller.allocate_xsterm_id();
+                    controller.register_pane(first.pane_id.clone(), xsterm_id);
+                    controller.record_pane_window(first.pane_id.clone(), first.window_id.clone());
+                    controller.record_first_pane(xsterm_id, first.pane_id.clone());
+                    if let Ok(mut bindings) = controller.window_bindings.lock() {
+                        bindings.insert(first.window_id.clone(), pw.xsterm_window_id);
+                    }
+                    tracing::info!(
+                        "bootstrap pane registered from list-panes: window={} pane={} xsterm_id={}",
+                        first.window_id,
+                        first.pane_id,
+                        xsterm_id
+                    );
+                }
+            }
+        }
+    }
+    let payload = serde_json::json!({
+        "cmd_id": cmd_id,
+        "panes": entries.iter().map(|e| serde_json::json!({
+            "paneId": e.pane_id,
+            "windowId": e.window_id,
+            "sessionId": e.session_id,
+            "active": e.active,
+            "width": e.width,
+            "height": e.height,
+            "cwd": e.cwd,
+            "title": e.title,
+        })).collect::<Vec<_>>(),
+    });
+    let wrapped = serde_json::json!([session_id, payload]);
+    if let Err(e) = backend.emit("tmux-pane-list", &wrapped) {
+        tracing::error!("Failed to emit tmux-pane-list: {}", e);
+    }
+}
+
+/// Inspect the first body line of a completed command response. If it
+/// Take the accumulated body lines for `current_command_id` and
+/// clear `current_command_id` so the next `%begin..%end` block starts
+/// fresh. Called by the `CommandEnd` arm of `dispatch_event` before
+/// `handle_classified_response` runs.
+fn take_command_body(controller: &TmuxController) -> Vec<String> {
+    if let Ok(mut id_slot) = controller.current_command_id.lock() {
+        id_slot.take();
+    }
+    if let Ok(mut body) = controller.current_command_lines.lock() {
+        std::mem::take(&mut *body)
+    } else {
+        Vec::new()
+    }
+}
+
+/// Inspect the first body line of a completed command response. If it
+/// looks like `list-windows` (`@<id> …`) or `list-panes`
+/// (`%<id> …`) output, classify the body as `WindowList` / `PaneList`
+/// and emit a matching event to the frontend. For `WindowList`,
+/// additionally trigger a follow-up `list-panes ""` so the dispatch
+/// chain produces a `PaneList` event that registers the first pane
+/// for `await_first_pane` — eliminating the Bug 016 / 017 race.
+fn handle_classified_response(
+    controller: &TmuxController,
+    backend: &dyn AppBackend,
+    controller_id: u32,
+    cmd_id: u32,
+    lines: Vec<String>,
+) {
+    let first = lines.first().map(|l| l.trim_start()).unwrap_or("");
+    if first.starts_with('@') {
+        emit_window_list(backend, controller_id, controller, cmd_id, &lines);
+        // Bug 017 bootstrap chain: emit window list, then immediately
+        // ask the server for the panes so we can register the first
+        // pane for `await_first_pane`. Dispatched on an OS thread to
+        // keep the dispatch loop free of synchronous send latency.
+        trigger_followup_list_panes(controller);
+    } else if first.starts_with('%') {
+        emit_pane_list(backend, controller_id, controller, cmd_id, &lines);
+    } else {
+        tracing::debug!(
+            "command {} body does not look like a list query (first line {:?}); ignoring",
+            cmd_id,
+            first
+        );
+    }
+}
+
+/// Send `list-panes ""` on a detached OS thread so the dispatch loop
+/// doesn't block on the synchronous `stdin_tx` send. This is the second
+/// leg of the Bug 017 bootstrap chain — the first leg is the
+/// `list-windows` query sent by `schedule_initial_state_sync`.
+fn trigger_followup_list_panes(controller: &TmuxController) {
+    let stdin_tx = controller.stdin_tx.clone();
+    std::thread::spawn(move || {
+        let cmd =
+            super::commands::list_panes_with_format("", super::commands::DEFAULT_PANE_LIST_FORMAT);
+        if stdin_tx.send(cmd).is_err() {
+            tracing::debug!("trigger_followup_list_panes: controller stdin_tx closed; skipping");
+        }
+    });
 }

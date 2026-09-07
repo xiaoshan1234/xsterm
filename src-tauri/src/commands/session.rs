@@ -202,9 +202,7 @@ pub async fn create_tmux_session(
 /// `src-tauri/src/infrastructure/binary_frame.rs` for the wire format
 /// (Perf 001).
 #[tauri::command]
-pub fn get_session_output_channel(
-    backend: State<'_, Arc<RealAppBackend>>,
-) -> Channel<Vec<u8>> {
+pub fn get_session_output_channel(backend: State<'_, Arc<RealAppBackend>>) -> Channel<Vec<u8>> {
     backend.session_output_channel.clone()
 }
 
@@ -426,8 +424,7 @@ pub async fn auto_attach_tmux_servers(
 ) -> Result<Vec<AutoAttachOutcome>, String> {
     let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
     let dyn_backend: Arc<dyn AppBackend> = arc_real;
-    let stored =
-        crate::commands::persistence::load_attached_tmux_servers(app.clone()).await?;
+    let stored = crate::commands::persistence::load_attached_tmux_servers(app.clone()).await?;
     let results = state.auto_attach_on_startup(&stored, dyn_backend).await;
     // Persist the (possibly reduced) live list so a failed server that
     // got dropped does not keep haunting subsequent startups.

@@ -7,10 +7,7 @@ use crate::models::session::{AttachedTmuxServer, SessionInfo};
 
 /// Persist the given session list to disk.
 #[tauri::command]
-pub async fn save_sessions(
-    sessions: Vec<SessionInfo>,
-    app: AppHandle,
-) -> Result<(), String> {
+pub async fn save_sessions(sessions: Vec<SessionInfo>, app: AppHandle) -> Result<(), String> {
     tracing::debug!("Saving {} sessions", sessions.len());
     let store = app.store("sessions.json").map_err_string()?;
     store.set("sessions", serde_json::to_value(sessions).map_err_string()?);
@@ -65,9 +62,7 @@ pub async fn save_attached_tmux_servers(
 /// before re-attaching every previously-known server. Returns an empty list
 /// when the store has no entry yet.
 #[tauri::command]
-pub async fn load_attached_tmux_servers(
-    app: AppHandle,
-) -> Result<Vec<AttachedTmuxServer>, String> {
+pub async fn load_attached_tmux_servers(app: AppHandle) -> Result<Vec<AttachedTmuxServer>, String> {
     let store = app.store(ATTACHED_TMUX_STORE).map_err_string()?;
     match store.get(ATTACHED_TMUX_KEY) {
         Some(value) => {
@@ -99,17 +94,17 @@ pub(crate) fn save_attached_tmux_servers_impl(
 
 /// Persist the group storage to disk.
 #[tauri::command]
-pub async fn save_groups(
-    store_data: GroupStore,
-    app: AppHandle,
-) -> Result<(), String> {
+pub async fn save_groups(store_data: GroupStore, app: AppHandle) -> Result<(), String> {
     tracing::debug!(
         "Saving {} groups, next_id={}",
         store_data.groups.len(),
         store_data.next_group_id
     );
     let store = app.store("groups.json").map_err_string()?;
-    store.set("groups", serde_json::to_value(&store_data).map_err_string()?);
+    store.set(
+        "groups",
+        serde_json::to_value(&store_data).map_err_string()?,
+    );
     store.save().map_err_string()?;
     Ok(())
 }
@@ -121,9 +116,16 @@ pub async fn load_groups(app: AppHandle) -> Result<GroupStore, String> {
     match store.get("groups") {
         Some(value) => {
             let data: GroupStore = serde_json::from_value(value.clone()).map_err_string()?;
-            tracing::debug!("Loaded {} groups, next_id={}", data.groups.len(), data.next_group_id);
+            tracing::debug!(
+                "Loaded {} groups, next_id={}",
+                data.groups.len(),
+                data.next_group_id
+            );
             Ok(data)
         }
-        None => Ok(GroupStore { groups: vec![], next_group_id: 1 }),
+        None => Ok(GroupStore {
+            groups: vec![],
+            next_group_id: 1,
+        }),
     }
 }

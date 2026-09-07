@@ -46,7 +46,9 @@ use portable_pty::PtySize;
 
 use crate::error::StringError;
 use crate::infrastructure::app_backend::AppBackend;
-use crate::infrastructure::pty::{spawn_writer_thread, LocalSession, LocalSessionHandles, PtySystem};
+use crate::infrastructure::pty::{
+    spawn_writer_thread, LocalSession, LocalSessionHandles, PtySystem,
+};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{LocalSessionConfig, SessionInfo, SessionType};
 
@@ -177,7 +179,10 @@ pub fn create_local_session(
     let info = SessionInfo {
         id: session_id,
         name: resolve_session_name(config.name, &shell_name),
-        session_type: SessionType::Local { shell: shell_path, cwd },
+        session_type: SessionType::Local {
+            shell: shell_path,
+            cwd,
+        },
         is_connected: true,
         capabilities: CapabilityFlags::for_local(),
         tmux_pane_id: None,

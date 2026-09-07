@@ -47,14 +47,23 @@ pub struct NativePtySystem {
 impl NativePtySystem {
     /// Create a new native PTY system.
     pub fn new() -> Self {
-        Self { inner: std::sync::Mutex::new(native_pty_system()) }
+        Self {
+            inner: std::sync::Mutex::new(native_pty_system()),
+        }
     }
 }
 
 impl PtySystem for NativePtySystem {
     fn openpty(&self, size: PtySize) -> Result<Box<dyn PtyPair>, String> {
-        let pair = self.inner.lock().map_err_string()?.openpty(size).map_err_string()?;
-        Ok(Box::new(NativePtyPair { inner: std::sync::Mutex::new(pair) }))
+        let pair = self
+            .inner
+            .lock()
+            .map_err_string()?
+            .openpty(size)
+            .map_err_string()?;
+        Ok(Box::new(NativePtyPair {
+            inner: std::sync::Mutex::new(pair),
+        }))
     }
 }
 
@@ -68,7 +77,9 @@ impl PtyPair for NativePtyPair {
     fn spawn(&mut self, cmd: CommandBuilder) -> Result<Box<dyn Child>, String> {
         let guard = self.inner.lock().map_err_string()?;
         let child = guard.slave.spawn_command(cmd).map_err_string()?;
-        Ok(Box::new(NativeChild { inner: std::sync::Mutex::new(child) }))
+        Ok(Box::new(NativeChild {
+            inner: std::sync::Mutex::new(child),
+        }))
     }
 
     fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String> {
@@ -83,12 +94,15 @@ impl PtyPair for NativePtyPair {
 
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
         let guard = self.inner.lock().map_err_string()?;
-        guard.master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        }).map_err_string()
+        guard
+            .master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err_string()
     }
 }
 

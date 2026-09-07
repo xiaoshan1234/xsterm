@@ -246,9 +246,7 @@ impl SshTmuxBackend {
     /// `tokio::sync::mpsc::UnboundedSender`. The thread lives until
     /// the SSH channel closes (the bridge sender side is dropped by
     /// the SSH data loop in that case).
-    pub fn from_connect_result(
-        result: crate::infrastructure::ssh::SshConnectResult,
-    ) -> Self {
+    pub fn from_connect_result(result: crate::infrastructure::ssh::SshConnectResult) -> Self {
         let crate::infrastructure::ssh::SshConnectResult {
             channel,
             write_tx,

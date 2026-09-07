@@ -13,7 +13,11 @@ pub enum SessionType {
 
     /// A remote session connected over SSH.
     #[serde(rename = "ssh")]
-    Ssh { host: String, port: u16, user: String },
+    Ssh {
+        host: String,
+        port: u16,
+        user: String,
+    },
 
     /// A pane owned by a local `tmux -CC` controller.
     #[serde(rename = "tmux-cc")]
@@ -797,8 +801,10 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_missing_name_field_defaults_to_none() {
-        let json_without_name = r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p"}"#;
-        let config: SSHSessionConfig = serde_json::from_str(json_without_name).expect("deserialize");
+        let json_without_name =
+            r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p"}"#;
+        let config: SSHSessionConfig =
+            serde_json::from_str(json_without_name).expect("deserialize");
         assert!(config.name.is_none());
         assert_eq!(config.host, "h");
     }
@@ -831,7 +837,10 @@ mod tests {
         let roundtrip: LocalSessionConfig =
             serde_json::from_str(&json).expect("deserialize LocalSessionConfig");
 
-        assert_eq!(roundtrip.shell_template.as_deref(), Some("template {{name}}"));
+        assert_eq!(
+            roundtrip.shell_template.as_deref(),
+            Some("template {{name}}")
+        );
         assert_eq!(roundtrip.term_type.as_deref(), Some("xterm-256color"));
         assert_eq!(roundtrip.charset.as_deref(), Some("utf-8"));
         assert_eq!(roundtrip.startup_command.as_deref(), Some("echo ready"));
@@ -959,7 +968,10 @@ mod tests {
 
         assert_eq!(roundtrip.line_timestamp, Some(true));
         assert_eq!(roundtrip.time_format.as_deref(), Some("%H:%M:%S"));
-        assert_eq!(roundtrip.date_time_format.as_deref(), Some("%Y-%m-%d %H:%M:%S"));
+        assert_eq!(
+            roundtrip.date_time_format.as_deref(),
+            Some("%Y-%m-%d %H:%M:%S")
+        );
         assert_eq!(roundtrip.auto_wrap, Some(true));
         assert_eq!(roundtrip.reverse_video, Some(false));
         assert_eq!(roundtrip.mouse_wheel_scroll_lines, Some(3));
@@ -1157,7 +1169,15 @@ mod tests {
 
     #[test]
     fn tmux_pane_info_populates_all_tmux_fields() {
-        let info = tmux_pane_info(42, 7, "%13", Some("main"), Some("editor pane"), false, Some("@3"));
+        let info = tmux_pane_info(
+            42,
+            7,
+            "%13",
+            Some("main"),
+            Some("editor pane"),
+            false,
+            Some("@3"),
+        );
         assert_eq!(info.id, 42);
         assert_eq!(info.name, "editor pane");
         assert!(info.is_connected);
@@ -1167,7 +1187,12 @@ mod tests {
         assert_eq!(info.tmux_window_id.as_deref(), Some("@3"));
         assert!(!info.is_hidden);
         match info.session_type {
-            SessionType::TmuxCc { controller_id, pane_id, session_name, socket_name } => {
+            SessionType::TmuxCc {
+                controller_id,
+                pane_id,
+                session_name,
+                socket_name,
+            } => {
                 assert_eq!(controller_id, 7);
                 assert_eq!(pane_id, "%13");
                 assert_eq!(session_name, "main");
@@ -1184,9 +1209,15 @@ mod tests {
         // (`tmux -CC new`) pass `false`; attach callers pass
         // `true`. This test locks in both directions.
         let hidden = tmux_pane_info(1, 1, "%0", None, None, true, None);
-        assert!(hidden.is_hidden, "caller passed true → is_hidden must be true");
+        assert!(
+            hidden.is_hidden,
+            "caller passed true → is_hidden must be true"
+        );
         let visible = tmux_pane_info(2, 1, "%5", None, None, false, None);
-        assert!(!visible.is_hidden, "caller passed false → is_hidden must be false");
+        assert!(
+            !visible.is_hidden,
+            "caller passed false → is_hidden must be false"
+        );
         assert_eq!(
             visible.name, "tmux-1:%5",
             "missing display_name falls back to controller:pane",
@@ -1289,19 +1320,29 @@ mod split_direction_tests {
 
     #[test]
     fn parse_horizontal_returns_horizontal_variant() {
-        assert_eq!(SplitDirection::parse("horizontal"), Some(SplitDirection::Horizontal));
+        assert_eq!(
+            SplitDirection::parse("horizontal"),
+            Some(SplitDirection::Horizontal)
+        );
     }
 
     #[test]
     fn parse_vertical_returns_vertical_variant() {
-        assert_eq!(SplitDirection::parse("vertical"), Some(SplitDirection::Vertical));
+        assert_eq!(
+            SplitDirection::parse("vertical"),
+            Some(SplitDirection::Vertical)
+        );
     }
 
     #[test]
     fn parse_returns_none_for_unknown_string() {
         assert_eq!(SplitDirection::parse("diagonal"), None);
         assert_eq!(SplitDirection::parse(""), None);
-        assert_eq!(SplitDirection::parse("Horizontal"), None, "must be lowercase exactly");
+        assert_eq!(
+            SplitDirection::parse("Horizontal"),
+            None,
+            "must be lowercase exactly"
+        );
     }
 
     #[test]

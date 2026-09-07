@@ -869,3 +869,22 @@ server 推送 `%window-pane-changed` → dispatcher 注册 pane → `await_first
 YES
 ---END---
 
+
+# Bug 017
+## 现象
+Bug 016 修复后（dispatcher 累积 CommandOutput body → CommandEnd 时 classify emit WindowList/PaneList + register_first_pane），日志显示 `bootstrap %end id=401 (0 body lines)` —— body 是空！但 `%output %22` 来了（shell prompt 已来）。server **不**主动发 `%window-pane-changed`，且 dispatcher 看到的 `%begin %end 401` 包了空 body。
+## 理想效果
+list-panes 响应（id=401）body 含 24 行（1 @1 bash %1 ... 20 @23 bash %23 ...），dispatcher 解析为 PaneList，register_first_pane 成功。
+## BUG原因
+Bug 016 修复时，spawn_with_backend 末尾发 `new-window` 后立即发 `list-panes ""`。但 **list-panes 命令与 new-window 命令间隔极短**。server 端 tmux 在 pty-req + exec 期间发了一些内部响应（id=395, 400 等）穿插到 list-panes 响应前后。dispatcher 的 `pending_bootstrap` oneshot 在 **`%end 395` 时已被 take**（body 空），`%end 401`（list-panes 响应）来时 take 失败 → body 走"no consumer" drop。
+## 解决方案
+1. **删 pending_bootstrap / bootstrap_rx 字段 + oneshot 路径**—— race 复杂，调试困难
+2. **删 list_panes_for_bootstrap 命令**
+3. **新加 schedule_initial_state_sync(Arc<Mutex<UnboundedSender<String>>>)**：500ms 后发 list-windows ""（不与 new-window 竞争）。`std::thread::spawn` 异步，dispatch 循环不阻塞
+4. **dispatch.rs 加 WindowList/PaneListRow 结构 + parse + emit**：检测 `%begin %end` body 第一行 `@<id>` → emit `tmux-window-list` event；`%<id>` → emit `tmux-pane-list` event 并 register_first_pane
+5. **dispatch.rs 加 trigger_followup_list_panes**：WindowList handler 立即触发 list-panes "" follow-up，OS 线程异步发 stdin
+6. **dispatch.rs 加 handle_classified_response**：dispatch_event `CommandEnd` 时 classify body emit 相应事件 + WindowList → trigger list-panes follow-up
+7. **controller.rs 加 current_command_id / current_command_lines 字段**：dispatcher 累积 command body lines（按 id 区分）；CommandEnd 时 take 全部 + classify
+8. **await_first_pane bootstrap 分支删除**：直接 fall through 到 first_pane_tx wait（dispatcher 已 register_first_pane）
+## 是否解决
+YES

@@ -121,19 +121,11 @@ pub enum ControlEvent {
     /// `%begin <ts> <id> <flags>` — start of a synchronous command reply
     /// block. Lines between this and the matching `%end`/`%error` are
     /// delivered as [`ControlEvent::CommandOutput`].
-    CommandBegin {
-        id: u32,
-        timestamp: u64,
-        flags: u32,
-    },
+    CommandBegin { id: u32, timestamp: u64, flags: u32 },
 
     /// `%end <ts> <id> <flags>` — matching terminator for a prior
     /// [`ControlEvent::CommandBegin`].
-    CommandEnd {
-        id: u32,
-        timestamp: u64,
-        flags: u32,
-    },
+    CommandEnd { id: u32, timestamp: u64, flags: u32 },
 
     /// `%error <ts> <id> <flags> <msg>` — command reply failed; the body
     /// lines emitted before this are dropped (the parser clears its in-block

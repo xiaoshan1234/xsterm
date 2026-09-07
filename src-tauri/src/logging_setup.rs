@@ -1,8 +1,8 @@
 use std::path::Path;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
-use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 
 use crate::error::StringError;
 

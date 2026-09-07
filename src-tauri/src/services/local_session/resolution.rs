@@ -22,7 +22,10 @@ pub(super) const BASH_LOGIN_FLAG: &str = "--login";
 /// Priority: explicit `shell` wins; otherwise the template (or its
 /// Unix/Windows default) wins; otherwise a per-OS fallback (`cmd.exe`
 /// on Windows, `$SHELL` / `/bin/bash` on Unix).
-pub(super) fn resolve_shell_path(configured: Option<String>, shell_template: Option<&str>) -> String {
+pub(super) fn resolve_shell_path(
+    configured: Option<String>,
+    shell_template: Option<&str>,
+) -> String {
     if let Some(shell) = configured {
         return shell;
     }
@@ -74,7 +77,9 @@ pub(super) fn parse_shell_command(shell_path: &str) -> (String, Vec<String>) {
         .map(|(exe, rest)| {
             (
                 exe.to_string(),
-                rest.split_whitespace().map(String::from).collect::<Vec<_>>(),
+                rest.split_whitespace()
+                    .map(String::from)
+                    .collect::<Vec<_>>(),
             )
         })
         .unwrap_or_else(|| (shell_path.to_string(), Vec::new()))
@@ -138,7 +143,5 @@ pub(super) fn apply_shell_flags(cmd: &mut CommandBuilder, shell_name: &str) {
 /// in the spawn flow.
 pub(super) fn is_wsl_exe(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
-    lower == "wsl.exe"
-        || lower.ends_with("\\wsl.exe")
-        || lower.ends_with("/wsl.exe")
+    lower == "wsl.exe" || lower.ends_with("\\wsl.exe") || lower.ends_with("/wsl.exe")
 }

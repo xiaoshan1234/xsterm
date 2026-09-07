@@ -34,10 +34,7 @@ pub trait SshBackend: Send + Sync {
     /// timeout, compression).
     ///
     /// On success, returns the I/O channels needed to drive the session.
-    fn connect(
-        &self,
-        config: &SSHSessionConfig,
-    ) -> Result<SshConnectResult, String>;
+    fn connect(&self, config: &SSHSessionConfig) -> Result<SshConnectResult, String>;
 
     /// open a single SSH exec channel and run `command` on the
     /// remote host. Returns the same `SshConnectResult` shape as
@@ -152,10 +149,7 @@ impl RusshBackend {
 }
 
 impl SshBackend for RusshBackend {
-    fn connect(
-        &self,
-        config: &SSHSessionConfig,
-    ) -> Result<SshConnectResult, String> {
+    fn connect(&self, config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
         // Host key verification stays disabled per AGENTS.md; the path is
         // logged here as a future-use marker.
         if let Some(path) = config.known_hosts_path.as_deref() {
@@ -315,13 +309,17 @@ async fn open_configured_tcp_stream(config: &SSHSessionConfig) -> Result<TcpStre
         if let Err(e) = socket.set_nodelay(tcp_nodelay) {
             tracing::warn!(
                 "Failed to set TCP_NODELAY={} on {}: {}",
-                tcp_nodelay, addr, e
+                tcp_nodelay,
+                addr,
+                e
             );
         }
         if let Err(e) = socket.set_keepalive(so_keepalive) {
             tracing::warn!(
                 "Failed to set SO_KEEPALIVE={} on {}: {}",
-                so_keepalive, addr, e
+                so_keepalive,
+                addr,
+                e
             );
         }
 
@@ -329,7 +327,9 @@ async fn open_configured_tcp_stream(config: &SSHSessionConfig) -> Result<TcpStre
             Ok(stream) => {
                 tracing::info!(
                     "SSH TCP connected to {} (nodelay={}, keepalive={})",
-                    addr, tcp_nodelay, so_keepalive
+                    addr,
+                    tcp_nodelay,
+                    so_keepalive
                 );
                 return Ok(stream);
             }
@@ -389,9 +389,9 @@ fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
         });
     });
 
-    result_rx
-        .recv()
-        .map_err(|_| "SSH connection thread died before handshake (panic or runtime build failure)".to_string())??;
+    result_rx.recv().map_err(|_| {
+        "SSH connection thread died before handshake (panic or runtime build failure)".to_string()
+    })??;
 
     Ok(SshConnectResult {
         channel: Box::new(BridgedChannel),
@@ -452,14 +452,12 @@ async fn run_ssh_session(
         connect_block.await?
     };
 
-    authenticate(&mut handle, config)
-        .await
-        .map_err(|e| {
-            format!(
-                "SSH authentication failed for {}@{}: {}",
-                config.username, config.host, e
-            )
-        })?;
+    authenticate(&mut handle, config).await.map_err(|e| {
+        format!(
+            "SSH authentication failed for {}@{}: {}",
+            config.username, config.host, e
+        )
+    })?;
 
     let mut channel = handle
         .channel_open_session()
@@ -474,7 +472,8 @@ async fn run_ssh_session(
             if let Err(e) = channel.set_env(false, "LC_ALL", cs.to_string()).await {
                 tracing::warn!(
                     "SSH server rejected LC_ALL={} via env: {} (charset may not take effect)",
-                    cs, e
+                    cs,
+                    e
                 );
             } else {
                 tracing::info!("Applied charset via SSH env LC_ALL={}", cs);
@@ -482,10 +481,7 @@ async fn run_ssh_session(
         }
     }
 
-    let term_type = config
-        .term_type
-        .as_deref()
-        .unwrap_or(DEFAULT_TERMINAL_TYPE);
+    let term_type = config.term_type.as_deref().unwrap_or(DEFAULT_TERMINAL_TYPE);
     let mut pty_size = default_pty_size();
     if let Some(rows) = config.initial_rows {
         pty_size.rows = rows as u16;
@@ -604,9 +600,10 @@ fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConne
         });
     });
 
-    result_rx
-        .recv()
-        .map_err(|_| "SSH exec connection thread died before handshake (panic or runtime build failure)".to_string())??;
+    result_rx.recv().map_err(|_| {
+        "SSH exec connection thread died before handshake (panic or runtime build failure)"
+            .to_string()
+    })??;
 
     Ok(SshConnectResult {
         channel: Box::new(BridgedChannel),
@@ -671,14 +668,12 @@ async fn run_ssh_exec_session(
         connect_block.await?
     };
 
-    authenticate(&mut handle, config)
-        .await
-        .map_err(|e| {
-            format!(
-                "SSH authentication failed for {}@{}: {}",
-                config.username, config.host, e
-            )
-        })?;
+    authenticate(&mut handle, config).await.map_err(|e| {
+        format!(
+            "SSH authentication failed for {}@{}: {}",
+            config.username, config.host, e
+        )
+    })?;
 
     let mut channel = handle
         .channel_open_session()
@@ -693,7 +688,8 @@ async fn run_ssh_exec_session(
             if let Err(e) = channel.set_env(false, "LC_ALL", cs.to_string()).await {
                 tracing::warn!(
                     "SSH server rejected LC_ALL={} via env: {} (charset may not take effect)",
-                    cs, e
+                    cs,
+                    e
                 );
             }
         }
@@ -707,10 +703,7 @@ async fn run_ssh_exec_session(
     // see `doc/maintenance/bug.md`). SSH `exec` + `pty-req` is the
     // standard OpenSSH pattern for running an interactive command
     // non-interactively.
-    let term_type = config
-        .term_type
-        .as_deref()
-        .unwrap_or(DEFAULT_TERMINAL_TYPE);
+    let term_type = config.term_type.as_deref().unwrap_or(DEFAULT_TERMINAL_TYPE);
     let mut pty_size = default_pty_size();
     if let Some(rows) = config.initial_rows {
         pty_size.rows = rows as u16;
@@ -878,7 +871,11 @@ async fn forward_write_data(
 ) -> bool {
     match data {
         Some(d) => {
-            if handle.data(channel_id, CryptoVec::from_slice(&d)).await.is_err() {
+            if handle
+                .data(channel_id, CryptoVec::from_slice(&d))
+                .await
+                .is_err()
+            {
                 tracing::error!("SSH channel data send failed");
                 true
             } else {
@@ -988,8 +985,7 @@ async fn exec_ssh_command(
         ssh_config.keepalive_interval = Some(Duration::from_secs(secs as u64));
     }
     if config.enable_compression.unwrap_or(false) {
-        ssh_config.preferred.compression =
-            std::borrow::Cow::Borrowed(&[russh::compression::ZLIB]);
+        ssh_config.preferred.compression = std::borrow::Cow::Borrowed(&[russh::compression::ZLIB]);
     }
     let ssh_config = Arc::new(ssh_config);
 
@@ -1046,16 +1042,11 @@ async fn exec_ssh_command(
         match channel.wait().await {
             Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
                 if exit_status != 0 {
-                    return Err(format!(
-                        "Remote command exited with status {}",
-                        exit_status
-                    ));
+                    return Err(format!("Remote command exited with status {}", exit_status));
                 }
                 break;
             }
-            Some(russh::ChannelMsg::Close)
-            | Some(russh::ChannelMsg::Eof)
-            | None => break,
+            Some(russh::ChannelMsg::Close) | Some(russh::ChannelMsg::Eof) | None => break,
             _ => {}
         }
     }

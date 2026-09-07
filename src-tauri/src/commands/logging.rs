@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_store::StoreExt;
-use tracing_subscriber::{EnvFilter, Registry, reload};
+use tracing_subscriber::{reload, EnvFilter, Registry};
 
 use crate::error::StringError;
 use crate::logging_setup::LogConfig;
@@ -15,7 +15,12 @@ pub async fn log_message(
     message: String,
     data: Option<String>,
 ) -> Result<(), String> {
-    let msg = format!("[{}] {} - {}", source, message, data.as_deref().unwrap_or(""));
+    let msg = format!(
+        "[{}] {} - {}",
+        source,
+        message,
+        data.as_deref().unwrap_or("")
+    );
     match level.as_str() {
         "DEBUG" => tracing::debug!(target: "frontend", "{}", msg),
         "WARN" => tracing::warn!(target: "frontend", "{}", msg),
@@ -52,7 +57,10 @@ pub async fn set_log_config(
 /// Return the application's log directory path.
 #[tauri::command]
 pub async fn get_log_dir(app: AppHandle) -> Result<String, String> {
-    let log_dir = app.path().app_log_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .unwrap_or_else(|_| PathBuf::from("."));
     log_dir
         .to_str()
         .map(|s| s.to_string())

@@ -6,16 +6,18 @@ use dashmap::DashMap;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{NativePtySystem, PtySystem};
 use crate::infrastructure::session_backend::SessionBackend;
-use crate::infrastructure::ssh::{upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper};
-use crate::services::tmux::TmuxController;
+use crate::infrastructure::ssh::{
+    upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper,
+};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{
-    build_remote_image_path, AttachedTmuxServer, LocalSessionConfig, SessionInfo,
-    SessionLoggingConfig, SplitDirection, SSHSessionConfig, TmuxCcConfig, tmux_pane_info,
+    build_remote_image_path, tmux_pane_info, AttachedTmuxServer, LocalSessionConfig,
+    SSHSessionConfig, SessionInfo, SessionLoggingConfig, SplitDirection, TmuxCcConfig,
 };
 use crate::services::local_session::create_local_session;
 use crate::services::session_log::start_session_logging;
 use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
+use crate::services::tmux::TmuxController;
 
 /// per-server outcome from
 /// [`SessionManager::auto_attach_on_startup`].
@@ -203,12 +205,7 @@ impl SessionManager {
     ) -> Result<SessionInfo, String> {
         let id = self.allocate_session_id();
 
-        let session = create_local_session(
-            self.pty_system.as_ref(),
-            config,
-            backend,
-            id,
-        )?;
+        let session = create_local_session(self.pty_system.as_ref(), config, backend, id)?;
 
         // Acknowledge the session's logging configuration. The wiring of the
         // output stream into the log writer is deferred to a follow-up wave;
@@ -229,12 +226,7 @@ impl SessionManager {
     ) -> Result<SessionInfo, String> {
         let id = self.allocate_session_id();
 
-        let wrapper = infra_create_ssh(
-            self.ssh_backend.as_ref(),
-            config,
-            backend,
-            id,
-        )?;
+        let wrapper = infra_create_ssh(self.ssh_backend.as_ref(), config, backend, id)?;
 
         // Acknowledge the session's logging configuration. See `create_local`
         // for the rationale on the deferred wiring.
@@ -263,12 +255,8 @@ impl SessionManager {
         backend: Arc<dyn AppBackend>,
     ) -> Result<SessionInfo, String> {
         let controller_id = self.allocate_controller_id();
-        let controller = TmuxController::spawn_local(
-            config,
-            backend,
-            self.ssh_backend.as_ref(),
-            controller_id,
-        )?;
+        let controller =
+            TmuxController::spawn_local(config, backend, self.ssh_backend.as_ref(), controller_id)?;
 
         let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
 
@@ -301,8 +289,7 @@ impl SessionManager {
             capabilities: CapabilityFlags::for_tmux(),
         };
 
-        self.tmux_controllers
-            .insert(controller_id, controller);
+        self.tmux_controllers.insert(controller_id, controller);
         let self_ref = self.insert_session(xsterm_id, ActiveSession::TmuxPane(Box::new(handle)));
         debug_assert_eq!(self_ref.id, xsterm_id);
 
@@ -358,8 +345,7 @@ impl SessionManager {
             capabilities: CapabilityFlags::for_tmux(),
         };
 
-        self.tmux_controllers
-            .insert(controller_id, controller);
+        self.tmux_controllers.insert(controller_id, controller);
         let self_ref = self.insert_session(xsterm_id, ActiveSession::TmuxPane(Box::new(handle)));
         debug_assert_eq!(self_ref.id, xsterm_id);
 
@@ -425,50 +411,50 @@ impl SessionManager {
     }
 
     /// re-attach every previously-attached tmux server.
-///
-/// Reads the supplied list of [`AttachedTmuxServer`]s (typically the
-/// contents of `attached_tmux.json`) and tries to attach to each one
-/// in order. Returns one [`AutoAttachOutcome`] per server so the
-/// frontend can show partial-failure UI without crashing on the first
-/// dead server.
-pub async fn auto_attach_on_startup(
-    &self,
-    servers: &[AttachedTmuxServer],
-    backend: Arc<dyn AppBackend>,
-) -> Vec<AutoAttachOutcome> {
-    let mut out = Vec::with_capacity(servers.len());
-    for server in servers {
-        let cfg = TmuxCcConfig {
-            name: None,
-            tmux_session_name: Some(server.session_name.clone()),
-            socket_name: server.socket_name.clone(),
-            base_config_id: None,
-            start_command: None,
-            env_config: None,
-            initial_rows: None,
-            initial_cols: None,
-            ssh: None,
-        };
-        let key = format!(
-            "{}::{}",
-            server.session_name,
-            server.socket_name.as_deref().unwrap_or("")
-        );
-        match self.attach_tmux(&cfg, backend.clone()).await {
-            Ok(info) => out.push(AutoAttachOutcome {
-                session_key: key,
-                info: Some(info),
-                error: None,
-            }),
-            Err(e) => out.push(AutoAttachOutcome {
-                session_key: key,
-                info: None,
-                error: Some(e),
-            }),
+    ///
+    /// Reads the supplied list of [`AttachedTmuxServer`]s (typically the
+    /// contents of `attached_tmux.json`) and tries to attach to each one
+    /// in order. Returns one [`AutoAttachOutcome`] per server so the
+    /// frontend can show partial-failure UI without crashing on the first
+    /// dead server.
+    pub async fn auto_attach_on_startup(
+        &self,
+        servers: &[AttachedTmuxServer],
+        backend: Arc<dyn AppBackend>,
+    ) -> Vec<AutoAttachOutcome> {
+        let mut out = Vec::with_capacity(servers.len());
+        for server in servers {
+            let cfg = TmuxCcConfig {
+                name: None,
+                tmux_session_name: Some(server.session_name.clone()),
+                socket_name: server.socket_name.clone(),
+                base_config_id: None,
+                start_command: None,
+                env_config: None,
+                initial_rows: None,
+                initial_cols: None,
+                ssh: None,
+            };
+            let key = format!(
+                "{}::{}",
+                server.session_name,
+                server.socket_name.as_deref().unwrap_or("")
+            );
+            match self.attach_tmux(&cfg, backend.clone()).await {
+                Ok(info) => out.push(AutoAttachOutcome {
+                    session_key: key,
+                    info: Some(info),
+                    error: None,
+                }),
+                Err(e) => out.push(AutoAttachOutcome {
+                    session_key: key,
+                    info: None,
+                    error: Some(e),
+                }),
+            }
         }
+        out
     }
-    out
-}
 
     /// Close every pane backed by `controller_id` and then tear down the
     /// tmux controller itself.
@@ -548,18 +534,17 @@ pub async fn auto_attach_on_startup(
 
         // Look up the parent pane session and extract its tmux pane id.
         let parent_tmux_pane_id = {
-            let parent_entry = self.sessions.get(&parent_xsterm_session_id).ok_or_else(|| {
-                format!(
-                    "parent session {parent_xsterm_session_id} not found in SessionManager"
-                )
-            })?;
+            let parent_entry = self
+                .sessions
+                .get(&parent_xsterm_session_id)
+                .ok_or_else(|| {
+                    format!("parent session {parent_xsterm_session_id} not found in SessionManager")
+                })?;
             parent_entry
                 .value()
                 .tmux_pane_id()
                 .ok_or_else(|| {
-                    format!(
-                        "parent session {parent_xsterm_session_id} is not a tmux pane session"
-                    )
+                    format!("parent session {parent_xsterm_session_id} is not a tmux pane session")
                 })?
                 .to_string()
         };
@@ -707,7 +692,8 @@ pub async fn auto_attach_on_startup(
             info: info.clone(),
             capabilities: CapabilityFlags::for_tmux(),
         };
-        let result = self.insert_session(xsterm_session_id, ActiveSession::TmuxPane(Box::new(handle)));
+        let result =
+            self.insert_session(xsterm_session_id, ActiveSession::TmuxPane(Box::new(handle)));
         debug_assert_eq!(result.id, xsterm_session_id);
 
         tracing::info!(
@@ -835,12 +821,7 @@ pub async fn auto_attach_on_startup(
 
     /// Upload an image file to the SSH server for the given session and return
     /// the remote path where it was stored.
-    pub fn upload_image(
-        &self,
-        id: u32,
-        filename: &str,
-        data: Vec<u8>,
-    ) -> Result<String, String> {
+    pub fn upload_image(&self, id: u32, filename: &str, data: Vec<u8>) -> Result<String, String> {
         let config = self.get_ssh_config(id)?;
         let remote_path = build_remote_image_path(filename)?;
 
@@ -1003,10 +984,7 @@ mod tests {
     }
 
     impl SshBackend for MockSshBackendM {
-        fn connect(
-            &self,
-            config: &SSHSessionConfig,
-        ) -> Result<SshConnectResult, String> {
+        fn connect(&self, config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
             self.connect(config)
         }
 
@@ -1026,7 +1004,9 @@ mod tests {
 
     impl Default for TestAppBackend {
         fn default() -> Self {
-            Self { emit_result: Ok(()) }
+            Self {
+                emit_result: Ok(()),
+            }
         }
     }
 
@@ -1062,10 +1042,7 @@ mod tests {
         }
         fn write(&self, data: &[u8]) -> Result<(), String> {
             self.write_called.fetch_add(1, Ordering::SeqCst);
-            self.write_data
-                .lock()
-                .unwrap()
-                .extend_from_slice(data);
+            self.write_data.lock().unwrap().extend_from_slice(data);
             Ok(())
         }
         fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
@@ -1123,8 +1100,10 @@ mod tests {
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_master_writer()
+                .returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader()
+                .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
         });
@@ -1137,7 +1116,17 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, Arc::new(mock_backend));
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
+            Arc::new(mock_backend),
+        );
 
         assert!(result.is_ok());
         let info = result.unwrap();
@@ -1158,7 +1147,14 @@ mod tests {
         let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { name: None, shell: Some("/usr/bin/zsh".to_string()), cwd: None, args: None, env_config: None, ..Default::default() },
+            LocalSessionConfig {
+                name: None,
+                shell: Some("/usr/bin/zsh".to_string()),
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
             Arc::new(mock_backend),
         );
 
@@ -1175,7 +1171,14 @@ mod tests {
         let manager = build_mock_manager(mock_pty_system);
 
         let result = manager.create_local(
-            LocalSessionConfig { name: None, shell: None, cwd: Some("/tmp".to_string()), args: None, env_config: None, ..Default::default() },
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: Some("/tmp".to_string()),
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
             Arc::new(mock_backend),
         );
 
@@ -1238,11 +1241,23 @@ mod tests {
     #[test]
     fn create_local_when_pty_open_fails_returns_err() {
         let mut mock_pty_system = MockPtySystemM::new();
-        mock_pty_system.expect_openpty().returning(|_| Err("PTY open failed".to_string()));
+        mock_pty_system
+            .expect_openpty()
+            .returning(|_| Err("PTY open failed".to_string()));
         let mock_backend = TestAppBackend::default();
         let manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, Arc::new(mock_backend));
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
+            Arc::new(mock_backend),
+        );
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PTY open failed");
@@ -1263,7 +1278,17 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, Arc::new(mock_backend));
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
+            Arc::new(mock_backend),
+        );
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -1285,7 +1310,17 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, Arc::new(mock_backend));
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
+            Arc::new(mock_backend),
+        );
         assert!(result.is_ok());
 
         let close_result = manager.close(result.unwrap().id);
@@ -1299,7 +1334,17 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, Arc::new(mock_backend));
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
+            Arc::new(mock_backend),
+        );
         assert!(result.is_ok());
 
         let info = result.unwrap();
@@ -1321,7 +1366,17 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, Arc::new(mock_backend));
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
+            Arc::new(mock_backend),
+        );
         assert!(result.is_ok());
 
         assert_eq!(manager.list().len(), 1);
@@ -1334,7 +1389,17 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = build_mock_manager(mock_pty_system);
 
-        let result = manager.create_local(LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() }, Arc::new(mock_backend));
+        let result = manager.create_local(
+            LocalSessionConfig {
+                name: None,
+                shell: None,
+                cwd: None,
+                args: None,
+                env_config: None,
+                ..Default::default()
+            },
+            Arc::new(mock_backend),
+        );
         assert!(result.is_ok());
         let info = result.unwrap();
 
@@ -1364,7 +1429,7 @@ mod tests {
                 exit_code: Arc::new(std::sync::Mutex::new(None)),
 
                 exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
-        })
+            })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1432,7 +1497,7 @@ mod tests {
                 exit_code: Arc::new(std::sync::Mutex::new(None)),
 
                 exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
-        })
+            })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1491,7 +1556,7 @@ mod tests {
                 exit_code: Arc::new(std::sync::Mutex::new(None)),
 
                 exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
-        })
+            })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1550,7 +1615,7 @@ mod tests {
                 exit_code: Arc::new(std::sync::Mutex::new(None)),
 
                 exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
-        })
+            })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1606,7 +1671,9 @@ mod tests {
     #[test]
     fn create_ssh_connection_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_| Err("Failed to connect".to_string()));
+        mock_ssh_backend
+            .expect_connect()
+            .returning(|_| Err("Failed to connect".to_string()));
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
@@ -1650,7 +1717,9 @@ mod tests {
     #[test]
     fn create_ssh_auth_error() {
         let mut mock_ssh_backend = MockSshBackendM::new();
-        mock_ssh_backend.expect_connect().returning(|_| Err("SSH auth failed".to_string()));
+        mock_ssh_backend
+            .expect_connect()
+            .returning(|_| Err("SSH auth failed".to_string()));
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
@@ -1709,7 +1778,7 @@ mod tests {
                 exit_code: Arc::new(std::sync::Mutex::new(None)),
 
                 exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
-        })
+            })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1722,36 +1791,47 @@ mod tests {
             next_controller_id: AtomicU32::new(1),
         };
 
-manager.create_local(
-            LocalSessionConfig { name: None, shell: None, cwd: None, args: None, env_config: None, ..Default::default() },
-            Arc::new(mock_backend.clone()),
-        ).expect("local session should be created");
+        manager
+            .create_local(
+                LocalSessionConfig {
+                    name: None,
+                    shell: None,
+                    cwd: None,
+                    args: None,
+                    env_config: None,
+                    ..Default::default()
+                },
+                Arc::new(mock_backend.clone()),
+            )
+            .expect("local session should be created");
 
-        manager.create_ssh(
-            SSHSessionConfig {
-                name: None,
-                host: "localhost".to_string(),
-                port: 22,
-                username: "testuser".to_string(),
-                auth_type: "password".to_string(),
-                password: Some("testpass".to_string()),
-                key_file: None,
-                passphrase: None,
-                term_type: None,
-                initial_rows: None,
-                initial_cols: None,
-                keepalive_interval: None,
-                connection_timeout: None,
-                tcp_nodelay: None,
-                so_keepalive: None,
-                null_packet_keepalive: None,
-                charset: None,
-                enable_compression: None,
-                known_hosts_path: None,
-                proxy_jump: None,
-            },
-            Arc::new(mock_backend.clone()),
-        ).expect("ssh session should be created");
+        manager
+            .create_ssh(
+                SSHSessionConfig {
+                    name: None,
+                    host: "localhost".to_string(),
+                    port: 22,
+                    username: "testuser".to_string(),
+                    auth_type: "password".to_string(),
+                    password: Some("testpass".to_string()),
+                    key_file: None,
+                    passphrase: None,
+                    term_type: None,
+                    initial_rows: None,
+                    initial_cols: None,
+                    keepalive_interval: None,
+                    connection_timeout: None,
+                    tcp_nodelay: None,
+                    so_keepalive: None,
+                    null_packet_keepalive: None,
+                    charset: None,
+                    enable_compression: None,
+                    known_hosts_path: None,
+                    proxy_jump: None,
+                },
+                Arc::new(mock_backend.clone()),
+            )
+            .expect("ssh session should be created");
 
         let infos = manager.list();
         assert_eq!(infos.len(), 2);
@@ -1869,8 +1949,10 @@ manager.create_local(
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_master_writer()
+                .returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader()
+                .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
         });
@@ -1885,9 +1967,7 @@ manager.create_local(
             shell: Some("/bin/sh".to_string()),
             cwd: None,
             args: None,
-            env_config: Some(EnvConfig {
-                env: Some(env),
-            }),
+            env_config: Some(EnvConfig { env: Some(env) }),
             ..Default::default()
         };
 
@@ -1897,10 +1977,7 @@ manager.create_local(
         let cmd_guard = captured_cmd.lock().unwrap();
         let cmd = cmd_guard.as_ref().expect("CommandBuilder was captured");
 
-        assert_eq!(
-            cmd.get_env("TEST_VAR"),
-            Some(OsStr::new("test_value_xyz"))
-        );
+        assert_eq!(cmd.get_env("TEST_VAR"), Some(OsStr::new("test_value_xyz")));
 
         assert!(cmd.get_env("PATH").is_some());
     }
@@ -1927,8 +2004,10 @@ manager.create_local(
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_master_writer()
+                .returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader()
+                .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
         });
@@ -1948,9 +2027,7 @@ manager.create_local(
             shell: Some("wsl.exe".to_string()),
             cwd: None,
             args: None,
-            env_config: Some(EnvConfig {
-                env: Some(env),
-            }),
+            env_config: Some(EnvConfig { env: Some(env) }),
             ..Default::default()
         };
 
@@ -2002,8 +2079,10 @@ manager.create_local(
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer().returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader().returning(|| Ok(Box::new(MockReadReturningZero)));
+            pair.expect_master_writer()
+                .returning(|| Ok(Box::new(MockWrite)));
+            pair.expect_master_reader()
+                .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
         });
@@ -2019,9 +2098,7 @@ manager.create_local(
             shell: Some("cmd.exe".to_string()),
             cwd: None,
             args: None,
-            env_config: Some(EnvConfig {
-                env: Some(env),
-            }),
+            env_config: Some(EnvConfig { env: Some(env) }),
             ..Default::default()
         };
 
@@ -2056,9 +2133,7 @@ manager.create_local(
     ) -> (
         Arc<crate::services::tmux::TmuxController>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
-        tokio::sync::mpsc::UnboundedSender<
-            crate::services::tmux::events::ControlEvent,
-        >,
+        tokio::sync::mpsc::UnboundedSender<crate::services::tmux::events::ControlEvent>,
     ) {
         use crate::infrastructure::app_backend::AppBackend;
         use crate::services::tmux::dispatch::spawn_dispatch_task;
@@ -2108,9 +2183,7 @@ manager.create_local(
         // split-result path (not the bootstrap path).
         controller.record_first_pane(1_000_001, "%5".to_string());
 
-        manager
-            .tmux_controllers
-            .insert(1, Arc::clone(&controller));
+        manager.tmux_controllers.insert(1, Arc::clone(&controller));
 
         // Insert a TmuxPane session for the parent so
         // `create_tmux_pane`'s `tmux_pane_id` lookup succeeds.
@@ -2140,10 +2213,12 @@ manager.create_local(
         tokio::time::sleep(std::time::Duration::from_millis(30)).await;
 
         dispatch_tx
-            .send(crate::services::tmux::events::ControlEvent::WindowPaneChanged {
-                window_id: "@7".to_string(),
-                pane_id: "%11".to_string(),
-            })
+            .send(
+                crate::services::tmux::events::ControlEvent::WindowPaneChanged {
+                    window_id: "@7".to_string(),
+                    pane_id: "%11".to_string(),
+                },
+            )
             .expect("dispatch channel must accept the synthetic reply");
 
         let info = tokio::time::timeout(std::time::Duration::from_secs(2), split_handle)
@@ -2161,12 +2236,19 @@ manager.create_local(
         // - the tmux pane id tmux confirmed via the reply,
         // - the matching controller id,
         // - is_hidden = false (user-driven split).
-        assert_eq!(info.id, 1_000_001, "controller must allocate the next xsterm id");
+        assert_eq!(
+            info.id, 1_000_001,
+            "controller must allocate the next xsterm id"
+        );
         assert_eq!(info.tmux_pane_id.as_deref(), Some("%11"));
         assert_eq!(info.tmux_controller_id, Some(1));
         assert!(!info.is_hidden, "user-driven splits must render normally");
         match info.session_type {
-            SessionType::TmuxCc { controller_id, pane_id, .. } => {
+            SessionType::TmuxCc {
+                controller_id,
+                pane_id,
+                ..
+            } => {
                 assert_eq!(controller_id, 1);
                 assert_eq!(pane_id, "%11");
             }
@@ -2233,15 +2315,14 @@ manager.create_local(
 
         // Kill the pane. The command must land on the controller's
         // stdin FIFO.
-        manager.kill_tmux_pane(1_000_001).expect("kill must succeed");
+        manager
+            .kill_tmux_pane(1_000_001)
+            .expect("kill must succeed");
 
-        let cmd = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            stdin_rx.recv(),
-        )
-        .await
-        .expect("kill command must arrive on stdin")
-        .expect("stdin channel must not be closed");
+        let cmd = tokio::time::timeout(std::time::Duration::from_millis(100), stdin_rx.recv())
+            .await
+            .expect("kill command must arrive on stdin")
+            .expect("stdin channel must not be closed");
         assert_eq!(
             cmd, "kill-pane -t %5\n",
             "kill_tmux_pane must queue the literal kill-pane command"
@@ -2316,9 +2397,7 @@ manager.create_local(
         controller.register_pane("%0".to_string(), 2_000_001);
         controller.record_first_pane(2_000_001, "%0".to_string());
 
-        manager
-            .tmux_controllers
-            .insert(2, Arc::clone(&controller));
+        manager.tmux_controllers.insert(2, Arc::clone(&controller));
 
         // Kick off `create_tmux_window` in the background. It will block
         // until we feed the dispatch task a `WindowAdd` + matching
@@ -2344,10 +2423,12 @@ manager.create_local(
 
         // Feed the matching WindowPaneChanged reply.
         dispatch_tx
-            .send(crate::services::tmux::events::ControlEvent::WindowPaneChanged {
-                window_id: "@3".to_string(),
-                pane_id: "%7".to_string(),
-            })
+            .send(
+                crate::services::tmux::events::ControlEvent::WindowPaneChanged {
+                    window_id: "@3".to_string(),
+                    pane_id: "%7".to_string(),
+                },
+            )
             .expect("dispatch channel must accept WindowPaneChanged");
 
         let info = tokio::time::timeout(std::time::Duration::from_secs(2), window_handle)
@@ -2405,17 +2486,17 @@ manager.create_local(
             })
             .unwrap();
         dispatch_tx_clone
-            .send(crate::services::tmux::events::ControlEvent::WindowPaneChanged {
-                window_id: "@11".to_string(),
-                pane_id: "%99".to_string(),
-            })
+            .send(
+                crate::services::tmux::events::ControlEvent::WindowPaneChanged {
+                    window_id: "@11".to_string(),
+                    pane_id: "%99".to_string(),
+                },
+            )
             .unwrap();
         // Yield so the dispatch task processes both events.
         tokio::time::sleep(std::time::Duration::from_millis(30)).await;
 
-        manager
-            .tmux_controllers
-            .insert(3, Arc::clone(&controller));
+        manager.tmux_controllers.insert(3, Arc::clone(&controller));
 
         // kill_tmux_window resolves the tmux window id from the
         // binding and writes `kill-window -t @11` to stdin.
@@ -2479,9 +2560,8 @@ manager.create_local(
 
         let manager_arc = Arc::new(manager);
         let manager_clone = Arc::clone(&manager_arc);
-        let capture_handle = tokio::spawn(async move {
-            manager_clone.capture_tmux_pane(20_000_001, 200).await
-        });
+        let capture_handle =
+            tokio::spawn(async move { manager_clone.capture_tmux_pane(20_000_001, 200).await });
 
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         dispatch_tx
@@ -2535,8 +2615,12 @@ manager.create_local(
         let manager = SessionManager::new();
         struct StubBackend;
         impl crate::infrastructure::app_backend::AppBackend for StubBackend {
-            fn emit(&self, _: &str, _: &serde_json::Value) -> Result<(), String> { Ok(()) }
-            fn emit_binary(&self, _: Vec<u8>) -> Result<(), String> { Ok(()) }
+            fn emit(&self, _: &str, _: &serde_json::Value) -> Result<(), String> {
+                Ok(())
+            }
+            fn emit_binary(&self, _: Vec<u8>) -> Result<(), String> {
+                Ok(())
+            }
             fn spawn(&self, _: Box<dyn FnOnce() + Send>) {}
         }
         let backend: Arc<dyn AppBackend> = Arc::new(StubBackend);

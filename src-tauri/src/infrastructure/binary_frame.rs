@@ -67,8 +67,7 @@ pub fn decode_session_output_header(frame: &[u8]) -> Option<(u32, usize, usize)>
         return None;
     }
     let session_id = u32::from_be_bytes([frame[2], frame[3], frame[4], frame[5]]);
-    let payload_len =
-        u32::from_be_bytes([frame[6], frame[7], frame[8], frame[9]]) as usize;
+    let payload_len = u32::from_be_bytes([frame[6], frame[7], frame[8], frame[9]]) as usize;
     Some((session_id, HEADER_LEN, payload_len))
 }
 

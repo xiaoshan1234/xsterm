@@ -4,7 +4,7 @@ use std::thread;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::ssh::{SshBackend, SshConnectResult, SshSessionWrapper};
 use crate::models::capabilities::CapabilityFlags;
-use crate::models::session::{SessionInfo, SessionType, SSHSessionConfig};
+use crate::models::session::{SSHSessionConfig, SessionInfo, SessionType};
 
 /// Create an SSH session and start a thread that forwards channel output to the
 /// frontend.
@@ -14,8 +14,14 @@ pub fn create_ssh_session(
     backend: Arc<dyn AppBackend>,
     session_id: u32,
 ) -> Result<SshSessionWrapper, String> {
-    let SshConnectResult { channel: _channel, write_tx, read_rx, resize_tx, exit_code: _exit_code, exit_code_tx: _ } =
-        ssh_backend.connect(&config)?;
+    let SshConnectResult {
+        channel: _channel,
+        write_tx,
+        read_rx,
+        resize_tx,
+        exit_code: _exit_code,
+        exit_code_tx: _,
+    } = ssh_backend.connect(&config)?;
 
     // Keep the channel alive for the lifetime of the session. It is never used
     // directly because reads/writes go through the dedicated channels above.
@@ -61,7 +67,11 @@ pub fn create_ssh_session(
                         "session-output",
                         &serde_json::json!([session_id, &data[..]]),
                     ) {
-                        tracing::error!("Failed to emit SSH output for session {}: {}", session_id, e);
+                        tracing::error!(
+                            "Failed to emit SSH output for session {}: {}",
+                            session_id,
+                            e
+                        );
                         break;
                     }
                 }
@@ -71,10 +81,8 @@ pub fn create_ssh_session(
                         session_id,
                         seen_data
                     );
-                    let _ = backend_clone.emit(
-                        "session-disconnected",
-                        &serde_json::json!(session_id),
-                    );
+                    let _ =
+                        backend_clone.emit("session-disconnected", &serde_json::json!(session_id));
                     break;
                 }
             }

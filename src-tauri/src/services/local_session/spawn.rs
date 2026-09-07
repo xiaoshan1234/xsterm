@@ -86,12 +86,7 @@ pub(super) fn spawn_output_forwarder(
                         break;
                     }
                 }
-                Err(e)
-                    if matches!(
-                        e.kind(),
-                        ErrorKind::WouldBlock | ErrorKind::Interrupted
-                    ) =>
-                {
+                Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) => {
                     continue;
                 }
                 Err(e) => {
@@ -162,10 +157,9 @@ pub(super) fn spawn_output_forwarder(
             };
 
             if !to_emit.is_empty() {
-                if let Err(e) = backend_clone.emit(
-                    "session-output",
-                    &serde_json::json!([session_id, to_emit]),
-                ) {
+                if let Err(e) =
+                    backend_clone.emit("session-output", &serde_json::json!([session_id, to_emit]))
+                {
                     tracing::error!("Failed to emit session output: {}", e);
                     break 'outer;
                 }
@@ -178,10 +172,8 @@ pub(super) fn spawn_output_forwarder(
                         "PTY EOF for session {} after data — shell exited",
                         session_id
                     );
-                    let _ = backend_clone.emit(
-                        "session-disconnected",
-                        &serde_json::json!(session_id),
-                    );
+                    let _ =
+                        backend_clone.emit("session-disconnected", &serde_json::json!(session_id));
                 } else {
                     tracing::debug!(
                         "Transient PTY EOF before data for session {}; retrying",

@@ -86,10 +86,7 @@ pub fn kill_pane(pane_id: &str) -> String {
 #[allow(dead_code)]
 pub fn new_window(session: &str, name: Option<&str>) -> String {
     match name {
-        Some(n) => format!(
-            "new-window -t {session} -n {}\n",
-            quote_arg(n)
-        ),
+        Some(n) => format!("new-window -t {session} -n {}\n", quote_arg(n)),
         None => format!("new-window -t {session}\n"),
     }
 }
@@ -117,10 +114,7 @@ pub fn kill_window(window_id: &str) -> String {
 
 /// `rename-window -t @<id> <new_name>` — rename the window.
 pub fn rename_window(window_id: &str, name: &str) -> String {
-    format!(
-        "rename-window -t {window_id} {}\n",
-        quote_arg(name)
-    )
+    format!("rename-window -t {window_id} {}\n", quote_arg(name))
 }
 
 /// `attach-session -c ""` — attach (and create if absent) the default
@@ -172,6 +166,41 @@ pub fn capture_pane(pane_id: &str, start_line: i32) -> String {
 #[allow(dead_code)]
 pub fn list_panes(window_id: &str) -> String {
     format!("list-panes -t {window_id}\n")
+}
+
+/// `list-panes` with an explicit `-F` format — used for the bootstrap
+/// state query right after `new-session -A` + `new-window`. The output
+/// rows start with a `%<pane_id>` (tab-separated) which the dispatch
+/// task's `classify_command_response` turns into a `PaneList` event.
+///
+/// `window_id` empty ⇒ no `-t`, lists every pane on the server (used as
+/// the default bootstrap query after a fresh `new-window`).
+/// `window_id` non-empty ⇒ `-t <window_id>` (used to refresh a specific
+/// window after a `WindowList`).
+pub fn list_panes_with_format(window_id: &str, format: &str) -> String {
+    if window_id.is_empty() {
+        format!("list-panes -F '{format}'\n")
+    } else {
+        format!("list-panes -t {window_id} -F '{format}'\n")
+    }
+}
+
+/// Default `list-panes -F` format covering every field `dispatch_event`
+/// needs to register a `PaneList` entry: id / window / session /
+/// active flag / width / height / cwd / title.
+pub const DEFAULT_PANE_LIST_FORMAT: &str =
+    "#{pane_id}\t#{window_id}\t#{session_id}\t#{pane_active}\t\
+     #{pane_width}\t#{pane_height}\t#{pane_current_path}\t#{pane_title}";
+
+/// Default `list-windows -F` format covering every field `WindowList`
+/// needs: id / session / name / active flag / layout.
+pub const DEFAULT_WINDOW_LIST_FORMAT: &str =
+    "#{window_id}\t#{session_id}\t#{window_name}\t#{window_active}\t#{window_layout}";
+
+/// Build a `list-windows` command for a session (or all sessions if
+/// empty).
+pub fn list_windows(session_id: &str) -> String {
+    list_panes_with_format(session_id, DEFAULT_WINDOW_LIST_FORMAT)
 }
 
 /// `list-sessions` — list every session on this server.
