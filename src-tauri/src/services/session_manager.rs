@@ -442,6 +442,7 @@ pub async fn auto_attach_on_startup(
             name: None,
             tmux_session_name: Some(server.session_name.clone()),
             socket_name: server.socket_name.clone(),
+            base_config_id: None,
             start_command: None,
             env_config: None,
             initial_rows: None,
@@ -1359,8 +1360,11 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
-            exit_code: Arc::new(std::sync::Mutex::new(None)),
-            })
+
+                exit_code: Arc::new(std::sync::Mutex::new(None)),
+
+                exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
+        })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1424,8 +1428,11 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
-            exit_code: Arc::new(std::sync::Mutex::new(None)),
-            })
+
+                exit_code: Arc::new(std::sync::Mutex::new(None)),
+
+                exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
+        })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1480,8 +1487,11 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
-            exit_code: Arc::new(std::sync::Mutex::new(None)),
-            })
+
+                exit_code: Arc::new(std::sync::Mutex::new(None)),
+
+                exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
+        })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1536,8 +1546,11 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
-            exit_code: Arc::new(std::sync::Mutex::new(None)),
-            })
+
+                exit_code: Arc::new(std::sync::Mutex::new(None)),
+
+                exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
+        })
         });
 
         let mock_backend = TestAppBackend::default();
@@ -1692,8 +1705,11 @@ mod tests {
                 write_tx,
                 read_rx,
                 resize_tx: None,
-            exit_code: Arc::new(std::sync::Mutex::new(None)),
-            })
+
+                exit_code: Arc::new(std::sync::Mutex::new(None)),
+
+                exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
+        })
         });
 
         let mock_backend = TestAppBackend::default();

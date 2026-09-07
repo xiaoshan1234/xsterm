@@ -123,6 +123,16 @@ pub fn rename_window(window_id: &str, name: &str) -> String {
     )
 }
 
+/// `attach-session -c ""` — attach (and create if absent) the default
+/// control session. Sent immediately after `refresh_client_control`
+/// at controller startup; without it, `tmux -CC new-session -d` on
+/// the server creates a detached session and the client never sees
+/// the `%session-changed` / `%window-add` / `%window-pane-changed`
+/// notifications needed to register the first pane (Bug 014).
+pub fn attach_session_create() -> String {
+    "attach-session -c \"\"\n".to_string()
+}
+
 /// `resize-pane -t %<pane_id> -x <cols> -y <rows>` — resize the pane to the
 /// given character dimensions. tmux updates the child process's TIOCSWINSZ
 /// and propagates a SIGWINCH down the pty chain.
@@ -195,6 +205,17 @@ pub fn refresh_client() -> String {
 /// with code 0 immediately after the initial `%begin` block.
 pub fn refresh_client_control() -> String {
     "refresh-client -C\n".to_string()
+}
+
+/// `list-panes -a -F "#{session_name} #{window_id} #{window_name} #{pane_id}"`
+/// — list every pane on the server, formatted for the bootstrap
+/// state query. We send this right after `new-window` because some
+/// tmux versions (notably OpenBSD base) don't push
+/// `%window-pane-changed` immediately when a window is created
+/// under control mode; the server's own state query is the only
+/// reliable way to learn the first pane id (Bug 016).
+pub fn list_panes_for_bootstrap() -> String {
+    "list-panes -a -F \"#{session_name} #{window_id} #{window_name} #{pane_id}\"\n".to_string()
 }
 
 #[cfg(test)]

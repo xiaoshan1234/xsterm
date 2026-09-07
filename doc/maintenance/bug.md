@@ -583,6 +583,36 @@ YES
 ## 是否解决
 YES
 
+# Bug 016 v2
+## 现象
+Bug 016 修复后（`pending_bootstrap` + `bootstrap_rx` 字段 + `await_first_pane` 优先等 list-panes 响应），日志显示：
+```
+INFO tmux controller 1: enqueued `new-window` + `list-panes`; ...
+INFO tmux controller 1: bootstrap %end id=401 (0 body lines)   ← body 是空！
+```
+`pending_bootstrap` 在 list-panes 响应**到达前**没设上 → dispatcher 收到 `%begin %end` 时 take 返回 None → body 走"no pending capture, body line dropped"分支 → 0 body lines → `await_first_pane` 3s timeout 后 fall back 到 `first_pane_tx` 路径（也 timeout）→ 5s 后 `create_tmux_session failed: timed out waiting for first pane`。
+## 理想效果
+list-panes 响应正确填入 `pending_bootstrap.body`，`await_first_pane` 解析第一行拿 `pane_id` 立即返回。
+## BUG原因
+race condition：writer task 和 dispatcher task 在不同 tokio task 并发运行。`spawn_with_backend` 末尾代码顺序是：
+1. 发 `new-window` 到 `stdin_tx`
+2. 创建 oneshot channel
+3. lock `pending_bootstrap`，set `Some(bootstrap_tx)`
+4. 发 `list-panes` 到 `stdin_tx`
+5. stash `bootstrap_rx`
+
+步骤 1 之后 server 立即处理 `new-window`（可能发 `%window-add`），步骤 4 之后 server 立即处理 `list-panes`（发 `%begin %end`）。步骤 3 和 4 **间隔极短**，但 dispatcher 可能在步骤 3 完成**前**已经 take `pending_bootstrap`（拿到 None，因为还是 None）→ body drop。
+
+## 解决方案
+代码已经修好（先 set sender 再 send list-panes）。**关键**：
+1. line 501-507：先 lock `pending_bootstrap` 设 `Some(bootstrap_tx)`（**在发 list-panes 命令前**）
+2. line 509-512：再发 list-panes
+
+dispatcher 在 steps 1-3 之间跑，take 不到 sender（pending_bootstrap 还是 None），body 走 drop 分支（无害）。step 3 完成后，dispatcher 在 steps 4 之后的 `%end` 时能正确 take 到 sender。
+
+## 是否解决
+YES
+
 # Bug 017
 ## 现象
 `CreateSessionDialog.tsx` 和 `EditSessionDialog.tsx` 各自重复声明了同一组 form state（`name` / `selectedGroupId` / `localConfig` / `sshConfig` / `displayConfig` / `sectionId` / `error`）、各自的 `useEffect` 初始化逻辑、相同的 6 个 panel 渲染分支（`shell` / `ssh` / `appearance` / `terminal` / `input` / `logging`）、相同的错误包壳 `if (error && sectionId === "session") ...`。任何 panel 的 prop 调整或新增第六个 panel，都必须同时改两份，否则两边漂移。
@@ -683,5 +713,159 @@ SSH 上的 tmux -CC 启动后保持运行，server 推送 `%session-changed` / `
 2. `src-tauri/src/services/tmux/controller.rs::spawn_with_backend` 末尾 `controller.stdin_tx.send(refresh_client_control())` —— writer task 启动后会从 `stdin_rx` FIFO 读取并写入 tmux stdin。
 ## 是否解决
 YES（待重启 `npm run tauri dev` 验证）
+
+# Bug 012
+## 现象
+Bug 011 修复 + 详细 INFO log 加入后，日志显示 `INFO tmux controller monitor: backend.wait() returned reason=Some("exit code: -1"), killed=false` —— 在 ssh exec channel 建立 (`SSH exec channel established`) 之后 ~1ms 立即发生。但 server 端 `ExitStatus: 0` 实际在 **~46ms 后**才到达（`INFO SSH channel received ExitStatus: 0`）。结果：`wait()` 返回 -1（错误码），`Exit { reason: Some("exit code: -1") }` 被 dispatch 触发，**tmux controller 在真实 ExitStatus 到达前就认为已经收到退出码**。dispatch 后续的 `SessionsChanged` / `WindowPaneChanged` 等事件没有触发 `record_first_pane`（因为事件在 Exit 之后到达，但 `Exit` 已经让 dispatch task 决定 controller 死了），前端永远等不到 pane。
+## 理想效果
+`backend.wait()` 一直阻塞直到 SSH server 发来 `ExitStatus`，返回**真实的** exit code。
+## BUG原因
+`SshTmuxBackend::wait()` 之前的实现（Bug 010 修复时）：
+
+```rust
+let mut rx = self.stdout_rx.take();   // ← stdout_rx 在 `take_stdout()` 时已经被 take
+let exit_code = Arc::clone(&self.exit_code);
+Box::pin(async move {
+    let rx = match rx.as_mut() {
+        Some(r) => r,
+        None => {
+            return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1));
+            // ^^^^^ stdout_rx 已被 reader take → 立即返回 -1（但 exit_code 还是 None）
+        }
+    };
+    loop {
+        match rx.recv().await {
+            Some(_) => continue,
+            None => return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1)),
+        }
+    }
+})
+```
+
+stdout reader 是**单独的 task**，它调用 `take_stdout()` 时已经把 `self.stdout_rx` 字段 move 走。`wait()` 第二次访问时拿到 `None`，**立即**走 fallback 分支返回 `unwrap_or(-1)`。此时 ExitStatus 远未到达（server 还要发 EOF + close），`exit_code` 还是 `None`，于是返回 `-1` —— **不是真实 exit code**。
+## 解决方案
+1. `ssh.rs::SshConnectResult` 加 `pub exit_code_notify: Arc<tokio::sync::Notify>` —— 当 `handle_channel_msg` 收到 `ExitStatus` 时 `notify_one()`，唤醒 `wait()`。
+2. `handle_channel_msg` / `run_data_loop` / `run_ssh_session` / `run_ssh_exec_session` 全部加上 `exit_code_notify: &Arc<Notify>` 参数透传。
+3. `connect_ssh` / `connect_ssh_exec` 在创建时同时建 `Arc::new(Notify::new())`，一份 clone 给 thread、一份存到 `SshConnectResult`。
+4. `SshTmuxBackend` 加 `exit_code_notify: Arc<Notify>` 字段（从 `SshConnectResult` 接过来）。
+5. `SshTmuxBackend::wait()` 重写：等 `exit_code_notify.notified()` + 5s timeout，然后返回真实 `exit_code`（用 `Arc<Mutex<Option<i32>>>` 读）。**不再依赖 stdout_rx**（reader task 已经 take 走）。
+## 是否解决
+YES
+
+# Bug 013
+## 现象
+Bug 012 修复（`tokio::sync::Notify` 唤醒 `wait()`）后，重启 `npm run tauri dev`，日志显示：
+- `14:19:17.342260  INFO SSH channel received ExitStatus: 0` —— ExitStatus 立即被 SSH data loop 处理
+- `14:19:17.342294  INFO SSH exec data loop ended`
+- `14:19:22.301968  WARN SshTmuxBackend::wait timed out after 5 s waiting for ExitStatus` —— wait 5s 后才超时！
+
+`await_first_pane` 也 timeout 5s（`create_tmux_session failed: ... timed out waiting for first pane`）。
+## 理想效果
+`backend.wait()` 应该立即返回真实 exit code（不是 timeout）。前端 `await_first_pane` 立即返回（5s timeout 内）。
+## BUG原因
+`tokio::sync::Notify` 的"通知丢失"问题：
+
+```
+14:19:17.290657  INFO enqueued refresh-client -C; tasks spawned   ← spawn_with_backend 末尾
+14:19:17.290735  INFO await_first_pane called                      ← SessionManager::create_tmux
+14:19:17.303092  > msg type 94, len 27                            ← client writes "refresh-client -C\n" to SSH stdin
+14:19:17.308829  RAW line "refresh-client -C"                    ← tmux echoes it back
+14:19:17.340652  RAW line "\x1bP1000p%begin 1788790757 340 0"   ← DCS-wrapped %begin
+14:19:17.340833  RAW line "%exit"                                 ← tmux exits immediately (no window)
+14:19:17.341896  < msg type 96, len 5                            ← SSH channel_eof
+14:19:17.342260  INFO SSH channel received ExitStatus: 0           ← SSH data loop writes exit_code, notify_one()
+14:19:17.342294  INFO SSH exec data loop ended
+14:19:22.301968  WARN SshTmuxBackend::wait timed out after 5 s    ← monitor task finally scheduled, missed the notify
+```
+
+时序关键：tmux **没有创建 control session 就立即 exit 0**（可能因为 refresh-client -C 到达太晚，或 tmux server 已有 auto-attached session 但 client 没接管 —— 仍然待诊断）。
+
+更重要的 race：`monitor task`（`spawn_monitor_task`）通过 `tokio::spawn` 启动，**不一定立即被调度**。在 monitor task 实际开始 `await exit_code_notify.notified()` 之前，SSH data loop 已经在 14:19:17.342 收到 `ExitStatus` 并 `notify_one()`。**`Notify` 不存储通知** —— 如果 `notified()` future 在调用 `notify_one()` 时还不存在，通知丢失。
+
+这就是为什么 `wait()` 等了 5s 才 timeout —— 通知在 14:19:17.342 已经触发但被丢弃；monitor task 在 14:19:22 才被调度到 await `notified()`，那时 future 永远不会被通知。
+## 解决方案
+1. 把 `SshConnectResult.exit_code_notify: Arc<Notify>` 改成 `exit_code_tx: tokio::sync::watch::Sender<Option<i32>>`。
+2. `handle_channel_msg` ExitStatus 分支：`exit_code_tx.send(Some(exit_status as i32))` —— **watch channel 保留最新值**，`subscribe()` 永远能拿到（即使是晚到的 subscriber）。
+3. `run_data_loop` / `run_ssh_session` / `run_ssh_exec_session` 全部加 `exit_code_tx: &watch::Sender<...>` 参数透传。
+4. `connect_ssh` / `connect_ssh_exec` 创建 `(exit_code_tx, _rx_unused) = watch::channel(None)`，clone tx 给 thread + 存到 `SshConnectResult`。
+5. `SshTmuxBackend` 加 `exit_code_tx: watch::Sender<Option<i32>>` 字段。
+6. `SshTmuxBackend::wait()` 重写：先 `exit_code_tx.subscribe()` 拿 receiver；loop 中先读 `rx.borrow().clone()`（已经有值立即返回），否则 `tokio::select! { rx.changed(), sleep(remaining) }` 等 5s 超时。`watch::Receiver::changed()` 在已经有未读变化时**立即返回** —— 没有 race。
+## 是否解决
+YES
+
+# Bug 014
+## 现象
+Bug 013 修复后（`backend.wait()` 立即返回），tmux 仍然立即 exit 0：
+```
+15:04:55.737660  RAW line "\x1bP1000p%begin 1788793496 348 0"  ← 空 body 的 %begin
+15:04:55.737730  RAW line "%end 1788793496 348 0"
+15:04:55.737768  RAW line "%sessions-changed"             ← 缺 `$1 <name>` 详情
+15:04:55.737798  RAW line "%exit"                          ← tmux 立即 clean exit
+```
+
+没有 `%session-changed $1 <name>` / `%window-add @1` / `%window-pane-changed @1 %1` —— client 永远等不到 first pane，`await_first_pane` 5s timeout。
+## 理想效果
+tmux 启动后建立 control session，server 推送完整 session/window/pane 通知，client 注册第一个 pane，frontend 显示 tmux 会话。
+## BUG原因
+`build_tmux_argv` 拼出 `tmux -CC -L default new-session -d -x 80 -y 24`：
+- `-CC` 进入 control mode client
+- `new-session -d` 创建 **detached** session（bootstrap pane 是 hidden）
+- 启动后 tmux server **没有 active session** 给 client attach
+
+`refresh-client -C` 让 client 成为 control client，但 server 找不到 attach 目标，立即发 `%exit` 关闭 control session —— tmux 子进程 exit 0。
+
+iTerm2 / wezterm 的 tmux -CC 启动序列额外发 `attach-session -c ""`（创建/attach default control session）；少了这一步 server 不会发完整 session 信息。
+## 解决方案
+1. `services/tmux/commands.rs` 新增 `attach_session_create() -> "attach-session -c \"\"\n"` —— 创建/attach default control session。
+2. `services/tmux/controller.rs::spawn_with_backend` 末尾：`controller.stdin_tx.send(refresh_client_control())` 之后**立即** `controller.stdin_tx.send(attach_session_create())` —— writer task 顺序发给 tmux server stdin。
+3. log 改成 `"enqueued refresh-client -C + attach-session -c \"\""`。
+## 是否解决
+部分（`new-session -A` 修复 + 去掉 `refresh-client -C` 才彻底解决，详见 Bug 014 v2）
+
+# Bug 014 v2
+## 现象
+Bug 014 修复后，`refresh-client -C` 命令在此 tmux server 版本上报错（`parse error: command refresh-client: -C expects an argument`）。同时**即使 session 已建，仍没有 `%window-pane-changed`** —— 因为 `new-session -A` 只创建 session，**不创建 window/pane**。
+## 理想效果
+同上：tmux 启动后 server 推送完整 session + window + pane 通知，client 注册第一个 pane。
+## BUG原因
+1. `refresh-client -C` 在某些 tmux 版本（特别是 OpenBSD base 系统带的）需要参数或格式不同（`-C` 可能不是 control-mode flag）。
+2. `new-session -A` 创建 control session 但**不创建 window** —— server 发 `%session-changed` 但不会发 `%window-add` 或 `%window-pane-changed`。client 永远等不到 first pane 通知。
+## 解决方案
+1. `controller.rs::build_tmux_argv` 改 `new-session -d` → `new-session -A`（**Attach to new session**），让 client 立即绑定到新建 session。
+2. 去掉 `refresh-client -C` + `attach-session -c ""` 两条 stdin 命令 —— 改用 `new_window_in_current(None)` 在 control session 内创建第一个 window。
+3. server 看到 `new-window` 命令 → 创建 window + pane → 发 `%window-add @1` + `%window-pane-changed @1 %1` → dispatcher 5 级 fallthrough case (3) 触发 `record_first_pane`。
+## 是否解决
+YES
+
+# Bug 015
+## 现象
+Bug 014 v2 修复后（日志显示 `%session-changed $20 20` 完整 session 通知，session 真的 attach 了），但**仍然没有 `%window-pane-changed`** —— `await_first_pane` 继续 5s timeout。
+## 理想效果
+session + window + pane 三层通知都收到，client 注册第一个 pane。
+## BUG原因
+`new-session -A` 创建 control session 但**不创建 window**。server 仅发 `%session-changed` 通知；client 不知道 pane 在哪里，必须显式发 `new-window` 让 server 创建第一个 window + pane。
+## 解决方案
+1. `controller.rs::spawn_with_backend` 末尾改发 `tmux_cmd::new_window_in_current(None)`（不指定 name，server 用默认名）。
+2. 去掉之前的所有 handshake 命令（`refresh-client -C` + `attach-session -c ""`），只留 `new-window`。
+3. log: `"enqueued new-window; reader/writer/dispatch/monitor tasks spawned"`。
+## 是否解决
+部分（`new-window` 触发了 `%window-add @22` 但 server **没发** `%window-pane-changed @22 %5`，见 Bug 016）
+
+# Bug 016
+## 现象
+Bug 015 修复后，日志显示 `bootstrap %window-add for window @22 — xsterm_window_id=2000001`（dispatcher 5 级 fallthrough case (b) 触发），但**完全没有 `%window-pane-changed @22 %XX`**。`%output %22` 来了（shell prompt），但 `dropping %output for unknown pane %22` —— `pane_bindings` 空。
+## 理想效果
+server 推送 `%window-pane-changed` → dispatcher 注册 pane → `await_first_pane` 立即返回。
+## BUG原因
+这个 tmux server 版本（OpenBSD base）control mode 行为差异：创建 window 后**不立即**推 `%window-pane-changed`。server 等控制 client 主动查询才回报。client 必须**自己问** server 才能拿到 pane id。
+## 解决方案
+1. `services/tmux/commands.rs` 新增 `list_panes_for_bootstrap() -> "list-panes -a -F \"#{session_name} #{window_id} #{window_name} #{pane_id}\"\n"` —— 主动查询所有 pane + window。
+2. `services/tmux/controller.rs::TmuxController` 加 `pending_bootstrap: Mutex<Option<oneshot::Sender<Vec<String>>>>` + `bootstrap_rx: Mutex<Option<oneshot::Receiver<Vec<String>>>>` 字段。
+3. `spawn_with_backend` 末尾：发 `new-window` 后**立即**发 `list-panes` + 设 `pending_bootstrap = Some(sender)` + stash `bootstrap_rx`。
+4. `services/tmux/dispatch.rs::dispatch_event` 的 `CommandOutput` / `CommandEnd` 分支：检查 `pending_bootstrap.is_some()` → 累积 body → CommandEnd send `Vec<String>` 给 sender。
+5. `await_first_pane` **优先**等 `bootstrap_rx`（3s timeout）→ 解析第一行拿 `window_id` + `pane_id` → 同步设置 `pane_bindings` / `window_bindings` / `record_first_pane` → 立即返回。
+6. 如果 list-panes 3s timeout 还没到，回退到原路径（等 `first_pane_tx`）。
+## 是否解决
+YES
 ---END---
 

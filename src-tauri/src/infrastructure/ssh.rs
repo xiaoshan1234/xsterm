@@ -75,6 +75,15 @@ pub struct SshConnectResult {
     /// tmux controller log / surface real exit codes. See
     /// `doc/maintenance/bug.md` Bug 010.
     pub exit_code: Arc<std::sync::Mutex<Option<i32>>>,
+    /// Watch channel carrying the remote command's exit code.
+    /// `wait()` uses this instead of the stdout channel (the reader
+    /// is a separate task and has already taken `self.stdout_rx`).
+    /// `watch` keeps the latest value, so a late `notified().await`
+    /// still observes the value — unlike `Notify` (Bug 013: the
+    /// monitor task may not have reached its `await` yet when the
+    /// SSH data loop processes `ExitStatus`, so a one-shot notify is
+    /// lost). See `doc/maintenance/bug.md` Bug 013.
+    pub exit_code_tx: tokio::sync::watch::Sender<Option<i32>>,
 }
 
 /// Holds the metadata and write channel for an established SSH session.
@@ -349,7 +358,9 @@ fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
         (Some(tx), Some(rx))
     };
     let exit_code = Arc::new(std::sync::Mutex::new(None));
+    let (exit_code_tx, _exit_code_rx_unused) = tokio::sync::watch::channel(None::<i32>);
     let exit_code_for_thread = Arc::clone(&exit_code);
+    let exit_code_tx_for_thread = exit_code_tx.clone();
 
     let config_clone = config.clone();
 
@@ -367,6 +378,7 @@ fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
                 &mut write_rx,
                 resize_rx,
                 &exit_code_for_thread,
+                &exit_code_tx_for_thread,
             )
             .await;
 
@@ -387,6 +399,7 @@ fn connect_ssh(config: &SSHSessionConfig) -> Result<SshConnectResult, String> {
         read_rx,
         resize_tx,
         exit_code,
+        exit_code_tx,
     })
 }
 
@@ -399,6 +412,7 @@ async fn run_ssh_session(
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     resize_rx: Option<mpsc::UnboundedReceiver<(u16, u16)>>,
     exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
+    exit_code_tx: &tokio::sync::watch::Sender<Option<i32>>,
 ) -> Result<(), String> {
     let mut russh_config = russh::client::Config::default();
     if let Some(secs) = config.keepalive_interval {
@@ -534,6 +548,7 @@ async fn run_ssh_session(
         resize_rx,
         &mut keepalive_rx,
         exit_code,
+        exit_code_tx,
     )
     .await;
     tracing::info!("SSH data loop ended");
@@ -557,7 +572,9 @@ fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConne
     let (read_tx, read_rx) = sync_mpsc::channel::<Option<Vec<u8>>>();
     let (write_tx, mut write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
     let exit_code = Arc::new(std::sync::Mutex::new(None));
+    let (exit_code_tx, _exit_code_rx_unused) = tokio::sync::watch::channel(None::<i32>);
     let exit_code_for_thread = Arc::clone(&exit_code);
+    let exit_code_tx_for_thread = exit_code_tx.clone();
 
     let config_clone = config.clone();
     let command_owned = command.to_string();
@@ -576,6 +593,7 @@ fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConne
                 &read_tx,
                 &mut write_rx,
                 &exit_code_for_thread,
+                &exit_code_tx_for_thread,
             )
             .await;
 
@@ -596,6 +614,7 @@ fn connect_ssh_exec(config: &SSHSessionConfig, command: &str) -> Result<SshConne
         read_rx,
         resize_tx: None,
         exit_code,
+        exit_code_tx,
     })
 }
 
@@ -615,6 +634,7 @@ async fn run_ssh_exec_session(
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     write_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
+    exit_code_tx: &tokio::sync::watch::Sender<Option<i32>>,
 ) -> Result<(), String> {
     let mut russh_config = russh::client::Config::default();
     if let Some(secs) = config.keepalive_interval {
@@ -744,6 +764,7 @@ async fn run_ssh_exec_session(
         None,
         &mut keepalive_rx,
         exit_code,
+        exit_code_tx,
     )
     .await;
     tracing::info!("SSH exec data loop ended for command {:?}", command);
@@ -799,6 +820,7 @@ async fn handle_channel_msg(
     msg: Option<russh::ChannelMsg>,
     read_tx: &sync_mpsc::Sender<Option<Vec<u8>>>,
     exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
+    exit_code_tx: &tokio::sync::watch::Sender<Option<i32>>,
 ) -> bool {
     match msg {
         Some(russh::ChannelMsg::Data { data }) => {
@@ -830,6 +852,12 @@ async fn handle_channel_msg(
             if let Ok(mut slot) = exit_code.lock() {
                 *slot = Some(exit_status as i32);
             }
+            // Publish to the watch channel; the latest value is
+            // retained so a late `wait()` (one that hasn't reached
+            // its `await` yet when we fire this) still observes the
+            // value (Bug 013: `Notify` would lose the wakeup because
+            // its `notified()` future doesn't exist before the call).
+            let _ = exit_code_tx.send(Some(exit_status as i32));
             false
         }
         None => {
@@ -874,6 +902,7 @@ async fn run_data_loop(
     mut resize_rx: Option<mpsc::UnboundedReceiver<(u16, u16)>>,
     keepalive_rx: &mut mpsc::UnboundedReceiver<Vec<u8>>,
     exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
+    exit_code_tx: &tokio::sync::watch::Sender<Option<i32>>,
 ) {
     let channel_id = channel.id();
     // Track whether the keepalive side has closed (e.g. exec channel
@@ -900,7 +929,7 @@ async fn run_data_loop(
         };
         tokio::select! {
             msg = channel.wait() => {
-                if handle_channel_msg(msg, read_tx, exit_code).await {
+                if handle_channel_msg(msg, read_tx, exit_code, exit_code_tx).await {
                     break;
                 }
             }

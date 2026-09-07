@@ -293,6 +293,21 @@ pub struct TmuxController {
     /// body lines being assembled for the in-flight capture.
     /// Reset to empty on each `CommandBegin` and drained on `CommandEnd`.
     pub(crate) pending_capture_body: std::sync::Mutex<Vec<String>>,
+    /// Bootstrap pane discovery: when set, the next `%begin..%end`
+    /// block (e.g. from a `list-panes` command sent right after
+    /// `new-session -A` + `new-window`) is captured and delivered to
+    /// this sender. Used by `spawn_with_backend` to learn the first
+    /// pane id on tmux versions that don't push `%window-pane-changed`
+    /// in time (Bug 016).
+    pub(crate) pending_bootstrap: std::sync::Mutex<Option<oneshot::Sender<Vec<String>>>>,
+    /// Receiver side of the bootstrap list-panes query. `await_first_pane`
+    /// awaits this first; if the bootstrap answer arrives in time it
+    /// registers the first pane from the list-panes output and returns
+    /// immediately, without waiting for `%window-pane-changed` from
+    /// the server. Lives here (rather than in `spawn_with_backend`) so
+    /// it can be `.await`ed from the async `await_first_pane` method.
+    pub(crate) bootstrap_rx:
+        std::sync::Mutex<Option<oneshot::Receiver<Vec<String>>>>,
     /// tokio mutex serialising concurrent `capture_pane` callers
     /// so two requests never overlap their `%begin..%end` block.
     capture_lock: tokio::sync::Mutex<()>,
@@ -448,6 +463,8 @@ impl TmuxController {
             // after construction via the returned Arc.
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -466,10 +483,43 @@ impl TmuxController {
         // initial `%begin` block, so we push it onto the writer
         // task's FIFO *before* returning — the writer task is the
         // sole owner of `stdin_rx`, and `stdin_tx.send` is non-blocking.
+        // Bug 015: server creates the control session (via
+        // `new-session -A` in the `tmux -CC` argv) but does NOT
+        // automatically create a window/pane. We must explicitly
+        // `new-window` to trigger `%window-add` + `%window-pane-changed`
+        // notifications needed to register the first pane.
         controller
             .stdin_tx
-            .send(tmux_cmd::refresh_client_control())
-            .map_err(|e| format!("failed to enqueue refresh-client -C: {e}"))?;
+            .send(tmux_cmd::new_window_in_current(None))
+            .map_err(|e| format!("failed to enqueue new-window: {e}"))?;
+
+        // Bug 016: some tmux versions (notably OpenBSD base) don't push
+        // `%window-pane-changed` reliably when a window is created
+        // under control mode. We send `list-panes` and arrange for
+        // `await_first_pane` (which is async) to wait on the response
+        // and register the first pane from it.
+        let (bootstrap_tx, bootstrap_rx) = oneshot::channel::<Vec<String>>();
+        {
+            let mut slot = controller
+                .pending_bootstrap
+                .lock()
+                .map_err(|e| format!("failed to lock pending_bootstrap: {e}"))?;
+            *slot = Some(bootstrap_tx);
+        }
+        controller
+            .stdin_tx
+            .send(tmux_cmd::list_panes_for_bootstrap())
+            .map_err(|e| format!("failed to enqueue list-panes: {e}"))?;
+        // Stash the receiver on the controller for `await_first_pane`
+        // to consume (it's a `tokio::sync::oneshot::Receiver` so it
+        // needs to live in a `Send + Sync` slot).
+        if let Ok(mut slot) = controller.bootstrap_rx.lock() {
+            *slot = Some(bootstrap_rx);
+        }
+        tracing::info!(
+            "tmux controller {}: enqueued `new-window` + `list-panes`; reader/writer/dispatch/monitor tasks spawned",
+            controller_id
+        );
 
         Ok(controller)
     }
@@ -761,6 +811,74 @@ impl TmuxController {
     /// cached first-pane result if available, otherwise the same timeout
     /// error.
     pub async fn await_first_pane(&self) -> Result<(u32, String), String> {
+        tracing::info!(
+            "tmux controller {}: await_first_pane called (will block up to {:?}s waiting for record_first_pane from dispatcher)",
+            self.controller_id,
+            AWAIT_FIRST_PANE_TIMEOUT.as_secs()
+        );
+
+        // Bug 016: prefer the bootstrap list-panes answer when it's
+        // available. The spawn_with_backend enqueued a `list-panes`
+        // command right after `new-window` and stashed the receiver
+        // here; if the server responds in time, parse the first
+        // pane id directly, register it, and send the first-pane
+        // signal. The dispatcher's CommandEnd branch already wrote
+        // the raw body to this receiver; we just consume it.
+        //
+        // Important: take the receiver out of the Mutex **before**
+        // awaiting so the non-Send `MutexGuard` doesn't survive
+        // across the `.await` (Tauri command handlers need `Send`
+        // futures).
+        let bootstrap_rx = if let Ok(mut slot) = self.bootstrap_rx.lock() {
+            slot.take()
+        } else {
+            None
+        };
+        if let Some(rx) = bootstrap_rx {
+            match tokio::time::timeout(Duration::from_secs(3), rx).await {
+                Ok(Ok(lines)) => {
+                    if let Some(first_line) = lines.first() {
+                        let parts: Vec<&str> =
+                            first_line.split_whitespace().collect();
+                        if parts.len() == 4 {
+                            let (_session, window, _wname, pane) =
+                                (parts[0], parts[1], parts[2], parts[3]);
+                            let xsterm_id = self.allocate_xsterm_id();
+                            let xsterm_wid = self.allocate_xsterm_window_id();
+                            self.register_pane(pane.to_string(), xsterm_id);
+                            self.record_pane_window(
+                                pane.to_string(),
+                                window.to_string(),
+                            );
+                            if let Ok(mut bindings) = self.window_bindings.lock()
+                            {
+                                bindings.insert(window.to_string(), xsterm_wid);
+                            }
+                            self.record_first_pane(xsterm_id, pane.to_string());
+                            tracing::info!(
+                                "tmux controller {}: await_first_pane resolved via list-panes bootstrap (pane={})",
+                                self.controller_id,
+                                pane
+                            );
+                            return Ok((xsterm_id, pane.to_string()));
+                        }
+                        tracing::warn!(
+                            "tmux controller {}: bootstrap list-panes line has unexpected shape: {:?}",
+                            self.controller_id,
+                            first_line
+                        );
+                    }
+                }
+                Ok(Err(_)) => {}
+                Err(_) => {
+                    tracing::warn!(
+                        "tmux controller {}: bootstrap list-panes timed out after 3 s; falling back to record_first_pane",
+                        self.controller_id
+                    );
+                }
+            }
+        }
+
         // Take the receiver (one-shot). If already taken, return an error.
         let rx = {
             let mut guard = self.first_pane_rx.lock().await;
@@ -1185,6 +1303,8 @@ impl TmuxController {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             // 5 s mirrors the production SPLIT_PANE_TIMEOUT (kept in
@@ -1216,9 +1336,20 @@ impl TmuxController {
     /// of [`TmuxController::await_first_pane`]. Idempotent: subsequent
     /// calls are no-ops.
     pub(crate) fn record_first_pane(&self, xsterm_id: u32, pane_id: String) {
+        tracing::info!(
+            "tmux controller {}: record_first_pane(xsterm_id={}, pane_id={:?}) called by dispatcher",
+            self.controller_id,
+            xsterm_id,
+            pane_id
+        );
         if let Ok(mut slot) = self.first_pane_tx.lock() {
             if let Some(tx) = slot.take() {
                 let _ = tx.send((xsterm_id, pane_id));
+            } else {
+                tracing::warn!(
+                    "tmux controller {}: first_pane_tx already consumed (await_first_pane may have already returned)",
+                    self.controller_id
+                );
             }
         }
     }
@@ -1262,7 +1393,11 @@ fn build_tmux_argv(config: &TmuxCcConfig) -> Result<Vec<String>, String> {
     argv.push(socket.to_string());
 
     argv.push("new-session".to_string());
-    argv.push("-d".to_string());
+    // `-A` (attach) instead of `-d` (detached) so the control-mode
+    // client is bound to the newly created session immediately. With
+    // `-d` tmux creates a detached session and the server closes the
+    // control session as soon as `refresh-client -C` arrives (Bug 014).
+    argv.push("-A".to_string());
 
     if let Some(session_name) = config.tmux_session_name.as_deref() {
         argv.push("-s".to_string());
@@ -1349,9 +1484,19 @@ where
     tokio::spawn(async move {
         let mut parser = ControlParser::new();
         let mut lines = BufReader::new(stdout).lines();
+        tracing::info!("tmux reader: task started");
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
+                    // DEBUG AID: log every raw byte tmux emits so we can
+                    // diagnose wire-protocol mismatches from the rolling
+                    // log without re-running with a debugger.
+                    tracing::info!(
+                        "tmux reader: RAW line ({} bytes, hex preview {:?}): {:?}",
+                        line.len(),
+                        preview_hex(&line, 64),
+                        line
+                    );
                     // Strip DCS passthrough markers so the parser sees
                     // a clean `%xxx` line stream. See the function
                     // doc above for the byte sequence.
@@ -1361,7 +1506,18 @@ where
                         .strip_prefix(DCS_START)
                         .unwrap_or(&line)
                         .trim_end_matches(DCS_END);
+                    let was_dcs = stripped.as_ptr() != line.as_ptr()
+                        || stripped.len() != line.len();
+                    tracing::info!(
+                        "tmux reader: stripped line (DCS {}): {:?}",
+                        if was_dcs { "yes" } else { "no" },
+                        stripped
+                    );
                     if let Some(event) = parser.feed(stripped) {
+                        tracing::info!(
+                            "tmux reader: parser emitted event: {:?}",
+                            event
+                        );
                         if dispatch_tx.send(event).is_err() {
                             tracing::debug!("tmux reader: dispatch channel closed, exiting");
                             break;
@@ -1369,7 +1525,7 @@ where
                     }
                 }
                 Ok(None) => {
-                    tracing::debug!("tmux reader: stdout EOF");
+                    tracing::info!("tmux reader: stdout EOF (tmux closed pipe or exited)");
                     break;
                 }
                 Err(e) => {
@@ -1378,7 +1534,28 @@ where
                 }
             }
         }
+        tracing::info!("tmux reader: task exiting");
     });
+}
+
+/// First `max_bytes` of `s` rendered as escaped hex (each byte
+/// `"\\xNN"`), used by `spawn_reader_task` for a compact diagnostic
+/// preview of long lines without flooding the rolling log.
+fn preview_hex(s: &str, max_bytes: usize) -> String {
+    let bytes = s.as_bytes();
+    let take = bytes.len().min(max_bytes);
+    let mut out = String::with_capacity(take * 4 + 8);
+    for &b in &bytes[..take] {
+        if b.is_ascii_graphic() || b == b' ' {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("\\x{:02x}", b));
+        }
+    }
+    if bytes.len() > take {
+        out.push_str(&format!("…(+{} bytes)", bytes.len() - take));
+    }
+    out
 }
 
 /// Spawn the stdin writer task.
@@ -1452,6 +1629,11 @@ fn spawn_monitor_task(
             Ok(code) => Some(format!("exit code: {code}")),
             Err(e) => Some(format!("wait error: {e}")),
         };
+        tracing::info!(
+            "tmux controller monitor: backend.wait() returned reason={:?}, killed={}",
+            reason,
+            killed.load(Ordering::SeqCst)
+        );
         if !killed.load(Ordering::SeqCst) {
             let _ = dispatch_tx.send(ControlEvent::Exit { reason });
         }
@@ -1698,6 +1880,7 @@ mod tests {
             name: None,
             tmux_session_name: Some("work".to_string()),
             socket_name: Some("dev".to_string()),
+            base_config_id: None,
             start_command: None,
             env_config: None,
             initial_rows: Some(40),
@@ -1711,7 +1894,7 @@ mod tests {
         assert_eq!(argv_refs[1], "-L");
         assert_eq!(argv_refs[2], "dev");
         assert_eq!(argv_refs[3], "new-session");
-        assert_eq!(argv_refs[4], "-d");
+        assert_eq!(argv_refs[4], "-A");
         assert_eq!(argv_refs[5], "-s");
         assert_eq!(argv_refs[6], "work");
         assert_eq!(argv_refs[7], "-x");
@@ -1760,6 +1943,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -1814,6 +1999,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -1853,6 +2040,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -1920,6 +2109,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2022,6 +2213,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2106,6 +2299,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2142,6 +2337,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2184,6 +2381,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2233,6 +2432,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2297,6 +2498,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2356,6 +2559,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2416,6 +2621,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2515,6 +2722,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2570,6 +2779,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2619,6 +2830,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2688,6 +2901,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2821,6 +3036,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2922,6 +3139,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3018,6 +3237,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3086,6 +3307,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3153,6 +3376,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3212,6 +3437,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3272,6 +3499,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3319,6 +3548,8 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
+            pending_bootstrap: std::sync::Mutex::new(None),
+            bootstrap_rx: std::sync::Mutex::new(None),
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,

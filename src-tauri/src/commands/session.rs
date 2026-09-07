@@ -153,14 +153,27 @@ pub async fn create_tmux_session(
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     tracing::info!(
-        "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?}",
+        "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?} base_config_id={:?} has_ssh={}",
         config.name,
         config.tmux_session_name,
         config.socket_name,
+        config.base_config_id,
+        config.ssh.is_some()
     );
     let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
     let dyn_backend: Arc<dyn AppBackend> = arc_real;
     let result = state.create_tmux(&config, dyn_backend).await;
+    if let Err(ref e) = result {
+        tracing::error!(
+            "create_tmux_session failed: {} (config was: name={:?}, tmux_session={:?}, socket={:?}, base_config_id={:?}, has_ssh={})",
+            e,
+            config.name,
+            config.tmux_session_name,
+            config.socket_name,
+            config.base_config_id,
+            config.ssh.is_some()
+        );
+    }
     if result.is_ok() {
         // refresh `attached_tmux.json` with the up-to-date list.
         // Best-effort: a transient store failure must not mask a successful

@@ -41,6 +41,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::thread;
+use std::time::Duration;
 
 use futures_core::future::BoxFuture;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -219,6 +220,12 @@ pub struct SshTmuxBackend {
     ///
     /// [`wait`]: TmuxBackend::wait
     exit_code: Arc<std::sync::Mutex<Option<i32>>>,
+    /// Notified when `exit_code` is populated. `wait()` cannot rely
+    /// on the stdout channel closing as its wait signal (the stdout
+    /// reader is a separate task and has already taken
+    /// `self.stdout_rx`), so it needs an explicit notification that
+    /// "ExitStatus has been received" (Bug 012).
+    exit_code_tx: tokio::sync::watch::Sender<Option<i32>>,
 }
 
 /// Bundles the lifetime-tied bits of an [`SshTmuxBackend`] — the
@@ -248,6 +255,7 @@ impl SshTmuxBackend {
             read_rx,
             resize_tx: _resize_tx,
             exit_code,
+            exit_code_tx,
         } = result;
 
         // Spawn the bridge thread: read from the SSH `sync_mpsc`,
@@ -284,6 +292,7 @@ impl SshTmuxBackend {
             stdin_tx: write_tx,
             stderr_rx: Some(stderr_rx),
             exit_code,
+            exit_code_tx,
             _lifetime: SshBackendLifetime {
                 _channel: channel,
                 _keepalive_unused_tx: keepalive_tx,
@@ -321,34 +330,55 @@ impl TmuxBackend for SshTmuxBackend {
     }
 
     fn wait(&mut self) -> BoxFuture<'_, Result<i32, String>> {
-        // Reuse `tokio_rx` if stdout hasn't been taken yet — we own
-        // the EOF signal. Once `take_stdout` was called, fall back to
-        // a "channel closed" sentinel (the reader task observing EOF
-        // is itself the wait signal in practice; `close()` calls
-        // `kill()` and the dispatch task picks up the orphan state).
-        //
-        // On EOF (the `recv() -> None` branch) we return the captured
-        // exit code if the SSH data loop has stored one — that lets
-        // the tmux controller distinguish a clean tmux exit (0) from
-        // a startup failure (non-zero). When the data loop never
-        // reported an exit code (e.g. the channel was closed via
-        // `kill()` instead of letting tmux exit normally) we fall
-        // back to `-1` so the caller can still detect "unknown".
-        let mut rx = self.stdout_rx.take();
+        // Wait until the SSH data loop observes
+        // `SSH_MSG_CHANNEL_EXIT_STATUS` and writes the captured exit
+        // code into `self.exit_code`. The stdout reader is a separate
+        // task and has already taken `self.stdout_rx`, so this
+        // `wait()` cannot use stdout EOF as its completion signal —
+        // the explicit `exit_code_notify` is the only reliable signal
+        // (Bug 012: the previous implementation returned
+        // `unwrap_or(-1)` immediately after the reader task took
+        // stdout_rx, masking the real exit code as 0/127). A bounded
+        // 5 s timeout is used so a server that never sends
+        // ExitStatus (rare; OpenSSH always does) does not hang
+        // forever.
         let exit_code = Arc::clone(&self.exit_code);
+        let mut exit_code_rx = self.exit_code_tx.subscribe();
+        let _stdout_rx = self.stdout_rx.take();
         Box::pin(async move {
-            let rx = match rx.as_mut() {
-                Some(r) => r,
-                None => {
-                    // stdout was already consumed — fall back to the
-                    // stored exit code only.
+            // Poll the watch channel: if the value is already Some
+            // (e.g. ExitStatus was processed before the monitor task
+            // reached its `await`), return immediately. Otherwise
+            // `changed().await` until a value arrives or the 5 s
+            // deadline elapses. The watch channel retains the latest
+            // value across `subscribe()` (Bug 013: a one-shot `Notify`
+            // would lose the wakeup if the data loop fired before
+            // this future was created).
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                if let Some(code) = exit_code_rx.borrow().clone() {
+                    return Ok(code);
+                }
+                let now = tokio::time::Instant::now();
+                if now >= deadline {
+                    tracing::warn!(
+                        "SshTmuxBackend::wait timed out after 5 s waiting for ExitStatus"
+                    );
                     return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1));
                 }
-            };
-            loop {
-                match rx.recv().await {
-                    Some(_) => continue,
-                    None => return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1)),
+                let remaining = deadline - now;
+                tokio::select! {
+                    res = exit_code_rx.changed() => {
+                        if res.is_err() {
+                            return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1));
+                        }
+                    }
+                    _ = tokio::time::sleep(remaining) => {
+                        tracing::warn!(
+                            "SshTmuxBackend::wait timed out after 5 s waiting for ExitStatus"
+                        );
+                        return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1));
+                    }
                 }
             }
         })
@@ -624,6 +654,7 @@ mod tests {
             read_rx,
             resize_tx: Some(_resize_tx),
             exit_code: Arc::new(std::sync::Mutex::new(None)),
+            exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
         };
         let mut backend = SshTmuxBackend::from_connect_result(result);
 
@@ -655,6 +686,7 @@ mod tests {
             read_rx,
             resize_tx: Some(_resize_tx),
             exit_code: Arc::new(std::sync::Mutex::new(None)),
+            exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
         };
         let mut backend = SshTmuxBackend::from_connect_result(result);
 
@@ -679,6 +711,7 @@ mod tests {
             read_rx,
             resize_tx: Some(_resize_tx),
             exit_code: Arc::new(std::sync::Mutex::new(None)),
+            exit_code_tx: tokio::sync::watch::channel(None::<i32>).0,
         };
         let mut backend = SshTmuxBackend::from_connect_result(result);
 

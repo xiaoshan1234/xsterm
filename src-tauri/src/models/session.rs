@@ -265,6 +265,14 @@ pub struct TmuxCcConfig {
     /// §4.4 D5 + §4.7 (the `ssh` field on `TmuxCcConfig`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh: Option<SSHSessionConfig>,
+    /// Frontend-only: id of the saved SSH or Local shell config this
+    /// tmux session rides on. `CreateSessionDialog.handleCreate`
+    /// looks the base config up and copies the SSH sub-config into
+    /// `ssh` above before the request reaches the backend. The
+    /// backend only uses `baseConfigId` for logging — the actual
+    // transport is determined by whether `ssh` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_config_id: Option<String>,
 }
 
 /// Build a [`SessionInfo`] for a tmux pane freshly registered with
@@ -1100,6 +1108,7 @@ mod tests {
             initial_rows: Some(40),
             initial_cols: Some(132),
             ssh: None,
+            base_config_id: None,
         };
 
         let json = serde_json::to_string(&config).expect("serialize TmuxCcConfig");

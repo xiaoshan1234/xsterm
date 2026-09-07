@@ -70,6 +70,11 @@ fn dispatch_event(
     controller_id: u32,
     event: ControlEvent,
 ) {
+    tracing::info!(
+        "tmux dispatch: controller {} received event: {:?}",
+        controller_id,
+        event
+    );
     match event {
         ControlEvent::Output { pane_id, data } => {
             if let Some(xsterm_id) = controller.xsterm_id_for_pane(&pane_id) {
@@ -548,12 +553,25 @@ fn dispatch_event(
             }
         }
         ControlEvent::CommandOutput { id, ref line } => {
+            // Route body lines to whichever consumer (capture-pane
+            // promise or bootstrap list-panes promise) is currently
+            // expecting them. Falls through to "no consumer, log and
+            // drop" if neither is set.
             let has_capture = controller
                 .pending_capture
                 .lock()
                 .map(|s| s.is_some())
                 .unwrap_or(false);
+            let has_bootstrap = controller
+                .pending_bootstrap
+                .lock()
+                .map(|s| s.is_some())
+                .unwrap_or(false);
             if has_capture {
+                if let Ok(mut body) = controller.pending_capture_body.lock() {
+                    body.push(line.clone());
+                }
+            } else if has_bootstrap {
                 if let Ok(mut body) = controller.pending_capture_body.lock() {
                     body.push(line.clone());
                 }
@@ -566,11 +584,14 @@ fn dispatch_event(
             }
         }
         ControlEvent::CommandEnd { id, .. } => {
-            let mut slot = match controller.pending_capture.lock() {
+            // Resolve whichever promise the end-block is for. If both
+            // are set (shouldn't happen — controller is sequential),
+            // capture wins because it has the longer history.
+            let mut capture_slot = match controller.pending_capture.lock() {
                 Ok(s) => s,
                 Err(_) => return,
             };
-            if let Some(tx) = slot.take() {
+            if let Some(tx) = capture_slot.take() {
                 let body = controller
                     .pending_capture_body
                     .lock()
@@ -583,6 +604,28 @@ fn dispatch_event(
                     controller_id,
                     id,
                     body.len()
+                );
+                return;
+            }
+            drop(capture_slot);
+            // No capture in flight — try the bootstrap consumer.
+            let mut bootstrap_slot = match controller.pending_bootstrap.lock() {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            if let Some(tx) = bootstrap_slot.take() {
+                let body = controller
+                    .pending_capture_body
+                    .lock()
+                    .map(|mut b| std::mem::take(&mut *b))
+                    .unwrap_or_default();
+                let body_len = body.len();
+                let _ = tx.send(body);
+                tracing::debug!(
+                    "tmux controller {}: bootstrap %end id={} ({} body lines)",
+                    controller_id,
+                    id,
+                    body_len
                 );
             } else {
                 tracing::debug!(
