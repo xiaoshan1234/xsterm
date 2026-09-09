@@ -701,7 +701,7 @@ fn parse_pane_list_row(line: &str) -> Option<PaneListRow> {
 fn emit_window_list(
     backend: &dyn AppBackend,
     session_id: u32,
-    _controller: &TmuxController,
+    controller: &TmuxController,
     cmd_id: u32,
     lines: &[String],
 ) {
@@ -712,6 +712,57 @@ fn emit_window_list(
     if entries.is_empty() {
         tracing::debug!("command {} body had no parseable list rows", cmd_id);
         return;
+    }
+    // Pre-populate `pending_window_pane` for every window we see in
+    // this list — the server won't fire `%window-add` for windows
+    // that already existed before this controller attached, so
+    // `emit_pane_list` needs entries to match against. Allocate a
+    // fresh `xsterm_window_id` for each window so panes from the
+    // following `list-panes -a` response can be bound to it.
+    let window_ids: std::collections::HashMap<String, u32> = if let Ok(mut pending) =
+        controller.pending_window_pane.lock()
+    {
+        entries
+            .iter()
+            .map(|e| {
+                let xsterm_wid = controller.allocate_xsterm_window_id();
+                pending.insert(
+                    e.window_id.clone(),
+                    super::controller::PendingWindow {
+                        xsterm_window_id: xsterm_wid,
+                        sender: None,
+                    },
+                );
+                (e.window_id.clone(), xsterm_wid)
+            })
+            .collect()
+    } else {
+        std::collections::HashMap::new()
+    };
+    // Emit one `tmux-window-added` per row — the frontend's
+    // `tmux-window-added` listener is idempotent and creates an
+    // xsterm Window for each one.
+    //
+    // `session_id` (the controller id) is used as the synthetic
+    // xsterm session id because `list-windows -a` reports windows from
+    // every session this controller is attached to (typically just
+    // one — the control-mode session) and we want all of those panes
+    // to share a single xsterm session in the React tree.
+    for entry in &entries {
+        let xsterm_wid = window_ids
+            .get(&entry.window_id)
+            .copied()
+            .unwrap_or(0);
+        let payload = serde_json::json!({
+            "controllerId": session_id,
+            "tmuxWindowId": entry.window_id,
+            "xstermWindowId": xsterm_wid,
+            "xstermSessionId": session_id,
+            "xstermPaneId": "",
+        });
+        if let Err(e) = backend.emit("tmux-window-added", &payload) {
+            tracing::error!("Failed to emit tmux-window-added: {}", e);
+        }
     }
     let payload = serde_json::json!({
         "cmd_id": cmd_id,
@@ -744,28 +795,70 @@ fn emit_pane_list(
         tracing::debug!("command {} body had no parseable list rows", cmd_id);
         return;
     }
-    // Best-effort: register the first pane with `await_first_pane` so
-    // the bootstrap path doesn't have to wait for
-    // `%window-pane-changed` (some tmux versions never send it).
-    if let Some(first) = entries.first() {
-        if let Ok(mut pending) = controller.pending_window_pane.lock() {
-            if let Some(pw) = pending.get_mut(&first.window_id) {
-                if pw.sender.is_none() {
-                    let xsterm_id = controller.allocate_xsterm_id();
-                    controller.register_pane(first.pane_id.clone(), xsterm_id);
-                    controller.record_pane_window(first.pane_id.clone(), first.window_id.clone());
-                    controller.record_first_pane(xsterm_id, first.pane_id.clone());
-                    if let Ok(mut bindings) = controller.window_bindings.lock() {
-                        bindings.insert(first.window_id.clone(), pw.xsterm_window_id);
-                    }
-                    tracing::info!(
-                        "bootstrap pane registered from list-panes: window={} pane={} xsterm_id={}",
-                        first.window_id,
-                        first.pane_id,
-                        xsterm_id
-                    );
-                }
-            }
+    // Look up the xsterm window id per tmux window id (populated by
+    // `emit_window_list`) and bind each pane to its window.
+    let window_to_xsterm: std::collections::HashMap<String, u32> =
+        if let Ok(bindings) = controller.window_bindings.lock() {
+            bindings.clone()
+        } else {
+            std::collections::HashMap::new()
+        };
+    // Best-effort: register every pane we see. The first one wakes
+    // `await_first_pane`; the rest are bound to their windows for
+    // `%output` routing via the `pane_bindings` map.
+    let mut first_registered = false;
+    for entry in &entries {
+        let xsterm_id = controller.allocate_xsterm_id();
+        controller.register_pane(entry.pane_id.clone(), xsterm_id);
+        controller.record_pane_window(entry.pane_id.clone(), entry.window_id.clone());
+        // Emit one `tmux-pane-added` per row — the frontend's
+        // `tmux-pane-added` listener is idempotent and creates an
+        // xsterm Session for each one. Using the controller id as the
+        // synthetic xsterm_session_id keeps all panes from this
+        // controller under a single xsterm session in the React tree.
+        let parent_window_id = entry.window_id.clone();
+        let xsterm_window_id = window_to_xsterm
+            .get(&entry.window_id)
+            .copied()
+            .unwrap_or(0);
+        let payload = serde_json::json!({
+            "controllerId": session_id,
+            "tmuxPaneId": entry.pane_id,
+            // IMPORTANT: `xstermSessionId` is the freshly allocated
+            // per-pane xsterm id, **not** `session_id` (the controller
+            // id). If we used the controller id here, every pane from
+            // this controller would share the same React Session and
+            // the frontend's idempotency check would short-circuit all
+            // but the first one. Each pane must own a unique
+            // xsterm_session_id so the frontend creates one Session
+            // node per pane — that's how the workspace tree shows the
+            // full server-side history.
+            "xstermSessionId": xsterm_id,
+            "parentTmuxWindowId": parent_window_id,
+        });
+        if let Err(e) = backend.emit("tmux-pane-added", &payload) {
+            tracing::error!("Failed to emit tmux-pane-added: {}", e);
+        }
+        if let Ok(mut pane_bindings) = controller.pane_bindings.lock() {
+            pane_bindings.insert(entry.pane_id.clone(), xsterm_id);
+        }
+        if !first_registered {
+            controller.record_first_pane(xsterm_id, entry.pane_id.clone());
+            first_registered = true;
+            tracing::info!(
+                "bootstrap first pane registered from list-panes: window={} pane={} xsterm_id={} xsterm_window_id={}",
+                entry.window_id,
+                entry.pane_id,
+                xsterm_id,
+                xsterm_window_id,
+            );
+        } else {
+            tracing::info!(
+                "bootstrap additional pane registered from list-panes: window={} pane={} xsterm_id={}",
+                entry.window_id,
+                entry.pane_id,
+                xsterm_id,
+            );
         }
     }
     let payload = serde_json::json!({

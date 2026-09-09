@@ -48,10 +48,37 @@ pub struct AutoAttachOutcome {
 /// the controller so the [`SessionBackend`] contract is honoured without
 /// duplicating the tmux wire format per pane.
 pub struct TmuxPaneHandle {
-    controller: Arc<TmuxController>,
-    tmux_pane_id: String,
-    info: SessionInfo,
-    capabilities: CapabilityFlags,
+    /// `pub(crate)` so [`dispatch`](crate::services::tmux::dispatch) can
+    /// construct a handle for a pane discovered via the bootstrap
+    /// `list-panes -a` query without going through `create_tmux_pane`
+    /// (which would issue an extra `split-window`). See
+    /// [`SessionManager::register_existing_tmux_panes`].
+    pub controller: Arc<TmuxController>,
+    pub tmux_pane_id: String,
+    pub info: SessionInfo,
+    pub capabilities: CapabilityFlags,
+}
+
+impl TmuxPaneHandle {
+    /// Construct a handle for an already-existing pane the dispatch task
+    /// learned about via the bootstrap `list-panes` query. Mirrors the
+    /// shape `create_tmux` / `create_tmux_pane` produce internally; the
+    /// only difference is no underlying `split-window`/`new-window`
+    /// round-trip — the pane was already created server-side before we
+    /// attached.
+    pub(crate) fn new(
+        controller: Arc<TmuxController>,
+        tmux_pane_id: String,
+        info: SessionInfo,
+        capabilities: CapabilityFlags,
+    ) -> Self {
+        Self {
+            controller,
+            tmux_pane_id,
+            info,
+            capabilities,
+        }
+    }
 }
 
 impl SessionBackend for TmuxPaneHandle {

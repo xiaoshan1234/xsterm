@@ -179,9 +179,9 @@ pub fn list_panes(window_id: &str) -> String {
 /// window after a `WindowList`).
 pub fn list_panes_with_format(window_id: &str, format: &str) -> String {
     if window_id.is_empty() {
-        format!("list-panes -F '{format}'\n")
+        format!("list-panes -a -F '{format}'\n")
     } else {
-        format!("list-panes -t {window_id} -F '{format}'\n")
+        format!("list-panes -a -t {window_id} -F '{format}'\n")
     }
 }
 
@@ -197,10 +197,12 @@ pub const DEFAULT_PANE_LIST_FORMAT: &str =
 pub const DEFAULT_WINDOW_LIST_FORMAT: &str =
     "#{window_id}\t#{session_id}\t#{window_name}\t#{window_active}\t#{window_layout}";
 
-/// Build a `list-windows` command for a session (or all sessions if
-/// empty).
-pub fn list_windows(session_id: &str) -> String {
-    list_panes_with_format(session_id, DEFAULT_WINDOW_LIST_FORMAT)
+/// Build a `list-windows -a` query so the bootstrap pass picks up
+/// every pre-existing window/pane on the server (not just the first).
+/// Without `-a` tmux only reports the current session's first window,
+/// so panes in other windows would be lost on the client side.
+pub fn list_windows(_session_id: &str) -> String {
+    format!("list-windows -a -F '{DEFAULT_WINDOW_LIST_FORMAT}'\n")
 }
 
 /// `list-sessions` — list every session on this server.

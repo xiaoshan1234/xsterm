@@ -88,11 +88,13 @@ export function TmuxForm({
 
         <FormTextField
           label="Tmux Session Name"
-          placeholder="leave blank to auto-generate"
+          placeholder="e.g. dev, work, session-1"
+          required
           value={config.tmuxSessionName}
           onChange={(tmuxSessionName) =>
             onConfigChange({ ...config, tmuxSessionName: tmuxSessionName ?? undefined })
           }
+          helperText="Required. The tmux server uses this as the session name; one tmux session always maps to one xsterm workspace."
         />
 
         <FormTextField

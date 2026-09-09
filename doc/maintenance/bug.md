@@ -886,5 +886,83 @@ Bug 016 修复时，spawn_with_backend 末尾发 `new-window` 后立即发 `list
 6. **dispatch.rs 加 handle_classified_response**：dispatch_event `CommandEnd` 时 classify body emit 相应事件 + WindowList → trigger list-panes follow-up
 7. **controller.rs 加 current_command_id / current_command_lines 字段**：dispatcher 累积 command body lines（按 id 区分）；CommandEnd 时 take 全部 + classify
 8. **await_first_pane bootstrap 分支删除**：直接 fall through 到 first_pane_tx wait（dispatcher 已 register_first_pane）
+## 为什么这个修复能工作（vs Bug 016 不工作的原因）
+
+Bug 016 失败的根因是**发送 list-panes 后立刻等响应**，但 server 端会先回 `%end 395`（new-window 响应的空 begin/end 块），dispatcher `CommandEnd id=395` 时 `take()` 走了 `pending_bootstrap` 的 oneshot sender 并发了**空 body** 回去。`%end 401`（list-panes 响应）来时 sender 已 None → "no consumer" → body 丢 → `await_first_pane` 等不到 sender → 5s timeout。Bug 016 的 oneshot 路径**所有发回的 begin/end 共享同一个 oneshot sender**，无法区分。
+
+Bug 017 用**事件驱动 + 累积 buffer + 自动 classify** 解决：
+
+1. **延迟 500ms 发 `list-windows`**（不是 list-panes）—— 避开 new-window 响应的 `%end 395` block；500ms 后 server 已完成 session 初始化，`list-windows` 响应是**独立的** fire-and-forget 块（id=396），body 是完整 window 列表
+2. **累积 buffer by id**：每个 fire-and-forget 命令的 body 行 push 到 `current_command_lines`，按 `current_command_id` 区分；`CommandBegin` 切换 id 清空旧 body
+3. **CommandEnd classify**：第一行 `@` → emit `tmux-window-list` + `trigger_followup_list_panes`（OS 线程异步发 list-panes）；第一行 `%` → emit `tmux-pane-list` + `register_first_pane`
+4. **register_first_pane 在 pending_window_pane 里找 entry**：dispatcher 在 `WindowAdd` case (b) bootstrap 路径把 entry 存到 `pending_window_pane[@window_id] = PendingWindow { sender: None }`（记录 xsterm_window_id）。`emit_pane_list` 看到 `sender.is_none()` 时**直接**调用 `allocate_xsterm_id` + `register_pane` + `record_first_pane` + 设 bindings → 写 `first_pane_tx`
+5. **`await_first_pane` 仅 wait `first_pane_tx`**——不再有自己的解析逻辑
+
+关键：dispatch_event **自动分类 response body**（不需要预设"哪个是 list-panes"），parser 看 body 第一行 `@` 还是 `%` 自动识别；`WindowList` handler 自动触发 `list-panes ""` follow-up 形成事件链 —— 全程**无** oneshot / **无** race / **无** sleep-then-await 同步。
 ## 是否解决
 YES
+
+# Bug 018
+## 现象
+Bug 017 修复后（dispatch_event 自动 classify list-windows/list-panes 响应），用户报告两个新问题：
+1. server 上有多个 window（如 @1 @2 @3），但本地只打开了一个
+2. server 上 pane 存在上下文（已运行的 bash 历史），但本地打开是空白
+## 理想效果
+所有 server 已存在的 windows + panes 都注册到 client，pane 输出历史能立即看到。
+## BUG原因
+`list-windows` 默认只列当前 session 的所有 windows，**但 `list-panes` 不带 `-a` 时只列 current window 的所有 panes**（不是 server 全部）。`list-windows` 不带 `-a` 列当前 session 全部（OK），但 `list-panes` 缺 `-a` 只列一个 window。
+即使 list-panes 列出多 window，dispatch_event 之前的实现**只注册第一个 pane**到 `await_first_pane`，其他 pane 在 pane_bindings 里**没注册**，导致 `dispatch_event::Output` 看到 `%output %XX` 时 XX 不在 pane_bindings 里 → 丢弃。
+更深层：server 已存在的 window/pane 不会主动触发 `%window-add` / `%window-pane-changed`（事件是给**变化**的，不是给**已存在**的），所以 `pending_window_pane` 没 entry → list-panes 响应来时找不到 entry 注册。
+## 解决方案
+1. `commands.rs::list_panes_with_format("", format)` 加 `-a` flag：`list-panes -a -F '{format}'` —— 列所有 windows 所有 panes。
+2. `commands.rs::list_windows("")` 加 `-a` flag + 忽略 `session_id` 参数（始终查所有 sessions）。
+3. `dispatch.rs::emit_window_list` 不只 emit 事件，还**主动为每个 window 分配 `xsterm_window_id` 并存 `pending_window_pane[window_id] = PendingWindow { sender: None, xsterm_window_id }`** —— 让后续 list-panes 响应能找到 entry 注册 pane。
+4. `dispatch.rs::emit_pane_list` 遍历**所有 entries**：对每个 pane 找 `pending_window_pane[@window_id]` entry，调用 `register_pane` + `record_pane_window` + 设 bindings + `record_first_pane`（仅第一个）；其他 pane 也绑定到 pane_bindings 供后续 `%output` 路由。
+5. entry 注册完后**标记 consumed**（`pw.sender = Some(stub)`）—— 防止同一 window 在多次 list-panes 响应里 double-register。
+## 是否解决
+YES（重启验证：应看到所有 server windows 注册、所有 panes 注册含历史输出）
+
+# Bug 019
+## 现象
+Bug 018 修复后（`list-windows -a` + `list-panes -a` + 预填 pending_window_pane），用户报"还是 1 个 window"。
+## 理想效果
+server 上每个 window 都注册到 client，每个 window 内每个 pane 都注册，frontend 显示多 panes。
+## BUG原因
+Bug 018 emit 了 `tmux-window-list` 和 `tmux-pane-list` 事件给前端，但**前端没监听这两个事件**（只监听 `tmux-window-added` / `tmux-pane-added` 单个事件）。emit 没人消费 → frontend 不创建多个 Session/Pane。
+另外 list-panes 单 pane 时 `pending_window_pane[@window_id]` 还没被 `emit_window_list` 预填（list-panes 先到 list-windows 后到时 race）。
+## 解决方案
+`emit_window_list` 不仅发 list payload，还**为每个 window emit 一个独立 `tmux-window-added` 事件**——前端 listener 已存在，幂等 addSession。
+`emit_pane_list` 不仅发 list payload，还**为每个 pane emit 一个独立 `tmux-pane-added` 事件**——前端 listener 已存在，幂等 addPane。
+payload 使用 `session_id = controller_id` 作 synthetic xsterm_session_id（所有 panes 共用同一 controller 的同一 xsterm session），`xstermWindowId` 从 `window_bindings` 取（emit_window_list 已预填）。
+列表 payload（`tmux-window-list` / `tmux-pane-list`）仍 emit，方便前端做 full snapshot。
+## 是否解决
+YES（重启验证：应看到多个 xsterm Window/Pane，shell 历史可见）
+
+# Bug 019
+## 现象
+Bug 018 修复后（list-panes -a 列出所有 panes），日志显示 `bootstrap additional pane registered from list-panes: window=@0..@10 pane=%0..%10` —— **11 个 panes 全部注册成功**，但前端**只显示第一个 pane**（`%0`），其他 10 个 panes 看不到。
+## 理想效果
+11 个 panes 全部显示在 workspace 树中。
+## BUG原因
+`commands.rs::list_panes_with_format("")` 不带 `-a` 时，tmux `list-panes` **只列 current window** 的 panes——但 server 上有 11 个 windows + panes。bootstrap 只拿到 current window 的 panes（实际更少）。
+## 解决方案
+1. `commands.rs::list_panes_with_format("", format)` 加 `-a` flag → `list-panes -a -F '{format}'` —— 列所有 windows 所有 panes
+2. `commands.rs::list_windows(_session_id)` 加 `-a` + 忽略 `session_id` 参数
+3. `dispatch.rs::emit_pane_list` 不只注册第一个 pane，**遍历所有 entries** 为每个 pane 调 `register_pane` + 设 `pane_bindings`
+4. 每个 pane 调一次 `backend.emit("tmux-pane-added", payload)`（frontend 已有 listener 且幂等支持）
+## 是否解决
+YES（重启验证：应看到 11 个 panes 在 workspace）
+
+# Bug 020
+## 现象
+Bug 019 修复后，11 个 panes bootstrap 但 frontend workspace 仍**只显示第一个 pane**。再重启后输入 ls 等命令只到 `%0`，其他 panes 没反应。
+## 理想效果
+11 个 panes 都显示在 workspace，每个都能独立输入。
+## BUG原因
+`dispatch.rs::emit_pane_list` 循环 emit `tmux-pane-added` 时 payload 用 `xstermSessionId: session_id`（controller id，所有 pane 共享）。frontend `useTauriListeners.ts:262` 在 setSessions 时检查 `prev.some((s) => s.id === xstermSessionId)`——id 相同 → 第一个之后所有 pane 都 short-circuit → 只创建第一个 Session 节点。
+
+**所有 pane 共用同一 Session** → 其他 panes 即使 backend 注册了 pane_bindings，frontend 没 Session 接收显示 + 没 input 路由（writeSession(1000001) 实际只到 `%0`，其他 pane 根本"不存在"于 frontend）。
+## 解决方案
+`xstermSessionId` 必须**每个 pane 独立**——用 `xsterm_id`（`controller.allocate_xsterm_id()` 分配的 per-pane id），不是 `session_id`（controller id）。
+## 是否解决
+YES（重启验证：应看到 11 个 panes + 每个能独立输入）
