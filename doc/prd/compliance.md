@@ -140,7 +140,7 @@
     - CLA（暂不要求）
 
 [ ] 5.4 SECURITY.md
-    - 漏洞披露邮箱（security@ai-terminal.dev）
+    - 漏洞披露邮箱（security@xsterm.dev）
     - 90 天披露窗口
     - 致谢墙
 
@@ -209,7 +209,7 @@
 
 [ ] 9.1 本地日志
     - 默认关闭
-    - 启用后写到 %LOCALAPPDATA%\ai-terminal\logs\
+    - 启用后写到 %LOCALAPPDATA%\xsterm\logs\
     - 7 天自动清理
 
 [ ] 9.2 崩溃转储

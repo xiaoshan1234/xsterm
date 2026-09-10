@@ -306,7 +306,7 @@ PRD 全文写 "AI Terminal"，但 xsterm 0.1.3 是已发布产品名。**三个�
 2. **D-α / D-β / D-γ / D-δ 四个战略决策点先拍板**——直接决定 02 / 03 的边界。
 3. **MCP 是第一阶段唯一阻塞项**——所有 AI agent 价值（M6/M7/M8）都基于 MCP。
 4. **Store 上架是商业化分水岭**——但技术上是"配置 + 流程"问题，不是代码问题。
-5. **建立 RFC 流程**——dev-handoff.md 要求 72h 讨论窗口；建议每个 P0 PR 配一个 `docs/rfcs/NNNN-*.md`。
+5. **建立 RFC 流程**——dev-handoff.md 要求 72h 讨论窗口；建议每个 P0 PR 配一个 `doc/rfcs/NNNN-*.md`。
 
 ---
 

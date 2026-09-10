@@ -1,10 +1,13 @@
-# AI Terminal — MVP PRD
+# xsterm — AI Terminal MVP PRD
 
-产品名（暂定）：AI Terminal
+产品名：xsterm
+副品牌：AI Terminal
 定位：Windows 下第一个 AI-first 终端模拟器，原生兼容现代 TUI，向 AI agent 暴露完整控制面。
 目标平台：Windows 10/11（64-bit），后续规划 macOS / Linux。
 渲染：Tauri 2 + WebView2；终端引擎自研（基于 portable-pty + xterm.js）。
 商业模式：MVP 全部免费，区分个人 / 企业授权。上架 Microsoft Store，先开源（MVP 阶段 MIT），后续可能改源码许可证但保留免费使用。
+
+> 决策历史：D-α / D-β / D-γ / D-δ 详见 `doc/rfcs/0001..0004-*.md`。
 
 ================================================================
 1. 目标用户与场景
@@ -32,7 +35,7 @@ M2. 执行环境（5 种全部支持）
     - CMD
     - WSL（自动列出已安装发行版）
     - SSH（基础，密码 + 私钥认证）
-    - tmux session 映射（启动时 attach 或新建，detach 后保持后台 session）
+    - tmux -CC 完整控制模式（保留 xsterm 现有 3622 行 controller 实现，对标 iTerm2）
     - Docker 容器 attach（exec 进入运行中容器）
 M3. TUI 兼容性（"完整档"）
     - 24-bit true color
@@ -75,7 +78,7 @@ M8. 远程 SSH agent 接入
     - 支持反向 SSH tunnel（`ssh -R`），远端 agent 通过隧道连接本地 MCP server
     - 自动生成隧道脚本（PowerShell + bash 双版本）
 M9. 配置
-    - 配置文件：`%APPDATA%\ai-terminal\config.toml`
+    - 配置文件：`%APPDATA%\xsterm\config.toml`
     - 默认提供 schema，编辑器有智能提示（生成 JSON schema 给 VS Code）
     - 配置文件改动自动 reload（watch notify）
 M10. 上架 Microsoft Store
@@ -103,7 +106,7 @@ COULD（v2+）：
 
 进程模型：
   ┌─────────────────────────────────────────────────┐
-  │ ai-terminal.exe (Tauri 主进程)                   │
+  │ xsterm.exe (Tauri 主进程)                        │
   │   ├─ WebView2 (UI: TS + React)                    │
   │   │   └─ xterm.js (终端渲染 + ANSI/序列解析)      │
   │   ├─ portable-pty (PTY 抽象层, 跨平台)            │
@@ -115,10 +118,10 @@ COULD（v2+）：
 - ui/                      Tauri 前端（React + TypeScript + Vite）
   - terminal/              xterm.js 封装 + TUI 协议处理
 - pty-bridge/              portable-pty 封装，事件总线，PTY ↔ xterm.js 双向桥接
-- mcp-server/              MCP server 实现（rmcp crate），与主进程通过 tokio::mpsc 通信
+- mcp/                     MCP server 内部模块（rmcp crate），MVP 阶段嵌入主进程（RFC 0002）
 - ssh-client/              russh 封装，连接管理 + known_hosts
 - ssh-tunnel/              russh 反向隧道
-- config/                  配置加载 + 热更新
+- config/                  配置加载 + 热更新（TOML 格式，RFC 0003）
 - updater/                 应用内更新
 
 数据流：
@@ -143,10 +146,10 @@ COULD（v2+）：
 ================================================================
 
 本地数据：
-- 配置：%APPDATA%\ai-terminal\config.toml
+- 配置：%APPDATA%\xsterm\config.toml
 - 会话状态：内存 only，不持久化（关掉就丢）
-- SSH known_hosts：%APPDATA%\ai-terminal\ssh\known_hosts
-- 主题 / 字体缓存：%LOCALAPPDATA%\ai-terminal\cache
+- SSH known_hosts：%APPDATA%\xsterm\ssh\known_hosts
+- 主题 / 字体缓存：%LOCALAPPDATA%\xsterm\cache
 
 权限（最小原则）：
 - 启动子进程（PowerShell / WSL / ssh / docker）— 必需
@@ -266,11 +269,14 @@ F. 安全
     → AI 通过 send_keys / capture_screen 操作
     → AI 调用 detach_session 或用户输入释放口令 → 恢复
 
-7.3 tmux session 映射
-  用户在标签页右键 → "新建 tmux session" → 终端 exec `tmux new -s name`
-    → PTY 接管，session 在后台持续运行
-    → 标签页关闭不杀 tmux session（用 `tmux kill-session` 才结束）
-    → 重新打开终端 → "attach tmux session" 列出已有 session
+7.3 tmux -CC 完整控制模式（RFC 0001）
+  用户在标签页右键 → "新建 tmux" → 终端走 `tmux -CC new -s name`
+    → xsterm 自研 controller 接管（3622 行），-CC 协议完整解析
+    → 单标签页内分屏 = tmux pane
+    → 标签页关闭 → kill-pane / kill-server（用户配置）
+    → 标签页 detach → server 后台保留，pane 状态完整
+    → SSH 上的 tmux 走 russh exec channel 透传控制协议
+    → 重新打开 → attach 现有 server，pane 状态完整恢复
 
 7.4 自动更新
   启动时检查（用户可关闭）→ 有新版本 → 下载 MSIX → Store 通道或直连安装
@@ -290,14 +296,20 @@ R4. WebView2 在某些 Win10 版本未预装
     → 安装包检测 + 提示用户下载
 R5. MCP 协议还在快速迭代，SDK 兼容性风险
     → 锁定 rmcp 1.x 版本，CI 跑兼容性测试
-R6. Microsoft Store 审核对"开发者工具"较严
+R6. MCP 嵌入主进程（RFC 0002）→ MCP 崩溃会拖垮 UI
+    → tokio task 隔离 + panic hook 重启 + 严格模块边界（mcp/ 不反向依赖业务）
+R7. Microsoft Store 审核对"开发者工具"较严
     → 提前读 App Certification Kit 文档，预留 2 周缓冲
-R7. tmux 在 Windows 原生不可用，必须走 WSL
+R8. tmux 在 Windows 原生不可用，必须走 WSL
     → UI 明示"tmux 仅在 WSL session 中可用"
-R8. 24-bit color + WebGL 渲染在低端机掉帧
+R9. 24-bit color + WebGL 渲染在低端机掉帧
     → 提供"兼容模式"开关（DOM 渲染 + 256 color）
-R9. xterm.js bundle 较大（约 1MB gzip）
+R10. xterm.js bundle 较大（约 1MB gzip）
     → code-split 按需加载，初始包 < 500KB
+R11. tmux -CC 协议复杂，自研 controller 维护成本高
+    → 锁定 tmux ≥ 3.2，CI matrix 测试多版本；协议升级时 controller 优先
+R12. 配置迁移 store.json → config.toml（RFC 0003）可能丢数据
+    → 字段映射前后 diff 报告 + 30 天 .bak 回退 + 迁移日志
 
 ================================================================
 9. MVP 里程碑（建议节奏）
@@ -350,7 +362,7 @@ M6 (W18+): 公测 + 修 bug + 准备 v1.1
 
 TODO 拆分原则：
 - 每个 TODO 一个 PR，标题写清楚
-- 跨模块改动先 RFC（写 docs/rfcs/0001-xxx.md）
+- 跨模块改动先 RFC（写 doc/rfcs/0001-xxx.md）
 - MCP 相关改动必须更新 rmcp 兼容性测试
 
 ================================================================

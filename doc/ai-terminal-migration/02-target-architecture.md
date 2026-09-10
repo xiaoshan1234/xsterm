@@ -2,11 +2,11 @@
 
 > **目的**：在 01-gap-analysis.md 确定的缺口上，给出 xsterm 演进后的目标架构。这是 dev 实施的契约，tm 验收的依据。
 >
-> **决策点对应**：本文采用以下推荐（需 pdm / owner 在 README §5 拍板）：
-> - **D-α** tmux 实现：保留 `tmux -CC`，规格 M2 简化为"通过 MCP `create_session(type=\"tmux\")` 自动 attach 现有或新建 server"
-> - **D-β** MCP server 拆分：`xsterm.exe`（主 UI）+ `xsterm-mcp.exe`（stdio 子进程），单 workspace + 多 binary
-> - **D-γ** 配置格式：迁移 `config.toml`（`serde + toml`），启动时一次性迁移旧 store JSON
-> - **D-δ** 命名：保留 `xsterm` 品牌，产品对外宣传可叫"AI Terminal"（README 改名 + 商店 listing 名）
+> **决策点对应**：本文采用以下决议（pdm 2026-09-11 拍板，详见 `doc/rfcs/`）：
+> - **D-α** tmux 实现：**保留 xsterm -CC 全量实现**，对标 iTerm2（RFC 0001）
+> - **D-β** MCP server 拆分：**MVP 阶段单二进制 + 内部模块**（RFC 0002）
+> - **D-γ** 配置格式：**迁移 `config.toml`**，启动时一次性迁移旧 store JSON + 30 天回退（RFC 0003）
+> - **D-δ** 命名：**保留 `xsterm` 品牌**，对外宣传用 "AI Terminal"（RFC 0004）
 
 ---
 

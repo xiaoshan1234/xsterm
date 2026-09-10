@@ -4,7 +4,10 @@ AI Terminal — MCP Server 规范
 版本：v0.1
 协议：MCP 2025-06-18（streamable HTTP + stdio）
 传输：stdio（默认）/ Streamable HTTP（可选，需显式开启）
-定位：AI Terminal 内置 MCP server 的完整契约，是产品的核心差异化。
+定位：xsterm（AI Terminal）内置 MCP server 的完整契约，是产品的核心差异化。
+
+> 决策历史：D-α / D-β / D-γ / D-δ 详见 `doc/rfcs/0001..0004-*.md`。
+> 当前 MCP server 实现：MVP 阶段嵌入 xsterm 主进程内部模块 `src-tauri/src/mcp/`（RFC 0002），未来按需拆分。
 
 ================================================================
 0. 文档目的
@@ -20,7 +23,7 @@ AI Terminal — MCP Server 规范
 1.1 进程模型
 
   ┌─────────────────────────────────────────────────┐
-  │ ai-terminal.exe                                  │
+  │ xsterm.exe (Tauri 主进程)                        │
   │                                                  │
   │  ┌──────────────┐    tokio::mpsc    ┌────────┐  │
   │  │ pty-bridge   │ ───────────────▶ │  core  │  │
@@ -58,16 +61,16 @@ AI Terminal — MCP Server 规范
 
 2.1 stdio（默认）
 
-- 启动：主进程 spawn mcp-server 子进程，stdin/stdout 通过 pipe 连接。
+- 启动：主进程启动后 spawn 一个 tokio task 跑 MCP server，stdio 端点通过 Tauri 的 IPC pipe 连接子进程（或同进程内的 stdio bridge）。
 - 帧格式：MCP 规范的 JSON-RPC 2.0，每条消息一个 JSON 对象 + \n 分隔。
 - 多 agent 限制：stdio 是一对一（一个 stdio 实例只能服务一个 agent）。
   多 agent 同时使用 → 全部走 HTTP 端点。
 - 进程生命周期：与主进程同生共死，stdio EOF → MCP server 优雅退出。
 - 启动参数（推荐给 agent 配置）：
-  command: "ai-terminal-mcp"
+  command: "xsterm-mcp"
   args: ["--stdio"]
-  或：
-  command: "ai-terminal.exe"
+  或（如果未来拆出独立二进制）：
+  command: "xsterm.exe"
   args: ["--mcp-stdio"]
 
 2.2 Streamable HTTP（可选，需配置开启）
@@ -77,7 +80,7 @@ AI Terminal — MCP Server 规范
   - POST /mcp     请求（client → server 调用）
   - GET  /mcp     打开 SSE 流（订阅服务端通知 / 推送）
   - DELETE /mcp   关闭 SSE 流
-- 鉴权：Bearer token，token 写到 %APPDATA%\ai-terminal\mcp.token，
+- 鉴权：Bearer token，token 写到 %APPDATA%\xsterm\mcp.token，
   首次启用时生成 256-bit 随机值。token 文件权限 0600。
 - 会话：MCP streamable HTTP 用 session id，server 在 POST 第一次请求时生成，
   client 必须在 Mcpa-Session-Id header 携带。
@@ -560,7 +563,7 @@ HTTP：Bearer token，必须在 Authorization header 携带。token 错误 → 4
 6.3 审计
 
 - 默认不记录任何调用日志。
-- 配置 mcp.audit.enabled=true 时，写 %LOCALAPPDATA%\ai-terminal\audit.log：
+- 配置 mcp.audit.enabled=true 时，写 %LOCALAPPDATA%\xsterm\audit.log：
   { ts, agent, method, params_hash, result_code }
   params_hash 是参数 JSON 的 SHA256，不写明文（避免泄露用户输入）。
 - 日志 7 天自动清理。
@@ -691,8 +694,8 @@ HTTP：Bearer token，必须在 Authorization header 携带。token 错误 → 4
   ~/.config/claude_desktop_config.json (Windows: %APPDATA%\Claude\config.json):
   {
     "mcpServers": {
-      "ai-terminal": {
-        "command": "ai-terminal-mcp",
+      "xsterm": {
+        "command": "xsterm-mcp",
         "args": ["--stdio"]
       }
     }
@@ -702,7 +705,7 @@ HTTP：Bearer token，必须在 Authorization header 携带。token 错误 → 4
 
   {
     "mcpServers": {
-      "ai-terminal": {
+      "xsterm": {
         "url": "http://127.0.0.1:19847/mcp",
         "headers": {
           "Authorization": "Bearer <从 UI 复制的 token>"
@@ -714,20 +717,20 @@ HTTP：Bearer token，必须在 Authorization header 携带。token 错误 → 4
 11.3 Cursor
 
   Settings → MCP → Add:
-  Name: ai-terminal
-  Command: ai-terminal-mcp
+  Name: xsterm
+  Command: xsterm-mcp
   Args: --stdio
 
 11.4 Codex CLI
 
   ~/.codex/config.toml:
-  [mcp_servers.ai-terminal]
-  command = "ai-terminal-mcp"
+  [mcp_servers.xsterm]
+  command = "xsterm-mcp"
   args = ["--stdio"]
 
 11.5 反向 SSH tunnel 一键脚本（PowerShell）
 
-  # AI Terminal UI 生成的脚本
+  # xsterm UI 生成的脚本
   ssh -R 19847:127.0.0.1:19847 user@your-server.example.com
   # 远端 agent 访问 http://127.0.0.1:19847/mcp + Bearer token
 
@@ -737,7 +740,7 @@ HTTP：Bearer token，必须在 Authorization header 携带。token 错误 → 4
   from mcp.client.stdio import stdio_client
 
   params = StdioServerParameters(
-      command="ai-terminal-mcp",
+      command="xsterm-mcp",
       args=["--stdio"],
   )
   async with stdio_client(params) as (read, write):

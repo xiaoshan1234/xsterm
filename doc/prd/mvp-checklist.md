@@ -105,7 +105,7 @@ MUST（MVP 必交付，阻塞发布）
 - [ ] 断线自动重连（指数退避，5 次）
 
 ## M9. 配置
-- [ ] 配置文件 %APPDATA%\ai-terminal\config.toml
+- [ ] 配置文件 %APPDATA%\xsterm\config.toml
 - [ ] schema（VS Code JSON schema）
 - [ ] 文件改动自动 reload
   - 验收：修改后 < 1s 内 UI 反映

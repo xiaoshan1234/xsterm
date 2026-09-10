@@ -182,7 +182,7 @@ G. 安全（P0）
 ================================================================
 
 ✅ 默认无网络监听
-   - 应用启动后 `netstat -ano | findstr LISTEN` 不应看到 ai-terminal.exe（除非 TCP MCP 启用）
+   - 应用启动后 `netstat -ano | findstr LISTEN` 不应看到 xsterm.exe（除非 TCP MCP 启用）
 
 ✅ 配置 schema 校验
    - 故意写错配置 → 应用拒绝启动并提示具体错误

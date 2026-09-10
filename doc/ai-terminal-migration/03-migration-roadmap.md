@@ -108,14 +108,16 @@
 
 ### PR-005：`docs(rfcs): establish RFC process`
 
-**标题**：`docs: add RFC template + 0001-tmux-strategy + 0002-mcp-binary-split`
+**标题**：`docs: add RFC template + 0001-0004 strategic decisions`
+
+**状态**：✅ 已完成（pdm 2026-09-11 拍板 4 个决策，详见 `doc/rfcs/`）
 
 **范围**：
-- `docs/rfcs/README.md`：RFC 流程（提出 → 讨论 72h → 决议）
-- `docs/rfcs/0001-tmux-strategy.md`：拍 D-α（保留 -CC）
-- `docs/rfcs/0002-mcp-binary-split.md`：拍 D-β（独立子进程）
-- `docs/rfcs/0003-config-toml-migration.md`：拍 D-γ（toml + 迁移）
-- `docs/rfcs/0004-naming.md`：拍 D-δ（产品名）
+- `doc/rfcs/README.md`：RFC 流程（提出 → 讨论 72h → 决议） — 待 PR 后续补
+- `doc/rfcs/0001-keep-tmux-cc.md`：拍 D-α（保留 -CC，对标 iTerm2）✅
+- `doc/rfcs/0002-mcp-single-binary.md`：拍 D-β（MVP 单二进制 + 内部模块）✅
+- `doc/rfcs/0003-config-toml-migration.md`：拍 D-γ（toml + 30 天回退）✅
+- `doc/rfcs/0004-product-naming.md`：拍 D-δ（保留 xsterm 品牌）✅
 
 **自测**：
 - README 里有可点击的目录

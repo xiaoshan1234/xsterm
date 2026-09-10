@@ -27,18 +27,18 @@ doc/ai-terminal-migration/
 
 ---
 
-## 3. 4 个战略决策点（需要 tm / pdm 拍板）
+## 3. 4 个战略决策（已拍板）
 
-dev 已经给推荐方案，但 owner 决定权交给 pdm / 你。**这些决策是 M0 的 RFC 输入**，不拍板不动 M1+ 的代码。
+dev 已经给推荐方案，pdm 已在 4 个 RFC 里签字：
 
-| ID | 主题 | dev 推荐 | 关键 trade-off |
+| ID | 主题 | 决议 | RFC |
 |---|---|---|---|
-| **D-α** | tmux 实现路线冲突（规格简单模式 vs xsterm -CC） | 保留 -CC，规格 M2 简化为"create_session(type=tmux)" | 双栈维护成本 vs 保留差异化资产 |
-| **D-β** | MCP server 拆分（单 crate / workspace / 双二进制）| 双二进制（xsterm.exe + xsterm-mcp.exe）| 边界清晰 / 编译速度 / Claude Desktop 直配 |
-| **D-γ** | 配置格式（toml / 保留 JSON） | 迁移 toml + 30 天回退窗口 | 规格符合度 vs 数据迁移风险 |
-| **D-δ** | 产品命名（保留 xsterm / 改名 AI Terminal / 双品牌）| **问你** | 商业 vs 工程 |
+| **D-α** | tmux 实现路线 | **保留 xsterm -CC 全量实现**，对标 iTerm2 | [RFC 0001](../rfcs/0001-keep-tmux-cc.md) |
+| **D-β** | MCP server 拆分 | **按需实现**：MVP 阶段单二进制 + 内部模块，未来再拆 | [RFC 0002](../rfcs/0002-mcp-single-binary.md) |
+| **D-γ** | 配置格式 | **TOML 迁移**，30 天回退窗口保留 | [RFC 0003](../rfcs/0003-config-toml-migration.md) |
+| **D-δ** | 产品命名 | **保留 xsterm 品牌**，对外宣传用 "AI Terminal" | [RFC 0004](../rfcs/0004-product-naming.md) |
 
-**拍板方式**：在 4 个 RFC 里写决议（`docs/rfcs/0001..0004-*.md`）。
+**4 个 RFC 全部 Accepted**（pdm 签字 2026-09-11，dev / tm 待签）。M0 可以启动。
 
 ---
 
