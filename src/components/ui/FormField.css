@@ -24,3 +24,9 @@
   font-weight: 500;
   color: var(--ink);
 }
+
+.form-field__helper {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}

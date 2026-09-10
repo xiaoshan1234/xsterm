@@ -448,3 +448,50 @@ pub async fn rename_tmux_window(
     );
     state.rename_tmux_window(xsterm_window_id, &name)
 }
+
+/// Register a batch of pre-existing tmux panes into the session
+/// manager's `sessions` map. Each entry is
+/// `(xsterm_session_id, controller_id, tmux_pane_id)`; the session
+/// manager looks up the controller and registers the existing pane
+/// (already bound to its `pane_bindings` entry) under the requested
+/// xsterm session id. Returns the list of registered xsterm session
+/// ids.
+///
+/// Used by the frontend after the bootstrap `tmux-pane-list` event
+/// fires: the frontend creates a Session node for each pane and then
+/// asks the backend to make the corresponding tmux backend live so
+/// `writeSession(xsterm_session_id, …)` routes correctly (Bug 021).
+#[tauri::command]
+pub async fn register_existing_tmux_panes(
+    panes: Vec<(u32, u32, String)>,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<Vec<u32>, String> {
+    use crate::models::capabilities::CapabilityFlags;
+    use crate::models::session::tmux_pane_info;
+    use crate::services::session_manager::TmuxPaneHandle;
+    let mut specs = Vec::with_capacity(panes.len());
+    for (xsterm_session_id, controller_id, tmux_pane_id) in panes {
+        let controller = state.tmux_controller_by_id(controller_id)?;
+        // `is_hidden = false`: these are working panes from `tmux-pane-list`,
+        // not the bootstrap pane of a `tmux -CC attach` (D3 in req-006).
+        let info = tmux_pane_info(
+            xsterm_session_id,
+            controller_id,
+            tmux_pane_id.clone(),
+            None,
+            None,
+            false,
+            None,
+        );
+        let capabilities = CapabilityFlags::for_tmux();
+        let handle = TmuxPaneHandle::new(controller, tmux_pane_id, info, capabilities);
+        specs.push((
+            xsterm_session_id,
+            handle.controller.clone(),
+            handle.tmux_pane_id.clone(),
+            handle.info.clone(),
+            handle.capabilities.clone(),
+        ));
+    }
+    state.register_existing_tmux_panes(specs)
+}

@@ -146,6 +146,7 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
     ...opts,
     openFromConfigInternal,
     createWindowFromSession,
+    createWorkspaceFromSession,
   });
 
   const pane = usePaneActions(opts);

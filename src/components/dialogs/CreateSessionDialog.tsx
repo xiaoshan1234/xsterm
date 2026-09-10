@@ -138,9 +138,16 @@ export default function CreateSessionDialog({
             return;
           }
         }
+        const trimmedTmuxSessionName = tmuxConfig.tmuxSessionName?.trim() ?? "";
+        if (!trimmedTmuxSessionName) {
+          form.setError("Tmux Session Name is required.");
+          form.setSectionId("session");
+          return;
+        }
         const trimmedName = form.name.trim();
         const baseTmuxConfig: TmuxCcConfig = {
           ...tmuxConfig,
+          tmuxSessionName: trimmedTmuxSessionName,
           ...(sshSub ? { ssh: sshSub } : {}),
         };
         const tmuxConfigWithName: TmuxCcConfig = trimmedName
@@ -208,8 +215,15 @@ export default function CreateSessionDialog({
             return;
           }
         }
+        const trimmedTmuxSessionName = tmuxConfig.tmuxSessionName?.trim() ?? "";
+        if (!trimmedTmuxSessionName) {
+          form.setError("Tmux Session Name is required.");
+          form.setSectionId("session");
+          return;
+        }
         const baseTmuxConfig: TmuxCcConfig = {
           ...tmuxConfig,
+          tmuxSessionName: trimmedTmuxSessionName,
           ...(sshSub ? { ssh: sshSub } : {}),
         };
         const trimmedName = form.name.trim();
@@ -230,6 +244,10 @@ export default function CreateSessionDialog({
       form.setError(err instanceof Error ? err.message : String(err));
     }
   };
+
+  const isTmuxSessionNameMissing = !tmuxConfig.tmuxSessionName?.trim();
+  const isCreateDisabled =
+    topTab === "tmux-cc" && (!tmuxConfig.baseConfigId || isTmuxSessionNameMissing);
 
   const renderSessionSection = () => {
     if (topTab === "tmux-cc") {
@@ -319,7 +337,7 @@ export default function CreateSessionDialog({
         <button className="btn btn--secondary" onClick={handleSaveOnly}>
           Save Only
         </button>
-        <button className="btn btn--primary" onClick={handleCreate}>
+        <button className="btn btn--primary" onClick={handleCreate} disabled={isCreateDisabled}>
           Create
         </button>
       </div>

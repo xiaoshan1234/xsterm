@@ -9,6 +9,10 @@ interface FormTextFieldProps {
   type?: "text" | "password";
   disabled?: boolean;
   autoComplete?: string;
+  /** Forward the native `required` HTML attribute (UX cue + form validation). */
+  required?: boolean;
+  /** Optional muted helper text rendered below the input (e.g. "Required."). */
+  helperText?: string;
 }
 
 export function FormTextField({
@@ -19,6 +23,8 @@ export function FormTextField({
   type = "text",
   disabled,
   autoComplete,
+  required,
+  helperText,
 }: FormTextFieldProps) {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.value || undefined);
@@ -32,7 +38,9 @@ export function FormTextField({
         onChange={handleChange}
         disabled={disabled}
         autoComplete={autoComplete}
+        required={required}
       />
+      {helperText && <span className="form-field__helper">{helperText}</span>}
     </FormField>
   );
 }

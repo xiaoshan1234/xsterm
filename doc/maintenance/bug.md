@@ -966,3 +966,95 @@ Bug 019 修复后，11 个 panes bootstrap 但 frontend workspace 仍**只显示
 `xstermSessionId` 必须**每个 pane 独立**——用 `xsterm_id`（`controller.allocate_xsterm_id()` 分配的 per-pane id），不是 `session_id`（controller id）。
 ## 是否解决
 YES（重启验证：应看到 11 个 panes + 每个能独立输入）
+
+# Bug 021
+## 现象
+用户报告 xsterm tmux session 三个相关问题：
+1. 创建 tmux session 后无法在终端里键入字符（按 Enter 触发 reconnect → create + close 死循环）
+2. Create Session 对话框的 "Tmux Session Name" 字段**没有强制必填**——空字符串也能 Create
+3. 创建 tmux session 没有独立 workspace，被塞进当前 active workspace 的 Window 列表里
+## 理想效果
+1. 终端在 tmux session 创建后立即可键入（焦点 + 连接态正确）
+2. "Tmux Session Name" 字段必须填写才能 Create
+4. 每个 tmux session 独占一个 xsterm workspace（与 TmuxForm.helperText 文档一致："one tmux session always maps to one xsterm workspace"）
+## BUG原因
+**问题 1（无法输入）**：是问题 3 的下游症状。tmux session 被创建到 active workspace 之外的 Window，用户在 UI 上看到的是另一个 pane，键入字符被 `Terminal.tsx:260` 的 `if (!isFocusedRef.current) return;` 拦截。修好问题 3 后，焦点路由正确（`xterm.focus()` 在 `useEffect([isActive])` 中触发），`isConnectedRef.current` 始终 true（tmux controller 不 emit `session-disconnected`，仅 local PTY / SSH forwarder 会）。
+
+**问题 2（字段未强制必填）**：
+- `FormTextField.tsx` 的 interface 没有 `required?: boolean` 字段，TmuxForm 传的 `required` 被静默丢弃
+- `CreateSessionDialog.tsx::handleCreate` 的 tmux-cc 分支只校验 `baseConfigId`，不校验 `tmuxSessionName`
+- `<button class="btn btn--primary">` 的 Create 按钮没有 `disabled` 状态，空字段也能点
+
+**问题 3（共用 workspace）**：`useSessionLifecycle.ts::createAndActivateSession` 在 `!skipAutoWindow` 分支无条件调用 `createWindowFromSession`，把新 tmux window 塞进 `activeWorkspaceId`。`createWorkspaceFromSession`（已经在 `SessionActions` 里实现）被设计为给 tmux 用，但没人调用它。
+## 解决方案
+1. **`src/contexts/session/useSessionLifecycle.ts`**：
+   - `UseSessionLifecycleDeps` 新增 `createWorkspaceFromSession: (sessionId, configId, name?) => Workspace`
+   - `createAndActivateSession` 在 `!skipAutoWindow` 分支按 `type === "tmux-cc"` 分流：tmux-cc 调 `createWorkspaceFromSession`（新 workspace + 切换 activeWorkspaceId），其他维持 `createWindowFromSession` 行为
+   - `openFromConfig` 同样按 `session.type === "tmux-cc"` 分流（用户从 sidebar 重新打开已保存的 tmux config 时仍要给独立 workspace）
+2. **`src/contexts/session/useSessionActions.ts`**：`useSessionLifecycle({...opts, openFromConfigInternal, createWindowFromSession, createWorkspaceFromSession})` —— 把已经存在的 `createWorkspaceFromSession` 透传给 lifecycle hook
+3. **`src/components/dialogs/FormTextField.tsx`**：interface 新增 `required?: boolean` + `helperText?: string`，`<input>` 上 `required={required}`，`{helperText && <span className="form-field__helper">...</span>}`
+4. **`src/components/ui/FormField.css`**：新增 `.form-field__helper { font-size: 12px; font-weight: 400; color: var(--muted); }`（无 hex、无 box-shadow，符合设计系统 §10）
+5. **`src/components/dialogs/CreateSessionDialog.tsx`**：
+   - `handleCreate` tmux-cc 分支新增 `tmuxSessionName.trim()` 非空校验，空则 `setError("Tmux Session Name is required.")` 并 return
+   - `handleSaveOnly` tmux-cc 分支同样校验
+   - 顶层新增 `isCreateDisabled = topTab === "tmux-cc" && (!baseConfigId || isTmuxSessionNameMissing)`，Create 按钮 `<button disabled={isCreateDisabled}>` —— Save Only 仍可用（保存待补字段的 config 模板是允许的）
+   - 把 trimmed `tmuxSessionName` 写回 config 再传给 `onCreateTmux` / `saveConfigOnly`（之前 trim 仅在 name 上，tmuxSessionName 漏了）
+## 是否解决
+YES（`npx tsc --noEmit` 干净；设计系统三条 grep 通过：0 禁 token / 0  bold  权重 / 5 box-shadow 全部命中 §10 文档化例外）
+
+> 注意：本仓库 `src-tauri/src/services/session_manager.rs` 当前 on-disk 版本相对 HEAD 有 5399 行 diff，`cargo check` 在本环境下不能跑（与本次修复无关，是前置会话遗留）。前端改动已通过 `npx tsc --noEmit` + 设计系统 grep 验证。
+
+# Bug 022
+## 现象
+Bug 021 的 dev 分支合并工作树后，`cargo check` 在 `src-tauri/` 5 处失败：
+1. `src/services/tmux/mod.rs:46` — `pub use controller::{TmuxController, TmuxPaneHandle}` 报 `unresolved import TmuxPaneHandle`。
+2. `src/commands/session.rs:470` — `use crate::models::session::{CapabilityFlags, ...}` 报 `struct import CapabilityFlags is private`。
+3. `src/commands/session.rs:474` — `SessionInfo::default()` 报 `no function or associated item named default found`。
+4. `src/commands/session.rs:477` — `SessionType::TmuxCc(TmuxCcConfig::default())` 报 `expected value, found struct variant`（`TmuxCc` 是 struct variant，不是 tuple variant）。
+5. 修完以上四处在 `src/services/session_manager.rs:849` 又暴露一个新错误：`format!("Session {} not found")` 缺一个参数（`{}` 占位符但没传值）。
+
+修复前整个 `xsterm (lib)` 编译失败，246 个 Rust 单元测试无法运行。
+## 理想效果
+- `cargo check --manifest-path src-tauri/Cargo.toml` 干净通过（无 error）。
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` 246 passed；0 failed。
+- `npx tsc --noEmit` 干净（前端本来就 OK）。
+- 改动最小化：仅触碰产生编译错误的 3 个文件，不重构无关代码。
+## BUG 原因
+**问题 1**：`TmuxPaneHandle` 实际定义在 `src/services/session_manager.rs:50`（per-pane handle，由 `SessionManager` 持有），不在 `tmux/controller.rs` 里。`tmux/mod.rs` 的 `pub use` 是 refactor 时漏改的——模块文档（`tmux/mod.rs:19-25`）明确写了"Public API: only `TmuxController`"，grep 整个仓库也找不到任何 `use crate::services::tmux::TmuxPaneHandle`，所以这是死路径的 re-export。
+
+**问题 2**：`models/session.rs:4` 通过 `use crate::models::capabilities::CapabilityFlags;` 把它导入成私有 re-import，但 `models/session.rs` 没有 `pub use` 重新导出它。所以 `use crate::models::session::CapabilityFlags` 命中私有 item。正确的导入路径是 `crate::models::capabilities::CapabilityFlags`（公开的原始定义）。
+
+**问题 3 + 4**：`register_existing_tmux_panes` 命令原本的写法是逐字段手搓 `SessionInfo`：
+```rust
+let mut info = SessionInfo::default();          // SessionInfo 没有 Default
+info.id = xsterm_session_id;
+info.name = format!("tmux-{controller_id}:{tmux_pane_id}");
+info.session_type = SessionType::TmuxCc(TmuxCcConfig::default());  // TmuxCc 是 struct variant
+```
+但 `SessionInfo` 没有 `#[derive(Default)]`（很多字段是 `bool` / `u32`，缺省行为不该是 false/0），`SessionType::TmuxCc` 在 schema v1 后被改成了 `{ controller_id, pane_id, session_name, socket_name }` 命名 struct variant（不是 `(TmuxCcConfig)` tuple variant），所以手搓完全跑不通。已有的 `tmux_pane_info(xsterm_id, controller_id, pane_id, tmux_session_name, display_name, is_hidden, tmux_window_id)` helper（`models/session.rs:300`）已经把 `name` / `session_type` / `tmux_pane_id` / `tmux_controller_id` / `tmux_window_id` / `capabilities` 全填好，是 `create_tmux` / `attach_tmux` / `create_tmux_pane` / `create_tmux_window` 共用的 helper——这个新 command 应该用它，而不是自己拼。
+
+**问题 5**：`SessionManager::get` 的 `format!("Session {} not found")` 缺了 `, id` 参数，被 `cargo check` 的 `format!_args` lint 抓住——这是 refactor 时漏掉的小坑，编译错误，被前面的问题挡住了没暴露。
+## 解决方案
+1. **`src-tauri/src/services/tmux/mod.rs:46`**：`pub use controller::{TmuxController, TmuxPaneHandle}` → `pub use controller::TmuxController`。`TmuxPaneHandle` 本来就在 `session_manager` 模块下，所有调用方（包括刚加的 `register_existing_tmux_panes` 命令）已经走 `use crate::services::session_manager::TmuxPaneHandle`，无需通过 `tmux` 重新导出。
+2. **`src-tauri/src/commands/session.rs:464-489`**：把 `register_existing_tmux_panes` 体内逐字段手搓的逻辑全部替换为：
+   ```rust
+   use crate::models::capabilities::CapabilityFlags;       // 修正：capabilities 模块
+   use crate::models::session::tmux_pane_info;             // 共用 helper
+   use crate::services::session_manager::TmuxPaneHandle;
+   ...
+   let info = tmux_pane_info(
+       xsterm_session_id, controller_id, tmux_pane_id.clone(),
+       None,    // tmux_session_name — 走 fallback "tmux-<controller_id>"
+       None,    // display_name — 走 fallback "<session_name>:<pane_id>"
+       false,   // is_hidden — 这些是 tmux-pane-list 上的工作 pane，
+                //             不是 attach 的 bootstrap pane（D3 / req-006）
+       None,    // tmux_window_id — 由 dispatch task 后续通过 %window-pane-changed 补上
+   );
+   ```
+   helper 产出的 `name = "tmux-<controller_id>:<pane_id>"`，与重构前的硬编码完全一致；同时额外携带 `tmux_pane_id` / `tmux_controller_id` 字段（之前手搓漏了），让 `frontend` 能通过 `SessionInfo.tmux_pane_id` 反查到 tmux pane id。
+3. **`src-tauri/src/services/session_manager.rs:849`**：`format!("Session {} not found")` → `format!("Session {id} not found")`（用 capture 形式补上 `id`，与同函数内其他 `format!` 风格一致）。
+
+**未触动**：调用 `TmuxPaneHandle::new(...)` → 立即 unpack 字段再 push 进 `Vec<(u32, Arc<TmuxController>, String, SessionInfo, CapabilityFlags)>` 的间接写法看着有点啰嗦，但它不是编译问题（语法 / 类型都正确），也不影响行为；本次只解决编译，不顺手重构。
+## 是否解决
+YES（`cargo check --manifest-path src-tauri/Cargo.toml` 干净，6 个 warning 全是 `dead_code`（新增的 `register_existing_tmux_panes` 命令 / `tmux_controller_by_id` 方法等还未被前端 `invoke` 调用 + 测试代码用 struct literal 而非 `new` constructor），非 error；`cargo test --manifest-path src-tauri/Cargo.toml --lib` 246 passed / 0 failed / 2 ignored；`npx tsc --noEmit` 干净；改动 3 个文件共 ~25 行）
+

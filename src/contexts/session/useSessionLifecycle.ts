@@ -41,6 +41,19 @@ interface UseSessionLifecycleDeps {
     name?: string,
     targetWorkspaceId?: string,
   ) => Window;
+  /**
+   * Spawn a brand-new workspace wrapping the session's window. tmux-cc
+   * sessions ALWAYS route through this so that one tmux session maps to
+   * exactly one xsterm workspace (mirrors `TmuxForm.helperText`:
+   * "one tmux session always maps to one xsterm workspace"). Local / SSH
+   * continue to route through `createWindowFromSession` so they share the
+   * active workspace as before.
+   */
+  createWorkspaceFromSession: (
+    sessionId: number,
+    configId: string,
+    name?: string,
+  ) => Workspace;
   /** persistent map keyed by controller id so the retry banner
    * can hand the original config back to the backend after a
    * `tmux-controller-exit`. */
@@ -59,6 +72,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     updateGroups,
     openFromConfigInternal,
     createWindowFromSession,
+    createWorkspaceFromSession,
     tmuxControllerConfigsRef,
   } = deps;
 
@@ -137,16 +151,25 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       }
 
       if (!skipAutoWindow) {
-        createWindowFromSession(
-          session.id,
-          session.configId,
-          session.name,
-          activeWorkspaceId ?? undefined,
-        );
+        if (type === "tmux-cc") {
+          // tmux-cc: one tmux session always maps to one xsterm
+          // workspace (mirrors TmuxForm.helperText). Use
+          // createWorkspaceFromSession which spawns a fresh workspace
+          // AND switches activeWorkspaceId so the new session is the
+          // visible one.
+          createWorkspaceFromSession(session.id, session.configId, session.name);
+        } else {
+          createWindowFromSession(
+            session.id,
+            session.configId,
+            session.name,
+            activeWorkspaceId ?? undefined,
+          );
+        }
       }
       return session;
     },
-    [updateConfigs, createWindowFromSession, setSessions, activeWorkspaceId],
+    [updateConfigs, createWindowFromSession, createWorkspaceFromSession, setSessions, activeWorkspaceId],
   );
 
   /**
@@ -355,15 +378,28 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
    * Open a session from a saved config (also creates a default workspace)
    *
    * Difference from createSessionFromSavedConfig: this method additionally calls createWindowFromSession,
-   * used for the sidebar "open" operation, which also displays the session UI
+   * used for the sidebar "open" operation, which also displays the session UI.
+   *
+   * tmux-cc configs route through `createWorkspaceFromSession` so that
+   * re-opening a saved tmux config still gives one tmux session its own
+   * workspace (mirrors the create path).
    */
   const openFromConfig = useCallback(
     async (configId: string): Promise<Session> => {
       const session = await openFromConfigInternal(configId);
-      createWindowFromSession(session.id, session.name, activeWorkspaceId ?? undefined);
+      if (session.type === "tmux-cc") {
+        createWorkspaceFromSession(session.id, session.configId, session.name);
+      } else {
+        createWindowFromSession(
+          session.id,
+          session.configId,
+          session.name,
+          activeWorkspaceId ?? undefined,
+        );
+      }
       return session;
     },
-    [openFromConfigInternal, createWindowFromSession, activeWorkspaceId],
+    [openFromConfigInternal, createWindowFromSession, createWorkspaceFromSession, activeWorkspaceId],
   );
 
   const removeConfig = useCallback(

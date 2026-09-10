@@ -66,7 +66,7 @@ impl TmuxPaneHandle {
     /// only difference is no underlying `split-window`/`new-window`
     /// round-trip — the pane was already created server-side before we
     /// attached.
-    pub(crate) fn new(
+    pub fn new(
         controller: Arc<TmuxController>,
         tmux_pane_id: String,
         info: SessionInfo,
@@ -440,6 +440,31 @@ impl SessionManager {
     /// re-attach every previously-attached tmux server.
     ///
     /// Reads the supplied list of [`AttachedTmuxServer`]s (typically the
+    /// Register panes that the dispatch task discovered via the
+    /// bootstrap `list-panes -a` query but which were never created via
+    /// `create_tmux` / `create_tmux_pane` (Bug 021 — pre-existing panes
+    /// on the tmux server before our controller attached). Each tuple
+    /// `(xsterm_session_id, controller, pane_id, info, capabilities)`
+    /// produces a fresh `TmuxPaneHandle` and inserts it into `sessions`
+    /// so subsequent `writeSession(xsterm_session_id, ...)` from the
+    /// frontend routes correctly. Returns the newly registered ids.
+    pub fn register_existing_tmux_panes(
+        &self,
+        panes: Vec<(u32, Arc<TmuxController>, String, SessionInfo, CapabilityFlags)>,
+    ) -> Result<Vec<u32>, String> {
+        let mut registered = Vec::with_capacity(panes.len());
+        for (xsterm_id, controller, pane_id, info, capabilities) in panes {
+            let handle =
+                TmuxPaneHandle::new(controller, pane_id, info, capabilities);
+            self.sessions.insert(
+                xsterm_id,
+                Arc::new(ActiveSession::TmuxPane(Box::new(handle))),
+            );
+            registered.push(xsterm_id);
+        }
+        Ok(registered)
+    }
+
     /// contents of `attached_tmux.json`) and tries to attach to each one
     /// in order. Returns one [`AutoAttachOutcome`] per server so the
     /// frontend can show partial-failure UI without crashing on the first
@@ -821,7 +846,22 @@ impl SessionManager {
         self.sessions
             .get(&id)
             .map(|entry| entry.value().clone())
-            .ok_or_else(|| format!("Session {} not found", id))
+            .ok_or_else(|| format!("Session {id} not found"))
+    }
+
+    /// Look up a tmux controller by its id (allocated by
+    /// `allocate_controller_id`). Cloned `Arc` so the caller can hold it
+    /// past the lookup. Used by `register_existing_tmux_panes` to
+    /// register panes discovered via the bootstrap `list-panes -a` query
+    /// (Bug 021).
+    pub fn tmux_controller_by_id(
+        &self,
+        controller_id: u32,
+    ) -> Result<Arc<crate::services::tmux::controller::TmuxController>, String> {
+        self.tmux_controllers
+            .get(&controller_id)
+            .map(|entry| entry.value().clone())
+            .ok_or_else(|| format!("tmux controller {controller_id} not found"))
     }
 
     /// Return a clone of the SSH config for the session with the given `id`.
