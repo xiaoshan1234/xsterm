@@ -1,89 +1,39 @@
-//! Tmux control-mode controller for Wave 2 (extended to Wave 5).
+//! Tmux control-mode controller (legacy monolith + PR-T3 prelude).
 //!
-//! This module is the bridge between xsterm's session layer and the `tmux
-//! -CC` child process that owns one or more tmux panes. Its job is:
+//! This file is the original 3622-line `controller.rs`; PR-T3 copies it
+//! here so we can split it across `controller/{mod,id_map,subscriber,
+//! handshake,session}.rs` in later PRs without disturbing the import path
+//! (`crate::services::tmux::controller::*` keeps working).
+//!
+//! ## PR-T3 additions
+//!
+//! - `id_map` sub-module: [`CommandRegistry`] + tests. Defined here, but
+//!   **not yet wired** into the controller's response routing — the old
+//!   `pending_splits` / `pending_window_pane` / `pending_capture` queues
+//!   still own split / new-window / capture waits. PR-T5 hooks the
+//!   registry into the response router; PR-T8 deletes the old queues.
+//!
+//! ## Original job (unchanged in PR-T3)
 //!
 //! 1. Spawn `tmux` as a child process (Wave 1 local path) **or** open an
 //!    SSH exec channel running `tmux -CC` on the remote host (Wave 5),
 //!    via the [`TmuxBackend`](crate::infrastructure::tmux::backend::TmuxBackend)
 //!    trait abstraction.
 //! 2. Read stdout line-by-line, feed each line through the pure
-//!    [`ControlParser`](crate::infrastructure::tmux::parser::ControlParser),
-//!    and hand the resulting [`ControlEvent`]s to an internal dispatch task.
+//!    [`ProtocolParser`](crate::services::tmux::protocol::parser::ProtocolParser),
+//!    and hand the resulting [`ProtocolEvent`]s to an internal dispatch task.
 //! 3. The dispatch task interprets each event:
 //!    - `Output { pane_id, data }` → resolve the pane → xsterm session id
 //!      binding and emit `"session-output"` via [`AppBackend`].
-//!    - `WindowPaneChanged { pane_id, .. }` (first sighting) → allocate a
-//!      fresh xsterm session id, register the binding, signal
-//!      [`TmuxController::await_first_pane`], and emit `"tmux-pane-added"`.
-//!      See `dispatch_event` for the routing between the
-//!      bootstrap-pane path, the split-result path (resolved through
-//!      `pending_splits`), and the external-pane path.
-//!    - `PaneExited { pane_id }` / `PaneDied { pane_id }` → look up the
-//!      xsterm session id and emit `"tmux-pane-removed"`. The frontend
-//!      drops the matching `Session` from React state in response.
-//!    - `Pause { pane_id }` / `Continue { pane_id }` → forward to the
-//!      frontend as `"tmux-paused"` / `"tmux-continued"` for backpressure
-//!      UI.
-//!    - `Exit { reason }` → emit `"tmux-controller-exit"`.
-//! 4. Receive newline-terminated tmux command strings on a separate channel
-//!    and dispatch them to the backend's stdin in FIFO order through a
-//!    single background task (so the IPC layer never blocks on a slow
-//!    tmux).
-//!
-//! ## Concurrency model
-//!
-//! ```text
-//!   IPC worker (write_session)
-//!          │
-//!          ▼
-//!   stdin_tx ──→ cmd_rx ──→ writer task ──→ backend.stdin (local child or SSH channel)
-//!                                       (single dispatch)
-//!
-//!   backend.stdout ──→ reader task ──→ dispatch_tx ──→ dispatch_rx
-//!                                     (parser.feed)        │
-//!                                                        ▼
-//!                                              dispatch task
-//!                                                        │
-//!                                                        ▼
-//!                                              app_backend.emit(...)
-//!                                                        │
-//!   first_pane_tx ◄─────── (signalled once, on the first WindowPaneChanged)
-//!                                                        │
-//!                                                        ▼
-//!                                              store (xsterm_id, pane_id)
-//!
-//!   backend.wait() ──→ monitor task ──→ dispatch_tx (Exit event)
-//! ```
-//!
-//! - [`TmuxController::send_keys`] / [`TmuxController::resize_pane`] /
-//!   [`TmuxController::kill_pane`] use an `UnboundedSender` so they never
-//!   block the caller; the writer task drains in the background.
-//! - [`TmuxController::split_pane`] uses a **`tokio::sync::oneshot`** pair
-//!   registered in `pending_splits` before the `split-window` command is
-//!   written to stdin. The dispatch task pops the front sender on the
-//!   matching `%window-pane-changed` reply and resolves it with the new
-//!   pane's `(xsterm_session_id, tmux_pane_id, tmux_window_id)` triple.
-//! - The reader task owns the parser and the stdout reader; it is the only
-//!   place that sees raw bytes from tmux, and it exits cleanly on EOF.
-//! - The dispatch task is the only thing that mutates `pane_bindings` and
-//!   `next_xsterm_id`, so there is no contention with the per-pane
-//!   `send_keys` / `resize_pane` paths.
-//! - The monitor task races with [`TmuxController::close`]: whichever wins
-//!   the race sets the `killed` flag. If `close()` wins, the monitor task
-//!   returns silently; if the monitor task wins, it emits an `Exit` event
-//!   that the dispatch task forwards as `"tmux-controller-exit"`.
-//!
-//! ## Testing
-//!
-//! The reader / writer / dispatch tasks are exposed internally as free
-//! functions (`spawn_reader_task`, `spawn_writer_task`,
-//! [`spawn_dispatch_task`](dispatch::spawn_dispatch_task)) so tests can
-//! drive them with mock I/O — `Cursor<Vec<u8>>` for stdout,
-//! `tokio::io::duplex` for stdin/stdout pipes, and a hand-rolled
-//! `RecordingBackend` for assertions — without spawning a real tmux
-//! binary.
+pub(crate) mod id_map;
 
+// Re-export so existing `controller::TmuxController` callers keep working.
+pub use self::id_map::{CommandRegistry, RegisteredCommand, send_to_waiter};
+
+use super::commands as tmux_cmd;
+use super::dispatch::spawn_dispatch_task;
+use super::events::ProtocolEvent;
+use super::parser::ProtocolParser;
 use std::collections::{HashMap, VecDeque};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -100,11 +50,6 @@ use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::ssh::SshBackend;
 use crate::infrastructure::tmux::backend::{LocalTmuxBackend, SshTmuxBackend, TmuxBackend};
 use crate::models::session::{SplitDirection, TmuxCcConfig};
-
-use super::commands as tmux_cmd;
-use super::dispatch::spawn_dispatch_task;
-use super::events::ControlEvent;
-use super::parser::ControlParser;
 
 /// Default initial pane size in rows when [`TmuxCcConfig::initial_rows`] is
 /// `None`. Mirrors `portable_pty::default_pty_size()` so behaviour is
@@ -449,7 +394,7 @@ impl TmuxController {
             .map_err(|e| format!("tmux backend has no stderr: {e}"))?;
 
         let (stdin_tx, stdin_rx) = mpsc::unbounded_channel::<String>();
-        let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         let (pane_tx_init, pane_rx_init) = oneshot::channel::<(u32, String)>();
 
         let killed = Arc::new(AtomicBool::new(false));
@@ -1256,7 +1201,7 @@ impl TmuxController {
     /// `stdin_tx` / `app_backend`. The dispatch task is NOT spawned
     /// here — tests that need it call
     /// [`spawn_dispatch_task`] directly with their own
-    /// `mpsc::UnboundedSender<ControlEvent>`.
+    /// `mpsc::UnboundedSender<ProtocolEvent>`.
     ///
     /// `pub(crate)` so tests in `services::session_manager` (and
     /// future sibling crates) can wire end-to-end flows against a
@@ -1449,7 +1394,7 @@ fn shell_quote(s: &str) -> String {
 /// Spawn the stdout reader task.
 ///
 /// Reads lines from `stdout`, feeds each line through a fresh
-/// [`ControlParser`], and pushes the resulting [`ControlEvent`]s into
+/// [`ProtocolParser`], and pushes the resulting [`ProtocolEvent`]s into
 /// `dispatch_tx`. Exits when `stdout` returns EOF (tmux closed the pipe,
 /// e.g. on `kill -9`) or when the consumer drops `dispatch_tx`.
 ///
@@ -1471,12 +1416,12 @@ fn shell_quote(s: &str) -> String {
 /// `ESC P 1000 p` prefix causes the parser's `Unknown` branch to
 /// drop the *entire* line (including the `%begin` notification
 /// inside it). Strip both markers before feeding the parser.
-fn spawn_reader_task<R>(stdout: R, dispatch_tx: mpsc::UnboundedSender<ControlEvent>)
+fn spawn_reader_task<R>(stdout: R, dispatch_tx: mpsc::UnboundedSender<ProtocolEvent>)
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
 {
     tokio::spawn(async move {
-        let mut parser = ControlParser::new();
+        let mut parser = ProtocolParser::new();
         let mut lines = BufReader::new(stdout).lines();
         tracing::info!("tmux reader: task started");
         loop {
@@ -1596,7 +1541,7 @@ where
 /// Takes the backend out of the shared mutex and `await`s
 /// `backend.wait()`. If the backend exited on its own (i.e.
 /// [`TmuxController::close`] did not set the `killed` flag), pushes a
-/// synthetic [`ControlEvent::Exit`] with the captured status as the
+/// synthetic [`ProtocolEvent::Exit`] with the captured status as the
 /// reason.
 ///
 /// takes a `Box<dyn TmuxBackend>` slot instead of a `Child`
@@ -1605,7 +1550,7 @@ where
 fn spawn_monitor_task(
     backend: Arc<Mutex<Option<Box<dyn TmuxBackend>>>>,
     killed: Arc<AtomicBool>,
-    dispatch_tx: mpsc::UnboundedSender<ControlEvent>,
+    dispatch_tx: mpsc::UnboundedSender<ProtocolEvent>,
 ) {
     tokio::spawn(async move {
         let mut backend = {
@@ -1626,7 +1571,7 @@ fn spawn_monitor_task(
             killed.load(Ordering::SeqCst)
         );
         if !killed.load(Ordering::SeqCst) {
-            let _ = dispatch_tx.send(ControlEvent::Exit { reason });
+            let _ = dispatch_tx.send(ProtocolEvent::Exit { reason });
         }
     });
 }
@@ -1642,9 +1587,9 @@ mod tests {
     /// Pull up to `max` events from `rx` with a short per-recv timeout, so the
     /// test fails fast instead of hanging on an empty channel.
     async fn drain_events(
-        rx: &mut mpsc::UnboundedReceiver<ControlEvent>,
+        rx: &mut mpsc::UnboundedReceiver<ProtocolEvent>,
         max: usize,
-    ) -> Vec<ControlEvent> {
+    ) -> Vec<ProtocolEvent> {
         let mut out = Vec::new();
         for _ in 0..max {
             match timeout(std::time::Duration::from_millis(100), rx.recv()).await {
@@ -1699,7 +1644,7 @@ mod tests {
         let stdout = Cursor::new(
             b"%begin 1 7 0\nline one\nline two\n%end 1 7 0\n%sessions-changed\n".to_vec(),
         );
-        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_reader_task(stdout, event_tx);
 
         let mut events = Vec::new();
@@ -1707,25 +1652,25 @@ mod tests {
             events.push(ev);
         }
 
-        assert!(events.contains(&ControlEvent::CommandBegin {
+        assert!(events.contains(&ProtocolEvent::CommandBegin {
             id: 7,
             timestamp: 1,
             flags: 0
         }));
-        assert!(events.contains(&ControlEvent::CommandOutput {
+        assert!(events.contains(&ProtocolEvent::CommandOutput {
             id: 7,
             line: "line one".to_string()
         }));
-        assert!(events.contains(&ControlEvent::CommandOutput {
+        assert!(events.contains(&ProtocolEvent::CommandOutput {
             id: 7,
             line: "line two".to_string()
         }));
-        assert!(events.contains(&ControlEvent::CommandEnd {
+        assert!(events.contains(&ProtocolEvent::CommandEnd {
             id: 7,
             timestamp: 1,
             flags: 0
         }));
-        assert!(events.contains(&ControlEvent::SessionsChanged));
+        assert!(events.contains(&ProtocolEvent::SessionsChanged));
     }
 
     /// `tmux -CC` wraps its wire protocol in a DCS passthrough
@@ -1744,7 +1689,7 @@ mod tests {
         let stdout = Cursor::new(
             b"\x1bP1000p%begin 1 7 0\nline one\nline two\n%end 1 7 0\n%sessions-changed\n".to_vec(),
         );
-        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_reader_task(stdout, event_tx);
 
         let mut events = Vec::new();
@@ -1752,25 +1697,25 @@ mod tests {
             events.push(ev);
         }
 
-        assert!(events.contains(&ControlEvent::CommandBegin {
+        assert!(events.contains(&ProtocolEvent::CommandBegin {
             id: 7,
             timestamp: 1,
             flags: 0
         }));
-        assert!(events.contains(&ControlEvent::CommandOutput {
+        assert!(events.contains(&ProtocolEvent::CommandOutput {
             id: 7,
             line: "line one".to_string()
         }));
-        assert!(events.contains(&ControlEvent::CommandOutput {
+        assert!(events.contains(&ProtocolEvent::CommandOutput {
             id: 7,
             line: "line two".to_string()
         }));
-        assert!(events.contains(&ControlEvent::CommandEnd {
+        assert!(events.contains(&ProtocolEvent::CommandEnd {
             id: 7,
             timestamp: 1,
             flags: 0
         }));
-        assert!(events.contains(&ControlEvent::SessionsChanged));
+        assert!(events.contains(&ProtocolEvent::SessionsChanged));
     }
 
     /// The DCS end marker (`ESC \`, 2 bytes) may be concatenated
@@ -1779,7 +1724,7 @@ mod tests {
     #[tokio::test]
     async fn reader_task_strips_dcs_passthrough_end_marker() {
         let stdout = Cursor::new(b"%sessions-changed\x1b\\\n".to_vec());
-        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_reader_task(stdout, event_tx);
 
         let mut events = Vec::new();
@@ -1787,18 +1732,18 @@ mod tests {
             events.push(ev);
         }
 
-        assert!(events.contains(&ControlEvent::SessionsChanged));
+        assert!(events.contains(&ProtocolEvent::SessionsChanged));
     }
 
     #[tokio::test]
     async fn reader_task_decodes_escaped_output_payload() {
         let stdout = Cursor::new(b"%output %5 hello\\012world\n".to_vec());
-        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_reader_task(stdout, event_tx);
 
         let events = drain_events(&mut event_rx, 4).await;
         assert!(events.iter().any(|e| matches!(e,
-            ControlEvent::Output { pane_id, data }
+            ProtocolEvent::Output { pane_id, data }
                 if pane_id == "%5" && data == b"hello\nworld"
         )));
     }
@@ -1806,7 +1751,7 @@ mod tests {
     #[tokio::test]
     async fn reader_task_drops_empty_lines_outside_block() {
         let stdout = Cursor::new(b"\n\n%sessions-changed\n\n".to_vec());
-        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_reader_task(stdout, event_tx);
 
         let mut events = Vec::new();
@@ -1814,7 +1759,7 @@ mod tests {
             events.push(ev);
         }
         assert_eq!(events.len(), 1);
-        assert!(matches!(events[0], ControlEvent::SessionsChanged));
+        assert!(matches!(events[0], ProtocolEvent::SessionsChanged));
     }
 
     #[tokio::test]
@@ -2040,14 +1985,14 @@ mod tests {
         });
         controller.register_pane("%7".to_string(), 7777);
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 3);
-        tx.send(ControlEvent::Output {
+        tx.send(ProtocolEvent::Output {
             pane_id: "%7".to_string(),
             data: b"hi\n".to_vec(),
         })
         .unwrap();
-        tx.send(ControlEvent::Output {
+        tx.send(ProtocolEvent::Output {
             pane_id: "%999".to_string(),
             data: b"orphan".to_vec(),
         })
@@ -2112,16 +2057,16 @@ mod tests {
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
         });
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 4);
 
-        tx.send(ControlEvent::WindowPaneChanged {
+        tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@1".to_string(),
             pane_id: "%3".to_string(),
         })
         .unwrap();
         // Duplicate — must be ignored.
-        tx.send(ControlEvent::WindowPaneChanged {
+        tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@1".to_string(),
             pane_id: "%3".to_string(),
         })
@@ -2131,7 +2076,7 @@ mod tests {
         // dispatch task logs and skips. The frontend
         // listener for `tmux-pane-added` relies on this so its pane tree
         // never sees a brand-new pane it does not know about.
-        tx.send(ControlEvent::WindowPaneChanged {
+        tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@1".to_string(),
             pane_id: "%4".to_string(),
         })
@@ -2222,18 +2167,18 @@ mod tests {
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
         });
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 5);
 
-        tx.send(ControlEvent::Pause {
+        tx.send(ProtocolEvent::Pause {
             pane_id: "%8".to_string(),
         })
         .unwrap();
-        tx.send(ControlEvent::Continue {
+        tx.send(ProtocolEvent::Continue {
             pane_id: "%8".to_string(),
         })
         .unwrap();
-        tx.send(ControlEvent::Exit {
+        tx.send(ProtocolEvent::Exit {
             reason: Some("killed".to_string()),
         })
         .unwrap();
@@ -2446,10 +2391,10 @@ mod tests {
         });
         controller.register_pane("%5".to_string(), 8_000_042);
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 8);
 
-        tx.send(ControlEvent::PaneExited {
+        tx.send(ProtocolEvent::PaneExited {
             pane_id: "%5".to_string(),
         })
         .unwrap();
@@ -2513,10 +2458,10 @@ mod tests {
         });
         controller.register_pane("%9".to_string(), 9_000_007);
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 9);
 
-        tx.send(ControlEvent::PaneDied {
+        tx.send(ProtocolEvent::PaneDied {
             pane_id: "%9".to_string(),
         })
         .unwrap();
@@ -2574,10 +2519,10 @@ mod tests {
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
         });
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 10);
 
-        tx.send(ControlEvent::PaneExited {
+        tx.send(ProtocolEvent::PaneExited {
             pane_id: "%404".to_string(),
         })
         .unwrap();
@@ -2642,7 +2587,7 @@ mod tests {
         // (case 3) for the reply we feed below.
         controller.record_first_pane(11_000_042, "%5".to_string());
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 11);
 
         // Kick off the split in a background task; it will block on the
@@ -2658,7 +2603,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         // Feed the matching reply.
-        tx.send(ControlEvent::WindowPaneChanged {
+        tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@7".to_string(),
             pane_id: "%11".to_string(),
         })
@@ -2908,7 +2853,7 @@ mod tests {
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
         });
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 15);
 
         // Pre-record the bootstrap pane so the dispatch task takes the
@@ -2928,7 +2873,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         // Feed the WindowAdd reply.
-        tx.send(ControlEvent::WindowAdd {
+        tx.send(ProtocolEvent::WindowAdd {
             window_id: "@9".to_string(),
         })
         .unwrap();
@@ -2937,7 +2882,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         // Feed the WindowPaneChanged reply (the first pane of the new window).
-        tx.send(ControlEvent::WindowPaneChanged {
+        tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@9".to_string(),
             pane_id: "%13".to_string(),
         })
@@ -3047,19 +2992,19 @@ mod tests {
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
         });
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 16);
 
         // Feed WindowAdd for the bootstrap window — no pending_windows
         // sender, window_bindings is empty → bootstrap path.
-        tx.send(ControlEvent::WindowAdd {
+        tx.send(ProtocolEvent::WindowAdd {
             window_id: "@1".to_string(),
         })
         .unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         // Feed WindowPaneChanged — should resolve the pending entry.
-        tx.send(ControlEvent::WindowPaneChanged {
+        tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@1".to_string(),
             pane_id: "%0".to_string(),
         })
@@ -3167,16 +3112,16 @@ mod tests {
             .unwrap()
             .insert("%9".to_string(), "@3".to_string());
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 17);
 
         // Bound window-close → emit + drop binding + drop panes in that window.
-        tx.send(ControlEvent::WindowClose {
+        tx.send(ProtocolEvent::WindowClose {
             window_id: "@3".to_string(),
         })
         .unwrap();
         // Unbound window-close → no emit.
-        tx.send(ControlEvent::WindowClose {
+        tx.send(ProtocolEvent::WindowClose {
             window_id: "@99".to_string(),
         })
         .unwrap();
@@ -3263,15 +3208,15 @@ mod tests {
             .unwrap()
             .insert("@5".to_string(), 18_500_099);
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 18);
 
-        tx.send(ControlEvent::WindowRenamed {
+        tx.send(ProtocolEvent::WindowRenamed {
             window_id: "@5".to_string(),
             name: "editor".to_string(),
         })
         .unwrap();
-        tx.send(ControlEvent::WindowRenamed {
+        tx.send(ProtocolEvent::WindowRenamed {
             window_id: "@404".to_string(),
             name: "orphan".to_string(),
         })
@@ -3406,7 +3351,7 @@ mod tests {
         });
         controller.register_pane("%42".to_string(), 100_000_042);
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 100);
 
         // Kick off capture_pane in a background task.
@@ -3418,28 +3363,28 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         // Drive the dispatch task with a synthetic %begin/%output/%end block.
-        tx.send(ControlEvent::CommandBegin {
+        tx.send(ProtocolEvent::CommandBegin {
             id: 7,
             timestamp: 1,
             flags: 0,
         })
         .unwrap();
-        tx.send(ControlEvent::CommandOutput {
+        tx.send(ProtocolEvent::CommandOutput {
             id: 7,
             line: "first line".to_string(),
         })
         .unwrap();
-        tx.send(ControlEvent::CommandOutput {
+        tx.send(ProtocolEvent::CommandOutput {
             id: 7,
             line: "second line".to_string(),
         })
         .unwrap();
-        tx.send(ControlEvent::CommandOutput {
+        tx.send(ProtocolEvent::CommandOutput {
             id: 7,
             line: "third line".to_string(),
         })
         .unwrap();
-        tx.send(ControlEvent::CommandEnd {
+        tx.send(ProtocolEvent::CommandEnd {
             id: 7,
             timestamp: 1,
             flags: 0,
@@ -3489,7 +3434,7 @@ mod tests {
         });
         controller.register_pane("%9".to_string(), 101_000_009);
 
-        let (tx, rx) = mpsc::unbounded_channel::<ControlEvent>();
+        let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(rx, controller.clone(), backend.clone(), 101);
 
         let controller_clone = Arc::clone(&controller);
@@ -3497,7 +3442,7 @@ mod tests {
             tokio::spawn(async move { controller_clone.capture_pane("%9", 50).await });
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
-        tx.send(ControlEvent::CommandError {
+        tx.send(ProtocolEvent::CommandError {
             id: 11,
             timestamp: 2,
             flags: 0,

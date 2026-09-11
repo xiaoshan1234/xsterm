@@ -41,6 +41,7 @@ pub(crate) mod dispatch;
 pub(crate) mod escape;
 pub(crate) mod events;
 pub(crate) mod parser;
+pub(crate) mod protocol;
 
 #[allow(unused_imports)]
 pub use controller::TmuxController;
