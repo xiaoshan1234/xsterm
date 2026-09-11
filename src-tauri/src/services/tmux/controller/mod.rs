@@ -25,10 +25,17 @@
 //! 3. The dispatch task interprets each event:
 //!    - `Output { pane_id, data }` → resolve the pane → xsterm session id
 //!      binding and emit `"session-output"` via [`AppBackend`].
+pub(crate) mod handshake;
 pub(crate) mod id_map;
+pub(crate) mod subscriber;
 
 // Re-export so existing `controller::TmuxController` callers keep working.
+pub use self::handshake::{
+    execute_plan, execute_step, parse_probe, plan_for, FirstPane, HandshakeError, HandshakePlan,
+    HandshakeResult, HandshakeStep, ProbeResult, HANDSHAKE_STEP_TIMEOUT,
+};
 pub use self::id_map::{CommandRegistry, RegisteredCommand, send_to_waiter};
+pub use self::subscriber::{RouterAction, RouterState};
 
 use super::commands as tmux_cmd;
 use super::dispatch::spawn_dispatch_task;
