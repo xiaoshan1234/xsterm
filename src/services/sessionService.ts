@@ -66,6 +66,26 @@ export async function createTmux(config: TmuxCcConfig): Promise<SessionInfo> {
 }
 
 /**
+ * Probe the tmux server for a session whose name matches
+ * `config.tmuxSessionName`. Returns `true` when one already exists,
+ * `false` otherwise. SSH is not supported by the backend probe yet
+ * (the command returns `Err` for SSH configs); callers should treat
+ * the `Err` as "fall back to the previous behaviour".
+ *
+ * Used by the Create Session dialog to decide between
+ * `create_tmux_session` and `attach_tmux_session` — see
+ * `doc/ai-terminal-migration/04-tmux-redesign-v0.md`.
+ */
+export async function probeTmuxSessionExists(
+  config: TmuxCcConfig,
+): Promise<boolean> {
+  logger.debug("sessionService", "probeTmuxSessionExists", { config });
+  const result = await invoke<boolean>("probe_tmux_session_exists", { config });
+  logger.debug("sessionService", "probeTmuxSessionExists:result", result);
+  return result;
+}
+
+/**
  * Attach to an existing `tmux -CC` server. Implemented as the
  * scrollback / reconnect path; the Tauri command is
  * `attach_tmux_session`. The frontend auto-attach flow (see

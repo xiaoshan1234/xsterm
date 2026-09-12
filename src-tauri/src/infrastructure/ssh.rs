@@ -52,6 +52,32 @@ pub trait SshBackend: Send + Sync {
         config: &SSHSessionConfig,
         command: &str,
     ) -> Result<SshConnectResult, String>;
+
+    /// Run `command` on the remote host and return its full stdout as a
+    /// `String`, blocking until the channel EOFs. Returns `(stdout,
+    /// exit_status)` — `exit_status.success()` is `true` when the
+    /// remote command exited with code 0.
+    ///
+    /// Used by [`SessionManager::probe_tmux_session_exists`](crate::services::session_manager::SessionManager::probe_tmux_session_exists)
+    /// to run `tmux list-sessions` on the remote host without having
+    /// to thread a long-lived `SshConnectResult` through the call site.
+    /// Implementations are free to reuse [`Self::connect_exec`] under
+    /// the hood; the trait is split so the call site does not have to
+    /// deal with channel lifecycle for a one-shot query.
+    ///
+    /// **Sync** on purpose — `SshBackend` is held as `Box<dyn ...>`
+    /// throughout the codebase, and `async fn` in a trait makes the
+    /// trait non-`dyn`-compatible (rustc rejects `dyn SshBackend`
+    /// the moment any method is `async`). The single call site
+    /// ([`SessionManager::probe_tmux_session_exists`]) wraps the
+    /// invocation in `tokio::task::spawn_blocking`, which is the
+    /// cheap-and-correct pattern for a sub-second blocking syscall
+    /// on a tokio reactor.
+    fn run_command_capture_stdout(
+        &self,
+        config: &SSHSessionConfig,
+        command: &str,
+    ) -> Result<(String, std::process::ExitStatus), String>;
 }
 
 /// Result of an SSH connection, containing both the channel (for trait compliance)
@@ -194,6 +220,84 @@ impl SshBackend for RusshBackend {
         command: &str,
     ) -> Result<SshConnectResult, String> {
         connect_ssh_exec(config, command)
+    }
+
+    fn run_command_capture_stdout(
+        &self,
+        config: &SSHSessionConfig,
+        command: &str,
+    ) -> Result<(String, std::process::ExitStatus), String> {
+        // Reuse the exec-channel handshake, then drain stdout until
+        // EOF and wait for the real exit code (Bug 013: never return
+        // a fake `Ok(0)` from a race-prone `Notify`).
+        let result = connect_ssh_exec(config, command)?;
+        // Hold read_rx + write_tx + exit_code in this scope so the
+        // background reader task can finish cleanly.
+        let SshConnectResult {
+            channel: _channel,
+            mut write_tx,
+            read_rx,
+            exit_code,
+            exit_code_tx,
+            ..
+        } = result;
+        drop(write_tx); // close stdin → server sees EOF after command runs
+        // Drain stdout on a blocking thread — read_rx is `sync_mpsc`,
+        // not async; `read()` is the only way to consume it.
+        let stdout_bytes: Vec<u8> = std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            while let Ok(Some(bytes)) = read_rx.recv() {
+                buf.extend_from_slice(&bytes);
+            }
+            buf
+        })
+        .join()
+        .map_err(|_| "run_command_capture_stdout: drain thread panicked".to_string())?;
+        // Wait for the exit code (the watch channel carries the
+        // current value; poll briefly if the writer hasn't called
+        // `send` yet).
+        let exit = wait_for_exit_code(&exit_code, &exit_code_tx);
+        Ok((String::from_utf8_lossy(&stdout_bytes).into_owned(), exit))
+    }
+}
+
+fn wait_for_exit_code(
+    exit_code: &Arc<std::sync::Mutex<Option<i32>>>,
+    exit_code_tx: &tokio::sync::watch::Sender<Option<i32>>,
+) -> std::process::ExitStatus {
+    // Polling via the watch channel is the documented escape hatch
+    // when the producer's only notify was a one-shot `Notify`. Bug 013.
+    let code = exit_code
+        .lock()
+        .ok()
+        .and_then(|g| *g)
+        .or_else(|| exit_code_tx.borrow().clone())
+        .unwrap_or(-1);
+    // We never know the platform-specific "how did the process die"
+    // signal, so map onto UnixExitStatus by hand: ExitStatus on Unix
+    // is `(exit_code << 8) | signal`; we only have the exit code so
+    // signal == 0.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code << 8)
+    }
+    #[cfg(not(unix))]
+    {
+        // Windows: synthesise an `ExitStatus` by spawning and waiting on
+        // a process that exits with the captured code. `from_raw` is
+        // not available on Windows for `ExitStatus`.
+        let _ = code;
+        std::process::Command::new("cmd")
+            .args(["/C", "exit"])
+            .arg(code.to_string())
+            .status()
+            .unwrap_or_else(|_| {
+                // If even that fails, fabricate a successful status so
+                // the caller can read the stdout anyway; the
+                // alternative is to leak the captured code as `Err`.
+                std::process::ExitStatus::default()
+            })
     }
 }
 

@@ -12,6 +12,22 @@
 //!   `pending_splits` / `pending_window_pane` / `pending_capture` queues
 //!   still own split / new-window / capture waits. PR-T5 hooks the
 //!   registry into the response router; PR-T8 deletes the old queues.
+
+//! ## PR-T7 additions (interaction redesign)
+//!
+//! - [`SpawnMode`] enum tells the controller + dispatch task whether we
+//!   just created a fresh tmux session (so only one window exists) or
+//!   attached to an existing one (so the server has N windows/panes we
+//!   must mirror into xsterm's pane tree). Fixes Bug: every Create
+//!   attaches to an existing server session and creates yet another
+//!   empty window — server has 7 windows, xsterm only shows the new one.
+//!
+//! ## Original job (unchanged in PR-T3)
+//!
+//! 1. Spawn `tmux` as a child process (Wave 1 local path) **or** open an
+//!   must mirror into xsterm's pane tree). Fixes Bug: every Create
+//!   attaches to an existing server session and creates yet another
+//!   empty window — server has 7 windows, xsterm only shows the new one.
 //!
 //! ## Original job (unchanged in PR-T3)
 //!
@@ -25,6 +41,25 @@
 //! 3. The dispatch task interprets each event:
 //!    - `Output { pane_id, data }` → resolve the pane → xsterm session id
 //!      binding and emit `"session-output"` via [`AppBackend`].
+
+/// How this controller was created — drives the dispatch task's
+/// behaviour on the `%window-add` / `%window-pane-changed` /
+/// `list-panes` / `list-windows` replies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SpawnMode {
+    /// `spawn_local` / `spawn_with_args`. We asked tmux to `new-session
+    /// -A`; the server should have created exactly one window for us
+    /// (after the unconditional `new-window` we enqueue). The dispatch
+    /// task only emits `tmux-pane-added` for the **first** pane per
+    /// window so xsterm doesn't get spammed with stale panes.
+    Create,
+    /// `spawn_attach`. We asked tmux to `attach-session -t <name>`;
+    /// the server has *N existing windows and panes*. The dispatch task
+    /// emits `tmux-pane-added` for **every** pane `list-panes -a` returns
+    /// so xsterm mirrors the server's full state.
+    Attach,
+}
+
 pub(crate) mod handshake;
 pub(crate) mod id_map;
 pub(crate) mod subscriber;
@@ -230,10 +265,18 @@ pub struct TmuxController {
     pub(crate) window_bindings: std::sync::Mutex<HashMap<String, u32>>,
     /// tmux session name for `tmux -CC attach-session` (set by
     /// `spawn_attach`; `None` for `spawn_local`). Wrapped in a `Mutex`
-    /// because `spawn_attach` writes it via the returned `Arc` after
-    /// `spawn_with_args` returns. Used by the `attachedTmuxServers`
-    /// persistence so we can re-attach on restart.
-    session_name: std::sync::Mutex<Option<String>>,
+        /// because `spawn_attach` writes it via the returned `Arc` after
+        /// `spawn_with_args` returns. Used by the `attachedTmuxServers`
+        /// persistence so we can re-attach on restart.
+        session_name: std::sync::Mutex<Option<String>>,
+        /// Whether this controller was created via `spawn_attach` (true) or
+        /// `spawn_local` / `spawn_with_args` (false). The dispatch task
+        /// uses this to decide whether to emit `tmux-pane-added` events
+        /// for *every* pane the server reports (Attach: server already has
+        /// windows/panes, we want xsterm to mirror them) or only the
+        /// bootstrap pane (Create: only one window exists, the one we just
+        /// asked the server to create).
+        pub(crate) spawn_mode: SpawnMode,
     /// in-flight `capture_pane` awaiter. Exactly one capture may
     /// be in flight at a time — tmux serialises command replies in order,
     /// and `capture_lock` enforces single-caller semantics so the
@@ -337,7 +380,7 @@ impl TmuxController {
             let result = ssh_backend.connect_exec(ssh_cfg, &command)?;
             let backend: Box<dyn TmuxBackend> =
                 Box::new(SshTmuxBackend::from_connect_result(result));
-            return Self::spawn_with_backend(backend, app_backend, controller_id);
+            return Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create);
         }
 
         // Local path: spawn `tmux` as a tokio child process.
@@ -351,7 +394,7 @@ impl TmuxController {
 
         let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, &argv_refs))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
-        Self::spawn_with_backend(backend, app_backend, controller_id)
+        Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)
     }
 
     /// Lower-level constructor — spawns tmux with `argv[1..]` already
@@ -374,7 +417,7 @@ impl TmuxController {
 
         let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, args))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
-        Self::spawn_with_backend(backend, app_backend, controller_id)
+        Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)
     }
 
     /// build a [`TmuxController`] around an already-constructed
@@ -386,10 +429,11 @@ impl TmuxController {
     /// Wave 1 `Arc<Mutex<Option<Child>>>` design did. Whoever wins runs
     /// with the backend; the loser sees `None` and exits silently.
     fn spawn_with_backend(
-        mut backend: Box<dyn TmuxBackend>,
-        app_backend: Arc<dyn AppBackend>,
-        controller_id: u32,
-    ) -> Result<Arc<Self>, String> {
+            mut backend: Box<dyn TmuxBackend>,
+            app_backend: Arc<dyn AppBackend>,
+            controller_id: u32,
+            mode: SpawnMode,
+        ) -> Result<Arc<Self>, String> {
         let stdout = backend
             .take_stdout()
             .map_err(|e| format!("tmux backend has no stdout: {e}"))?;
@@ -433,12 +477,13 @@ impl TmuxController {
             // after construction via the returned Arc.
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
-            capture_lock: tokio::sync::Mutex::new(()),
-            split_pane_timeout: SPLIT_PANE_TIMEOUT,
-        });
+                        current_command_id: std::sync::Mutex::new(None),
+                        current_command_lines: std::sync::Mutex::new(Vec::new()),
+                        pending_capture_body: std::sync::Mutex::new(Vec::new()),
+                        capture_lock: tokio::sync::Mutex::new(()),
+                        split_pane_timeout: SPLIT_PANE_TIMEOUT,
+                        spawn_mode: mode,
+                    });
 
         spawn_dispatch_task(
             dispatch_rx,
@@ -453,15 +498,29 @@ impl TmuxController {
         // initial `%begin` block, so we push it onto the writer
         // task's FIFO *before* returning — the writer task is the
         // sole owner of `stdin_rx`, and `stdin_tx.send` is non-blocking.
+        //
         // Bug 015: server creates the control session (via
         // `new-session -A` in the `tmux -CC` argv) but does NOT
         // automatically create a window/pane. We must explicitly
         // `new-window` to trigger `%window-add` + `%window-pane-changed`
-        // notifications needed to register the first pane.
-        controller
-            .stdin_tx
-            .send(tmux_cmd::new_window_in_current(None))
-            .map_err(|e| format!("failed to enqueue new-window: {e}"))?;
+        // notifications needed to register the first pane — but only
+        // when the session is *freshly created*. In `SpawnMode::Attach`
+        // the server already has N windows/panes; sending another
+        // `new-window` would silently create one more empty window on
+        // every re-attach. The dispatch task uses `spawn_mode` to
+        // decide whether to emit one `tmux-pane-added` (Create) or N
+        // (Attach).
+        if mode == SpawnMode::Create {
+            controller
+                .stdin_tx
+                .send(tmux_cmd::new_window_in_current(None))
+                .map_err(|e| format!("failed to enqueue new-window: {e}"))?;
+        } else {
+            tracing::info!(
+                "tmux controller {}: attach mode — skipping new-window (server already has panes)",
+                controller_id
+            );
+        }
 
         // Bug 017: instead of racing `list-panes` with `new-window`, we
         // schedule a delayed `list-windows` query that the dispatch
@@ -470,10 +529,29 @@ impl TmuxController {
         // for `await_first_pane`. The race-free chain is:
         //   new-window → %window-add → list-windows → %WindowList →
         //   list-panes → %PaneList → register_first_pane.
-        schedule_initial_state_sync(controller.stdin_tx.clone());
+        //
+        // In `SpawnMode::Attach` we *skipped* `new-window` above, so the
+        // server's existing windows drive the dispatch loop instead.
+        // We still need a list-panes -a to know the active pane for
+        // `await_first_pane`; list-windows is unused because there is
+        // no fresh `%window-add` to chain against.
+        if mode == SpawnMode::Create {
+            schedule_initial_state_sync(controller.stdin_tx.clone());
+        } else {
+            // Attach: query the server's existing panes directly.
+            // Do it inline (no thread::sleep) — the dispatch loop is
+            // not racing a `new-window` so there's no point waiting.
+            controller
+                .stdin_tx
+                .send(tmux_cmd::list_panes_with_format(
+                    "",
+                    tmux_cmd::DEFAULT_PANE_LIST_FORMAT,
+                ))
+                .map_err(|e| format!("failed to enqueue list-panes -a (attach): {e}"))?;
+        }
         tracing::info!(
-            "tmux controller {}: enqueued `new-window`; reader/writer/dispatch/monitor tasks spawned; initial state sync scheduled",
-            controller_id
+            "tmux controller {}: spawn complete (mode={:?}); reader/writer/dispatch/monitor tasks running",
+            controller_id, mode
         );
 
         Ok(controller)
@@ -541,7 +619,7 @@ impl TmuxController {
             Box::new(LocalTmuxBackend::new(child))
         };
 
-        let arc = Self::spawn_with_backend(backend, app_backend, controller_id)?;
+        let arc = Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Attach)?;
         // Stash the session name on the controller so the persistence layer
         // (`SessionManager::list_attached_tmux_servers`) can read it
         // without re-parsing the config.
@@ -1253,6 +1331,7 @@ impl TmuxController {
             // 5 s mirrors the production SPLIT_PANE_TIMEOUT (kept in
             // sync by hand — the constant is private to this module).
             split_pane_timeout: Duration::from_secs(5),
+            spawn_mode: SpawnMode::Create,
         })
     }
 
@@ -1890,6 +1969,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         assert!(controller.register_pane("%5".to_string(), 1001));
@@ -1947,6 +2027,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         controller.register_pane("%1".to_string(), 2001);
@@ -1989,6 +2070,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%7".to_string(), 7777);
 
@@ -2062,6 +2144,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2172,6 +2255,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2259,6 +2343,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         // Fire record_first_pane FIRST, with no sleep — simulate the
@@ -2298,6 +2383,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         let controller_for_wait = Arc::clone(&controller);
@@ -2343,6 +2429,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         controller.register_pane("%3".to_string(), 3003);
@@ -2395,6 +2482,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%5".to_string(), 8_000_042);
 
@@ -2462,6 +2550,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%9".to_string(), 9_000_007);
 
@@ -2524,6 +2613,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2587,6 +2677,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%5".to_string(), 11_000_042);
         // Pre-record the first pane so the dispatch task takes the
@@ -2683,6 +2774,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         };
         controller.register_pane("%5".to_string(), 12_000_001);
         controller.set_split_pane_timeout_for_tests(Duration::from_millis(50));
@@ -2739,6 +2831,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         };
         controller.register_pane("%0".to_string(), 13_000_001);
 
@@ -2793,6 +2886,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%5".to_string(), 14_000_001);
 
@@ -2858,6 +2952,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2997,6 +3092,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -3101,6 +3197,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         // Pre-register a window + pane (simulates bootstrap done).
         controller
@@ -3208,6 +3305,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller
             .window_bindings
@@ -3283,6 +3381,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         };
         controller
             .window_bindings
@@ -3355,6 +3454,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%42".to_string(), 100_000_042);
 
@@ -3438,6 +3538,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%9".to_string(), 101_000_009);
 
@@ -3500,6 +3601,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         };
 
         let err = controller
@@ -3550,6 +3652,7 @@ mod tests {
             pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: SpawnMode::Create,
         });
         controller.register_pane("%1".to_string(), 103_000_001);
 

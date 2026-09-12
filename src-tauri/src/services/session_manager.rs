@@ -206,9 +206,23 @@ pub struct SessionManager {
     sessions: DashMap<u32, Arc<ActiveSession>>,
     next_id: AtomicU32,
     pty_system: Box<dyn PtySystem>,
-    ssh_backend: Box<dyn SshBackend>,
+    ssh_backend: Arc<dyn SshBackend>,
     tmux_controllers: DashMap<u32, Arc<TmuxController>>,
     next_controller_id: AtomicU32,
+}
+
+/// Shell-quote a single argument for the probe command's remote shell.
+/// Conservative — wraps in single quotes and escapes embedded single
+/// quotes. We do not need a full POSIX-shell quoter because `tmux -L`
+/// only sees a single token; `run_command_capture_stdout` hands the
+/// resulting string to a remote shell which then splits it for tmux.
+///
+/// Module-level free function (not an associated fn on
+/// `SessionManager`) so the call site can use it without `Self::`
+/// qualification and so the function is reusable by future helpers
+/// (e.g. an HTTP `GET /api/tmux/sessions`).
+fn tmux_probe_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 impl SessionManager {
@@ -218,7 +232,7 @@ impl SessionManager {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(NativePtySystem::new()),
-            ssh_backend: Box::new(SshBackendImpl::new()),
+            ssh_backend: Arc::new(SshBackendImpl::new()),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         }
@@ -326,6 +340,97 @@ impl SessionManager {
             xsterm_id
         );
         Ok(info)
+    }
+
+    /// Probe the tmux server (local or via SSH) for a session with the
+    /// given name. Returns `true` when the session exists, `false` when
+    /// it does not (or the server isn't running), and `Err` only for
+    /// transport / spawn failures (DNS, auth, command-not-found) — not
+    /// for "session not found".
+    ///
+    /// Used by the Create Session dialog to decide between
+    /// `create_tmux_session` and `attach_tmux_session` (PR-T7 in the
+    /// tmux-redesign track): the controller's new-window shortcut only
+    /// works on a fresh session, so when the user types a name that
+    /// already exists on the server we want the attach path, not
+    /// `new-session -A` which tmux treats as an attach but would still
+    /// trigger the controller's stale new-window enqueue.
+    ///
+    /// **Scope:** local + SSH. The local path spawns
+    /// `tmux -L <socket> list-sessions -F '#{session_name}'`; the SSH
+    /// path delegates to
+    /// [`SshBackend::run_command_capture_stdout`](crate::infrastructure::ssh::SshBackend::run_command_capture_stdout)
+    /// which runs the same `tmux` command on the remote host via an
+    /// exec channel. Both treat the absence of the named session the
+    /// same way (`Ok(false)`).
+    pub async fn probe_tmux_session_exists(
+        &self,
+        config: &TmuxCcConfig,
+    ) -> Result<bool, String> {
+        let socket = config
+            .socket_name
+            .as_deref()
+            .unwrap_or("default");
+        let name = config.tmux_session_name.as_deref().ok_or_else(|| {
+            "probe_tmux_session_exists: tmuxSessionName is required".to_string()
+        })?;
+        if let Some(ssh_cfg) = config.ssh.as_ref() {
+            // Build the remote command. We use a simple `tmux` argv
+            // here (no -CC) so the remote tmux treats this as a plain
+            // one-shot query, not a control client. The socket name
+            // is user-supplied so we shell-quote it (defensive — the
+            // actual tmux socket path charset is conservative but
+            // `run_command_capture_stdout` hands the string to a
+            // remote shell, not directly to tmux).
+            let command = format!(
+                "tmux -L {} list-sessions -F '#{{session_name}}'",
+                tmux_probe_quote(socket)
+            );
+            let ssh_cfg = ssh_cfg.clone();
+            let backend = Arc::clone(&self.ssh_backend);
+            // `run_command_capture_stdout` is sync (russh handshake +
+            // drain run in a blocking thread); wrap with
+            // spawn_blocking so we don't block the tokio reactor.
+            let join = tokio::task::spawn_blocking(move || {
+                backend.run_command_capture_stdout(&ssh_cfg, &command)
+            })
+            .await
+            .map_err(|e| {
+                format!("probe_tmux_session_exists: SSH probe task panicked: {e}")
+            })?;
+            let (stdout, status) = join?;
+            if !status.success() {
+                // No server / permission denied / etc. — not an error
+                // from the caller's perspective.
+                return Ok(false);
+            }
+            return Ok(stdout.lines().any(|line| line.trim() == name));
+        }
+        let output = tokio::process::Command::new("tmux")
+            .args([
+                "-L",
+                socket,
+                "list-sessions",
+                "-F",
+                "#{session_name}",
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await
+            .map_err(|e| {
+                format!("probe_tmux_session_exists: failed to spawn `tmux`: {e}")
+            })?;
+        // list-sessions exits 0 + stdout lines for every session when a
+        // server is running. It exits 1 + stderr "no server running on
+        // /tmp/tmux-..." when there is no server. We treat both as
+        // "session does not exist" (Ok(false)).
+        if !output.status.success() {
+            return Ok(false);
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.lines().any(|line| line.trim() == name))
     }
 
     /// attach to an existing `tmux -CC` server and register the
@@ -1047,6 +1152,11 @@ mod tests {
                 config: &SSHSessionConfig,
                 command: &str,
             ) -> Result<SshConnectResult, String>;
+            fn run_command_capture_stdout(
+                &self,
+                config: &SSHSessionConfig,
+                command: &str,
+            ) -> Result<(String, std::process::ExitStatus), String>;
         }
     }
 
@@ -1061,6 +1171,14 @@ mod tests {
             command: &str,
         ) -> Result<SshConnectResult, String> {
             self.connect_exec(config, command)
+        }
+
+        fn run_command_capture_stdout(
+            &self,
+            config: &SSHSessionConfig,
+            command: &str,
+        ) -> Result<(String, std::process::ExitStatus), String> {
+            self.run_command_capture_stdout(config, command)
         }
     }
 
@@ -1153,7 +1271,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(mock_pty_system),
-            ssh_backend: Box::new(MockSshBackendM::new()),
+            ssh_backend: Arc::new(MockSshBackendM::new()),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         }
@@ -1504,7 +1622,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
-            ssh_backend: Box::new(mock_ssh_backend),
+            ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         };
@@ -1572,7 +1690,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
-            ssh_backend: Box::new(mock_ssh_backend),
+            ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         };
@@ -1631,7 +1749,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
-            ssh_backend: Box::new(mock_ssh_backend),
+            ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         };
@@ -1690,7 +1808,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
-            ssh_backend: Box::new(mock_ssh_backend),
+            ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         };
@@ -1746,7 +1864,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
-            ssh_backend: Box::new(mock_ssh_backend),
+            ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         };
@@ -1792,7 +1910,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
-            ssh_backend: Box::new(mock_ssh_backend),
+            ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         };
@@ -1853,7 +1971,7 @@ mod tests {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             pty_system: Box::new(mock_pty_system),
-            ssh_backend: Box::new(mock_ssh_backend),
+            ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
         };

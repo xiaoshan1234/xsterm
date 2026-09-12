@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import * as sessionService from "../../services/sessionService";
+import { logger } from "../../contexts/LoggerContext";
 import type {
   LocalSessionConfig,
   SavedSessionConfig,
@@ -260,7 +261,16 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
    * create a local tmux control-mode session and a default workspace.
    *
    * Call chain: createTmuxSession → createAndActivateSession("tmux-cc", ...)
-   * → backend sessionService.createTmux(config) → sessions[] + auto-create window.
+   * → probe_tmux_session_exists (optional) → backend sessionService.createTmux
+   * or attachTmux → sessions[] + auto-create window.
+   *
+   * When the server already has a session with the same
+   * `tmuxSessionName`, the controller's `new-window` shortcut (which
+   * it only takes on a fresh session) would otherwise be wasted and
+   * the user would see a phantom empty window on top of their
+   * existing panes. So we probe first and re-route to
+   * `attach_tmux_session` when the session exists. The probe is
+   * local-only (SSH falls through to the previous behaviour).
    */
   const createTmuxSession = useCallback(
     async (
@@ -270,7 +280,28 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Session> => {
       return createAndActivateSession(
         "tmux-cc",
-        () => sessionService.createTmux(config),
+        async () => {
+          let alreadyExists = false;
+          try {
+            alreadyExists = await sessionService.probeTmuxSessionExists(
+              config,
+            );
+          } catch (err) {
+            // Probe is best-effort. If it fails (SSH, transport
+            // error, command-not-found), fall through to the create
+            // path — same behaviour as before this PR.
+            const reason = err instanceof Error ? err.message : String(err);
+            logger.warn(
+              "useSessionLifecycle",
+              "probe_tmux_session_exists failed; falling back to createTmux",
+              reason,
+            );
+          }
+          if (alreadyExists) {
+            return await sessionService.attachTmux(config);
+          }
+          return await sessionService.createTmux(config);
+        },
         config,
         save,
         false,

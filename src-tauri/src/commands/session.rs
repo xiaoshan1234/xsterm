@@ -495,3 +495,24 @@ pub async fn register_existing_tmux_panes(
     }
     state.register_existing_tmux_panes(specs)
 }
+
+/// Probe the tmux server for a session with the same name as
+/// `config.tmux_session_name`. Returns `true` if the session already
+/// exists, `false` otherwise. The Create Session dialog calls this
+/// before deciding between `create_tmux_session` and
+/// `attach_tmux_session` — see
+/// `doc/ai-terminal-migration/04-tmux-redesign-v0.md` and the
+/// `probe_tmux_session_exists` method on `SessionManager` for the
+/// rationale.
+///
+/// Returns `Err(_)` only for transport / spawn failures (not for
+/// "session not found"). SSH is currently not supported by the probe
+/// (a follow-up PR); the method returns `Err` for SSH configs so the
+/// frontend can fall back to its previous behaviour.
+#[tauri::command]
+pub async fn probe_tmux_session_exists(
+    config: TmuxCcConfig,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<bool, String> {
+    state.probe_tmux_session_exists(&config).await
+}
