@@ -33,8 +33,8 @@ pub use command::{CommandId, CommandKind, ResponseOutcome, ResponseWaiter, Tagge
 pub use events::ProtocolEvent;
 pub use version::{parse_version, CapabilityMatrix, CommandListEntry, TmuxProtocolVersion};
 pub use wire::{
-    attach_session_create, kill_pane, kill_window, list_panes_with_format,
-    list_windows, new_window_in_current, refresh_client_control, rename_window,
-    resize_pane, send_keys, split_window, DEFAULT_PANE_LIST_FORMAT,
+    attach_session_create, detach_client, kill_pane, kill_server, kill_window,
+    list_panes_with_format, list_windows, new_window_in_current, refresh_client_control,
+    rename_window, resize_pane, send_keys, split_window, DEFAULT_PANE_LIST_FORMAT,
     DEFAULT_WINDOW_LIST_FORMAT,
 };

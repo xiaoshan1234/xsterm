@@ -9,10 +9,10 @@
 //! directly.** The shim will be removed in PR-T5.
 
 pub use crate::services::tmux::protocol::wire::{
-    attach_session_create, kill_pane, kill_window, list_panes, list_panes_for_bootstrap,
-    list_panes_with_format, list_sessions, list_windows, new_window, new_window_in_current,
-    refresh_client, refresh_client_control, rename_window, resize_pane, send_keys,
-    split_window, capture_pane, DEFAULT_PANE_LIST_FORMAT, DEFAULT_WINDOW_LIST_FORMAT,
+    attach_session_create, detach_client, kill_pane, kill_server, kill_window, list_panes,
+    list_panes_for_bootstrap, list_panes_with_format, list_sessions, list_windows, new_window,
+    new_window_in_current, refresh_client, refresh_client_control, rename_window, resize_pane,
+    send_keys, split_window, capture_pane, DEFAULT_PANE_LIST_FORMAT, DEFAULT_WINDOW_LIST_FORMAT,
 };
 
 #[cfg(test)]

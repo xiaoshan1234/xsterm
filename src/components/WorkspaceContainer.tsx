@@ -5,6 +5,7 @@ import { useClampedPanelHeight } from "../hooks/useClampedPanelHeight";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
 import { WindowTabBar } from "./WindowTabBar";
+import { TmuxControlWindowView } from "./TmuxControlWindowView";
 import CommandSendPanel from "./CommandSendPanel";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
@@ -101,6 +102,27 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     }
   }, [workspace.name, workspace.id, saveWorkspace]);
 
+  // The "+" button on the tab bar creates a tmux window on the
+  // server when the active window is a tmux-control-window
+  // (ADR 0009 §2.4 "windows-control + New Window" + Phase E). For
+  // any other active window we keep the legacy behaviour (open a
+  // local init Window that prompts the user to attach / create a
+  // session).
+  const handleAdd = useCallback(() => {
+    if (activeWindow?.windowType === "tmux-control" && activeWindow.tmuxControlWindowId !== undefined) {
+      createWindow(
+        workspace.id,
+        undefined,
+        undefined,
+        undefined,
+        "terminal",
+        activeWindow.tmuxControlWindowId,
+      );
+      return;
+    }
+    createWindow(workspace.id, undefined, undefined, undefined, "init");
+  }, [activeWindow, createWindow, workspace.id]);
+
   return (
     <div
       className="workspace-container"
@@ -112,7 +134,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         workspace={workspace}
         activeWindowId={workspace.activeWindowId}
         onSelect={(windowId) => setActiveWindow(workspace.id, windowId)}
-        onAdd={() => createWindow(workspace.id, undefined, undefined, undefined, "init")}
+        onAdd={handleAdd}
         onSaveAll={handleSaveAll}
         onSaveWindow={(windowId) => setSavingWindowId(windowId)}
         onCloseWindow={(windowId) => closeWindow(workspace.id, windowId)}
@@ -130,6 +152,8 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
         >
           {window.windowType === "init" ? (
             <InitWindowView workspace={workspace} windowId={window.id} />
+          ) : window.windowType === "tmux-control" ? (
+            <TmuxControlWindowView window={window} />
           ) : (
             <PaneTree
               workspace={workspace}

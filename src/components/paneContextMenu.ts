@@ -31,7 +31,8 @@ export interface PaneMenuActions {
  *  - If session attached: Select All, Copy, (Paste if connected), Clear Pane
  *  - Always: Close Pane (danger)
  *  - If session attached: Close Session (danger)
- *  - tmux session: New Tmux Window, Rename Tmux Window, Close Tmux Window
+ *  - tmux session: New Tmux Window, Rename Tmux Window,
+ *    Delete from tmux server
  */
 export function buildPaneContextMenu(
   session: Session | undefined,
@@ -70,8 +71,12 @@ export function buildPaneContextMenu(
       items.push({ label: "Rename Tmux Window…", onClick: actions.renameTmuxWindow });
     }
     if (actions.killTmuxWindow && hasTmuxWindowId) {
+      // ADR 0009 §2.10: rename "Close Tmux Window" → "Delete from
+      // tmux server" so the destructive nature of kill-window is
+      // explicit. The user can still detach (i.e. close the
+      // underlying session) via the standard "Close Session" item.
       items.push({
-        label: "Close Tmux Window",
+        label: "Delete from tmux server",
         onClick: actions.killTmuxWindow,
         danger: true,
       });

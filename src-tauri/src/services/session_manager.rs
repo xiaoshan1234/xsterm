@@ -2,7 +2,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use tauri::AppHandle;
 
+use crate::commands::persistence::save_attached_tmux_servers_impl;
 use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{NativePtySystem, PtySystem};
 use crate::infrastructure::session_backend::SessionBackend;
@@ -658,6 +660,154 @@ impl SessionManager {
         }
 
         controller.close().map_err(|e| e.to_string())
+    }
+
+    /// Detach the control client for `controller_id` from its tmux
+    /// session and tear down the Rust-side state for that controller.
+    ///
+    /// Frontend entry point: `detach_tmux_controller` Tauri command.
+    ///
+    /// Flow (ADR 0009 §2.9):
+    /// 1. Look up the controller; if it's gone, return `Ok(())`
+    ///    (idempotent — the frontend may retry after the controller
+    ///    already exited).
+    /// 2. Send `detach-client -s "<session_name>"` to the controller's
+    ///    stdin. tmux treats this as a graceful disconnect: the
+    ///    session + windows stay alive on the server; the control
+    ///    client child exits.
+    /// 3. Remove the controller from `tmux_controllers` and unbind
+    ///    every pane session it owned. We do NOT call
+    ///    [`TmuxController::close`] — the natural exit path through
+    ///    the monitor task is what lets the dispatch task fire
+    ///    `tmux-controller-exit` for the frontend.
+    ///
+    /// Errors:
+    /// - Unknown controller id → `Ok(())` (already detached / closed).
+    /// - Controller has no `session_name` recorded → `Err(_)` from the
+    ///   wire command (we still drop the controller + panes).
+    /// - Stdin channel already closed → best-effort; the controller
+    ///   is already exiting on its own.
+    pub fn detach_tmux_controller(&self, controller_id: u32) -> Result<(), String> {
+        let Some((_, controller)) = self.tmux_controllers.remove(&controller_id) else {
+            return Ok(());
+        };
+
+        // Best-effort wire command. Failure here means the child
+        // already exited (e.g. user killed the tmux server) — we still
+        // drop our local state.
+        if let Err(e) = controller.detach_client() {
+            tracing::warn!(
+                "detach_tmux_controller({}): detach-client write failed: {e}; continuing",
+                controller_id
+            );
+        }
+
+        // Clean up the pane sessions that belonged to this controller.
+        let pane_ids: Vec<u32> = self
+            .sessions
+            .iter()
+            .filter_map(|entry| {
+                if entry.value().tmux_controller_id() == Some(controller_id) {
+                    Some(*entry.key())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for pane_id in pane_ids {
+            if let Err(e) = self.close(pane_id) {
+                tracing::warn!(
+                    "detach_tmux_controller({}): dropping pane {} raised: {e}",
+                    controller_id,
+                    pane_id
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Tell the tmux server to shut down via `kill-server` and tear
+    /// down the Rust-side state for that controller.
+    ///
+    /// Frontend entry point: `kill_server_via_controller` Tauri command.
+    /// Distinct from `detach_tmux_controller`: the session + windows
+    /// are destroyed server-side. ADR 0009 §2.4 row "Remote delete".
+    ///
+    /// Fire-and-forget: we don't wait for the tmux child to exit; the
+    /// monitor task observes the backend exit and the dispatch task
+    /// fires `tmux-controller-exit` for the frontend.
+    pub fn kill_server_via_controller(&self, controller_id: u32) -> Result<(), String> {
+        let Some((_, controller)) = self.tmux_controllers.remove(&controller_id) else {
+            return Ok(());
+        };
+
+        if let Err(e) = controller.kill_server() {
+            tracing::warn!(
+                "kill_server_via_controller({}): kill-server write failed: {e}; continuing",
+                controller_id
+            );
+        }
+
+        let pane_ids: Vec<u32> = self
+            .sessions
+            .iter()
+            .filter_map(|entry| {
+                if entry.value().tmux_controller_id() == Some(controller_id) {
+                    Some(*entry.key())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for pane_id in pane_ids {
+            if let Err(e) = self.close(pane_id) {
+                tracing::warn!(
+                    "kill_server_via_controller({}): dropping pane {} raised: {e}",
+                    controller_id,
+                    pane_id
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Remove a single controller's entry from the on-disk
+    /// `attached_tmux.json` store so the next startup does not
+    /// auto-attach it. ADR 0009 §2.9 + A9.
+    ///
+    /// If the controller is still registered we look up its
+    /// `session_name`; if it has already exited, we fall back to the
+    /// `tmux_controllers` map state at call time. The "session_name
+    /// to remove" is matched against the live list to produce the
+    /// filtered list we save back to disk.
+    ///
+    /// Idempotent: removing a non-existent entry is a no-op (the
+    /// filtered list already excludes it).
+    pub fn unmark_attached_tmux(
+        &self,
+        controller_id: u32,
+        app: &AppHandle,
+    ) -> Result<(), String> {
+        // The session name we want to drop. If the controller is
+        // already gone, we still have nothing to match — fall through
+        // and let `list_attached_tmux_servers` reflect the current
+        // truth.
+        let target_name = self
+            .tmux_controllers
+            .get(&controller_id)
+            .and_then(|c| c.value().session_name());
+
+        let live = self.list_attached_tmux_servers();
+        let filtered: Vec<AttachedTmuxServer> = match target_name.as_ref() {
+            Some(name) => live
+                .into_iter()
+                .filter(|s| s.session_name != *name)
+                .collect(),
+            None => live,
+        };
+        save_attached_tmux_servers_impl(app, &filtered)
     }
 
     /// Split `parent_xsterm_session_id` (a tmux pane session that already

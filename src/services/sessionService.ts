@@ -305,8 +305,8 @@ export async function killTmuxWindow(xstermWindowId: number): Promise<void> {
  * update the matching xsterm Window's `name`.
  *
  * `xstermWindowId` is the **xsterm** window id (NOT the tmux window
- * id). The frontend looks this up from the `tmux-window-added` event
- * payload when it created the Window.
+ * id). The frontend looks this up from the `tmux-window-added`
+ * event payload when it created the Window.
  */
 export async function renameTmuxWindow(
   xstermWindowId: number,
@@ -315,4 +315,56 @@ export async function renameTmuxWindow(
   logger.debug("sessionService", "renameTmuxWindow", { xstermWindowId, name });
   await invoke("rename_tmux_window", { xstermWindowId, name });
   logger.debug("sessionService", "renameTmuxWindow:result", undefined);
+}
+
+/**
+ * Detach the control client for `controllerId` from its tmux session
+ * without destroying the server-side session + windows. ADR 0009
+ * §2.9 + §2.4 row "Disconnect".
+ *
+ * The backend writes `detach-client -s "<name>"` to the controller's
+ * stdin and removes the controller from the in-memory registry. The
+ * tmux child exits naturally; the dispatch task emits
+ * `tmux-controller-exit` which the frontend listener uses to drop
+ * every `Session` that was bound to this controller and to grey-out
+ * the corresponding xsterm windows.
+ *
+ * Idempotent: unknown `controllerId` returns `Ok(())`.
+ */
+export async function detachTmux(controllerId: number): Promise<void> {
+  logger.debug("sessionService", "detachTmux", { controllerId });
+  await invoke("detach_tmux_controller", { controllerId });
+  logger.debug("sessionService", "detachTmux:result", undefined);
+}
+
+/**
+ * Shut down the entire tmux server reachable via `controllerId`
+ * (every session, every window, every pane). ADR 0009 §2.9 + §2.4
+ * row "Remote delete".
+ *
+ * The backend writes `kill-server` to the controller's stdin. The
+ * tmux child exits because its server is gone; the dispatch task
+ * emits `tmux-controller-exit` for the frontend listener.
+ *
+ * Idempotent: unknown `controllerId` returns `Ok(())`.
+ */
+export async function killServerViaController(controllerId: number): Promise<void> {
+  logger.debug("sessionService", "killServerViaController", { controllerId });
+  await invoke("kill_server_via_controller", { controllerId });
+  logger.debug("sessionService", "killServerViaController:result", undefined);
+}
+
+/**
+ * Remove a controller's entry from the persisted `attached_tmux.json`
+ * store so the next startup does not auto-attach it. ADR 0009 §2.9 +
+ * A9.
+ *
+ * Called by the frontend's "Close control-window" and "Remote delete"
+ * UI paths so the user's explicit teardown does not leave a ghost
+ * entry behind for the next session to silently re-attach.
+ */
+export async function unmarkAttachedTmux(controllerId: number): Promise<void> {
+  logger.debug("sessionService", "unmarkAttachedTmux", { controllerId });
+  await invoke("unmark_attached_tmux", { controllerId });
+  logger.debug("sessionService", "unmarkAttachedTmux:result", undefined);
 }

@@ -1129,6 +1129,46 @@ impl TmuxController {
         self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
     }
 
+    /// send `detach-client -s "<session_name>"` to tmux.
+    ///
+    /// tmux treats this as a graceful disconnect: the control client
+    /// child process exits cleanly (`%exit`), the tmux server + its
+    /// session + windows stay alive, and the monitor task observes the
+    /// backend exit which the dispatch task propagates to the frontend
+    /// as `tmux-controller-exit`.
+    ///
+    /// Returns `Err(SessionManagerNotFound)` if the controller never
+    /// recorded a session name (the `session_name` slot is `None`,
+    /// typically because spawn_attach was called without a
+    /// `tmuxSessionName` in the config). Returns `Err(AlreadyClosed)`
+    /// if the writer channel is gone (the controller already exited).
+    /// ADR 0009 §2.9.
+    pub fn detach_client(&self) -> Result<(), TmuxError> {
+        let name = self.session_name().ok_or_else(|| {
+            TmuxError::Internal(format!(
+                "tmux controller {} has no recorded session_name — cannot detach",
+                self.controller_id
+            ))
+        })?;
+        let cmd = tmux_cmd::detach_client(&name);
+        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+    }
+
+    /// send `kill-server` to tmux.
+    ///
+    /// tmux shuts down the entire server (every session, every window,
+    /// every pane). The control client child process exits because the
+    /// server it was attached to is gone; the monitor task observes the
+    /// backend exit which the dispatch task propagates to the frontend
+    /// as `tmux-controller-exit`.
+    ///
+    /// Returns `Err(AlreadyClosed)` if the writer channel is gone.
+    /// ADR 0009 §2.9.
+    pub fn kill_server(&self) -> Result<(), TmuxError> {
+        let cmd = tmux_cmd::kill_server();
+        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+    }
+
     /// snapshot of every pane currently registered with this
     /// controller. Returns `(tmux_pane_id, tmux_window_id)` pairs. Used by
     /// [`SessionManager::kill_tmux_window`](crate::services::session_manager::SessionManager::kill_tmux_window)

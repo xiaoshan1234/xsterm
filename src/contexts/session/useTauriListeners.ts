@@ -8,7 +8,9 @@ import {
   type TmuxPaneRemovedEvent,
   type TmuxWindowAddedEvent,
   type TmuxWindowClosedEvent,
+  type TmuxWindowListEntry,
   type TmuxWindowRenamedEvent,
+  type Window,
 } from "../../types/session";
 import {
   createLeafPane,
@@ -74,6 +76,7 @@ type ListenersState = Pick<
   | "establishingSessionsRef"
   | "setTmuxControllerErrors"
   | "tmuxControllerConfigsRef"
+  | "tmuxWindowListsRef"
 >;
 
 export function useTauriListeners({
@@ -84,6 +87,7 @@ export function useTauriListeners({
   establishingSessionsRef,
   setTmuxControllerErrors,
   tmuxControllerConfigsRef,
+  tmuxWindowListsRef,
 }: ListenersState): void {
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +185,14 @@ export function useTauriListeners({
       // `attachTmux` / `createTmux` on Retry. If the controller was
       // never registered (e.g. a Wave 0 test session) we silently skip
       // the banner so we don't show a banner with no retry path.
+      //
+      // ADR 0009 §2.7: also drop every ordinary tmux-window that
+      // belonged to this controller (a tmux-window whose only panes
+      // were the dead sessions becomes leafless and should not stay
+      // in the workspace as an empty ghost). The control-window for
+      // this controller is intentionally left in place — the user
+      // closes it via the tab × button, which routes through
+      // `closeWindow` and calls `unmark_attached_tmux`.
       const unlistenTmuxControllerExit = await listen<{
         controllerId: number;
         reason?: string;
@@ -198,23 +210,41 @@ export function useTauriListeners({
           }
           setSessions((prev) => prev.filter((s) => !deadIds.has(s.id)));
           setWorkspaces((prev) =>
-            prev.map((workspace) =>
-              withRecomputedSessionIds({
+            prev.map((workspace) => {
+              // Drop every ordinary tmux-window whose only panes just died.
+              // Control-windows stay so the user can see "this controller
+              // is dead" and close it explicitly via the tab UI.
+              const surviving: Window[] = [];
+              for (const window of workspace.windows) {
+                if (window.windowType === "tmux-control") {
+                  surviving.push(window);
+                  continue;
+                }
+                let root = window.rootPane;
+                for (const id of deadIds) {
+                  root = removeSessionAndCollapse(root, id);
+                }
+                const leafCount = getLeafPaneIds(root).length;
+                if (leafCount === 0) continue; // drop the ghost window
+                const newActivePaneId = findPaneNode(root, window.activePaneId ?? "")
+                  ? window.activePaneId
+                  : (getLeafPaneIds(root)[0] ?? null);
+                surviving.push({ ...window, rootPane: root, activePaneId: newActivePaneId });
+              }
+              const nextActiveId = surviving.find((w) => w.id === workspace.activeWindowId)
+                ? workspace.activeWindowId
+                : (surviving[0]?.id ?? null);
+              return withRecomputedSessionIds({
                 ...workspace,
-                windows: workspace.windows.map((window) => {
-                  let root = window.rootPane;
-                  for (const id of deadIds) {
-                    root = removeSessionAndCollapse(root, id);
-                  }
-                  const newActivePaneId = findPaneNode(root, window.activePaneId ?? "")
-                    ? window.activePaneId
-                    : (getLeafPaneIds(root)[0] ?? null);
-                  return { ...window, rootPane: root, activePaneId: newActivePaneId };
-                }),
-              }),
-            ),
+                windows: surviving,
+                activeWindowId: nextActiveId,
+              });
+            }),
           );
         }
+        // Always clear the per-controller window-list cache so a
+        // future attach starts fresh.
+        tmuxWindowListsRef.current.delete(controllerId);
         if (storedConfig) {
           setTmuxControllerErrors((prev) => {
             const next = new Map(prev);
@@ -364,20 +394,31 @@ export function useTauriListeners({
           }
 
           // Pick a target workspace: prefer the one that already
-          // contains a window for this controller, else the active
-          // workspace, else the first workspace. If none exist, the
-          // UI is in an unusual state and we skip creating a window
-          // (the frontend's tmux-controller-exit handler will clean
-          // up later).
+          // has the control-window for this controller (ADR 0009
+          // §2.7), then the one with an existing tmux-window for
+          // this controller, then the active / first workspace.
+          // The control-window lookup is essential: the listener
+          // may fire BEFORE `tmux-window-list` lands (so the
+          // control-window doesn't exist yet), in which case we
+          // fall back to "any workspace that already has a
+          // tmux-window for this controller" and finally the
+          // active workspace — and insert the control-window
+          // lazily when we get there (the next `setWorkspaces`
+          // branch below handles that).
           const targetWorkspaceId = (() => {
+            const withControlWindow = workspacesRef.current.find((w) =>
+              w.windows.some((win) => win.tmuxControlWindowId === controllerId),
+            );
+            if (withControlWindow) return withControlWindow.id;
             const withController = workspacesRef.current.find((w) =>
-              w.windows.some((win) =>
-                win.rootPane.sessionId !== undefined &&
-                sessionsRef.current.some(
-                  (s) =>
-                    s.id === win.rootPane.sessionId &&
-                    s.tmuxControllerId === controllerId,
-                ),
+              w.windows.some(
+                (win) =>
+                  win.rootPane.sessionId !== undefined &&
+                  sessionsRef.current.some(
+                    (s) =>
+                      s.id === win.rootPane.sessionId &&
+                      s.tmuxControllerId === controllerId,
+                  ),
               ),
             );
             if (withController) return withController.id;
@@ -388,22 +429,58 @@ export function useTauriListeners({
           })();
           if (!targetWorkspaceId) return;
 
+          // Resolve the tmux session name for the control-window
+          // tab. The Session that just came back carries the
+          // same backend controller id, but the front-end
+          // `Session.sessionType.config` is intentionally empty
+          // (`buildTmuxPaneSession` only fills the discriminator).
+          // The original `TmuxCcConfig` lives in
+          // `tmuxControllerConfigsRef` keyed by controller id.
+          const tmuxSessionName =
+            tmuxControllerConfigsRef.current.get(controllerId)?.tmuxSessionName ??
+            `tmux-${controllerId}`;
+
           const rootPane = createLeafPane(100, xstermSessionId, "");
           const windowName = `Window ${xstermPaneId}`;
           setWorkspaces((prev) =>
             prev.map((workspace) => {
               if (workspace.id !== targetWorkspaceId) return workspace;
-              const newWindow = {
+              const hasControlWindow = workspace.windows.some(
+                (win) => win.tmuxControlWindowId === controllerId,
+              );
+              // Lazily insert the control-window at the head of the
+              // windows[] when this listener fires for a controller
+              // whose control-window hasn't been installed yet. This
+              // catches the race where tmux-window-added arrives
+              // before tmux-window-list (the bridge batch). ADR 0009
+              // §2.7 step (4).
+              const controlWindow: Window = {
+                id: crypto.randomUUID(),
+                name: tmuxSessionName,
+                rootPane: {
+                  id: crypto.randomUUID(),
+                  type: "leaf",
+                  size: 100,
+                },
+                activePaneId: null,
+                windowType: "tmux-control",
+                tmuxControlWindowId: controllerId,
+                tmuxControlName: tmuxSessionName,
+              };
+              const newWindow: Window = {
                 id: crypto.randomUUID(),
                 name: windowName,
                 rootPane,
                 activePaneId: rootPane.id,
-                windowType: "terminal" as const,
+                windowType: "terminal",
                 xstermWindowId,
               };
+              const baseWindows = hasControlWindow
+                ? workspace.windows
+                : [controlWindow, ...workspace.windows];
               return withRecomputedSessionIds({
                 ...workspace,
-                windows: [...workspace.windows, newWindow],
+                windows: [...baseWindows, newWindow],
                 activeWindowId: newWindow.id,
               });
             }),
@@ -515,6 +592,15 @@ export function useTauriListeners({
               ),
             })),
           );
+          // Keep the per-controller window-list cache in sync so the
+          // windows-control card reflects the rename without waiting
+          // for a fresh `tmux-window-list` event.
+          for (const [controllerId, entries] of tmuxWindowListsRef.current) {
+            const updated = entries.map((e) =>
+              e.xstermWindowId === xstermWindowId ? { ...e, name } : e,
+            );
+            tmuxWindowListsRef.current.set(controllerId, updated);
+          }
         },
       ).catch((e) => {
         console.error("Failed to listen tmux-window-renamed:", e);
@@ -525,11 +611,61 @@ export function useTauriListeners({
         return;
       }
       if (unlistenTmuxWindowRenamed) unlisteners.push(unlistenTmuxWindowRenamed);
+
+      // tmux-window-list. Bridge module emits this once per
+      // controller after the bootstrap `list-windows` reply so the
+      // frontend can render the full set of tmux windows atomically
+      // (instead of N individual `tmux-window-added` events).
+      //
+      // ADR 0009 §2.8 / §2.6: we use it to populate
+      // `tmuxWindowListsRef`, which the windows-control card inside
+      // the control-window UI reads on first render.
+      //
+      // The bridge already fires one `tmux-window-added` per row
+      // before emitting this `tmux-window-list` summary, so by the
+      // time we get here every entry has a corresponding
+      // xsterm_window_id in `windows` (those events short-circuit if
+      // the Session is already known — same idempotency as
+      // `tmux-pane-added`). We do NOT mutate `workspaces` from this
+      // listener — control-window insertion is handled in the
+      // `tmux-window-added` branch above (and at create/attach time
+      // via `createAndActivateSession`).
+      const unlistenTmuxWindowList = await listen<{
+        controller_id: number;
+        windows: Array<{
+          tmux_window_id: string;
+          xsterm_window_id?: number;
+          xsterm_session_id?: number;
+          xsterm_pane_id?: string;
+          name: string;
+        }>;
+      }>(
+        "tmux-window-list",
+        (event) => {
+          const { controller_id: controllerId, windows: rows } = event.payload;
+          const entries: TmuxWindowListEntry[] = rows.map((row) => ({
+            tmuxWindowId: row.tmux_window_id,
+            xstermWindowId: row.xsterm_window_id ?? 0,
+            xstermSessionId: row.xsterm_session_id,
+            xstermPaneId: row.xsterm_pane_id,
+            name: row.name,
+          }));
+          tmuxWindowListsRef.current.set(controllerId, entries);
+        },
+      ).catch((e) => {
+        console.error("Failed to listen tmux-window-list:", e);
+        return null;
+      });
+      if (cancelled) {
+        unlistenTmuxWindowList?.();
+        return;
+      }
+      if (unlistenTmuxWindowList) unlisteners.push(unlistenTmuxWindowList);
     })();
 
     return () => {
       cancelled = true;
       unlisteners.forEach((cleanup) => cleanup());
     };
-  }, [setSessions, setWorkspaces, sessionsRef, workspacesRef, establishingSessionsRef, setTmuxControllerErrors, tmuxControllerConfigsRef]);
+  }, [setSessions, setWorkspaces, sessionsRef, workspacesRef, establishingSessionsRef, setTmuxControllerErrors, tmuxControllerConfigsRef, tmuxWindowListsRef]);
 }

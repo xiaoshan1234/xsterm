@@ -1,0 +1,212 @@
+.tmux-control-window-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding: var(--space-lg);
+  background: var(--canvas);
+  overflow: auto;
+}
+
+.tmux-control-window-view__grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: var(--space-base);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .tmux-control-window-view__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tmux-control-window-view__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-base);
+  padding: var(--space-sm) var(--space-base);
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tmux-control-window-view__error-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+/* --- Shared card primitives -------------------------------------------- */
+
+.tmux-card {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tmux-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.tmux-card__title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.tmux-card__subtitle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tmux-card__divider {
+  height: 1px;
+  background: var(--hairline);
+  margin: 0 calc(-1 * var(--space-base));
+}
+
+.tmux-card__actions {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+/* --- Session control card --------------------------------------------- */
+
+.tmux-session-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tmux-session-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--success);
+}
+
+.tmux-session-status__dot--disconnected {
+  background: var(--muted-soft);
+}
+
+.tmux-session-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+  font-size: 13px;
+  color: var(--body);
+}
+
+.tmux-session-meta__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.tmux-session-meta__key {
+  color: var(--muted);
+}
+
+.tmux-session-meta__value {
+  color: var(--body);
+  font-family: var(--font-mono);
+}
+
+/* --- Windows control card --------------------------------------------- */
+
+.tmux-windows-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.tmux-windows-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--canvas-soft);
+}
+
+.tmux-windows-row__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tmux-windows-row__name {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tmux-windows-row__id {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.tmux-windows-row__actions {
+  display: flex;
+  gap: var(--space-xxs);
+  flex-shrink: 0;
+}
+
+.tmux-windows-row__action {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.tmux-windows-row__action:hover {
+  background: var(--bg-hover);
+  border-color: var(--muted-soft);
+}
+
+.tmux-windows-row__action--danger {
+  color: var(--error);
+  border-color: var(--hairline-strong);
+}
+
+.tmux-windows-row__action--danger:hover {
+  background: var(--error-bg);
+  border-color: var(--error);
+}
+
+.tmux-windows-empty {
+  padding: var(--space-base);
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tmux-windows-new {
+  margin-top: var(--space-xs);
+}

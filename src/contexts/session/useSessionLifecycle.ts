@@ -73,7 +73,6 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     updateGroups,
     openFromConfigInternal,
     createWindowFromSession,
-    createWorkspaceFromSession,
     tmuxControllerConfigsRef,
   } = deps;
 
@@ -153,12 +152,13 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
 
       if (!skipAutoWindow) {
         if (type === "tmux-cc") {
-          // tmux-cc: one tmux session always maps to one xsterm
-          // workspace (mirrors TmuxForm.helperText). Use
-          // createWorkspaceFromSession which spawns a fresh workspace
-          // AND switches activeWorkspaceId so the new session is the
-          // visible one.
-          createWorkspaceFromSession(session.id, session.configId, session.name);
+          // tmux-cc: do NOT call createWorkspaceFromSession anymore
+          // (ADR 0009 §2.7). The bootstrap pane session is added to
+          // `sessions[]` above, and `tmux-window-added` /
+          // `tmux-window-list` listeners are responsible for inserting
+          // the control-window + each ordinary tmux-window into the
+          // active workspace. The active workspace is created on
+          // demand by those listeners if it does not exist yet.
         } else {
           createWindowFromSession(
             session.id,
@@ -170,7 +170,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       }
       return session;
     },
-    [updateConfigs, createWindowFromSession, createWorkspaceFromSession, setSessions, activeWorkspaceId],
+    [updateConfigs, createWindowFromSession, setSessions, activeWorkspaceId],
   );
 
   /**
@@ -411,16 +411,15 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
    * Difference from createSessionFromSavedConfig: this method additionally calls createWindowFromSession,
    * used for the sidebar "open" operation, which also displays the session UI.
    *
-   * tmux-cc configs route through `createWorkspaceFromSession` so that
-   * re-opening a saved tmux config still gives one tmux session its own
-   * workspace (mirrors the create path).
+   * tmux-cc configs no longer route through `createWorkspaceFromSession`
+   * (ADR 0009 §2.7). The tmux-window-added / tmux-window-list listeners
+   * install the control-window + ordinary tmux-windows into the active
+   * workspace — same path as the create flow above.
    */
   const openFromConfig = useCallback(
     async (configId: string): Promise<Session> => {
       const session = await openFromConfigInternal(configId);
-      if (session.type === "tmux-cc") {
-        createWorkspaceFromSession(session.id, session.configId, session.name);
-      } else {
+      if (session.type !== "tmux-cc") {
         createWindowFromSession(
           session.id,
           session.configId,
@@ -430,7 +429,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       }
       return session;
     },
-    [openFromConfigInternal, createWindowFromSession, createWorkspaceFromSession, activeWorkspaceId],
+    [openFromConfigInternal, createWindowFromSession, activeWorkspaceId],
   );
 
   const removeConfig = useCallback(

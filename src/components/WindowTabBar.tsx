@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
 import { ContextMenu, type ContextMenuItem } from "./ui/ContextMenu";
@@ -33,6 +33,25 @@ export function WindowTabBar({
   onRenameWindow,
 }: WindowTabBarProps) {
   const { reorderWindows } = useSession();
+
+  // ADR 0009 §2.5: tmux-control-window tabs require a confirm()
+  // before closing — dropping the tab detaches every tmux-window
+  // in the same workspace. The user can still hit Disconnect from
+  // the session-control card for the less destructive variant.
+  const closeWindowWithConfirm = useCallback(
+    (windowId: string) => {
+      const target = workspace.windows.find((w) => w.id === windowId);
+      if (target?.windowType === "tmux-control") {
+        const ok = window.confirm(
+          "Close this session? All windows will disconnect from tmux server. " +
+            "The session itself stays on the server.",
+        );
+        if (!ok) return;
+      }
+      onCloseWindow(windowId);
+    },
+    [onCloseWindow, workspace.windows],
+  );
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<{ index: number; position: "before" | "after" } | null>(
@@ -167,7 +186,7 @@ export function WindowTabBar({
             dropIndicatorPosition={dropTarget?.index === index ? dropTarget.position : null}
             onSelect={() => onSelect(window.id)}
             onSave={() => onSaveWindow(window.id)}
-            onClose={() => onCloseWindow(window.id)}
+            onClose={() => closeWindowWithConfirm(window.id)}
             onRename={() => onRenameWindow(window.id)}
             onMouseDown={handleTabMouseDown(index)}
           />
@@ -258,7 +277,10 @@ export function WindowTab({
         }}
       >
         {dropIndicatorPosition === "before" && <div className="tab-drop-indicator" />}
-        <span className="tab-title">{position}. {window.name}</span>
+        <span className="tab-title">
+          {window.windowType === "tmux-control" ? "▶ " : ""}
+          {position}. {window.name}
+        </span>
         <button
           className="tab-close"
           type="button"

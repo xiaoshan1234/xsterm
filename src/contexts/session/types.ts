@@ -11,6 +11,7 @@ import {
   type SessionGroup,
   type SplitDirection,
   type TmuxCcConfig,
+  type TmuxWindowListEntry,
   type Window,
   type Workspace,
 } from "../../types/session";
@@ -33,6 +34,15 @@ export interface SessionContextType {
   tmuxControllerErrors: Map<number, TmuxControllerError>;
   setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
   tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxCcConfig>>;
+  /**
+   * `controllerId → TmuxWindowListEntry[]` cache. Populated by the
+   * `tmux-window-list` listener and incrementally refreshed by the
+   * per-window `tmux-window-added` / `-closed` / `-renamed` events.
+   * Read by `TmuxWindowsControl` (the windows-control card inside
+   * the control-window UI) so the card can render rows even before
+   * the first `tmux-window-added` arrives. ADR 0009 §2.6.
+   */
+  tmuxWindowListsRef: MutableRefObject<Map<number, TmuxWindowListEntry[]>>;
   createLocalSession: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
   createSshSession: (config: SSHSessionConfig, save?: boolean) => Promise<Session>;
   createLocalSessionOnly: (config: LocalSessionConfig, save?: boolean) => Promise<Session>;
@@ -79,6 +89,7 @@ export interface SessionContextType {
     configId?: string,
     name?: string,
     windowType?: "terminal" | "init",
+    tmuxControlWindowId?: number,
   ) => Window;
   createDefaultWorkspace: () => Workspace;
   createInitWindow: () => Window;
@@ -174,6 +185,15 @@ export interface SessionState {
    * rows are gone.
    */
   tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxCcConfig>>;
+  /**
+   * `controllerId → TmuxWindowListEntry[]` cache. Populated by the
+   * `tmux-window-list` listener and incrementally refreshed by the
+   * per-window `tmux-window-added` / `-closed` / `-renamed` events.
+   * Read by `TmuxWindowsControl` (the windows-control card inside
+   * the control-window UI) so the card can render rows even before
+   * the first `tmux-window-added` arrives. ADR 0009 §2.6.
+   */
+  tmuxWindowListsRef: MutableRefObject<Map<number, TmuxWindowListEntry[]>>;
 }
 
 export interface SessionPersistence {
@@ -230,6 +250,7 @@ export interface SessionActions {
     configId?: string,
     name?: string,
     windowType?: "terminal" | "init",
+    tmuxControlWindowId?: number,
   ) => Window;
   createDefaultWorkspace: () => Workspace;
   createInitWindow: () => Window;

@@ -30,6 +30,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     tmuxControllerErrors: state.tmuxControllerErrors,
     setTmuxControllerErrors: state.setTmuxControllerErrors,
     tmuxControllerConfigsRef: state.tmuxControllerConfigsRef,
+    tmuxWindowListsRef: state.tmuxWindowListsRef,
     ...actions,
   };
 

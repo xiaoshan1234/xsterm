@@ -516,3 +516,63 @@ pub async fn probe_tmux_session_exists(
 ) -> Result<bool, String> {
     state.probe_tmux_session_exists(&config).await
 }
+
+/// Detach the control client for a tmux controller from its server
+/// without destroying the server-side session + windows. ADR 0009
+/// §2.9 + §2.4 row "Disconnect".
+///
+/// Fire-and-forget: writes `detach-client -s "<name>"` to the
+/// controller's stdin and drops the controller from the manager; the
+/// tmux child exits naturally and the dispatch task emits
+/// `tmux-controller-exit` for the frontend listener. Idempotent —
+/// unknown `controller_id` returns `Ok(())`.
+#[tauri::command]
+pub async fn detach_tmux_controller(
+    controller_id: u32,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<(), String> {
+    tracing::info!("detach_tmux_controller: controller_id={}", controller_id);
+    state.detach_tmux_controller(controller_id)
+}
+
+/// Shut down the entire tmux server reachable via `controller_id`
+/// (every session, every window, every pane). ADR 0009 §2.9 + §2.4
+/// row "Remote delete".
+///
+/// Fire-and-forget: writes `kill-server` to the controller's stdin;
+/// the tmux child exits because its server is gone. The dispatch
+/// task emits `tmux-controller-exit` for the frontend listener.
+/// Idempotent — unknown `controller_id` returns `Ok(())`.
+#[tauri::command]
+pub async fn kill_server_via_controller(
+    controller_id: u32,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<(), String> {
+    tracing::info!(
+        "kill_server_via_controller: controller_id={}",
+        controller_id
+    );
+    state.kill_server_via_controller(controller_id)
+}
+
+/// Remove a controller's entry from the persisted `attached_tmux.json`
+/// store so the next startup does not auto-attach it. ADR 0009 §2.9 +
+/// A9.
+///
+/// Called from two paths:
+/// - "Close control-window" in the UI (after the windows have been
+///   torn down via `closeSession`).
+/// - "Remote delete" in the session-control UI (after
+///   `kill_server_via_controller` fired).
+#[tauri::command]
+pub async fn unmark_attached_tmux(
+    controller_id: u32,
+    state: State<'_, Arc<SessionManager>>,
+    app: AppHandle,
+) -> Result<(), String> {
+    tracing::info!(
+        "unmark_attached_tmux: controller_id={}",
+        controller_id
+    );
+    state.unmark_attached_tmux(controller_id, &app)
+}

@@ -6,6 +6,7 @@ import {
   type Session,
   type SessionGroup,
   type TmuxCcConfig,
+  type TmuxWindowListEntry,
   type Workspace,
 } from "../../types/session";
 import { type SessionState, type TmuxControllerError } from "./types";
@@ -32,6 +33,11 @@ export function useSessionState(): SessionState {
   // `createTmux` / `attachTmux`. Survives pane teardown (which only removes
   // `sessions` entries, not the controller's persistent metadata).
   const tmuxControllerConfigsRef = useRef<Map<number, TmuxCcConfig>>(new Map());
+  // `controllerId → TmuxWindowListEntry[]` cache. Populated by the
+  // `tmux-window-list` listener and incrementally refreshed by
+  // `tmux-window-added` / `-closed` / `-renamed`. Read by
+  // `TmuxWindowsControl` to render the windows-control card. ADR 0009 §2.6.
+  const tmuxWindowListsRef = useRef<Map<number, TmuxWindowListEntry[]>>(new Map());
 
   const sessionsRef = useRef(sessions);
   const workspacesRef = useRef(workspaces);
@@ -91,5 +97,6 @@ export function useSessionState(): SessionState {
     tmuxControllerErrors,
     setTmuxControllerErrors,
     tmuxControllerConfigsRef,
+    tmuxWindowListsRef,
   };
 }

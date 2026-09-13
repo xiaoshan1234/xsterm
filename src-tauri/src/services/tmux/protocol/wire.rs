@@ -275,3 +275,26 @@ pub fn refresh_client_control() -> String {
 pub fn list_panes_for_bootstrap() -> String {
     "list-panes -a -F \"#{session_name} #{window_id} #{window_name} #{pane_id}\"\n".to_string()
 }
+
+/// `detach-client -s "<session_name>"` — detach the calling control
+/// client from `session_name`. tmux treats this as a graceful
+/// disconnect: the child process exits cleanly (`%exit` from tmux's
+/// end), the server's session + windows stay alive, and the monitor
+/// task fires the `Exit` event which the dispatch task propagates to
+/// the frontend as `tmux-controller-exit`.
+///
+/// `session_name` is passed through [`quote_arg`] so a session like
+/// `"work — dev"` round-trips safely. ADR 0009 §2.9.
+pub fn detach_client(session_name: &str) -> String {
+    format!("detach-client -s {}\n", quote_arg(session_name))
+}
+
+/// `kill-server` — tell the calling control client to shut down the
+/// entire tmux server (every session, every window, every pane).
+/// Used by the session-control "Remote delete" action. The child
+/// process exits after running the command because the server it was
+/// attached to is gone; the monitor task observes the exit and the
+/// dispatch task fires `tmux-controller-exit`. ADR 0009 §2.9.
+pub fn kill_server() -> String {
+    "kill-server\n".to_string()
+}

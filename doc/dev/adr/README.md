@@ -24,6 +24,8 @@ ADR 编号一旦发出**不重用**——即使决策被推翻，新 ADR 也只�
 | [0004](0004-product-naming.md) | 产品命名决策 | Accepted |
 | [0005](0005-tmux-redesign-v0.md) | tmux 子系统分层重设计（P1-P5）| Accepted (P1-P8 全部落地；待 dev 真实环境回归验证) |
 | [0008](0008-p8-v0-design.md) | P8: 删 v1 路径（dispatch 5 层 fallthrough + 7 个 pending_* 字段）| Accepted (W1-W3b 全部落地；待 dev 真实环境回归验证) |
+| [0009](0009-tmux-control-window.md) | tmux-control-window：workspace 顶部挂 session/window 控制 UI | Accepted (待落地) |
+| [0009 任务说明](0009-opencode-task.md) | ADR 0009 的 opencode 执行 prompt（任务说明、Phase A-H、Pre-commit grep、交付格式）| — |
 
 ## 没归档的决策
 
