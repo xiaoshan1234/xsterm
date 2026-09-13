@@ -6,8 +6,9 @@
 
 ```
 doc/
-├── README.md                          ← 你正在读
-├── design-system.md                   Cursor 暗色 IDE 适配版 UI 设计规范（强引用，不动）
+├── README.md                              ← 你正在读
+├── design-system.md                       Cursor 暗色 IDE 适配版 UI 设计规范（强引用，不动）
+├── tm-handoff.md                          ★ tm 验收专属入口（90 分钟达到拍板水平）
 │
 ├── architecture/                      "代码现在长什么样"
 │   └── overview.md                     ← 全栈架构地图 + tmux 子系统详解
@@ -37,6 +38,18 @@ doc/
 ```
 
 ## 2. 按场景找文档
+
+### 2.1 我是 tm（第一次接手验收）
+
+5 分钟：读 `doc/README.md`（本文件）+ `roadmap/migration-prs.md` §0 战略决策 + `architecture/overview.md` §1 一句话总结。
+
+30 分钟：通读 `roadmap/target-architecture.md` §1–§5（演进终态）+ `changelog/bugs.md` 最近 5 个 bug（看最近踩过的坑）+ `roadmap/gap-analysis.md` §6 缺口优先级（看接下来 6 个月做什么）。
+
+60 分钟：通读 `adr/0005-tmux-redesign-v0.md`（tmux 子系统设计意图）+ `architecture/overview.md` §5（tmux 概念 + 进程模型）。
+
+验收 PR：对照 `roadmap/migration-prs.md` 每个 PR 的"自测标准"逐项跑。`changelog/bugs.md` 里 `是否解决: YES` 的 bug 标完成，`NO` 的标待修。
+
+### 2.2 我是 dev（改代码前）
 
 | 我想…… | 看 |
 |---|---|
