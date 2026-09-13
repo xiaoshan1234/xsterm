@@ -4,7 +4,9 @@
 >
 > **生成时间**：2026-09-11 文档重组后。
 >
-> **代码状态**：xsterm 0.1.3 → 0.1.4-rc（tmux -CC P1-P5 重构已落地，Bug 1 修复已上线，SSH probe 已上线）。
+> **代码状态**：xsterm 0.1.3 → 0.1.4-rc（tmux -CC P1-P8 全部落地，Bug 1 修复已上线，SSH probe 已上线）。
+>
+> **生成时间**：2026-09-11 文档重组 + 2026-09-13 P8 完结。
 
 ---
 
@@ -13,11 +15,11 @@
 回答这 4 个问题：
 
 1. **xsterm 是什么**？Tauri 2 桌面终端模拟器，Rust 后端 + React 前端 + xterm.js 渲染。
-2. **最近在干什么**？把 tmux -CC 子系统从 3622 行 monolith 拆到分层模块（controller/{mod,id_map,handshake,subscriber}.rs），并修了 tmux 启动 handshake 的 18 个连续 bug。
-3. **目前在哪**？P1-P5 已落地；P6（错误模型）+ P7（bridge 层）+ P8（删旧路径）待做；P9（本文档同步）已完成。
+2. **最近在干什么**？把 tmux -CC 子系统从 3622 行 monolith 拆到分层模块（controller/{mod,id_map,handshake,subscriber}.rs + protocol/* + errors.rs + bridge/mod.rs），修了 tmux 启动 handshake 的 18 个连续 bug，删了 v1 路径 5 层 fallthrough + 7 个 pending_* 字段。
+3. **目前在哪**？**P1-P8 全部 commit**——所有 v0 重设计的 PR 都完成；下一步是 dev 真实环境跑 tauri dev 回归测试 + 修复 P8 后回归 bug。
 4. **6 个月内做什么**？MCP server + toml 配置 + 反向 SSH tunnel + Microsoft Store 打包。详见 `roadmap/target-architecture.md` + `roadmap/migration-prs.md`。
 
-完整项目结构 → `doc/README.md`（一个文件，5 层职责）。
+完整项目结构 → `doc/README.md`（一个文件，3 角色层：dev / pdm / tm）。
 
 ---
 
@@ -42,12 +44,14 @@
 
 | 验证项 | 验证方法 | 期望 |
 |---|---|---|
-| 307 个 Rust 单元测试 | `cargo test --manifest-path src-tauri/Cargo.toml --lib` | `307 passed; 0 failed` |
+| 320 个 Rust 单元测试 | `cargo test --manifest-path src-tauri/Cargo.toml --lib` | `320 passed; 0 failed` |
 | TS 类型检查 | `npx tsc --noEmit` | 无输出（无 error）|
 | 22 个 bug 全部修过 | `changelog/bugs.md` grep `是否解决: YES` | 22/22 YES |
-| tmux P1-P5 重构 | `git log --grep="tmux-redesign\|P[1-5]"` | 看到 P1-P5 相关 commit |
+| tmux P1-P8 重构 | `git log --grep="tmux-redesign\|P[1-8]"` | 看到 P1-P8 相关 commit |
 | Bug 1 修复（每回新增 window） | `grep -n "SpawnMode\|new-window\|list-panes" src-tauri/src/services/tmux/controller/mod.rs` | 看到 `if mode == SpawnMode::Create` 分支 |
 | SSH probe 已支持 | `grep -n "probe_tmux_session_exists" src-tauri/src/commands/session.rs` | 看到 Tauri command + session_manager 实现 |
+| P8 v1 路径已删 | `grep -nE "pending_splits\|pending_capture\|pending_window_pane" src-tauri/src/services/tmux/controller/mod.rs` | 0 匹配 |
+| P8 RouterState 接 dispatch | `grep -n "RouterState::process" src-tauri/src/services/tmux/dispatch.rs` | 看到调用 |
 
 ### 2.2 待 dev 测试（tm 不验，只读代码确认逻辑存在）
 
@@ -56,13 +60,15 @@
 | PR-T4 handshake v2 路径 | `git show` PR-T4 提交（如果已存在）+ 单元测试 `cargo test handshake` |
 | PR-T5 RouterState 接入 | `controller/subscriber.rs` 文件存在 + 9 个测试通过 |
 | SSH probe 真实路径 | dev 手动 SSH 跑 `probe_tmux_session_exists` 一次 |
+| P8 W3a RouterState 接管命令响应 | `grep -n "RouterState" src-tauri/src/services/tmux/dispatch.rs` |
+| P8 W3b 4 公开方法用 CommandRegistry | `grep -n "command_registry.register" src-tauri/src/services/tmux/controller/mod.rs` |
 
 ### 2.3 待做（tm 不该有预期）
 
-- **P6**：`errors.rs` + `From<TmuxError> for String`（尚未提交）
-- **P7**：`bridge/` 层独立（尚未提交）
-- **P8**：删 v1 路径（**等 2 周观察期**——tm 此时不验）
 - **MCP server**（M3）：tm 等 PR-T9+ 才看
+- **toml 配置迁移**（M3）：tm 等 PR-T10+ 才看
+- **删 v1 路径（P8）**：✅ **已完成 2026-09-13** —— 7 个 `pending_*` 字段已删，dispatch 5 层 fallthrough 已替换为 RouterState 路径
+- **2 周观察期**：在 dev 真实环境跑 tauri dev 无回归后即可宣布 v2 路径稳定
 
 ---
 
@@ -104,7 +110,7 @@ PR 提上来 tm 看：
 - ❌ 直接用 `Box<dyn SshBackend>` 替代 `Arc<dyn SshBackend>`（SSH probe 改造教训）→ 拒绝
 - ❌ `protocol/` 子模块新增公共 API 不带 deprecation 兼容旧路径 → 拒绝（破坏 PR-T1 的 shim 设计）
 - ❌ 删 `changelog/bugs.md` 历史 entry（即使 bug 早已解决）→ 拒绝
-- ❌ 改 `tmux` 子系统的 5 层 fallthrough dispatch（`dispatch.rs:79` 起）→ **要求走 PR-T5 RouterState 路径**，不允许直接打补丁
+- ❌ 改 `tmux` 子系统的 5 层 fallthrough dispatch（`dispatch.rs:79` 起）→ **要求走 PR-T8 RouterState 路径**，不允许直接打补丁（v1 路径已删，inline 改 dispatch 是技术债）
 
 ---
 

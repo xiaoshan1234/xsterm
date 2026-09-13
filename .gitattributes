@@ -1,0 +1,7 @@
+# Force LF for all text files checked into the repo. The .md files
+# in `doc/` were accidentally committed with CRLF terminators on
+# Windows during a P7 commit cycle; we normalize the rest of the
+# repo to LF and add this guard so future re-introductions of CRLF
+# get caught by `git diff --check` (or by a CI hook) before they
+# land.
+* text=auto eol=lf
