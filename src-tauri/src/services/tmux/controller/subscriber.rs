@@ -230,16 +230,25 @@ impl RouterState {
         let _ = (_bridge, _controller);
         match event {
             ProtocolEvent::CommandBegin { id, .. } => {
-                if registry.outstanding() == 0
-                    || !self.registry_has_id_u32(registry, *id)
-                {
-                    return RouterAction::UnknownCommandStart { cmd_id: *id };
-                }
+                // Init `in_flight` BEFORE the waiter-presence check:
+                // fire-and-forget commands (e.g. `list-windows` in
+                // `schedule_initial_state_sync`'s bootstrap chain) have
+                // no registered waiter, but their body still needs to
+                // accumulate so the dispatch caller can classify it via
+                // `DelegateToV1` → `handle_classified_response`.
+                // Reordering these two statements re-introduces a 5 s
+                // `await_first_pane` hang in `create_tmux_session`.
                 self.in_flight = Some(InFlightBody {
                     cmd_id: *id,
                     lines: Vec::new(),
                 });
-                RouterAction::Ignore
+                if registry.outstanding() == 0
+                    || !self.registry_has_id_u32(registry, *id)
+                {
+                    RouterAction::UnknownCommandStart { cmd_id: *id }
+                } else {
+                    RouterAction::Ignore
+                }
             }
             ProtocolEvent::CommandOutput { id, line } => {
                 if let Some(in_flight) = self.in_flight.as_mut() {
@@ -538,6 +547,74 @@ mod tests {
         assert_eq!(
             action.kind(),
             RouterActionKind::UnknownCommandStart
+        );
+    }
+
+    /// Regression: fire-and-forget `%begin..%end` (no waiter) must still
+    /// initialise `in_flight` so the dispatch caller can drain the body
+    /// via `take_in_flight_lines` and run `handle_classified_response`.
+    ///
+    /// Pre-fix, `CommandBegin` returned `UnknownCommandStart` *before*
+    /// initialising `in_flight`, so the matching `CommandEnd` saw
+    /// `in_flight == None`, returned `OrphanCommandEnd`, and the body
+    /// lines for fire-and-forget commands (e.g. `list-windows` in
+    /// `schedule_initial_state_sync`'s bootstrap chain) were dropped.
+    /// That broke the chain
+    /// `new-window → %window-add → list-windows → %WindowList →
+    /// list-panes → %PaneList → record_first_pane`, hanging
+    /// `await_first_pane` for 5 s in `create_tmux_session`.
+    #[test]
+    fn begin_without_waiter_initializes_in_flight_for_end_to_classify() {
+        let mut router = RouterState::default();
+        let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
+        let action = router.process(
+            &ProtocolEvent::CommandBegin {
+                id: 7,
+                timestamp: 0,
+                flags: 0,
+            },
+            &registry,
+            &bridge,
+            controller.as_ref(),
+        );
+        assert_eq!(action.kind(), RouterActionKind::UnknownCommandStart);
+        assert_eq!(router.in_flight_lines(), 0);
+
+        for line in ["@1 bash", "@2 vim", "@3 top"] {
+            let _ = router.process(
+                &ProtocolEvent::CommandOutput {
+                    id: 7,
+                    line: line.to_string(),
+                },
+                &registry,
+                &bridge,
+                controller.as_ref(),
+            );
+        }
+        assert_eq!(router.in_flight_lines(), 3);
+
+        let action = router.process(
+            &ProtocolEvent::CommandEnd {
+                id: 7,
+                timestamp: 0,
+                flags: 0,
+            },
+            &registry,
+            &bridge,
+            controller.as_ref(),
+        );
+        assert_eq!(action.kind(), RouterActionKind::DelegateToV1);
+
+        let body = router.take_in_flight_lines();
+        assert_eq!(
+            body,
+            vec![
+                "@1 bash".to_string(),
+                "@2 vim".to_string(),
+                "@3 top".to_string()
+            ]
         );
     }
 
