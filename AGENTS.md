@@ -98,7 +98,7 @@ xsterm 的几个概念容易混淆（特别是 "session"）。**session = backen
 - ❌ "frontend `Session` 就是 xsterm pane" —— 错。pane 是 PaneTree leaf，通过 `sessionId` 引用 Session。
 - ❌ 把 `xsterm_session_id` 参数类型说成 "tmux pane id" —— 错。它是 `Session.id` u32。
 
-详细实现：[`doc/requirements/prd-0.1/tmux-cc-implementation.md` §1](doc/requirements/prd-0.1/tmux-cc-implementation.md) / [`doc/arch/architecture-map.md` §5.7](doc/arch/architecture-map.md) / [`doc/requirements/prd-0.1/req-006-tmux.md` §2](doc/requirements/prd-0.1/req-006-tmux.md)
+详细实现：[`doc/history/prd-0.1-requirements/tmux-cc-implementation.md` §1](doc/history/prd-0.1-requirements/tmux-cc-implementation.md) / [`doc/architecture/overview.md` §5.7](doc/architecture/overview.md) / [`doc/history/prd-0.1-requirements/req-006-tmux.md` §2](doc/history/prd-0.1-requirements/req-006-tmux.md)
 
 ### Frontend
 
@@ -111,7 +111,7 @@ xsterm 的几个概念容易混淆（特别是 "session"）。**session = backen
 - Components import from these service modules, not directly from `@tauri-apps/api`.
 - Styling is plain CSS only (no Tailwind, CSS-in-JS, or UI framework). CSS files are colocated next to components.
 - The app has no router; view switching is state-driven inside `AppLayout`.
-- Full architecture overview, complexity hotspots, and onboarding path: [`doc/arch/architecture-map.md`](doc/arch/architecture-map.md).
+- Full architecture overview, complexity hotspots, and onboarding path: [`doc/architecture/overview.md`](doc/architecture/overview.md).
 
 ### Backend
 
@@ -164,7 +164,7 @@ xsterm 的几个概念容易混淆（特别是 "session"）。**session = backen
 
 ## Bug Fix Documentation
 
-After a bug is fixed, update `doc/maintenance/bug.md` with the root cause and the solution details. Mark the bug as resolved (`是否解决: YES`) and keep the record in the same format as existing entries.
+After a bug is fixed, update `doc/changelog/bugs.md` with the root cause and the solution details. Mark the bug as resolved (`是否解决: YES`) and keep the record in the same format as existing entries.
 
 ## Documentation Map
 
@@ -173,16 +173,18 @@ All project documentation lives under `doc/`, organized by purpose:
 | Path | Purpose | When to read |
 |---|---|---|
 | `doc/design-system.md` | Cursor 暗色 IDE 适配版 UI 设计系统（**必读**） | 任何 UI 改动前 |
-| `doc/arch/architecture-map.md` | 全栈架构地图 + 复杂度热点 + onboarding path | 新人入门、改 session/window/pane 前 |
-| `doc/maintenance/bug.md` | 已知 bug 历史 + 修复记录（按时间倒序） | 改 bug 前查历史 |
-| `doc/maintenance/perf.md` | 本地 PTY I/O 性能诊断 + 与 oxideterm 的架构对比 + 按 ROI 排序的修复计划（Perf 001-009） | 改 session I/O / 调 IPC / 排查"打字卡 / cat 大文件卡"前 |
-| `doc/requirements/prd-0.1/` | v0.1 PRD 拆解 + 需求文档（req-*.md）+ session-config 字段详表 | 做产品决策、改字段行为前 |
-| `doc/requirements/prd-0.1/create-session-config.md` | Create Session 表单字段完整参考 | 改 CreateSessionDialog 前 |
-| `doc/requirements/prd-0.1/session-config-{common,shell,ssh}.md` | Session config 三类字段详表 | 改 LocalSessionForm / SshSessionForm / CommonSettingsForm 前 |
+| `doc/architecture/overview.md` | 全栈架构地图 + 复杂度热点 + onboarding path | 新人入门、改 session/window/pane 前 |
+| `doc/changelog/bugs.md` | 已知 bug 历史 + 修复记录（按时间倒序） | 改 bug 前查历史 |
+| `doc/changelog/perf.md` | 本地 PTY I/O 性能诊断 + 与 oxideterm 的架构对比 + 按 ROI 排序的修复计划（Perf 001-009） | 改 session I/O / 调 IPC / 排查"打字卡 / cat 大文件卡"前 |
+| `doc/roadmap/` | 演进路线（gap-analysis / target-architecture / migration-prs） | 做产品决策、改字段行为前 |
+| `doc/history/prd-0.1-requirements/create-session-config.md` | Create Session 表单字段完整参考（**已归档**，可能过时） | 改 CreateSessionDialog 前 |
+| `doc/history/prd-0.1-requirements/session-config-{common,shell,ssh}.md` | Session config 三类字段详表（**已归档**，可能过时） | 改 LocalSessionForm / SshSessionForm / CommonSettingsForm 前 |
 
-**已删除/过期的旧文档**（不要再引用）：
+**历史迁移记录**（不要再回到这些路径）：
 - ~~`doc/frontend-architecture.md`~~ —— 2026-07-02 目标态（含 tmux 相关文件），与实际仓库不符，已删除
-- ~~`doc/architecture-map.md`~~ —— 已迁移到 `doc/arch/architecture-map.md`
-- ~~`doc/bug.md`~~ —— 已迁移到 `doc/maintenance/bug.md`
-- ~~`doc/req-*.md`~~ —— 已迁移到 `doc/requirements/prd-0.1/req-*.md`
+- ~~`doc/architecture-map.md`~~ —— 已迁移到 `doc/history/prd-0.1-arch-snapshot/architecture-map.md`（保留作历史）
+- ~~`doc/bug.md`~~ —— 已迁移到 `doc/changelog/bugs.md`
+- ~~`doc/req-*.md`~~ —— 已迁移到 `doc/history/prd-0.1-requirements/req-*.md`（保留作历史）
 - ~~`doc/version.md`~~ / ~~`doc/dev-manage.md`~~ —— 已删除
+
+**新文档结构**（详见 `doc/README.md`）：`architecture/` / `adr/` / `roadmap/` / `changelog/` / `history/` + `design-system.md`。所有"现状"文档在新结构里，所有"废弃但保留可追溯"在 `history/`。

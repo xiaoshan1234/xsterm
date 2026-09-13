@@ -9,8 +9,8 @@
 >
 > **何时不阅读**
 > - 仅调整 shell chrome / UI 设计 —— 看 `doc/design-system.md`
-> - 调整 session-config 字段语义 —— 看 `doc/requirements/prd-0.1/`
-> - 修 confirmed bug —— 看 `doc/maintenance/bug.md`
+> - 调整 session-config 字段语义 —— 看 `doc/history/prd-0.1-requirements/`
+> - 修 confirmed bug —— 看 `doc/changelog/bugs.md`
 
 ---
 
@@ -1052,8 +1052,8 @@ PARTIAL（11 条 finding 中 10 条 DONE [Perf 001, 002, 003, 004, 005, 006, 007
 
 ## 相关历史
 
-- `doc/maintenance/bug.md` Bug 005：撤回过 rAF 输入批量方案，原因：当时没有真正解决根因（双 paste 路径），且当时 rAF 收益不抵延迟。本 perf doc 的 Perf 003 是**不同的方案**，只 rAF 不去重，应避免被 Bug 005 经验误判为不可行。
-- `doc/maintenance/bug.md` Bug 011：引入了 Perf 008 的 100ms sleep 作为 ConPTY 首读 EOF 防御，本身合理但代价待优化。
+- `doc/changelog/bugs.md` Bug 005：撤回过 rAF 输入批量方案，原因：当时没有真正解决根因（双 paste 路径），且当时 rAF 收益不抵延迟。本 perf doc 的 Perf 003 是**不同的方案**，只 rAF 不去重，应避免被 Bug 005 经验误判为不可行。
+- `doc/changelog/bugs.md` Bug 011：引入了 Perf 008 的 100ms sleep 作为 ConPTY 首读 EOF 防御，本身合理但代价待优化。
 
 ---
 
@@ -1175,8 +1175,8 @@ PARTIAL（11 条 finding 中 10 条 DONE [Perf 001, 002, 003, 004, 005, 006, 007
 | 009 | `sessionOutputBuffer` 加 4 MB per-session 上限，溢出按行边界截断保留尾部 | `sessionOutputBuffer.ts` | tsc ✅ |
 
 **文档同步**：
-- `doc/maintenance/perf.md` 创建（含 9 条 finding + TL;DR + 数据流图 + oxideterm 对比 + 修复顺序）
-- `AGENTS.md` documentation map 加入 `doc/maintenance/perf.md` 条目
+- `doc/changelog/perf.md` 创建（含 9 条 finding + TL;DR + 数据流图 + oxideterm 对比 + 修复顺序）
+- `AGENTS.md` documentation map 加入 `doc/changelog/perf.md` 条目
 
 **修复顺序依据**（按 perf.md ROI 表）：
 1. Perf 002（去 flush）→ 快赢，P0

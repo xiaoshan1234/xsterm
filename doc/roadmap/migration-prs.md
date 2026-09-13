@@ -110,14 +110,14 @@
 
 **标题**：`docs: add RFC template + 0001-0004 strategic decisions`
 
-**状态**：✅ 已完成（pdm 2026-09-11 拍板 4 个决策，详见 `doc/rfcs/`）
+**状态**：✅ 已完成（pdm 2026-09-11 拍板 4 个决策，详见 `doc/adr/legacy-rfcs/`）
 
 **范围**：
-- `doc/rfcs/README.md`：RFC 流程（提出 → 讨论 72h → 决议） — 待 PR 后续补
-- `doc/rfcs/0001-keep-tmux-cc.md`：拍 D-α（保留 -CC，对标 iTerm2）✅
-- `doc/rfcs/0002-mcp-single-binary.md`：拍 D-β（MVP 单二进制 + 内部模块）✅
-- `doc/rfcs/0003-config-toml-migration.md`：拍 D-γ（toml + 30 天回退）✅
-- `doc/rfcs/0004-product-naming.md`：拍 D-δ（保留 xsterm 品牌）✅
+- `doc/adr/legacy-rfcs/README.md`：RFC 流程（提出 → 讨论 72h → 决议） — 待 PR 后续补
+- `doc/adr/legacy-rfcs/0001-keep-tmux-cc.md`：拍 D-α（保留 -CC，对标 iTerm2）✅
+- `doc/adr/legacy-rfcs/0002-mcp-single-binary.md`：拍 D-β（MVP 单二进制 + 内部模块）✅
+- `doc/adr/legacy-rfcs/0003-config-toml-migration.md`：拍 D-γ（toml + 30 天回退）✅
+- `doc/adr/legacy-rfcs/0004-product-naming.md`：拍 D-δ（保留 xsterm 品牌）✅
 
 **自测**：
 - README 里有可点击的目录
@@ -937,7 +937,7 @@
 ### 流程
 
 - 公测用户通过 Store 下载
-- bug 报告 → `doc/maintenance/bug.md` 按现有格式记录
+- bug 报告 → `doc/changelog/bugs.md` 按现有格式记录
 - 0 P0 bug 跑过 4 周 = 成功标准 §11
 - 收集 v1.1 需求
 

@@ -725,10 +725,10 @@ T1: await tx1 → timeout(2s) → 错误
 
 ### P9: 文档 + RFC
 
-- 写 `doc/rfcs/0005-tmux-redesign.md`：本稿 v0 的最终决议
-- 更新 `doc/arch/architecture-map.md`：tmux -CC 章节按新架构重写
-- 更新 `doc/requirements/prd-0.1/tmux-cc-implementation.md`：删除 Wave 0-6 历史，新增"启动协议 + capability 探测"章节
-- 更新 `doc/maintenance/bug.md`：把 18 个 tmux -CC bug 的根因统一指向本 RFC
+- 写 `doc/adr/legacy-rfcs/0005-tmux-redesign.md`：本稿 v0 的最终决议
+- 更新 `doc/history/prd-0.1-arch-snapshot/architecture-map.md`：tmux -CC 章节按新架构重写
+- 更新 `doc/history/prd-0.1-requirements/tmux-cc-implementation.md`：删除 Wave 0-6 历史，新增"启动协议 + capability 探测"章节
+- 更新 `doc/changelog/bugs.md`：把 18 个 tmux -CC bug 的根因统一指向本 RFC
 
 ---
 
