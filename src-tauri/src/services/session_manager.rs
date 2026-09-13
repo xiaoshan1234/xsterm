@@ -2753,22 +2753,34 @@ mod tests {
             tokio::spawn(async move { manager_clone.capture_tmux_pane(20_000_001, 200).await });
 
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        // P8 W2: dispatch correlates by registry-allocated command id.
+        // Read the id capture_tmux_pane just got from its internal
+        // `controller.capture_pane` → `registry.register` call.
+        let cmd_id = controller
+            .registry
+            .ids()
+            .into_iter()
+            .next()
+            .expect("capture_pane must have registered a waiter")
+            .0 as u32;
+
         dispatch_tx
             .send(crate::services::tmux::events::ControlEvent::CommandBegin {
-                id: 1,
+                id: cmd_id,
                 timestamp: 0,
                 flags: 0,
             })
             .unwrap();
         dispatch_tx
             .send(crate::services::tmux::events::ControlEvent::CommandOutput {
-                id: 1,
+                id: cmd_id,
                 line: "scrollback line".to_string(),
             })
             .unwrap();
         dispatch_tx
             .send(crate::services::tmux::events::ControlEvent::CommandEnd {
-                id: 1,
+                id: cmd_id,
                 timestamp: 0,
                 flags: 0,
             })

@@ -37,7 +37,6 @@ use tokio::sync::mpsc;
 use crate::infrastructure::app_backend::AppBackend;
 
 use super::controller::{PendingWindow, TmuxController};
-use super::errors::TmuxError;
 use super::bridge::TmuxBridge;
 use super::events::ControlEvent;
 use serde_json::json;
@@ -389,84 +388,70 @@ fn dispatch_event(
         // `Command*` events below form the synchronous reply envelope for
         // any tmux command that prints to stdout (currently only our
         // `capture-pane`, but architecturally also `list-windows` /
-        // `list-sessions` / etc.). The dispatch task routes the block
-        // to `pending_capture` only when a `capture_pane` call is in
-        // flight; otherwise the events are debug-logged and dropped (we
-        // don't fire-and-forget any other stdout-producing commands
-        // yet, so this is observably correct).
+        // `list-sessions` / etc.). P8 W2: body accumulation lives on the
+        // controller's `command_body_accumulator` (replacing
+        // `pending_capture_body` + `current_command_lines`); waiter
+        // resolution goes through the `CommandRegistry` —
+        // `capture_pane` registers a `BeginEnd` waiter and the dispatch
+        // task takes it out via `registry.take(id)` on `%end` /
+        // `%error`. If no waiter is registered for the id (e.g. a
+        // `list-windows` fire-and-forget probe), the accumulated body
+        // falls through to `handle_classified_response` for
+        // WindowList / PaneList classification.
         ControlEvent::CommandBegin { id, .. } => {
-            // Reset the body buffer regardless of whether we're tracking
-            // a capture — any leftover lines from a previous (orphaned)
-            // block must not bleed into this one.
-            if let Ok(mut body) = controller.pending_capture_body.lock() {
+            // Reset the body buffer regardless of whether a waiter is
+            // registered — any leftover lines from a previous
+            // (orphaned) block must not bleed into this one.
+            if let Ok(mut body) = controller.command_body_accumulator.lock() {
                 body.clear();
             }
-            let has_capture = controller
-                .pending_capture
-                .lock()
-                .map(|s| s.is_some())
-                .unwrap_or(false);
-            if !has_capture {
+            if controller.registry.outstanding() == 0 {
                 tracing::debug!(
-                    "tmux controller {}: %begin {} for unrelated command (no pending capture)",
+                    "tmux controller {}: %begin {} for unrelated command (no registered waiter)",
                     controller.controller_id(),
                     id
                 );
             }
         }
         ControlEvent::CommandOutput { id, ref line } => {
-            // Route body lines to whichever consumer is currently
-            // expecting them:
-            //   1. `pending_capture` is set (capture-pane promise).
-            //   2. Otherwise, accumulate into `current_command_lines`
-            //      for end-of-block classification (WindowList /
-            //      PaneList / generic CommandResponse) via
-            //      `handle_classified_response`.
-            let has_capture = controller
-                .pending_capture
-                .lock()
-                .map(|s| s.is_some())
-                .unwrap_or(false);
-            if has_capture {
-                if let Ok(mut body) = controller.pending_capture_body.lock() {
-                    body.push(line.clone());
-                }
-            } else if let Ok(mut body) = controller.current_command_lines.lock() {
+            // Accumulate body lines into the controller's body buffer.
+            // Both capture-pane (which registers a waiter in the
+            // registry) and list-windows / list-panes (fire-and-forget,
+            // classified via `handle_classified_response` on `%end`)
+            // share this single accumulator; the resolution path is
+            // decided on `%end`.
+            if let Ok(mut body) = controller.command_body_accumulator.lock() {
                 body.push(line.clone());
             } else {
                 tracing::debug!(
-                    "tmux controller {}: %output for command {} (no pending capture, body line dropped)",
+                    "tmux controller {}: %output for command {} (body line dropped — accumulator lock poisoned)",
                     controller.controller_id(),
                     id
                 );
             }
         }
         ControlEvent::CommandEnd { id, .. } => {
-            // Resolve whichever promise the end-block is for. If both
-            // are set (shouldn't happen — controller is sequential),
-            // capture wins because it has the longer history.
-            let mut capture_slot = match controller.pending_capture.lock() {
-                Ok(s) => s,
-                Err(_) => return,
-            };
-            if let Some(tx) = capture_slot.take() {
-                let body = controller
-                    .pending_capture_body
-                    .lock()
-                    .map(|mut b| std::mem::take(&mut *b))
-                    .unwrap_or_default();
-                let text = body.join("\n");
-                let _ = tx.send(Ok(text));
+            // Take the accumulated body, then check the registry for a
+            // waiter registered under this id.
+            let body_lines = take_command_body(controller);
+            let waiter = controller.registry.take(super::protocol::command::CommandId(id as u64));
+            if let Some(waiter) = waiter {
+                // Registered waiter (capture-pane, etc.): ship the body
+                // into its `BeginEnd` oneshot via `send_to_waiter`.
+                let line_count = body_lines.len();
+                super::controller::send_to_waiter(
+                    waiter,
+                    super::protocol::command::ResponseOutcome::Ok { body_lines },
+                );
                 tracing::debug!(
-                    "tmux controller {}: capture-pane %end id={} ({} body lines)",
+                    "tmux controller {}: registry waiter resolved on %end id={} ({} body lines)",
                     controller.controller_id(),
                     id,
-                    body.len()
+                    line_count
                 );
                 return;
             }
-            drop(capture_slot);
-            // No capture in flight — fall through to generic
+            // No waiter registered — fall through to generic
             // command-response classification: emit a `tmux-window-list`
             // / `tmux-pane-list` event from the accumulated body, or
             // drop the body silently if it doesn't look like a list
@@ -476,29 +461,30 @@ fn dispatch_event(
                 bridge,
                 controller.controller_id(),
                 id,
-                take_command_body(controller),
+                body_lines,
             );
         }
         ControlEvent::CommandError { id, message, .. } => {
-            let mut slot = match controller.pending_capture.lock() {
-                Ok(s) => s,
-                Err(_) => return,
-            };
-            if let Some(tx) = slot.take() {
-                            // Map the error string into `TmuxError::Internal` so the
-                            // caller's `?`-chain (which now returns `TmuxError`)
-                            // stays type-coherent. The user-visible message is
-                            // preserved by `TmuxError`'s `Display` impl.
-                            let _ = tx.send(Err(TmuxError::Internal(format!(
-                                "tmux controller {}: capture-pane failed (id={}): {message}",
-                                controller.controller_id(), id
-                            ))));
-                if let Ok(mut body) = controller.pending_capture_body.lock() {
-                    body.clear();
-                }
+            // Drop any accumulated body lines — tmux's own parser does
+            // the same on `%error`. Take the waiter (if any) and
+            // resolve it with `Err`.
+            let _ = take_command_body(controller);
+            let waiter = controller.registry.take(super::protocol::command::CommandId(id as u64));
+            if let Some(waiter) = waiter {
+                super::controller::send_to_waiter(
+                    waiter,
+                    super::protocol::command::ResponseOutcome::Err {
+                        message: message.clone(),
+                    },
+                );
+                tracing::debug!(
+                    "tmux controller {}: registry waiter resolved on %error id={}: {message}",
+                    controller.controller_id(),
+                    id
+                );
             } else {
                 tracing::debug!(
-                    "tmux controller {}: %error for command {} (no pending capture): {message}",
+                    "tmux controller {}: %error for command {} (no registered waiter): {message}",
                     controller.controller_id(),
                     id
                 );
@@ -718,16 +704,15 @@ fn emit_pane_list(
     bridge.emit_tmux_pane_added_for_list(session_id, serde_json::json!(rows));
 }
 
-/// Inspect the first body line of a completed command response. If it
-/// Take the accumulated body lines for `current_command_id` and
-/// clear `current_command_id` so the next `%begin..%end` block starts
-/// fresh. Called by the `CommandEnd` arm of `dispatch_event` before
-/// `handle_classified_response` runs.
+/// Take the accumulated body lines for the current `%begin..%end`
+/// block out of [`TmuxController::command_body_accumulator`]. Called by
+/// the `CommandEnd` and `CommandError` arms of `dispatch_event` before
+/// `handle_classified_response` runs (when no registry waiter
+/// resolves the reply) and immediately clears the buffer so the next
+/// `%begin` starts fresh. P8 W2: replaces the old
+/// `current_command_id` + `current_command_lines` pair (now dead).
 fn take_command_body(controller: &TmuxController) -> Vec<String> {
-    if let Ok(mut id_slot) = controller.current_command_id.lock() {
-        id_slot.take();
-    }
-    if let Ok(mut body) = controller.current_command_lines.lock() {
+    if let Ok(mut body) = controller.command_body_accumulator.lock() {
         std::mem::take(&mut *body)
     } else {
         Vec::new()

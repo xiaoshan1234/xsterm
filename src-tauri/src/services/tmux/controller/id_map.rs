@@ -70,6 +70,17 @@ pub struct RegisteredCommand {
 }
 
 /// One outstanding outbound command, plus its registered waiter.
+///
+/// Body accumulation lives in [`RouterState::in_flight`] (PR-T5)
+/// rather than here — the registry stays the single source of truth
+/// for waiter correlation only. PR-T8 deletes the v1
+/// `pending_capture_body` / `current_command_lines` /
+///
+/// `current_command_id` fields from the controller and lets
+/// `RouterState` own the "one in-flight command body" state. The
+/// dispatch task tells the registry when a command is *registered* /
+/// when its waiter is *ready*; the router state holds the body until
+/// the waiter is taken.
 pub struct CommandRegistry {
     next_id: AtomicU64,
     by_id: Mutex<HashMap<CommandId, ResponseWaiter>>,
@@ -126,9 +137,9 @@ impl CommandRegistry {
         }
     }
 
-    /// Take the waiter registered for `id`. Returns `None` when no waiter
-    /// is registered (either because the command was fire-and-forget or
-    /// because this id has already been taken by an earlier `%end`).
+    /// Take the [`ResponseWaiter`] registered for `id`. Returns `None`
+    /// when no waiter is registered (either fire-and-forget or already
+    /// taken by an earlier `%end`).
     ///
     /// Call this on `%end <id>` (or `%error <id>`). The response router
     /// passes the accumulated body / error message into the waiter.
@@ -149,9 +160,10 @@ impl CommandRegistry {
         self.completed.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Drop every registered waiter. Used on controller close so any
-    /// pending `await_first_pane` / `wait_for` etc. wake up and observe
-    /// the shutdown instead of hanging forever.
+    /// Drop every registered waiter (and body buffer). Used on
+    /// controller close so any pending `await_first_pane` / `wait_for`
+    /// etc. wake up and observe the shutdown instead of hanging
+    /// forever.
     ///
     /// Returns the number of waiters that were dropped.
     pub fn drain(&self) -> usize {
@@ -159,6 +171,24 @@ impl CommandRegistry {
         let n = map.len();
         map.clear();
         n
+    }
+
+    /// Test-only: snapshot every currently-registered waiter id. Used
+    /// by tests that need to drive the dispatch task with synthetic
+    /// `%begin` / `%output` / `%end` events whose `id` matches the
+    /// one `capture_pane` (or any future migrated public method) got
+    /// from `register()`. Without this helper the tests would have to
+    /// hardcode ids and quietly drift out of sync with the registry's
+    /// allocator; with it, the test reads the id the registry just
+    /// assigned and uses that.
+    #[cfg(test)]
+    pub(crate) fn ids(&self) -> Vec<CommandId> {
+        self.by_id
+            .lock()
+            .expect("CommandRegistry mutex poisoned")
+            .keys()
+            .copied()
+            .collect()
     }
 
     /// Convenience: produce the [`ResponseOutcome`] to send into a waiter

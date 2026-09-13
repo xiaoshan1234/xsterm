@@ -78,6 +78,7 @@ use super::errors::{TmuxError, spawn_err};
 use super::bridge::TmuxBridge;
 use super::events::ProtocolEvent;
 use super::parser::ProtocolParser;
+use super::protocol::command::{CommandKind, ResponseOutcome, ResponseWaiter};
 use std::collections::{HashMap, VecDeque};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -290,6 +291,14 @@ pub struct TmuxController {
     pub(crate) pending_capture: std::sync::Mutex<Option<oneshot::Sender<CaptureResult>>>,
     /// body lines being assembled for the in-flight capture.
     /// Reset to empty on each `CommandBegin` and drained on `CommandEnd`.
+    ///
+    /// P8 W2: dead — `capture_pane` no longer writes here. Body
+    /// accumulation now lives in [`TmuxController::command_body_accumulator`]
+    /// and waiter correlation is on [`TmuxController::registry`].
+    /// Kept so [`close`] can no-op cleanly and so the test fixture
+    /// `close_drains_pending_capture_with_error` still compiles. W3
+    /// deletes this field.
+    #[allow(dead_code)]
     pub(crate) pending_capture_body: std::sync::Mutex<Vec<String>>,
     /// tokio mutex serialising concurrent `capture_pane` callers
     /// so two requests never overlap their `%begin..%end` block.
@@ -302,16 +311,47 @@ pub struct TmuxController {
     /// end-event can classify the whole body as `WindowList` /
     /// `PaneList` / generic `CommandResponse` (see
     /// `dispatch_event::handle_classified_response`).
+    ///
+    /// P8 W2: dead — replaced by the controller-level
+    /// `command_body_accumulator`. W3 deletes this field.
+    #[allow(dead_code)]
     pub(crate) current_command_id: std::sync::Mutex<Option<u32>>,
     /// Body lines being assembled for `current_command_id`. Reset on
     /// each `CommandOutput` whose id differs from
     /// `current_command_id`, and drained by the matching `CommandEnd`.
+    ///
+    /// P8 W2: dead — replaced by the controller-level
+    /// `command_body_accumulator`. W3 deletes this field.
+    #[allow(dead_code)]
     pub(crate) current_command_lines: std::sync::Mutex<Vec<String>>,
     /// Override hook used by tests to shorten [`SPLIT_PANE_TIMEOUT`]. In
     /// production this stays at [`SPLIT_PANE_TIMEOUT`]; the
     /// `split_pane_times_out_when_no_response` test substitutes a smaller
     /// value so the test does not have to wait 5 s for the timeout.
     split_pane_timeout: Duration,
+    /// P8 v2 registry — single source of truth for in-flight command
+    /// waiters. PR-T3 introduced this and PR-T5 wired it into the
+    /// response router (now in `subscriber::RouterState`); W2 (this
+    /// commit) migrates `capture_pane` to register its `BeginEnd` waiter
+    /// here instead of pushing onto `pending_capture`. The dispatch
+    /// task's `CommandEnd` / `CommandError` handlers take the waiter
+    /// out via `registry.take(id)` and resolve it via
+    /// `send_to_waiter` — `pending_capture` and
+    /// `pending_capture_body` are now dead (W3 deletes them).
+    ///
+    /// Note: `split_pane` / `new_window` / `await_first_pane` still use
+    /// their legacy fields because the registry's `ResponseWaiter`
+    /// carries a `ResponseOutcome` (just body lines + OK/Err), not the
+    /// structured `(xsterm_id, tmux_pane_id, tmux_window_id)` triple
+    /// those methods need. W3 unifies them after deleting the legacy
+    /// pending fields.
+    pub(crate) registry: CommandRegistry,
+    /// Body lines being assembled for the in-flight `%begin..%end`
+    /// command block. Replaces `pending_capture_body` (which was
+    /// capture-only) and `current_command_lines` (which was
+    /// list-classification-only); both have been marked
+    /// `#[allow(dead_code)]` above. W3 deletes them.
+    pub(crate) command_body_accumulator: std::sync::Mutex<Vec<String>>,
 }
 
 /// Delay before the initial state sync query (Bug 017). The control-
@@ -495,6 +535,8 @@ impl TmuxController {
                         capture_lock: tokio::sync::Mutex::new(()),
                         split_pane_timeout: SPLIT_PANE_TIMEOUT,
                         spawn_mode: mode,
+                        registry: CommandRegistry::new(),
+                        command_body_accumulator: std::sync::Mutex::new(Vec::new()),
                     });
 
         spawn_dispatch_task(
@@ -730,56 +772,53 @@ impl TmuxController {
         // can be in flight at a time.
         let _guard = self.capture_lock.lock().await;
 
-        // Register the sender BEFORE writing the command so the dispatch
-        // task routes the matching %end back to us even when tmux
-        // replies faster than the writer's loop schedules the command.
-        let (tx, rx) = oneshot::channel::<CaptureResult>();
+        // P8 W2: register the waiter with `CommandRegistry` instead of
+        // pushing onto `pending_capture`. The dispatch task's
+        // `CommandEnd` / `CommandError` handlers take the waiter out via
+        // `registry.take(id)` and resolve it via `send_to_waiter`.
+        // `pending_capture` and `pending_capture_body` are no longer
+        // touched; W3 deletes them.
+        let (tx, rx) = oneshot::channel::<ResponseOutcome>();
+        let reg = self.registry.register(
+            CommandKind::CapturePane {
+                pane_id: tmux_pane_id.to_string(),
+                lines,
+            },
+            tmux_cmd::capture_pane(tmux_pane_id, lines),
+            Some(ResponseWaiter::BeginEnd(tx)),
+        );
+
+        if self
+            .stdin_tx
+            .send(reg.tagged.wire)
+            .map_err(|_| TmuxError::AlreadyClosed)
+            .is_err()
         {
-            let mut slot = self.pending_capture.lock().map_err_string()?;
-            // Should never observe a stuck sender — guard above
-            // serialises. Defensive clear anyway so we don't strand an
-            // already-orphaned sender from a previous timeout.
-            if slot.is_some() {
-                if let Ok(mut body) = self.pending_capture_body.lock() {
-                    body.clear();
-                }
-            }
-            *slot = Some(tx);
+            // Drain the just-registered waiter so a future `CommandEnd`
+            // for this id does not strand an orphan sender in the
+            // registry (the dispatch task will pick it up and resolve
+            // it; the receiver is dropped here).
+            self.registry.take(reg.tagged.id);
+            return Err(TmuxError::AlreadyClosed);
         }
 
-        let cmd = tmux_cmd::capture_pane(tmux_pane_id, lines);
-                if self
-                    .stdin_tx
-                    .send(cmd)
-                    .map_err(|_| {
-                        TmuxError::AlreadyClosed
-                    })
-                    .is_err()
-                {
-                    // Roll back so the dispatch task doesn't observe a stale
-                    // sender after we returned.
-                    if let Ok(mut slot) = self.pending_capture.lock() {
-                        *slot = None;
-                    }
-                    return Err(TmuxError::AlreadyClosed);
-                }
-
         match tokio::time::timeout(CAPTURE_PANE_TIMEOUT, rx).await {
-            Ok(Ok(result)) => result,
+            Ok(Ok(ResponseOutcome::Ok { body_lines })) => {
+                Ok(body_lines.join("\n"))
+            }
+            Ok(Ok(ResponseOutcome::Err { message })) => Err(TmuxError::Internal(format!(
+                "tmux controller {}: capture-pane failed (id={:?}): {message}",
+                self.controller_id, reg.tagged.id
+            ))),
             Ok(Err(_canceled)) => Err(TmuxError::Internal(format!(
                 "tmux controller {}: capture response channel closed",
                 self.controller_id
             ))),
             Err(_elapsed) => {
-                // Drop our half so the dispatch task's later CommandEnd
-                // sees a closed channel and silently discards (we already
-                // gave up).
-                if let Ok(mut slot) = self.pending_capture.lock() {
-                    *slot = None;
-                }
-                if let Ok(mut body) = self.pending_capture_body.lock() {
-                    body.clear();
-                }
+                // Drop our half — the dispatch task's later CommandEnd
+                // will see a closed channel and silently discard (we
+                // already gave up). The registry still holds the
+                // registered waiter; `close()` will drain it.
                 Err(TmuxError::Internal(format!(
                     "tmux controller {}: capture timed out after {:?}",
                     self.controller_id, CAPTURE_PANE_TIMEOUT
@@ -859,6 +898,26 @@ impl TmuxController {
         self.drain_pending_splits_with_error("controller closed");
         // same dance for `new_window` awaiters.
         self.drain_pending_windows_with_error("controller closed");
+        // P8 W2: also drain the registry so any in-flight
+        // `capture_pane` waiter (and future migrated methods) wake
+        // promptly. Dropping the `ResponseWaiter::BeginEnd` sender
+        // here is enough — the receiver in the public method observes
+        // a closed channel and surfaces `Err(AlreadyClosed)`.
+        let drained = self.registry.drain();
+        if drained > 0 {
+            tracing::debug!(
+                "tmux controller {}: registry drained {} waiter(s) on close",
+                self.controller_id,
+                drained
+            );
+        }
+        // Clear the body accumulator too so a stale `CommandBegin`
+        // arriving after close doesn't bleed body lines into the next
+        // controller's lifetime (defensive — the dispatch task should
+        // be exiting alongside us).
+        if let Ok(mut body) = self.command_body_accumulator.lock() {
+            body.clear();
+        }
         tracing::debug!(
             "tmux controller {}: close complete (tasks unwind async)",
             self.controller_id
@@ -1312,6 +1371,8 @@ impl TmuxController {
             // sync by hand — the constant is private to this module).
             split_pane_timeout: Duration::from_secs(5),
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         })
     }
 
@@ -1962,6 +2023,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         assert!(controller.register_pane("%5".to_string(), 1001));
@@ -2020,6 +2083,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         controller.register_pane("%1".to_string(), 2001);
@@ -2063,6 +2128,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%7".to_string(), 7777);
 
@@ -2137,6 +2204,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2261,6 +2330,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2349,6 +2420,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         // Fire record_first_pane FIRST, with no sleep — simulate the
@@ -2392,6 +2465,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         let controller_for_wait = Arc::clone(&controller);
@@ -2438,6 +2513,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         controller.register_pane("%3".to_string(), 3003);
@@ -2491,6 +2568,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%5".to_string(), 8_000_042);
 
@@ -2559,6 +2638,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%9".to_string(), 9_000_007);
 
@@ -2622,6 +2703,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2686,6 +2769,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%5".to_string(), 11_000_042);
         // Pre-record the first pane so the dispatch task takes the
@@ -2792,6 +2877,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         };
         controller.register_pane("%5".to_string(), 12_000_001);
         controller.set_split_pane_timeout_for_tests(Duration::from_millis(50));
@@ -2849,6 +2936,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         };
         controller.register_pane("%0".to_string(), 13_000_001);
 
@@ -2904,6 +2993,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%5".to_string(), 14_000_001);
 
@@ -2970,6 +3061,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -3115,6 +3208,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -3221,6 +3316,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         // Pre-register a window + pane (simulates bootstrap done).
         controller
@@ -3329,6 +3426,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller
             .window_bindings
@@ -3405,6 +3504,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         };
         controller
             .window_bindings
@@ -3478,6 +3579,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%42".to_string(), 100_000_042);
 
@@ -3489,33 +3592,46 @@ mod tests {
         let capture_handle =
             tokio::spawn(async move { controller_clone.capture_pane("%42", 100).await });
 
-        // Yield so capture_pane registers its sender + writes the command.
+        // Yield so capture_pane registers its waiter via
+        // `registry.register()` and writes the command to stdin.
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        // P8 W2: the dispatch task now correlates `%begin`/`%end` by
+        // the registry-allocated command id (was previously implicit
+        // via `pending_capture`). Read the id capture_pane just got
+        // so we can drive the synthetic events with the matching id.
+        let cmd_id = controller
+            .registry
+            .ids()
+            .into_iter()
+            .next()
+            .expect("capture_pane must have registered a waiter")
+            .0 as u32;
 
         // Drive the dispatch task with a synthetic %begin/%output/%end block.
         tx.send(ProtocolEvent::CommandBegin {
-            id: 7,
+            id: cmd_id,
             timestamp: 1,
             flags: 0,
         })
         .unwrap();
         tx.send(ProtocolEvent::CommandOutput {
-            id: 7,
+            id: cmd_id,
             line: "first line".to_string(),
         })
         .unwrap();
         tx.send(ProtocolEvent::CommandOutput {
-            id: 7,
+            id: cmd_id,
             line: "second line".to_string(),
         })
         .unwrap();
         tx.send(ProtocolEvent::CommandOutput {
-            id: 7,
+            id: cmd_id,
             line: "third line".to_string(),
         })
         .unwrap();
         tx.send(ProtocolEvent::CommandEnd {
-            id: 7,
+            id: cmd_id,
             timestamp: 1,
             flags: 0,
         })
@@ -3562,6 +3678,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%9".to_string(), 101_000_009);
 
@@ -3573,8 +3691,17 @@ mod tests {
             tokio::spawn(async move { controller_clone.capture_pane("%9", 50).await });
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
+        // P8 W2: dispatch correlates `%error` by the registry id.
+        let cmd_id = controller
+            .registry
+            .ids()
+            .into_iter()
+            .next()
+            .expect("capture_pane must have registered a waiter")
+            .0 as u32;
+
         tx.send(ProtocolEvent::CommandError {
-            id: 11,
+            id: cmd_id,
             timestamp: 2,
             flags: 0,
             message: "pane gone".to_string(),
@@ -3625,6 +3752,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         };
 
         let err = controller
@@ -3676,6 +3805,8 @@ mod tests {
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
+            registry: CommandRegistry::new(),
+            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
         });
         controller.register_pane("%1".to_string(), 103_000_001);
 
