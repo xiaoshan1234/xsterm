@@ -1058,3 +1058,48 @@ info.session_type = SessionType::TmuxCc(TmuxCcConfig::default());  // TmuxCc 是
 ## 是否解决
 YES（`cargo check --manifest-path src-tauri/Cargo.toml` 干净，6 个 warning 全是 `dead_code`（新增的 `register_existing_tmux_panes` 命令 / `tmux_controller_by_id` 方法等还未被前端 `invoke` 调用 + 测试代码用 struct literal 而非 `new` constructor），非 error；`cargo test --manifest-path src-tauri/Cargo.toml --lib` 246 passed / 0 failed / 2 ignored；`npx tsc --noEmit` 干净；改动 3 个文件共 ~25 行）
 
+
+# Bug 023
+## 现象
+`create_tmux_session` 在 SSH tmux server 上 100% 复现：5 秒后报 `tmux operation timed out after 5s (await_first_pane)`，dispatch 日志里能看到 `list-windows` (`%begin 297 %end 297`) 的正常响应，但之后 **没有任何 `WindowAdd` / `WindowPaneChanged` / list-panes 响应**，5 秒后 `await_first_pane` 超时 + `SshTmuxBackend::wait` 超时同时触发。
+## 理想效果
+`create_tmux_session` 的 bootstrap chain 必须完成：
+
+```
+new-window → %window-add → list-windows → %WindowList →
+list-panes → %PaneList → record_first_pane → await_first_pane resolves
+```
+
+`%WindowList` / `%PaneList` 的 body 必须被分类（`emit_window_list` / `emit_pane_list`）才能触发 list-panes follow-up。
+## BUG 原因
+PR-T8 W3a（commit `f1b36cc`）把 `dispatch_event` 的命令响应分支改造成委托 `RouterState::process`，但 `RouterState::process` 的 `CommandBegin` 分支写成：
+
+```rust
+ProtocolEvent::CommandBegin { id, .. } => {
+    if registry.outstanding() == 0
+        || !self.registry_has_id_u32(registry, *id)
+    {
+        return RouterAction::UnknownCommandStart { cmd_id: *id };  // ← 提前 return
+    }
+    self.in_flight = Some(InFlightBody { ... });  // ← fire-and-forget 永远到不了这里
+    RouterAction::Ignore
+}
+```
+
+`list-windows` 在 `schedule_initial_state_sync` 里是 fire-and-forget（直接 `stdin_tx.send`，**没经过 `CommandRegistry.register()`，所以 `registry.outstanding() == 0`**）。tmux 返回 `%begin 297 %output*4 %end 297` 时：
+
+1. `CommandBegin 297` → `outstanding() == 0` → return `UnknownCommandStart`，**`in_flight` 没初始化**
+2. `CommandOutput 297` × 4 → `in_flight` 是 `None` → body lines **被丢弃**
+3. `CommandEnd 297` → `in_flight` 是 `None` → `matches!` 失败 → return `OrphanCommandEnd`
+4. dispatch caller 只对 `DelegateToV1` 调 `handle_classified_response` → **没调**
+5. `emit_window_list` 没跑 → `trigger_followup_list_panes` 没发 list-panes
+6. `emit_pane_list` 没跑 → `record_first_pane` 没被调
+7. `await_first_pane` 等 5 秒后 timeout
+
+回归的根因：W2 命令响应路径**不依赖 registry 状态**（`command_body_accumulator` 总是清空/累加/取出）；W3a RouterState **过度依赖 registry.outstanding() 决定是否初始化 `in_flight`**，导致 fire-and-forget 命令的 body 永远进不了 `in_flight`。
+## 解决方案
+`subscriber.rs:231` 的 `CommandBegin` 分支改成**无条件**先初始化 `in_flight`，然后再用 `outstanding()` 判断返回 `UnknownCommandStart` 还是 `Ignore`（保留 variant 作 logging hint，但不再作为路由分支）。
+
+回归测试 `subscriber::tests::begin_without_waiter_initializes_in_flight_for_end_to_classify`（commit `d5d8892`）锁死 fire-and-forget block 的 body 累积行为，防止未来"简化"把 `if` 块移回 init 之前。
+## 是否解决
+YES（`cargo test --lib --manifest-path src-tauri/Cargo.toml` → `312 passed; 0 failed; 2 ignored`；commit `d5d8892` 是 hotfix；改动 1 文件 6 行有效 + 回归测试 + 注释）。
