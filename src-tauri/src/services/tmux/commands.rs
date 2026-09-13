@@ -30,13 +30,59 @@ mod tests {
         let cmd = send_keys("%5", b"hello\nworld");
         must_end_in_newline(&cmd);
         assert!(cmd.contains("hello\\012world"), "got {cmd:?}");
-        assert!(cmd.starts_with("send-keys -t %5 "));
+        assert!(
+            cmd.starts_with("send-keys -l -t %5 \""),
+            "missing -l flag / outer quoting; got {cmd:?}"
+        );
+        assert!(cmd.ends_with("\"\n"));
     }
 
     #[test]
     fn send_keys_escapes_backslash() {
         let cmd = send_keys("%5", b"a\\b");
         assert!(cmd.contains("a\\134b"), "got {cmd:?}");
+    }
+
+    /// Regression: a literal space keystroke must survive the trip to
+    /// tmux. Pre-fix, the wire string was `send-keys -t %5  \n` (one
+    /// space between `%5` and the trailing literal space). tmux's
+    /// command-line tokenizer split on whitespace and the trailing
+    /// space was eaten as a delimiter, so the user typed nothing.
+    /// Post-fix: `-l` flag + outer `"..."` quoting bundle the payload
+    /// into one argument regardless of whitespace; tmux decodes any
+    /// `\nnn` escapes under literal mode and forwards the bytes to
+    /// the pane.
+    #[test]
+    fn send_keys_quotes_payload_with_whitespace() {
+        let cmd = send_keys("%5", b" ");
+        must_end_in_newline(&cmd);
+        assert!(cmd.contains("\" \""), "got {cmd:?}");
+        assert!(cmd.starts_with("send-keys -l "), "got {cmd:?}");
+    }
+
+    /// Regression: a multi-char ASCII chunk (e.g. `hello`) must be
+    /// sent to the pane as five literal bytes. Pre-fix, tmux's
+    /// `send-keys` (without `-l`) interpreted each argument as a key
+    /// name; `hello` is not a key name and got silently dropped, so
+    /// the user typed nothing for any chunk > 1 char.
+    #[test]
+    fn send_keys_uses_literal_flag() {
+        let cmd = send_keys("%5", b"hello");
+        assert!(cmd.starts_with("send-keys -l "), "got {cmd:?}");
+        assert!(cmd.contains("\"hello\""), "got {cmd:?}");
+    }
+
+    /// Regression: a literal `"` keystroke must be embedded inside
+    /// the outer `"..."` quoting without terminating it. Pre-fix the
+    /// outer quoting did not exist, so this was a non-issue; the
+    /// post-fix wire format has the outer quotes and needs to escape
+    /// any internal `"` so the tokenizer doesn't truncate the arg.
+    #[test]
+    fn send_keys_escapes_embedded_quote_in_payload() {
+        let cmd = send_keys("%5", b"\"");
+        assert!(cmd.starts_with("send-keys -l -t %5 \""));
+        assert!(cmd.ends_with("\"\n"));
+        assert!(cmd.contains("\\\""), "got {cmd:?}");
     }
 
     #[test]

@@ -51,19 +51,39 @@ fn needs_quoting(b: u8) -> bool {
     b.is_ascii_whitespace() || b == b'"' || b == b'\\'
 }
 
-/// `send-keys -t %<pane_id> <escaped_keys>` — send a keystroke (or chunk of
-/// keystrokes) to the pane.
+/// `send-keys -l -t %<pane_id> "<escaped_keys>"` — send a keystroke (or
+/// chunk of keystrokes) to the pane.
 ///
-/// The payload is passed through [`escape_output`] so every byte survives
-/// the line-protocol trip: control characters and backslashes are emitted as
-/// `\nnn` octal escapes, printable bytes pass through. tmux's `send-keys`
-/// without `-l` interprets each argument through its key parser, which
-/// decodes `\nnn` back to the original byte and dispatches it to the pane.
+/// Two layers of protection keep every byte intact across the
+/// command-line trip:
+///
+/// 1. **The payload is passed through [`escape_output`]** so every byte
+///    survives: control characters, backslash, and non-ASCII bytes are
+///    emitted as `\nnn` octal escapes. Printable bytes pass through.
+/// 2. **The escaped payload is wrapped in `"..."` and the `-l` flag is
+///    passed to `send-keys`.** Two failures the bare wire format
+///    suffered before this change:
+///
+///    - tmux's command-line tokenizer splits on ASCII whitespace
+///      *before* any octal decoding runs, so a literal space keystroke
+///      arrived as a delimiter and was eaten (Bug — see
+///      `doc/dev/changelog/bugs.md` Bug 024).
+///    - Without `-l`, tmux interprets each argument as a key name
+///      (`Up`, `C-a`, `BSpace`)…).`hello` is not a key name and gets
+///      dropped silently. `-l` tells tmux to treat the argument as
+///      literal bytes (still with octal decoding), which is what
+///      xterm.js's byte stream needs.
 ///
 /// Returns a newline-terminated command line ready for stdin.
 pub fn send_keys(pane_id: &str, keys: &[u8]) -> String {
     let escaped = escape_output(keys);
-    format!("send-keys -t {pane_id} {escaped}\n")
+    // `escape_output` already converts every `\` to `\134`, so the
+    // escaped payload contains no raw `\` that we need to re-escape.
+    // The only character that can break the outer `"..."` quoting is
+    // a literal `"` (0x22 is printable ASCII and not in its escape
+    // set); replace it with `\"`.
+    let safe = escaped.replace('"', "\\\"");
+    format!("send-keys -l -t {pane_id} \"{safe}\"\n")
 }
 
 /// `split-window -h|-v -t %<pane_id>` — split the pane horizontally
