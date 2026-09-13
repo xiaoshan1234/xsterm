@@ -38,10 +38,64 @@
 pub(crate) mod commands;
 pub(crate) mod controller;
 pub(crate) mod dispatch;
+pub(crate) mod errors;
 pub(crate) mod escape;
 pub(crate) mod events;
 pub(crate) mod parser;
 pub(crate) mod protocol;
 
+pub(crate) mod bridge;
+
 #[allow(unused_imports)]
 pub use controller::TmuxController;
+
+/// Bridge [`TmuxError`] back to a `String` at the Tauri command
+/// boundary (`commands::session`). All Tauri command signatures today
+/// return `Result<_, String>`; with this impl in place, command
+/// bodies can `?`-propagate a `TmuxError` and Tauri serialises the
+/// `String` payload to the frontend as-is.
+///
+/// We do this at the **module boundary** (this file) instead of next
+/// to the error enum because the conversion is an explicit project
+/// policy: `services::tmux::*` returns `TmuxError`; only the
+/// `tauri::command` surface converts to `String`. Putting the impl
+/// next to `TmuxError` would tempt internal call sites to bail into
+/// `String` early and defeat the variant-matching value of the
+/// typed error.
+impl From<errors::TmuxError> for String {
+    fn from(err: errors::TmuxError) -> String {
+        // `to_string()` is provided by `thiserror`'s `Display` impl;
+        // we keep no extra prefix here because Tauri already wraps
+        // command errors with the command name when surfacing them
+        // to the frontend.
+        err.to_string()
+    }
+}
+
+#[cfg(test)]
+mod from_impl_tests {
+    use super::errors::{CommandKind, TmuxError};
+
+    #[test]
+    fn from_does_not_swallow_variant_detail() {
+        // The point of `TmuxError` is that the variant is matched
+        // before conversion; this test pins the `to_string()`
+        // output so a stray `#[error("...")]` change can't silently
+        // regress log greps that distinguish "server not running"
+        // from "internal invariant violated".
+        let s: String = TmuxError::ServerNotRunning {
+            socket: "alt".into(),
+        }
+        .to_string()
+        .into();
+        assert!(s.contains("alt"));
+        assert!(s.contains("server not running"));
+        let s: String = TmuxError::CommandNotFound {
+            kind: CommandKind::Pane,
+            id: "%3".into(),
+        }
+        .into();
+        assert!(s.contains("pane"));
+        assert!(s.contains("%3"));
+    }
+}

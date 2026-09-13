@@ -92,10 +92,12 @@ impl SessionBackend for TmuxPaneHandle {
 
     fn write(&self, data: &[u8]) -> Result<(), String> {
         self.controller.send_keys(&self.tmux_pane_id, data)
+            .map_err(|e| e.to_string())
     }
 
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
         self.controller.resize_pane(&self.tmux_pane_id, rows, cols)
+            .map_err(|e| e.to_string())
     }
 
     fn close(self: Box<Self>) -> Result<(), String> {
@@ -104,6 +106,7 @@ impl SessionBackend for TmuxPaneHandle {
         // `unbind_pane` removes the entry from `pane_bindings` and lets
         // the controller stay alive.
         self.controller.unbind_pane(&self.tmux_pane_id)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -517,6 +520,7 @@ impl SessionManager {
         drop(entry);
 
         controller.capture_pane(&tmux_pane_id, lines).await
+            .map_err(|e| e.to_string())
     }
 
     /// enumerate live tmux controllers as
@@ -653,7 +657,7 @@ impl SessionManager {
             }
         }
 
-        controller.close()
+        controller.close().map_err(|e| e.to_string())
     }
 
     /// Split `parent_xsterm_session_id` (a tmux pane session that already
@@ -792,7 +796,7 @@ impl SessionManager {
             .ok_or_else(|| format!("session {xsterm_session_id} has no tmux_pane_id"))?
             .to_string();
         drop(entry); // release the DashMap shard lock before the I/O.
-        controller.kill_pane(&tmux_pane_id)
+        controller.kill_pane(&tmux_pane_id).map_err(|e| e.to_string())
     }
 
     /// open a new tmux window on the given controller and return
@@ -901,7 +905,7 @@ impl SessionManager {
         let (controller, tmux_window_id) = found.ok_or_else(|| {
             format!("xsterm window {xsterm_window_id} is not bound to any tmux controller")
         })?;
-        controller.kill_window(&tmux_window_id)
+        controller.kill_window(&tmux_window_id).map_err(|e| e.to_string())
     }
 
     /// rename a tmux window via `rename-window`.
@@ -928,7 +932,7 @@ impl SessionManager {
         let (controller, tmux_window_id) = found.ok_or_else(|| {
             format!("xsterm window {xsterm_window_id} is not bound to any tmux controller")
         })?;
-        controller.rename_window(&tmux_window_id, name)
+        controller.rename_window(&tmux_window_id, name).map_err(|e| e.to_string())
     }
 
     /// Allocate the next unique tmux controller id.
@@ -2347,7 +2351,7 @@ mod tests {
             stdin_tx,
             backend.clone(),
         );
-        spawn_dispatch_task(dispatch_rx, controller.clone(), backend, controller_id);
+        spawn_dispatch_task(dispatch_rx, controller.clone(), crate::services::tmux::bridge::TmuxBridge::new(backend.clone(), controller.clone()));
         (controller, stdin_rx, dispatch_tx)
     }
 

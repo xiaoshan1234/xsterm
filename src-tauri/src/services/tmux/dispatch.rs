@@ -37,7 +37,10 @@ use tokio::sync::mpsc;
 use crate::infrastructure::app_backend::AppBackend;
 
 use super::controller::{PendingWindow, TmuxController};
+use super::errors::TmuxError;
+use super::bridge::TmuxBridge;
 use super::events::ControlEvent;
+use serde_json::json;
 
 /// Spawn the dispatch task that turns parsed [`ControlEvent`]s into
 /// [`AppBackend`] emits.
@@ -48,50 +51,39 @@ use super::events::ControlEvent;
 pub(crate) fn spawn_dispatch_task(
     mut dispatch_rx: mpsc::UnboundedReceiver<ControlEvent>,
     controller: Arc<TmuxController>,
-    app_backend: Arc<dyn AppBackend>,
-    controller_id: u32,
+    bridge: TmuxBridge,
 ) {
     tokio::spawn(async move {
         while let Some(event) = dispatch_rx.recv().await {
-            dispatch_event(&controller, app_backend.as_ref(), controller_id, event);
+            dispatch_event(&controller, &bridge, event);
         }
         tracing::debug!(
             "tmux controller {}: dispatch channel closed, exiting",
-            controller_id
+            controller.controller_id()
         );
     });
 }
 
 /// Interpret one [`ControlEvent`] and emit the corresponding frontend
-/// events via [`AppBackend`].
+/// events via [`TmuxBridge`].
 fn dispatch_event(
     controller: &Arc<TmuxController>,
-    backend: &dyn AppBackend,
-    controller_id: u32,
+    bridge: &TmuxBridge,
     event: ControlEvent,
 ) {
     tracing::info!(
         "tmux dispatch: controller {} received event: {:?}",
-        controller_id,
+        controller.controller_id(),
         event
     );
     match event {
         ControlEvent::Output { pane_id, data } => {
             if let Some(xsterm_id) = controller.xsterm_id_for_pane(&pane_id) {
-                if let Err(e) =
-                    backend.emit("session-output", &serde_json::json!([xsterm_id, data]))
-                {
-                    tracing::error!(
-                        "tmux controller {}: session-output emit failed for pane {}: {}",
-                        controller_id,
-                        pane_id,
-                        e
-                    );
-                }
+                bridge.emit_session_output(xsterm_id, data);
             } else {
                 tracing::debug!(
                     "tmux controller {}: dropping %output for unknown pane {} ({} bytes)",
-                    controller_id,
+                    controller.controller_id(),
                     pane_id,
                     data.len()
                 );
@@ -126,21 +118,7 @@ fn dispatch_event(
                 let xsterm_id = controller.allocate_xsterm_id();
                 controller.register_pane(pane_id.clone(), xsterm_id);
                 controller.record_pane_window(pane_id.clone(), window_id.clone());
-                if let Err(e) = backend.emit(
-                    "tmux-pane-added",
-                    &serde_json::json!({
-                        "controller_id": controller_id,
-                        "tmux_pane_id": pane_id,
-                        "xsterm_session_id": xsterm_id,
-                        "parent_tmux_window_id": window_id,
-                    }),
-                ) {
-                    tracing::error!(
-                        "tmux controller {}: tmux-pane-added emit failed: {}",
-                        controller_id,
-                        e
-                    );
-                }
+                bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
                 let _ = tx.send(Ok((xsterm_id, pane_id.clone(), window_id.clone())));
                 return;
             }
@@ -166,38 +144,15 @@ fn dispatch_event(
                 if let Ok(mut bindings) = controller.window_bindings.lock() {
                     bindings.insert(window_id.clone(), pending.xsterm_window_id);
                 }
-                if let Err(e) = backend.emit(
-                    "tmux-pane-added",
-                    &serde_json::json!({
-                        "controller_id": controller_id,
-                        "tmux_pane_id": pane_id,
-                        "xsterm_session_id": xsterm_id,
-                        "parent_tmux_window_id": window_id,
-                    }),
-                ) {
-                    tracing::error!(
-                        "tmux controller {}: tmux-pane-added emit failed: {}",
-                        controller_id,
-                        e
-                    );
-                }
+                bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
                 if let Some(tx) = pending.sender {
-                    if let Err(e) = backend.emit(
-                        "tmux-window-added",
-                        &serde_json::json!({
-                            "controller_id": controller_id,
-                            "tmux_window_id": window_id,
-                            "xsterm_window_id": pending.xsterm_window_id,
-                            "xsterm_session_id": xsterm_id,
-                            "xsterm_pane_id": pane_id,
-                        }),
-                    ) {
-                        tracing::error!(
-                            "tmux controller {}: tmux-window-added emit failed: {}",
-                            controller_id,
-                            e
-                        );
-                    }
+                    bridge.emit_tmux_window_added(
+                        pending.xsterm_window_id,
+                        &window_id,
+                        None,
+                        Some(xsterm_id),
+                        Some(&pane_id),
+                    );
                     let _ = tx.send(Ok((
                         pending.xsterm_window_id,
                         window_id.clone(),
@@ -230,21 +185,7 @@ fn dispatch_event(
                 controller.register_pane(pane_id.clone(), xsterm_id);
                 controller.record_pane_window(pane_id.clone(), window_id.clone());
                 controller.record_first_pane(xsterm_id, pane_id.clone());
-                if let Err(e) = backend.emit(
-                    "tmux-pane-added",
-                    &serde_json::json!({
-                        "controller_id": controller_id,
-                        "tmux_pane_id": pane_id,
-                        "xsterm_session_id": xsterm_id,
-                        "parent_tmux_window_id": window_id,
-                    }),
-                ) {
-                    tracing::error!(
-                        "tmux controller {}: tmux-pane-added emit failed: {}",
-                        controller_id,
-                        e
-                    );
-                }
+                bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
                 return;
             }
 
@@ -258,7 +199,7 @@ fn dispatch_event(
             //    re-bind UI.
             tracing::debug!(
                 "tmux controller {}: external %window-pane-changed for pane {} in window {} — not auto-binding",
-                controller_id,
+                controller.controller_id(),
                 pane_id,
                 window_id
             );
@@ -334,7 +275,7 @@ fn dispatch_event(
                 }
                 tracing::debug!(
                     "tmux controller {}: bootstrap %window-add for window {} — xsterm_window_id={}",
-                    controller_id,
+                    controller.controller_id(),
                     window_id,
                     xsterm_window_id
                 );
@@ -342,7 +283,7 @@ fn dispatch_event(
             }
             tracing::debug!(
                 "tmux controller {}: external %window-add for window {} — not auto-binding",
-                controller_id,
+                controller.controller_id(),
                 window_id,
             );
         }
@@ -378,24 +319,11 @@ fn dispatch_event(
                         }
                     }
                 }
-                if let Err(e) = backend.emit(
-                    "tmux-window-closed",
-                    &serde_json::json!({
-                        "controller_id": controller_id,
-                        "tmux_window_id": window_id,
-                        "xsterm_window_id": xsterm_window_id,
-                    }),
-                ) {
-                    tracing::error!(
-                        "tmux controller {}: tmux-window-closed emit failed: {}",
-                        controller_id,
-                        e
-                    );
-                }
+                bridge.emit_tmux_window_closed(&window_id, xsterm_window_id);
             } else {
                 tracing::debug!(
                     "tmux controller {}: %window-close for unbound window {} — no tmux-window-closed emitted",
-                    controller_id,
+                    controller.controller_id(),
                     window_id,
                 );
             }
@@ -407,25 +335,11 @@ fn dispatch_event(
                 .ok()
                 .and_then(|m| m.get(&window_id).copied());
             if let Some(xsterm_window_id) = xsterm_window_id {
-                if let Err(e) = backend.emit(
-                    "tmux-window-renamed",
-                    &serde_json::json!({
-                        "controller_id": controller_id,
-                        "tmux_window_id": window_id,
-                        "xsterm_window_id": xsterm_window_id,
-                        "name": name,
-                    }),
-                ) {
-                    tracing::error!(
-                        "tmux controller {}: tmux-window-renamed emit failed: {}",
-                        controller_id,
-                        e
-                    );
-                }
+                bridge.emit_tmux_window_renamed(&window_id, xsterm_window_id, &name);
             } else {
                 tracing::debug!(
                     "tmux controller {}: %window-renamed for unbound window {} — no tmux-window-renamed emitted",
-                    controller_id,
+                    controller.controller_id(),
                     window_id,
                 );
             }
@@ -453,67 +367,23 @@ fn dispatch_event(
                 map.remove(pane_id);
             }
             if let Some(xsterm_id) = xsterm_id {
-                if let Err(e) = backend.emit(
-                    "tmux-pane-removed",
-                    &serde_json::json!({
-                        "controller_id": controller_id,
-                        "tmux_pane_id": pane_id,
-                        "xsterm_session_id": xsterm_id,
-                    }),
-                ) {
-                    tracing::error!(
-                        "tmux controller {}: tmux-pane-removed emit failed: {}",
-                        controller_id,
-                        e
-                    );
-                }
+                bridge.emit_tmux_pane_removed(&pane_id, xsterm_id);
             } else {
                 tracing::debug!(
-                    "tmux controller {}: {} for unbound pane {} — no tmux-pane-removed emitted",
-                    controller_id,
-                    event_kind,
-                    pane_id
+                    "tmux controller {}: %pane-exited for unbound pane {} — no tmux-pane-removed emitted",
+                    controller.controller_id(),
+                    pane_id,
                 );
             }
         }
         ControlEvent::Pause { pane_id } => {
-            if let Err(e) = backend.emit(
-                "tmux-paused",
-                &serde_json::json!({ "tmux_pane_id": pane_id }),
-            ) {
-                tracing::error!(
-                    "tmux controller {}: tmux-paused emit failed: {}",
-                    controller_id,
-                    e
-                );
-            }
+            bridge.emit_tmux_paused(&pane_id);
         }
         ControlEvent::Continue { pane_id } => {
-            if let Err(e) = backend.emit(
-                "tmux-continued",
-                &serde_json::json!({ "tmux_pane_id": pane_id }),
-            ) {
-                tracing::error!(
-                    "tmux controller {}: tmux-continued emit failed: {}",
-                    controller_id,
-                    e
-                );
-            }
+            bridge.emit_tmux_continued(&pane_id);
         }
         ControlEvent::Exit { reason } => {
-            if let Err(e) = backend.emit(
-                "tmux-controller-exit",
-                &serde_json::json!({
-                    "controller_id": controller_id,
-                    "reason": reason,
-                }),
-            ) {
-                tracing::error!(
-                    "tmux controller {}: tmux-controller-exit emit failed: {}",
-                    controller_id,
-                    e
-                );
-            }
+            bridge.emit_tmux_controller_exit(reason.as_deref());
         }
         // capture-pane Promise coordination. The four
         // `Command*` events below form the synchronous reply envelope for
@@ -539,7 +409,7 @@ fn dispatch_event(
             if !has_capture {
                 tracing::debug!(
                     "tmux controller {}: %begin {} for unrelated command (no pending capture)",
-                    controller_id,
+                    controller.controller_id(),
                     id
                 );
             }
@@ -566,7 +436,7 @@ fn dispatch_event(
             } else {
                 tracing::debug!(
                     "tmux controller {}: %output for command {} (no pending capture, body line dropped)",
-                    controller_id,
+                    controller.controller_id(),
                     id
                 );
             }
@@ -589,7 +459,7 @@ fn dispatch_event(
                 let _ = tx.send(Ok(text));
                 tracing::debug!(
                     "tmux controller {}: capture-pane %end id={} ({} body lines)",
-                    controller_id,
+                    controller.controller_id(),
                     id,
                     body.len()
                 );
@@ -603,8 +473,8 @@ fn dispatch_event(
             // query.
             handle_classified_response(
                 controller,
-                backend,
-                controller_id,
+                bridge,
+                controller.controller_id(),
                 id,
                 take_command_body(controller),
             );
@@ -615,17 +485,21 @@ fn dispatch_event(
                 Err(_) => return,
             };
             if let Some(tx) = slot.take() {
-                let _ = tx.send(Err(format!(
-                    "tmux controller {}: capture-pane failed (id={}): {message}",
-                    controller_id, id
-                )));
+                            // Map the error string into `TmuxError::Internal` so the
+                            // caller's `?`-chain (which now returns `TmuxError`)
+                            // stays type-coherent. The user-visible message is
+                            // preserved by `TmuxError`'s `Display` impl.
+                            let _ = tx.send(Err(TmuxError::Internal(format!(
+                                "tmux controller {}: capture-pane failed (id={}): {message}",
+                                controller.controller_id(), id
+                            ))));
                 if let Ok(mut body) = controller.pending_capture_body.lock() {
                     body.clear();
                 }
             } else {
                 tracing::debug!(
                     "tmux controller {}: %error for command {} (no pending capture): {message}",
-                    controller_id,
+                    controller.controller_id(),
                     id
                 );
             }
@@ -636,7 +510,7 @@ fn dispatch_event(
         _ => {
             tracing::debug!(
                 "tmux controller {}: ignoring event {:?}",
-                controller_id,
+                controller.controller_id(),
                 event
             );
         }
@@ -699,7 +573,7 @@ fn parse_pane_list_row(line: &str) -> Option<PaneListRow> {
 }
 
 fn emit_window_list(
-    backend: &dyn AppBackend,
+    bridge: &TmuxBridge,
     session_id: u32,
     controller: &TmuxController,
     cmd_id: u32,
@@ -739,49 +613,27 @@ fn emit_window_list(
     } else {
         std::collections::HashMap::new()
     };
-    // Emit one `tmux-window-added` per row — the frontend's
-    // `tmux-window-added` listener is idempotent and creates an
-    // xsterm Window for each one.
-    //
-    // `session_id` (the controller id) is used as the synthetic
-    // xsterm session id because `list-windows -a` reports windows from
-    // every session this controller is attached to (typically just
-    // one — the control-mode session) and we want all of those panes
-    // to share a single xsterm session in the React tree.
-    for entry in &entries {
-        let xsterm_wid = window_ids
-            .get(&entry.window_id)
-            .copied()
-            .unwrap_or(0);
-        let payload = serde_json::json!({
-            "controllerId": session_id,
-            "tmuxWindowId": entry.window_id,
-            "xstermWindowId": xsterm_wid,
-            "xstermSessionId": session_id,
-            "xstermPaneId": "",
-        });
-        if let Err(e) = backend.emit("tmux-window-added", &payload) {
-            tracing::error!("Failed to emit tmux-window-added: {}", e);
-        }
-    }
-    let payload = serde_json::json!({
-        "cmd_id": cmd_id,
-        "windows": entries.iter().map(|e| serde_json::json!({
-            "windowId": e.window_id,
-            "sessionId": e.session_id,
-            "name": e.name,
-            "active": e.active,
-            "layout": e.layout,
-        })).collect::<Vec<_>>(),
-    });
-    let wrapped = serde_json::json!([session_id, payload]);
-    if let Err(e) = backend.emit("tmux-window-list", &wrapped) {
-        tracing::error!("Failed to emit tmux-window-list: {}", e);
-    }
+    let rows = entries
+        .iter()
+        .map(|entry| {
+            let xsterm_wid = window_ids
+                .get(&entry.window_id)
+                .copied()
+                .unwrap_or(0);
+            serde_json::json!({
+                "controllerId": session_id,
+                "tmuxWindowId": entry.window_id,
+                "xstermWindowId": xsterm_wid,
+                "xstermSessionId": session_id,
+                "xstermPaneId": "",
+            })
+        })
+        .collect::<Vec<_>>();
+    bridge.emit_tmux_window_added_for_list(session_id, serde_json::json!(rows));
 }
 
 fn emit_pane_list(
-    backend: &dyn AppBackend,
+    bridge: &TmuxBridge,
     session_id: u32,
     controller: &TmuxController,
     cmd_id: u32,
@@ -821,24 +673,11 @@ fn emit_pane_list(
             .get(&entry.window_id)
             .copied()
             .unwrap_or(0);
-        let payload = serde_json::json!({
-            "controllerId": session_id,
-            "tmuxPaneId": entry.pane_id,
-            // IMPORTANT: `xstermSessionId` is the freshly allocated
-            // per-pane xsterm id, **not** `session_id` (the controller
-            // id). If we used the controller id here, every pane from
-            // this controller would share the same React Session and
-            // the frontend's idempotency check would short-circuit all
-            // but the first one. Each pane must own a unique
-            // xsterm_session_id so the frontend creates one Session
-            // node per pane — that's how the workspace tree shows the
-            // full server-side history.
-            "xstermSessionId": xsterm_id,
-            "parentTmuxWindowId": parent_window_id,
-        });
-        if let Err(e) = backend.emit("tmux-pane-added", &payload) {
-            tracing::error!("Failed to emit tmux-pane-added: {}", e);
-        }
+        bridge.emit_tmux_pane_added_with_window(
+            xsterm_id,
+            &entry.pane_id,
+            xsterm_window_id,
+        );
         if let Ok(mut pane_bindings) = controller.pane_bindings.lock() {
             pane_bindings.insert(entry.pane_id.clone(), xsterm_id);
         }
@@ -861,23 +700,22 @@ fn emit_pane_list(
             );
         }
     }
-    let payload = serde_json::json!({
-        "cmd_id": cmd_id,
-        "panes": entries.iter().map(|e| serde_json::json!({
-            "paneId": e.pane_id,
-            "windowId": e.window_id,
-            "sessionId": e.session_id,
-            "active": e.active,
-            "width": e.width,
-            "height": e.height,
-            "cwd": e.cwd,
-            "title": e.title,
-        })).collect::<Vec<_>>(),
-    });
-    let wrapped = serde_json::json!([session_id, payload]);
-    if let Err(e) = backend.emit("tmux-pane-list", &wrapped) {
-        tracing::error!("Failed to emit tmux-pane-list: {}", e);
-    }
+    let rows = entries
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "paneId": e.pane_id,
+                "windowId": e.window_id,
+                "sessionId": e.session_id,
+                "active": e.active,
+                "width": e.width,
+                "height": e.height,
+                "cwd": e.cwd,
+                "title": e.title,
+            })
+        })
+        .collect::<Vec<_>>();
+    bridge.emit_tmux_pane_added_for_list(session_id, serde_json::json!(rows));
 }
 
 /// Inspect the first body line of a completed command response. If it
@@ -905,21 +743,21 @@ fn take_command_body(controller: &TmuxController) -> Vec<String> {
 /// for `await_first_pane` — eliminating the Bug 016 / 017 race.
 fn handle_classified_response(
     controller: &TmuxController,
-    backend: &dyn AppBackend,
+    bridge: &TmuxBridge,
     controller_id: u32,
     cmd_id: u32,
     lines: Vec<String>,
 ) {
     let first = lines.first().map(|l| l.trim_start()).unwrap_or("");
     if first.starts_with('@') {
-        emit_window_list(backend, controller_id, controller, cmd_id, &lines);
+        emit_window_list(bridge, controller_id, controller, cmd_id, &lines);
         // Bug 017 bootstrap chain: emit window list, then immediately
         // ask the server for the panes so we can register the first
         // pane for `await_first_pane`. Dispatched on an OS thread to
         // keep the dispatch loop free of synchronous send latency.
         trigger_followup_list_panes(controller);
     } else if first.starts_with('%') {
-        emit_pane_list(backend, controller_id, controller, cmd_id, &lines);
+        emit_pane_list(bridge, controller_id, controller, cmd_id, &lines);
     } else {
         tracing::debug!(
             "command {} body does not look like a list query (first line {:?}); ignoring",

@@ -21,6 +21,7 @@ serde_json = "1"
 portable-pty = "0.8"
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
+thiserror = "1"
 russh = "0.50.0-beta.7"
 russh-keys = "0.50.0-beta.7"
 tracing = "0.1"

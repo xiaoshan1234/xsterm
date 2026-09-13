@@ -74,6 +74,8 @@ pub use self::subscriber::{RouterAction, RouterState};
 
 use super::commands as tmux_cmd;
 use super::dispatch::spawn_dispatch_task;
+use super::errors::{TmuxError, spawn_err};
+use super::bridge::TmuxBridge;
 use super::events::ProtocolEvent;
 use super::parser::ProtocolParser;
 use std::collections::{HashMap, VecDeque};
@@ -127,25 +129,27 @@ const DEFAULT_TMUX_SOCKET_NAME: &str = "default";
 /// `Ok(xsterm_session_id, tmux_pane_id, tmux_window_id)` once tmux confirms
 /// the split via `%window-pane-changed`. `Err(message)` on timeout, on a
 /// closed channel, or when tmux itself reports a command error (the
-/// dispatch task propagates the error string into the oneshot so the
-/// awaiting Tauri command returns a clean `Err` to the frontend).
-type SplitResult = Result<(u32, String, String), String>;
+/// dispatch task propagates the [`TmuxError`] into the oneshot so the
+/// awaiting Tauri command returns a clean `Err` to the frontend —
+/// the [`From<TmuxError> for String`] impl at `services/tmux/mod.rs`
+/// bridges the two at the Tauri boundary).
+type SplitResult = Result<(u32, String, String), TmuxError>;
 
 /// Result of a [`TmuxController::new_window`] request.
 ///
 /// `Ok(xsterm_window_id, tmux_window_id, xsterm_session_id, tmux_pane_id)`
 /// once tmux confirms the new window via `%window-pane-changed` (the
 /// first pane of the new window is reported in the same reply chain).
-/// `Err(message)` on timeout, on a closed channel, or when tmux itself
-/// reports a command error.
-type NewWindowResult = Result<(u32, String, u32, String), String>;
+/// `Err(TmuxError)` on timeout, on a closed channel, or when tmux
+/// itself reports a command error.
+type NewWindowResult = Result<(u32, String, u32, String), TmuxError>;
 
 /// Result of a [`TmuxController::capture_pane`] request.
 ///
 /// `Ok(text)` once tmux confirms via `%end` (body lines joined with `\n`).
-/// `Err(message)` on timeout, on a closed channel, on a `%error` reply,
-/// or when tmux itself reports the command failed.
-type CaptureResult = Result<String, String>;
+/// `Err(TmuxError)` on timeout, on a closed channel, on a `%error`
+/// reply, or when tmux itself reports the command failed.
+type CaptureResult = Result<String, TmuxError>;
 
 /// Handle to one running `tmux -CC` child process and its I/O tasks.
 ///
@@ -370,18 +374,26 @@ impl TmuxController {
         app_backend: Arc<dyn AppBackend>,
         ssh_backend: &dyn SshBackend,
         controller_id: u32,
-    ) -> Result<Arc<Self>, String> {
+    ) -> Result<Arc<Self>, TmuxError> {
         if let Some(ssh_cfg) = config.ssh.as_ref() {
-            // SSH path: build the remote `tmux -CC ...` argv, run
-            // it through an SSH exec channel, and wrap the resulting
-            // `SshConnectResult` in a `SshTmuxBackend`.
-            let argv_strings = build_tmux_argv(config)?;
-            let command = format!("tmux {}", argv_strings.join(" "));
-            let result = ssh_backend.connect_exec(ssh_cfg, &command)?;
-            let backend: Box<dyn TmuxBackend> =
-                Box::new(SshTmuxBackend::from_connect_result(result));
-            return Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create);
-        }
+                    // SSH path: build the remote `tmux -CC ...` argv, run
+                    // it through an SSH exec channel, and wrap the resulting
+                    // `SshConnectResult` in a `SshTmuxBackend`.
+                    //
+                    // `connect_exec` returns `Result<_, String>` (russh has
+                    // no `Error: Send + Sync + 'static` blanket, so the
+                    // SshBackend trait is stuck with `String` for now).
+                    // We map the error to `TmuxError::Ipc` so the caller
+                    // can still pattern-match on the variant.
+                    let argv_strings = build_tmux_argv(config)?;
+                    let command = format!("tmux {}", argv_strings.join(" "));
+                    let result = ssh_backend
+                        .connect_exec(ssh_cfg, &command)
+                        .map_err(|msg| spawn_err("ssh_backend.connect_exec", msg))?;
+                    let backend: Box<dyn TmuxBackend> =
+                        Box::new(SshTmuxBackend::from_connect_result(result));
+                    return Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create);
+                }
 
         // Local path: spawn `tmux` as a tokio child process.
         let argv_strings = build_tmux_argv(config)?;
@@ -408,7 +420,7 @@ impl TmuxController {
         args: &[&str],
         app_backend: Arc<dyn AppBackend>,
         controller_id: u32,
-    ) -> Result<Arc<Self>, String> {
+    ) -> Result<Arc<Self>, TmuxError> {
         let mut cmd = Command::new("tmux");
         cmd.args(args)
             .stdin(Stdio::piped())
@@ -433,7 +445,7 @@ impl TmuxController {
             app_backend: Arc<dyn AppBackend>,
             controller_id: u32,
             mode: SpawnMode,
-        ) -> Result<Arc<Self>, String> {
+        ) -> Result<Arc<Self>, TmuxError> {
         let stdout = backend
             .take_stdout()
             .map_err(|e| format!("tmux backend has no stdout: {e}"))?;
@@ -488,8 +500,10 @@ impl TmuxController {
         spawn_dispatch_task(
             dispatch_rx,
             controller.clone(),
-            Arc::clone(&controller.app_backend),
-            controller_id,
+            TmuxBridge::new(
+                Arc::clone(&controller.app_backend),
+                controller.clone(),
+            ),
         );
 
         // Register this child process as a tmux control client. tmux
@@ -579,7 +593,7 @@ impl TmuxController {
         app_backend: Arc<dyn AppBackend>,
         ssh_backend: &dyn SshBackend,
         controller_id: u32,
-    ) -> Result<Arc<Self>, String> {
+    ) -> Result<Arc<Self>, TmuxError> {
         let session_name = config.tmux_session_name.as_deref().ok_or_else(|| {
             "tmux -CC attach requires `tmuxSessionName` in TmuxCcConfig".to_string()
         })?;
@@ -636,51 +650,43 @@ impl TmuxController {
     /// FIFO queue. Returns `Err` if the writer task has already exited
     /// (e.g. after [`TmuxController::close`]) or if the pane id is not
     /// registered with this controller.
-    pub fn send_keys(&self, tmux_pane_id: &str, keys: &[u8]) -> Result<(), String> {
+    pub fn send_keys(&self, tmux_pane_id: &str, keys: &[u8]) -> Result<(), TmuxError> {
         if !self
             .pane_bindings
             .lock()
             .map_err_string()?
             .contains_key(tmux_pane_id)
         {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux pane '{}' is not registered with controller {}",
                 tmux_pane_id, self.controller_id
-            ));
+            )));
         }
         let cmd = tmux_cmd::send_keys(tmux_pane_id, keys);
-        self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        })
-    }
+                self.stdin_tx
+                    .send(cmd)
+                    .map_err(|_| TmuxError::AlreadyClosed)
+            }
 
     /// Resize a pane to `cols` × `rows` characters.
     ///
     /// Builds `resize-pane -t %<pane> -x <cols> -y <rows>` via
     /// [`tmux_cmd::resize_pane`] and queues it for dispatch. Same error
     /// semantics as [`TmuxController::send_keys`].
-    pub fn resize_pane(&self, tmux_pane_id: &str, rows: u16, cols: u16) -> Result<(), String> {
+    pub fn resize_pane(&self, tmux_pane_id: &str, rows: u16, cols: u16) -> Result<(), TmuxError> {
         if !self
             .pane_bindings
             .lock()
             .map_err_string()?
             .contains_key(tmux_pane_id)
         {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux pane '{}' is not registered with controller {}",
                 tmux_pane_id, self.controller_id
-            ));
+            )));
         }
         let cmd = tmux_cmd::resize_pane(tmux_pane_id, cols, rows);
-        self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        })
+        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// read up to `lines` lines of scrollback from the pane via
@@ -714,10 +720,10 @@ impl TmuxController {
             .map_err_string()?
             .contains_key(tmux_pane_id)
         {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux pane '{}' is not registered with controller {}",
                 tmux_pane_id, self.controller_id
-            ));
+            )));
         }
 
         // Serialise concurrent capture_pane callers — only one capture
@@ -742,26 +748,28 @@ impl TmuxController {
         }
 
         let cmd = tmux_cmd::capture_pane(tmux_pane_id, lines);
-        if let Err(e) = self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        }) {
-            // Roll back so the dispatch task doesn't observe a stale
-            // sender after we returned.
-            if let Ok(mut slot) = self.pending_capture.lock() {
-                *slot = None;
-            }
-            return Err(e);
-        }
+                if self
+                    .stdin_tx
+                    .send(cmd)
+                    .map_err(|_| {
+                        TmuxError::AlreadyClosed
+                    })
+                    .is_err()
+                {
+                    // Roll back so the dispatch task doesn't observe a stale
+                    // sender after we returned.
+                    if let Ok(mut slot) = self.pending_capture.lock() {
+                        *slot = None;
+                    }
+                    return Err(TmuxError::AlreadyClosed);
+                }
 
         match tokio::time::timeout(CAPTURE_PANE_TIMEOUT, rx).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_canceled)) => Err(format!(
+            Ok(Err(_canceled)) => Err(TmuxError::Internal(format!(
                 "tmux controller {}: capture response channel closed",
                 self.controller_id
-            )),
+            ))),
             Err(_elapsed) => {
                 // Drop our half so the dispatch task's later CommandEnd
                 // sees a closed channel and silently discards (we already
@@ -772,10 +780,10 @@ impl TmuxController {
                 if let Ok(mut body) = self.pending_capture_body.lock() {
                     body.clear();
                 }
-                Err(format!(
+                Err(TmuxError::Internal(format!(
                     "tmux controller {}: capture timed out after {:?}",
                     self.controller_id, CAPTURE_PANE_TIMEOUT
-                ))
+                )))
             }
         }
     }
@@ -815,7 +823,7 @@ impl TmuxController {
     /// Background tasks unwind asynchronously; this call does **not**
     /// wait for them to finish. The dispatch task will observe the writer
     /// task's exit and finish its own loop.
-    pub fn close(&self) -> Result<(), String> {
+    pub fn close(&self) -> Result<(), TmuxError> {
         self.killed.store(true, Ordering::SeqCst);
         if let Ok(mut guard) = self.backend.try_lock() {
             if let Some(mut backend) = guard.take() {
@@ -835,10 +843,10 @@ impl TmuxController {
         // already-dropped receiver just returns Err and we ignore it.
         if let Ok(mut slot) = self.pending_capture.lock() {
             if let Some(tx) = slot.take() {
-                let _ = tx.send(Err(format!(
+                let _ = tx.send(Err(TmuxError::Internal(format!(
                     "tmux controller {}: controller closed",
                     self.controller_id
-                )));
+                ))));
             }
         }
         if let Ok(mut body) = self.pending_capture_body.lock() {
@@ -866,7 +874,7 @@ impl TmuxController {
     /// should `await` it; subsequent calls return immediately with the
     /// cached first-pane result if available, otherwise the same timeout
     /// error.
-    pub async fn await_first_pane(&self) -> Result<(u32, String), String> {
+    pub async fn await_first_pane(&self) -> Result<(u32, String), TmuxError> {
         tracing::info!(
             "tmux controller {}: await_first_pane called (will block up to {:?}s waiting for record_first_pane from dispatcher)",
             self.controller_id,
@@ -887,26 +895,23 @@ impl TmuxController {
             guard.take()
         };
         let rx = rx.ok_or_else(|| {
-            format!(
-                "tmux controller {}: first pane already awaited",
-                self.controller_id
-            )
-        })?;
-        // Await with the standard 5s timeout. The receiver buffers the
-        // dispatcher's `.send()`, so this doesn't lose notifications the
-        // way `Notify` did (Notify's `notified()` future is only
-        // registered as a waiter on first poll, leaving a T2→T3 race).
-        match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, rx).await {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(_)) => Err(format!(
-                "tmux controller {}: first pane channel closed unexpectedly",
-                self.controller_id
-            )),
-            Err(_) => Err(format!(
-                "tmux controller {}: timed out waiting for first pane",
-                self.controller_id
-            )),
-        }
+                    TmuxError::Internal(format!(
+                        "tmux controller {}: first pane already awaited",
+                        self.controller_id
+                    ))
+                })?;
+                // Await with the standard 5s timeout. The receiver buffers the
+                // dispatcher's `.send()`, so this doesn't lose notifications the
+                // way `Notify` did (Notify's `notified()` future is only
+                // registered as a waiter on first poll, leaving a T2→T3 race).
+                match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, rx).await {
+                    Ok(Ok(result)) => Ok(result),
+                    Ok(Err(_)) => Err(TmuxError::AlreadyClosed),
+                    Err(_) => Err(TmuxError::Timeout {
+                        budget: AWAIT_FIRST_PANE_TIMEOUT,
+                        context: "await_first_pane",
+                    }),
+                }
     }
 
     /// Snapshot of every pane currently registered with this controller.
@@ -936,13 +941,13 @@ impl TmuxController {
     ///
     /// Does **not** issue `kill-pane` — that is the caller's responsibility
     /// if the underlying tmux pane should also disappear.
-    pub fn unbind_pane(&self, tmux_pane_id: &str) -> Result<(), String> {
+    pub fn unbind_pane(&self, tmux_pane_id: &str) -> Result<(), TmuxError> {
         let mut map = self.pane_bindings.lock().map_err_string()?;
         if map.remove(tmux_pane_id).is_none() {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux pane '{}' is not bound to controller {}",
                 tmux_pane_id, self.controller_id
-            ));
+            )));
         }
         tracing::debug!(
             "tmux controller {}: unbound pane {}",
@@ -986,10 +991,10 @@ impl TmuxController {
             .map_err_string()?
             .contains_key(parent_tmux_pane_id)
         {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux pane '{}' is not registered with controller {}",
                 parent_tmux_pane_id, self.controller_id
-            ));
+            )));
         }
 
         let (tx, rx) = oneshot::channel::<SplitResult>();
@@ -1003,30 +1008,25 @@ impl TmuxController {
             direction.flag(),
             parent_tmux_pane_id
         );
-        if let Err(e) = self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        }) {
-            // Roll back: remove the sender we just pushed so the dispatch
-            // task does not wait on a stale channel forever.
-            if let Ok(mut queue) = self.pending_splits.lock() {
-                queue.pop_back();
-            }
-            return Err(e);
-        }
+        if let Err(e) = self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed) {
+                            // Roll back: remove the sender we just pushed so the dispatch
+                            // task does not wait on a stale channel forever.
+                            if let Ok(mut queue) = self.pending_splits.lock() {
+                                queue.pop_back();
+                            }
+                            return Err(e);
+                        }
 
         match tokio::time::timeout(self.split_pane_timeout, rx).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_canceled)) => Err(format!(
+            Ok(Err(_canceled)) => Err(TmuxError::Internal(format!(
                 "tmux controller {}: split response channel closed",
                 self.controller_id
-            )),
-            Err(_elapsed) => Err(format!(
+            ))),
+            Err(_elapsed) => Err(TmuxError::Internal(format!(
                 "tmux controller {}: split timed out after {:?}",
                 self.controller_id, self.split_pane_timeout
-            )),
+            ))),
         }
     }
 
@@ -1039,25 +1039,20 @@ impl TmuxController {
     ///
     /// Returns `Err` if the pane is not bound to this controller or if the
     /// writer channel has already closed.
-    pub fn kill_pane(&self, tmux_pane_id: &str) -> Result<(), String> {
+    pub fn kill_pane(&self, tmux_pane_id: &str) -> Result<(), TmuxError> {
         if !self
             .pane_bindings
             .lock()
             .map_err_string()?
             .contains_key(tmux_pane_id)
         {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux pane '{}' is not registered with controller {}",
                 tmux_pane_id, self.controller_id
-            ));
+            )));
         }
         let cmd = tmux_cmd::kill_pane(tmux_pane_id);
-        self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        })
+        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// open a new tmux window and return its
@@ -1091,12 +1086,7 @@ impl TmuxController {
         }
 
         let cmd = tmux_cmd::new_window_in_current(window_name);
-        if let Err(e) = self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        }) {
+        if let Err(e) = self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed) {
             // Roll back: remove the sender we just pushed so the dispatch
             // task does not wait on a stale channel forever.
             if let Ok(mut queue) = self.pending_windows.lock() {
@@ -1107,14 +1097,14 @@ impl TmuxController {
 
         match tokio::time::timeout(NEW_WINDOW_TIMEOUT, rx).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_canceled)) => Err(format!(
+            Ok(Err(_canceled)) => Err(TmuxError::Internal(format!(
                 "tmux controller {}: new-window response channel closed",
                 self.controller_id
-            )),
-            Err(_elapsed) => Err(format!(
+            ))),
+            Err(_elapsed) => Err(TmuxError::Internal(format!(
                 "tmux controller {}: new-window timed out after {:?}",
                 self.controller_id, NEW_WINDOW_TIMEOUT
-            )),
+            ))),
         }
     }
 
@@ -1128,25 +1118,20 @@ impl TmuxController {
     ///
     /// Returns `Err` if the window is not bound to this controller or if
     /// the writer channel has already closed.
-    pub fn kill_window(&self, tmux_window_id: &str) -> Result<(), String> {
+    pub fn kill_window(&self, tmux_window_id: &str) -> Result<(), TmuxError> {
         if !self
             .window_bindings
             .lock()
             .map_err_string()?
             .contains_key(tmux_window_id)
         {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux window '{}' is not registered with controller {}",
                 tmux_window_id, self.controller_id
-            ));
+            )));
         }
         let cmd = tmux_cmd::kill_window(tmux_window_id);
-        self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        })
+        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// send `rename-window -t @<id> <new_name>` to tmux.
@@ -1158,25 +1143,20 @@ impl TmuxController {
     ///
     /// Returns `Err` if the window is not bound to this controller or if
     /// the writer channel has already closed.
-    pub fn rename_window(&self, tmux_window_id: &str, name: &str) -> Result<(), String> {
+    pub fn rename_window(&self, tmux_window_id: &str, name: &str) -> Result<(), TmuxError> {
         if !self
             .window_bindings
             .lock()
             .map_err_string()?
             .contains_key(tmux_window_id)
         {
-            return Err(format!(
+            return Err(TmuxError::Internal(format!(
                 "tmux window '{}' is not registered with controller {}",
                 tmux_window_id, self.controller_id
-            ));
+            )));
         }
         let cmd = tmux_cmd::rename_window(tmux_window_id, name);
-        self.stdin_tx.send(cmd).map_err(|_| {
-            format!(
-                "tmux controller {} writer channel is closed",
-                self.controller_id
-            )
-        })
+        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// snapshot of every pane currently registered with this
@@ -1232,10 +1212,10 @@ impl TmuxController {
             queue.drain(..).collect()
         };
         for tx in drained {
-            let _ = tx.send(Err(format!(
+            let _ = tx.send(Err(TmuxError::Internal(format!(
                 "tmux controller {}: {reason}",
                 self.controller_id
-            )));
+            ))));
         }
     }
 
@@ -1250,10 +1230,10 @@ impl TmuxController {
             queue.drain(..).collect()
         };
         for tx in drained {
-            let _ = tx.send(Err(format!(
+            let _ = tx.send(Err(TmuxError::Internal(format!(
                 "tmux controller {}: {reason}",
                 self.controller_id
-            )));
+            ))));
         }
     }
 
@@ -1406,7 +1386,7 @@ impl TmuxController {
 ///
 /// `-d` starts the session detached so the bootstrap pane does not grab
 /// the terminal; `-x` / `-y` fix the initial geometry.
-fn build_tmux_argv(config: &TmuxCcConfig) -> Result<Vec<String>, String> {
+fn build_tmux_argv(config: &TmuxCcConfig) -> Result<Vec<String>, TmuxError> {
     let mut argv: Vec<String> = Vec::with_capacity(10);
     argv.push("-CC".to_string());
 
@@ -1451,19 +1431,30 @@ fn build_tmux_argv(config: &TmuxCcConfig) -> Result<Vec<String>, String> {
 /// missing. This helper upgrades that single case into an actionable
 /// error that names `tmux`, points to common Windows install paths,
 /// and shows the argv that was being attempted.
-fn tmux_spawn_err(e: std::io::Error, argv: &[&str]) -> String {
+/// Format a `tmux not found` message that points the user at the
+/// usual installation paths. Returns a `TmuxError::Spawn` so the
+/// `?` chain picks up the variant without an extra `.map_err`.
+fn tmux_spawn_err(e: std::io::Error, argv: &[&str]) -> TmuxError {
     if e.kind() == std::io::ErrorKind::NotFound {
-        format!(
+        // We deliberately format the long installation hint as a
+        // human-readable String and stash it in the `Internal`
+        // variant so the caller can't accidentally surface it as a
+        // generic "spawn failed" — it only fires when tmux is
+        // actually missing, and the user genuinely needs the hint.
+        let msg = format!(
             "tmux executable not found in PATH. Please install tmux (>= 3.0) and \
              ensure `tmux -V` works from your shell. On Windows, common sources are \
              WSL (`wsl --install`, then install tmux inside the distro), MSYS2 \
              (`pacman -S tmux`), or git-bash (which bundles tmux on newer \
              releases). \
              (Original error: {e}; argv: tmux {})",
-            argv.join(" "),
-        )
+            argv.join(" ")
+        );
+        TmuxError::Internal(msg)
     } else {
-        e.to_string()
+        // Any other spawn failure: keep the chain simple via the
+        // shared helper.
+        spawn_err("cmd.spawn", e)
     }
 }
 
@@ -1665,6 +1656,7 @@ fn spawn_monitor_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::tmux::bridge::TmuxBridge;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex as StdMutex};
     use tokio::io::{duplex, AsyncReadExt};
@@ -2036,7 +2028,7 @@ mod tests {
 
         let err = controller.unbind_pane("%1").unwrap_err();
         assert!(
-            err.contains("not bound"),
+            err.to_string().contains("not bound"),
             "expected 'not bound' in message, got: {err}"
         );
     }
@@ -2075,7 +2067,7 @@ mod tests {
         controller.register_pane("%7".to_string(), 7777);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 3);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
         tx.send(ProtocolEvent::Output {
             pane_id: "%7".to_string(),
             data: b"hi\n".to_vec(),
@@ -2148,7 +2140,7 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 4);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@1".to_string(),
@@ -2195,16 +2187,29 @@ mod tests {
             "expected exactly 1 tmux-pane-added event (bootstrap only); got {recorded:?}"
         );
         let first = &pane_adds[0];
-        assert_eq!(first["controller_id"].as_u64().unwrap(), 4);
+        // Wire contract: payload keys are snake_case on the wire;
+        // Tauri's IPC layer camelCases them for the frontend, which
+        // destructures `{ xstermSessionId, controllerId, tmuxPaneId,
+        // tmuxWindowId }` (see `useTauriListeners.ts`). The test
+        // asserts the snake_case keys the bridge emits directly.
+        assert_eq!(first["tmux_controller_id"].as_u64().unwrap(), 4);
         assert_eq!(first["tmux_pane_id"].as_str().unwrap(), "%3");
         assert_eq!(
-            first["parent_tmux_window_id"].as_str().unwrap(),
+            first["tmux_window_id"].as_str().unwrap(),
             "@1",
-            "Wave 2 payload must include parent_tmux_window_id"
+            "P7 bridge payload: tmux_window_id carries the parent window id (matches frontend contract)"
+        );
+        assert!(
+            first.get("xsterm_session_id").is_some(),
+            "P7 bridge payload: xsterm_session_id must be set (frontend uses it as React Session id)"
+        );
+        assert!(
+            first.get("parent_tmux_window_id").is_none(),
+            "P7 bridge dropped the legacy Wave 2 `parent_tmux_window_id` field; frontend uses `tmux_window_id`"
         );
         assert!(
             first.get("is_hidden").is_none(),
-            "Wave 2 payload must NOT include the legacy is_hidden field"
+            "P7 bridge dropped the legacy `is_hidden` field; it was Wave 2 internal only"
         );
 
         // The second pane (%4) must NOT be in pane_bindings because no
@@ -2259,7 +2264,7 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 5);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         tx.send(ProtocolEvent::Pause {
             pane_id: "%8".to_string(),
@@ -2351,7 +2356,10 @@ mod tests {
         controller.record_first_pane(6_000_042, "%42".to_string());
 
         let result = controller.await_first_pane().await;
-        assert_eq!(result, Ok((6_000_042, "%42".to_string())));
+        assert!(
+            matches!(result, Ok((6_000_042, ref p)) if p == "%42"),
+            "expected Ok((6_000_042, \"%42\")), got: {result:?}"
+        );
     }
 
     #[tokio::test]
@@ -2487,7 +2495,7 @@ mod tests {
         controller.register_pane("%5".to_string(), 8_000_042);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 8);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         tx.send(ProtocolEvent::PaneExited {
             pane_id: "%5".to_string(),
@@ -2555,7 +2563,7 @@ mod tests {
         controller.register_pane("%9".to_string(), 9_000_007);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 9);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         tx.send(ProtocolEvent::PaneDied {
             pane_id: "%9".to_string(),
@@ -2617,7 +2625,7 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 10);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         tx.send(ProtocolEvent::PaneExited {
             pane_id: "%404".to_string(),
@@ -2686,7 +2694,7 @@ mod tests {
         controller.record_first_pane(11_000_042, "%5".to_string());
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 11);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         // Kick off the split in a background task; it will block on the
         // oneshot until the dispatch task sees the reply.
@@ -2733,10 +2741,19 @@ mod tests {
             .iter()
             .find(|(n, _)| n == "tmux-pane-added")
             .expect("tmux-pane-added must be emitted for split result");
-        assert_eq!(added.1["controller_id"].as_u64().unwrap(), 11);
+        // P7 bridge payload — see `emit_tmux_pane_added_with_window` /
+        // `emit_tmux_pane_added` in `services/tmux/bridge/mod.rs`.
+        // The split-result path uses the simple form (not the
+        // `_with_window` overload) because the parent window id is
+        // available as a tmux id string, not an xsterm id.
+        assert_eq!(added.1["tmux_controller_id"].as_u64().unwrap(), 11);
         assert_eq!(added.1["tmux_pane_id"].as_str().unwrap(), "%11");
         assert_eq!(added.1["xsterm_session_id"].as_u64().unwrap(), 11_000_001);
-        assert_eq!(added.1["parent_tmux_window_id"].as_str().unwrap(), "@7");
+        assert_eq!(
+            added.1["tmux_window_id"].as_str().unwrap(),
+            "@7",
+            "P7 bridge payload: split-result path uses tmux_window_id (matches frontend contract)"
+        );
     }
 
     /// When no `%window-pane-changed` reply ever arrives (e.g. tmux
@@ -2787,7 +2804,7 @@ mod tests {
 
         let err = result.expect_err("split must time out without a reply");
         assert!(
-            err.contains("timed out"),
+            err.to_string().contains("timed out"),
             "expected 'timed out' in error, got: {err}"
         );
         // 50 ms timeout + a few ms of slack — should be far less than 1 s.
@@ -2837,7 +2854,7 @@ mod tests {
 
         // Unknown pane must error.
         let err = controller.kill_pane("%999").unwrap_err();
-        assert!(err.contains("not registered"), "got: {err}");
+        assert!(err.to_string().contains("not registered"), "got: {err}");
 
         // Bound pane must succeed and queue the kill-pane command.
         controller
@@ -2904,7 +2921,7 @@ mod tests {
             .expect("oneshot must resolve with Err");
         let err = result.expect_err("drained sender must yield Err");
         assert!(
-            err.contains("controller closed"),
+            err.to_string().contains("controller closed"),
             "expected 'controller closed' in error, got: {err}"
         );
     }
@@ -2956,7 +2973,7 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 15);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         // Pre-record the bootstrap pane so the dispatch task takes the
         // new-window path (not the legacy bootstrap fallback).
@@ -3025,22 +3042,27 @@ mod tests {
             .iter()
             .find(|(n, _)| n == "tmux-pane-added")
             .expect("tmux-pane-added must be emitted for the new window's first pane");
-        assert_eq!(pane_added.1["controller_id"].as_u64().unwrap(), 15);
+        assert_eq!(pane_added.1["tmux_controller_id"].as_u64().unwrap(), 15);
         assert_eq!(pane_added.1["tmux_pane_id"].as_str().unwrap(), "%13");
         assert_eq!(
             pane_added.1["xsterm_session_id"].as_u64().unwrap(),
             15_000_001
         );
         assert_eq!(
-            pane_added.1["parent_tmux_window_id"].as_str().unwrap(),
-            "@9"
+            pane_added.1["tmux_window_id"].as_str().unwrap(),
+            "@9",
+            "P7 bridge payload: new-window path uses tmux_window_id (matches frontend contract)"
         );
 
         let window_added = recorded
             .iter()
             .find(|(n, _)| n == "tmux-window-added")
             .expect("tmux-window-added must be emitted for user-driven new-window");
-        assert_eq!(window_added.1["controller_id"].as_u64().unwrap(), 15);
+        // P7 bridge payload: see `emit_tmux_window_added` in
+        // `services/tmux/bridge/mod.rs`. The new-window path populates
+        // `xsterm_session_id` and `xsterm_pane_id` so the frontend can
+        // build the Window + Session + first-pane in one event.
+        assert_eq!(window_added.1["tmux_controller_id"].as_u64().unwrap(), 15);
         assert_eq!(window_added.1["tmux_window_id"].as_str().unwrap(), "@9");
         assert_eq!(
             window_added.1["xsterm_window_id"].as_u64().unwrap(),
@@ -3096,7 +3118,7 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 16);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         // Feed WindowAdd for the bootstrap window — no pending_windows
         // sender, window_bindings is empty → bootstrap path.
@@ -3137,8 +3159,9 @@ mod tests {
             .expect("tmux-pane-added must be emitted for the bootstrap pane");
         assert_eq!(pane_added.1["tmux_pane_id"].as_str().unwrap(), "%0");
         assert_eq!(
-            pane_added.1["parent_tmux_window_id"].as_str().unwrap(),
-            "@1"
+            pane_added.1["tmux_window_id"].as_str().unwrap(),
+            "@1",
+            "P7 bridge payload: bootstrap pane uses tmux_window_id (frontend contract)"
         );
         assert_eq!(
             pane_added.1["xsterm_session_id"].as_u64().unwrap(),
@@ -3217,7 +3240,7 @@ mod tests {
             .insert("%9".to_string(), "@3".to_string());
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 17);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         // Bound window-close → emit + drop binding + drop panes in that window.
         tx.send(ProtocolEvent::WindowClose {
@@ -3314,7 +3337,7 @@ mod tests {
             .insert("@5".to_string(), 18_500_099);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 18);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         tx.send(ProtocolEvent::WindowRenamed {
             window_id: "@5".to_string(),
@@ -3391,9 +3414,9 @@ mod tests {
 
         // Unknown window → Err.
         let err = controller.kill_window("@404").unwrap_err();
-        assert!(err.contains("not registered"), "got: {err}");
+        assert!(err.to_string().contains("not registered"), "got: {err}");
         let err = controller.rename_window("@404", "x").unwrap_err();
-        assert!(err.contains("not registered"), "got: {err}");
+        assert!(err.to_string().contains("not registered"), "got: {err}");
 
         // Bound window → success and correct commands queued.
         controller
@@ -3459,7 +3482,7 @@ mod tests {
         controller.register_pane("%42".to_string(), 100_000_042);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 100);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         // Kick off capture_pane in a background task.
         let controller_clone = Arc::clone(&controller);
@@ -3543,7 +3566,7 @@ mod tests {
         controller.register_pane("%9".to_string(), 101_000_009);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), backend.clone(), 101);
+        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
 
         let controller_clone = Arc::clone(&controller);
         let capture_handle =
@@ -3564,7 +3587,7 @@ mod tests {
             .expect("capture_pane task did not panic");
         let err = result.expect_err("capture_pane must return Err on %error");
         assert!(
-            err.contains("capture-pane failed") && err.contains("pane gone"),
+            err.to_string().contains("capture-pane failed") && err.to_string().contains("pane gone"),
             "expected error to surface tmux's message, got: {err}"
         );
     }
@@ -3609,7 +3632,7 @@ mod tests {
             .await
             .expect_err("capture_pane on unbound pane must error");
         assert!(
-            err.contains("not registered"),
+            err.to_string().contains("not registered"),
             "expected 'not registered' in error, got: {err}"
         );
         // No command must have been queued on stdin.
@@ -3670,7 +3693,7 @@ mod tests {
             .expect("oneshot must resolve with Err");
         let err = result.expect_err("drained sender must yield Err");
         assert!(
-            err.contains("controller closed"),
+            err.to_string().contains("controller closed"),
             "expected 'controller closed' in error, got: {err}"
         );
     }
