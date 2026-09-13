@@ -289,41 +289,10 @@ pub struct TmuxController {
     /// block to either the pending sender (match) or some other command
     /// (no match — ignore).
     pub(crate) pending_capture: std::sync::Mutex<Option<oneshot::Sender<CaptureResult>>>,
-    /// body lines being assembled for the in-flight capture.
-    /// Reset to empty on each `CommandBegin` and drained on `CommandEnd`.
-    ///
-    /// P8 W2: dead — `capture_pane` no longer writes here. Body
-    /// accumulation now lives in [`TmuxController::command_body_accumulator`]
-    /// and waiter correlation is on [`TmuxController::registry`].
-    /// Kept so [`close`] can no-op cleanly and so the test fixture
-    /// `close_drains_pending_capture_with_error` still compiles. W3
-    /// deletes this field.
-    #[allow(dead_code)]
-    pub(crate) pending_capture_body: std::sync::Mutex<Vec<String>>,
     /// tokio mutex serialising concurrent `capture_pane` callers
     /// so two requests never overlap their `%begin..%end` block.
     capture_lock: tokio::sync::Mutex<()>,
 
-    /// Current fire-and-forget command id (set by `CommandOutput` with a
-    /// new id, flushed by `CommandEnd`). Used by the dispatch task to
-    /// accumulate body lines belonging to a single `%begin..%end` block
-    /// (e.g. `list-windows` / `list-panes` bootstrap queries) so the
-    /// end-event can classify the whole body as `WindowList` /
-    /// `PaneList` / generic `CommandResponse` (see
-    /// `dispatch_event::handle_classified_response`).
-    ///
-    /// P8 W2: dead — replaced by the controller-level
-    /// `command_body_accumulator`. W3 deletes this field.
-    #[allow(dead_code)]
-    pub(crate) current_command_id: std::sync::Mutex<Option<u32>>,
-    /// Body lines being assembled for `current_command_id`. Reset on
-    /// each `CommandOutput` whose id differs from
-    /// `current_command_id`, and drained by the matching `CommandEnd`.
-    ///
-    /// P8 W2: dead — replaced by the controller-level
-    /// `command_body_accumulator`. W3 deletes this field.
-    #[allow(dead_code)]
-    pub(crate) current_command_lines: std::sync::Mutex<Vec<String>>,
     /// Override hook used by tests to shorten [`SPLIT_PANE_TIMEOUT`]. In
     /// production this stays at [`SPLIT_PANE_TIMEOUT`]; the
     /// `split_pane_times_out_when_no_response` test substitutes a smaller
@@ -336,8 +305,7 @@ pub struct TmuxController {
     /// here instead of pushing onto `pending_capture`. The dispatch
     /// task's `CommandEnd` / `CommandError` handlers take the waiter
     /// out via `registry.take(id)` and resolve it via
-    /// `send_to_waiter` — `pending_capture` and
-    /// `pending_capture_body` are now dead (W3 deletes them).
+    /// `send_to_waiter`.
     ///
     /// Note: `split_pane` / `new_window` / `await_first_pane` still use
     /// their legacy fields because the registry's `ResponseWaiter`
@@ -346,12 +314,13 @@ pub struct TmuxController {
     /// those methods need. W3 unifies them after deleting the legacy
     /// pending fields.
     pub(crate) registry: CommandRegistry,
-    /// Body lines being assembled for the in-flight `%begin..%end`
-    /// command block. Replaces `pending_capture_body` (which was
-    /// capture-only) and `current_command_lines` (which was
-    /// list-classification-only); both have been marked
-    /// `#[allow(dead_code)]` above. W3 deletes them.
-    pub(crate) command_body_accumulator: std::sync::Mutex<Vec<String>>,
+    /// P8 W3a: P5' RouterState — owns the in-flight body buffer for
+    /// the current `%begin..%end` block, resolves registered waiters
+    /// via `send_to_waiter`, and returns a [`RouterAction`] for the
+    /// dispatcher to handle. Replaces the four deleted fields
+    /// (`pending_capture_body`, `current_command_id`,
+    /// `current_command_lines`, `command_body_accumulator`).
+    pub(crate) router_state: std::sync::Mutex<RouterState>,
 }
 
 /// Delay before the initial state sync query (Bug 017). The control-
@@ -529,14 +498,11 @@ impl TmuxController {
             // after construction via the returned Arc.
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-                        current_command_id: std::sync::Mutex::new(None),
-                        current_command_lines: std::sync::Mutex::new(Vec::new()),
-                        pending_capture_body: std::sync::Mutex::new(Vec::new()),
                         capture_lock: tokio::sync::Mutex::new(()),
                         split_pane_timeout: SPLIT_PANE_TIMEOUT,
                         spawn_mode: mode,
                         registry: CommandRegistry::new(),
-                        command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+                        router_state: std::sync::Mutex::new(RouterState::default()),
                     });
 
         spawn_dispatch_task(
@@ -773,11 +739,10 @@ impl TmuxController {
         let _guard = self.capture_lock.lock().await;
 
         // P8 W2: register the waiter with `CommandRegistry` instead of
-        // pushing onto `pending_capture`. The dispatch task's
-        // `CommandEnd` / `CommandError` handlers take the waiter out via
-        // `registry.take(id)` and resolve it via `send_to_waiter`.
-        // `pending_capture` and `pending_capture_body` are no longer
-        // touched; W3 deletes them.
+        // pushing onto `pending_capture`. P8 W3a: the dispatch task's
+        // `CommandEnd` / `CommandError` handlers go through
+        // `RouterState::process()` which takes the waiter out via
+        // `registry.take(id)` and resolves it via `send_to_waiter`.
         let (tx, rx) = oneshot::channel::<ResponseOutcome>();
         let reg = self.registry.register(
             CommandKind::CapturePane {
@@ -888,9 +853,6 @@ impl TmuxController {
                 ))));
             }
         }
-        if let Ok(mut body) = self.pending_capture_body.lock() {
-            body.clear();
-        }
         // Wake every awaiter blocked on a split reply; without this the
         // Tauri command would wait the full `split_pane_timeout` before
         // surfacing an error, even though we already know the controller
@@ -910,13 +872,6 @@ impl TmuxController {
                 self.controller_id,
                 drained
             );
-        }
-        // Clear the body accumulator too so a stale `CommandBegin`
-        // arriving after close doesn't bleed body lines into the next
-        // controller's lifetime (defensive — the dispatch task should
-        // be exiting alongside us).
-        if let Ok(mut body) = self.command_body_accumulator.lock() {
-            body.clear();
         }
         tracing::debug!(
             "tmux controller {}: close complete (tasks unwind async)",
@@ -1361,18 +1316,13 @@ impl TmuxController {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             // 5 s mirrors the production SPLIT_PANE_TIMEOUT (kept in
             // sync by hand — the constant is private to this module).
             split_pane_timeout: Duration::from_secs(5),
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         })
     }
 
@@ -2015,16 +1965,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         assert!(controller.register_pane("%5".to_string(), 1001));
@@ -2075,16 +2020,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         controller.register_pane("%1".to_string(), 2001);
@@ -2120,16 +2060,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%7".to_string(), 7777);
 
@@ -2196,16 +2131,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2322,16 +2252,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2412,16 +2337,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         // Fire record_first_pane FIRST, with no sleep — simulate the
@@ -2457,16 +2377,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         let controller_for_wait = Arc::clone(&controller);
@@ -2505,16 +2420,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         controller.register_pane("%3".to_string(), 3003);
@@ -2560,16 +2470,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%5".to_string(), 8_000_042);
 
@@ -2630,16 +2535,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%9".to_string(), 9_000_007);
 
@@ -2695,16 +2595,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2761,16 +2656,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%5".to_string(), 11_000_042);
         // Pre-record the first pane so the dispatch task takes the
@@ -2869,16 +2759,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         };
         controller.register_pane("%5".to_string(), 12_000_001);
         controller.set_split_pane_timeout_for_tests(Duration::from_millis(50));
@@ -2928,16 +2813,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         };
         controller.register_pane("%0".to_string(), 13_000_001);
 
@@ -2985,16 +2865,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%5".to_string(), 14_000_001);
 
@@ -3053,16 +2928,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -3200,16 +3070,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -3308,16 +3173,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         // Pre-register a window + pane (simulates bootstrap done).
         controller
@@ -3418,16 +3278,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller
             .window_bindings
@@ -3496,16 +3351,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         };
         controller
             .window_bindings
@@ -3571,16 +3421,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%42".to_string(), 100_000_042);
 
@@ -3670,16 +3515,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%9".to_string(), 101_000_009);
 
@@ -3744,16 +3584,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         };
 
         let err = controller
@@ -3797,16 +3632,11 @@ mod tests {
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
             pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
-            command_body_accumulator: std::sync::Mutex::new(Vec::new()),
+            router_state: std::sync::Mutex::new(RouterState::default()),
         });
         controller.register_pane("%1".to_string(), 103_000_001);
 

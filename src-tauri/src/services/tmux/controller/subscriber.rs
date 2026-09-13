@@ -99,8 +99,12 @@ pub enum RouterAction {
     /// originating kind was a list query.
     UnknownCommandStart { cmd_id: u32 },
 
-    /// A `%end` / `%error` arrived for a command that has no registered
-    /// waiter. Same as `UnknownCommandStart` but at the tail.
+    /// A `%error` arrived for a command that has no registered waiter.
+    /// `%end` without a waiter is now returned as
+    /// [`RouterAction::DelegateToV1`] (with the accumulated body still
+    /// sitting on `RouterState.in_flight`) so the dispatcher can drain
+    /// it via [`RouterState::take_in_flight_lines`] and run
+    /// `handle_classified_response` on the fire-and-forget body.
     UnknownCommandEnd {
         cmd_id: u32,
         errored: bool,
@@ -250,33 +254,38 @@ impl RouterState {
                 RouterAction::Ignore
             }
             ProtocolEvent::CommandEnd { id, .. } => {
-                let lines = match self.in_flight.take() {
-                    Some(InFlightBody {
-                        cmd_id: active_id,
-                        lines,
-                    }) if active_id == *id => lines,
-                    _ => {
-                        return RouterAction::OrphanCommandEnd { cmd_id: *id };
-                    }
-                };
-                // P5': resolve the waiter internally. If a waiter was
-                // registered, ship the accumulated body into its
-                // oneshot; otherwise signal UnknownCommandEnd so the
-                // caller can log the orphan-end-of-fire-and-forget case.
+                // Validate id matches the active in-flight block. If not
+                // (or no block is active), this is an orphan end.
+                let matches = matches!(
+                    self.in_flight.as_ref(),
+                    Some(InFlightBody { cmd_id, .. }) if *cmd_id == *id
+                );
+                if !matches {
+                    return RouterAction::OrphanCommandEnd { cmd_id: *id };
+                }
                 let waiter = registry.take(CommandId(*id as u64));
                 match waiter {
                     Some(waiter) => {
+                        // Drain in_flight and ship the body to the waiter.
+                        let lines = self
+                            .in_flight
+                            .take()
+                            .map(|b| b.lines)
+                            .unwrap_or_default();
                         send_to_waiter(
                             waiter,
                             ResponseOutcome::Ok { body_lines: lines },
                         );
                         RouterAction::Resolve
                     }
-                    None => RouterAction::UnknownCommandEnd {
-                        cmd_id: *id,
-                        errored: false,
-                        message: None,
-                    },
+                    None => {
+                        // Fire-and-forget list query: the dispatcher
+                        // drains in_flight via `take_in_flight_lines()`
+                        // and runs `handle_classified_response` on the
+                        // accumulated body. We deliberately leave
+                        // in_flight intact here.
+                        RouterAction::DelegateToV1
+                    }
                 }
             }
             ProtocolEvent::CommandError {
@@ -321,6 +330,19 @@ impl RouterState {
             .as_ref()
             .map(|b| b.lines.len())
             .unwrap_or(0)
+    }
+
+    /// Drain the in-flight body lines (if any) and return them. Used by
+    /// `dispatch_event` after `process()` returns
+    /// [`RouterAction::DelegateToV1`] for a fire-and-forget `%end` so the
+    /// dispatcher can hand the body to
+    /// `handle_classified_response`. Returns an empty `Vec` when no
+    /// block is active.
+    pub fn take_in_flight_lines(&mut self) -> Vec<String> {
+        match self.in_flight.take() {
+            Some(InFlightBody { lines, .. }) => lines,
+            None => Vec::new(),
+        }
     }
 
     /// Linear probe of the registry for `cmd_id`. Avoids re-storing a

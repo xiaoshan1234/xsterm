@@ -36,7 +36,7 @@ use tokio::sync::mpsc;
 
 use crate::infrastructure::app_backend::AppBackend;
 
-use super::controller::{PendingWindow, TmuxController};
+use super::controller::{PendingWindow, RouterAction, TmuxController};
 use super::bridge::TmuxBridge;
 use super::events::ControlEvent;
 use serde_json::json;
@@ -384,111 +384,58 @@ fn dispatch_event(
         ControlEvent::Exit { reason } => {
             bridge.emit_tmux_controller_exit(reason.as_deref());
         }
-        // capture-pane Promise coordination. The four
-        // `Command*` events below form the synchronous reply envelope for
-        // any tmux command that prints to stdout (currently only our
-        // `capture-pane`, but architecturally also `list-windows` /
-        // `list-sessions` / etc.). P8 W2: body accumulation lives on the
-        // controller's `command_body_accumulator` (replacing
-        // `pending_capture_body` + `current_command_lines`); waiter
-        // resolution goes through the `CommandRegistry` —
-        // `capture_pane` registers a `BeginEnd` waiter and the dispatch
-        // task takes it out via `registry.take(id)` on `%end` /
-        // `%error`. If no waiter is registered for the id (e.g. a
-        // `list-windows` fire-and-forget probe), the accumulated body
-        // falls through to `handle_classified_response` for
-        // WindowList / PaneList classification.
-        ControlEvent::CommandBegin { id, .. } => {
-            // Reset the body buffer regardless of whether a waiter is
-            // registered — any leftover lines from a previous
-            // (orphaned) block must not bleed into this one.
-            if let Ok(mut body) = controller.command_body_accumulator.lock() {
-                body.clear();
-            }
-            if controller.registry.outstanding() == 0 {
-                tracing::debug!(
-                    "tmux controller {}: %begin {} for unrelated command (no registered waiter)",
-                    controller.controller_id(),
-                    id
-                );
-            }
+        // Command response envelope (`%begin` / `%output` / `%end` /
+        // `%error`). P8 W3a: delegation to `RouterState::process()` —
+        // the controller's `router_state` owns the in-flight body
+        // buffer, resolves registered waiters via `send_to_waiter`,
+        // and returns a `RouterAction` describing what (if anything)
+        // the dispatcher must do. Only `DelegateToV1` for `%end`
+        // (fire-and-forget list queries) needs extra work — drain the
+        // in-flight body and feed it to `handle_classified_response`.
+        ControlEvent::CommandBegin { .. } => {
+            let mut rs = match controller.router_state.lock() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            let _ = rs.process(&event, &controller.registry, bridge, controller);
         }
-        ControlEvent::CommandOutput { id, ref line } => {
-            // Accumulate body lines into the controller's body buffer.
-            // Both capture-pane (which registers a waiter in the
-            // registry) and list-windows / list-panes (fire-and-forget,
-            // classified via `handle_classified_response` on `%end`)
-            // share this single accumulator; the resolution path is
-            // decided on `%end`.
-            if let Ok(mut body) = controller.command_body_accumulator.lock() {
-                body.push(line.clone());
-            } else {
-                tracing::debug!(
-                    "tmux controller {}: %output for command {} (body line dropped — accumulator lock poisoned)",
-                    controller.controller_id(),
-                    id
-                );
-            }
+        ControlEvent::CommandOutput { .. } => {
+            let mut rs = match controller.router_state.lock() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            let _ = rs.process(&event, &controller.registry, bridge, controller);
         }
         ControlEvent::CommandEnd { id, .. } => {
-            // Take the accumulated body, then check the registry for a
-            // waiter registered under this id.
-            let body_lines = take_command_body(controller);
-            let waiter = controller.registry.take(super::protocol::command::CommandId(id as u64));
-            if let Some(waiter) = waiter {
-                // Registered waiter (capture-pane, etc.): ship the body
-                // into its `BeginEnd` oneshot via `send_to_waiter`.
-                let line_count = body_lines.len();
-                super::controller::send_to_waiter(
-                    waiter,
-                    super::protocol::command::ResponseOutcome::Ok { body_lines },
-                );
-                tracing::debug!(
-                    "tmux controller {}: registry waiter resolved on %end id={} ({} body lines)",
+            let action = {
+                let mut rs = match controller.router_state.lock() {
+                    Ok(g) => g,
+                    Err(_) => return,
+                };
+                rs.process(&event, &controller.registry, bridge, controller)
+            };
+            if matches!(action, RouterAction::DelegateToV1) {
+                let body_lines = controller
+                    .router_state
+                    .lock()
+                    .ok()
+                    .map(|mut rs| rs.take_in_flight_lines())
+                    .unwrap_or_default();
+                handle_classified_response(
+                    controller,
+                    bridge,
                     controller.controller_id(),
                     id,
-                    line_count
+                    body_lines,
                 );
-                return;
             }
-            // No waiter registered — fall through to generic
-            // command-response classification: emit a `tmux-window-list`
-            // / `tmux-pane-list` event from the accumulated body, or
-            // drop the body silently if it doesn't look like a list
-            // query.
-            handle_classified_response(
-                controller,
-                bridge,
-                controller.controller_id(),
-                id,
-                body_lines,
-            );
         }
-        ControlEvent::CommandError { id, message, .. } => {
-            // Drop any accumulated body lines — tmux's own parser does
-            // the same on `%error`. Take the waiter (if any) and
-            // resolve it with `Err`.
-            let _ = take_command_body(controller);
-            let waiter = controller.registry.take(super::protocol::command::CommandId(id as u64));
-            if let Some(waiter) = waiter {
-                super::controller::send_to_waiter(
-                    waiter,
-                    super::protocol::command::ResponseOutcome::Err {
-                        message: message.clone(),
-                    },
-                );
-                tracing::debug!(
-                    "tmux controller {}: registry waiter resolved on %error id={}: {message}",
-                    controller.controller_id(),
-                    id
-                );
-            } else {
-                tracing::debug!(
-                    "tmux controller {}: %error for command {} (no registered waiter): {message}",
-                    controller.controller_id(),
-                    id
-                );
-            }
+        ControlEvent::CommandError { .. } => {
+            let mut rs = match controller.router_state.lock() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            let _ = rs.process(&event, &controller.registry, bridge, controller);
         }
         // All other events are observation-only and have no controller-side
         // backend emit. They are logged for debug purposes so a missed
@@ -702,21 +649,6 @@ fn emit_pane_list(
         })
         .collect::<Vec<_>>();
     bridge.emit_tmux_pane_added_for_list(session_id, serde_json::json!(rows));
-}
-
-/// Take the accumulated body lines for the current `%begin..%end`
-/// block out of [`TmuxController::command_body_accumulator`]. Called by
-/// the `CommandEnd` and `CommandError` arms of `dispatch_event` before
-/// `handle_classified_response` runs (when no registry waiter
-/// resolves the reply) and immediately clears the buffer so the next
-/// `%begin` starts fresh. P8 W2: replaces the old
-/// `current_command_id` + `current_command_lines` pair (now dead).
-fn take_command_body(controller: &TmuxController) -> Vec<String> {
-    if let Ok(mut body) = controller.command_body_accumulator.lock() {
-        std::mem::take(&mut *body)
-    } else {
-        Vec::new()
-    }
 }
 
 /// Inspect the first body line of a completed command response. If it
