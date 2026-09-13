@@ -6,7 +6,7 @@ AI Terminal — MCP Server 规范
 传输：stdio（默认）/ Streamable HTTP（可选，需显式开启）
 定位：xsterm（AI Terminal）内置 MCP server 的完整契约，是产品的核心差异化。
 
-> 决策历史：D-α / D-β / D-γ / D-δ 详见 `doc/rfcs/0001..0004-*.md`。
+> 决策历史：D-α / D-β / D-γ / D-δ 详见 `doc/dev/adr/0001..0004-*.md`。
 > 当前 MCP server 实现：MVP 阶段嵌入 xsterm 主进程内部模块 `src-tauri/src/mcp/`（RFC 0002），未来按需拆分。
 
 ================================================================

@@ -122,18 +122,18 @@ PR 提上来 tm 看：
 
 ## 7. tm 不该做的事
 
-- ❌ 改 doc/architecture/overview.md（dev 改，tm 拍板）
-- ❌ 改 doc/adr/*（拍板后由 dev 加新 ADR）
-- ❌ 改 doc/roadmap/*（dev 在 PR 里更新进度）
-- ❌ 改 doc/changelog/*（dev 在 PR 里加 entry）
+- ❌ 改 doc/dev/architecture/overview.md（dev 改，tm 拍板）
+- ❌ 改 doc/dev/adr/*（拍板后由 dev 加新 ADR）
+- ❌ 改 doc/dev/roadmap/*（dev 在 PR 里更新进度）
+- ❌ 改 doc/dev/changelog/*（dev 在 PR 里加 entry）
 - ❌ 在 PR 里"顺手"删 `history/` 内容（保持历史快照，1 周评审期后再删）
 
 ---
 
 ## 8. 反馈渠道
 
-- tm 给 dev：直接编辑本文件（`doc/history/00-ai-terminal-migration-handoff.md` 不——那是已归档）→ 编辑 `doc/README.md` §"按场景找文档"
-- tm 给 pdm：开 ADR（`doc/adr/README.md` 模板）
+- tm 给 dev：直接编辑本文件（`doc/dev/history/00-ai-terminal-migration-handoff.md` 不——那是已归档）→ 编辑 `doc/README.md` §"按场景找文档"
+- tm 给 pdm：开 ADR（`doc/dev/adr/README.md` 模板）
 - tm 给用户：转 dev（dev 不直接面对用户）
 
 ---

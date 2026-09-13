@@ -71,7 +71,7 @@ TODO 拆分原则
 每个 TODO 必须满足：
 1. 一个 PR 只做一件事
 2. 标题格式：`feat(mcp): add subscribe_output tool`（conventional commits）
-3. 跨模块改动先写 RFC：doc/rfcs/0001-xxx.md，72 小时讨论窗口
+3. 跨模块改动先写 RFC：doc/dev/adr/0001-xxx.md，72 小时讨论窗口
 4. 任何破坏性 API 改动必须更新 CHANGELOG.md
 5. 任何 MCP 协议改动必须更新 mcp-compat 测试
 
