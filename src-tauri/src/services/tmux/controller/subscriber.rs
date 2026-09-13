@@ -1,6 +1,6 @@
-//! PR-T5: Response router — replaces the dispatch.rs 5-level fallthrough.
+//! P5': RouterState — owns command-response resolution, delegates notifications.
 //!
-//! ## Why
+//! ## Why this module exists (and why it changed)
 //!
 //! `dispatch_event` in `dispatch.rs` is a 900-line `match` that handles
 //! 30+ [`ProtocolEvent`] variants with ad-hoc state across five "pending_*
@@ -9,22 +9,33 @@
 //! Bug 014, Bug 016, and Bug 017 were all variants of "the dispatch task
 //! and one of those queues got out of sync."
 //!
-//! The new design splits the work into two halves:
+//! PR-T5 introduced [`RouterState`] but kept it isolated: `dispatch_event`
+//! still walked every variant itself. PR-T7 then built
+//! [`crate::services::tmux::bridge::TmuxBridge`] and `dispatch_event`
+//! started calling bridge methods directly — **bypassing RouterState**.
+//! That left RouterState as nine unit tests and zero call sites.
 //!
-//! - **Command response** events (`CommandBegin` / `CommandOutput` /
-//!   `CommandEnd` / `CommandError`) are routed by command id. They
-//!   accumulate body lines until `%end` or `%error`, then take the
-//!   registered waiter out of [`CommandRegistry`] and send it the
-//!   accumulated outcome.
-//! - **Notification** events (`Output`, `WindowAdd`, `WindowPaneChanged`,
-//!   `*Changed`, etc.) update a `SessionView` and emit Tauri events via
-//!   the bridge.
+//! P5' (this PR) revives RouterState by upgrading its responsibilities:
 //!
-//! PR-T5 only delivers the **command-response half** in the form of
-//! [`process_event`]; it is a state machine you call per
-//! [`ProtocolEvent`], getting back a [`RouterAction`] that says what to
-//! do next. The notification half is wired in PR-T7; until then, the
-//! old `dispatch_event` is still the source of truth for notifications.
+//! 1. **`CommandBegin` / `CommandOutput` / `CommandEnd` / `CommandError`
+//!    events** — RouterState takes the registered
+//!    [`ResponseWaiter`](crate::services::tmux::protocol::command::ResponseWaiter)
+//!    out of the [`CommandRegistry`] and resolves it directly via
+//!    [`send_to_waiter`]. Callers no longer carry a waiter + outcome back
+//!    out — [`RouterAction::Resolve`] is now a unit variant that signals
+//!    "I resolved a waiter; nothing else for you to do."
+//! 2. **All other events** (`Output`, `WindowAdd`, `WindowPaneChanged`,
+//!    `*Changed`, etc.) — RouterState returns
+//!    [`RouterAction::DelegateToV1`], telling the caller to keep handling
+//!    notifications directly via [`crate::services::tmux::bridge::TmuxBridge`]
+//!    (or its v2 successor in W3).
+//!
+//! ## Forward-compat params
+//!
+//! [`RouterState::process`] accepts `&TmuxBridge` and `&TmuxController`
+//! even though PR-T5' doesn't dereference either. W3 will use them to wire
+//! the controller's `pane_bindings` / `window_bindings` mutations into
+//! RouterState so callers don't have to thread the controller through.
 //!
 //! ## Lifetime
 //!
@@ -32,87 +43,60 @@
 //! reader task → parser.feed → Vec<ProtocolEvent>
 //!                                     │
 //!                                     ▼
-//!                              RouterState.process(event)
+//!                  RouterState.process(event, registry, &bridge, &controller)
 //!                                     │
 //!                  ┌──────────────────┴──────────────────┐
 //!                  ▼                                     ▼
-//!        take waiter from                    (notification half —
-//!        CommandRegistry;                   deferred to PR-T7)
-//!        build ResponseOutcome
-//!                  │
-//!                  ▼
-//!              RouterAction::Resolve(Waiter, Outcome)
-//!                  │
-//!                  ▼
-//!              send_to_waiter()
+//!        CommandEnd/CommandError:               DelegateToV1:
+//!        take waiter from registry,             caller (dispatch_event)
+//!        resolve via send_to_waiter,            emits bridge.emit_xxx()
+//!        return RouterAction::Resolve
 //! ```
-//!
-//! PR-T5 keeps the per-command body accumulator **inside the router
-//! state**, not the controller — the controller only needs to know "what
-//! waiter, if any, does this id resolve to?" and `take(id)` answers that.
 //!
 //! ## Body-line classification
 //!
 //! `list-windows` and `list-panes` bodies start with `@<id>` and `%<id>`
 //! respectively. The v0 spec wants to remove this "first character
-//! decides" hack; PR-T5 instead threads the originating [`CommandKind`]
-//! from the registered [`CommandRegistry`] entry — if the kind was
-//! `ListWindows`, body lines are window rows; if `ListPanes`, pane rows.
-//! PR-T7 uses this to fold Bug 017's `classify_command_response` away.
-//!
-//! ## History
-//!
-//! New in PR-T5. Lives next to `dispatch.rs`; the old file remains the
-//! default dispatcher until PR-T8 removes it.
+//! decides" hack; PR-T5 already threads the originating [`CommandKind`]
+//! from the registered [`CommandRegistry`] entry — W3 will fold Bug 017's
+//! `classify_command_response` away using `registry.kind_for(id)`.
 
 use std::collections::HashMap;
 
+use crate::services::tmux::bridge::TmuxBridge;
 use crate::services::tmux::controller::id_map::{send_to_waiter, CommandRegistry};
+use crate::services::tmux::controller::TmuxController;
 use crate::services::tmux::protocol::command::{CommandId, ResponseOutcome, ResponseWaiter};
 use crate::services::tmux::protocol::events::ProtocolEvent;
 
 /// One event's outcome as far as the command router is concerned.
 ///
 /// The router is a pure state machine: feed it one [`ProtocolEvent`] and
-/// it returns one [`RouterAction`]. The caller is responsible for
-/// actually performing the action (e.g. calling
-/// [`send_to_waiter`]) — the router itself owns no channels.
+/// it returns one [`RouterAction`]. For command-response events
+/// (`CommandBegin` / `CommandOutput` / `CommandEnd` / `CommandError`),
+/// RouterState has **already resolved** the registered
+/// [`ResponseWaiter`] by the time it returns — the caller has nothing
+/// left to do besides observe the [`RouterAction`] for logging / metrics.
 ///
-/// The notification half (which Tauri events to emit, which SessionView
-/// slot to update) is intentionally **not** represented here; that ships
-/// in PR-T7.
+/// For every other [`ProtocolEvent`] variant, RouterState returns
+/// [`RouterAction::DelegateToV1`] and the caller falls through to its
+/// own bridge-based notification handler. The full responsibility split
+/// is documented in the module-level docs.
 ///
 /// `PartialEq` is **not** derived because [`ResponseWaiter`] carries a
 /// `tokio::sync::oneshot::Sender` which doesn't implement `Eq`. Test
-/// helpers below use [`RouterActionExt`] to extract the inner payload
-/// for assertion.
+/// helpers below use [`RouterActionExt`] to extract a payload-free
+/// discriminator for assertion.
 #[derive(Debug)]
 pub enum RouterAction {
-    /// Nothing to do. Notification half will still process the event;
-    /// this variant means the command half doesn't need to act.
+    /// A command-response event for which nothing interesting happened
+    /// (mid-block `CommandOutput`, etc.). Caller does nothing.
     Ignore,
 
-    /// A waiter was waiting for the command response that just completed.
-    /// Caller must call
-    /// [`send_to_waiter`](crate::services::tmux::controller::id_map::send_to_waiter)
-    /// with `waiter` + `outcome` to resolve the promise.
-    Resolve {
-        waiter: ResponseWaiter,
-        outcome: ResponseOutcome,
-    },
-
-    /// A body line arrived inside a `%begin..%end` block. Accumulator
-    /// state has been updated. Caller does nothing; this is for logging /
-    /// observability only — PR-T7 can hook UI progress here if useful.
-    BodyLine {
-        cmd_id: u32,
-        line: String,
-    },
-
     /// A `%begin` line arrived for a command that has **no** registered
-    /// waiter (fire-and-forget). Caller logs / ignores. PR-T7 will
-    /// still route the eventual `%end` through the notification half if
-    /// the originating kind was a list query.
+    /// waiter (fire-and-forget). Caller logs / ignores. W3 will still
+    /// route the eventual `%end` through the notification half if the
+    /// originating kind was a list query.
     UnknownCommandStart { cmd_id: u32 },
 
     /// A `%end` / `%error` arrived for a command that has no registered
@@ -126,6 +110,30 @@ pub enum RouterAction {
     /// Protocol violation: `%end` or `%error` arrived without a matching
     /// `%begin`. Caller logs.
     OrphanCommandEnd { cmd_id: u32 },
+
+    /// A body line arrived inside a `%begin..%end` block. Accumulator
+    /// state has been updated. Caller does nothing; this is for logging /
+    /// observability only — W3 can hook UI progress here if useful.
+    BodyLine {
+        cmd_id: u32,
+        line: String,
+    },
+
+    /// RouterState has resolved the registered [`ResponseWaiter`] for a
+    /// `%end` / `%error` reply (using the accumulated body or the error
+    /// message). The caller has nothing to do — the awaiter downstream
+    /// already got its [`ResponseOutcome`]. This variant exists purely
+    /// so the caller can observe the resolution for logging / metrics.
+    Resolve,
+
+    /// RouterState does **not** own this event — it's a notification
+    /// (`Output`, `WindowAdd`, `WindowPaneChanged`, `*Changed`, etc.).
+    /// Caller handles it directly via
+    /// [`crate::services::tmux::bridge::TmuxBridge`] (the v1 path that
+    /// PR-T7 put in place). RouterState returns this variant only; W3
+    /// will progressively migrate notifications into RouterState so this
+    /// variant eventually disappears.
+    DelegateToV1,
 }
 
 /// Test-only helpers for asserting against [`RouterAction`] without
@@ -139,11 +147,12 @@ pub trait RouterActionExt {
 #[allow(dead_code)]
 pub enum RouterActionKind {
     Ignore,
-    Resolve,
     BodyLine,
     UnknownCommandStart,
     UnknownCommandEnd,
     OrphanCommandEnd,
+    Resolve,
+    DelegateToV1,
 }
 
 #[allow(dead_code)]
@@ -151,11 +160,12 @@ impl RouterActionExt for RouterAction {
     fn kind(&self) -> RouterActionKind {
         match self {
             RouterAction::Ignore => RouterActionKind::Ignore,
-            RouterAction::Resolve { .. } => RouterActionKind::Resolve,
             RouterAction::BodyLine { .. } => RouterActionKind::BodyLine,
             RouterAction::UnknownCommandStart { .. } => RouterActionKind::UnknownCommandStart,
             RouterAction::UnknownCommandEnd { .. } => RouterActionKind::UnknownCommandEnd,
             RouterAction::OrphanCommandEnd { .. } => RouterActionKind::OrphanCommandEnd,
+            RouterAction::Resolve => RouterActionKind::Resolve,
+            RouterAction::DelegateToV1 => RouterActionKind::DelegateToV1,
         }
     }
 }
@@ -181,15 +191,39 @@ impl RouterState {
     /// Process one [`ProtocolEvent`] and return the action the caller
     /// should take.
     ///
+    /// P5' responsibility split:
+    ///
+    /// - **`CommandBegin` / `CommandOutput` / `CommandEnd` / `CommandError`**
+    ///   — RouterState owns the body accumulator and resolves the
+    ///   registered [`ResponseWaiter`] via [`send_to_waiter`]. The caller
+    ///   receives a [`RouterAction::Resolve`] (or `UnknownCommandStart`
+    ///   / `UnknownCommandEnd` / `OrphanCommandEnd` for the no-waiter
+    ///   paths) but has nothing else to do.
+    /// - **Everything else** — RouterState returns
+    ///   [`RouterAction::DelegateToV1`]; the caller (`dispatch_event`)
+    ///   falls through to its bridge-based notification handler.
+    ///
+    /// `bridge` and `controller` are forward-compat parameters; P5' does
+    /// not dereference them. W3 will use them to thread the controller's
+    /// `pane_bindings` / `window_bindings` updates through RouterState.
+    /// They are taken as references so the caller doesn't have to clone
+    /// the `Arc` on every event.
+    ///
     /// `registry` is consulted on `%end` / `%error` to find the
     /// registered waiter. The `cmd_id` carried by tmux is a `u32`; the
-    /// registry hands out `CommandId(u64)`. PR-T5 narrows by `as u32` —
-    /// PR-T8 unifies the types.
+    /// registry hands out [`CommandId`]`(u64)`. P5' narrows by `as u32` —
+    /// W3 unifies the types.
+    #[allow(clippy::too_many_arguments)]
     pub fn process(
         &mut self,
         event: &ProtocolEvent,
         registry: &CommandRegistry,
+        _bridge: &TmuxBridge,
+        _controller: &TmuxController,
     ) -> RouterAction {
+        // Forward-compat: consume the forward-compat params so Rust's
+        // unused-arg lint stays quiet. W3 will start using them.
+        let _ = (_bridge, _controller);
         match event {
             ProtocolEvent::CommandBegin { id, .. } => {
                 if registry.outstanding() == 0
@@ -225,12 +259,19 @@ impl RouterState {
                         return RouterAction::OrphanCommandEnd { cmd_id: *id };
                     }
                 };
+                // P5': resolve the waiter internally. If a waiter was
+                // registered, ship the accumulated body into its
+                // oneshot; otherwise signal UnknownCommandEnd so the
+                // caller can log the orphan-end-of-fire-and-forget case.
                 let waiter = registry.take(CommandId(*id as u64));
                 match waiter {
-                    Some(waiter) => RouterAction::Resolve {
-                        waiter,
-                        outcome: ResponseOutcome::Ok { body_lines: lines },
-                    },
+                    Some(waiter) => {
+                        send_to_waiter(
+                            waiter,
+                            ResponseOutcome::Ok { body_lines: lines },
+                        );
+                        RouterAction::Resolve
+                    }
                     None => RouterAction::UnknownCommandEnd {
                         cmd_id: *id,
                         errored: false,
@@ -244,17 +285,20 @@ impl RouterState {
                 flags: _,
                 timestamp: _,
             } => {
-                // Drop any accumulated lines — tmux's own parser does the
-                // same. Take the waiter and resolve with Err.
+                // Drop any accumulated lines — tmux's own parser does
+                // the same. Take the waiter and resolve with Err.
                 let _ = self.in_flight.take();
                 let waiter = registry.take(CommandId(*id as u64));
                 match waiter {
-                    Some(waiter) => RouterAction::Resolve {
-                        waiter,
-                        outcome: ResponseOutcome::Err {
-                            message: message.clone(),
-                        },
-                    },
+                    Some(waiter) => {
+                        send_to_waiter(
+                            waiter,
+                            ResponseOutcome::Err {
+                                message: message.clone(),
+                            },
+                        );
+                        RouterAction::Resolve
+                    }
                     None => RouterAction::UnknownCommandEnd {
                         cmd_id: *id,
                         errored: true,
@@ -262,7 +306,10 @@ impl RouterState {
                     },
                 }
             }
-            _ => RouterAction::Ignore,
+            // All non-command events are notifications — delegate to the
+            // v1 path (the existing dispatch_event / bridge.emit_xxx
+            // flow). W3 will progressively fold these into RouterState.
+            _ => RouterAction::DelegateToV1,
         }
     }
 
@@ -278,7 +325,7 @@ impl RouterState {
 
     /// Linear probe of the registry for `cmd_id`. Avoids re-storing a
     /// parallel map of u32 → u64 (which would itself need locking).
-    /// Removed in PR-T8 when registry keys unify to u32.
+    /// Removed in W3 when registry keys unify to u32.
     fn registry_has_id_u32(&self, registry: &CommandRegistry, cmd_id: u32) -> bool {
         // The registry only hands out ids starting at 0 and monotonically
         // increasing. u32 is enough for any practical session; if we
@@ -315,6 +362,8 @@ impl StaticWaiters {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
     use tokio::sync::oneshot;
 
     fn make_waiter() -> (ResponseWaiter, oneshot::Receiver<ResponseOutcome>) {
@@ -322,12 +371,67 @@ mod tests {
         (ResponseWaiter::BeginEnd(tx), rx)
     }
 
+    /// Minimal no-op `AppBackend` impl so we can build a `TmuxController`
+    /// for tests via its `new_for_tests` constructor. The bridge and
+    /// controller params are forward-compat in P5' — RouterState never
+    /// calls `backend.emit*`, so a no-op impl is enough.
+    struct NoopBackend;
+
+    impl crate::infrastructure::app_backend::AppBackend for NoopBackend {
+        fn emit(
+            &self,
+            _event: &str,
+            _payload: &serde_json::Value,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+        fn emit_binary(&self, _bytes: Vec<u8>) -> Result<(), String> {
+            Ok(())
+        }
+        fn spawn(&self, _f: Box<dyn FnOnce() + Send>) {}
+    }
+
+    /// Build a fresh `(controller, bridge)` pair for tests. Both are
+    /// real instances but RouterState only takes them by reference and
+    /// never calls into them — the params are forward-compat.
+    fn make_fixtures() -> (Arc<TmuxController>, TmuxBridge) {
+        let (stdin_tx, _stdin_rx) = mpsc::unbounded_channel::<String>();
+        let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
+            Arc::new(NoopBackend);
+        let controller = TmuxController::new_for_tests(
+            0, // controller_id
+            0, // base_xsterm_id
+            stdin_tx,
+            backend.clone(),
+        );
+        let bridge = TmuxBridge::new(backend, controller.clone());
+        (controller, bridge)
+    }
+
+    /// Tiny inline "block on" for oneshot receivers. Avoids pulling in
+    /// a runtime; uses `try_recv` in a tight loop.
+    fn block_on<T>(
+        mut rx: oneshot::Receiver<T>,
+    ) -> Result<T, oneshot::error::TryRecvError> {
+        loop {
+            match rx.try_recv() {
+                Ok(v) => return Ok(v),
+                Err(oneshot::error::TryRecvError::Empty) => {
+                    std::hint::spin_loop();
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     #[test]
     fn begin_then_end_resolves_waiter() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
         // Register a waiter for the next id (0).
-        let (waiter, _rx) = make_waiter();
+        let (waiter, rx) = make_waiter();
         let _ = registry.register(
             crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
             "display-message -p '#{version}'\n".to_string(),
@@ -342,6 +446,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         assert_eq!(action.kind(), RouterActionKind::Ignore);
         assert_eq!(router.in_flight_lines(), 0);
@@ -353,6 +459,8 @@ mod tests {
                 line: "3.4".to_string(),
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         match action {
             RouterAction::BodyLine { cmd_id, line } => {
@@ -363,7 +471,9 @@ mod tests {
         }
         assert_eq!(router.in_flight_lines(), 1);
 
-        // End.
+        // End. RouterState resolves the waiter internally — the
+        // caller observes a unit Resolve and the rx below receives
+        // the body lines.
         let action = router.process(
             &ProtocolEvent::CommandEnd {
                 id: 0,
@@ -371,28 +481,27 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
-        let (waiter, _rx) = make_waiter();
-        let _ = registry.register(
-            crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
-            "x".to_string(),
-            Some(waiter),
-        );
-        match action {
-            RouterAction::Resolve { outcome, .. } => match outcome {
-                ResponseOutcome::Ok { body_lines } => {
-                    assert_eq!(body_lines, vec!["3.4".to_string()]);
-                }
-                ResponseOutcome::Err { message } => panic!("unexpected err: {message}"),
-            },
-            other => panic!("expected Resolve, got {other:?}"),
+        assert_eq!(action.kind(), RouterActionKind::Resolve);
+        assert_eq!(registry.outstanding(), 0, "waiter should have been taken");
+        match block_on(rx).unwrap() {
+            ResponseOutcome::Ok { body_lines } => {
+                assert_eq!(body_lines, vec!["3.4".to_string()]);
+            }
+            ResponseOutcome::Err { message } => panic!("unexpected err: {message}"),
         }
+        // After the block ends, in_flight_lines drops back to 0.
+        assert_eq!(router.in_flight_lines(), 0);
     }
 
     #[test]
     fn begin_without_waiter_emits_unknown_command_start() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
         // No waiter registered for id 0 (we never registered any command).
         let action = router.process(
             &ProtocolEvent::CommandBegin {
@@ -401,6 +510,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         assert_eq!(
             action.kind(),
@@ -412,6 +523,8 @@ mod tests {
     fn error_after_begin_resolves_with_err() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
         let (waiter, rx) = make_waiter();
         let _ = registry.register(
             crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
@@ -425,6 +538,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         let action = router.process(
             &ProtocolEvent::CommandError {
@@ -434,39 +549,30 @@ mod tests {
                 message: "parse error".to_string(),
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
-        let outcome = match action {
-            RouterAction::Resolve { waiter, outcome } => {
-                // Inspect first (before send moves the value).
-                assert_eq!(
-                    outcome,
-                    ResponseOutcome::Err {
-                        message: "parse error".to_string()
-                    }
-                );
-                let stored = outcome.clone();
-                // Now actually resolve the promise.
-                send_to_waiter(waiter, outcome);
-                stored
+        // P5': caller sees a unit Resolve — the waiter was already
+        // resolved internally.
+        assert_eq!(action.kind(), RouterActionKind::Resolve);
+        assert_eq!(registry.outstanding(), 0, "waiter should have been taken");
+        match block_on(rx).unwrap() {
+            ResponseOutcome::Err { message } => {
+                assert_eq!(message, "parse error");
             }
-            other => panic!("expected Resolve, got {other:?}"),
-        };
-        // rx has the err. (We can't `.await` in a sync test; spin-loop.)
-        let mut rx = rx;
-        for _ in 0..1000 {
-            if let Ok(v) = rx.try_recv() {
-                assert_eq!(v, outcome);
-                return;
-            }
-            std::hint::spin_loop();
+            ResponseOutcome::Ok { body_lines } => panic!(
+                "unexpected ok with {} lines",
+                body_lines.len()
+            ),
         }
-        panic!("receiver never got value");
     }
 
     #[test]
     fn orphan_end_returns_orphan_action() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
         let action = router.process(
             &ProtocolEvent::CommandEnd {
                 id: 99,
@@ -474,6 +580,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         assert_eq!(action.kind(), RouterActionKind::OrphanCommandEnd);
     }
@@ -482,6 +590,8 @@ mod tests {
     fn end_with_mismatched_id_returns_orphan() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
         let (waiter, _rx) = make_waiter();
         let _ = registry.register(
             crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
@@ -495,6 +605,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         // End for a *different* id → orphan.
         let action = router.process(
@@ -504,6 +616,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         assert_eq!(
             action.kind(),
@@ -517,39 +631,64 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
     }
 
     #[test]
-    fn non_command_event_returns_ignore() {
+    fn non_command_event_returns_delegate_to_v1() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
+        // P5' change: notification events are no longer "Ignore" — they
+        // are explicitly delegated back to the v1 path.
         let action = router.process(
             &ProtocolEvent::SessionsChanged,
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
-        assert_eq!(action.kind(), RouterActionKind::Ignore);
+        assert_eq!(action.kind(), RouterActionKind::DelegateToV1);
+
         let action = router.process(
             &ProtocolEvent::Output {
                 pane_id: "%5".to_string(),
                 data: b"hello".to_vec(),
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
-        assert_eq!(action.kind(), RouterActionKind::Ignore);
+        assert_eq!(action.kind(), RouterActionKind::DelegateToV1);
+
+        let action = router.process(
+            &ProtocolEvent::WindowAdd {
+                window_id: "@1".to_string(),
+            },
+            &registry,
+            &bridge,
+            controller.as_ref(),
+        );
+        assert_eq!(action.kind(), RouterActionKind::DelegateToV1);
     }
 
     #[test]
     fn body_lines_outside_begin_are_ignored() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
-        // No begin → CommandOutput is ignored.
+        let (controller, bridge) = make_fixtures();
+
+        // No begin → CommandOutput is ignored (no in-flight block).
         let action = router.process(
             &ProtocolEvent::CommandOutput {
                 id: 0,
                 line: "x".to_string(),
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         assert_eq!(action.kind(), RouterActionKind::Ignore);
         assert_eq!(router.in_flight_lines(), 0);
@@ -559,6 +698,8 @@ mod tests {
     fn body_lines_for_different_id_than_begin_are_ignored() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
+        let (controller, bridge) = make_fixtures();
+
         let (waiter, _rx) = make_waiter();
         let _ = registry.register(
             crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
@@ -572,6 +713,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         // CommandOutput for a *different* id → ignored.
         let action = router.process(
@@ -580,6 +723,8 @@ mod tests {
                 line: "x".to_string(),
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         assert_eq!(action.kind(), RouterActionKind::Ignore);
         assert_eq!(router.in_flight_lines(), 0);
@@ -589,7 +734,9 @@ mod tests {
     fn end_after_take_resolves_with_accumulated_lines() {
         let mut router = RouterState::default();
         let registry = CommandRegistry::new();
-        let (waiter, _rx) = make_waiter();
+        let (controller, bridge) = make_fixtures();
+
+        let (waiter, rx) = make_waiter();
         let _ = registry.register(
             crate::services::tmux::protocol::command::CommandKind::ListWindows,
             "list-windows -a\n".to_string(),
@@ -602,6 +749,8 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
         for line in ["@1 bash bash", "@2 vim vim"] {
             let _ = router.process(
@@ -610,6 +759,8 @@ mod tests {
                     line: line.to_string(),
                 },
                 &registry,
+                &bridge,
+                controller.as_ref(),
             );
         }
         let action = router.process(
@@ -619,18 +770,19 @@ mod tests {
                 flags: 0,
             },
             &registry,
+            &bridge,
+            controller.as_ref(),
         );
-        match action {
-            RouterAction::Resolve { outcome, .. } => match outcome {
-                ResponseOutcome::Ok { body_lines } => {
-                    assert_eq!(
-                        body_lines,
-                        vec!["@1 bash bash".to_string(), "@2 vim vim".to_string()]
-                    );
-                }
-                ResponseOutcome::Err { message } => panic!("err: {message}"),
-            },
-            other => panic!("expected Resolve, got {other:?}"),
+        assert_eq!(action.kind(), RouterActionKind::Resolve);
+        assert_eq!(registry.outstanding(), 0, "waiter should have been taken");
+        match block_on(rx).unwrap() {
+            ResponseOutcome::Ok { body_lines } => {
+                assert_eq!(
+                    body_lines,
+                    vec!["@1 bash bash".to_string(), "@2 vim vim".to_string()]
+                );
+            }
+            ResponseOutcome::Err { message } => panic!("err: {message}"),
         }
         // After the block ends, in_flight_lines drops back to 0.
         assert_eq!(router.in_flight_lines(), 0);
