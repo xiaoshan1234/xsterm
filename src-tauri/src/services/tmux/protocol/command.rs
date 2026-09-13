@@ -186,6 +186,94 @@ pub enum ResponseOutcome {
     Err { message: String },
 }
 
+/// What an event-correlated waiter is waiting for.
+///
+/// P8 W3b: this is the registry's second correlation mode. Alongside
+/// the command-id-keyed [`ResponseWaiter`] (resolved by `%begin..%end`),
+/// the controller also needs waiters resolved by **events** —
+/// specifically `%window-pane-changed` and `%window-add`. tmux does not
+/// respond to `split-window` / `new-window` with a `%begin..%end` block;
+/// it responds with notification events whose payload identifies the
+/// newly-created pane / window. These waiters live in a separate FIFO
+/// inside [`crate::services::tmux::controller::id_map::CommandRegistry`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventWaiterKind {
+    /// Resolved by the next `%window-pane-changed` event (FIFO across
+    /// all `SplitResult` waiters with `tmux_window_id == None`).
+    /// Created by [`crate::services::tmux::controller::TmuxController::split_pane`].
+    SplitResult,
+    /// Resolved in two phases: first by `%window-add` (which moves the
+    /// entry from "no window_id" to "keyed by window_id"), then by the
+    /// matching `%window-pane-changed` for that window_id. Created by
+    /// [`crate::services::tmux::controller::TmuxController::new_window`].
+    NewWindowResult,
+    /// Bootstrap-only: `%window-pane-changed` for the very first window
+    /// the controller sees, no sender attached. Created by the
+    /// dispatch task's `WindowAdd` case (b) when no `pending_windows`
+    /// sender exists, and by the `list-windows` response handler
+    /// (`emit_window_list`) for every window the server reports in the
+    /// attach path. The dispatch handler resolves this by populating
+    /// `window_bindings` so `await_first_pane`'s separate
+    /// `first_pane_tx` mechanism (still owned by the controller) takes
+    /// over on the next `%window-pane-changed`.
+    Bootstrap,
+}
+
+/// What the dispatch event handler resolves an [`EventWaiter`] with.
+///
+/// The `Sender` carries the typed channel back to the awaiting public
+/// method (`split_pane` / `new_window`). The `None` variant exists
+/// because bootstrap windows have no caller awaiting a result — the
+/// frontend already owns the matching xsterm Window.
+#[derive(Debug)]
+pub enum EventWaiterSender {
+    /// Back-channel for [`crate::services::tmux::controller::TmuxController::split_pane`].
+    Split(tokio::sync::oneshot::Sender<crate::services::tmux::controller::SplitResult>),
+    /// Back-channel for [`crate::services::tmux::controller::TmuxController::new_window`].
+    NewWindow(tokio::sync::oneshot::Sender<crate::services::tmux::controller::NewWindowResult>),
+    /// Bootstrap has no sender — the dispatch handler just removes the
+    /// entry so `await_first_pane`'s separate `first_pane_tx` mechanism
+    /// resolves on the next `%window-pane-changed`.
+    None,
+}
+
+/// One outstanding event-correlated waiter.
+///
+/// Lives in the controller's [`CommandRegistry`](crate::services::tmux::controller::id_map::CommandRegistry)
+/// `event_waiters` FIFO. The dispatch task resolves waiters by matching
+/// against `kind` and `tmux_window_id`:
+///
+/// - `SplitResult` + `tmux_window_id: None` → next `%window-pane-changed`
+/// - `NewWindowResult` + `tmux_window_id: None` → next `%window-add`
+///   (then re-registered keyed by the new `window_id` for the
+///   `%window-pane-changed` resolution)
+/// - `NewWindowResult` or `Bootstrap` + `tmux_window_id: Some(id)` →
+///   next `%window-pane-changed` whose `window_id == id`
+#[derive(Debug)]
+pub struct EventWaiter {
+    /// Which event resolves this waiter.
+    pub kind: EventWaiterKind,
+    /// The typed back-channel to the awaiting caller. Bootstrap entries
+    /// use `EventWaiterSender::None` (no caller is awaiting).
+    pub sender: EventWaiterSender,
+    /// `None` = pop FIFO on next matching event. `Some(window_id)` =
+    /// pop only when the matching event's `window_id` matches. `None`
+    /// is the initial state for `NewWindowResult`; `WindowAdd` rewrites
+    /// it to `Some(<new window_id>)` so the subsequent
+    /// `%window-pane-changed` for that window resolves it.
+    pub tmux_window_id: Option<String>,
+    /// Allocated by the dispatcher at `WindowAdd` time for the
+    /// `Bootstrap` and `NewWindowResult` paths. Stashed here so the
+    /// `WindowPaneChanged` handler can insert it into `window_bindings`
+    /// without having to re-allocate (Bootstrap) or having to look it up
+    /// from a separate map (NewWindowResult — the W2 design carried it
+    /// in `PendingWindow { xsterm_window_id, .. }`; W3b folds that
+    /// struct's payload into this field).
+    ///
+    /// `None` for `SplitResult` (no xsterm window id involved).
+    pub xsterm_window_id: Option<u32>,
+}
+
 impl ResponseOutcome {
     /// Convenience: flatten the body lines into a single string. Returns
     /// `Err(message)` for the failure path so callers don't have to

@@ -78,8 +78,10 @@ use super::errors::{TmuxError, spawn_err};
 use super::bridge::TmuxBridge;
 use super::events::ProtocolEvent;
 use super::parser::ProtocolParser;
-use super::protocol::command::{CommandKind, ResponseOutcome, ResponseWaiter};
-use std::collections::{HashMap, VecDeque};
+use super::protocol::command::{
+    CommandKind, EventWaiter, EventWaiterKind, EventWaiterSender, ResponseOutcome, ResponseWaiter,
+};
+use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -134,7 +136,7 @@ const DEFAULT_TMUX_SOCKET_NAME: &str = "default";
 /// awaiting Tauri command returns a clean `Err` to the frontend —
 /// the [`From<TmuxError> for String`] impl at `services/tmux/mod.rs`
 /// bridges the two at the Tauri boundary).
-type SplitResult = Result<(u32, String, String), TmuxError>;
+pub(crate) type SplitResult = Result<(u32, String, String), TmuxError>;
 
 /// Result of a [`TmuxController::new_window`] request.
 ///
@@ -143,14 +145,14 @@ type SplitResult = Result<(u32, String, String), TmuxError>;
 /// first pane of the new window is reported in the same reply chain).
 /// `Err(TmuxError)` on timeout, on a closed channel, or when tmux
 /// itself reports a command error.
-type NewWindowResult = Result<(u32, String, u32, String), TmuxError>;
+pub(crate) type NewWindowResult = Result<(u32, String, u32, String), TmuxError>;
 
 /// Result of a [`TmuxController::capture_pane`] request.
 ///
 /// `Ok(text)` once tmux confirms via `%end` (body lines joined with `\n`).
 /// `Err(TmuxError)` on timeout, on a closed channel, on a `%error`
 /// reply, or when tmux itself reports the command failed.
-type CaptureResult = Result<String, TmuxError>;
+pub(crate) type CaptureResult = Result<String, TmuxError>;
 
 /// Handle to one running `tmux -CC` child process and its I/O tasks.
 ///
@@ -238,29 +240,6 @@ pub struct TmuxController {
     /// dispatch task can `.take()` it on `record_first_pane` (one-shot
     /// semantics — second call is a no-op).
     pub(crate) first_pane_tx: std::sync::Mutex<Option<oneshot::Sender<(u32, String)>>>,
-    /// FIFO queue of [`oneshot::Sender`]s awaiting the result of a
-    /// [`TmuxController::split_pane`] request. The dispatch task pushes
-    /// `split_pane` callers onto this queue (before writing `split-window`
-    /// to stdin), then pops the front sender on the matching
-    /// `%window-pane-changed` reply and resolves it with the new pane's
-    /// `(xsterm_session_id, tmux_pane_id, tmux_window_id)`. Multiple
-    /// concurrent splits are handled in tmux's reply order (FIFO).
-    pub(crate) pending_splits: std::sync::Mutex<VecDeque<oneshot::Sender<SplitResult>>>,
-    /// FIFO queue of [`oneshot::Sender`]s awaiting the result of a
-    /// [`TmuxController::new_window`] request. Mirrors `pending_splits`
-    /// exactly — `new_window` callers push a sender here before writing
-    /// `new-window` to stdin, and the dispatch task pops the front sender
-    /// once the matching `%window-pane-changed` reply arrives.
-    pub(crate) pending_windows: std::sync::Mutex<VecDeque<oneshot::Sender<NewWindowResult>>>,
-    /// side-map `tmux_window_id → PendingWindow` that bridges
-    /// `%window-add` and the matching `%window-pane-changed`. The dispatch
-    /// task stores the freshly-allocated xsterm window id here on
-    /// `WindowAdd`, then removes the entry and resolves any pending
-    /// sender / emits `tmux-window-added` on `WindowPaneChanged`. The
-    /// `sender` is `Some` for user-driven `new-window` requests and
-    /// `None` for the bootstrap window (which is already known to the
-    /// frontend).
-    pub(crate) pending_window_pane: std::sync::Mutex<HashMap<String, PendingWindow>>,
     /// `tmux_window_id → xsterm_window_id` map for every tmux
     /// window this controller has observed (bootstrap, user-driven, and
     /// — in the future — external). Used by `kill_window` /
@@ -282,13 +261,6 @@ pub struct TmuxController {
         /// bootstrap pane (Create: only one window exists, the one we just
         /// asked the server to create).
         pub(crate) spawn_mode: SpawnMode,
-    /// in-flight `capture_pane` awaiter. Exactly one capture may
-    /// be in flight at a time — tmux serialises command replies in order,
-    /// and `capture_lock` enforces single-caller semantics so the
-    /// dispatch task can unambiguously route the next `%begin/%end`
-    /// block to either the pending sender (match) or some other command
-    /// (no match — ignore).
-    pub(crate) pending_capture: std::sync::Mutex<Option<oneshot::Sender<CaptureResult>>>,
     /// tokio mutex serialising concurrent `capture_pane` callers
     /// so two requests never overlap their `%begin..%end` block.
     capture_lock: tokio::sync::Mutex<()>,
@@ -300,19 +272,22 @@ pub struct TmuxController {
     split_pane_timeout: Duration,
     /// P8 v2 registry — single source of truth for in-flight command
     /// waiters. PR-T3 introduced this and PR-T5 wired it into the
-    /// response router (now in `subscriber::RouterState`); W2 (this
-    /// commit) migrates `capture_pane` to register its `BeginEnd` waiter
-    /// here instead of pushing onto `pending_capture`. The dispatch
-    /// task's `CommandEnd` / `CommandError` handlers take the waiter
-    /// out via `registry.take(id)` and resolve it via
-    /// `send_to_waiter`.
+    /// response router (now in `subscriber::RouterState`); W2
+    /// (PR-T8) migrates `capture_pane` to register its `BeginEnd`
+    /// waiter here instead of pushing onto the v1 `pending_capture`
+    /// queue. The dispatch task's `CommandEnd` / `CommandError`
+    /// handlers take the waiter out via `registry.take(id)` and
+    /// resolve it via `send_to_waiter`.
     ///
-    /// Note: `split_pane` / `new_window` / `await_first_pane` still use
-    /// their legacy fields because the registry's `ResponseWaiter`
-    /// carries a `ResponseOutcome` (just body lines + OK/Err), not the
+    /// W3b adds a second correlation mode: `event_waiters` (a FIFO of
+    /// [`EventWaiter`](super::protocol::command::EventWaiter)) for
+    /// `split_pane` / `new_window`, which tmux replies to with
+    /// `%window-pane-changed` / `%window-add` instead of
+    /// `%begin..%end`. The dispatch task's notification handlers take
+    /// the waiter out via `take_event_waiter_for_split` /
+    /// `take_event_waiter_for_window` and resolve it with the
     /// structured `(xsterm_id, tmux_pane_id, tmux_window_id)` triple
-    /// those methods need. W3 unifies them after deleting the legacy
-    /// pending fields.
+    /// those methods need. After W3b no `pending_*` queue remains.
     pub(crate) registry: CommandRegistry,
     /// P8 W3a: P5' RouterState — owns the in-flight body buffer for
     /// the current `%begin..%end` block, resolves registered waiters
@@ -346,24 +321,6 @@ fn schedule_initial_state_sync(stdin_tx: mpsc::UnboundedSender<String>) {
             );
         }
     });
-}
-
-/// per-window bookkeeping stored in
-/// [`TmuxController::pending_window_pane`] between `%window-add` and the
-/// matching `%window-pane-changed`.
-///
-/// `sender` is `Some` only for user-driven `new-window` requests
-/// (resolved by the dispatch task with the new pane's quadruple); the
-/// bootstrap window's entry has `sender = None` because the frontend
-/// already owns the corresponding xsterm Window — we just need the
-/// dispatch task to populate `window_bindings` and `pane_window_bindings`
-/// so `tmux-pane-added` carries the bootstrap tmux window id.
-pub(crate) struct PendingWindow {
-    /// xsterm window id allocated on `%window-add`.
-    pub(crate) xsterm_window_id: u32,
-    /// `Some` for user-driven new-window requests, `None` for the
-    /// bootstrap window.
-    pub(crate) sender: Option<oneshot::Sender<NewWindowResult>>,
 }
 
 impl TmuxController {
@@ -490,14 +447,10 @@ impl TmuxController {
             next_xsterm_window_id: AtomicU32::new(controller_id.saturating_mul(1_000_000) + 1),
             first_pane_tx: std::sync::Mutex::new(Some(pane_tx_init)),
             first_pane_rx: tokio::sync::Mutex::new(Some(pane_rx_init)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             // initialised to None; `spawn_attach` rewrites this
             // after construction via the returned Arc.
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
                         capture_lock: tokio::sync::Mutex::new(()),
                         split_pane_timeout: SPLIT_PANE_TIMEOUT,
                         spawn_mode: mode,
@@ -839,38 +792,19 @@ impl TmuxController {
                 }
             }
         }
-        // wake the pending capture-pane awaiter too, otherwise
-        // a teardown would let it sit on the full CAPTURE_PANE_TIMEOUT
-        // even though we know the child is dead. We hold no lock here;
-        // the dispatch task may still process a stale %begin/%end after
-        // we set the slot to None, but `oneshot::Sender::send` on an
-        // already-dropped receiver just returns Err and we ignore it.
-        if let Ok(mut slot) = self.pending_capture.lock() {
-            if let Some(tx) = slot.take() {
-                let _ = tx.send(Err(TmuxError::Internal(format!(
-                    "tmux controller {}: controller closed",
-                    self.controller_id
-                ))));
-            }
-        }
-        // Wake every awaiter blocked on a split reply; without this the
-        // Tauri command would wait the full `split_pane_timeout` before
-        // surfacing an error, even though we already know the controller
-        // is going away.
-        self.drain_pending_splits_with_error("controller closed");
-        // same dance for `new_window` awaiters.
-        self.drain_pending_windows_with_error("controller closed");
-        // P8 W2: also drain the registry so any in-flight
-        // `capture_pane` waiter (and future migrated methods) wake
-        // promptly. Dropping the `ResponseWaiter::BeginEnd` sender
-        // here is enough — the receiver in the public method observes
-        // a closed channel and surfaces `Err(AlreadyClosed)`.
-        let drained = self.registry.drain();
-        if drained > 0 {
+        // P8 W3b: drain the registry's command waiters AND event
+        // waiters in one call. Replaces the four v1 per-queue drains
+        // (`pending_capture` / `pending_splits` / `pending_windows` /
+        // `pending_window_pane`); the senders inside the dropped
+        // waiters observe a closed channel and surface `Err` to the
+        // awaiting public methods.
+        let (cmd_drained, event_drained) = self.registry.drain_all();
+        if cmd_drained + event_drained > 0 {
             tracing::debug!(
-                "tmux controller {}: registry drained {} waiter(s) on close",
+                "tmux controller {}: registry drained {} command waiter(s) and {} event waiter(s) on close",
                 self.controller_id,
-                drained
+                cmd_drained,
+                event_drained
             );
         }
         tracing::debug!(
@@ -975,15 +909,15 @@ impl TmuxController {
     /// `(xsterm_session_id, tmux_pane_id, tmux_window_id)` triple.
     ///
     /// Flow:
-    /// 1. Register a [`oneshot::Sender`] in `pending_splits` so the
-    ///    dispatch task can route the matching `%window-pane-changed`
-    ///    reply back to this future. The sender is pushed **before** the
-    ///    `split-window` command is written to stdin, eliminating the
-    ///    race where tmux replies faster than the caller can register.
-    /// 2. Write `split-window <flag> -t %<parent>` (built via
-    ///    [`tmux_cmd::split_window`]) to stdin. The writer task drains
-    ///    the FIFO in a single background thread, preserving tmux's
-    ///    expected command ordering.
+    /// 1. Register an [`EventWaiter`] (kind: `SplitResult`) on the
+    ///    `CommandRegistry` so the dispatch task can route the matching
+    ///    `%window-pane-changed` reply back to this future. The waiter
+    ///    is registered **before** the `split-window` command is
+    ///    written to stdin, eliminating the race where tmux replies
+    ///    faster than the caller can register.
+    /// 2. Write `split-window <flag> -t %<parent>` (built inline) to
+    ///    stdin. The writer task drains the FIFO in a single background
+    ///    thread, preserving tmux's expected command ordering.
     /// 3. `await` the oneshot with [`SPLIT_PANE_TIMEOUT`].
     ///
     /// Errors:
@@ -1011,25 +945,35 @@ impl TmuxController {
             )));
         }
 
+        // P8 W3b: tmux does not echo `%begin..%end` for `split-window`;
+        // it answers with `%window-pane-changed`. Register an
+        // event-correlated waiter on the registry; the dispatch task's
+        // `%window-pane-changed` layer 2 pops it via
+        // `take_event_waiter_for_split`.
         let (tx, rx) = oneshot::channel::<SplitResult>();
-        {
-            let mut queue = self.pending_splits.lock().map_err_string()?;
-            queue.push_back(tx);
-        }
+        self.registry.register_event_waiter(EventWaiter {
+            kind: EventWaiterKind::SplitResult,
+            sender: EventWaiterSender::Split(tx),
+            tmux_window_id: None,
+            xsterm_window_id: None,
+        });
 
         let cmd = format!(
             "split-window {} -t {}\n",
             direction.flag(),
             parent_tmux_pane_id
         );
-        if let Err(e) = self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed) {
-                            // Roll back: remove the sender we just pushed so the dispatch
-                            // task does not wait on a stale channel forever.
-                            if let Ok(mut queue) = self.pending_splits.lock() {
-                                queue.pop_back();
-                            }
-                            return Err(e);
-                        }
+        if let Err(e) = self
+            .stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
+        {
+            // Roll back: drain the just-registered waiter. There is
+            // exactly one in-flight (we just registered it), so the
+            // crude `drain_event_waiters` is safe.
+            self.registry.drain_event_waiters();
+            return Err(e);
+        }
 
         match tokio::time::timeout(self.split_pane_timeout, rx).await {
             Ok(Ok(result)) => result,
@@ -1074,12 +1018,12 @@ impl TmuxController {
     /// quadruple once tmux confirms via `%window-pane-changed`.
     ///
     /// Flow:
-    /// 1. Register a [`oneshot::Sender`] in `pending_windows` so the
-    ///    dispatch task can route the matching `%window-add` /
-    ///    `%window-pane-changed` reply pair back to this future. The
-    ///    sender is pushed **before** the `new-window` command is written
-    ///    to stdin, eliminating the race where tmux replies faster than
-    ///    the caller can register.
+    /// 1. Register an [`EventWaiter`] (kind: `NewWindowResult`) on the
+    ///    `CommandRegistry` so the dispatch task can route the matching
+    ///    `%window-add` / `%window-pane-changed` reply pair back to this
+    ///    future. The waiter is registered **before** the `new-window`
+    ///    command is written to stdin, eliminating the race where tmux
+    ///    replies faster than the caller can register.
     /// 2. Write `new-window [-n <name>]` (built via
     ///    [`tmux_cmd::new_window_in_current`]) to stdin. No `-t <session>`
     ///    flag because the `tmux -CC` controller is attached to its own
@@ -1093,19 +1037,31 @@ impl TmuxController {
     ///   dispatch task already exited (the child died before we got the
     ///   reply).
     pub async fn new_window(&self, window_name: Option<&str>) -> NewWindowResult {
+        // P8 W3b: tmux answers `new-window` with `%window-add` followed
+        // by `%window-pane-changed` for the new window's first pane —
+        // NOT a `%begin..%end` block. Register an event-correlated
+        // waiter on the registry; the dispatch task's `%window-add`
+        // case (a) re-keys it from `tmux_window_id: None` to
+        // `Some(<window_id>)`, then `%window-pane-changed` layer 3
+        // pops it via `take_event_waiter_for_window`.
         let (tx, rx) = oneshot::channel::<NewWindowResult>();
-        {
-            let mut queue = self.pending_windows.lock().map_err_string()?;
-            queue.push_back(tx);
-        }
+        self.registry.register_event_waiter(EventWaiter {
+            kind: EventWaiterKind::NewWindowResult,
+            sender: EventWaiterSender::NewWindow(tx),
+            tmux_window_id: None,
+            xsterm_window_id: None,
+        });
 
         let cmd = tmux_cmd::new_window_in_current(window_name);
-        if let Err(e) = self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed) {
-            // Roll back: remove the sender we just pushed so the dispatch
-            // task does not wait on a stale channel forever.
-            if let Ok(mut queue) = self.pending_windows.lock() {
-                queue.pop_back();
-            }
+        if let Err(e) = self
+            .stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
+        {
+            // Roll back: drain the just-registered waiter. There is
+            // exactly one in-flight (we just registered it), so the
+            // crude `drain_event_waiters` is safe.
+            self.registry.drain_event_waiters();
             return Err(e);
         }
 
@@ -1211,46 +1167,6 @@ impl TmuxController {
             .unwrap_or_default()
     }
 
-    /// Drain every pending split sender with an error.
-    ///
-    /// Called by [`TmuxController::close`] so a Tauri command awaiting a
-    /// split result does not block forever on a child that is being torn
-    /// down. Each sender gets an `Err("controller closed")` so the awaiter
-    /// surfaces a clean error to the frontend.
-    fn drain_pending_splits_with_error(&self, reason: &str) {
-        let drained: Vec<oneshot::Sender<SplitResult>> = {
-            let mut queue = match self.pending_splits.lock() {
-                Ok(q) => q,
-                Err(_) => return,
-            };
-            queue.drain(..).collect()
-        };
-        for tx in drained {
-            let _ = tx.send(Err(TmuxError::Internal(format!(
-                "tmux controller {}: {reason}",
-                self.controller_id
-            ))));
-        }
-    }
-
-    /// drain every pending new-window sender with an error. Mirrors
-    /// [`TmuxController::drain_pending_splits_with_error`].
-    fn drain_pending_windows_with_error(&self, reason: &str) {
-        let drained: Vec<oneshot::Sender<NewWindowResult>> = {
-            let mut queue = match self.pending_windows.lock() {
-                Ok(q) => q,
-                Err(_) => return,
-            };
-            queue.drain(..).collect()
-        };
-        for tx in drained {
-            let _ = tx.send(Err(TmuxError::Internal(format!(
-                "tmux controller {}: {reason}",
-                self.controller_id
-            ))));
-        }
-    }
-
     /// Override the [`SPLIT_PANE_TIMEOUT`] used by
     /// [`TmuxController::split_pane`]. Test-only — production code paths
     /// use the default. Made `pub(crate)` so unit tests in the same crate
@@ -1293,7 +1209,6 @@ impl TmuxController {
         stdin_tx: mpsc::UnboundedSender<String>,
         app_backend: Arc<dyn AppBackend>,
     ) -> Arc<Self> {
-        use std::collections::VecDeque;
         let (first_pane_tx, first_pane_rx) = oneshot::channel::<(u32, String)>();
         Arc::new(Self {
             controller_id,
@@ -1310,12 +1225,8 @@ impl TmuxController {
             next_xsterm_window_id: AtomicU32::new(base_xsterm_id + 500_000),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             // 5 s mirrors the production SPLIT_PANE_TIMEOUT (kept in
             // sync by hand — the constant is private to this module).
@@ -1959,12 +1870,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(1_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2014,12 +1921,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(2_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2054,12 +1957,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(3_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2125,12 +2024,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(4_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2246,12 +2141,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(5_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2331,12 +2222,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(6_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2371,12 +2258,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(6_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2414,12 +2297,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(7_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2464,12 +2343,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(8_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2529,12 +2404,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(9_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2589,12 +2460,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(10_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2650,12 +2517,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(11_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2753,12 +2616,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(12_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2807,12 +2666,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(13_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2840,11 +2695,14 @@ mod tests {
         );
     }
 
-    /// `close` must drain every pending split sender with an error so a
-    /// Tauri command awaiting a split result does not block the full
-    /// `SPLIT_PANE_TIMEOUT` after the controller has been torn down.
+    /// `close` must drain every event-correlated waiter (P8 W3b) with an
+    /// error so a Tauri command awaiting a split / new-window / capture
+    /// result does not block the full timeout after the controller has
+    /// been torn down. Replaces the v1 `close_drains_pending_splits_with_error`
+    /// / `close_drains_pending_capture_with_error` tests (those fields
+    /// are deleted in W3b).
     #[tokio::test]
-    async fn close_drains_pending_splits_with_error() {
+    async fn close_drains_event_waiters_with_error() {
         let backend: Arc<dyn AppBackend> = Arc::new(RecordingBackend::new());
         let (first_pane_tx, first_pane_rx) = oneshot::channel::<(u32, String)>();
         let controller = Arc::new(TmuxController {
@@ -2859,12 +2717,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(14_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2873,22 +2727,34 @@ mod tests {
         });
         controller.register_pane("%5".to_string(), 14_000_001);
 
-        // Push a dummy sender directly so we can verify `close` drains
-        // it without going through `split_pane` (which would try to
-        // write to the no-op stdin_tx and fail).
+        // Register a SplitResult event waiter directly (simulating what
+        // `split_pane` does internally) so we can verify `close` drains
+        // it via `registry.drain_event_waiters()` without going through
+        // `split_pane` (which would try to write to the no-op stdin_tx
+        // and fail).
         let (tx, rx) = oneshot::channel::<SplitResult>();
-        controller.pending_splits.lock().unwrap().push_back(tx);
+        controller.registry.register_event_waiter(EventWaiter {
+            kind: EventWaiterKind::SplitResult,
+            sender: EventWaiterSender::Split(tx),
+            tmux_window_id: None,
+            xsterm_window_id: None,
+        });
 
         controller.close().expect("close must succeed");
 
-        let result = tokio::time::timeout(std::time::Duration::from_secs(1), rx)
+        // Dropping the sender (via `registry.drain_event_waiters`)
+        // closes the channel; `rx.await` then resolves to
+        // `Err(RecvError)`. The mere fact that it resolves within
+        // 1 s — instead of hanging the full `SPLIT_PANE_TIMEOUT` —
+        // is what we assert.
+        let _dropped = tokio::time::timeout(std::time::Duration::from_secs(1), rx)
             .await
-            .expect("close must wake the pending sender within 1 s")
-            .expect("oneshot must resolve with Err");
-        let err = result.expect_err("drained sender must yield Err");
-        assert!(
-            err.to_string().contains("controller closed"),
-            "expected 'controller closed' in error, got: {err}"
+            .expect("close must wake the pending event waiter within 1 s")
+            .expect_err("drained sender must drop (close channel) so the receiver sees Err");
+        assert_eq!(
+            controller.registry.event_waiter_count(),
+            0,
+            "close must have drained every event waiter"
         );
     }
 
@@ -2897,9 +2763,10 @@ mod tests {
     // ===========================================================================
 
     /// drive the dispatch task end-to-end for a user-driven
-    /// `new_window` request. The test pushes a sender into `pending_windows`
-    /// (simulating what `new_window` does internally), feeds a
-    /// `%window-add` then a `%window-pane-changed`, and verifies that:
+    /// `new_window` request. The test registers a `NewWindowResult`
+    /// event waiter on the registry (simulating what `new_window` does
+    /// internally), feeds a `%window-add` then a
+    /// `%window-pane-changed`, and verifies that:
     /// 1. The sender resolves with the correct quadruple.
     /// 2. The new pane is registered in `pane_bindings` /
     ///    `pane_window_bindings`.
@@ -2922,12 +2789,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(15_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -2943,13 +2806,14 @@ mod tests {
         controller.register_pane("%0".to_string(), 15_000_042);
         controller.record_first_pane(15_000_042, "%0".to_string());
 
-        // Push a sender into pending_windows (simulating new_window).
+        // Register a NewWindowResult event waiter (simulating new_window).
         let (user_tx, user_rx) = oneshot::channel::<NewWindowResult>();
-        controller
-            .pending_windows
-            .lock()
-            .unwrap()
-            .push_back(user_tx);
+        controller.registry.register_event_waiter(EventWaiter {
+            kind: EventWaiterKind::NewWindowResult,
+            sender: EventWaiterSender::NewWindow(user_tx),
+            tmux_window_id: None,
+            xsterm_window_id: None,
+        });
 
         // Yield so the dispatch task is ready to receive.
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
@@ -2960,7 +2824,7 @@ mod tests {
         })
         .unwrap();
 
-        // Give the dispatch task a tick to stash the pending entry.
+        // Give the dispatch task a tick to re-key the waiter.
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         // Feed the WindowPaneChanged reply (the first pane of the new window).
@@ -3064,12 +2928,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(16_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3167,12 +3027,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(17_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3272,12 +3128,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(18_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3345,12 +3197,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(19_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3415,12 +3263,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(100_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3509,12 +3353,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(101_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3578,12 +3418,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(102_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3609,7 +3445,10 @@ mod tests {
     /// `close` wakes an outstanding `capture_pane` awaiter with
     /// an `Err("controller closed")` so a Tauri command awaiting
     /// `capture_tmux_pane` does not block the full 5 s CAPTURE_PANE_TIMEOUT
-    /// after the controller has been torn down.
+    /// after the controller has been torn down. P8 W3b: capture_pane's
+    /// waiter is a `BeginEnd` registered via the registry (was a
+    /// `pending_capture` oneshot in v1); close drains it via
+    /// `registry.drain()`.
     #[tokio::test]
     async fn close_drains_pending_capture_with_error() {
         let backend = Arc::new(RecordingBackend::new());
@@ -3626,12 +3465,8 @@ mod tests {
             next_xsterm_window_id: AtomicU32::new(103_500_001),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
             window_bindings: std::sync::Mutex::new(HashMap::new()),
             session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
             spawn_mode: SpawnMode::Create,
@@ -3640,22 +3475,29 @@ mod tests {
         });
         controller.register_pane("%1".to_string(), 103_000_001);
 
-        // Push a dummy sender directly so we can verify `close` drains
-        // it without going through `capture_pane` (which would block on
-        // stdin_tx that is a no-op channel).
-        let (tx, rx) = oneshot::channel::<CaptureResult>();
-        controller.pending_capture.lock().unwrap().replace(tx);
+        // Register a BeginEnd waiter on the registry (simulating what
+        // `capture_pane` does internally) so we can verify `close`
+        // drains it via `registry.drain()` without going through
+        // `capture_pane` (which would block on the no-op stdin_tx).
+        let (tx, rx) = oneshot::channel::<ResponseOutcome>();
+        controller.registry.register(
+            CommandKind::CapturePane {
+                pane_id: "%1".to_string(),
+                lines: 100,
+            },
+            "capture-pane -p -e -J -S -100 -t %1\n".to_string(),
+            Some(ResponseWaiter::BeginEnd(tx)),
+        );
 
         controller.close().expect("close must succeed");
 
-        let result = tokio::time::timeout(std::time::Duration::from_secs(1), rx)
+        // Dropping the sender (via `registry.drain`) closes the
+        // channel; `rx.await` then resolves to `Err(RecvError)`. The
+        // mere fact that it resolves within 1 s — instead of hanging
+        // the full `CAPTURE_PANE_TIMEOUT` — is what we assert.
+        let _dropped = tokio::time::timeout(std::time::Duration::from_secs(1), rx)
             .await
-            .expect("close must wake the pending sender within 1 s")
-            .expect("oneshot must resolve with Err");
-        let err = result.expect_err("drained sender must yield Err");
-        assert!(
-            err.to_string().contains("controller closed"),
-            "expected 'controller closed' in error, got: {err}"
-        );
+            .expect("close must wake the pending capture waiter within 1 s")
+            .expect_err("drained sender must drop (close channel) so the receiver sees Err");
     }
 }

@@ -51,7 +51,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
 use crate::services::tmux::protocol::command::{
-    CommandId, CommandKind, ResponseOutcome, ResponseWaiter, TaggedCommand,
+    CommandId, CommandKind, EventWaiter, EventWaiterSender, ResponseOutcome, ResponseWaiter,
+    TaggedCommand,
 };
 
 /// Outcome of `CommandRegistry::register`.
@@ -88,6 +89,12 @@ pub struct CommandRegistry {
     /// will log this on close.
     #[allow(dead_code)]
     completed: std::sync::atomic::AtomicU64,
+    /// FIFO of [`EventWaiter`]s resolved by `%window-pane-changed` /
+    /// `%window-add` events. P8 W3b replaces the controller's
+    /// `pending_splits` / `pending_windows` / `pending_window_pane`
+    /// queues with this single vector. See the doc on
+    /// [`EventWaiterKind`] for the matching rules.
+    event_waiters: Mutex<Vec<EventWaiter>>,
 }
 
 impl Default for CommandRegistry {
@@ -103,6 +110,7 @@ impl CommandRegistry {
             next_id: AtomicU64::new(0),
             by_id: Mutex::new(HashMap::new()),
             completed: std::sync::atomic::AtomicU64::new(0),
+            event_waiters: Mutex::new(Vec::new()),
         }
     }
 
@@ -147,6 +155,82 @@ impl CommandRegistry {
         self.by_id.lock().expect("CommandRegistry mutex poisoned").remove(&id)
     }
 
+    /// Register an event-correlated waiter. Returns the entry's index
+    /// in the internal `Vec` so they can refer to it if needed (most
+    /// callers don't need the id back).
+    pub fn register_event_waiter(&self, waiter: EventWaiter) -> usize {
+        let mut v = self
+            .event_waiters
+            .lock()
+            .expect("CommandRegistry mutex poisoned");
+        v.push(waiter);
+        v.len() - 1
+    }
+
+    /// Pop the frontmost [`EventWaiterKind::SplitResult`] waiter with
+    /// `tmux_window_id == None`. Used by the dispatch task's
+    /// `%window-pane-changed` layer 2 (the split-result path).
+    pub fn take_event_waiter_for_split(
+        &self,
+    ) -> Option<tokio::sync::oneshot::Sender<crate::services::tmux::controller::SplitResult>> {
+        let mut v = self
+            .event_waiters
+            .lock()
+            .expect("CommandRegistry mutex poisoned");
+        let pos = v.iter().position(|w| {
+            matches!(w.kind, crate::services::tmux::protocol::command::EventWaiterKind::SplitResult)
+                && w.tmux_window_id.is_none()
+        })?;
+        match v.remove(pos).sender {
+            EventWaiterSender::Split(tx) => Some(tx),
+            // Type system guarantees `kind == SplitResult` ⇔ `sender == Split`.
+            _ => unreachable!("kind == SplitResult implies sender == Split"),
+        }
+    }
+
+    /// Take the [`EventWaiterKind::NewWindowResult`] waiter with
+    /// `tmux_window_id == None` (the "no window_id yet" phase of the
+    /// two-phase new-window dance). Used by the dispatch task's
+    /// `%window-add` case (a).
+    pub fn take_event_waiter_for_new_window_unbound(&self) -> Option<EventWaiter> {
+        let mut v = self
+            .event_waiters
+            .lock()
+            .expect("CommandRegistry mutex poisoned");
+        let pos = v.iter().position(|w| {
+            matches!(
+                w.kind,
+                crate::services::tmux::protocol::command::EventWaiterKind::NewWindowResult
+            ) && w.tmux_window_id.is_none()
+        })?;
+        Some(v.remove(pos))
+    }
+
+    /// Take the waiter (any kind) registered for `window_id`. Used by
+    /// the dispatch task's `%window-pane-changed` layer 3 (the
+    /// Wave 3 new-window / bootstrap path).
+    pub fn take_event_waiter_for_window(&self, window_id: &str) -> Option<EventWaiter> {
+        let mut v = self
+            .event_waiters
+            .lock()
+            .expect("CommandRegistry mutex poisoned");
+        let pos = v
+            .iter()
+            .position(|w| w.tmux_window_id.as_deref() == Some(window_id))?;
+        Some(v.remove(pos))
+    }
+
+    /// How many event waiters are currently registered. Used by the
+    /// dispatch task's `WindowAdd` case (b) bootstrap-detection
+    /// predicate (no `NewWindowResult` waiter + no Bootstrap waiter
+    /// ⇒ this is the first window).
+    pub(crate) fn event_waiter_count(&self) -> usize {
+        self.event_waiters
+            .lock()
+            .expect("CommandRegistry mutex poisoned")
+            .len()
+    }
+
     /// Test/diagnostic helper: how many waiters are still registered.
     #[allow(dead_code)]
     pub fn outstanding(&self) -> usize {
@@ -171,6 +255,30 @@ impl CommandRegistry {
         let n = map.len();
         map.clear();
         n
+    }
+
+    /// Drop every event-correlated waiter. Used on controller close.
+    /// The senders inside the dropped waiters observe a closed channel
+    /// and surface `Err` to the awaiting public methods.
+    ///
+    /// Returns the number of event waiters that were dropped.
+    pub fn drain_event_waiters(&self) -> usize {
+        let mut v = self
+            .event_waiters
+            .lock()
+            .expect("CommandRegistry mutex poisoned");
+        let n = v.len();
+        v.clear();
+        n
+    }
+
+    /// Drain command waiters AND event waiters in one call. P8 W3b:
+    /// `TmuxController::close` uses this so it doesn't have to remember
+    /// which fields existed in v1 vs v2 — there's only the registry.
+    ///
+    /// Returns `(command_drained, event_drained)`.
+    pub fn drain_all(&self) -> (usize, usize) {
+        (self.drain(), self.drain_event_waiters())
     }
 
     /// Test-only: snapshot every currently-registered waiter id. Used
