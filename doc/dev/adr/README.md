@@ -23,6 +23,7 @@ ADR 编号一旦发出**不重用**——即使决策被推翻，新 ADR 也只�
 | [0003](0003-config-toml-migration.md) | 配置文件从 JSON store 迁到 TOML | Accepted |
 | [0004](0004-product-naming.md) | 产品命名决策 | Accepted |
 | [0005](0005-tmux-redesign-v0.md) | tmux 子系统分层重设计（P1-P5）| Accepted (部分落地：P1-P5；P6-P9 待 dev 测试）|
+| [0008](0008-p8-v0-design.md) | P8: 删 v1 路径（dispatch 5 层 fallthrough + 7 个 pending_* 字段）| Accepted (W1-W3b 全部落地；待 dev 真实环境回归验证) |
 
 ## 没归档的决策
 
