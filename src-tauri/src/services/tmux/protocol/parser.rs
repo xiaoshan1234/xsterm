@@ -182,7 +182,7 @@ impl ProtocolParser {
                 line: line.to_string(),
             }),
 
-            "output" => parse_output_event(line, rest),
+            "output" => parse_output_event(line),
             "extended-output" => parse_extended_output_event(line, rest),
 
             "session-changed" => {
@@ -339,18 +339,26 @@ fn split_after_first<'a>(rest: &'a [&'a str]) -> Option<(&'a str, String)> {
         .map(|first| (first, rest[1..].join(" ")))
 }
 
-fn parse_output_event(line: &str, rest: &[&str]) -> Option<ProtocolEvent> {
-    let pane_id = match first_token(rest) {
-        Some(id) => id.to_string(),
-        None => {
-            return Some(ProtocolEvent::Unknown {
-                line: line.to_string(),
-            });
-        }
+fn parse_output_event(line: &str) -> Option<ProtocolEvent> {
+    // Format `%output %<pane_id> <data>`: separator space after
+    // pane_id is mandatory; data can be empty or contain printable
+    // bytes (including spaces). Use byte indices rather than
+    // `splitn`/`split_ascii_whitespace` because both drop trailing
+    // whitespace (Bug 024).
+    let after_prefix = line.strip_prefix("%output ")?;
+    let pane_id_end = after_prefix.find(' ').unwrap_or(after_prefix.len());
+    let pane_id = &after_prefix[..pane_id_end];
+    let data_start = pane_id_end + 1; // skip the separator space
+    let data_str = if data_start <= after_prefix.len() {
+        &after_prefix[data_start..]
+    } else {
+        ""
     };
-    let data_str = rest[1..].join(" ");
-    let data = unescape_output(&data_str);
-    Some(ProtocolEvent::Output { pane_id, data })
+    let data = unescape_output(data_str);
+    Some(ProtocolEvent::Output {
+        pane_id: pane_id.to_string(),
+        data,
+    })
 }
 
 fn parse_extended_output_event(line: &str, rest: &[&str]) -> Option<ProtocolEvent> {
@@ -968,14 +976,67 @@ mod tests {
     }
 
     #[test]
-    fn trailing_whitespace_tolerated() {
+    fn trailing_whitespace_preserved_in_data() {
+        // Bug 024 regression: trailing space in data must survive.
         let mut p = ProtocolParser::new();
-        let ev = feed_one(&mut p, "%output %1 hello   \t  ");
+        let ev = feed_one(&mut p, "%output %1 ls ");
         assert_eq!(
             ev,
             ProtocolEvent::Output {
                 pane_id: "%1".into(),
-                data: b"hello".to_vec()
+                data: b"ls ".to_vec()
+            }
+        );
+    }
+
+    /// Bug 024 regression: 1-byte space data must surface in
+    /// `data`. The wire format is `%output %<pane_id> <data>` with
+    /// one mandatory separator after pane_id; for `data = " "`
+    /// tmux emits 12 bytes (`%output %0  `) — one separator + one
+    /// data byte. Pre-fix the parser's `split_ascii_whitespace`
+    /// collapsed the trailing whitespace and `data` came out
+    /// empty, so the user's typed space never echoed in the terminal.
+    #[test]
+    fn trailing_space_only_data_is_one_byte() {
+        let mut p = ProtocolParser::new();
+        let ev = feed_one(&mut p, "%output %0  ");
+        assert_eq!(
+            ev,
+            ProtocolEvent::Output {
+                pane_id: "%0".into(),
+                data: b" ".to_vec()
+            }
+        );
+    }
+
+    /// Wire format sanity check: 11-byte line (separator but no
+    /// data) must produce empty `data`. The 11-byte and 12-byte
+    /// forms differ by exactly one trailing space byte, which is
+    /// how tmux encodes 0 vs 1 byte of data.
+    #[test]
+    fn separator_only_line_has_empty_data() {
+        let mut p = ProtocolParser::new();
+        let ev = feed_one(&mut p, "%output %0 ");
+        assert_eq!(
+            ev,
+            ProtocolEvent::Output {
+                pane_id: "%0".into(),
+                data: b"".to_vec()
+            }
+        );
+    }
+
+    #[test]
+    fn inner_spaces_in_data_are_preserved() {
+        // Bug 024 regression: consecutive spaces inside data must
+        // not be collapsed.
+        let mut p = ProtocolParser::new();
+        let ev = feed_one(&mut p, "%output %0 ls   -al");
+        assert_eq!(
+            ev,
+            ProtocolEvent::Output {
+                pane_id: "%0".into(),
+                data: b"ls   -al".to_vec()
             }
         );
     }
