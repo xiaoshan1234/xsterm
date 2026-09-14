@@ -1,10 +1,19 @@
-# xsterm tmux -CC 重设计 v0（待评审）
+# xsterm tmux -CC 重设计 v0（已落地）
 
-> **状态**：草案 v0，dev 输出待 tm / pdm 判断
+> **状态**：Accepted（v0 全部 9 个 PR 落地，2026-09-13）—— 等 dev 真实环境 2 周观察期（v0 spec §7）。实际 commit 链：
+> - P1 (`ac213c8` 前) `protocol/` 层拆分
+> - P2 (B3 期) `protocol/version.rs` + 能力矩阵
+> - P3 `controller/id_map.rs` TaggedCommand + CommandRegistry
+> - P4 (B4 期) `controller/handshake.rs` 探测式握手
+> - P5 (B5 期) `controller/subscriber.rs` RouterState 响应路由
+> - P6 (本次会话) `errors.rs` + `From<TmuxError> for String`
+> - P7 (本次会话) `bridge/` 层独立
+> - P8 (`ac213c8`..`fd5d322`) 删 v1 路径 5 层 fallthrough + 7 个 pending_* 字段 + 4 个公开方法改用 CommandRegistry
+> - P9 (本次会话) 文档 + RFC 收尾
 >
-> **动机**：现有实现是 Wave 0→6 演进的化石（3622 行 controller.rs + 945 行 dispatch.rs）。Bug 007–022 全是同一个根因——启动握手用"sleep + race + classify body"硬拼，每修一个补一个。18 个 bug 的总数是症状，根因是架构错位。
+> **ADR 演进**：v0 草案（2026-09-11）→ 实施期发现需重做 P5（RouterState 不知道 bridge —— P7 bridge 改造时**绕过了** RouterState）→ P5' 在 commit `ac213c8` 单独落地，RouterState 接 bridge。这是 v0 草稿未识别的 gap。
 >
-> **目标**：分层 + 一次正确握手 + 协议版本探测 + 单向事件流。本稿**不实现**，只描述架构、模块边界、关键时序、PR 切片。
+> **P8 后回归 bug**：Bug 023（`create_tmux_session` SSH tmux 5s timeout）—— 已在 commit `61f61ce` 修（`RouterState::in_flight` for fire-and-forget 初始化）。这是 P8 暴露的回归，纳入 2 周观察期监控。
 
 ---
 

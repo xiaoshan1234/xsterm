@@ -22,7 +22,7 @@ ADR 编号一旦发出**不重用**——即使决策被推翻，新 ADR 也只�
 | [0002](0002-mcp-single-binary.md) | MCP server 内嵌主进程（vs 独立二进制）| Accepted |
 | [0003](0003-config-toml-migration.md) | 配置文件从 JSON store 迁到 TOML | Accepted |
 | [0004](0004-product-naming.md) | 产品命名决策 | Accepted |
-| [0005](0005-tmux-redesign-v0.md) | tmux 子系统分层重设计（P1-P5）| Accepted (P1-P8 全部落地；待 dev 真实环境回归验证) |
+| [0005](0005-tmux-redesign-v0.md) | tmux 子系统分层重设计（P1-P5）| Accepted (P1-P9 全部落地，2026-09-13；待 dev 真实环境 2 周观察期) |
 | [0008](0008-p8-v0-design.md) | P8: 删 v1 路径（dispatch 5 层 fallthrough + 7 个 pending_* 字段）| Accepted (W1-W3b 全部落地；待 dev 真实环境回归验证) |
 | [0009](0009-tmux-control-window.md) | tmux-control-window：workspace 顶部挂 session/window 控制 UI | Accepted (待落地) |
 | [0009 任务说明](0009-opencode-task.md) | ADR 0009 的 opencode 执行 prompt（任务说明、Phase A-H、Pre-commit grep、交付格式）| — |
