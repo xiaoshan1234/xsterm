@@ -29,7 +29,7 @@
 |---|---|
 | `doc/README.md` | — |
 | `roadmap/target-architecture.md`（演进终态） | `roadmap/gap-analysis.md`（缺口）|
-| `roadmap/migration-prs.md`（PR 切片 + 自测标准）| `architecture/overview.md`（当前代码）|
+| `roadmap/migration-prs.md`（PR 切片 + 自测标准）| `architecture/README.md` + `01-logical-view.md`（当前代码）|
 | `adr/0005-tmux-redesign-v0.md`（tmux 重设计）| `changelog/perf.md`（性能 ROI）|
 | `changelog/bugs.md`（最近踩过的坑）| `adr/legacy-rfcs/0001-0004.md`（旧 RFC）|
 | `doc/design-system.md`（仅在验收 UI PR 时）| — |
@@ -118,7 +118,7 @@ PR 提上来 tm 看：
 
 | 问题 | 怎么办 |
 |---|---|
-| 不知道某概念是什么 | 看 `architecture/overview.md` §5.1（tmux 概念层级） |
+| 不知道某概念是什么 | 看 `architecture/01-logical-view.md` §3（tmux 概念层级） |
 | 不知道某决策为什么这样选 | 看 `adr/` 对应 ADR |
 | 不知道历史上为什么这样 | 看 `history/`（带 banner，不要直接引用）|
 | 不知道 PR 切片 | 看 `roadmap/migration-prs.md` |
@@ -128,7 +128,7 @@ PR 提上来 tm 看：
 
 ## 7. tm 不该做的事
 
-- ❌ 改 doc/dev/architecture/overview.md（dev 改，tm 拍板）
+- ❌ 改 doc/dev/architecture/*（dev 改，tm 拍板）
 - ❌ 改 doc/dev/adr/*（拍板后由 dev 加新 ADR）
 - ❌ 改 doc/dev/roadmap/*（dev 在 PR 里更新进度）
 - ❌ 改 doc/dev/changelog/*（dev 在 PR 里加 entry）
@@ -149,7 +149,7 @@ PR 提上来 tm 看：
 1. `doc/README.md`（5 min）
 2. `roadmap/target-architecture.md` §0 决策 + §6 风险（10 min）
 3. `roadmap/migration-prs.md` §0 战略决策 + §1–§5 各 PR 状态（15 min）
-4. `architecture/overview.md` §5（tmux 子系统，15 min）
+4. `architecture/01-logical-view.md` §3 + `02-process-view.md` §3-§4（tmux 子系统，15 min）
 5. 跑 `cargo test --manifest-path src-tauri/Cargo.toml --lib`（1 min）
 6. 跑 `npx tsc --noEmit`（1 min）
 7. `changelog/bugs.md` 扫最近 5 个 bug（10 min）

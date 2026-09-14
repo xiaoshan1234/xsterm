@@ -98,7 +98,7 @@ xsterm 的几个概念容易混淆（特别是 "session"）。**session = backen
 - ❌ "frontend `Session` 就是 xsterm pane" —— 错。pane 是 PaneTree leaf，通过 `sessionId` 引用 Session。
 - ❌ 把 `xsterm_session_id` 参数类型说成 "tmux pane id" —— 错。它是 `Session.id` u32。
 
-详细实现：[`doc/dev/history/prd-0.1-requirements/tmux-cc-implementation.md` §1](doc/dev/history/prd-0.1-requirements/tmux-cc-implementation.md) / [`doc/dev/architecture/overview.md` §5.7](doc/dev/architecture/overview.md) / [`doc/dev/history/prd-0.1-requirements/req-006-tmux.md` §2](doc/dev/history/prd-0.1-requirements/req-006-tmux.md)
+- 详细实现：[`doc/dev/architecture/02-process-view.md` §3](doc/dev/architecture/02-process-view.md) / [`doc/dev/architecture/03-development-view.md` §3](doc/dev/architecture/03-development-view.md) / [`doc/dev/architecture/README.md`](doc/dev/architecture/README.md) / [`doc/dev/history/prd-0.1-requirements/req-006-tmux.md` §2](doc/dev/history/prd-0.1-requirements/req-006-tmux.md)
 
 ### Frontend
 
@@ -111,7 +111,7 @@ xsterm 的几个概念容易混淆（特别是 "session"）。**session = backen
 - Components import from these service modules, not directly from `@tauri-apps/api`.
 - Styling is plain CSS only (no Tailwind, CSS-in-JS, or UI framework). CSS files are colocated next to components.
 - The app has no router; view switching is state-driven inside `AppLayout`.
-- Full architecture overview, complexity hotspots, and onboarding path: [`doc/dev/architecture/overview.md`](doc/dev/architecture/overview.md).
+- Full architecture overview, complexity hotspots, and onboarding path: [`doc/dev/architecture/README.md`](doc/dev/architecture/README.md).
 
 ### Backend
 
@@ -173,7 +173,7 @@ All project documentation lives under `doc/`, organized by **role** (dev / pdm /
 | Path | Purpose | When to read |
 |---|---|---|
 | `doc/design-system.md` | Cursor 暗色 IDE 适配版 UI 设计系统（**必读**） | 任何 UI 改动前 |
-| `doc/dev/architecture/overview.md` | 全栈架构地图 + 复杂度热点 + onboarding path | 新人入门、改 session/window/pane 前 |
+| `doc/dev/architecture/README.md` → 5 个视图 | 全栈架构地图 + 复杂度热点 + onboarding path | 新人入门、改 session/window/pane 前 |
 | `doc/dev/changelog/bugs.md` | 已知 bug 历史 + 修复记录（按时间倒序） | 改 bug 前查历史 |
 | `doc/dev/changelog/perf.md` | 本地 PTY I/O 性能诊断 + 与 oxideterm 的架构对比 + 按 ROI 排序的修复计划（Perf 001-009） | 改 session I/O / 调 IPC / 排查"打字卡 / cat 大文件卡"前 |
 | `doc/dev/roadmap/` | 演进路线（gap-analysis / target-architecture / migration-prs） | 做产品决策、改字段行为前 |

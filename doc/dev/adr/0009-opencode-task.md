@@ -4,7 +4,7 @@
 
 ## 0. 项目基础
 
-> 用户原始需求文本：`doc/dev/tmux-control.md` —— 仅作存档参考，**不作为 source of truth**。所有决策以 ADR `0009-tmux-control-window.md` 为准（已校正术语和范围）。
+> 用户原始需求文本：`doc/dev/adr/0009-tmux-control-window.md` —— 用户原始 brainstorm 的来源（**不作为 source of truth**）。所有决策以本 ADR 为准（已校正术语和范围）。
 
 - 仓库根：`/mnt/c/Users/LONER/1111/prj/xsterm`
 - dev 分支，当前 commit 干净
