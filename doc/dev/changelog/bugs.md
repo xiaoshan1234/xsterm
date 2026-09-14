@@ -1171,3 +1171,48 @@ else { tracing::debug!("command {} body does not look like a list query (first l
 
 ## 是否解决
 YES（`cargo test --lib --manifest-path src-tauri/Cargo.toml` → `322 passed; 0 failed`；dispatch.rs 从 725 行缩到 615 行；首次字符分类 hack 完全消除；body 分类由 `RouterState` 透传的 `CommandKind` 决定，与 body 内容无关）。
+
+# Bug 026
+## 现象
+Bug 025 的 commit（`Refactor tmux event handling to use ProtocolEvent`）把 dispatch 的命令响应分支从「首字符分类器」改成「按 `CommandKind` 类型化路由」——重写了 `dispatch_event` 的 `CommandEnd` arm、`RouterState::InFlightBody` 加了 `kind` 字段、`RouterAction::DelegateToV1` 升级成带 `cmd_id/kind/body_lines` 的 struct 变体。结果：`create_tmux_session` / `attach_tmux_session` 100% 复现 Bug 023 症状——5 秒后报 `tmux controller N: timed out waiting for first pane`，dispatch 日志里能看到 `list-windows` (`%begin..%end`) 的正常响应，但 body 被静默丢弃，bootstrap chain 中断。SSH tmux 路径必然复现，本地 + Attach 模式都可能复现。
+## 理想效果
+fire-and-forget 命令（`list-windows` / `list-panes`）的 `%begin..%end` body 也能被 dispatch 正确分类，发出 `tmux-window-list` / `tmux-pane-list` 事件，触发后续 bootstrap chain，`await_first_pane` 在 5s 内 resolve。
+## BUG 原因
+Bug 025 重写 dispatch 时**自作主张换了分类算法**（首字符 → kind），但忘了 Bug 023 的 hotfix 只解决了「`in_flight` 初始化」——分类算法本身仍然依赖首字符嗅探。原本只需要：
+1. 让 `RouterState::CommandBegin` 无条件 init `in_flight`（Bug 023，commit `d5d8892`，6 行改动）
+2. 让 dispatch 在收到 `DelegateToV1` 时调 `handle_classified_response`，里面用首字符分类 + `trim_start()` 处理空白前缀
+
+Bug 025 把第 2 步换成「按 `kind` 路由」——但 `kind` 来源是 `registry.kind_for(id)`，而 fire-and-forget 命令**没经过 `register()`**（三个调用点：`schedule_initial_state_sync`、attach 路径、`dispatch.rs` inline follow-up），`kind_by_id` 为空 → `kind_for(id) = None` → `match kind { ... }` 落到 `_` 分支 → body 丢。回归测试 `dispatch_emits_pane_added_and_records_first_pane` 只覆盖 `WindowPaneChanged` 路径的 case 3 Bootstrap EventWaiter，没覆盖 `CommandEnd` 的 fire-and-forget body 路由路径，所以本地 cargo test 322 全过但生产 100% 复现。
+
+**根因总结**：Bug 025 fix 越界了——把「Bug 023 hotfix 不动 dispatch，只 init `in_flight`」的最小方案扩成了重写整个 dispatch 分类逻辑，结果引入了新的 race 条件。
+## 解决方案
+**采用 Bug 023 hotfix 的同款最小方案——只恢复 dispatch 的首字符分类器，保留 Bug 023 的 `in_flight` 无条件初始化，移除所有 kind plumbing。**
+
+具体改动：
+1. **`subscriber.rs::InFlightBody`** 移除 `kind: Option<CommandKind>` 字段，恢复为 `{ cmd_id, lines }` 两字段结构。`CommandBegin` 分支不再调 `registry.kind_for(id)`。
+2. **`subscriber.rs::RouterAction::DelegateToV1`** 恢复为 unit variant（不带 `cmd_id/kind/body_lines` 字段）。`CommandEnd` 分支 fire-and-forget 路径直接返回 `DelegateToV1`，**不消费 `in_flight`**——让 dispatcher 自己 drain。
+3. **`dispatch.rs::CommandEnd` arm** 收到 `DelegateToV1` 时，调 `controller.router_state.lock().take_in_flight_lines()` 拿到 body，再调恢复的 `handle_classified_response(...)`。
+4. **`dispatch.rs`** 恢复以下函数（Bug 025 删除的）：
+   - `handle_classified_response`：首字符分类器（`first.starts_with('@')` → `emit_window_list` + `trigger_followup_list_panes`；`first.starts_with('%')` → `emit_pane_list`；其他 → DEBUG 日志丢弃）。`trim_start()` 处理空白前缀。
+   - `WindowListRow` / `PaneListRow` / `parse_window_list_row` / `parse_pane_list_row`
+   - `emit_window_list` / `emit_pane_list`
+   - `trigger_followup_list_panes`（用裸 `stdin_tx.send(wire)`，不走 `register()`）
+5. **`subscriber.rs` 测试更新**：之前 `match` 在 `DelegateToV1 { cmd_id, kind, body_lines }` struct variant 的两个测试改回用 `take_in_flight_lines()` 取 body、断言 `DelegateToV1` unit variant。
+6. **`id_map.rs::kind_by_id` / `kind_for()` / `register()` 中的 `kind_by_id` 插入**：本次未触碰（保留 post-Bug-025 状态）。`kind_for()` 现在是 dead code，由后续 PR 清理。
+
+**未做的（避免再越界）**：
+- ❌ 不改 `schedule_initial_state_sync` / attach 路径的 `stdin_tx.send` 调用——它们保持裸 wire send，不需要走 `register()`（Bug 023 验证过这种设计能用）
+- ❌ 不改 `CommandRegistry::register()` 的 `if waiter_registered` 守卫
+- ❌ 不改 dispatcher 的「按 kind 路由」基础设施（已全部移除）
+- ❌ 不加 `drop_kind()` 等新 cleanup 方法
+## 是否解决
+YES（`cargo test --lib --manifest-path src-tauri/Cargo.toml` → `322 passed; 0 failed`；`cargo check` 0 errors / 56 warnings（全部 pre-existing dead-code，含 `kind_for()` 现在无 caller）；`npx tsc --noEmit` 0 errors）。
+
+复现路径（用户场景）：
+- `create_tmux_session` → `spawn_with_backend` → `schedule_initial_state_sync` → 500ms 后裸 `stdin_tx.send("list-windows -a ...")` 
+- tmux 返回 `%begin 297` → `RouterState::CommandBegin` **无条件 init `in_flight = Some({cmd_id: 297, lines: []})`**
+- tmux 返回 `%output 297 ...` × N → 每行 push 到 `in_flight.lines`
+- tmux 返回 `%end 297` → `RouterState::CommandEnd` 取 `registry.take(297) = None` → 返回 `DelegateToV1`，**保留 `in_flight` 不消费**
+- `dispatch_event::CommandEnd` 收到 `DelegateToV1` → 锁 `router_state` 调 `take_in_flight_lines()` 拿到 body → 调 `handle_classified_response(body)`
+- `handle_classified_response` 看 `body[0].trim_start().starts_with('@')` → 走 `emit_window_list` → `trigger_followup_list_panes` 裸发 `list-panes`
+- tmux 返回 `list-panes` body → 同样走 `handle_classified_response` → `emit_pane_list` → `record_first_pane` → `await_first_pane` 在 < 100ms 内 resolve

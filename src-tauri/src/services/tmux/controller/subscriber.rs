@@ -71,7 +71,8 @@ use crate::services::tmux::bridge::TmuxBridge;
 use crate::services::tmux::controller::id_map::{send_to_waiter, CommandRegistry};
 use crate::services::tmux::controller::TmuxController;
 use crate::services::tmux::protocol::command::{
-    CommandId, CommandKind, ResponseOutcome, ResponseWaiter,
+    CommandId, ResponseOutcome, ResponseWaiter,
+    TaggedCommand,
 };
 use crate::services::tmux::protocol::events::ProtocolEvent;
 
@@ -137,24 +138,15 @@ pub enum RouterAction {
     Resolve,
 
     /// RouterState does **not** own this event — it's a notification
-    /// (`Output`, `WindowAdd`, `WindowPaneChanged`, `*Changed`, etc.).
-    /// Caller handles it directly via
+    /// (`Output`, `WindowAdd`, `WindowPaneChanged`, `*Changed`, etc.)
+    /// OR a fire-and-forget `%end` (no registered [`ResponseWaiter`]).
+    /// Caller handles notifications directly via
     /// [`crate::services::tmux::bridge::TmuxBridge`] (the v1 path that
-    /// PR-T7 put in place). RouterState returns this variant only; W3
-    /// will progressively migrate notifications into RouterState so this
-    /// variant eventually disappears.
-    ///
-    /// **P8 W3b**: this variant now carries a payload. For a fire-and-
-    /// forget `%end` (no registered [`ResponseWaiter`]) the dispatcher
-    /// needs to know which `bridge.emit_*` to dispatch the body to; we
-    /// pass the originating [`CommandKind`] plus the accumulated body
-    /// lines so the dispatcher can route via a `match` instead of the
-    /// pre-fix `first.starts_with('@')` heuristic (Bug 022).
-    DelegateToV1 {
-        cmd_id: u32,
-        kind: CommandKind,
-        body_lines: Vec<String>,
-    },
+    /// PR-T7 put in place) and drains the fire-and-forget body via
+    /// [`RouterState::take_in_flight_lines`] to feed
+    /// `handle_classified_response`. W3 will migrate notifications into
+    /// RouterState so this variant eventually disappears.
+    DelegateToV1,
 }
 
 /// Test-only helpers for asserting against [`RouterAction`] without
@@ -205,12 +197,6 @@ pub struct RouterState {
 #[derive(Debug)]
 struct InFlightBody {
     cmd_id: u32,
-    /// Origin kind for this command. `None` for fire-and-forget ids
-    /// (commands not registered against the [`CommandRegistry`]);
-    /// `Some(kind)` otherwise, captured at `%begin` so the dispatcher
-    /// can classify a fire-and-forget `%end` body without sniffing
-    /// the first line (Bug 022).
-    kind: Option<CommandKind>,
     lines: Vec<String>,
 }
 
@@ -260,14 +246,10 @@ impl RouterState {
                 // accumulate so the dispatch caller can classify it via
                 // `DelegateToV1` → `handle_classified_response`.
                 // Reordering these two statements re-introduces a 5 s
-                // `await_first_pane` hang in `create_tmux_session`.
-                //
-                // P8 W3b: also capture the originating kind from the
-                // registry so a fire-and-forget `%end` can be classified
-                // without sniffing the first line (Bug 022).
+                // `await_first_pane` hang in `create_tmux_session`
+                // (Bug 023 hotfix — commit `d5d8892`).
                 self.in_flight = Some(InFlightBody {
                     cmd_id: *id,
-                    kind: registry.kind_for(CommandId(*id as u64)),
                     lines: Vec::new(),
                 });
                 if registry.outstanding() == 0
@@ -316,24 +298,13 @@ impl RouterState {
                         RouterAction::Resolve
                     }
                     None => {
-                        // Fire-and-forget `%end`: drain `in_flight`
-                        // (consuming the body) and hand the kind +
-                        // body_lines back to the dispatcher so it can
-                        // route via a typed `match kind { ... }` instead
-                        // of the pre-fix `first.starts_with('@')`
-                        // heuristic (Bug 022). If the id was never
-                        // registered the kind is `None`; pass
-                        // `CommandKind::Detach` as a placeholder so the
-                        // dispatcher's match can still resolve to a
-                        // single `DelegateToV1` variant (the dispatcher
-                        // itself drops `Detach` bodies).
-                        let InFlightBody { cmd_id, kind, lines } =
-                            self.in_flight.take().unwrap();
-                        RouterAction::DelegateToV1 {
-                            cmd_id,
-                            kind: kind.unwrap_or(CommandKind::Detach),
-                            body_lines: lines,
-                        }
+                        // Fire-and-forget `%end`: leave `in_flight`
+                        // intact so the dispatcher can drain it via
+                        // `take_in_flight_lines()` and feed
+                        // `handle_classified_response` (which uses
+                        // `first.starts_with('@'|'%')` to pick
+                        // `emit_window_list` / `emit_pane_list`).
+                        RouterAction::DelegateToV1
                     }
                 }
             }
@@ -367,15 +338,7 @@ impl RouterState {
             // All non-command events are notifications — delegate to the
             // v1 path (the existing dispatch_event / bridge.emit_xxx
             // flow). W3 will progressively fold these into RouterState.
-            // No in-flight body exists for these events; the kind
-            // defaults to `Detach` so the dispatcher's `match kind`
-            // always has an arm to land in (it ignores `Detach`
-            // payloads anyway).
-            _ => RouterAction::DelegateToV1 {
-                cmd_id: 0,
-                kind: CommandKind::Detach,
-                body_lines: Vec::new(),
-            },
+            _ => RouterAction::DelegateToV1,
         }
     }
 
@@ -652,32 +615,19 @@ mod tests {
             &bridge,
             controller.as_ref(),
         );
-        // P8 W3b: body now travels inside the DelegateToV1 payload
-        // (alongside the originating kind), so the dispatcher no longer
-        // needs the separate `take_in_flight_lines()` drain step.
+        // Fire-and-forget `%end` returns `DelegateToV1` and leaves
+        // `in_flight` intact so the dispatcher can drain via
+        // `take_in_flight_lines()` (Bug 023 fix).
         assert_eq!(action.kind(), RouterActionKind::DelegateToV1);
-        match action {
-            RouterAction::DelegateToV1 {
-                cmd_id,
-                kind,
-                body_lines,
-            } => {
-                assert_eq!(cmd_id, 7);
-                assert_eq!(
-                    kind,
-                    crate::services::tmux::protocol::command::CommandKind::Detach
-                );
-                assert_eq!(
-                    body_lines,
-                    vec![
-                        "@1 bash".to_string(),
-                        "@2 vim".to_string(),
-                        "@3 top".to_string()
-                    ]
-                );
-            }
-            other => panic!("expected DelegateToV1, got {other:?}"),
-        }
+        let body_lines = router.take_in_flight_lines();
+        assert_eq!(
+            body_lines,
+            vec![
+                "@1 bash".to_string(),
+                "@2 vim".to_string(),
+                "@3 top".to_string()
+            ]
+        );
     }
 
     #[test]
@@ -856,21 +806,7 @@ mod tests {
             controller.as_ref(),
         );
         match action {
-            RouterAction::DelegateToV1 {
-                cmd_id,
-                kind,
-                body_lines,
-            } => {
-                assert_eq!(cmd_id, 0, "notifications have no in-flight cmd_id");
-                assert_eq!(
-                    kind,
-                    crate::services::tmux::protocol::command::CommandKind::Detach
-                );
-                assert!(
-                    body_lines.is_empty(),
-                    "notifications carry no body, got {body_lines:?}"
-                );
-            }
+            RouterAction::DelegateToV1 => {}
             other => panic!("expected DelegateToV1, got {other:?}"),
         }
     }
