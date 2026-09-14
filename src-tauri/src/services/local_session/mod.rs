@@ -188,6 +188,7 @@ pub fn create_local_session(
         tmux_pane_id: None,
         tmux_controller_id: None,
         tmux_window_id: None,
+        xsterm_window_id: None,
         is_hidden: false,
     };
 

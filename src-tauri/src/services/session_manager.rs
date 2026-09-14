@@ -230,6 +230,18 @@ fn tmux_probe_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+/// Look up the xsterm window id paired with a tmux window id from a
+/// controller's `window_bindings` snapshot. Returns `None` when the
+/// controller has not yet inserted the binding (rare race during the
+/// bootstrap path) or when the binding has been dropped after a
+/// `tmux-window-closed`.
+fn xsterm_window_id_for(controller: &TmuxController, tmux_window_id: &str) -> Option<u32> {
+    controller
+        .window_bindings()
+        .into_iter()
+        .find_map(|(win_id, xid)| (win_id == tmux_window_id).then_some(xid))
+}
+
 impl SessionManager {
     /// Create a new session manager with default platform backends.
     pub fn new() -> Self {
@@ -311,6 +323,16 @@ impl SessionManager {
         // pane → window mapping when it handles `%window-pane-changed`
         // for the bootstrap pane.
         let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
+        // Pair with the xsterm window id allocated by the bootstrap
+        // `list-windows` reply (the dispatch task inserted it into
+        // `window_bindings` before resolving the first-pane signal).
+        // The frontend uses this so `createAndActivateSession` can
+        // render the matching xsterm Window synchronously — the
+        // `tmux-window-added` listener does NOT fire for the
+        // bootstrap window.
+        let xsterm_window_id = tmux_window_id
+            .as_deref()
+            .and_then(|wid| xsterm_window_id_for(&controller, wid));
 
         // MVP supports both `tmux -CC new -s <name>` (the first pane tmux
         // reports IS the user's working shell, so it must be visible —
@@ -326,6 +348,7 @@ impl SessionManager {
             config.name.as_deref(),
             false,
             tmux_window_id.as_deref(),
+            xsterm_window_id,
         );
 
         let handle = TmuxPaneHandle {
@@ -464,6 +487,9 @@ impl SessionManager {
         let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
 
         let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
+        let xsterm_window_id = tmux_window_id
+            .as_deref()
+            .and_then(|wid| xsterm_window_id_for(&controller, wid));
 
         let info = tmux_pane_info(
             xsterm_id,
@@ -473,6 +499,7 @@ impl SessionManager {
             config.name.as_deref(),
             true, // is_hidden: bootstrap pane of an attach (D3).
             tmux_window_id.as_deref(),
+            xsterm_window_id,
         );
 
         let handle = TmuxPaneHandle {
@@ -900,6 +927,7 @@ impl SessionManager {
             None,
             false,
             Some(&_new_tmux_window_id),
+            xsterm_window_id_for(&controller, &_new_tmux_window_id),
         );
 
         let handle = TmuxPaneHandle {
@@ -995,6 +1023,7 @@ impl SessionManager {
             window_name,
             false,
             Some(&tmux_window_id),
+            Some(xsterm_window_id),
         );
 
         let handle = TmuxPaneHandle {
@@ -1409,6 +1438,7 @@ mod tests {
                 tmux_pane_id: None,
                 tmux_controller_id: None,
                 tmux_window_id: None,
+                xsterm_window_id: None,
                 is_hidden: false,
             },
             capabilities: CapabilityFlags::for_local(),
@@ -2526,7 +2556,7 @@ mod tests {
 
         // Insert a TmuxPane session for the parent so
         // `create_tmux_pane`'s `tmux_pane_id` lookup succeeds.
-        let parent_info = tmux_pane_info(1_000_001, 1, "%5", Some("dev"), None, false, None);
+        let parent_info = tmux_pane_info(1_000_001, 1, "%5", Some("dev"), None, false, None, None);
         manager.sessions.insert(
             1_000_001,
             Arc::new(ActiveSession::TmuxPane(Box::new(TmuxPaneHandle {
@@ -2641,7 +2671,7 @@ mod tests {
         controller.register_pane("%5".to_string(), 1_000_001);
 
         // Insert a TmuxPane session bound to the controller.
-        let info = tmux_pane_info(1_000_001, 1, "%5", Some("dev"), None, false, None);
+        let info = tmux_pane_info(1_000_001, 1, "%5", Some("dev"), None, false, None, None);
         manager.sessions.insert(
             1_000_001,
             Arc::new(ActiveSession::TmuxPane(Box::new(TmuxPaneHandle {
@@ -2886,7 +2916,7 @@ mod tests {
         controller.register_pane("%1".to_string(), 20_000_001);
         manager.tmux_controllers.insert(20, Arc::clone(&controller));
 
-        let info = tmux_pane_info(20_000_001, 20, "%1", Some("dev"), None, false, None);
+        let info = tmux_pane_info(20_000_001, 20, "%1", Some("dev"), None, false, None, None);
         manager.sessions.insert(
             20_000_001,
             Arc::new(ActiveSession::TmuxPane(Box::new(TmuxPaneHandle {

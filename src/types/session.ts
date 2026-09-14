@@ -112,6 +112,14 @@ export interface Session {
    */
   tmuxWindowId?: string;
   /**
+   * xsterm window id paired with `tmuxWindowId`. Surfaced by
+   * `create_tmux_session` / `attach_tmux_session` so the frontend can
+   * install the matching xsterm Window synchronously on return — the
+   * `tmux-window-added` listener does not fire for the bootstrap
+   * window (Bug fix 2026-09-13).
+   */
+  xstermWindowId?: number;
+  /**
    * hidden (bootstrap) tmux panes are not rendered. `tmux -CC new`
    * panes have `is_hidden = false` so they render normally; tmux
    * attaches flag the bootstrap pane as hidden.

@@ -48,6 +48,16 @@ pub struct SessionInfo {
     /// `None` for non-tmux sessions (local PTY / SSH).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tmux_window_id: Option<String>,
+    /// xsterm window id (a u32) the bootstrap / first-pane of the tmux
+    /// window was allocated. Surfaced so the frontend can render the
+    /// matching xsterm Window synchronously when
+    /// `create_tmux_session` / `attach_tmux_session` returns (the
+    /// `tmux-window-added` listener does NOT fire for the bootstrap
+    /// window — ADR 0009 §3.2 risk #5 + Bug fix 2026-09-13). `None`
+    /// for non-tmux sessions and for tmux panes whose window has not
+    /// been allocated yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xsterm_window_id: Option<u32>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub is_hidden: bool,
 }
@@ -297,6 +307,15 @@ pub struct TmuxCcConfig {
 /// containing `xsterm Window`. Pass `None` if the pane is not yet attached
 /// to a tmux window (rare — only used by tests that construct a synthetic
 /// pane without a window).
+///
+/// `xsterm_window_id` is the xsterm-allocated window id paired with
+/// `tmux_window_id`. Surfaced so the frontend can render the matching
+/// xsterm Window synchronously on `create_tmux_session` /
+/// `attach_tmux_session` return — the bootstrap window does not emit
+/// `tmux-window-added`, so the listener-only path would leave the
+/// workspace empty until another tmux event arrives. Pass `None` when
+/// the pane is not yet bound to a tmux window (rare; tests that build
+/// a synthetic pane without a window).
 pub fn tmux_pane_info(
     xsterm_session_id: u32,
     controller_id: u32,
@@ -305,6 +324,7 @@ pub fn tmux_pane_info(
     display_name: Option<&str>,
     is_hidden: bool,
     tmux_window_id: Option<&str>,
+    xsterm_window_id: Option<u32>,
 ) -> SessionInfo {
     let tmux_pane_id = tmux_pane_id.into();
     let session_name = tmux_session_name
@@ -329,6 +349,7 @@ pub fn tmux_pane_info(
         tmux_pane_id: Some(tmux_pane_id),
         tmux_controller_id: Some(controller_id),
         tmux_window_id: tmux_window_id.map(str::to_string),
+        xsterm_window_id,
         is_hidden,
     }
 }
@@ -1177,6 +1198,7 @@ mod tests {
             Some("editor pane"),
             false,
             Some("@3"),
+            Some(13),
         );
         assert_eq!(info.id, 42);
         assert_eq!(info.name, "editor pane");
@@ -1185,6 +1207,7 @@ mod tests {
         assert_eq!(info.tmux_pane_id.as_deref(), Some("%13"));
         assert_eq!(info.tmux_controller_id, Some(7));
         assert_eq!(info.tmux_window_id.as_deref(), Some("@3"));
+        assert_eq!(info.xsterm_window_id, Some(13));
         assert!(!info.is_hidden);
         match info.session_type {
             SessionType::TmuxCc {
@@ -1208,12 +1231,12 @@ mod tests {
         // caller decision, not something the helper computes. MVP callers
         // (`tmux -CC new`) pass `false`; attach callers pass
         // `true`. This test locks in both directions.
-        let hidden = tmux_pane_info(1, 1, "%0", None, None, true, None);
+        let hidden = tmux_pane_info(1, 1, "%0", None, None, true, None, None);
         assert!(
             hidden.is_hidden,
             "caller passed true → is_hidden must be true"
         );
-        let visible = tmux_pane_info(2, 1, "%5", None, None, false, None);
+        let visible = tmux_pane_info(2, 1, "%5", None, None, false, None, None);
         assert!(
             !visible.is_hidden,
             "caller passed false → is_hidden must be false"
@@ -1226,8 +1249,8 @@ mod tests {
 
     #[test]
     fn tmux_pane_info_serializes_is_hidden_only_when_true() {
-        let hidden = tmux_pane_info(1, 1, "%0", None, None, true, None);
-        let visible = tmux_pane_info(2, 1, "%5", None, None, false, None);
+        let hidden = tmux_pane_info(1, 1, "%0", None, None, true, None, None);
+        let visible = tmux_pane_info(2, 1, "%5", None, None, false, None, None);
         let hidden_json = serde_json::to_string(&hidden).unwrap();
         let visible_json = serde_json::to_string(&visible).unwrap();
         assert!(hidden_json.contains("\"isHidden\":true"));
@@ -1236,12 +1259,22 @@ mod tests {
 
     #[test]
     fn tmux_pane_info_serializes_tmux_window_id_only_when_some() {
-        let with_window = tmux_pane_info(1, 1, "%5", None, None, false, Some("@2"));
-        let without_window = tmux_pane_info(2, 1, "%6", None, None, false, None);
+        let with_window = tmux_pane_info(1, 1, "%5", None, None, false, Some("@2"), None);
+        let without_window = tmux_pane_info(2, 1, "%6", None, None, false, None, None);
         let with_json = serde_json::to_string(&with_window).unwrap();
         let without_json = serde_json::to_string(&without_window).unwrap();
         assert!(with_json.contains("\"tmuxWindowId\":\"@2\""));
         assert!(!without_json.contains("tmuxWindowId"));
+    }
+
+    #[test]
+    fn tmux_pane_info_serializes_xsterm_window_id_only_when_some() {
+        let with_xid = tmux_pane_info(1, 1, "%5", None, None, false, None, Some(99));
+        let without_xid = tmux_pane_info(2, 1, "%6", None, None, false, None, None);
+        let with_json = serde_json::to_string(&with_xid).unwrap();
+        let without_json = serde_json::to_string(&without_xid).unwrap();
+        assert!(with_json.contains("\"xstermWindowId\":99"));
+        assert!(!without_json.contains("xstermWindowId"));
     }
 
     #[test]

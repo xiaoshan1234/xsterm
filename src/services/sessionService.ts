@@ -20,10 +20,19 @@ export interface SessionInfo {
   tmuxPaneId?: string;
   /** id of the tmux controller process that owns this pane. */
   tmuxControllerId?: number;
+  /** tmux window id (e.g. `@1`) the pane belongs to. Surfaced by
+   * `create_tmux_session` / `attach_tmux_session` so the frontend can
+   * render the matching xsterm Window synchronously on return (the
+   * `tmux-window-added` listener does not fire for the bootstrap window). */
+  tmuxWindowId?: string;
+  /** xsterm window id paired with `tmuxWindowId`. Frontend uses this to
+   * construct the matching xsterm Window on `create_tmux_session` /
+   * `attach_tmux_session` return. Undefined for non-tmux sessions. */
+  xstermWindowId?: number;
   /**
    * hidden (bootstrap) tmux panes are not rendered by the frontend.
    * MVP `tmux -CC new` panes have `is_hidden = false`; tmux attaches
- * flag the bootstrap pane as hidden.
+   * flag the bootstrap pane as hidden.
    */
   isHidden?: boolean;
 }

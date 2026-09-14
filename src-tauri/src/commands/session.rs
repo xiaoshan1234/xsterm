@@ -482,6 +482,7 @@ pub async fn register_existing_tmux_panes(
             None,
             false,
             None,
+            None,
         );
         let capabilities = CapabilityFlags::for_tmux();
         let handle = TmuxPaneHandle::new(controller, tmux_pane_id, info, capabilities);

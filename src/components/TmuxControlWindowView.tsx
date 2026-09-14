@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
 import type { Window } from "../types/session";
 import { useSession } from "../contexts/SessionContext";
-import * as sessionService from "../services/sessionService";
 import { TmuxSessionControl } from "./TmuxSessionControl";
 import { TmuxWindowsControl } from "./TmuxWindowsControl";
 import "./TmuxControlWindowView.css";
@@ -24,7 +23,7 @@ interface TmuxControlWindowViewProps {
  * `--hairline` dividers, `--radius-lg` cards, 400/500 typography.
  */
 export function TmuxControlWindowView({ window: controlWindow }: TmuxControlWindowViewProps) {
-  const { tmuxWindowListsRef, tmuxControllerErrors, tmuxControllerConfigsRef } = useSession();
+  const { tmuxWindowListsRef, tmuxControllerErrors, tmuxControllerConfigsRef, createTmuxSession } = useSession();
   const controllerId = controlWindow.tmuxControlWindowId ?? 0;
   const tmuxSessionName = controlWindow.tmuxControlName ?? `tmux-${controllerId}`;
 
@@ -44,9 +43,14 @@ export function TmuxControlWindowView({ window: controlWindow }: TmuxControlWind
 
   const handleRetry = useCallback(async () => {
     if (!storedConfig) return;
-    const op = storedConfig.tmuxSessionName ? sessionService.attachTmux : sessionService.createTmux;
+    // ADR 0009 fix: route through createTmuxSession hook so the
+    // tmux-cc branch in `createAndActivateSession` installs the
+    // control-window + bootstrap pane xsterm Window synchronously.
+    // Calling `sessionService.createTmux` / `attachTmux` directly
+    // bypassed that hook and left the workspace with no
+    // control-window tab.
     try {
-      await op(storedConfig);
+      await createTmuxSession(storedConfig, false);
     } catch (e) {
       window.alert(
         `Failed to retry tmux controller: ${e instanceof Error ? e.message : String(e)}`,
@@ -54,7 +58,7 @@ export function TmuxControlWindowView({ window: controlWindow }: TmuxControlWind
       return;
     }
     setErrorDismissed(true);
-  }, [storedConfig]);
+  }, [storedConfig, createTmuxSession]);
 
   const handleDismiss = useCallback(() => {
     setErrorDismissed(true);

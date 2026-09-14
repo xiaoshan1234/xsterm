@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useSession } from "../contexts/SessionContext";
-import * as sessionService from "../services/sessionService";
 import type { Session, TmuxCcConfig } from "../types/session";
 import type { TmuxControllerError } from "../contexts/session/types";
 import "./TmuxControllerErrorBanner.css";
@@ -20,7 +19,7 @@ interface TmuxControllerErrorBannerProps {
 export function TmuxControllerErrorBanner({
   paneSessions,
 }: TmuxControllerErrorBannerProps) {
-  const { tmuxControllerErrors, setTmuxControllerErrors } = useSession();
+  const { tmuxControllerErrors, setTmuxControllerErrors, createTmuxSession } = useSession();
 
   const match: { controllerId: number; config: TmuxCcConfig; reason?: string } | null =
     (() => {
@@ -39,19 +38,22 @@ export function TmuxControllerErrorBanner({
     })();
 
   const handleRetry = useCallback(async () => {
-    if (!match) return;
-    const op = match.config.tmuxSessionName
-      ? sessionService.attachTmux
-      : sessionService.createTmux;
-    try {
-      await op(match.config);
-    } catch (e) {
-      console.error("Failed to retry tmux controller:", e);
-      window.alert(
-        `Failed to retry tmux controller: ${e instanceof Error ? e.message : String(e)}`,
-      );
-      return;
-    }
+      if (!match) return;
+      // ADR 0009 fix: route through createTmuxSession hook so the
+      // tmux-cc branch in `createAndActivateSession` installs the
+      // control-window + bootstrap pane xsterm Window synchronously.
+      // Calling `sessionService.createTmux` / `attachTmux` directly
+      // bypassed that hook and left the workspace with no
+      // control-window tab.
+      try {
+        await createTmuxSession(match.config as TmuxCcConfig, false);
+      } catch (e) {
+        console.error("Failed to retry tmux controller:", e);
+        window.alert(
+          `Failed to retry tmux controller: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        return;
+      }
     setTmuxControllerErrors(
       (prev: Map<number, TmuxControllerError>) => {
         const next = new Map(prev);

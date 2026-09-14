@@ -353,6 +353,12 @@ export function useTauriListeners({
       // the Session was already inserted by `create_tmux_window`'s
       // return value, the pane-add path is a no-op. If the Session is
       // unknown (race or out-of-band source), we synthesize one.
+      //
+      // The bootstrap xsterm Window is also installed synchronously by
+      // `createAndActivateSession` (Bug fix 2026-09-13), so we dedupe
+      // by `xstermWindowId` to avoid inserting a second Window when
+      // the bridge fires `tmux-window-added` for the bootstrap pane
+      // shortly after the backend return.
       const unlistenTmuxWindowAdded = await listen<TmuxWindowAddedEvent>(
         "tmux-window-added",
         (event) => {
@@ -363,6 +369,37 @@ export function useTauriListeners({
             xstermSessionId,
             xstermPaneId,
           } = event.payload;
+          // Bootstrap xsterm Window already inserted by the sync
+          // `createAndActivateSession` path — keep the Session
+          // mutation logic (below) but skip the Window insert.
+          if (
+            workspacesRef.current.some((w) =>
+              w.windows.some((win) => win.xstermWindowId === xstermWindowId),
+            )
+          ) {
+            if (!sessionsRef.current.some((s) => s.id === xstermSessionId)) {
+              const session = buildTmuxPaneSession(
+                {
+                  id: xstermSessionId,
+                  name: `tmux-${controllerId}:${xstermPaneId}`,
+                  tmuxPaneId: xstermPaneId,
+                  tmuxControllerId: controllerId,
+                },
+                { type: "tmux-cc", config: {} },
+              );
+              session.tmuxWindowId = tmuxWindowId;
+              setSessions((prev) =>
+                prev.some((s) => s.id === xstermSessionId) ? prev : [...prev, session],
+              );
+            } else {
+              setSessions((prev) =>
+                prev.map((s) =>
+                  s.id === xstermSessionId ? { ...s, tmuxWindowId } : s,
+                ),
+              );
+            }
+            return;
+          }
           // Make sure the Session exists in React state (idempotent —
           // if `create_tmux_window`'s return value already populated
           // it, this is a no-op).
