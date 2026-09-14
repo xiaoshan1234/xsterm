@@ -467,29 +467,31 @@ impl TmuxController {
             ),
         );
 
-        // Register this child process as a tmux control client. tmux
-        // server closes the control session and exits the client with
-        // code 0 if no client sends `refresh-client -C` after the
-        // initial `%begin` block, so we push it onto the writer
-        // task's FIFO *before* returning — the writer task is the
-        // sole owner of `stdin_rx`, and `stdin_tx.send` is non-blocking.
+        // Bug 015 (legacy) used to enqueue an unconditional `new-window` after
+        // `tmux -CC new-session` because the bootstrap window does NOT
+        // emit `%window-add` + `%window-pane-changed` synchronously —
+        // dispatch needed that extra window to wake `await_first_pane`.
         //
-        // Bug 015: server creates the control session (via
-        // `new-session -A` in the `tmux -CC` argv) but does NOT
-        // automatically create a window/pane. We must explicitly
-        // `new-window` to trigger `%window-add` + `%window-pane-changed`
-        // notifications needed to register the first pane — but only
-        // when the session is *freshly created*. In `SpawnMode::Attach`
-        // the server already has N windows/panes; sending another
-        // `new-window` would silently create one more empty window on
-        // every re-attach. The dispatch task uses `spawn_mode` to
-        // decide whether to emit one `tmux-pane-added` (Create) or N
-        // (Attach).
+        // **Removed by ADR 0009 / Bug 0009 fix:** the bootstrap pane is
+        // now associated with its xsterm window id via
+        // `TmuxController::record_pane_window` (which inserts into
+        // BOTH `pane_window_bindings` AND `window_bindings`), so
+        // `SessionManager::create_tmux` can populate the bootstrap
+        // `SessionInfo` with the correct `xsterm_window_id` without
+        // relying on the dispatch task waking up. Sending another
+        // `new-window` here would create one empty window per Create
+        // call — visible on the server as `tmux list-windows` showing
+        // `+1` after every Create Tmux Session (Bug 0009 second-order).
+        //
+        // The `else` (Attach) branch has always been correct: the
+        // server already has N windows, we just read them.
         if mode == SpawnMode::Create {
-            controller
-                .stdin_tx
-                .send(tmux_cmd::new_window_in_current(None))
-                .map_err(|e| format!("failed to enqueue new-window: {e}"))?;
+            tracing::info!(
+                "tmux controller {}: Create mode — relying on Bug 0009 fix \
+                 (record_pane_window inserts window_bindings synchronously) \
+                 and NOT enqueuing a stray new-window",
+                controller_id
+            );
         } else {
             tracing::info!(
                 "tmux controller {}: attach mode — skipping new-window (server already has panes)",
@@ -1325,9 +1327,30 @@ impl TmuxController {
     /// [`SessionManager::create_tmux`](crate::services::session_manager::SessionManager::create_tmux)
     /// can populate the bootstrap pane's `tmux_window_id` on its
     /// `SessionInfo`.
-    pub(crate) fn record_pane_window(&self, pane_id: String, tmux_window_id: String) {
+    ///
+    /// **Also** populates `window_bindings` (tmux_window_id →
+    /// xsterm_window_id) so that `xsterm_window_id_for` (used by
+    /// `create_tmux` to attach the bootstrap window's xsterm id to the
+    /// returned `SessionInfo`) can look it up. Without this insert, the
+    /// backend returns `xsterm_window_id = None` and the frontend's
+    /// control-window sync insert is skipped — Bug 0009 root cause.
+    pub(crate) fn record_pane_window(
+        &self,
+        pane_id: String,
+        tmux_window_id: String,
+        xsterm_window_id: u32,
+    ) {
         if let Ok(mut map) = self.pane_window_bindings.lock() {
-            map.insert(pane_id, tmux_window_id);
+            map.insert(pane_id, tmux_window_id.clone());
+        }
+        if let Ok(mut map) = self.window_bindings.lock() {
+            tracing::info!(
+                "[DEBUG-0009-RUST] record_pane_window: inserting tmux_window_id={:?} -> xsterm_window_id={} into window_bindings (controller {})",
+                tmux_window_id,
+                xsterm_window_id,
+                self.controller_id
+            );
+            map.insert(tmux_window_id, xsterm_window_id);
         }
     }
 

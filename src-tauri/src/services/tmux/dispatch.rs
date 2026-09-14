@@ -110,7 +110,7 @@ fn dispatch_event(
             if let Some(tx) = controller.registry.take_event_waiter_for_split() {
                 let xsterm_id = controller.allocate_xsterm_id();
                 controller.register_pane(pane_id.clone(), xsterm_id);
-                controller.record_pane_window(pane_id.clone(), window_id.clone());
+                controller.record_pane_window(pane_id.clone(), window_id.clone(), xsterm_id);
                 bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
                 let _ = tx.send(Ok((xsterm_id, pane_id.clone(), window_id.clone())));
                 return;
@@ -132,7 +132,7 @@ fn dispatch_event(
             {
                 let xsterm_id = controller.allocate_xsterm_id();
                 controller.register_pane(pane_id.clone(), xsterm_id);
-                controller.record_pane_window(pane_id.clone(), window_id.clone());
+                controller.record_pane_window(pane_id.clone(), window_id.clone(), xsterm_id);
                 // Both NewWindowResult (re-registered by WindowAdd case a)
                 // and Bootstrap (registered by WindowAdd case b / list-windows)
                 // carry an xsterm_window_id allocated earlier; insert it.
@@ -196,7 +196,7 @@ fn dispatch_event(
             if first {
                 let xsterm_id = controller.allocate_xsterm_id();
                 controller.register_pane(pane_id.clone(), xsterm_id);
-                controller.record_pane_window(pane_id.clone(), window_id.clone());
+                controller.record_pane_window(pane_id.clone(), window_id.clone(), xsterm_id);
                 controller.record_first_pane(xsterm_id, pane_id.clone());
                 bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
                 return;
@@ -591,17 +591,18 @@ fn emit_pane_list(
     for entry in &entries {
         let xsterm_id = controller.allocate_xsterm_id();
         controller.register_pane(entry.pane_id.clone(), xsterm_id);
-        controller.record_pane_window(entry.pane_id.clone(), entry.window_id.clone());
-        // Emit one `tmux-pane-added` per row — the frontend's
-        // `tmux-pane-added` listener is idempotent and creates an
-        // xsterm Session for each one. Using the controller id as the
-        // synthetic xsterm_session_id keeps all panes from this
-        // controller under a single xsterm session in the React tree.
-        let parent_window_id = entry.window_id.clone();
         let xsterm_window_id = window_to_xsterm
             .get(&entry.window_id)
             .copied()
             .unwrap_or(0);
+        // Persist the pane → window + window → xsterm-window bindings so
+        // `create_tmux` can populate the bootstrap `SessionInfo` with
+        // both `tmux_window_id` and `xsterm_window_id`. ADR 0009.
+        controller.record_pane_window(
+            entry.pane_id.clone(),
+            entry.window_id.clone(),
+            xsterm_window_id,
+        );
         bridge.emit_tmux_pane_added_with_window(
             xsterm_id,
             &entry.pane_id,

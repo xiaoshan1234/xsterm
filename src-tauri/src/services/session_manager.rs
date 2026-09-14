@@ -312,17 +312,31 @@ impl SessionManager {
         config: &TmuxCcConfig,
         backend: Arc<dyn AppBackend>,
     ) -> Result<SessionInfo, String> {
+        tracing::info!(
+            "[DEBUG-0009-RUST] SessionManager::create_tmux ENTRY controller_id=pending config={:?}",
+            config
+        );
         let controller_id = self.allocate_controller_id();
         let controller =
             TmuxController::spawn_local(config, backend, self.ssh_backend.as_ref(), controller_id)?;
 
         let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
+        tracing::info!(
+            "[DEBUG-0009-RUST] await_first_pane returned xsterm_id={} tmux_pane_id={:?}",
+            xsterm_id,
+            tmux_pane_id
+        );
 
         // look up the bootstrap tmux window id so the
         // `SessionInfo` carries it. The dispatch task records the
         // pane → window mapping when it handles `%window-pane-changed`
         // for the bootstrap pane.
         let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
+        tracing::info!(
+            "[DEBUG-0009-RUST] tmux_window_id_for_pane returned {:?} for pane {:?}",
+            tmux_window_id,
+            tmux_pane_id
+        );
         // Pair with the xsterm window id allocated by the bootstrap
         // `list-windows` reply (the dispatch task inserted it into
         // `window_bindings` before resolving the first-pane signal).
@@ -333,6 +347,11 @@ impl SessionManager {
         let xsterm_window_id = tmux_window_id
             .as_deref()
             .and_then(|wid| xsterm_window_id_for(&controller, wid));
+        tracing::info!(
+            "[DEBUG-0009-RUST] xsterm_window_id resolved = {:?} (raw tmux_window_id={:?})",
+            xsterm_window_id,
+            tmux_window_id
+        );
 
         // MVP supports both `tmux -CC new -s <name>` (the first pane tmux
         // reports IS the user's working shell, so it must be visible —
@@ -349,6 +368,15 @@ impl SessionManager {
             false,
             tmux_window_id.as_deref(),
             xsterm_window_id,
+        );
+        tracing::info!(
+            "[DEBUG-0009-RUST] tmux_pane_info returned SessionInfo: id={} name={:?} tmuxWindowId={:?} xstermWindowId={:?} tmuxControllerId={:?} isHidden={:?}",
+            info.id,
+            info.name,
+            info.tmux_window_id,
+            info.xsterm_window_id,
+            info.tmux_controller_id,
+            info.is_hidden
         );
 
         let handle = TmuxPaneHandle {

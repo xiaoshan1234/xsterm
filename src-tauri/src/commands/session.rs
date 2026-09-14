@@ -69,9 +69,21 @@ pub async fn create_session(
     match config {
         SessionConfig::Local(local) => state.create_local(local, backend),
         SessionConfig::Ssh(ssh) => state.create_ssh(ssh, backend),
-        SessionConfig::TmuxCc(tmux) => state.create_tmux(&tmux, backend).await,
+        SessionConfig::TmuxCc(tmux) => {
+            tracing::info!(
+                "[DEBUG-0009-RUST] create_session routing to create_tmux config={:?}",
+                tmux
+            );
+            state.create_tmux(&tmux, backend).await
+        }
     }
     .inspect(|info| {
+        tracing::info!(
+            "[DEBUG-0009-RUST] Session created via generic command: id={} xsterm_window_id={:?} tmux_window_id={:?}",
+            info.id,
+            info.xsterm_window_id,
+            info.tmux_window_id
+        );
         tracing::info!("Session created via generic command: id={}", info.id);
     })
 }
@@ -153,6 +165,10 @@ pub async fn create_tmux_session(
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     tracing::info!(
+        "[DEBUG-0009-RUST] create_tmux_session command ENTRY config={:?}",
+        config
+    );
+    tracing::info!(
         "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?} base_config_id={:?} has_ssh={}",
         config.name,
         config.tmux_session_name,
@@ -163,6 +179,11 @@ pub async fn create_tmux_session(
     let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
     let dyn_backend: Arc<dyn AppBackend> = arc_real;
     let result = state.create_tmux(&config, dyn_backend).await;
+    tracing::info!(
+        "[DEBUG-0009-RUST] create_tmux_session command EXIT ok={} info={:?}",
+        result.is_ok(),
+        result.as_ref().ok()
+    );
     if let Err(ref e) = result {
         tracing::error!(
             "create_tmux_session failed: {} (config was: name={:?}, tmux_session={:?}, socket={:?}, base_config_id={:?}, has_ssh={})",

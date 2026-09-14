@@ -650,49 +650,108 @@ export function useTauriListeners({
       if (unlistenTmuxWindowRenamed) unlisteners.push(unlistenTmuxWindowRenamed);
 
       // tmux-window-list. Bridge module emits this once per
-      // controller after the bootstrap `list-windows` reply so the
-      // frontend can render the full set of tmux windows atomically
-      // (instead of N individual `tmux-window-added` events).
-      //
-      // ADR 0009 §2.8 / §2.6: we use it to populate
-      // `tmuxWindowListsRef`, which the windows-control card inside
-      // the control-window UI reads on first render.
-      //
-      // The bridge already fires one `tmux-window-added` per row
-      // before emitting this `tmux-window-list` summary, so by the
-      // time we get here every entry has a corresponding
-      // xsterm_window_id in `windows` (those events short-circuit if
-      // the Session is already known — same idempotency as
-      // `tmux-pane-added`). We do NOT mutate `workspaces` from this
-      // listener — control-window insertion is handled in the
-      // `tmux-window-added` branch above (and at create/attach time
-      // via `createAndActivateSession`).
-      const unlistenTmuxWindowList = await listen<{
-        controller_id: number;
-        windows: Array<{
-          tmux_window_id: string;
-          xsterm_window_id?: number;
-          xsterm_session_id?: number;
-          xsterm_pane_id?: string;
-          name: string;
-        }>;
-      }>(
-        "tmux-window-list",
-        (event) => {
-          const { controller_id: controllerId, windows: rows } = event.payload;
-          const entries: TmuxWindowListEntry[] = rows.map((row) => ({
-            tmuxWindowId: row.tmux_window_id,
-            xstermWindowId: row.xsterm_window_id ?? 0,
-            xstermSessionId: row.xsterm_session_id,
-            xstermPaneId: row.xsterm_pane_id,
-            name: row.name,
-          }));
-          tmuxWindowListsRef.current.set(controllerId, entries);
-        },
-      ).catch((e) => {
-        console.error("Failed to listen tmux-window-list:", e);
-        return null;
-      });
+            // controller after the bootstrap `list-windows` reply. The
+            // payload contains one row per tmux window on the server, with
+            // a freshly-allocated `xsterm_window_id` for each.
+            //
+            // **This is the authoritative source of truth for attach paths.**
+            // The bridge does NOT fire `tmux-window-added` for windows that
+            // already existed before the controller attached (Bug 015
+            // historical assumption — see dispatch.rs:220 `WindowAdd`
+            // case-c) — it only batches them into this single
+            // `tmux-window-list` event. So this listener MUST install
+            // xsterm Windows for every row to keep local view in sync with
+            // the server (Bug 0009 second-order: local window count <
+            // server window count on attach).
+            //
+            // ADR 0009 §2.8 / §2.6: also populate `tmuxWindowListsRef`,
+            // which the windows-control card inside the control-window UI
+            // reads on first render.
+            const unlistenTmuxWindowList = await listen<{
+              controller_id: number;
+              windows: Array<{
+                tmux_window_id: string;
+                xsterm_window_id?: number;
+                xsterm_session_id?: number;
+                xsterm_pane_id?: string;
+                name: string;
+              }>;
+            }>(
+              "tmux-window-list",
+              (event) => {
+                const { controller_id: controllerId, windows: rows } = event.payload;
+                const entries: TmuxWindowListEntry[] = rows.map((row) => ({
+                  tmuxWindowId: row.tmux_window_id,
+                  xstermWindowId: row.xsterm_window_id ?? 0,
+                  xstermSessionId: row.xsterm_session_id,
+                  xstermPaneId: row.xsterm_pane_id,
+                  name: row.name,
+                }));
+                tmuxWindowListsRef.current.set(controllerId, entries);
+
+                // Sync insert every row as an xsterm Window so the local
+                // workspace mirrors the server. The bootstrap window
+                // (created by `createAndActivateSession`) is already in
+                // workspacesRef.current by the time we get here, so the
+                // dedupe check below skips it. All other windows (attach
+                // path — server had N windows before this controller
+                // connected) get a fresh xsterm Window installed here.
+                setWorkspaces((prev) => {
+                  // Pick a target workspace: prefer one that already has
+                  // a control-window for this controller, else the active
+                  // workspace, else the first.
+                  const targetId = (() => {
+                    const withControl = prev.find((w) =>
+                      w.windows.some(
+                        (win) => win.tmuxControlWindowId === controllerId,
+                      ),
+                    );
+                    if (withControl) return withControl.id;
+                    const active =
+                      workspacesRef.current.find(
+                        (w) => w.id === workspacesRef.current[0]?.id,
+                      ) ?? prev[0];
+                    return active?.id ?? null;
+                  })();
+                  if (!targetId) return prev;
+                  return prev.map((workspace) => {
+                    if (workspace.id !== targetId) return workspace;
+                    const existingXstermIds = new Set(
+                      workspace.windows
+                        .map((w) => w.xstermWindowId)
+                        .filter((id): id is number => id !== undefined),
+                    );
+                    const newWindows: Window[] = [];
+                    for (const row of rows) {
+                      const xid = row.xsterm_window_id;
+                      if (xid === undefined || xid === 0) continue;
+                      if (existingXstermIds.has(xid)) continue;
+                      // Skip the bootstrap pane's xsterm pane id when
+                      // xsterm_pane_id is empty (the row represents a
+                      // window whose first pane we haven't bound yet).
+                      const rootPane = createLeafPane(100, row.xsterm_session_id ?? 0, "");
+                      newWindows.push({
+                        id: crypto.randomUUID(),
+                        name: row.name,
+                        rootPane,
+                        activePaneId: rootPane.id,
+                        windowType: "terminal",
+                        xstermWindowId: xid,
+                      });
+                      existingXstermIds.add(xid);
+                    }
+                    if (newWindows.length === 0) return workspace;
+                    return withRecomputedSessionIds({
+                      ...workspace,
+                      windows: [...workspace.windows, ...newWindows],
+                    });
+                  });
+                });
+              },
+            ).catch((e) => {
+              console.error("Failed to listen tmux-window-list:", e);
+              return null;
+            });
       if (cancelled) {
         unlistenTmuxWindowList?.();
         return;
