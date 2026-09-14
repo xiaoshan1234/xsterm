@@ -72,12 +72,12 @@ pub use self::handshake::{
 pub use self::id_map::{CommandRegistry, RegisteredCommand, send_to_waiter};
 pub use self::subscriber::{RouterAction, RouterState};
 
-use super::commands as tmux_cmd;
+use super::protocol::wire as tmux_cmd;
 use super::dispatch::spawn_dispatch_task;
 use super::errors::{TmuxError, spawn_err};
 use super::bridge::TmuxBridge;
-use super::events::ProtocolEvent;
-use super::parser::ProtocolParser;
+use super::protocol::events::ProtocolEvent;
+use super::protocol::parser::ProtocolParser;
 use super::protocol::command::{
     CommandKind, EventWaiter, EventWaiterKind, EventWaiterSender, ResponseOutcome, ResponseWaiter,
 };
@@ -2117,6 +2117,17 @@ mod tests {
             spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
             router_state: std::sync::Mutex::new(RouterState::default()),
+        });
+        // Production flow: `WindowAdd` case b pre-registers a Bootstrap
+        // EventWaiter keyed by `window_id` BEFORE the matching
+        // `%window-pane-changed` arrives. Simulate that here so the
+        // dispatch task takes the new case 3 (Bootstrap) path rather
+        // than the deleted case 4 (legacy fallback).
+        controller.registry.register_event_waiter(EventWaiter {
+            kind: EventWaiterKind::Bootstrap,
+            sender: EventWaiterSender::None,
+            tmux_window_id: Some("@1".to_string()),
+            xsterm_window_id: Some(controller.allocate_xsterm_window_id()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();

@@ -1103,3 +1103,71 @@ ProtocolEvent::CommandBegin { id, .. } => {
 回归测试 `subscriber::tests::begin_without_waiter_initializes_in_flight_for_end_to_classify`（commit `d5d8892`）锁死 fire-and-forget block 的 body 累积行为，防止未来"简化"把 `if` 块移回 init 之前。
 ## 是否解决
 YES（`cargo test --lib --manifest-path src-tauri/Cargo.toml` → `312 passed; 0 failed; 2 ignored`；commit `d5d8892` 是 hotfix；改动 1 文件 6 行有效 + 回归测试 + 注释）。
+
+# Bug 024
+## 现象
+xsterm 跑 `yes` / `tail -f` / `find /` 等高频输出命令时，dev 模式 `tauri dev` 的 rolling log 文件增长速率 ~10 MB/min；prod 模式（INFO 级默认关闭）看不出问题但 dev 体验严重受损。
+## 理想效果
+高频事件的 dispatch 路径不写 INFO 级日志，只在 DEBUG/TRACE 留下必要的追踪；log 文件大小与输出量解耦。
+## BUG 原因
+`src-tauri/src/services/tmux/dispatch.rs` 的 `dispatch_event` 入口无条件写：
+
+```rust
+tracing::info!(
+    "tmux dispatch: controller {} received event: {:?}",
+    controller.controller_id,
+    event
+);
+```
+
+每个 `ProtocolEvent` 都被记录——包括每秒数千次的 `ProtocolEvent::Output`。`info!` 会做 format + string allocation + sink write，对于 `%output` 这种热路径事件是 100% 的浪费。
+
+ADR 0000 设计原则 P5（"事件是单向流（dispatcher → subscribers）"）的延伸：dispatcher 是 transport 层，不应该污染业务日志；高频事件应只在 TRACE 留下行迹（生产环境默认关闭）。
+## 解决方案
+`src-tauri/src/services/tmux/dispatch.rs:74` `tracing::info!(...)` → `tracing::trace!(...)`。 TRACE 级在生产构建中默认禁用，dev 模式开启 RUST_LOG=trace 时仍可观察。
+
+新增 doc 注释说明 trace 的用途（生产默认关闭，dev 调试用）。其他事件的日志保留原有级别（Output 的 unbound pane drop 仍是 DEBUG，外部 pane / window 是 DEBUG，pane-exited / window-close 的 unbound 路径是 DEBUG）。
+
+回归测试不需要新增——日志级别变更不影响行为。
+## 是否解决
+YES（`cargo test --lib --manifest-path src-tauri/Cargo.toml` → `322 passed; 0 failed`；dev 模式跑 `yes` 30s，log 文件增长率应降到 < 1 MB/min；TRACE 级别可通过 `RUST_LOG=tmux=trace` 显式开启）。
+
+# Bug 025
+## 现象
+`dispatch.rs::handle_classified_response` 用 `body_lines.first().starts_with('@')` 区分 `list-windows` 响应（`@<id> ...`）和 `list-panes` 响应（`%<id> ...`）。如果 tmux 返回的 body 第一行有前导空格、tab、或为空行（罕见但生产偶发），分类器误判，body 被丢弃，bootstrap chain 静默中断（前端不再收到 `tmux-window-list` / `tmux-pane-list`），`create_tmux_session` 仍 5s timeout 后报错——和 Bug 023 类似的"静默 bootstrap 中断"症状，但根因不同（Bug 023 是 `in_flight` 没初始化，本 bug 是分类器脆弱）。
+## 理想效果
+`%begin` body 的分类**完全不依赖 body 内容**，只依赖发起这个命令时的 `CommandKind`（已存在 `CommandRegistry::by_id`）。
+## BUG 原因
+ADR 0005 §0 P5 明确禁止："响应解析用'按命令 ID 路由'，不靠'body 第一字符判断'"。但在 PR-T8 W3a（commit `f1b36cc`）把 dispatch 命令响应路径委托给 `RouterState::process` 后，`handle_classified_response` 仍保留"first char"分类——分类信息没传过 RouterState。
+
+`handle_classified_response` 函数（dispatch.rs:686-710）：
+```rust
+let first = lines.first().map(|l| l.trim_start()).unwrap_or("");
+if first.starts_with('@') { emit_window_list(...) }
+else if first.starts_with('%') { emit_pane_list(...) }
+else { tracing::debug!("command {} body does not look like a list query (first line {:?}); ignoring", ...); }
+```
+
+注意 `first.starts_with('@')` 之前还做了 `trim_start()`——这意味着 list-panes 的 body 第一行若全是空白，trim 后是空字符串 `""`，既不以 `@` 也不以 `%` 开头 → 静默丢弃。
+## 解决方案
+1. `subscriber.rs::InFlightBody` 新增 `kind: Option<CommandKind>` 字段；`CommandBegin` 分支在初始化 `in_flight` 时同步从 `registry.kind_for(id)` 取 kind（fire-and-forget 命令的 kind 是 `None`）。
+2. `RouterAction::DelegateToV1` 变体从 unit 改为 struct variant `DelegateToV1 { cmd_id: u32, kind: Option<CommandKind>, body_lines: Vec<String> }`。
+3. `dispatch_event` 的 `CommandEnd` 分支不再调 `handle_classified_response`；改为：
+   ```rust
+   if let RouterAction::DelegateToV1 { cmd_id, kind, body_lines } = action {
+       match kind {
+           Some(CommandKind::ListWindows) => { /* inline emit_window_list logic */ }
+           Some(CommandKind::ListPanes { .. }) => { /* inline emit_pane_list logic */ }
+           _ => { tracing::debug!("command {} body kind {:?} not body-routed; ignoring", ...); }
+       }
+   }
+   ```
+4. 删除 `dispatch.rs::handle_classified_response`（原 25 行）、`WindowListRow` / `PaneListRow` struct（已 inlined 进 match arm）、`parse_window_list_row` / `parse_pane_list_row` 函数（已 inlined 进 match arm）、`emit_window_list` / `emit_pane_list` 顶层函数（已 inlined 进 match arm）、`trigger_followup_list_panes` 顶层函数（保留 inline 形式：仍是 `list-panes` follow-up，但 std::thread::spawn 直接在 match arm 里）。
+5. `WindowPaneChanged` 的 case 4（legacy Wave 1/2 bootstrap fallback）一并删除——它的存在让"无 Bootstrap EventWaiter 但有 first_pane_tx"的合成测试通过，掩盖了 case 3 Bootstrap 路径的真实行为；现在测试需要显式 pre-register `EventWaiter { kind: Bootstrap, ... }` 模拟生产中 `WindowAdd` case b 的注册。
+
+回归测试改动：
+- `controller/mod.rs::tests::dispatch_emits_pane_added_and_records_first_pane`：在 `WindowPaneChanged` 事件前 pre-register Bootstrap EventWaiter for window `@1`（生产中由 `WindowAdd` case b 完成）。注释解释"如果删除这个 pre-register，测试会回到 case 5 (external) 路径——证明 case 4 fallback 已删除"。
+- `subscriber.rs::tests::non_command_event_still_delegates`：新增；验证 `ProtocolEvent::WindowAdd`（非命令事件）仍返回 `RouterAction::DelegateToV1`（不变行为）。
+
+## 是否解决
+YES（`cargo test --lib --manifest-path src-tauri/Cargo.toml` → `322 passed; 0 failed`；dispatch.rs 从 725 行缩到 615 行；首次字符分类 hack 完全消除；body 分类由 `RouterState` 透传的 `CommandKind` 决定，与 body 内容无关）。

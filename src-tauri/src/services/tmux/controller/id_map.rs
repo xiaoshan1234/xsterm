@@ -85,6 +85,13 @@ pub struct RegisteredCommand {
 pub struct CommandRegistry {
     next_id: AtomicU64,
     by_id: Mutex<HashMap<CommandId, ResponseWaiter>>,
+    /// Origin [`CommandKind`] for each registered id. Mirrors `by_id`
+    /// 1:1 (every id inserted into `by_id` also goes here) and exists
+    /// so `RouterState` can classify a fire-and-forget `%end` body
+    /// without sniffing the first line (P8 W3b closed Bug 017 / Bug 022:
+    /// replaced `first.starts_with('@')` heuristic with a typed lookup).
+    #[allow(dead_code)]
+    kind_by_id: Mutex<HashMap<CommandId, CommandKind>>,
     /// Counts taken (`%end` resolved) waiters, for diagnostics. PR-T5
     /// will log this on close.
     #[allow(dead_code)]
@@ -109,6 +116,7 @@ impl CommandRegistry {
         Self {
             next_id: AtomicU64::new(0),
             by_id: Mutex::new(HashMap::new()),
+            kind_by_id: Mutex::new(HashMap::new()),
             completed: std::sync::atomic::AtomicU64::new(0),
             event_waiters: Mutex::new(Vec::new()),
         }
@@ -133,6 +141,16 @@ impl CommandRegistry {
         if let Some(w) = waiter {
             self.by_id.lock().expect("CommandRegistry mutex poisoned").insert(id, w);
         }
+        // Mirror the kind into `kind_by_id` whenever there is a waiter;
+        // for fire-and-forget commands the dispatcher never classifies
+        // by kind, so we skip the insert. This keeps the two maps 1:1
+        // for any id actually routable via `kind_for`.
+        if waiter_registered {
+            self.kind_by_id
+                .lock()
+                .expect("CommandRegistry mutex poisoned")
+                .insert(id, kind.clone());
+        }
         let tagged = TaggedCommand {
             id,
             kind,
@@ -153,6 +171,22 @@ impl CommandRegistry {
     /// passes the accumulated body / error message into the waiter.
     pub fn take(&self, id: CommandId) -> Option<ResponseWaiter> {
         self.by_id.lock().expect("CommandRegistry mutex poisoned").remove(&id)
+    }
+
+    /// Look up the [`CommandKind`] that produced the registered waiter
+    /// for `id`. Returns `None` for fire-and-forget commands (which the
+    /// caller never registered against `by_id`) and for ids that have
+    /// already been taken by `take(id)`.
+    ///
+    /// P8 W3b: `RouterState::process` uses this on `%end` so the
+    /// dispatcher can classify the body without sniffing the first line
+    /// (the old `first.starts_with('@')` heuristic — Bug 022).
+    pub fn kind_for(&self, id: CommandId) -> Option<CommandKind> {
+        self.kind_by_id
+            .lock()
+            .expect("CommandRegistry mutex poisoned")
+            .get(&id)
+            .cloned()
     }
 
     /// Register an event-correlated waiter. Returns the entry's index
@@ -254,6 +288,12 @@ impl CommandRegistry {
         let mut map = self.by_id.lock().expect("CommandRegistry mutex poisoned");
         let n = map.len();
         map.clear();
+        // Mirror the kind map so a stale entry can't outlive its waiter
+        // and mislead `kind_for` post-shutdown.
+        self.kind_by_id
+            .lock()
+            .expect("CommandRegistry mutex poisoned")
+            .clear();
         n
     }
 

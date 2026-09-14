@@ -9,18 +9,18 @@
 //!
 //! | File             | Responsibility                                                                |
 //! |------------------|-------------------------------------------------------------------------------|
-//! | [`escape`]       | [`escape::unescape_output`] / [`escape::escape_output`] — octal `\nnn` codec for `%output`. |
-//! | [`events`]       | [`events::ControlEvent`] enum — one variant per `%xxx` notification line.              |
-//! | [`parser`]       | [`parser::ControlParser`] — pure state machine: line → `Option<ControlEvent>`.         |
-//! | [`commands`]     | High-level command builders returning newline-terminated stdin payloads.       |
+//! | [`protocol::codec`] | Octal `\nnn` codec for `%output`. |
+//! | [`protocol::events`] | [`ProtocolEvent`] enum — one variant per `%xxx` notification line. |
+//! | [`protocol::parser`] | Pure state machine: line → `Option<ProtocolEvent>`. |
+//! | [`protocol::wire`] | High-level command builders returning newline-terminated stdin payloads. |
 //! | [`controller`]   | [`controller::TmuxController`] — spawns the tmux child, owns reader / writer / monitor.    |
-//! | [`dispatch`]     | [`dispatch::spawn_dispatch_task`] + `dispatch_event` — turns `ControlEvent`s into Tauri events and Promise resolutions. |
+//! | [`dispatch`]     | [`dispatch::spawn_dispatch_task`] + `dispatch_event` — turns `ProtocolEvent`s into Tauri events and Promise resolutions. |
 //!
 //! ## Public API (re-exported here)
 //!
 //! - [`TmuxController`] — the main entry point used by `SessionManager`.
 //!
-//! Internal types (`ControlParser`, `ControlEvent`, the command builders,
+//! Internal types (`ProtocolParser`, `ProtocolEvent`, the command builders,
 //! and the codec functions) are `pub(crate)` so sibling modules can use
 //! them but the public API stays narrow.
 //!
@@ -35,13 +35,9 @@
 //! [`PtySystem`](crate::infrastructure::pty::PtySystem) /
 //! [`SshBackend`](crate::infrastructure::ssh::SshBackend).
 
-pub(crate) mod commands;
 pub(crate) mod controller;
 pub(crate) mod dispatch;
 pub(crate) mod errors;
-pub(crate) mod escape;
-pub(crate) mod events;
-pub(crate) mod parser;
 pub(crate) mod protocol;
 
 pub(crate) mod bridge;

@@ -1,4 +1,4 @@
-//! tmux dispatch task — turns parsed [`ControlEvent`]s into
+//! tmux dispatch task — turns parsed [`ProtocolEvent`]s into
 //! [`AppBackend`] emits.
 //!
 //! Split out from `controller.rs` so the 566-line match expression that
@@ -11,7 +11,7 @@
 //!
 //! ## Routing cheat sheet
 //!
-//! `dispatch_event` walks a match on `ControlEvent`. The two most
+//! `dispatch_event` walks a match on `ProtocolEvent`. The two most
 //! complex branches are:
 //!
 //! - **`%window-pane-changed` (five-level fallthrough)**
@@ -38,18 +38,18 @@ use crate::infrastructure::app_backend::AppBackend;
 
 use super::controller::{RouterAction, TmuxController};
 use super::bridge::TmuxBridge;
-use super::events::ControlEvent;
+use super::protocol::events::ProtocolEvent;
 use crate::services::tmux::protocol::command::{EventWaiter, EventWaiterKind, EventWaiterSender};
 use serde_json::json;
 
-/// Spawn the dispatch task that turns parsed [`ControlEvent`]s into
+/// Spawn the dispatch task that turns parsed [`ProtocolEvent`]s into
 /// [`AppBackend`] emits.
 ///
 /// `pub(crate)` so unit tests in `services::session_manager` (and any
 /// future sibling crate) can drive the dispatch task with synthetic
 /// events without going through a real `tmux -CC` child.
 pub(crate) fn spawn_dispatch_task(
-    mut dispatch_rx: mpsc::UnboundedReceiver<ControlEvent>,
+    mut dispatch_rx: mpsc::UnboundedReceiver<ProtocolEvent>,
     controller: Arc<TmuxController>,
     bridge: TmuxBridge,
 ) {
@@ -64,20 +64,20 @@ pub(crate) fn spawn_dispatch_task(
     });
 }
 
-/// Interpret one [`ControlEvent`] and emit the corresponding frontend
+/// Interpret one [`ProtocolEvent`] and emit the corresponding frontend
 /// events via [`TmuxBridge`].
 fn dispatch_event(
     controller: &Arc<TmuxController>,
     bridge: &TmuxBridge,
-    event: ControlEvent,
+    event: ProtocolEvent,
 ) {
-    tracing::info!(
+    tracing::trace!(
         "tmux dispatch: controller {} received event: {:?}",
         controller.controller_id(),
         event
     );
     match event {
-        ControlEvent::Output { pane_id, data } => {
+        ProtocolEvent::Output { pane_id, data } => {
             if let Some(xsterm_id) = controller.xsterm_id_for_pane(&pane_id) {
                 bridge.emit_session_output(xsterm_id, data);
             } else {
@@ -89,7 +89,7 @@ fn dispatch_event(
                 );
             }
         }
-        ControlEvent::WindowPaneChanged { window_id, pane_id } => {
+        ProtocolEvent::WindowPaneChanged { window_id, pane_id } => {
             // 1. Re-sighting of an already-bound pane → ignore (tmux
             //    re-emits `%window-pane-changed` whenever the active pane
             //    of a window changes, including panes we already own).
@@ -184,24 +184,6 @@ fn dispatch_event(
                 return;
             }
 
-            // 4. Bootstrap path (legacy Wave 1/2 fallback). Kept as a
-            //    safety net for cases where `%window-add` was missed for
-            //    some reason (e.g. an old test that drives the dispatch
-            //    task without going through a real tmux binary).
-            let first = controller
-                .first_pane_tx
-                .lock()
-                .map(|m| m.is_some())
-                .unwrap_or(false);
-            if first {
-                let xsterm_id = controller.allocate_xsterm_id();
-                controller.register_pane(pane_id.clone(), xsterm_id);
-                controller.record_pane_window(pane_id.clone(), window_id.clone(), xsterm_id);
-                controller.record_first_pane(xsterm_id, pane_id.clone());
-                bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
-                return;
-            }
-
             // 5. External pane creation. tmux reports a brand-new pane
             //    that we did not ask for (e.g. the user ran a `splitw`
             //    binding inside the inner shell, or the inner shell
@@ -210,6 +192,13 @@ fn dispatch_event(
             //    rendering them out-of-band would desync from React
             //    state. We just log; a future iteration may add a
             //    re-bind UI.
+            //
+            //    NB: if this fires *and* there's no `EventWaiter` for
+            //    the window, the bootstrap path either was missed
+            //    (`%window-add` not seen) or genuinely doesn't apply
+            //    (out-of-band pane). Either way, do not silently
+            //    consume — the loud log lets ops diagnose a missed
+            //    `%window-add`.
             tracing::debug!(
                 "tmux controller {}: external %window-pane-changed for pane {} in window {} — not auto-binding",
                 controller.controller_id(),
@@ -217,7 +206,7 @@ fn dispatch_event(
                 window_id
             );
         }
-        ControlEvent::WindowAdd { window_id } => {
+        ProtocolEvent::WindowAdd { window_id } => {
             // Three-case trichotomy (Wave 3 §4.4):
             //
             // a. `pending_windows` non-empty → this `%window-add` is the
@@ -287,7 +276,7 @@ fn dispatch_event(
                 window_id,
             );
         }
-        ControlEvent::WindowClose { window_id } => {
+        ProtocolEvent::WindowClose { window_id } => {
             // Look up the xsterm window id for the closing window. If we
             // never bound it (e.g. external window), there is nothing to
             // emit.
@@ -328,7 +317,7 @@ fn dispatch_event(
                 );
             }
         }
-        ControlEvent::WindowRenamed { window_id, name } => {
+        ProtocolEvent::WindowRenamed { window_id, name } => {
             let xsterm_window_id = controller
                 .window_bindings
                 .lock()
@@ -347,10 +336,10 @@ fn dispatch_event(
         // `pane_id` is borrowed via `ref pane_id` so `event` itself
         // stays whole — we still need `&event` below to read the
         // variant tag for the debug log on unbound panes.
-        ControlEvent::PaneExited { ref pane_id } | ControlEvent::PaneDied { ref pane_id } => {
+        ProtocolEvent::PaneExited { ref pane_id } | ProtocolEvent::PaneDied { ref pane_id } => {
             let event_kind = match &event {
-                ControlEvent::PaneExited { .. } => "%pane-exited",
-                ControlEvent::PaneDied { .. } => "%pane-died",
+                ProtocolEvent::PaneExited { .. } => "%pane-exited",
+                ProtocolEvent::PaneDied { .. } => "%pane-died",
                 _ => unreachable!("guarded by outer match"),
             };
             // Look up the xsterm id for the dying pane. If we never
@@ -376,13 +365,13 @@ fn dispatch_event(
                 );
             }
         }
-        ControlEvent::Pause { pane_id } => {
+        ProtocolEvent::Pause { pane_id } => {
             bridge.emit_tmux_paused(&pane_id);
         }
-        ControlEvent::Continue { pane_id } => {
+        ProtocolEvent::Continue { pane_id } => {
             bridge.emit_tmux_continued(&pane_id);
         }
-        ControlEvent::Exit { reason } => {
+        ProtocolEvent::Exit { reason } => {
             bridge.emit_tmux_controller_exit(reason.as_deref());
         }
         // Command response envelope (`%begin` / `%output` / `%end` /
@@ -393,21 +382,21 @@ fn dispatch_event(
         // the dispatcher must do. Only `DelegateToV1` for `%end`
         // (fire-and-forget list queries) needs extra work — drain the
         // in-flight body and feed it to `handle_classified_response`.
-        ControlEvent::CommandBegin { .. } => {
+        ProtocolEvent::CommandBegin { .. } => {
             let mut rs = match controller.router_state.lock() {
                 Ok(g) => g,
                 Err(_) => return,
             };
             let _ = rs.process(&event, &controller.registry, bridge, controller);
         }
-        ControlEvent::CommandOutput { .. } => {
+        ProtocolEvent::CommandOutput { .. } => {
             let mut rs = match controller.router_state.lock() {
                 Ok(g) => g,
                 Err(_) => return,
             };
             let _ = rs.process(&event, &controller.registry, bridge, controller);
         }
-        ControlEvent::CommandEnd { id, .. } => {
+        ProtocolEvent::CommandEnd { id, .. } => {
             let action = {
                 let mut rs = match controller.router_state.lock() {
                     Ok(g) => g,
@@ -415,23 +404,196 @@ fn dispatch_event(
                 };
                 rs.process(&event, &controller.registry, bridge, controller)
             };
-            if matches!(action, RouterAction::DelegateToV1) {
-                let body_lines = controller
-                    .router_state
-                    .lock()
-                    .ok()
-                    .map(|mut rs| rs.take_in_flight_lines())
-                    .unwrap_or_default();
-                handle_classified_response(
-                    controller,
-                    bridge,
-                    controller.controller_id(),
-                    id,
-                    body_lines,
-                );
+            // Route a fire-and-forget `%end` body by the originating
+            // [`CommandKind`] captured in `RouterState`. Without this
+            // typed dispatch we would have to sniff the first body
+            // line — Bug 022 (`first.starts_with('@')` missed any
+            // whitespace-prefixed or empty-first-line reply).
+            if let RouterAction::DelegateToV1 {
+                cmd_id: _,
+                kind,
+                body_lines,
+            } = action
+            {
+                use crate::services::tmux::protocol::command::CommandKind;
+                let controller_id = controller.controller_id();
+                match kind {
+                    CommandKind::ListWindows => {
+                        let entries: Vec<(String, String, String, bool, String)> =
+                            body_lines
+                                .iter()
+                                .filter_map(|line| {
+                                    let p: Vec<&str> = line.split('\t').collect();
+                                    if p.len() < 5 {
+                                        return None;
+                                    }
+                                    Some((
+                                        p[0].to_string(),
+                                        p[1].to_string(),
+                                        p[2].to_string(),
+                                        p[3] == "1",
+                                        p[4].to_string(),
+                                    ))
+                                })
+                                .collect();
+                        if !entries.is_empty() {
+                            let window_ids: std::collections::HashMap<String, u32> = entries
+                                .iter()
+                                .map(|e| {
+                                    let xsterm_wid = controller.allocate_xsterm_window_id();
+                                    controller.registry.register_event_waiter(EventWaiter {
+                                        kind: EventWaiterKind::Bootstrap,
+                                        sender: EventWaiterSender::None,
+                                        tmux_window_id: Some(e.0.clone()),
+                                        xsterm_window_id: Some(xsterm_wid),
+                                    });
+                                    if let Ok(mut bindings) =
+                                        controller.window_bindings.lock()
+                                    {
+                                        bindings.insert(e.0.clone(), xsterm_wid);
+                                    }
+                                    (e.0.clone(), xsterm_wid)
+                                })
+                                .collect();
+                            let rows = entries
+                                .iter()
+                                .map(|entry| {
+                                    let xsterm_wid = window_ids
+                                        .get(&entry.0)
+                                        .copied()
+                                        .unwrap_or(0);
+                                    serde_json::json!({
+                                        "controllerId": controller_id,
+                                        "tmuxWindowId": entry.0,
+                                        "xstermWindowId": xsterm_wid,
+                                        "xstermSessionId": controller_id,
+                                        "xstermPaneId": "",
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+                            bridge.emit_tmux_window_added_for_list(
+                                controller_id,
+                                serde_json::json!(rows),
+                            );
+                        }
+                        // Bug 017 bootstrap chain: ask the server for
+                        // the panes so we can register the first pane
+                        // for `await_first_pane`. Dispatched on an OS
+                        // thread to keep the dispatch loop free of
+                        // synchronous send latency.
+                        let stdin_tx = controller.stdin_tx.clone();
+                        std::thread::spawn(move || {
+                            let cmd = super::protocol::wire::list_panes_with_format(
+                                "",
+                                super::protocol::wire::DEFAULT_PANE_LIST_FORMAT,
+                            );
+                            if stdin_tx.send(cmd).is_err() {
+                                tracing::debug!(
+                                    "followup list-panes: controller stdin_tx closed; skipping"
+                                );
+                            }
+                        });
+                    }
+                    CommandKind::ListPanes { .. } => {
+                        let entries: Vec<(
+                            String,
+                            String,
+                            String,
+                            bool,
+                            u16,
+                            u16,
+                            String,
+                            String,
+                        )> = body_lines
+                            .iter()
+                            .filter_map(|line| {
+                                let p: Vec<&str> = line.split('\t').collect();
+                                if p.len() < 8 {
+                                    return None;
+                                }
+                                Some((
+                                    p[0].to_string(),
+                                    p[1].to_string(),
+                                    p[2].to_string(),
+                                    p[3] == "1",
+                                    p[4].parse().unwrap_or(0),
+                                    p[5].parse().unwrap_or(0),
+                                    p[6].to_string(),
+                                    p[7].to_string(),
+                                ))
+                            })
+                            .collect();
+                        if !entries.is_empty() {
+                            let window_to_xsterm: std::collections::HashMap<String, u32> =
+                                if let Ok(bindings) = controller.window_bindings.lock() {
+                                    bindings.clone()
+                                } else {
+                                    std::collections::HashMap::new()
+                                };
+                            let mut first_registered = false;
+                            for entry in &entries {
+                                let xsterm_id = controller.allocate_xsterm_id();
+                                controller.register_pane(entry.0.clone(), xsterm_id);
+                                let xsterm_window_id = window_to_xsterm
+                                    .get(&entry.1)
+                                    .copied()
+                                    .unwrap_or(0);
+                                controller.record_pane_window(
+                                    entry.0.clone(),
+                                    entry.1.clone(),
+                                    xsterm_window_id,
+                                );
+                                bridge.emit_tmux_pane_added_with_window(
+                                    xsterm_id,
+                                    &entry.0,
+                                    xsterm_window_id,
+                                );
+                                if let Ok(mut pane_bindings) =
+                                    controller.pane_bindings.lock()
+                                {
+                                    pane_bindings.insert(entry.0.clone(), xsterm_id);
+                                }
+                                if !first_registered {
+                                    controller.record_first_pane(
+                                        xsterm_id,
+                                        entry.0.clone(),
+                                    );
+                                    first_registered = true;
+                                }
+                            }
+                            let rows = entries
+                                .iter()
+                                .map(|e| {
+                                    serde_json::json!({
+                                        "paneId": e.0,
+                                        "windowId": e.1,
+                                        "sessionId": e.2,
+                                        "active": e.3,
+                                        "width": e.4,
+                                        "height": e.5,
+                                        "cwd": e.6,
+                                        "title": e.7,
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+                            bridge.emit_tmux_pane_added_for_list(
+                                controller_id,
+                                serde_json::json!(rows),
+                            );
+                        }
+                    }
+                    _ => {
+                        tracing::debug!(
+                            "command {} body kind {:?} is not body-routed; ignoring {} lines",
+                            id,
+                            kind,
+                            body_lines.len()
+                        );
+                    }
+                }
             }
         }
-        ControlEvent::CommandError { .. } => {
+        ProtocolEvent::CommandError { .. } => {
             let mut rs = match controller.router_state.lock() {
                 Ok(g) => g,
                 Err(_) => return,
@@ -451,275 +613,3 @@ fn dispatch_event(
     }
 }
 
-/// Snapshot of one window row produced by `tmux list-windows -F`:
-/// `#{window_id}\t#{session_id}\t#{window_name}\t#{window_active}\t#{window_layout}`.
-struct WindowListRow {
-    window_id: String,
-    session_id: String,
-    name: String,
-    active: bool,
-    layout: String,
-}
-
-/// Snapshot of one pane row produced by `tmux list-panes -F`:
-/// `#{pane_id}\t#{window_id}\t#{session_id}\t#{pane_active}\t
-///  #{pane_width}\t#{pane_height}\t#{pane_current_path}\t#{pane_title}`.
-struct PaneListRow {
-    pane_id: String,
-    window_id: String,
-    session_id: String,
-    active: bool,
-    width: u16,
-    height: u16,
-    cwd: String,
-    title: String,
-}
-
-fn parse_window_list_row(line: &str) -> Option<WindowListRow> {
-    let parts: Vec<&str> = line.split('\t').collect();
-    if parts.len() < 5 {
-        return None;
-    }
-    Some(WindowListRow {
-        window_id: parts[0].to_string(),
-        session_id: parts[1].to_string(),
-        name: parts[2].to_string(),
-        active: parts[3] == "1",
-        layout: parts[4].to_string(),
-    })
-}
-
-fn parse_pane_list_row(line: &str) -> Option<PaneListRow> {
-    let parts: Vec<&str> = line.split('\t').collect();
-    if parts.len() < 8 {
-        return None;
-    }
-    Some(PaneListRow {
-        pane_id: parts[0].to_string(),
-        window_id: parts[1].to_string(),
-        session_id: parts[2].to_string(),
-        active: parts[3] == "1",
-        width: parts[4].parse().unwrap_or(0),
-        height: parts[5].parse().unwrap_or(0),
-        cwd: parts[6].to_string(),
-        title: parts[7].to_string(),
-    })
-}
-
-fn emit_window_list(
-    bridge: &TmuxBridge,
-    session_id: u32,
-    controller: &TmuxController,
-    cmd_id: u32,
-    lines: &[String],
-) {
-    let entries: Vec<WindowListRow> = lines
-        .iter()
-        .filter_map(|l| parse_window_list_row(l))
-        .collect();
-    if entries.is_empty() {
-        tracing::debug!("command {} body had no parseable list rows", cmd_id);
-        return;
-    }
-    // Pre-populate the registry's event_waiters AND the controller's
-    // `window_bindings` map for every window we see in this list —
-    //
-    // 1. The server won't fire `%window-add` for windows that already
-    //    existed before this controller attached, so `emit_pane_list`
-    //    needs the binding to resolve the bootstrap pane → window
-    //    mapping.
-    // 2. `SessionManager::create_tmux` calls
-    //    `xsterm_window_id_for(&controller, tmux_window_id)` which
-    //    queries `window_bindings` — if it's empty there, the
-    //    bootstrap `SessionInfo.xsterm_window_id = None` and the
-    //    frontend's control-window sync insert skips (Bug 0009).
-    //
-    // Allocate a fresh `xsterm_window_id` for each window. P8 W3b:
-    // use `Bootstrap` event waiters instead of the deleted
-    // `pending_window_pane` field.
-    let window_ids: std::collections::HashMap<String, u32> = entries
-        .iter()
-        .map(|e| {
-            let xsterm_wid = controller.allocate_xsterm_window_id();
-            controller.registry.register_event_waiter(EventWaiter {
-                kind: EventWaiterKind::Bootstrap,
-                sender: EventWaiterSender::None,
-                tmux_window_id: Some(e.window_id.clone()),
-                xsterm_window_id: Some(xsterm_wid),
-            });
-            // **Bug 0009 fix:** also persist the binding in
-            // `window_bindings` so the following `list-panes`
-            // response (and `SessionManager::create_tmux`'s
-            // xsterm_window_id_for lookup) can resolve it.
-            if let Ok(mut bindings) = controller.window_bindings.lock() {
-                tracing::info!(
-                    "[DEBUG-0009-RUST] emit_window_list: inserting tmux_window_id={:?} -> xsterm_window_id={} into window_bindings (controller {})",
-                    e.window_id,
-                    xsterm_wid,
-                    controller.controller_id()
-                );
-                bindings.insert(e.window_id.clone(), xsterm_wid);
-            }
-            (e.window_id.clone(), xsterm_wid)
-        })
-        .collect();
-    let rows = entries
-        .iter()
-        .map(|entry| {
-            let xsterm_wid = window_ids
-                .get(&entry.window_id)
-                .copied()
-                .unwrap_or(0);
-            serde_json::json!({
-                "controllerId": session_id,
-                "tmuxWindowId": entry.window_id,
-                "xstermWindowId": xsterm_wid,
-                "xstermSessionId": session_id,
-                "xstermPaneId": "",
-            })
-        })
-        .collect::<Vec<_>>();
-    tracing::info!(
-        "[DEBUG-0009-RUST] emit_window_list: controller {} cmd_id={} entries={} windows={:?}",
-        session_id,
-        cmd_id,
-        entries.len(),
-        entries.iter().map(|e| (&e.window_id, "...")).collect::<Vec<_>>()
-    );
-    bridge.emit_tmux_window_added_for_list(session_id, serde_json::json!(rows));
-}
-
-fn emit_pane_list(
-    bridge: &TmuxBridge,
-    session_id: u32,
-    controller: &TmuxController,
-    cmd_id: u32,
-    lines: &[String],
-) {
-    let entries: Vec<PaneListRow> = lines
-        .iter()
-        .filter_map(|l| parse_pane_list_row(l))
-        .collect();
-    if entries.is_empty() {
-        tracing::debug!("command {} body had no parseable list rows", cmd_id);
-        return;
-    }
-    // Look up the xsterm window id per tmux window id (populated by
-    // `emit_window_list`) and bind each pane to its window.
-    let window_to_xsterm: std::collections::HashMap<String, u32> =
-        if let Ok(bindings) = controller.window_bindings.lock() {
-            bindings.clone()
-        } else {
-            std::collections::HashMap::new()
-        };
-    // Best-effort: register every pane we see. The first one wakes
-    // `await_first_pane`; the rest are bound to their windows for
-    // `%output` routing via the `pane_bindings` map.
-    let mut first_registered = false;
-    for entry in &entries {
-        let xsterm_id = controller.allocate_xsterm_id();
-        controller.register_pane(entry.pane_id.clone(), xsterm_id);
-        let xsterm_window_id = window_to_xsterm
-            .get(&entry.window_id)
-            .copied()
-            .unwrap_or(0);
-        // Persist the pane → window + window → xsterm-window bindings so
-        // `create_tmux` can populate the bootstrap `SessionInfo` with
-        // both `tmux_window_id` and `xsterm_window_id`. ADR 0009.
-        controller.record_pane_window(
-            entry.pane_id.clone(),
-            entry.window_id.clone(),
-            xsterm_window_id,
-        );
-        bridge.emit_tmux_pane_added_with_window(
-            xsterm_id,
-            &entry.pane_id,
-            xsterm_window_id,
-        );
-        if let Ok(mut pane_bindings) = controller.pane_bindings.lock() {
-            pane_bindings.insert(entry.pane_id.clone(), xsterm_id);
-        }
-        if !first_registered {
-            controller.record_first_pane(xsterm_id, entry.pane_id.clone());
-            first_registered = true;
-            tracing::info!(
-                "bootstrap first pane registered from list-panes: window={} pane={} xsterm_id={} xsterm_window_id={}",
-                entry.window_id,
-                entry.pane_id,
-                xsterm_id,
-                xsterm_window_id,
-            );
-        } else {
-            tracing::info!(
-                "bootstrap additional pane registered from list-panes: window={} pane={} xsterm_id={}",
-                entry.window_id,
-                entry.pane_id,
-                xsterm_id,
-            );
-        }
-    }
-    let rows = entries
-        .iter()
-        .map(|e| {
-            serde_json::json!({
-                "paneId": e.pane_id,
-                "windowId": e.window_id,
-                "sessionId": e.session_id,
-                "active": e.active,
-                "width": e.width,
-                "height": e.height,
-                "cwd": e.cwd,
-                "title": e.title,
-            })
-        })
-        .collect::<Vec<_>>();
-    bridge.emit_tmux_pane_added_for_list(session_id, serde_json::json!(rows));
-}
-
-/// Inspect the first body line of a completed command response. If it
-/// looks like `list-windows` (`@<id> …`) or `list-panes`
-/// (`%<id> …`) output, classify the body as `WindowList` / `PaneList`
-/// and emit a matching event to the frontend. For `WindowList`,
-/// additionally trigger a follow-up `list-panes ""` so the dispatch
-/// chain produces a `PaneList` event that registers the first pane
-/// for `await_first_pane` — eliminating the Bug 016 / 017 race.
-fn handle_classified_response(
-    controller: &TmuxController,
-    bridge: &TmuxBridge,
-    controller_id: u32,
-    cmd_id: u32,
-    lines: Vec<String>,
-) {
-    let first = lines.first().map(|l| l.trim_start()).unwrap_or("");
-    if first.starts_with('@') {
-        emit_window_list(bridge, controller_id, controller, cmd_id, &lines);
-        // Bug 017 bootstrap chain: emit window list, then immediately
-        // ask the server for the panes so we can register the first
-        // pane for `await_first_pane`. Dispatched on an OS thread to
-        // keep the dispatch loop free of synchronous send latency.
-        trigger_followup_list_panes(controller);
-    } else if first.starts_with('%') {
-        emit_pane_list(bridge, controller_id, controller, cmd_id, &lines);
-    } else {
-        tracing::debug!(
-            "command {} body does not look like a list query (first line {:?}); ignoring",
-            cmd_id,
-            first
-        );
-    }
-}
-
-/// Send `list-panes ""` on a detached OS thread so the dispatch loop
-/// doesn't block on the synchronous `stdin_tx` send. This is the second
-/// leg of the Bug 017 bootstrap chain — the first leg is the
-/// `list-windows` query sent by `schedule_initial_state_sync`.
-fn trigger_followup_list_panes(controller: &TmuxController) {
-    let stdin_tx = controller.stdin_tx.clone();
-    std::thread::spawn(move || {
-        let cmd =
-            super::commands::list_panes_with_format("", super::commands::DEFAULT_PANE_LIST_FORMAT);
-        if stdin_tx.send(cmd).is_err() {
-            tracing::debug!("trigger_followup_list_panes: controller stdin_tx closed; skipping");
-        }
-    });
-}

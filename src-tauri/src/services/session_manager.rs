@@ -2530,7 +2530,7 @@ mod tests {
     ) -> (
         Arc<crate::services::tmux::TmuxController>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
-        tokio::sync::mpsc::UnboundedSender<crate::services::tmux::events::ControlEvent>,
+        tokio::sync::mpsc::UnboundedSender<crate::services::tmux::protocol::events::ProtocolEvent>,
     ) {
         use crate::infrastructure::app_backend::AppBackend;
         use crate::services::tmux::dispatch::spawn_dispatch_task;
@@ -2552,7 +2552,7 @@ mod tests {
 
         let (stdin_tx, stdin_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let (dispatch_tx, dispatch_rx) =
-            tokio::sync::mpsc::unbounded_channel::<crate::services::tmux::events::ControlEvent>();
+            tokio::sync::mpsc::unbounded_channel::<crate::services::tmux::protocol::events::ProtocolEvent>();
         let controller = crate::services::tmux::TmuxController::new_for_tests(
             controller_id,
             base_xsterm_id,
@@ -2611,7 +2611,7 @@ mod tests {
 
         dispatch_tx
             .send(
-                crate::services::tmux::events::ControlEvent::WindowPaneChanged {
+                crate::services::tmux::protocol::events::ProtocolEvent::WindowPaneChanged {
                     window_id: "@7".to_string(),
                     pane_id: "%11".to_string(),
                 },
@@ -2812,7 +2812,7 @@ mod tests {
 
         // Feed the matching WindowAdd reply.
         dispatch_tx
-            .send(crate::services::tmux::events::ControlEvent::WindowAdd {
+            .send(crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
                 window_id: "@3".to_string(),
             })
             .expect("dispatch channel must accept WindowAdd");
@@ -2821,7 +2821,7 @@ mod tests {
         // Feed the matching WindowPaneChanged reply.
         dispatch_tx
             .send(
-                crate::services::tmux::events::ControlEvent::WindowPaneChanged {
+                crate::services::tmux::protocol::events::ProtocolEvent::WindowPaneChanged {
                     window_id: "@3".to_string(),
                     pane_id: "%7".to_string(),
                 },
@@ -2878,13 +2878,13 @@ mod tests {
         // the matching WindowPaneChanged).
         let dispatch_tx_clone = _dispatch_tx.clone();
         dispatch_tx_clone
-            .send(crate::services::tmux::events::ControlEvent::WindowAdd {
+            .send(crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
                 window_id: "@11".to_string(),
             })
             .unwrap();
         dispatch_tx_clone
             .send(
-                crate::services::tmux::events::ControlEvent::WindowPaneChanged {
+                crate::services::tmux::protocol::events::ProtocolEvent::WindowPaneChanged {
                     window_id: "@11".to_string(),
                     pane_id: "%99".to_string(),
                 },
@@ -2974,20 +2974,20 @@ mod tests {
             .0 as u32;
 
         dispatch_tx
-            .send(crate::services::tmux::events::ControlEvent::CommandBegin {
+            .send(crate::services::tmux::protocol::events::ProtocolEvent::CommandBegin {
                 id: cmd_id,
                 timestamp: 0,
                 flags: 0,
             })
             .unwrap();
         dispatch_tx
-            .send(crate::services::tmux::events::ControlEvent::CommandOutput {
+            .send(crate::services::tmux::protocol::events::ProtocolEvent::CommandOutput {
                 id: cmd_id,
                 line: "scrollback line".to_string(),
             })
             .unwrap();
         dispatch_tx
-            .send(crate::services::tmux::events::ControlEvent::CommandEnd {
+            .send(crate::services::tmux::protocol::events::ProtocolEvent::CommandEnd {
                 id: cmd_id,
                 timestamp: 0,
                 flags: 0,
