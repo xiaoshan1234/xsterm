@@ -515,16 +515,39 @@ impl TmuxController {
         if mode == SpawnMode::Create {
             schedule_initial_state_sync(controller.stdin_tx.clone());
         } else {
-            // Attach: query the server's existing panes directly.
-            // Do it inline (no thread::sleep) — the dispatch loop is
-            // not racing a `new-window` so there's no point waiting.
-            controller
-                .stdin_tx
-                .send(tmux_cmd::list_panes_with_format(
-                    "",
-                    tmux_cmd::DEFAULT_PANE_LIST_FORMAT,
-                ))
-                .map_err(|e| format!("failed to enqueue list-panes -a (attach): {e}"))?;
+            // Attach: we need BOTH `list-windows` and `list-panes` to
+            // mirror the server's full state into xsterm.
+            //
+            // - `list-windows -a` → `tmux-window-list` event → frontend
+            //   installs an xsterm Window for every row (Bug 0009c:
+            //   local window count was < server window count on attach
+            //   because the bridge does NOT emit `tmux-window-added`
+            //   for windows that already existed before this
+            //   controller attached).
+            // - `list-panes -a` → `tmux-pane-list` event → dispatch
+            //   records the first pane for `await_first_pane` and
+            //   populates `window_bindings`.
+            //
+            // Both are required. Send them on a detached OS thread to
+            // avoid blocking the spawn path on a sync stdin send.
+            let stdin_tx = controller.stdin_tx.clone();
+            std::thread::spawn(move || {
+                let cmds = [
+                    tmux_cmd::list_windows(""),
+                    tmux_cmd::list_panes_with_format(
+                        "",
+                        tmux_cmd::DEFAULT_PANE_LIST_FORMAT,
+                    ),
+                ];
+                for cmd in cmds {
+                    if stdin_tx.send(cmd).is_err() {
+                        tracing::debug!(
+                            "tmux controller attach: controller already closed stdin_tx; skipping"
+                        );
+                        break;
+                    }
+                }
+            });
         }
         tracing::info!(
             "tmux controller {}: spawn complete (mode={:?}); reader/writer/dispatch/monitor tasks running",

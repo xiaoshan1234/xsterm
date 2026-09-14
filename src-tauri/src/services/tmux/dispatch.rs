@@ -521,12 +521,20 @@ fn emit_window_list(
         tracing::debug!("command {} body had no parseable list rows", cmd_id);
         return;
     }
-    // Pre-populate the registry's event_waiters for every window we see
-    // in this list — the server won't fire `%window-add` for windows
-    // that already existed before this controller attached, so
-    // `emit_pane_list` needs entries to match against. Allocate a
-    // fresh `xsterm_window_id` for each window so panes from the
-    // following `list-panes -a` response can be bound to it. P8 W3b:
+    // Pre-populate the registry's event_waiters AND the controller's
+    // `window_bindings` map for every window we see in this list —
+    //
+    // 1. The server won't fire `%window-add` for windows that already
+    //    existed before this controller attached, so `emit_pane_list`
+    //    needs the binding to resolve the bootstrap pane → window
+    //    mapping.
+    // 2. `SessionManager::create_tmux` calls
+    //    `xsterm_window_id_for(&controller, tmux_window_id)` which
+    //    queries `window_bindings` — if it's empty there, the
+    //    bootstrap `SessionInfo.xsterm_window_id = None` and the
+    //    frontend's control-window sync insert skips (Bug 0009).
+    //
+    // Allocate a fresh `xsterm_window_id` for each window. P8 W3b:
     // use `Bootstrap` event waiters instead of the deleted
     // `pending_window_pane` field.
     let window_ids: std::collections::HashMap<String, u32> = entries
@@ -539,6 +547,19 @@ fn emit_window_list(
                 tmux_window_id: Some(e.window_id.clone()),
                 xsterm_window_id: Some(xsterm_wid),
             });
+            // **Bug 0009 fix:** also persist the binding in
+            // `window_bindings` so the following `list-panes`
+            // response (and `SessionManager::create_tmux`'s
+            // xsterm_window_id_for lookup) can resolve it.
+            if let Ok(mut bindings) = controller.window_bindings.lock() {
+                tracing::info!(
+                    "[DEBUG-0009-RUST] emit_window_list: inserting tmux_window_id={:?} -> xsterm_window_id={} into window_bindings (controller {})",
+                    e.window_id,
+                    xsterm_wid,
+                    controller.controller_id()
+                );
+                bindings.insert(e.window_id.clone(), xsterm_wid);
+            }
             (e.window_id.clone(), xsterm_wid)
         })
         .collect();
@@ -558,6 +579,13 @@ fn emit_window_list(
             })
         })
         .collect::<Vec<_>>();
+    tracing::info!(
+        "[DEBUG-0009-RUST] emit_window_list: controller {} cmd_id={} entries={} windows={:?}",
+        session_id,
+        cmd_id,
+        entries.len(),
+        entries.iter().map(|e| (&e.window_id, "...")).collect::<Vec<_>>()
+    );
     bridge.emit_tmux_window_added_for_list(session_id, serde_json::json!(rows));
 }
 

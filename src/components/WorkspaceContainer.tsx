@@ -32,20 +32,6 @@ interface WorkspaceContainerProps {
 }
 
 export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceContainerProps) {
-  // [DEBUG-0009] verify what windows exist at render
-  console.log("[DEBUG-0009] WorkspaceContainer render", {
-    workspaceId: workspace.id,
-    workspaceName: workspace.name,
-    activeWindowId: workspace.activeWindowId,
-    windows: workspace.windows.map(w => ({
-      id: w.id,
-      name: w.name,
-      windowType: w.windowType,
-      xstermWindowId: w.xstermWindowId,
-      tmuxControlWindowId: w.tmuxControlWindowId,
-      tmuxControlName: w.tmuxControlName,
-    })),
-  });
   const {
     sessions,
     setActiveWorkspace,
