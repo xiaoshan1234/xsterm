@@ -311,10 +311,27 @@ const INITIAL_STATE_SYNC_DELAY: Duration = Duration::from_millis(500);
 /// `await_first_pane` — eliminating the race in Bug 016 / 017 where
 /// the `list-panes` response was processed before its sender was
 /// installed on the controller.
-fn schedule_initial_state_sync(stdin_tx: mpsc::UnboundedSender<String>) {
+///
+/// `session_name` is read from the controller's own `session_name`
+/// slot (set by `spawn_local` / `spawn_attach`). PR-0009-fix: send
+/// `-t <session>` instead of `-a` so we enumerate windows for THIS
+/// controller's session only.
+fn schedule_initial_state_sync(
+    controller: Arc<TmuxController>,
+    stdin_tx: mpsc::UnboundedSender<String>,
+) {
     thread::spawn(move || {
         thread::sleep(INITIAL_STATE_SYNC_DELAY);
-        let command = tmux_cmd::list_windows("");
+        // Read the session name from the controller (single source of
+        // truth). Empty string is a defensive fallback — in production
+        // `spawn_local` already rejects configs without a session
+        // name; if we somehow got here without one (e.g. test fixture
+        // using `spawn_with_args`), we send `-a` as before rather than
+        // crashing the spawn path.
+        let session_name = controller
+            .session_name()
+            .unwrap_or_default();
+        let command = tmux_cmd::list_windows(&session_name);
         if stdin_tx.send(command).is_err() {
             tracing::debug!(
                 "schedule_initial_state_sync: controller already closed stdin_tx; skipping"
@@ -341,6 +358,23 @@ impl TmuxController {
         ssh_backend: &dyn SshBackend,
         controller_id: u32,
     ) -> Result<Arc<Self>, TmuxError> {
+        // PR-0009-fix: require a session name in Create mode too.
+        // Prior to this fix `spawn_attach` enforced the rule (it had
+        // to — attach needs a target), but `spawn_local` allowed
+        // `tmux_session_name: None`, which made tmux auto-generate a
+        // numeric session id. That hid the session from any later
+        // `list-windows -t <name>` query. With the v2 handshake using
+        // `-t <session>` (see `wire::list_windows` and
+        // `HandshakeStep::encode`), an unknown name would silently
+        // emit `tmux-windows-list` rows from the wrong session (or
+        // nothing at all). Reject the config up front with a clear
+        // message — same shape as `spawn_attach`'s validation.
+        let session_name = config.tmux_session_name.as_deref().ok_or_else(|| TmuxError::Ipc {
+            context: "tmux -CC create requires `tmuxSessionName` in TmuxCcConfig \
+                      (per PR-0009-fix; was previously allowed to be auto-generated)",
+            source: None,
+        })?;
+
         if let Some(ssh_cfg) = config.ssh.as_ref() {
                     // SSH path: build the remote `tmux -CC ...` argv, run
                     // it through an SSH exec channel, and wrap the resulting
@@ -358,7 +392,20 @@ impl TmuxController {
                         .map_err(|msg| spawn_err("ssh_backend.connect_exec", msg))?;
                     let backend: Box<dyn TmuxBackend> =
                         Box::new(SshTmuxBackend::from_connect_result(result));
-                    return Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create);
+                    let controller = Self::spawn_with_backend(
+                        backend,
+                        app_backend,
+                        controller_id,
+                        SpawnMode::Create,
+                    )?;
+                    // Mirror `spawn_attach`: stash the session name on
+                    // the controller so `schedule_initial_state_sync` /
+                    // Attach path can read it without re-parsing the
+                    // config.
+                    if let Ok(mut slot) = controller.session_name.lock() {
+                        *slot = Some(session_name.to_string());
+                    }
+                    return Ok(controller);
                 }
 
         // Local path: spawn `tmux` as a tokio child process.
@@ -372,7 +419,16 @@ impl TmuxController {
 
         let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, &argv_refs))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
-        Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)
+        let controller = Self::spawn_with_backend(
+            backend,
+            app_backend,
+            controller_id,
+            SpawnMode::Create,
+        )?;
+        if let Ok(mut slot) = controller.session_name.lock() {
+            *slot = Some(session_name.to_string());
+        }
+        Ok(controller)
     }
 
     /// Lower-level constructor — spawns tmux with `argv[1..]` already
@@ -513,27 +569,35 @@ impl TmuxController {
         // `await_first_pane`; list-windows is unused because there is
         // no fresh `%window-add` to chain against.
         if mode == SpawnMode::Create {
-            schedule_initial_state_sync(controller.stdin_tx.clone());
+            schedule_initial_state_sync(controller.clone(), controller.stdin_tx.clone());
         } else {
             // Attach: we need BOTH `list-windows` and `list-panes` to
             // mirror the server's full state into xsterm.
             //
-            // - `list-windows -a` → `tmux-window-list` event → frontend
-            //   installs an xsterm Window for every row (Bug 0009c:
-            //   local window count was < server window count on attach
-            //   because the bridge does NOT emit `tmux-window-added`
-            //   for windows that already existed before this
-            //   controller attached).
+            // - `list-windows -t <session>` (PR-0009-fix: was `-a`,
+            //   now scoped to THIS controller's session) →
+            //   `tmux-window-list` event → frontend installs an xsterm
+            //   Window for every row (Bug 0009c: local window count
+            //   was < server window count on attach because the bridge
+            //   does NOT emit `tmux-window-added` for windows that
+            //   already existed before this controller attached).
             // - `list-panes -a` → `tmux-pane-list` event → dispatch
             //   records the first pane for `await_first_pane` and
             //   populates `window_bindings`.
             //
             // Both are required. Send them on a detached OS thread to
             // avoid blocking the spawn path on a sync stdin send.
+            //
+            // PR-0009-fix: read session_name from the controller
+            // (spawn_attach already set it before calling us here).
             let stdin_tx = controller.stdin_tx.clone();
+            let controller_for_attach = controller.clone();
             std::thread::spawn(move || {
+                let session_name = controller_for_attach
+                    .session_name()
+                    .unwrap_or_default();
                 let cmds = [
-                    tmux_cmd::list_windows(""),
+                    tmux_cmd::list_windows(&session_name),
                     tmux_cmd::list_panes_with_format(
                         "",
                         tmux_cmd::DEFAULT_PANE_LIST_FORMAT,

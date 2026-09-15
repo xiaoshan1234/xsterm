@@ -922,6 +922,26 @@ Bug 017 修复后（dispatch_event 自动 classify list-windows/list-panes 响�
 ## 是否解决
 YES（重启验证：应看到所有 server windows 注册、所有 panes 注册含历史输出）
 
+## 改进建议（PR-0009-fix，2026-09-14，openclaw 提议）
+原 Bug 018 修复方案用 `list-windows -a` + 丢 `session_id` 参数（"始终查所有 sessions"）。
+openclaw 指出这过于粗暴 —— 一个 controller attach 到 session `test` 时会同时枚举 server 上的 `dev` session windows，污染 `window_bindings` 并向 frontend 发错误行的 `tmux-window-list`。
+
+**改进**：改用 `list-windows -t <session_id>`（req-006-tmux.md §3 line 118 规范），精准只列当前 controller 的 session。
+
+**落地**：
+- `wire.rs::list_windows(session_id)` 用 `-t <session>` + `quote_arg` 处理特殊字符
+- `handshake.rs::HandshakeStep::encode(&self, session_name: &str)` 签名扩展
+- `controller/mod.rs::schedule_initial_state_sync` 和 Attach 分支从 controller 自己的 `session_name` 字段读（single source of truth）
+- `controller/mod.rs::spawn_local` 入口加 `tmux_session_name` 校验：之前 Create 模式允许 `None`（让 tmux 自动起名），现在和 `spawn_attach` 一致地强制 `Some`
+- 4 个新单测覆盖 `-t` flag、空格 quote、引号 escape、format token 保留
+
+**遗留 TODO**：`list_panes_with_format` 仍是 `-a`；req-006 §3 line 117 规范是 `list-panes -t @<window>` per-window 两步方案。需要 dispatcher 加"per-window follow-up list-panes"队列，工作量超出本次 PR 范围，标 TODO 注释。
+
+**验证**：
+- `cargo test --lib`：326 passed, 0 failed（322 + 4 新增）
+- `cargo check`：0 编译错误
+- LSP warnings：1 个 `TmuxError::Ipc` 提示已修复；其余 55 warnings 均为 P1-P5 既有 dead code 遗留
+
 # Bug 019
 ## 现象
 Bug 018 修复后（`list-windows -a` + `list-panes -a` + 预填 pending_window_pane），用户报"还是 1 个 window"。

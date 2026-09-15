@@ -204,6 +204,13 @@ pub fn list_panes(window_id: &str) -> String {
 /// the default bootstrap query after a fresh `new-window`).
 /// `window_id` non-empty ⇒ `-t <window_id>` (used to refresh a specific
 /// window after a `WindowList`).
+///
+/// **Known imperfection**: both branches keep `-a`. The non-empty
+/// branch's `-t <window_id>` is enough on its own (single window, no
+/// need to fan out to "all") — the `-a` is redundant. Same applies
+/// to `list_windows` before PR-0009-fix. Out of scope for this PR;
+/// tracked as future cleanup once the per-window list-panes dance
+/// (see TODO on `list_panes_for_bootstrap`) is implemented.
 pub fn list_panes_with_format(window_id: &str, format: &str) -> String {
     if window_id.is_empty() {
         format!("list-panes -a -F '{format}'\n")
@@ -224,12 +231,26 @@ pub const DEFAULT_PANE_LIST_FORMAT: &str =
 pub const DEFAULT_WINDOW_LIST_FORMAT: &str =
     "#{window_id}\t#{session_id}\t#{window_name}\t#{window_active}\t#{window_layout}";
 
-/// Build a `list-windows -a` query so the bootstrap pass picks up
-/// every pre-existing window/pane on the server (not just the first).
-/// Without `-a` tmux only reports the current session's first window,
-/// so panes in other windows would be lost on the client side.
-pub fn list_windows(_session_id: &str) -> String {
-    format!("list-windows -a -F '{DEFAULT_WINDOW_LIST_FORMAT}'\n")
+/// Build a `list-windows -t <session_id>` query so the bootstrap pass
+/// picks up every pre-existing window for **this controller's** tmux
+/// session (not other sessions on the same server).
+///
+/// **History**: prior to PR-0009-fix this used `-a` and ignored its
+/// argument (`_session_id`). That was overly broad: a controller
+/// attached to session `test` would also enumerate windows of the
+/// `dev` session living on the same tmux server, polluting
+/// `window_bindings` and emitting bogus `tmux-window-list` rows.
+/// Switched to `-t <session>` per `req-006-tmux.md` §3 line 118 and
+/// dev review (openclaw, 2026-09-14).
+///
+/// `session_id` is `quote_arg`'d so session names with whitespace or
+/// embedded quotes round-trip safely.
+pub fn list_windows(session_id: &str) -> String {
+    format!(
+        "list-windows -t {target} -F '{fmt}'\n",
+        target = quote_arg(session_id),
+        fmt = DEFAULT_WINDOW_LIST_FORMAT
+    )
 }
 
 /// `list-sessions` — list every session on this server.
@@ -265,13 +286,17 @@ pub fn refresh_client_control() -> String {
     "refresh-client -C\n".to_string()
 }
 
-/// `list-panes -a -F "#{session_name} #{window_id} #{window_name} #{pane_id}"`
-/// — list every pane on the server, formatted for the bootstrap
-/// state query. We send this right after `new-window` because some
-/// tmux versions (notably OpenBSD base) don't push
-/// `%window-pane-changed` immediately when a window is created
-/// under control mode; the server's own state query is the only
-/// reliable way to learn the first pane id (Bug 016).
+/// `list-panes -a -F "..."` — bootstrap pass query.
+///
+/// **TODO (post-PR-0009-fix)**: req-006-tmux.md §3 line 117 mandates
+/// `list-panes -t @<window>` (one query per window). That requires a
+/// two-step protocol: first `list-windows -t <session>` → collect
+/// `@<win>` ids → then per-window `list-panes -t @<win>`. The current
+/// single `list-panes -a` works because each `TmuxController` owns
+/// exactly one tmux session (so `-a` ≈ `-t <our_session>` for panes),
+/// but the per-window form is more precise and prevents surprise if
+/// the 1:1 invariant ever breaks. Defer until dispatch queue
+/// supports a "follow-up per-window list-panes" fan-out.
 pub fn list_panes_for_bootstrap() -> String {
     "list-panes -a -F \"#{session_name} #{window_id} #{window_name} #{pane_id}\"\n".to_string()
 }
@@ -306,6 +331,63 @@ mod tests {
     fn must_end_in_newline(s: &str) {
         assert!(s.ends_with('\n'), "command {s:?} is not newline-terminated");
     }
+
+    // ---------------------------------------------------------------
+    // PR-0009-fix: list_windows must scope to a session, not -a.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn list_windows_uses_target_session_flag() {
+        let cmd = list_windows("test");
+        must_end_in_newline(&cmd);
+        assert!(
+            cmd.starts_with("list-windows -t test -F '"),
+            "missing `-t <session>`; got {cmd:?}"
+        );
+        assert!(
+            !cmd.contains(" -a "),
+            "regression: list_windows re-introduced -a; got {cmd:?}"
+        );
+    }
+
+    #[test]
+    fn list_windows_quotes_session_with_whitespace() {
+        let cmd = list_windows("my session");
+        assert!(
+            cmd.starts_with("list-windows -t \"my session\" -F '"),
+            "session with whitespace must be quoted; got {cmd:?}"
+        );
+    }
+
+    #[test]
+    fn list_windows_quotes_session_with_embedded_quote() {
+        let cmd = list_windows("a\"b");
+        assert!(
+            cmd.starts_with("list-windows -t \"a\\\"b\" -F '"),
+            "embedded quote must be escaped; got {cmd:?}"
+        );
+    }
+
+    #[test]
+    fn list_windows_preserves_default_format() {
+        let cmd = list_windows("test");
+        for token in [
+            "#{window_id}",
+            "#{session_id}",
+            "#{window_name}",
+            "#{window_active}",
+            "#{window_layout}",
+        ] {
+            assert!(
+                cmd.contains(token),
+                "list_windows dropped format token {token:?}; got {cmd:?}"
+            );
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // existing tests below
+    // ---------------------------------------------------------------
 
     #[test]
     fn send_keys_escapes_control_bytes() {

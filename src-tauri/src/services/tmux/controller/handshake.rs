@@ -107,7 +107,14 @@ pub enum HandshakeStep {
 impl HandshakeStep {
     /// Encode this step to the wire payload tmux expects. The returned
     /// string is newline-terminated and ready to write to stdin.
-    pub fn encode(&self) -> String {
+    ///
+    /// `session_name` is required for steps that target a specific
+    /// tmux session ([`HandshakeStep::ListWindows`] /
+    /// [`HandshakeStep::ListPanesAll`]); other steps ignore it.
+    /// Validated at the caller side (see `TmuxController::spawn_local`):
+    /// the config's `tmux_session_name` must be `Some` before we reach
+    /// the handshake.
+    pub fn encode(&self, session_name: &str) -> String {
         match self {
             HandshakeStep::DisplayVersion => {
                 "display-message -p '#{version}'\n".to_string()
@@ -121,7 +128,11 @@ impl HandshakeStep {
             }
             HandshakeStep::RefreshClientC => "refresh-client -C\n".to_string(),
             HandshakeStep::NewWindow => wire::new_window_in_current(None),
-            HandshakeStep::ListWindows => wire::list_windows(""),
+            // PR-0009-fix: `-t <session_name>` instead of `-a` so we
+            // enumerate windows for THIS controller's session only.
+            HandshakeStep::ListWindows => wire::list_windows(session_name),
+            // TODO: per-window list-panes (req-006 §3 line 117). See
+            // TODO on `wire::list_panes_for_bootstrap`.
             HandshakeStep::ListPanesAll => {
                 wire::list_panes_with_format("", wire::DEFAULT_PANE_LIST_FORMAT)
             }
@@ -313,10 +324,11 @@ pub fn parse_probe(version_body: &[String], list_commands_body: &[String]) -> Re
 /// only sends + waits.
 pub async fn execute_step(
     step: HandshakeStep,
+    session_name: &str,
     registry: &CommandRegistry,
     tagged_tx: &tokio::sync::mpsc::UnboundedSender<TaggedCommand>,
 ) -> Result<Vec<String>, HandshakeError> {
-    let wire = step.encode();
+    let wire = step.encode(session_name);
     let (sender, receiver) = if step.awaits_body() {
         let (tx, rx) = tokio::sync::oneshot::channel();
         (Some(tx), Some(rx))
@@ -357,6 +369,7 @@ pub async fn execute_step(
 /// responsible for closing the tmux child on failure.
 pub async fn execute_plan(
     plan: HandshakePlan,
+    session_name: &str,
     registry: &CommandRegistry,
     tagged_tx: &tokio::sync::mpsc::UnboundedSender<TaggedCommand>,
 ) -> Result<HandshakeResult, HandshakeError> {
@@ -369,7 +382,7 @@ pub async fn execute_plan(
     let version = plan.version.clone();
     let capabilities = plan.capabilities.clone();
     for step in &plan.steps {
-        let _ = execute_step(step.clone(), registry, tagged_tx).await?;
+        let _ = execute_step(step.clone(), session_name, registry, tagged_tx).await?;
     }
     // PR-T5 will hook the response router here: after the last step
     // completes, we expect either a `%window-pane-changed` event (modern)
@@ -530,7 +543,7 @@ mod tests {
             HandshakeStep::ListWindows,
             HandshakeStep::ListPanesAll,
         ] {
-            let wire = step.encode();
+            let wire = step.encode("test");
             assert!(
                 wire.ends_with('\n'),
                 "step {step:?} did not newline-terminate: {wire:?}"
