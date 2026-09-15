@@ -177,6 +177,7 @@ All project documentation lives under `doc/`, organized by **role** (dev / pdm /
 | `doc/dev/changelog/bugs.md` | 已知 bug 历史 + 修复记录（按时间倒序） | 改 bug 前查历史 |
 | `doc/dev/changelog/perf.md` | 本地 PTY I/O 性能诊断 + 与 oxideterm 的架构对比 + 按 ROI 排序的修复计划（Perf 001-009） | 改 session I/O / 调 IPC / 排查"打字卡 / cat 大文件卡"前 |
 | `doc/dev/roadmap/` | 演进路线（gap-analysis / target-architecture / migration-prs） | 做产品决策、改字段行为前 |
+| `doc/dev/flows/` | 端到端代码流程（path:line + ASCII 图） | 排查"卡哪一步" / 跟新功能调用链时 |
 | `doc/dev/history/prd-0.1-requirements/create-session-config.md` | Create Session 表单字段完整参考（**已归档**，可能过时） | 改 CreateSessionDialog 前 |
 | `doc/dev/history/prd-0.1-requirements/session-config-{common,shell,ssh}.md` | Session config 三类字段详表（**已归档**，可能过时） | 改 LocalSessionForm / SshSessionForm / CommonSettingsForm 前 |
 | `doc/tm/handoff.md` | tm 验收专属入口（90 分钟达到拍板水平） | tm 第一次接手 / 每个 PR 验收前 |

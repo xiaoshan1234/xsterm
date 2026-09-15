@@ -17,6 +17,9 @@ doc/
 │   │   ├── 03-development-view.md         源码组织/构建/wire/bridge
 │   │   ├── 04-physical-view.md            部署/capabilities/跨主机路径
 │   │   └── 05-scenarios.md                关键场景把 4 视图串起来
+│   ├── flows/                             代码流程（端到端 path:line + ASCII 流程图）
+│   │   ├── README.md                      命名约定 + 模板
+│   │   └── 01-open-tmux-session.md        打开 tmux session 端到端
 │   ├── adr/                               决策记录
 │   │   ├── README.md
 │   │   ├── legacy-rfcs/0001..0004.md
@@ -69,6 +72,7 @@ doc/
 | 看未来目标态 | `dev/roadmap/target-architecture.md` |
 | 看 P1-P5 tmux 重设计 | `dev/adr/0005-tmux-redesign-v0.md` |
 | 看关键场景怎么串起来 | `dev/architecture/05-scenarios.md` |
+| 跟一个用户动作的端到端代码路径 | `dev/flows/01-open-tmux-session.md`（打开 tmux session 流程） |
 | 找被废弃的旧文档 | `dev/history/README.md`（顶部 banner + 子目录索引）|
 
 ### 我是 tm（第一次接手验收）

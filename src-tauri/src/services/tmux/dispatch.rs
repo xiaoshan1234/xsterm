@@ -583,18 +583,41 @@ fn emit_window_list(
             // `window_bindings` so the following `list-panes`
             // response (and `SessionManager::create_tmux`'s
             // xsterm_window_id_for lookup) can resolve it.
+            //
+            // PR-0009-fix: also log `window_name` so a tmux session
+            // operator can verify (a) `-t <session>` scoping landed
+            // the right rows and (b) the name field round-trips
+            // through DCS / control-mode parsing intact. Format is
+            // stable for grep: `[PR-0009-fix] window`.
+            tracing::info!(
+                "[DEBUG-0009-RUST] emit_window_list: inserting tmux_window_id={:?} name={:?} -> xsterm_window_id={} into window_bindings (controller {})",
+                e.window_id,
+                e.name,
+                xsterm_wid,
+                controller.controller_id()
+            );
             if let Ok(mut bindings) = controller.window_bindings.lock() {
-                tracing::info!(
-                    "[DEBUG-0009-RUST] emit_window_list: inserting tmux_window_id={:?} -> xsterm_window_id={} into window_bindings (controller {})",
-                    e.window_id,
-                    xsterm_wid,
-                    controller.controller_id()
-                );
                 bindings.insert(e.window_id.clone(), xsterm_wid);
             }
             (e.window_id.clone(), xsterm_wid)
         })
         .collect();
+    // PR-0009-fix: single-line summary so an operator reading the log
+    // can see the whole snapshot at a glance without grepping.
+    tracing::info!(
+        "[PR-0009-fix] emit_window_list: session={:?} controller={} rows={} windows=[{}]",
+        controller
+            .session_name()
+            .as_deref()
+            .unwrap_or("<unbound>"),
+        controller.controller_id(),
+        entries.len(),
+        entries
+            .iter()
+            .map(|e| format!("({:?}@{:?})", e.name, e.window_id))
+            .collect::<Vec<_>>()
+            .join(", "),
+    );
     let rows = entries
         .iter()
         .map(|entry| {
