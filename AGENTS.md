@@ -49,21 +49,80 @@ All three grep results must be reviewed against [`doc/design-system.md`](doc/des
 
 **Test launcher**: Use `test/tauri-launcher.ts` for `START_TAURI=true` workflows — it handles the PowerShell invocation automatically.
 
+## Pre-commit Formatting — Standing Rule
+
+**Every commit must run formatters before `git commit`.** Both languages, no exceptions (other than commits that touch only generated files: `src-tauri/gen/`, `dist/`, `node_modules/` — gitignored anyway).
+
+### The sequence
+
+```bash
+# 1. Frontend — Prettier rewrites files in place
+npm run format
+
+# 2. Backend — rustfmt rewrites Rust sources in src-tauri/
+cargo fmt --manifest-path src-tauri/Cargo.toml
+
+# 3. Stage the formatting-only changes
+git add -u
+
+# 4. Commit (existing code + formatter rewrites in the same commit)
+git commit -m "..."
+```
+
+Then run the format **check** versions to confirm clean state:
+
+```bash
+npm run format:check           # exit 0 = clean
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check   # exit 0 = clean
+```
+
+### Why "auto-format" not just "check"
+
+This project chose `npm run format` + `cargo fmt` (mutating) over `format:check` + `cargo fmt --check` (fail-on-drift) because:
+
+- Style drift on save is faster to fix than style drift on PR review.
+- A rebase that drops the formatter run produces noisy diffs; running the formatter locally keeps the diff focused on the actual change.
+- The project does not yet have a git pre-commit hook (intentional, per dev review 2026-09) — the rule relies on dev discipline. **If a PR shows up with `npm run format:check` or `cargo fmt --check` failing, treat it as a bug fix, not a style nit.**
+
+### When formatting breaks code
+
+Two cases to watch for — do NOT silence the formatter, fix the underlying issue:
+
+1. **Prettier wraps a long string literal** → break the string into a template literal with concatenation, or extract a constant. See `src/services/sessionService.ts` for canonical examples.
+2. **rustfmt splits a long `match` arm across lines** → usually correct; if it hurts readability, extract a helper function instead of fighting the formatter.
+
+### Markdown files in `doc/`
+
+Prettier formats `.md` files too (`format` script's glob includes `md`). Long Chinese lines and ASCII diagrams may wrap differently than expected — preview the diff before committing. **Do not** add prettier-ignore comments to `doc/` files just to silence reformatting; either accept the diff or restructure the content.
+
 ## Exact Commands
 
 | Command | What it does |
-|--------|--------------|
+|---------|--------------|
 | `npm run dev` | Starts the Vite dev server only on port 1420. Does **not** start the Rust app. |
 | `npm run tauri dev` | Runs the full Tauri app in development: starts Vite in the background, then compiles and launches the Rust binary. |
 | `npm run build` | Runs `tsc` (type check only) + `vite build` → outputs to `dist/`. |
 | `npm run tauri build` | Full production build: `npm run build`, then `cargo build --release`, then bundles the app. |
 | `npm run preview` | Serves the built `dist/` via Vite preview. |
 | `npm run tauri` | Pass-through to the Tauri CLI. |
+| `npm run lint` / `npm run lint:fix` | ESLint over `src/` (`lint:fix` auto-fixes). |
+| `npm run format` | Prettier auto-formats `src/**/*.{ts,tsx,css,json,md}` in place. |
+| `npm run format:check` | Prettier check only (no writes) — used in CI / pre-commit verify. |
+| `npm test` / `npm run test:watch` | Vitest (frontend unit tests). |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | Runs the Rust unit tests. |
 | `cargo check --manifest-path src-tauri/Cargo.toml` | Fast Rust type-check without full compilation. |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml` | Rust lint (available, not enforced by CI). |
+| `cargo fmt` | Auto-formats all Rust sources in `src-tauri/` per rustfmt defaults. |
+| `cargo fmt --check` | Rust format check only (no writes) — used in CI / pre-commit verify. |
 
-There are **no** `npm run lint`, `npm run test`, or `npm run format` scripts. There is no ESLint, Prettier, Vitest, Jest, or Playwright config in the repo.
+Tools available in this repo (none of which are wired into a CI pipeline yet — verification is dev responsibility):
+
+- ESLint (`@eslint/js` + `typescript-eslint` + `eslint-plugin-react-hooks`)
+- Prettier 3 (`.prettierrc` + `.prettierignore` at repo root)
+- Vitest 4 + jsdom + `@testing-library/react` for frontend unit tests
+- chromedriver + selenium-webdriver for system / UI tests (`test:system`, `test:ui`)
+- rustfmt (default config — no `rustfmt.toml` in the repo)
+
 
 ## Architecture
 
