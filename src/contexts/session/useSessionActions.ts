@@ -56,48 +56,42 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
   const createDefaultWorkspace = workspaceActions.createDefaultWorkspace;
 
   const openFromConfigInternal = useCallback(
-      async (configId: string): Promise<Session> => {
-        const config = savedConfigs.find((c) => c.id === configId);
-        if (!config) throw new Error("Config not found");
+    async (configId: string): Promise<Session> => {
+      const config = savedConfigs.find((c) => c.id === configId);
+      if (!config) throw new Error("Config not found");
 
-        const info = await dispatchByType(
-          config.type,
-          () => sessionService.createLocal(config.config as LocalSessionConfig),
-          () => sessionService.createSsh(config.config as SSHSessionConfig),
-          () => sessionService.createTmux(config.config as TmuxCcConfig),
+      const info = await dispatchByType(
+        config.type,
+        () => sessionService.createLocal(config.config as LocalSessionConfig),
+        () => sessionService.createSsh(config.config as SSHSessionConfig),
+        () => sessionService.createTmux(config.config as TmuxCcConfig),
+      );
+      const session = buildFrontendSession(info, configId, config.type, config.displayConfig);
+      setSessions((prev) => [...prev, session]);
+
+      // ADR 0009 §2.7: tmux-cc sessions need their control-window +
+      // bootstrap pane xsterm Window installed synchronously (the
+      // dispatch task does NOT emit `tmux-window-added` for the
+      // bootstrap window — see dispatch.rs EventWaiterKind::Bootstrap).
+      // Without this, opening a saved tmux config renders an empty
+      // workspace and no control-window tab.
+      if (
+        config.type === "tmux-cc" &&
+        session.tmuxControllerId !== undefined &&
+        session.xstermWindowId !== undefined
+      ) {
+        insertTmuxControlAndBootstrapWindow(
+          session,
+          (config.config as TmuxCcConfig).tmuxSessionName,
+          activeWorkspaceId,
+          setWorkspaces,
+          createDefaultWorkspace,
         );
-        const session = buildFrontendSession(info, configId, config.type, config.displayConfig);
-        setSessions((prev) => [...prev, session]);
-
-        // ADR 0009 §2.7: tmux-cc sessions need their control-window +
-        // bootstrap pane xsterm Window installed synchronously (the
-        // dispatch task does NOT emit `tmux-window-added` for the
-        // bootstrap window — see dispatch.rs EventWaiterKind::Bootstrap).
-        // Without this, opening a saved tmux config renders an empty
-        // workspace and no control-window tab.
-        if (
-          config.type === "tmux-cc" &&
-          session.tmuxControllerId !== undefined &&
-          session.xstermWindowId !== undefined
-        ) {
-          insertTmuxControlAndBootstrapWindow(
-            session,
-            (config.config as TmuxCcConfig).tmuxSessionName,
-            activeWorkspaceId,
-            setWorkspaces,
-            createDefaultWorkspace,
-          );
-        }
-        return session;
-      },
-      [
-        savedConfigs,
-        setSessions,
-        setWorkspaces,
-        activeWorkspaceId,
-        createDefaultWorkspace,
-      ],
-    );
+      }
+      return session;
+    },
+    [savedConfigs, setSessions, setWorkspaces, activeWorkspaceId, createDefaultWorkspace],
+  );
 
   const createSessionFromSavedConfig = useCallback(
     async (configId: string): Promise<Session> => openFromConfigInternal(configId),
@@ -181,12 +175,12 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
   );
 
   const lifecycle = useSessionLifecycle({
-      ...opts,
-      openFromConfigInternal,
-      createWindowFromSession,
-      createWorkspaceFromSession,
-      createDefaultWorkspace,
-    });
+    ...opts,
+    openFromConfigInternal,
+    createWindowFromSession,
+    createWorkspaceFromSession,
+    createDefaultWorkspace,
+  });
 
   const pane = usePaneActions(opts);
 

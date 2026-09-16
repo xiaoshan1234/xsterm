@@ -38,10 +38,6 @@ export function parseSessionOutputFrame(frame: Uint8Array): ParsedSessionOutput 
   const sessionId = view.getUint32(2, false);
   const payloadLen = view.getUint32(6, false);
   if (frame.byteLength < HEADER_LEN + payloadLen) return null;
-  const data = new Uint8Array(
-    frame.buffer,
-    frame.byteOffset + HEADER_LEN,
-    payloadLen,
-  );
+  const data = new Uint8Array(frame.buffer, frame.byteOffset + HEADER_LEN, payloadLen);
   return { sessionId, data };
 }

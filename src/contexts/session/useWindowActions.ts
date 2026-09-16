@@ -186,28 +186,27 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
       if (!window) return;
 
       // ADR 0009 §2.4 — three-branch close semantics:
-//
-// 1. tmux-control window: confirm-gated by the caller; close every
-//    ordinary tmux-window in this workspace that belongs to the same
-//    controller (which detaches each leaf's session), drop the
-//    control-window itself, and unmark the attached tmux server so the
-//    next startup does not ghost-reconnect. tmux server-side session
-//    + windows stay alive.
-//
-// 2. ordinary tmux-window (xstermWindowId !== undefined): just close
-//    the leaf sessions. No `kill_tmux_window` (destructive ops are
-//    invoked explicitly via the Pane context menu).
-//
-// 3. everything else (init / non-tmux terminal): close leaf sessions
-//    + drop the Window.
+      //
+      // 1. tmux-control window: confirm-gated by the caller; close every
+      //    ordinary tmux-window in this workspace that belongs to the same
+      //    controller (which detaches each leaf's session), drop the
+      //    control-window itself, and unmark the attached tmux server so the
+      //    next startup does not ghost-reconnect. tmux server-side session
+      //    + windows stay alive.
+      //
+      // 2. ordinary tmux-window (xstermWindowId !== undefined): just close
+      //    the leaf sessions. No `kill_tmux_window` (destructive ops are
+      //    invoked explicitly via the Pane context menu).
+      //
+      // 3. everything else (init / non-tmux terminal): close leaf sessions
+      //    + drop the Window.
 
       if (window.windowType === "tmux-control" && window.tmuxControlWindowId !== undefined) {
         const controllerId = window.tmuxControlWindowId;
         const sessionIdsToClose = new Set<number>();
         const windowsToDrop: string[] = [windowId];
-        const siblingWindows = workspacesRef.current
-          .find((w) => w.id === workspaceId)
-          ?.windows ?? [];
+        const siblingWindows =
+          workspacesRef.current.find((w) => w.id === workspaceId)?.windows ?? [];
         for (const w of siblingWindows) {
           if (w.id === windowId) continue;
           if (w.windowType === "tmux-control") continue;

@@ -25,9 +25,9 @@ export function useSessionState(): SessionState {
   // one entry per tmux controller that has exited unexpectedly.
   // Kept separate from `sessions` so its lifecycle is not affected by the
   // `tmux-controller-exit` listener's `setSessions((prev) => prev.filter(...))`.
-  const [tmuxControllerErrors, setTmuxControllerErrors] = useState<Map<number, TmuxControllerError>>(
-    new Map(),
-  );
+  const [tmuxControllerErrors, setTmuxControllerErrors] = useState<
+    Map<number, TmuxControllerError>
+  >(new Map());
   // `controllerId → config` map. Populated by the create / attach
   // tmux flows so the retry banner can hand the original config back to
   // `createTmux` / `attachTmux`. Survives pane teardown (which only removes

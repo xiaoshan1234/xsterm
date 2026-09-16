@@ -66,9 +66,7 @@ export function buildFrontendSession(
     createdAt: now,
     lastActivityAt: now,
     ...(info.tmuxPaneId !== undefined ? { tmuxPaneId: info.tmuxPaneId } : {}),
-    ...(info.tmuxControllerId !== undefined
-      ? { tmuxControllerId: info.tmuxControllerId }
-      : {}),
+    ...(info.tmuxControllerId !== undefined ? { tmuxControllerId: info.tmuxControllerId } : {}),
     ...(info.tmuxWindowId !== undefined ? { tmuxWindowId: info.tmuxWindowId } : {}),
     ...(info.xstermWindowId !== undefined ? { xstermWindowId: info.xstermWindowId } : {}),
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),

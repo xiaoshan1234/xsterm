@@ -49,7 +49,7 @@ describe("parseSessionOutputFrame", () => {
   });
 
   it("decodes binary bytes (CJK, emoji) byte-exact", () => {
-    const payload = new Uint8Array([0xe4, 0xb8, 0xad, 0xef,0xbf, 0xbd]); // "中" + 🎉
+    const payload = new Uint8Array([0xe4, 0xb8, 0xad, 0xef, 0xbf, 0xbd]); // "中" + 🎉
     const frame = buildFrame(FRAME_MAGIC, FRAME_VERSION, u32MaxSafe(), payload);
     const parsed = parseSessionOutputFrame(frame);
     expect(parsed!.data).toEqual(payload);

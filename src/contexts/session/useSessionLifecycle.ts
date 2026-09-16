@@ -51,16 +51,14 @@ interface UseSessionLifecycleDeps {
    * continue to route through `createWindowFromSession` so they share the
    * active workspace as before.
    */
-  createWorkspaceFromSession: (
-    sessionId: number,
-    configId: string,
-    name?: string,
-  ) => Workspace;
+  createWorkspaceFromSession: (sessionId: number, configId: string, name?: string) => Workspace;
   createDefaultWorkspace: () => Workspace;
   /** persistent map keyed by controller id so the retry banner
    * can hand the original config back to the backend after a
    * `tmux-controller-exit`. */
-  tmuxControllerConfigsRef?: React.MutableRefObject<Map<number, import("../../types/session").TmuxCcConfig>>;
+  tmuxControllerConfigsRef?: React.MutableRefObject<
+    Map<number, import("../../types/session").TmuxCcConfig>
+  >;
 }
 
 export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
@@ -106,11 +104,12 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       // re-call the backend with the same args. We do this AFTER the
       // backend call so the controllerId is known (the backend assigns
       // it; we don't get it from the frontend).
-      if (type === "tmux-cc" && tmuxControllerConfigsRef && session.tmuxControllerId !== undefined) {
-        tmuxControllerConfigsRef.current.set(
-          session.tmuxControllerId,
-          config as TmuxCcConfig,
-        );
+      if (
+        type === "tmux-cc" &&
+        tmuxControllerConfigsRef &&
+        session.tmuxControllerId !== undefined
+      ) {
+        tmuxControllerConfigsRef.current.set(session.tmuxControllerId, config as TmuxCcConfig);
       }
 
       setSessions((prev) => [...prev, session]);
@@ -154,38 +153,38 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
       }
 
       if (!skipAutoWindow) {
-              if (type === "tmux-cc") {
-                // ADR 0009 §2.7: synchronously install the control-window +
-                // bootstrap pane's xsterm Window. The bootstrap tmux
-                // window does NOT emit `%window-add`, so the
-                // `tmux-window-added` listener never fires for it.
-                insertTmuxControlAndBootstrapWindow(
-                  session,
-                  tmuxControllerConfigsRef?.current.get(session.tmuxControllerId ?? -1)?.tmuxSessionName,
-                  activeWorkspaceId,
-                  setWorkspaces,
-                  createDefaultWorkspace,
-                );
-              } else {
-                createWindowFromSession(
-                  session.id,
-                  session.configId,
-                  session.name,
-                  activeWorkspaceId ?? undefined,
-                );
-              }
-            }
-            return session;
-          },
-          [
-            updateConfigs,
-            createWindowFromSession,
-            setWorkspaces,
+        if (type === "tmux-cc") {
+          // ADR 0009 §2.7: synchronously install the control-window +
+          // bootstrap pane's xsterm Window. The bootstrap tmux
+          // window does NOT emit `%window-add`, so the
+          // `tmux-window-added` listener never fires for it.
+          insertTmuxControlAndBootstrapWindow(
+            session,
+            tmuxControllerConfigsRef?.current.get(session.tmuxControllerId ?? -1)?.tmuxSessionName,
             activeWorkspaceId,
+            setWorkspaces,
             createDefaultWorkspace,
-            tmuxControllerConfigsRef,
-          ],
-        );
+          );
+        } else {
+          createWindowFromSession(
+            session.id,
+            session.configId,
+            session.name,
+            activeWorkspaceId ?? undefined,
+          );
+        }
+      }
+      return session;
+    },
+    [
+      updateConfigs,
+      createWindowFromSession,
+      setWorkspaces,
+      activeWorkspaceId,
+      createDefaultWorkspace,
+      tmuxControllerConfigsRef,
+    ],
+  );
 
   /**
    * Create a local session and automatically create a workspace
@@ -287,19 +286,17 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
    * local-only (SSH falls through to the previous behaviour).
    */
   const createTmuxSession = useCallback(
-      async (
-        config: TmuxCcConfig,
-        save = true,
-        displayConfig?: SessionDisplayConfig,
-      ): Promise<Session> => {
-        return createAndActivateSession(
+    async (
+      config: TmuxCcConfig,
+      save = true,
+      displayConfig?: SessionDisplayConfig,
+    ): Promise<Session> => {
+      return createAndActivateSession(
         "tmux-cc",
         async () => {
           let alreadyExists = false;
           try {
-            alreadyExists = await sessionService.probeTmuxSessionExists(
-              config,
-            );
+            alreadyExists = await sessionService.probeTmuxSessionExists(config);
           } catch (err) {
             // Probe is best-effort. If it fails (SSH, transport
             // error, command-not-found), fall through to the create
@@ -595,9 +592,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     (id: number, patch: Partial<SessionDisplayConfig>) => {
       setSessions((prev) =>
         prev.map((s) =>
-          s.id === id
-            ? { ...s, displayConfig: { ...(s.displayConfig ?? {}), ...patch } }
-            : s,
+          s.id === id ? { ...s, displayConfig: { ...(s.displayConfig ?? {}), ...patch } } : s,
         ),
       );
     },
@@ -638,15 +633,15 @@ export { assertSessionNotUsedElsewhere };
  * controller race during the bootstrap `list-windows` reply), only
  * the control-window is installed; the pane's xsterm Window will
  * arrive from the `tmux-window-added` listener when it eventually
-  * fires.
-  */
- export function insertTmuxControlAndBootstrapWindow(
-   session: Session,
-   tmuxSessionName: string | undefined,
-   activeWorkspaceId: string | null,
-   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>,
-   createDefaultWorkspace: () => Workspace,
- ): void {
+ * fires.
+ */
+export function insertTmuxControlAndBootstrapWindow(
+  session: Session,
+  tmuxSessionName: string | undefined,
+  activeWorkspaceId: string | null,
+  setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>,
+  createDefaultWorkspace: () => Workspace,
+): void {
   if (session.type !== "tmux-cc" || session.tmuxControllerId === undefined) {
     return;
   }
@@ -655,8 +650,8 @@ export { assertSessionNotUsedElsewhere };
   const rootPane = createLeafPane(100, session.id, session.configId);
 
   setWorkspaces((prev) => {
-      let workspaces = prev;
-      let targetId = activeWorkspaceId ?? workspaces[0]?.id ?? null;
+    let workspaces = prev;
+    let targetId = activeWorkspaceId ?? workspaces[0]?.id ?? null;
     if (!targetId || !workspaces.some((w) => w.id === targetId)) {
       const fresh = createDefaultWorkspace();
       targetId = fresh.id;
@@ -695,9 +690,7 @@ export { assertSessionNotUsedElsewhere };
       rootPane,
       activePaneId: rootPane.id,
       windowType: "terminal",
-      ...(session.xstermWindowId !== undefined
-        ? { xstermWindowId: session.xstermWindowId }
-        : {}),
+      ...(session.xstermWindowId !== undefined ? { xstermWindowId: session.xstermWindowId } : {}),
     };
     const baseWindows = hasControlWindow ? target.windows : [controlWindow, ...target.windows];
     return workspaces.map((workspace) =>

@@ -22,10 +22,7 @@ export function useTmuxAutoAttach(): void {
         if (results.length === 0) return;
         const succeeded = results.filter((r) => r.info !== undefined).length;
         const failed = results.length - succeeded;
-        console.info(
-          `[xsterm] auto-attach: ${succeeded} succeeded, ${failed} failed`,
-          results,
-        );
+        console.info(`[xsterm] auto-attach: ${succeeded} succeeded, ${failed} failed`, results);
       })
       .catch((err) => {
         console.warn("[xsterm] autoAttachTmuxServers failed:", err);

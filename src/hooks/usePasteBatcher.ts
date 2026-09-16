@@ -60,10 +60,7 @@ export function chunkBytes(bytes: Uint8Array, chunkSize: number): Uint8Array[] {
  * A paste that contains no newlines never needs the wrap — it's
  * indistinguishable from typed input.
  */
-export function formatPasteForBracketedMode(
-  text: string,
-  bracketedPasteMode: boolean,
-): string {
+export function formatPasteForBracketedMode(text: string, bracketedPasteMode: boolean): string {
   const normalized = convertLineEndings(text);
   if (!bracketedPasteMode || !normalized.includes("\r")) {
     return normalized;
@@ -123,20 +120,15 @@ export function usePasteBatcher(sessionId: number) {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  const enqueuePaste = useCallback(
-    (text: string, bracketedPasteMode: boolean) => {
-      if (text.length === 0) return;
-      const wrapped = formatPasteForBracketedMode(text, bracketedPasteMode);
-      const bytes = new TextEncoder().encode(wrapped);
+  const enqueuePaste = useCallback((text: string, bracketedPasteMode: boolean) => {
+    if (text.length === 0) return;
+    const wrapped = formatPasteForBracketedMode(text, bracketedPasteMode);
+    const bytes = new TextEncoder().encode(wrapped);
 
-      // Append to the queue. `.catch(() => {})` isolates failures so one
-      // rejection doesn't poison every subsequent paste.
-      appendToPasteQueue(inputQueueRef, () =>
-        writeSessionBytes(sessionIdRef.current, bytes),
-      );
-    },
-    [],
-  );
+    // Append to the queue. `.catch(() => {})` isolates failures so one
+    // rejection doesn't poison every subsequent paste.
+    appendToPasteQueue(inputQueueRef, () => writeSessionBytes(sessionIdRef.current, bytes));
+  }, []);
 
   // On unmount, do NOT cancel the queue — pending bytes should still reach
   // the PTY. If the component remounts with the same sessionId the queue

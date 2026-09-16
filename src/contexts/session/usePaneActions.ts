@@ -235,11 +235,7 @@ async function splitTmuxPaneInternal(
 
   let newSessionId: number;
   try {
-    const info = await sessionService.createTmuxPane(
-      controllerId,
-      xstermSessionId,
-      direction,
-    );
+    const info = await sessionService.createTmuxPane(controllerId, xstermSessionId, direction);
     newSessionId = info.id;
   } catch (e) {
     console.error("splitTmuxPane: backend create_tmux_pane failed:", e);
@@ -288,9 +284,7 @@ async function splitTmuxPaneInternal(
             ...workspace,
             activeWindowId: windowId,
             windows: workspace.windows.map((win) =>
-              win.id === windowId
-                ? { ...win, rootPane: newRoot, activePaneId: newPane.id }
-                : win,
+              win.id === windowId ? { ...win, rootPane: newRoot, activePaneId: newPane.id } : win,
             ),
           })
         : w,
