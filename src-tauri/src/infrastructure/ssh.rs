@@ -242,8 +242,8 @@ impl SshBackend for RusshBackend {
             ..
         } = result;
         drop(write_tx); // close stdin → server sees EOF after command runs
-        // Drain stdout on a blocking thread — read_rx is `sync_mpsc`,
-        // not async; `read()` is the only way to consume it.
+                        // Drain stdout on a blocking thread — read_rx is `sync_mpsc`,
+                        // not async; `read()` is the only way to consume it.
         let stdout_bytes: Vec<u8> = std::thread::spawn(move || {
             let mut buf = Vec::new();
             while let Ok(Some(bytes)) = read_rx.recv() {

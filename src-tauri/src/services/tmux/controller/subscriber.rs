@@ -71,8 +71,7 @@ use crate::services::tmux::bridge::TmuxBridge;
 use crate::services::tmux::controller::id_map::{send_to_waiter, CommandRegistry};
 use crate::services::tmux::controller::TmuxController;
 use crate::services::tmux::protocol::command::{
-    CommandId, ResponseOutcome, ResponseWaiter,
-    TaggedCommand,
+    CommandId, ResponseOutcome, ResponseWaiter, TaggedCommand,
 };
 use crate::services::tmux::protocol::events::ProtocolEvent;
 
@@ -125,10 +124,7 @@ pub enum RouterAction {
     /// A body line arrived inside a `%begin..%end` block. Accumulator
     /// state has been updated. Caller does nothing; this is for logging /
     /// observability only — W3 can hook UI progress here if useful.
-    BodyLine {
-        cmd_id: u32,
-        line: String,
-    },
+    BodyLine { cmd_id: u32, line: String },
 
     /// RouterState has resolved the registered [`ResponseWaiter`] for a
     /// `%end` / `%error` reply (using the accumulated body or the error
@@ -252,9 +248,7 @@ impl RouterState {
                     cmd_id: *id,
                     lines: Vec::new(),
                 });
-                if registry.outstanding() == 0
-                    || !self.registry_has_id_u32(registry, *id)
-                {
+                if registry.outstanding() == 0 || !self.registry_has_id_u32(registry, *id) {
                     RouterAction::UnknownCommandStart { cmd_id: *id }
                 } else {
                     RouterAction::Ignore
@@ -286,15 +280,8 @@ impl RouterState {
                 match waiter {
                     Some(waiter) => {
                         // Drain in_flight and ship the body to the waiter.
-                        let lines = self
-                            .in_flight
-                            .take()
-                            .map(|b| b.lines)
-                            .unwrap_or_default();
-                        send_to_waiter(
-                            waiter,
-                            ResponseOutcome::Ok { body_lines: lines },
-                        );
+                        let lines = self.in_flight.take().map(|b| b.lines).unwrap_or_default();
+                        send_to_waiter(waiter, ResponseOutcome::Ok { body_lines: lines });
                         RouterAction::Resolve
                     }
                     None => {
@@ -346,10 +333,7 @@ impl RouterState {
     /// command (0 when no block is active).
     #[allow(dead_code)]
     pub fn in_flight_lines(&self) -> usize {
-        self.in_flight
-            .as_ref()
-            .map(|b| b.lines.len())
-            .unwrap_or(0)
+        self.in_flight.as_ref().map(|b| b.lines.len()).unwrap_or(0)
     }
 
     /// Drain the in-flight body lines (if any) and return them. Kept for
@@ -419,11 +403,7 @@ mod tests {
     struct NoopBackend;
 
     impl crate::infrastructure::app_backend::AppBackend for NoopBackend {
-        fn emit(
-            &self,
-            _event: &str,
-            _payload: &serde_json::Value,
-        ) -> Result<(), String> {
+        fn emit(&self, _event: &str, _payload: &serde_json::Value) -> Result<(), String> {
             Ok(())
         }
         fn emit_binary(&self, _bytes: Vec<u8>) -> Result<(), String> {
@@ -451,9 +431,7 @@ mod tests {
 
     /// Tiny inline "block on" for oneshot receivers. Avoids pulling in
     /// a runtime; uses `try_recv` in a tight loop.
-    fn block_on<T>(
-        mut rx: oneshot::Receiver<T>,
-    ) -> Result<T, oneshot::error::TryRecvError> {
+    fn block_on<T>(mut rx: oneshot::Receiver<T>) -> Result<T, oneshot::error::TryRecvError> {
         loop {
             match rx.try_recv() {
                 Ok(v) => return Ok(v),
@@ -554,10 +532,7 @@ mod tests {
             &bridge,
             controller.as_ref(),
         );
-        assert_eq!(
-            action.kind(),
-            RouterActionKind::UnknownCommandStart
-        );
+        assert_eq!(action.kind(), RouterActionKind::UnknownCommandStart);
     }
 
     /// Regression: fire-and-forget `%begin..%end` (no waiter) must still
@@ -671,10 +646,9 @@ mod tests {
             ResponseOutcome::Err { message } => {
                 assert_eq!(message, "parse error");
             }
-            ResponseOutcome::Ok { body_lines } => panic!(
-                "unexpected ok with {} lines",
-                body_lines.len()
-            ),
+            ResponseOutcome::Ok { body_lines } => {
+                panic!("unexpected ok with {} lines", body_lines.len())
+            }
         }
     }
 
@@ -730,10 +704,7 @@ mod tests {
             &bridge,
             controller.as_ref(),
         );
-        assert_eq!(
-            action.kind(),
-            RouterActionKind::OrphanCommandEnd
-        );
+        assert_eq!(action.kind(), RouterActionKind::OrphanCommandEnd);
         // Begin state is still on id 0; clean up so the test doesn't leak.
         let _ = router.process(
             &ProtocolEvent::CommandEnd {

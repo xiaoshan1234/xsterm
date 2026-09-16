@@ -70,10 +70,7 @@ pub(crate) struct TmuxBridge {
 
 impl TmuxBridge {
     /// Build a bridge from the pieces. Cheap — just two `Arc` clones.
-    pub(crate) fn new(
-        backend: Arc<dyn AppBackend>,
-        controller: Arc<TmuxController>,
-    ) -> Self {
+    pub(crate) fn new(backend: Arc<dyn AppBackend>, controller: Arc<TmuxController>) -> Self {
         Self {
             backend,
             controller,
@@ -107,11 +104,7 @@ impl TmuxBridge {
     /// `parser.rs`); the frontend `Terminal` instance's xterm.js
     /// write hook expects a `number[]` so it can pass each byte to
     /// `term.write(charCode)` without crossing the JS string boundary.
-    pub(crate) fn emit_session_output(
-        &self,
-        xsterm_session_id: u32,
-        data: Vec<u8>,
-    ) {
+    pub(crate) fn emit_session_output(&self, xsterm_session_id: u32, data: Vec<u8>) {
         let payload = json!([xsterm_session_id, data]);
         self.try_emit("session-output", &payload, || {
             format!(
@@ -233,11 +226,7 @@ impl TmuxBridge {
     /// `windows` is one JSON row per tmux window — see the old inline
     /// `emit_window_list` payload shape (controllerId / tmuxWindowId /
     /// xstermWindowId / xstermSessionId / xstermPaneId).
-    pub(crate) fn emit_tmux_window_added_for_list(
-        &self,
-        session_id: u32,
-        rows: Value,
-    ) {
+    pub(crate) fn emit_tmux_window_added_for_list(&self, session_id: u32, rows: Value) {
         // The old inline impl emitted one `tmux-window-added` per row
         // *plus* a single `tmux-window-list` at the end. Both events
         // are still part of the wire contract; the per-row emits are
@@ -260,11 +249,7 @@ impl TmuxBridge {
     /// [`Self::emit_tmux_window_added_for_list`].
     ///
     /// Frontend contract: `{ controller_id, panes: [...] }`.
-    pub(crate) fn emit_tmux_pane_added_for_list(
-        &self,
-        session_id: u32,
-        rows: Value,
-    ) {
+    pub(crate) fn emit_tmux_pane_added_for_list(&self, session_id: u32, rows: Value) {
         let payload = json!({
             "controller_id": self.controller.controller_id(),
             "panes": rows,
@@ -281,20 +266,14 @@ impl TmuxBridge {
     /// `%window-close` notification.
     ///
     /// Frontend contract: `{ controller_id, tmux_window_id, xsterm_window_id }`.
-    pub(crate) fn emit_tmux_window_closed(
-        &self,
-        tmux_window_id: &str,
-        xsterm_window_id: u32,
-    ) {
+    pub(crate) fn emit_tmux_window_closed(&self, tmux_window_id: &str, xsterm_window_id: u32) {
         let payload = json!({
             "controller_id": self.controller.controller_id(),
             "tmux_window_id": tmux_window_id,
             "xsterm_window_id": xsterm_window_id,
         });
         self.try_emit("tmux-window-closed", &payload, || {
-            format!(
-                "tmux-window-closed emit failed for window {tmux_window_id}"
-            )
+            format!("tmux-window-closed emit failed for window {tmux_window_id}")
         });
     }
 
@@ -314,9 +293,7 @@ impl TmuxBridge {
             "name": name,
         });
         self.try_emit("tmux-window-renamed", &payload, || {
-            format!(
-                "tmux-window-renamed emit failed for window {tmux_window_id}"
-            )
+            format!("tmux-window-renamed emit failed for window {tmux_window_id}")
         });
     }
 
@@ -324,20 +301,14 @@ impl TmuxBridge {
     /// `%window-pane-changed` (pane gone).
     ///
     /// Frontend contract: `{ controller_id, tmux_pane_id, xsterm_session_id }`.
-    pub(crate) fn emit_tmux_pane_removed(
-        &self,
-        tmux_pane_id: &str,
-        xsterm_session_id: u32,
-    ) {
+    pub(crate) fn emit_tmux_pane_removed(&self, tmux_pane_id: &str, xsterm_session_id: u32) {
         let payload = json!({
             "controller_id": self.controller.controller_id(),
             "tmux_pane_id": tmux_pane_id,
             "xsterm_session_id": xsterm_session_id,
         });
         self.try_emit("tmux-pane-removed", &payload, || {
-            format!(
-                "tmux-pane-removed emit failed for pane {tmux_pane_id}"
-            )
+            format!("tmux-pane-removed emit failed for pane {tmux_pane_id}")
         });
     }
 
@@ -354,9 +325,7 @@ impl TmuxBridge {
     pub(crate) fn emit_tmux_continued(&self, tmux_pane_id: &str) {
         let payload = json!({ "tmux_pane_id": tmux_pane_id });
         self.try_emit("tmux-continued", &payload, || {
-            format!(
-                "tmux-continued emit failed for pane {tmux_pane_id}"
-            )
+            format!("tmux-continued emit failed for pane {tmux_pane_id}")
         });
     }
 
@@ -365,10 +334,7 @@ impl TmuxBridge {
     /// panes owned by the controller as disconnected.
     ///
     /// Frontend contract: `{ controller_id, reason }`.
-    pub(crate) fn emit_tmux_controller_exit(
-        &self,
-        reason: Option<&str>,
-    ) {
+    pub(crate) fn emit_tmux_controller_exit(&self, reason: Option<&str>) {
         let payload = json!({
             "controller_id": self.controller.controller_id(),
             "reason": reason,
@@ -389,18 +355,9 @@ impl TmuxBridge {
     /// (and the controller keeps running so that next event will
     /// eventually arrive). If we ever want to add retry / backoff,
     /// this is the one method to change.
-    fn try_emit<F: FnOnce() -> String>(
-        &self,
-        event_name: &'static str,
-        payload: &Value,
-        ctx: F,
-    ) {
+    fn try_emit<F: FnOnce() -> String>(&self, event_name: &'static str, payload: &Value, ctx: F) {
         if let Err(e) = self.backend.emit(event_name, payload) {
-            tracing::warn!(
-                "tmux bridge: {}: {}",
-                ctx(),
-                e
-            );
+            tracing::warn!("tmux bridge: {}: {}", ctx(), e);
         }
     }
 }
@@ -431,13 +388,8 @@ mod tests {
     }
 
     impl AppBackend for CapturingBackend {
-        fn emit(
-            &self,
-            event: &str,
-            payload: &serde_json::Value,
-        ) -> Result<(), String> {
-            *self.last.lock().unwrap() =
-                Some((event.to_string(), payload.clone()));
+        fn emit(&self, event: &str, payload: &serde_json::Value) -> Result<(), String> {
+            *self.last.lock().unwrap() = Some((event.to_string(), payload.clone()));
             if self.emit_should_fail {
                 Err("simulated emit failure".into())
             } else {

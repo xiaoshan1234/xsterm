@@ -34,8 +34,8 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc;
 
-use super::controller::{RouterAction, TmuxController};
 use super::bridge::TmuxBridge;
+use super::controller::{RouterAction, TmuxController};
 use super::protocol::events::ProtocolEvent;
 use crate::services::tmux::protocol::command::{EventWaiter, EventWaiterKind, EventWaiterSender};
 
@@ -63,11 +63,7 @@ pub(crate) fn spawn_dispatch_task(
 
 /// Interpret one [`ProtocolEvent`] and emit the corresponding frontend
 /// events via [`TmuxBridge`].
-fn dispatch_event(
-    controller: &Arc<TmuxController>,
-    bridge: &TmuxBridge,
-    event: ProtocolEvent,
-) {
+fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: ProtocolEvent) {
     tracing::trace!(
         "tmux dispatch: controller {} received event: {:?}",
         controller.controller_id(),
@@ -123,10 +119,7 @@ fn dispatch_event(
             //    `window_bindings`, emit `tmux-pane-added` (always),
             //    and — for user-driven `new-window` only — emit
             //    `tmux-window-added` and resolve the pending sender.
-            if let Some(pending) = controller
-                .registry
-                .take_event_waiter_for_window(&window_id)
-            {
+            if let Some(pending) = controller.registry.take_event_waiter_for_window(&window_id) {
                 let xsterm_id = controller.allocate_xsterm_id();
                 controller.register_pane(pane_id.clone(), xsterm_id);
                 controller.record_pane_window(pane_id.clone(), window_id.clone(), xsterm_id);
@@ -606,10 +599,7 @@ fn emit_window_list(
     // can see the whole snapshot at a glance without grepping.
     tracing::info!(
         "[PR-0009-fix] emit_window_list: session={:?} controller={} rows={} windows=[{}]",
-        controller
-            .session_name()
-            .as_deref()
-            .unwrap_or("<unbound>"),
+        controller.session_name().as_deref().unwrap_or("<unbound>"),
         controller.controller_id(),
         entries.len(),
         entries
@@ -621,10 +611,7 @@ fn emit_window_list(
     let rows = entries
         .iter()
         .map(|entry| {
-            let xsterm_wid = window_ids
-                .get(&entry.window_id)
-                .copied()
-                .unwrap_or(0);
+            let xsterm_wid = window_ids.get(&entry.window_id).copied().unwrap_or(0);
             serde_json::json!({
                 "controllerId": session_id,
                 "tmuxWindowId": entry.window_id,
@@ -639,7 +626,10 @@ fn emit_window_list(
         session_id,
         cmd_id,
         entries.len(),
-        entries.iter().map(|e| (&e.window_id, "...")).collect::<Vec<_>>()
+        entries
+            .iter()
+            .map(|e| (&e.window_id, "..."))
+            .collect::<Vec<_>>()
     );
     bridge.emit_tmux_window_added_for_list(session_id, serde_json::json!(rows));
 }
@@ -674,10 +664,7 @@ fn emit_pane_list(
     for entry in &entries {
         let xsterm_id = controller.allocate_xsterm_id();
         controller.register_pane(entry.pane_id.clone(), xsterm_id);
-        let xsterm_window_id = window_to_xsterm
-            .get(&entry.window_id)
-            .copied()
-            .unwrap_or(0);
+        let xsterm_window_id = window_to_xsterm.get(&entry.window_id).copied().unwrap_or(0);
         // Persist the pane → window + window → xsterm-window bindings so
         // `create_tmux` can populate the bootstrap `SessionInfo` with
         // both `tmux_window_id` and `xsterm_window_id`. ADR 0009.
@@ -686,11 +673,7 @@ fn emit_pane_list(
             entry.window_id.clone(),
             xsterm_window_id,
         );
-        bridge.emit_tmux_pane_added_with_window(
-            xsterm_id,
-            &entry.pane_id,
-            xsterm_window_id,
-        );
+        bridge.emit_tmux_pane_added_with_window(xsterm_id, &entry.pane_id, xsterm_window_id);
         if let Ok(mut pane_bindings) = controller.pane_bindings.lock() {
             pane_bindings.insert(entry.pane_id.clone(), xsterm_id);
         }
@@ -747,4 +730,3 @@ fn trigger_followup_list_panes(controller: &Arc<TmuxController>) {
         }
     });
 }
-

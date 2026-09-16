@@ -136,10 +136,16 @@ impl CommandRegistry {
         wire: String,
         waiter: Option<ResponseWaiter>,
     ) -> RegisteredCommand {
-        let id = CommandId(self.next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+        let id = CommandId(
+            self.next_id
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        );
         let waiter_registered = waiter.is_some();
         if let Some(w) = waiter {
-            self.by_id.lock().expect("CommandRegistry mutex poisoned").insert(id, w);
+            self.by_id
+                .lock()
+                .expect("CommandRegistry mutex poisoned")
+                .insert(id, w);
         }
         // Mirror the kind into `kind_by_id` whenever there is a waiter;
         // for fire-and-forget commands the dispatcher never classifies
@@ -151,11 +157,7 @@ impl CommandRegistry {
                 .expect("CommandRegistry mutex poisoned")
                 .insert(id, kind.clone());
         }
-        let tagged = TaggedCommand {
-            id,
-            kind,
-            wire,
-        };
+        let tagged = TaggedCommand { id, kind, wire };
         RegisteredCommand {
             id,
             tagged,
@@ -170,7 +172,10 @@ impl CommandRegistry {
     /// Call this on `%end <id>` (or `%error <id>`). The response router
     /// passes the accumulated body / error message into the waiter.
     pub fn take(&self, id: CommandId) -> Option<ResponseWaiter> {
-        self.by_id.lock().expect("CommandRegistry mutex poisoned").remove(&id)
+        self.by_id
+            .lock()
+            .expect("CommandRegistry mutex poisoned")
+            .remove(&id)
     }
 
     /// Look up the [`CommandKind`] that produced the registered waiter
@@ -212,8 +217,10 @@ impl CommandRegistry {
             .lock()
             .expect("CommandRegistry mutex poisoned");
         let pos = v.iter().position(|w| {
-            matches!(w.kind, crate::services::tmux::protocol::command::EventWaiterKind::SplitResult)
-                && w.tmux_window_id.is_none()
+            matches!(
+                w.kind,
+                crate::services::tmux::protocol::command::EventWaiterKind::SplitResult
+            ) && w.tmux_window_id.is_none()
         })?;
         match v.remove(pos).sender {
             EventWaiterSender::Split(tx) => Some(tx),
@@ -268,7 +275,10 @@ impl CommandRegistry {
     /// Test/diagnostic helper: how many waiters are still registered.
     #[allow(dead_code)]
     pub fn outstanding(&self) -> usize {
-        self.by_id.lock().expect("CommandRegistry mutex poisoned").len()
+        self.by_id
+            .lock()
+            .expect("CommandRegistry mutex poisoned")
+            .len()
     }
 
     /// Test/diagnostic helper: how many waiters have been taken since the
@@ -348,7 +358,8 @@ impl CommandRegistry {
     /// they retrieved via `take(id)`.
     #[allow(dead_code)]
     pub fn record_completed(&self) {
-        self.completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.completed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 

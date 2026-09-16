@@ -69,18 +69,18 @@ pub use self::handshake::{
     execute_plan, execute_step, parse_probe, plan_for, FirstPane, HandshakeError, HandshakePlan,
     HandshakeResult, HandshakeStep, ProbeResult, HANDSHAKE_STEP_TIMEOUT,
 };
-pub use self::id_map::{CommandRegistry, RegisteredCommand, send_to_waiter};
+pub use self::id_map::{send_to_waiter, CommandRegistry, RegisteredCommand};
 pub use self::subscriber::{RouterAction, RouterState};
 
-use super::protocol::wire as tmux_cmd;
-use super::dispatch::spawn_dispatch_task;
-use super::errors::{TmuxError, spawn_err};
 use super::bridge::TmuxBridge;
-use super::protocol::events::ProtocolEvent;
-use super::protocol::parser::ProtocolParser;
+use super::dispatch::spawn_dispatch_task;
+use super::errors::{spawn_err, TmuxError};
 use super::protocol::command::{
     CommandKind, EventWaiter, EventWaiterKind, EventWaiterSender, ResponseOutcome, ResponseWaiter,
 };
+use super::protocol::events::ProtocolEvent;
+use super::protocol::parser::ProtocolParser;
+use super::protocol::wire as tmux_cmd;
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -249,18 +249,18 @@ pub struct TmuxController {
     pub(crate) window_bindings: std::sync::Mutex<HashMap<String, u32>>,
     /// tmux session name for `tmux -CC attach-session` (set by
     /// `spawn_attach`; `None` for `spawn_local`). Wrapped in a `Mutex`
-        /// because `spawn_attach` writes it via the returned `Arc` after
-        /// `spawn_with_args` returns. Used by the `attachedTmuxServers`
-        /// persistence so we can re-attach on restart.
-        session_name: std::sync::Mutex<Option<String>>,
-        /// Whether this controller was created via `spawn_attach` (true) or
-        /// `spawn_local` / `spawn_with_args` (false). The dispatch task
-        /// uses this to decide whether to emit `tmux-pane-added` events
-        /// for *every* pane the server reports (Attach: server already has
-        /// windows/panes, we want xsterm to mirror them) or only the
-        /// bootstrap pane (Create: only one window exists, the one we just
-        /// asked the server to create).
-        pub(crate) spawn_mode: SpawnMode,
+    /// because `spawn_attach` writes it via the returned `Arc` after
+    /// `spawn_with_args` returns. Used by the `attachedTmuxServers`
+    /// persistence so we can re-attach on restart.
+    session_name: std::sync::Mutex<Option<String>>,
+    /// Whether this controller was created via `spawn_attach` (true) or
+    /// `spawn_local` / `spawn_with_args` (false). The dispatch task
+    /// uses this to decide whether to emit `tmux-pane-added` events
+    /// for *every* pane the server reports (Attach: server already has
+    /// windows/panes, we want xsterm to mirror them) or only the
+    /// bootstrap pane (Create: only one window exists, the one we just
+    /// asked the server to create).
+    pub(crate) spawn_mode: SpawnMode,
     /// tokio mutex serialising concurrent `capture_pane` callers
     /// so two requests never overlap their `%begin..%end` block.
     capture_lock: tokio::sync::Mutex<()>,
@@ -328,9 +328,7 @@ fn schedule_initial_state_sync(
         // name; if we somehow got here without one (e.g. test fixture
         // using `spawn_with_args`), we send `-a` as before rather than
         // crashing the spawn path.
-        let session_name = controller
-            .session_name()
-            .unwrap_or_default();
+        let session_name = controller.session_name().unwrap_or_default();
         let command = tmux_cmd::list_windows(&session_name);
         if stdin_tx.send(command).is_err() {
             tracing::debug!(
@@ -369,44 +367,43 @@ impl TmuxController {
         // emit `tmux-windows-list` rows from the wrong session (or
         // nothing at all). Reject the config up front with a clear
         // message — same shape as `spawn_attach`'s validation.
-        let session_name = config.tmux_session_name.as_deref().ok_or_else(|| TmuxError::Ipc {
-            context: "tmux -CC create requires `tmuxSessionName` in TmuxCcConfig \
+        let session_name = config
+            .tmux_session_name
+            .as_deref()
+            .ok_or_else(|| TmuxError::Ipc {
+                context: "tmux -CC create requires `tmuxSessionName` in TmuxCcConfig \
                       (per PR-0009-fix; was previously allowed to be auto-generated)",
-            source: None,
-        })?;
+                source: None,
+            })?;
 
         if let Some(ssh_cfg) = config.ssh.as_ref() {
-                    // SSH path: build the remote `tmux -CC ...` argv, run
-                    // it through an SSH exec channel, and wrap the resulting
-                    // `SshConnectResult` in a `SshTmuxBackend`.
-                    //
-                    // `connect_exec` returns `Result<_, String>` (russh has
-                    // no `Error: Send + Sync + 'static` blanket, so the
-                    // SshBackend trait is stuck with `String` for now).
-                    // We map the error to `TmuxError::Ipc` so the caller
-                    // can still pattern-match on the variant.
-                    let argv_strings = build_tmux_argv(config)?;
-                    let command = format!("tmux {}", argv_strings.join(" "));
-                    let result = ssh_backend
-                        .connect_exec(ssh_cfg, &command)
-                        .map_err(|msg| spawn_err("ssh_backend.connect_exec", msg))?;
-                    let backend: Box<dyn TmuxBackend> =
-                        Box::new(SshTmuxBackend::from_connect_result(result));
-                    let controller = Self::spawn_with_backend(
-                        backend,
-                        app_backend,
-                        controller_id,
-                        SpawnMode::Create,
-                    )?;
-                    // Mirror `spawn_attach`: stash the session name on
-                    // the controller so `schedule_initial_state_sync` /
-                    // Attach path can read it without re-parsing the
-                    // config.
-                    if let Ok(mut slot) = controller.session_name.lock() {
-                        *slot = Some(session_name.to_string());
-                    }
-                    return Ok(controller);
-                }
+            // SSH path: build the remote `tmux -CC ...` argv, run
+            // it through an SSH exec channel, and wrap the resulting
+            // `SshConnectResult` in a `SshTmuxBackend`.
+            //
+            // `connect_exec` returns `Result<_, String>` (russh has
+            // no `Error: Send + Sync + 'static` blanket, so the
+            // SshBackend trait is stuck with `String` for now).
+            // We map the error to `TmuxError::Ipc` so the caller
+            // can still pattern-match on the variant.
+            let argv_strings = build_tmux_argv(config)?;
+            let command = format!("tmux {}", argv_strings.join(" "));
+            let result = ssh_backend
+                .connect_exec(ssh_cfg, &command)
+                .map_err(|msg| spawn_err("ssh_backend.connect_exec", msg))?;
+            let backend: Box<dyn TmuxBackend> =
+                Box::new(SshTmuxBackend::from_connect_result(result));
+            let controller =
+                Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)?;
+            // Mirror `spawn_attach`: stash the session name on
+            // the controller so `schedule_initial_state_sync` /
+            // Attach path can read it without re-parsing the
+            // config.
+            if let Ok(mut slot) = controller.session_name.lock() {
+                *slot = Some(session_name.to_string());
+            }
+            return Ok(controller);
+        }
 
         // Local path: spawn `tmux` as a tokio child process.
         let argv_strings = build_tmux_argv(config)?;
@@ -419,12 +416,8 @@ impl TmuxController {
 
         let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, &argv_refs))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
-        let controller = Self::spawn_with_backend(
-            backend,
-            app_backend,
-            controller_id,
-            SpawnMode::Create,
-        )?;
+        let controller =
+            Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)?;
         if let Ok(mut slot) = controller.session_name.lock() {
             *slot = Some(session_name.to_string());
         }
@@ -463,11 +456,11 @@ impl TmuxController {
     /// Wave 1 `Arc<Mutex<Option<Child>>>` design did. Whoever wins runs
     /// with the backend; the loser sees `None` and exits silently.
     fn spawn_with_backend(
-            mut backend: Box<dyn TmuxBackend>,
-            app_backend: Arc<dyn AppBackend>,
-            controller_id: u32,
-            mode: SpawnMode,
-        ) -> Result<Arc<Self>, TmuxError> {
+        mut backend: Box<dyn TmuxBackend>,
+        app_backend: Arc<dyn AppBackend>,
+        controller_id: u32,
+        mode: SpawnMode,
+    ) -> Result<Arc<Self>, TmuxError> {
         let stdout = backend
             .take_stdout()
             .map_err(|e| format!("tmux backend has no stdout: {e}"))?;
@@ -507,20 +500,17 @@ impl TmuxController {
             // initialised to None; `spawn_attach` rewrites this
             // after construction via the returned Arc.
             session_name: std::sync::Mutex::new(None),
-                        capture_lock: tokio::sync::Mutex::new(()),
-                        split_pane_timeout: SPLIT_PANE_TIMEOUT,
-                        spawn_mode: mode,
-                        registry: CommandRegistry::new(),
-                        router_state: std::sync::Mutex::new(RouterState::default()),
-                    });
+            capture_lock: tokio::sync::Mutex::new(()),
+            split_pane_timeout: SPLIT_PANE_TIMEOUT,
+            spawn_mode: mode,
+            registry: CommandRegistry::new(),
+            router_state: std::sync::Mutex::new(RouterState::default()),
+        });
 
         spawn_dispatch_task(
             dispatch_rx,
             controller.clone(),
-            TmuxBridge::new(
-                Arc::clone(&controller.app_backend),
-                controller.clone(),
-            ),
+            TmuxBridge::new(Arc::clone(&controller.app_backend), controller.clone()),
         );
 
         // Bug 015 (legacy) used to enqueue an unconditional `new-window` after
@@ -593,15 +583,10 @@ impl TmuxController {
             let stdin_tx = controller.stdin_tx.clone();
             let controller_for_attach = controller.clone();
             std::thread::spawn(move || {
-                let session_name = controller_for_attach
-                    .session_name()
-                    .unwrap_or_default();
+                let session_name = controller_for_attach.session_name().unwrap_or_default();
                 let cmds = [
                     tmux_cmd::list_windows(&session_name),
-                    tmux_cmd::list_panes_with_format(
-                        "",
-                        tmux_cmd::DEFAULT_PANE_LIST_FORMAT,
-                    ),
+                    tmux_cmd::list_panes_with_format("", tmux_cmd::DEFAULT_PANE_LIST_FORMAT),
                 ];
                 for cmd in cmds {
                     if stdin_tx.send(cmd).is_err() {
@@ -713,10 +698,10 @@ impl TmuxController {
             )));
         }
         let cmd = tmux_cmd::send_keys(tmux_pane_id, keys);
-                self.stdin_tx
-                    .send(cmd)
-                    .map_err(|_| TmuxError::AlreadyClosed)
-            }
+        self.stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
+    }
 
     /// Resize a pane to `cols` × `rows` characters.
     ///
@@ -736,7 +721,9 @@ impl TmuxController {
             )));
         }
         let cmd = tmux_cmd::resize_pane(tmux_pane_id, cols, rows);
-        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+        self.stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// read up to `lines` lines of scrollback from the pane via
@@ -810,9 +797,7 @@ impl TmuxController {
         }
 
         match tokio::time::timeout(CAPTURE_PANE_TIMEOUT, rx).await {
-            Ok(Ok(ResponseOutcome::Ok { body_lines })) => {
-                Ok(body_lines.join("\n"))
-            }
+            Ok(Ok(ResponseOutcome::Ok { body_lines })) => Ok(body_lines.join("\n")),
             Ok(Ok(ResponseOutcome::Err { message })) => Err(TmuxError::Internal(format!(
                 "tmux controller {}: capture-pane failed (id={:?}): {message}",
                 self.controller_id, reg.tagged.id
@@ -932,23 +917,23 @@ impl TmuxController {
             guard.take()
         };
         let rx = rx.ok_or_else(|| {
-                    TmuxError::Internal(format!(
-                        "tmux controller {}: first pane already awaited",
-                        self.controller_id
-                    ))
-                })?;
-                // Await with the standard 5s timeout. The receiver buffers the
-                // dispatcher's `.send()`, so this doesn't lose notifications the
-                // way `Notify` did (Notify's `notified()` future is only
-                // registered as a waiter on first poll, leaving a T2→T3 race).
-                match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, rx).await {
-                    Ok(Ok(result)) => Ok(result),
-                    Ok(Err(_)) => Err(TmuxError::AlreadyClosed),
-                    Err(_) => Err(TmuxError::Timeout {
-                        budget: AWAIT_FIRST_PANE_TIMEOUT,
-                        context: "await_first_pane",
-                    }),
-                }
+            TmuxError::Internal(format!(
+                "tmux controller {}: first pane already awaited",
+                self.controller_id
+            ))
+        })?;
+        // Await with the standard 5s timeout. The receiver buffers the
+        // dispatcher's `.send()`, so this doesn't lose notifications the
+        // way `Notify` did (Notify's `notified()` future is only
+        // registered as a waiter on first poll, leaving a T2→T3 race).
+        match tokio::time::timeout(AWAIT_FIRST_PANE_TIMEOUT, rx).await {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(_)) => Err(TmuxError::AlreadyClosed),
+            Err(_) => Err(TmuxError::Timeout {
+                budget: AWAIT_FIRST_PANE_TIMEOUT,
+                context: "await_first_pane",
+            }),
+        }
     }
 
     /// Snapshot of every pane currently registered with this controller.
@@ -1099,7 +1084,9 @@ impl TmuxController {
             )));
         }
         let cmd = tmux_cmd::kill_pane(tmux_pane_id);
-        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+        self.stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// open a new tmux window and return its
@@ -1190,7 +1177,9 @@ impl TmuxController {
             )));
         }
         let cmd = tmux_cmd::kill_window(tmux_window_id);
-        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+        self.stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// send `rename-window -t @<id> <new_name>` to tmux.
@@ -1215,7 +1204,9 @@ impl TmuxController {
             )));
         }
         let cmd = tmux_cmd::rename_window(tmux_window_id, name);
-        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+        self.stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// send `detach-client -s "<session_name>"` to tmux.
@@ -1240,7 +1231,9 @@ impl TmuxController {
             ))
         })?;
         let cmd = tmux_cmd::detach_client(&name);
-        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+        self.stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// send `kill-server` to tmux.
@@ -1255,7 +1248,9 @@ impl TmuxController {
     /// ADR 0009 §2.9.
     pub fn kill_server(&self) -> Result<(), TmuxError> {
         let cmd = tmux_cmd::kill_server();
-        self.stdin_tx.send(cmd).map_err(|_| TmuxError::AlreadyClosed)
+        self.stdin_tx
+            .send(cmd)
+            .map_err(|_| TmuxError::AlreadyClosed)
     }
 
     /// snapshot of every pane currently registered with this
@@ -2118,7 +2113,11 @@ mod tests {
         controller.register_pane("%7".to_string(), 7777);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
         tx.send(ProtocolEvent::Output {
             pane_id: "%7".to_string(),
             data: b"hi\n".to_vec(),
@@ -2195,7 +2194,11 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         tx.send(ProtocolEvent::WindowPaneChanged {
             window_id: "@1".to_string(),
@@ -2312,7 +2315,11 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         tx.send(ProtocolEvent::Pause {
             pane_id: "%8".to_string(),
@@ -2515,7 +2522,11 @@ mod tests {
         controller.register_pane("%5".to_string(), 8_000_042);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         tx.send(ProtocolEvent::PaneExited {
             pane_id: "%5".to_string(),
@@ -2576,7 +2587,11 @@ mod tests {
         controller.register_pane("%9".to_string(), 9_000_007);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         tx.send(ProtocolEvent::PaneDied {
             pane_id: "%9".to_string(),
@@ -2631,7 +2646,11 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         tx.send(ProtocolEvent::PaneExited {
             pane_id: "%404".to_string(),
@@ -2693,7 +2712,11 @@ mod tests {
         controller.record_first_pane(11_000_042, "%5".to_string());
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         // Kick off the split in a background task; it will block on the
         // oneshot until the dispatch task sees the reply.
@@ -2960,7 +2983,11 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         // Pre-record the bootstrap pane so the dispatch task takes the
         // new-window path (not the legacy bootstrap fallback).
@@ -3099,7 +3126,11 @@ mod tests {
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         // Feed WindowAdd for the bootstrap window — no pending_windows
         // sender, window_bindings is empty → bootstrap path.
@@ -3214,7 +3245,11 @@ mod tests {
             .insert("%9".to_string(), "@3".to_string());
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         // Bound window-close → emit + drop binding + drop panes in that window.
         tx.send(ProtocolEvent::WindowClose {
@@ -3304,7 +3339,11 @@ mod tests {
             .insert("@5".to_string(), 18_500_099);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         tx.send(ProtocolEvent::WindowRenamed {
             window_id: "@5".to_string(),
@@ -3435,7 +3474,11 @@ mod tests {
         controller.register_pane("%42".to_string(), 100_000_042);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         // Kick off capture_pane in a background task.
         let controller_clone = Arc::clone(&controller);
@@ -3525,7 +3568,11 @@ mod tests {
         controller.register_pane("%9".to_string(), 101_000_009);
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
-        spawn_dispatch_task(rx, controller.clone(), TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            rx,
+            controller.clone(),
+            TmuxBridge::new(backend.clone(), controller.clone()),
+        );
 
         let controller_clone = Arc::clone(&controller);
         let capture_handle =
@@ -3555,7 +3602,8 @@ mod tests {
             .expect("capture_pane task did not panic");
         let err = result.expect_err("capture_pane must return Err on %error");
         assert!(
-            err.to_string().contains("capture-pane failed") && err.to_string().contains("pane gone"),
+            err.to_string().contains("capture-pane failed")
+                && err.to_string().contains("pane gone"),
             "expected error to surface tmux's message, got: {err}"
         );
     }

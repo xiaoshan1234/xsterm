@@ -93,12 +93,14 @@ impl SessionBackend for TmuxPaneHandle {
     }
 
     fn write(&self, data: &[u8]) -> Result<(), String> {
-        self.controller.send_keys(&self.tmux_pane_id, data)
+        self.controller
+            .send_keys(&self.tmux_pane_id, data)
             .map_err(|e| e.to_string())
     }
 
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
-        self.controller.resize_pane(&self.tmux_pane_id, rows, cols)
+        self.controller
+            .resize_pane(&self.tmux_pane_id, rows, cols)
             .map_err(|e| e.to_string())
     }
 
@@ -107,7 +109,8 @@ impl SessionBackend for TmuxPaneHandle {
         // panes owned by the same tmux -CC process may still be live.
         // `unbind_pane` removes the entry from `pane_bindings` and lets
         // the controller stay alive.
-        self.controller.unbind_pane(&self.tmux_pane_id)
+        self.controller
+            .unbind_pane(&self.tmux_pane_id)
             .map_err(|e| e.to_string())
     }
 }
@@ -419,17 +422,12 @@ impl SessionManager {
     /// which runs the same `tmux` command on the remote host via an
     /// exec channel. Both treat the absence of the named session the
     /// same way (`Ok(false)`).
-    pub async fn probe_tmux_session_exists(
-        &self,
-        config: &TmuxCcConfig,
-    ) -> Result<bool, String> {
-        let socket = config
-            .socket_name
+    pub async fn probe_tmux_session_exists(&self, config: &TmuxCcConfig) -> Result<bool, String> {
+        let socket = config.socket_name.as_deref().unwrap_or("default");
+        let name = config
+            .tmux_session_name
             .as_deref()
-            .unwrap_or("default");
-        let name = config.tmux_session_name.as_deref().ok_or_else(|| {
-            "probe_tmux_session_exists: tmuxSessionName is required".to_string()
-        })?;
+            .ok_or_else(|| "probe_tmux_session_exists: tmuxSessionName is required".to_string())?;
         if let Some(ssh_cfg) = config.ssh.as_ref() {
             // Build the remote command. We use a simple `tmux` argv
             // here (no -CC) so the remote tmux treats this as a plain
@@ -451,9 +449,7 @@ impl SessionManager {
                 backend.run_command_capture_stdout(&ssh_cfg, &command)
             })
             .await
-            .map_err(|e| {
-                format!("probe_tmux_session_exists: SSH probe task panicked: {e}")
-            })?;
+            .map_err(|e| format!("probe_tmux_session_exists: SSH probe task panicked: {e}"))?;
             let (stdout, status) = join?;
             if !status.success() {
                 // No server / permission denied / etc. — not an error
@@ -463,21 +459,13 @@ impl SessionManager {
             return Ok(stdout.lines().any(|line| line.trim() == name));
         }
         let output = tokio::process::Command::new("tmux")
-            .args([
-                "-L",
-                socket,
-                "list-sessions",
-                "-F",
-                "#{session_name}",
-            ])
+            .args(["-L", socket, "list-sessions", "-F", "#{session_name}"])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .output()
             .await
-            .map_err(|e| {
-                format!("probe_tmux_session_exists: failed to spawn `tmux`: {e}")
-            })?;
+            .map_err(|e| format!("probe_tmux_session_exists: failed to spawn `tmux`: {e}"))?;
         // list-sessions exits 0 + stdout lines for every session when a
         // server is running. It exits 1 + stderr "no server running on
         // /tmp/tmux-..." when there is no server. We treat both as
@@ -576,7 +564,9 @@ impl SessionManager {
             .to_string();
         drop(entry);
 
-        controller.capture_pane(&tmux_pane_id, lines).await
+        controller
+            .capture_pane(&tmux_pane_id, lines)
+            .await
             .map_err(|e| e.to_string())
     }
 
@@ -616,12 +606,17 @@ impl SessionManager {
     /// frontend routes correctly. Returns the newly registered ids.
     pub fn register_existing_tmux_panes(
         &self,
-        panes: Vec<(u32, Arc<TmuxController>, String, SessionInfo, CapabilityFlags)>,
+        panes: Vec<(
+            u32,
+            Arc<TmuxController>,
+            String,
+            SessionInfo,
+            CapabilityFlags,
+        )>,
     ) -> Result<Vec<u32>, String> {
         let mut registered = Vec::with_capacity(panes.len());
         for (xsterm_id, controller, pane_id, info, capabilities) in panes {
-            let handle =
-                TmuxPaneHandle::new(controller, pane_id, info, capabilities);
+            let handle = TmuxPaneHandle::new(controller, pane_id, info, capabilities);
             self.sessions.insert(
                 xsterm_id,
                 Arc::new(ActiveSession::TmuxPane(Box::new(handle))),
@@ -840,11 +835,7 @@ impl SessionManager {
     ///
     /// Idempotent: removing a non-existent entry is a no-op (the
     /// filtered list already excludes it).
-    pub fn unmark_attached_tmux(
-        &self,
-        controller_id: u32,
-        app: &AppHandle,
-    ) -> Result<(), String> {
+    pub fn unmark_attached_tmux(&self, controller_id: u32, app: &AppHandle) -> Result<(), String> {
         // The session name we want to drop. If the controller is
         // already gone, we still have nothing to match — fall through
         // and let `list_attached_tmux_servers` reflect the current
@@ -1002,7 +993,9 @@ impl SessionManager {
             .ok_or_else(|| format!("session {xsterm_session_id} has no tmux_pane_id"))?
             .to_string();
         drop(entry); // release the DashMap shard lock before the I/O.
-        controller.kill_pane(&tmux_pane_id).map_err(|e| e.to_string())
+        controller
+            .kill_pane(&tmux_pane_id)
+            .map_err(|e| e.to_string())
     }
 
     /// open a new tmux window on the given controller and return
@@ -1112,7 +1105,9 @@ impl SessionManager {
         let (controller, tmux_window_id) = found.ok_or_else(|| {
             format!("xsterm window {xsterm_window_id} is not bound to any tmux controller")
         })?;
-        controller.kill_window(&tmux_window_id).map_err(|e| e.to_string())
+        controller
+            .kill_window(&tmux_window_id)
+            .map_err(|e| e.to_string())
     }
 
     /// rename a tmux window via `rename-window`.
@@ -1139,7 +1134,9 @@ impl SessionManager {
         let (controller, tmux_window_id) = found.ok_or_else(|| {
             format!("xsterm window {xsterm_window_id} is not bound to any tmux controller")
         })?;
-        controller.rename_window(&tmux_window_id, name).map_err(|e| e.to_string())
+        controller
+            .rename_window(&tmux_window_id, name)
+            .map_err(|e| e.to_string())
     }
 
     /// Allocate the next unique tmux controller id.
@@ -2551,15 +2548,20 @@ mod tests {
         let backend: Arc<dyn AppBackend> = Arc::new(StubBackend);
 
         let (stdin_tx, stdin_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-        let (dispatch_tx, dispatch_rx) =
-            tokio::sync::mpsc::unbounded_channel::<crate::services::tmux::protocol::events::ProtocolEvent>();
+        let (dispatch_tx, dispatch_rx) = tokio::sync::mpsc::unbounded_channel::<
+            crate::services::tmux::protocol::events::ProtocolEvent,
+        >();
         let controller = crate::services::tmux::TmuxController::new_for_tests(
             controller_id,
             base_xsterm_id,
             stdin_tx,
             backend.clone(),
         );
-        spawn_dispatch_task(dispatch_rx, controller.clone(), crate::services::tmux::bridge::TmuxBridge::new(backend.clone(), controller.clone()));
+        spawn_dispatch_task(
+            dispatch_rx,
+            controller.clone(),
+            crate::services::tmux::bridge::TmuxBridge::new(backend.clone(), controller.clone()),
+        );
         (controller, stdin_rx, dispatch_tx)
     }
 
@@ -2812,9 +2814,11 @@ mod tests {
 
         // Feed the matching WindowAdd reply.
         dispatch_tx
-            .send(crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
-                window_id: "@3".to_string(),
-            })
+            .send(
+                crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
+                    window_id: "@3".to_string(),
+                },
+            )
             .expect("dispatch channel must accept WindowAdd");
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
@@ -2878,9 +2882,11 @@ mod tests {
         // the matching WindowPaneChanged).
         let dispatch_tx_clone = _dispatch_tx.clone();
         dispatch_tx_clone
-            .send(crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
-                window_id: "@11".to_string(),
-            })
+            .send(
+                crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
+                    window_id: "@11".to_string(),
+                },
+            )
             .unwrap();
         dispatch_tx_clone
             .send(
@@ -2974,24 +2980,30 @@ mod tests {
             .0 as u32;
 
         dispatch_tx
-            .send(crate::services::tmux::protocol::events::ProtocolEvent::CommandBegin {
-                id: cmd_id,
-                timestamp: 0,
-                flags: 0,
-            })
+            .send(
+                crate::services::tmux::protocol::events::ProtocolEvent::CommandBegin {
+                    id: cmd_id,
+                    timestamp: 0,
+                    flags: 0,
+                },
+            )
             .unwrap();
         dispatch_tx
-            .send(crate::services::tmux::protocol::events::ProtocolEvent::CommandOutput {
-                id: cmd_id,
-                line: "scrollback line".to_string(),
-            })
+            .send(
+                crate::services::tmux::protocol::events::ProtocolEvent::CommandOutput {
+                    id: cmd_id,
+                    line: "scrollback line".to_string(),
+                },
+            )
             .unwrap();
         dispatch_tx
-            .send(crate::services::tmux::protocol::events::ProtocolEvent::CommandEnd {
-                id: cmd_id,
-                timestamp: 0,
-                flags: 0,
-            })
+            .send(
+                crate::services::tmux::protocol::events::ProtocolEvent::CommandEnd {
+                    id: cmd_id,
+                    timestamp: 0,
+                    flags: 0,
+                },
+            )
             .unwrap();
 
         let text = tokio::time::timeout(std::time::Duration::from_secs(2), capture_handle)

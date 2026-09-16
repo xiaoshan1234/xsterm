@@ -116,9 +116,7 @@ impl HandshakeStep {
     /// the handshake.
     pub fn encode(&self, session_name: &str) -> String {
         match self {
-            HandshakeStep::DisplayVersion => {
-                "display-message -p '#{version}'\n".to_string()
-            }
+            HandshakeStep::DisplayVersion => "display-message -p '#{version}'\n".to_string(),
             HandshakeStep::ListCommands => "list-commands\n".to_string(),
             HandshakeStep::AttachSession => {
                 // `-c ""` works on tmux ≥ 2.6; older tmux needs `-t ""` —
@@ -160,9 +158,7 @@ impl HandshakeStep {
             HandshakeStep::DisplayVersion => CommandKind::DisplayVersion,
             HandshakeStep::ListCommands => CommandKind::ListCommands,
             HandshakeStep::AttachSession => CommandKind::AttachSession,
-            HandshakeStep::RefreshClientC => CommandKind::RefreshClient {
-                control_mode: true,
-            },
+            HandshakeStep::RefreshClientC => CommandKind::RefreshClient { control_mode: true },
             HandshakeStep::NewWindow => CommandKind::NewWindow { name: None },
             HandshakeStep::ListWindows => CommandKind::ListWindows,
             HandshakeStep::ListPanesAll => CommandKind::ListPanes { window_id: None },
@@ -196,17 +192,14 @@ pub struct HandshakePlan {
 /// 3. **Very old tmux (< 2.6)** — `attach-session -c ""` may not work;
 ///    fall back to `new-session -d` then `attach-session`. (We don't
 ///    emit that dance yet; PR-T4 only handles branches 1 + 2.)
-pub fn plan_for(
-    version: TmuxProtocolVersion,
-    list_commands: &[CommandListEntry],
-) -> HandshakePlan {
+pub fn plan_for(version: TmuxProtocolVersion, list_commands: &[CommandListEntry]) -> HandshakePlan {
     let mut capabilities = infer_capabilities(&version, list_commands);
     // Bug 014v2: OpenBSD's tmux parses `-C` but expects `-C 1`. If the
     // server claims to support `-C` per `list-commands` but our later
     // command sees a `%error`, the v2 handshake will fall back to the
     // explicit `-C 1` form (PR-T5 wires the error path).
-    capabilities.supports_refresh_client_dash_c = capabilities.supports_refresh_client_dash_c
-        && version.at_least(3, 0);
+    capabilities.supports_refresh_client_dash_c =
+        capabilities.supports_refresh_client_dash_c && version.at_least(3, 0);
     let mut steps = vec![
         HandshakeStep::DisplayVersion,
         HandshakeStep::ListCommands,
@@ -256,7 +249,10 @@ pub enum HandshakeError {
     UnparseableVersion(String),
     /// One of the planned commands got back `%error …` instead of
     /// `%end …`. The wrapped string is tmux's error message.
-    CommandFailed { step: HandshakeStep, message: String },
+    CommandFailed {
+        step: HandshakeStep,
+        message: String,
+    },
     /// No response within [`HANDSHAKE_STEP_TIMEOUT`].
     Timeout { step: HandshakeStep },
     /// The internal channel (writer / writer task) was closed before
@@ -294,16 +290,18 @@ pub struct ProbeResult {
 
 /// Parse the body of `display-message '#{version}'` + the body of
 /// `list-commands` into a single [`ProbeResult`]. Pure function; no I/O.
-pub fn parse_probe(version_body: &[String], list_commands_body: &[String]) -> Result<ProbeResult, HandshakeError> {
+pub fn parse_probe(
+    version_body: &[String],
+    list_commands_body: &[String],
+) -> Result<ProbeResult, HandshakeError> {
     let version_line = version_body.first().ok_or_else(|| {
         // Empty body can mean "%error no client attached" or simply a
         // tmux bug. We surface it as CommandFailed via UnparseableVersion
         // — same recovery path.
         HandshakeError::UnparseableVersion(String::new())
     })?;
-    let version = parse_version(version_line).ok_or_else(|| {
-        HandshakeError::UnparseableVersion(version_line.clone())
-    })?;
+    let version = parse_version(version_line)
+        .ok_or_else(|| HandshakeError::UnparseableVersion(version_line.clone()))?;
     let list_commands = list_commands_body
         .iter()
         .filter_map(|s| CommandListEntry::parse(s))
@@ -353,10 +351,9 @@ pub async fn execute_step(
         Ok(Err(_)) => Err(HandshakeError::ChannelClosed),
         Ok(Ok(outcome)) => match outcome {
             ResponseOutcome::Ok { body_lines } => Ok(body_lines),
-            ResponseOutcome::Err { message } => Err(HandshakeError::CommandFailed {
-                step,
-                message,
-            }),
+            ResponseOutcome::Err { message } => {
+                Err(HandshakeError::CommandFailed { step, message })
+            }
         },
     }
 }
@@ -431,7 +428,12 @@ mod tests {
             .collect();
         assert_eq!(
             kinds,
-            vec!["version", "list-commands", "attach-session", "refresh-client"]
+            vec![
+                "version",
+                "list-commands",
+                "attach-session",
+                "refresh-client"
+            ]
         );
     }
 
@@ -491,10 +493,7 @@ mod tests {
             minor: 9,
             patch: None,
         };
-        let list_commands = vec![CommandListEntry::parse(
-            "refresh-client -C [-S] [-A]",
-        )
-        .unwrap()];
+        let list_commands = vec![CommandListEntry::parse("refresh-client -C [-S] [-A]").unwrap()];
         let plan = plan_for(version, &list_commands);
         // `supports_refresh_client_dash_c` stays false because of the
         // version gate — see plan_for for rationale.

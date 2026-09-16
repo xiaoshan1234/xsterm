@@ -560,11 +560,8 @@ new-session [-AdE] [-F format] [-P printer] [-S name] [-t target-session] [-x wi
 refresh-client [-c target-client] [-F flags] [-S] [-A]
 list-commands [-F format]
 ";
-        let entries: Vec<CommandListEntry> = raw
-            .lines()
-            .map(CommandListEntry::parse)
-            .flatten()
-            .collect();
+        let entries: Vec<CommandListEntry> =
+            raw.lines().map(CommandListEntry::parse).flatten().collect();
         let v = TmuxProtocolVersion {
             major: 3,
             minor: 4,
@@ -584,11 +581,8 @@ list-commands [-F format]
         let raw = "\
 refresh-client [-c target-client] [-f flags] [-S size] [-A]
 ";
-        let entries: Vec<CommandListEntry> = raw
-            .lines()
-            .map(CommandListEntry::parse)
-            .flatten()
-            .collect();
+        let entries: Vec<CommandListEntry> =
+            raw.lines().map(CommandListEntry::parse).flatten().collect();
         let v = TmuxProtocolVersion {
             major: 2,
             minor: 2,

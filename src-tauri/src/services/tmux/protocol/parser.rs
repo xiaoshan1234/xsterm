@@ -241,9 +241,11 @@ impl ProtocolParser {
 
             "layout-change" => parse_layout_change(line, rest),
 
-            "pane-mode-changed" => first_token(rest).map(|pane_id| ProtocolEvent::PaneModeChanged {
-                pane_id: pane_id.to_string(),
-            }),
+            "pane-mode-changed" => {
+                first_token(rest).map(|pane_id| ProtocolEvent::PaneModeChanged {
+                    pane_id: pane_id.to_string(),
+                })
+            }
             "pane-exited" => first_token(rest).map(|pane_id| ProtocolEvent::PaneExited {
                 pane_id: pane_id.to_string(),
             }),

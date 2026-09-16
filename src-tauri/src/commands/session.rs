@@ -592,9 +592,6 @@ pub async fn unmark_attached_tmux(
     state: State<'_, Arc<SessionManager>>,
     app: AppHandle,
 ) -> Result<(), String> {
-    tracing::info!(
-        "unmark_attached_tmux: controller_id={}",
-        controller_id
-    );
+    tracing::info!("unmark_attached_tmux: controller_id={}", controller_id);
     state.unmark_attached_tmux(controller_id, &app)
 }

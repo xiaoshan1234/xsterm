@@ -169,9 +169,7 @@ pub enum ResponseWaiter {
     /// Await the next event matching the predicate (PR-T5+).
     /// Reserved for future use; PR-T3 wires nothing that emits it.
     #[allow(dead_code)]
-    Event(
-        tokio::sync::oneshot::Sender<crate::services::tmux::protocol::events::ProtocolEvent>,
-    ),
+    Event(tokio::sync::oneshot::Sender<crate::services::tmux::protocol::events::ProtocolEvent>),
 }
 
 /// Result delivered to a `BeginEnd` waiter.
@@ -323,11 +321,7 @@ pub struct TaggedCommand {
 
 impl TaggedCommand {
     /// Construct a fire-and-forget command. Allocates the id from `counter`.
-    pub fn fire_and_forget(
-        counter: &AtomicU64,
-        kind: CommandKind,
-        wire: String,
-    ) -> Self {
+    pub fn fire_and_forget(counter: &AtomicU64, kind: CommandKind, wire: String) -> Self {
         Self {
             id: CommandId::next_from(counter),
             kind,
@@ -363,11 +357,7 @@ mod tests {
     #[test]
     fn fire_and_forget_command_has_no_waiter() {
         let counter = AtomicU64::new(0);
-        let cmd = TaggedCommand::fire_and_forget(
-            &counter,
-            CommandKind::Detach,
-            "\n".to_string(),
-        );
+        let cmd = TaggedCommand::fire_and_forget(&counter, CommandKind::Detach, "\n".to_string());
         assert_eq!(cmd.id.0, 0);
         assert_eq!(cmd.wire, "\n");
     }
@@ -387,9 +377,7 @@ mod tests {
 
     #[test]
     fn response_outcome_is_ok() {
-        let ok = ResponseOutcome::Ok {
-            body_lines: vec![],
-        };
+        let ok = ResponseOutcome::Ok { body_lines: vec![] };
         assert!(ok.is_ok());
 
         let err = ResponseOutcome::Err {

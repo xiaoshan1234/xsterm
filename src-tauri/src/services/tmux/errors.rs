@@ -200,7 +200,8 @@ impl From<tokio::time::error::Elapsed> for TmuxError {
         // almost always a bug — flag it loudly.
         TmuxError::Timeout {
             budget: std::time::Duration::from_secs(0),
-            context: "tokio::time::timeout (no context — caller should use TmuxError::Timeout directly)",
+            context:
+                "tokio::time::timeout (no context — caller should use TmuxError::Timeout directly)",
         }
     }
 }
