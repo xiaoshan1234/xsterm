@@ -10,7 +10,12 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession } from "../../model/rules/sessionRules";
 import { createLeafPane, generateId } from "../../model/entities/paneTree";
-import type { SavedSessionConfig, Session, SessionDisplayConfig, SSHSessionConfig } from "../../model/entities";
+import type {
+  SavedSessionConfig,
+  Session,
+  SessionDisplayConfig,
+  SSHSessionConfig,
+} from "../../model/entities";
 
 export async function createSshSession(
   config: SSHSessionConfig,

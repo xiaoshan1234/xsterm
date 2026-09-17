@@ -99,10 +99,7 @@ export function useSessionLifecycle(_deps: UseSessionLifecycleDeps = {}) {
   );
 
   // --- open / save / remove / rename / close ---------------------------
-  const openFromConfig = useCallback(
-    (configId: string) => openSavedSessionUseCase(configId),
-    [],
-  );
+  const openFromConfig = useCallback((configId: string) => openSavedSessionUseCase(configId), []);
 
   const saveConfigOnly = useCallback(
     (
@@ -113,20 +110,11 @@ export function useSessionLifecycle(_deps: UseSessionLifecycleDeps = {}) {
     [],
   );
 
-  const removeConfig = useCallback(
-    (configId: string) => removeConfigUseCase(configId),
-    [],
-  );
+  const removeConfig = useCallback((configId: string) => removeConfigUseCase(configId), []);
 
-  const closeSession = useCallback(
-    (id: number) => closeSessionUseCase(id),
-    [],
-  );
+  const closeSession = useCallback((id: number) => closeSessionUseCase(id), []);
 
-  const reconnectSession = useCallback(
-    (id: number) => reconnectSessionUseCase(id),
-    [],
-  );
+  const reconnectSession = useCallback((id: number) => reconnectSessionUseCase(id), []);
 
   const renameSession = useCallback(
     (id: number, name: string) => renameSessionUseCase(id, name),
@@ -134,10 +122,8 @@ export function useSessionLifecycle(_deps: UseSessionLifecycleDeps = {}) {
   );
 
   const applyDisplayConfigToLiveSession = useCallback(
-    (
-      id: number,
-      patch: Parameters<typeof applyDisplayConfigToLiveSessionUseCase>[1],
-    ) => applyDisplayConfigToLiveSessionUseCase(id, patch),
+    (id: number, patch: Parameters<typeof applyDisplayConfigToLiveSessionUseCase>[1]) =>
+      applyDisplayConfigToLiveSessionUseCase(id, patch),
     [],
   );
 

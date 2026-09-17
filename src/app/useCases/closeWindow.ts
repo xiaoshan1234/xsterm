@@ -69,15 +69,17 @@ export function closeWindow(workspaceId: string, windowId: string): void {
     );
 
     sessionIdsToClose.forEach((sessionId) => {
-      tauri
-        .closeSession(sessionId)
-        .catch((e) => console.error("Failed to close session:", e));
+      tauri.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
       clearSessionOutput(sessionId);
     });
     if (sessionIdsToClose.size > 0) {
-      useSessionStore.getState().setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
+      useSessionStore
+        .getState()
+        .setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
     }
-    tmuxTauri.unmarkAttachedTmux(controllerId).catch((e) => console.error("Failed to unmark tmux:", e));
+    tmuxTauri
+      .unmarkAttachedTmux(controllerId)
+      .catch((e) => console.error("Failed to unmark tmux:", e));
     return;
   }
 
@@ -114,6 +116,8 @@ export function closeWindow(workspaceId: string, windowId: string): void {
     clearSessionOutput(sessionId);
   });
   if (sessionIdsToClose.size > 0) {
-    useSessionStore.getState().setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
+    useSessionStore
+      .getState()
+      .setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
   }
 }

@@ -22,30 +22,12 @@
  * side-effects of this hook, not part of the public interface.
  */
 import { useCallback, useEffect } from "react";
-import type {
-  SavedWindowConfig,
-  SavedWorkspace,
-  SessionGroup,
-} from "../../../../model/entities";
-import type {
-  SavedSessionConfig,
-} from "../../types/session";
-import {
-  loadSavedConfigs,
-  persistConfigs,
-} from "../../../../infra/store/savedConfigs";
-import {
-  loadSavedGroups,
-  persistGroups,
-} from "../../../../infra/store/groups";
-import {
-  loadSavedWorkspaces,
-  persistWorkspaces,
-} from "../../../../infra/store/savedWorkspaces";
-import {
-  loadSavedWindowConfigs,
-  persistWindowConfigs,
-} from "../../../../infra/store/savedWindows";
+import type { SavedWindowConfig, SavedWorkspace, SessionGroup } from "../../../../model/entities";
+import type { SavedSessionConfig } from "../../types/session";
+import { loadSavedConfigs, persistConfigs } from "../../../../infra/store/savedConfigs";
+import { loadSavedGroups, persistGroups } from "../../../../infra/store/groups";
+import { loadSavedWorkspaces, persistWorkspaces } from "../../../../infra/store/savedWorkspaces";
+import { loadSavedWindowConfigs, persistWindowConfigs } from "../../../../infra/store/savedWindows";
 import { getSettingsStore } from "../../../../infra/tauri/commands/persistence";
 import { usePersistenceStore } from "../../../../service/persistence/store";
 import { useSessionStore } from "../../../../service/session/store";
@@ -62,11 +44,15 @@ interface UseSessionPersistenceOptions {
   globalLocalEcho: boolean;
 }
 
-export function useSessionPersistence(
-  options: UseSessionPersistenceOptions,
-): SessionPersistence {
-  const { savedConfigs, savedWorkspaces, savedWindowConfigs, groups, nextGroupId, globalLocalEcho } =
-    options;
+export function useSessionPersistence(options: UseSessionPersistenceOptions): SessionPersistence {
+  const {
+    savedConfigs,
+    savedWorkspaces,
+    savedWindowConfigs,
+    groups,
+    nextGroupId,
+    globalLocalEcho,
+  } = options;
   const persistenceStore = usePersistenceStore;
 
   // --- one-shot load on mount ---------------------------------------------

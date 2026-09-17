@@ -1,7 +1,11 @@
 export { useAppShortcuts } from "./useAppShortcuts";
 export { useClampedPanelHeight } from "./useClampedPanelHeight";
 export { useDragResize } from "./useDragResize";
-export type { UseDragResizeOptions, DragResizeDeltaPayload, DragResizeStartPayload } from "./useDragResize";
+export type {
+  UseDragResizeOptions,
+  DragResizeDeltaPayload,
+  DragResizeStartPayload,
+} from "./useDragResize";
 export { useLineNumberOverlay } from "./useLineNumberOverlay";
 export { useShortcut, useShortcuts } from "./useShortcut";
 export type { ShortcutConfig } from "./useShortcut";

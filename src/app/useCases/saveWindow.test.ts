@@ -5,7 +5,15 @@ const mocks = vi.hoisted(() => ({
     {
       id: "ws1",
       name: "default",
-      windows: [{ id: "w1", name: "L", windowType: "terminal", rootPane: { id: "p1", type: "leaf", size: 100, sessionId: 5 }, activePaneId: "p1" }],
+      windows: [
+        {
+          id: "w1",
+          name: "L",
+          windowType: "terminal",
+          rootPane: { id: "p1", type: "leaf", size: 100, sessionId: 5 },
+          activePaneId: "p1",
+        },
+      ],
       activeWindowId: "w1",
       sessionIds: [5],
     },
@@ -14,7 +22,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../service/persistence/store", () => ({
-  usePersistenceStore: { getState: () => ({ upsertSavedWindowConfig: mocks.upsertSavedWindowConfig }) },
+  usePersistenceStore: {
+    getState: () => ({ upsertSavedWindowConfig: mocks.upsertSavedWindowConfig }),
+  },
 }));
 vi.mock("../../service/workspace/store", () => ({
   useWorkspaceStore: { getState: () => ({ workspaces: mocks.workspaces }) },

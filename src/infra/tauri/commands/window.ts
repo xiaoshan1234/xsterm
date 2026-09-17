@@ -1,4 +1,7 @@
-import { getCurrentWindow as tauriGetCurrentWindow, type Window as TauriWindow } from "@tauri-apps/api/window";
+import {
+  getCurrentWindow as tauriGetCurrentWindow,
+  type Window as TauriWindow,
+} from "@tauri-apps/api/window";
 
 /**
  * Re-export the current Tauri window handle so UI code can avoid a

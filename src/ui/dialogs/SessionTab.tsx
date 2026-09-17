@@ -51,8 +51,8 @@ export function SessionTab({
     [groups],
   );
 
-  const shellTemplateValue: string = localConfig.shellTemplate
-    ?? (localConfig.shell ? "custom" : "cmd");
+  const shellTemplateValue: string =
+    localConfig.shellTemplate ?? (localConfig.shell ? "custom" : "cmd");
 
   return (
     <div className="session-tab">
@@ -152,9 +152,7 @@ export function SessionTab({
               label="Username"
               placeholder="root"
               value={sshConfig.username}
-              onChange={(username) =>
-                onSshConfigChange({ ...sshConfig, username: username ?? "" })
-              }
+              onChange={(username) => onSshConfigChange({ ...sshConfig, username: username ?? "" })}
             />
           </div>
 
@@ -191,9 +189,7 @@ export function SessionTab({
                 placeholder="********"
                 type="password"
                 value={sshConfig.passphrase}
-                onChange={(passphrase) =>
-                  onSshConfigChange({ ...sshConfig, passphrase })
-                }
+                onChange={(passphrase) => onSshConfigChange({ ...sshConfig, passphrase })}
               />
             </>
           )}

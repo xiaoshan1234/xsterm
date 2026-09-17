@@ -17,13 +17,13 @@ import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
 
 export function removeConfig(configId: string): void {
   usePersistenceStore.getState().removeSavedConfig(configId);
-  usePersistenceStore.getState().setGroups((prev) =>
-    prev.map((g) => ({ ...g, configIds: g.configIds.filter((id) => id !== configId) })),
-  );
-
-  const session = useSessionStore
+  usePersistenceStore
     .getState()
-    .sessions.find((s) => s.configId === configId);
+    .setGroups((prev) =>
+      prev.map((g) => ({ ...g, configIds: g.configIds.filter((id) => id !== configId) })),
+    );
+
+  const session = useSessionStore.getState().sessions.find((s) => s.configId === configId);
   if (!session) return;
 
   tauri.closeSession(session.id).catch(console.error);

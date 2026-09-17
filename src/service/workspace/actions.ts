@@ -10,9 +10,7 @@
 import type { PaneNode, Window, Workspace } from "../../model/entities";
 import { useWorkspaceStore, type WorkspaceStoreState } from "./store";
 
-export function setWorkspaces(
-  next: Workspace[] | ((prev: Workspace[]) => Workspace[]),
-): void {
+export function setWorkspaces(next: Workspace[] | ((prev: Workspace[]) => Workspace[])): void {
   useWorkspaceStore.getState().setWorkspaces(next);
 }
 
@@ -38,11 +36,7 @@ export function setActiveWorkspace(id: string): void {
   useWorkspaceStore.getState().setActiveWorkspace(id);
 }
 
-export function reorderWindows(
-  workspaceId: string,
-  fromIndex: number,
-  toIndex: number,
-): void {
+export function reorderWindows(workspaceId: string, fromIndex: number, toIndex: number): void {
   useWorkspaceStore.getState().reorderWindows(workspaceId, fromIndex, toIndex);
 }
 

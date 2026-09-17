@@ -25,10 +25,7 @@ interface TmuxSessionControlProps {
  * Status dot turns grey when a `tmux-controller-exit` event for this
  * id is currently present in `tmuxControllerErrors`.
  */
-export function TmuxSessionControl({
-  controllerId,
-  tmuxSessionName,
-}: TmuxSessionControlProps) {
+export function TmuxSessionControl({ controllerId, tmuxSessionName }: TmuxSessionControlProps) {
   const { tmuxControllerErrors, tmuxControllerConfigsRef } = useSession();
 
   const isDisconnected = useMemo(
@@ -70,9 +67,7 @@ export function TmuxSessionControl({
     try {
       await sessionService.killServerViaController(controllerId);
     } catch (e) {
-      window.alert(
-        `Failed to delete tmux server: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      window.alert(`Failed to delete tmux server: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [controllerId, tmuxSessionName]);
 
@@ -107,7 +102,11 @@ export function TmuxSessionControl({
         <button className="btn btn--secondary" type="button" onClick={handleReconnect}>
           Reconnect
         </button>
-        <button className="btn btn--secondary tmux-windows-row__action--danger" type="button" onClick={handleRemoteDelete}>
+        <button
+          className="btn btn--secondary tmux-windows-row__action--danger"
+          type="button"
+          onClick={handleRemoteDelete}
+        >
           Remote delete
         </button>
       </div>

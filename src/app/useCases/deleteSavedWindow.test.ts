@@ -3,7 +3,9 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({ removeSavedWindowConfig: vi.fn() }));
 
 vi.mock("../../service/persistence/store", () => ({
-  usePersistenceStore: { getState: () => ({ removeSavedWindowConfig: mocks.removeSavedWindowConfig }) },
+  usePersistenceStore: {
+    getState: () => ({ removeSavedWindowConfig: mocks.removeSavedWindowConfig }),
+  },
 }));
 
 import { deleteSavedWindow } from "./deleteSavedWindow";

@@ -109,7 +109,10 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   // local init Window that prompts the user to attach / create a
   // session).
   const handleAdd = useCallback(() => {
-    if (activeWindow?.windowType === "tmux-control" && activeWindow.tmuxControlWindowId !== undefined) {
+    if (
+      activeWindow?.windowType === "tmux-control" &&
+      activeWindow.tmuxControlWindowId !== undefined
+    ) {
       createWindow(
         workspace.id,
         undefined,

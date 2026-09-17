@@ -7,7 +7,12 @@ import { useSessionStore } from "../../service/session/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession } from "../../model/rules/sessionRules";
 import { generateId } from "../../model/entities/paneTree";
-import type { SavedSessionConfig, Session, SessionDisplayConfig, TmuxCcConfig } from "../../model/entities";
+import type {
+  SavedSessionConfig,
+  Session,
+  SessionDisplayConfig,
+  TmuxCcConfig,
+} from "../../model/entities";
 
 export async function createTmuxSessionOnly(
   config: TmuxCcConfig,

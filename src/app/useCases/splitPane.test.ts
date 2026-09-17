@@ -13,7 +13,12 @@ const mocks = vi.hoisted(() => ({
       sessionType: { type: "tmux-cc", config: {} },
       tmuxPaneId: "%1",
       tmuxControllerId: 7,
-      capabilities: { supportsMultiplex: true, supportsResize: true, supportsReconnect: true, supportsLocalEcho: false },
+      capabilities: {
+        supportsMultiplex: true,
+        supportsResize: true,
+        supportsReconnect: true,
+        supportsLocalEcho: false,
+      },
     },
   ] as Array<Record<string, unknown>>,
 }));
@@ -23,7 +28,9 @@ vi.mock("../../infra/tauri/commands/tmux", () => ({
 }));
 
 vi.mock("../../service/session/store", () => ({
-  useSessionStore: { getState: () => ({ sessions: mocks.sessions, setSessions: mocks.setSessions }) },
+  useSessionStore: {
+    getState: () => ({ sessions: mocks.sessions, setSessions: mocks.setSessions }),
+  },
 }));
 vi.mock("../../service/workspace/store", () => ({
   useWorkspaceStore: { getState: () => ({ setWorkspaces: mocks.setWorkspaces }) },

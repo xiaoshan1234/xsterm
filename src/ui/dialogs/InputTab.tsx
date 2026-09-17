@@ -30,10 +30,7 @@ const CLIPBOARD_OPTIONS = [
   { value: "deny", label: "Deny" },
 ] as const;
 
-export default function InputTab({
-  displayConfig = {},
-  onDisplayChange,
-}: InputTabProps) {
+export default function InputTab({ displayConfig = {}, onDisplayChange }: InputTabProps) {
   const updateDisplay = (patch: Partial<SessionDisplayConfig>) => {
     onDisplayChange({ ...displayConfig, ...patch });
   };
@@ -74,9 +71,7 @@ export default function InputTab({
           <FormRadioGroup
             label="Keypad Mode"
             value={displayConfig.keypadMode ?? "normal"}
-            onChange={(v) =>
-              updateDisplay({ keypadMode: v as SessionDisplayConfig["keypadMode"] })
-            }
+            onChange={(v) => updateDisplay({ keypadMode: v as SessionDisplayConfig["keypadMode"] })}
             options={KEYPAD_OPTIONS}
           />
 

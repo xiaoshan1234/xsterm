@@ -63,11 +63,7 @@ export function createDefaultWorkspace(): Workspace {
   return workspace;
 }
 
-function createWorkspaceFromSession(
-  sessionId: number,
-  configId: string,
-  name?: string,
-): Workspace {
+function createWorkspaceFromSession(sessionId: number, configId: string, name?: string): Workspace {
   const wsStore = useWorkspaceStore.getState();
   const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId);
   const workspaceId = generateId();

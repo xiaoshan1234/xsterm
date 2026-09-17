@@ -1,10 +1,15 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  groups: [
-    { id: 1, name: "g1", configIds: ["cfg1", "cfg2"], collapsed: false },
-  ] as Array<{ id: number; name: string; configIds: string[]; collapsed: boolean }>,
-  savedConfigs: [{ id: "cfg1", name: "L", version: 1, type: "local", config: {} }] as Array<Record<string, unknown>>,
+  groups: [{ id: 1, name: "g1", configIds: ["cfg1", "cfg2"], collapsed: false }] as Array<{
+    id: number;
+    name: string;
+    configIds: string[];
+    collapsed: boolean;
+  }>,
+  savedConfigs: [{ id: "cfg1", name: "L", version: 1, type: "local", config: {} }] as Array<
+    Record<string, unknown>
+  >,
   sessions: [
     {
       id: 5,
@@ -38,7 +43,9 @@ vi.mock("../../service/persistence/store", () => ({
   },
 }));
 vi.mock("../../service/session/store", () => ({
-  useSessionStore: { getState: () => ({ sessions: mocks.sessions, removeSession: mocks.removeSession }) },
+  useSessionStore: {
+    getState: () => ({ sessions: mocks.sessions, removeSession: mocks.removeSession }),
+  },
 }));
 vi.mock("../../service/workspace/store", () => ({
   useWorkspaceStore: { getState: () => ({ setWorkspaces: mocks.setWorkspaces }) },

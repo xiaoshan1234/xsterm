@@ -32,7 +32,13 @@ vi.mock("../../service/session/store", () => ({
   useSessionStore: { getState: () => ({ setSessions: mocks.setSessions }) },
 }));
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces, setActiveWorkspaceId: mocks.setActiveWorkspaceId }) },
+  useWorkspaceStore: {
+    getState: () => ({
+      workspaces: mocks.workspaces,
+      setWorkspaces: mocks.setWorkspaces,
+      setActiveWorkspaceId: mocks.setActiveWorkspaceId,
+    }),
+  },
 }));
 
 import { closeWorkspace } from "./closeWorkspace";

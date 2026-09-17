@@ -60,7 +60,13 @@ export async function createWindow(
     case "init":
       return createInitWindow();
     case "replaceInit":
-      return replaceInitWindowWithSession(o.workspaceId!, o.windowId!, o.sessionId!, o.configId!, o.name);
+      return replaceInitWindowWithSession(
+        o.workspaceId!,
+        o.windowId!,
+        o.sessionId!,
+        o.configId!,
+        o.name,
+      );
     case "tmux":
       return createTmuxServerWindow(o.tmuxControlWindowId!, o.name, o.workspaceId);
   }
@@ -90,7 +96,10 @@ function createWindowFromSession(input: CreateWindowFromSessionInput): Window {
       workspace.id === targetId
         ? withRecomputedSessionIds({
             ...workspace,
-            windows: [...workspace.windows, { ...window, name: getUniqueWindowName(prev, targetId, baseName) }],
+            windows: [
+              ...workspace.windows,
+              { ...window, name: getUniqueWindowName(prev, targetId, baseName) },
+            ],
             activeWindowId: window.id,
           })
         : workspace,
@@ -105,12 +114,7 @@ async function createWindowFromSavedConfig(
   workspaceId: string | undefined,
 ): Promise<Window> {
   const session = await openSavedSession(configId);
-  assertSessionNotUsedElsewhere(
-    useWorkspaceStore.getState().workspaces,
-    null,
-    null,
-    session.id,
-  );
+  assertSessionNotUsedElsewhere(useWorkspaceStore.getState().workspaces, null, null, session.id);
   return createWindowFromSession({
     sessionId: session.id,
     configId: session.configId,

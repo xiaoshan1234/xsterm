@@ -7,11 +7,28 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../service/session/store", () => ({
-  useSessionStore: { getState: () => ({ sessions: [{ id: 1, configId: "c", name: "L", type: "local", isConnected: true, sessionType: { type: "local", config: {} } }] }) },
+  useSessionStore: {
+    getState: () => ({
+      sessions: [
+        {
+          id: 1,
+          configId: "c",
+          name: "L",
+          type: "local",
+          isConnected: true,
+          sessionType: { type: "local", config: {} },
+        },
+      ],
+    }),
+  },
 }));
 vi.mock("../../service/workspace/store", () => ({
   useWorkspaceStore: {
-    getState: () => ({ workspaces: mocks.workspaces, addWorkspace: mocks.addWorkspace, setActiveWorkspace: mocks.setActiveWorkspace }),
+    getState: () => ({
+      workspaces: mocks.workspaces,
+      addWorkspace: mocks.addWorkspace,
+      setActiveWorkspace: mocks.setActiveWorkspace,
+    }),
   },
 }));
 

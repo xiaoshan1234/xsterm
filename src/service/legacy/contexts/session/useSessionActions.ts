@@ -54,10 +54,7 @@ interface UseSessionActionsOptions {
   updateConfigs: (
     updater: (prev: LegacySavedSessionConfig[]) => LegacySavedSessionConfig[],
   ) => void;
-  updateGroups: (
-    updater: (prev: SessionGroup[]) => SessionGroup[],
-    nextId?: number,
-  ) => void;
+  updateGroups: (updater: (prev: SessionGroup[]) => SessionGroup[], nextId?: number) => void;
   persistSavedWorkspaces: (workspacesData: LegacySavedWorkspace[]) => void;
   persistSavedWindowConfigs: (windowConfigs: LegacySavedWindowConfig[]) => void;
 }
@@ -217,14 +214,6 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
       toggleGroup: group.toggleGroup,
       updateConfig: group.updateConfig,
     }),
-    [
-      lifecycle,
-      windowActions,
-      pane,
-      persistence,
-      group,
-      workspaceActions,
-      activeWorkspaceId,
-    ],
+    [lifecycle, windowActions, pane, persistence, group, workspaceActions, activeWorkspaceId],
   );
 }

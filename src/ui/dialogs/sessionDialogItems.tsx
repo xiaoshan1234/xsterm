@@ -21,13 +21,7 @@ import type { SSHSessionConfig } from "../../service/legacy/types/session";
  */
 
 export type SectionId =
-  | "session"
-  | "terminal"
-  | "appearance"
-  | "shell"
-  | "ssh"
-  | "input"
-  | "logging";
+  "session" | "terminal" | "appearance" | "shell" | "ssh" | "input" | "logging";
 
 export interface SidebarItemDef {
   id: SectionId;

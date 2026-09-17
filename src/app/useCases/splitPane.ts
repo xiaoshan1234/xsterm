@@ -11,7 +11,12 @@
 import * as tmuxTauri from "../../infra/tauri/commands/tmux";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { createLeafPane, createSplitNode, findPaneNode, replacePaneNode } from "../../model/entities/paneTree";
+import {
+  createLeafPane,
+  createSplitNode,
+  findPaneNode,
+  replacePaneNode,
+} from "../../model/entities/paneTree";
 import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
 import type { Session, SplitDirection } from "../../model/entities";
 

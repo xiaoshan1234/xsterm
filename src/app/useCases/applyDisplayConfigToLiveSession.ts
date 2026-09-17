@@ -10,9 +10,11 @@ export function applyDisplayConfigToLiveSession(
   id: number,
   patch: Partial<SessionDisplayConfig>,
 ): void {
-  useSessionStore.getState().setSessions((prev) =>
-    prev.map((s) =>
-      s.id === id ? { ...s, displayConfig: { ...(s.displayConfig ?? {}), ...patch } } : s,
-    ),
-  );
+  useSessionStore
+    .getState()
+    .setSessions((prev) =>
+      prev.map((s) =>
+        s.id === id ? { ...s, displayConfig: { ...(s.displayConfig ?? {}), ...patch } } : s,
+      ),
+    );
 }

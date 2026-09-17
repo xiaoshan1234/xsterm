@@ -140,10 +140,7 @@ export function useSessionState(): SessionState {
       setActiveWorkspaceId(workspaces[0].id);
       return;
     }
-    if (
-      activeWorkspaceId !== null &&
-      !workspaces.some((w) => w.id === activeWorkspaceId)
-    ) {
+    if (activeWorkspaceId !== null && !workspaces.some((w) => w.id === activeWorkspaceId)) {
       setActiveWorkspaceId(workspaces[0]?.id ?? null);
     }
   }, [workspaces, activeWorkspaceId, setActiveWorkspaceId]);
@@ -177,9 +174,7 @@ export function useSessionState(): SessionState {
     tmuxControllerConfigsRef: tmuxControllerConfigsRef as MutableRefObject<
       Map<number, TmuxCcConfig>
     >,
-    tmuxWindowListsRef: tmuxWindowListsRef as MutableRefObject<
-      Map<number, TmuxWindowListEntry[]>
-    >,
+    tmuxWindowListsRef: tmuxWindowListsRef as MutableRefObject<Map<number, TmuxWindowListEntry[]>>,
   };
 }
 

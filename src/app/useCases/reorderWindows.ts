@@ -4,11 +4,7 @@
  */
 import { useWorkspaceStore } from "../../service/workspace/store";
 
-export function reorderWindows(
-  workspaceId: string,
-  fromIndex: number,
-  toIndex: number,
-): void {
+export function reorderWindows(workspaceId: string, fromIndex: number, toIndex: number): void {
   if (fromIndex === toIndex) return;
   if (fromIndex < 0 || toIndex < 0) return;
   useWorkspaceStore.getState().setWorkspaces((prev) =>

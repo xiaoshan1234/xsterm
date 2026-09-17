@@ -2,9 +2,27 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const windows = [
-    { id: "a", name: "A", windowType: "terminal", rootPane: { id: "p1", type: "leaf", size: 100 }, activePaneId: "p1" },
-    { id: "b", name: "B", windowType: "terminal", rootPane: { id: "p2", type: "leaf", size: 100 }, activePaneId: "p2" },
-    { id: "c", name: "C", windowType: "terminal", rootPane: { id: "p3", type: "leaf", size: 100 }, activePaneId: "p3" },
+    {
+      id: "a",
+      name: "A",
+      windowType: "terminal",
+      rootPane: { id: "p1", type: "leaf", size: 100 },
+      activePaneId: "p1",
+    },
+    {
+      id: "b",
+      name: "B",
+      windowType: "terminal",
+      rootPane: { id: "p2", type: "leaf", size: 100 },
+      activePaneId: "p2",
+    },
+    {
+      id: "c",
+      name: "C",
+      windowType: "terminal",
+      rootPane: { id: "p3", type: "leaf", size: 100 },
+      activePaneId: "p3",
+    },
   ];
   return {
     workspaces: [{ id: "ws1", name: "default", windows, activeWindowId: "a", sessionIds: [] }],
@@ -13,7 +31,9 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }) },
+  useWorkspaceStore: {
+    getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }),
+  },
 }));
 
 import { reorderWindows } from "./reorderWindows";

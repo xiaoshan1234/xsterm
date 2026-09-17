@@ -9,7 +9,11 @@ import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { findPaneNode, getLeafPaneIds, removePaneFromTree } from "../../model/entities/paneTree";
 import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
 
-export async function closePane(workspaceId: string, windowId: string, paneId: string): Promise<void> {
+export async function closePane(
+  workspaceId: string,
+  windowId: string,
+  paneId: string,
+): Promise<void> {
   const wsStore = useWorkspaceStore.getState();
   const workspace = wsStore.workspaces.find((w) => w.id === workspaceId);
   const window = workspace?.windows.find((w) => w.id === windowId);

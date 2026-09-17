@@ -8,7 +8,9 @@ import {
   getUniqueWindowName,
 } from "./sessionRules";
 
-function makeLocalInfo(overrides: Partial<{ id: number; name: string; isConnected: boolean }> = {}) {
+function makeLocalInfo(
+  overrides: Partial<{ id: number; name: string; isConnected: boolean }> = {},
+) {
   return {
     id: 1,
     name: "alpha",
@@ -116,15 +118,21 @@ describe("buildFrontendSession", () => {
 
 describe("dispatchByType", () => {
   it("routes 'local' to the local handler", async () => {
-    const r = await dispatchByType("local", () => Promise.resolve("L"), () => Promise.resolve("S"), () =>
-      Promise.resolve("T"),
+    const r = await dispatchByType(
+      "local",
+      () => Promise.resolve("L"),
+      () => Promise.resolve("S"),
+      () => Promise.resolve("T"),
     );
     expect(r).toBe("L");
   });
 
   it("routes 'ssh' to the ssh handler", async () => {
-    const r = await dispatchByType("ssh", () => Promise.resolve("L"), () => Promise.resolve("S"), () =>
-      Promise.resolve("T"),
+    const r = await dispatchByType(
+      "ssh",
+      () => Promise.resolve("L"),
+      () => Promise.resolve("S"),
+      () => Promise.resolve("T"),
     );
     expect(r).toBe("S");
   });
@@ -190,7 +198,12 @@ describe("assertSessionNotUsedElsewhere", () => {
 
   it("throws when the session is used in a different window", () => {
     expect(() =>
-      assertSessionNotUsedElsewhere([wsWith("ws-1", "win-a", 7), wsWith("ws-2", "win-b", 7)], "ws-1", "win-a", 7),
+      assertSessionNotUsedElsewhere(
+        [wsWith("ws-1", "win-a", 7), wsWith("ws-2", "win-b", 7)],
+        "ws-1",
+        "win-a",
+        7,
+      ),
     ).toThrow("Session is already used in another window");
   });
 
@@ -207,6 +220,8 @@ describe("assertSessionNotUsedElsewhere", () => {
   });
 
   it("does not throw when no window contains the session", () => {
-    expect(() => assertSessionNotUsedElsewhere([wsWith("ws-1", "win-a", 7)], "ws-1", "win-a", 99)).not.toThrow();
+    expect(() =>
+      assertSessionNotUsedElsewhere([wsWith("ws-1", "win-a", 7)], "ws-1", "win-a", 99),
+    ).not.toThrow();
   });
 });

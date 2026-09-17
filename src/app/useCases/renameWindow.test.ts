@@ -7,7 +7,13 @@ const mocks = vi.hoisted(() => ({
       id: "ws1",
       name: "default",
       windows: [
-        { id: "w1", name: "Old", windowType: "terminal", rootPane: { id: "p1", type: "leaf", size: 100 }, activePaneId: "p1" },
+        {
+          id: "w1",
+          name: "Old",
+          windowType: "terminal",
+          rootPane: { id: "p1", type: "leaf", size: 100 },
+          activePaneId: "p1",
+        },
       ],
       activeWindowId: "w1",
       sessionIds: [],
@@ -20,7 +26,9 @@ vi.mock("../../infra/tauri/commands/tmux", () => ({
 }));
 
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }) },
+  useWorkspaceStore: {
+    getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }),
+  },
 }));
 
 import { renameTmuxWindow } from "../../infra/tauri/commands/tmux";

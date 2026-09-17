@@ -11,9 +11,7 @@ export function moveConfigToGroup(configId: string, groupId: number | null): voi
   );
   if (groupId !== null) {
     persistenceStore.setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g,
-      ),
+      prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g)),
     );
   }
 }

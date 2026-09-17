@@ -29,9 +29,7 @@ export function PaneInitCard({
     createTmuxSessionOnly,
     createSessionFromSavedConfig,
   } = useSession();
-  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux-cc" | null>(
-    null,
-  );
+  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux-cc" | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);

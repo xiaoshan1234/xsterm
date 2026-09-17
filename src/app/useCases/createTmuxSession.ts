@@ -12,7 +12,13 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession } from "../../model/rules/sessionRules";
 import { createLeafPane, generateId } from "../../model/entities/paneTree";
-import type { SavedSessionConfig, Session, SessionDisplayConfig, TmuxCcConfig, Window } from "../../model/entities";
+import type {
+  SavedSessionConfig,
+  Session,
+  SessionDisplayConfig,
+  TmuxCcConfig,
+  Window,
+} from "../../model/entities";
 
 export async function createTmuxSession(
   config: TmuxCcConfig,

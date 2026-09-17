@@ -30,7 +30,12 @@ vi.mock("../../service/session/store", () => ({
   useSessionStore: { getState: () => ({}) },
 }));
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ addWorkspace: mocks.addWorkspace, setActiveWorkspace: mocks.setActiveWorkspace }) },
+  useWorkspaceStore: {
+    getState: () => ({
+      addWorkspace: mocks.addWorkspace,
+      setActiveWorkspace: mocks.setActiveWorkspace,
+    }),
+  },
 }));
 vi.mock("./openSavedSession", () => ({
   openSavedSession: vi.fn(async () => ({

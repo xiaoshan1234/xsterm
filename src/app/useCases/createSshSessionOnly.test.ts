@@ -14,7 +14,9 @@ vi.mock("../../service/session/store", () => ({
 }));
 
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: [], activeWorkspaceId: null, addWindow: mocks.addWindow }) },
+  useWorkspaceStore: {
+    getState: () => ({ workspaces: [], activeWorkspaceId: null, addWindow: mocks.addWindow }),
+  },
 }));
 
 vi.mock("../../service/persistence/store", () => ({
@@ -30,7 +32,12 @@ describe("createSshSessionOnly", () => {
   });
 
   it("creates an SSH session without binding it to a window", async () => {
-    const mockInfo = { id: 22, name: "n", sessionType: { type: "ssh", config: {} }, isConnected: true } as any;
+    const mockInfo = {
+      id: 22,
+      name: "n",
+      sessionType: { type: "ssh", config: {} },
+      isConnected: true,
+    } as any;
     vi.mocked(createSsh).mockResolvedValue(mockInfo);
 
     const session = await createSshSessionOnly({

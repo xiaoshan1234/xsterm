@@ -27,8 +27,10 @@ export function setActivePane(workspaceId: string, windowId: string, paneId: str
   const sessionId = target?.type === "leaf" ? target.sessionId : undefined;
   if (sessionId !== undefined) {
     const now = Date.now();
-    useSessionStore.getState().setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? { ...s, lastActivityAt: now } : s)),
-    );
+    useSessionStore
+      .getState()
+      .setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, lastActivityAt: now } : s)),
+      );
   }
 }

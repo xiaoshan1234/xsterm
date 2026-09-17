@@ -52,7 +52,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set) => ({
   setWorkspaces: (next) => {
     set((state) => {
       const resolved =
-        typeof next === "function" ? (next as (p: Workspace[]) => Workspace[])(state.workspaces) : next;
+        typeof next === "function"
+          ? (next as (p: Workspace[]) => Workspace[])(state.workspaces)
+          : next;
       initialWorkspacesRef.current = resolved;
       return { workspaces: resolved };
     });
@@ -68,17 +70,152 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set) => ({
     }));
   },
 
-  // Stubs.
-  addWorkspace: () => {},
-  removeWorkspace: () => {},
-  renameWorkspace: () => {},
-  setActiveWorkspace: () => {},
-  reorderWindows: () => {},
-  addWindow: () => {},
-  removeWindow: () => {},
-  renameWindow: () => {},
-  setActiveWindow: () => {},
-  updateWindowPaneTree: () => {},
+  addWorkspace: (workspace) => {
+    set((state) => {
+      if (state.workspaces.some((w) => w.id === workspace.id)) return state;
+      const workspaces = [...state.workspaces, workspace];
+      initialWorkspacesRef.current = workspaces;
+      return {
+        workspaces,
+        activeWorkspaceId: state.activeWorkspaceId ?? workspace.id,
+      };
+    });
+  },
+  removeWorkspace: (id) => {
+    set((state) => {
+      if (!state.workspaces.some((w) => w.id === id)) return state;
+      const workspaces = state.workspaces.filter((w) => w.id !== id);
+      const activeWorkspaceId =
+        state.activeWorkspaceId === id ? (workspaces[0]?.id ?? null) : state.activeWorkspaceId;
+      initialWorkspacesRef.current = workspaces;
+      return { workspaces, activeWorkspaceId };
+    });
+  },
+  renameWorkspace: (id, name) => {
+    set((state) => {
+      let changed = false;
+      const workspaces = state.workspaces.map((w) => {
+        if (w.id !== id) return w;
+        if (w.name === name) return w;
+        changed = true;
+        return { ...w, name };
+      });
+      if (!changed) return state;
+      initialWorkspacesRef.current = workspaces;
+      return { workspaces };
+    });
+  },
+  setActiveWorkspace: (id) => {
+    set((state) => {
+      if (state.activeWorkspaceId === id) return state;
+      if (!state.workspaces.some((w) => w.id === id)) return state;
+      return { activeWorkspaceId: id };
+    });
+  },
+  reorderWindows: (workspaceId, fromIndex, toIndex) => {
+    set((state) => {
+      const idx = state.workspaces.findIndex((w) => w.id === workspaceId);
+      if (idx === -1) return state;
+      const workspace = state.workspaces[idx];
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= workspace.windows.length) return state;
+      if (fromIndex === toIndex) return state;
+      const windows = workspace.windows.slice();
+      const [moved] = windows.splice(fromIndex, 1);
+      windows.splice(toIndex, 0, moved);
+      const workspaces = state.workspaces.map((w, i) => (i === idx ? { ...w, windows } : w));
+      initialWorkspacesRef.current = workspaces;
+      return { workspaces };
+    });
+  },
+  addWindow: (workspaceId, window) => {
+    set((state) => {
+      const idx = state.workspaces.findIndex((w) => w.id === workspaceId);
+      if (idx === -1) return state;
+      const workspaces = state.workspaces.map((w, i) =>
+        i === idx
+          ? {
+              ...w,
+              windows: [...w.windows, window],
+              activeWindowId: window.id,
+            }
+          : w,
+      );
+      initialWorkspacesRef.current = workspaces;
+      return { workspaces };
+    });
+  },
+  removeWindow: (workspaceId, windowId) => {
+    set((state) => {
+      const idx = state.workspaces.findIndex((w) => w.id === workspaceId);
+      if (idx === -1) return state;
+      const workspace = state.workspaces[idx];
+      const remaining = workspace.windows.filter((win) => win.id !== windowId);
+      if (remaining.length === workspace.windows.length) return state;
+      const activeWindowId =
+        workspace.activeWindowId === windowId
+          ? (remaining[0]?.id ?? null)
+          : workspace.activeWindowId;
+      const workspaces = state.workspaces.map((w, i) =>
+        i === idx ? { ...w, windows: remaining, activeWindowId } : w,
+      );
+      initialWorkspacesRef.current = workspaces;
+      return { workspaces };
+    });
+  },
+  renameWindow: (workspaceId, windowId, name) => {
+    set((state) => {
+      const idx = state.workspaces.findIndex((w) => w.id === workspaceId);
+      if (idx === -1) return state;
+      let changed = false;
+      const workspaces = state.workspaces.map((w, i) => {
+        if (i !== idx) return w;
+        const windows = w.windows.map((win) => {
+          if (win.id !== windowId) return win;
+          if (win.name === name) return win;
+          changed = true;
+          return { ...win, name };
+        });
+        return changed ? { ...w, windows } : w;
+      });
+      if (!changed) return state;
+      initialWorkspacesRef.current = workspaces;
+      return { workspaces };
+    });
+  },
+  setActiveWindow: (workspaceId, windowId) => {
+    set((state) => {
+      const idx = state.workspaces.findIndex((w) => w.id === workspaceId);
+      if (idx === -1) return state;
+      const workspace = state.workspaces[idx];
+      if (!workspace.windows.some((win) => win.id === windowId)) return state;
+      if (workspace.activeWindowId === windowId) return state;
+      const workspaces = state.workspaces.map((w, i) =>
+        i === idx ? { ...w, activeWindowId: windowId } : w,
+      );
+      return { workspaces };
+    });
+  },
+  updateWindowPaneTree: (workspaceId, windowId, updater) => {
+    set((state) => {
+      const idx = state.workspaces.findIndex((w) => w.id === workspaceId);
+      if (idx === -1) return state;
+      let changed = false;
+      const workspaces = state.workspaces.map((w, i) => {
+        if (i !== idx) return w;
+        const windows = w.windows.map((win) => {
+          if (win.id !== windowId) return win;
+          const next = updater(win.rootPane);
+          if (next === win.rootPane) return win;
+          changed = true;
+          return { ...win, rootPane: next };
+        });
+        return changed ? { ...w, windows } : w;
+      });
+      if (!changed) return state;
+      initialWorkspacesRef.current = workspaces;
+      return { workspaces };
+    });
+  },
   reset: () => {
     initialWorkspacesRef.current = [];
     set({ workspaces: [], activeWorkspaceId: null });

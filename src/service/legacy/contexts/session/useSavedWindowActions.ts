@@ -4,12 +4,7 @@
  * `src/service/persistence/store.ts`; the use cases mutate it directly.
  */
 import { useCallback } from "react";
-import type {
-  SavedWindowConfig,
-  Session,
-  Window,
-  Workspace,
-} from "../../../../model/entities";
+import type { SavedWindowConfig, Session, Window, Workspace } from "../../../../model/entities";
 import { saveWindow as saveWindowUseCase } from "../../../../app/useCases/saveWindow";
 import { loadWindow as loadWindowUseCase } from "../../../../app/useCases/loadWindow";
 import { deleteSavedWindow as deleteSavedWindowUseCase } from "../../../../app/useCases/deleteSavedWindow";
@@ -52,10 +47,7 @@ export function useSavedWindowActions(_deps: UseSavedWindowActionsDeps) {
     [],
   );
 
-  const deleteSavedWindow = useCallback(
-    (id: string) => deleteSavedWindowUseCase(id),
-    [],
-  );
+  const deleteSavedWindow = useCallback((id: string) => deleteSavedWindowUseCase(id), []);
 
   /**
    * renameSavedWindow — direct mutation of the persistence store. There

@@ -40,10 +40,7 @@ export function useGroupActions(_deps: UseGroupActionsDeps) {
     (configId: string, groupId: number | null) => moveConfigToGroupUseCase(configId, groupId),
     [],
   );
-  const renameGroup = useCallback(
-    (id: number, name: string) => renameGroupUseCase(id, name),
-    [],
-  );
+  const renameGroup = useCallback((id: number, name: string) => renameGroupUseCase(id, name), []);
   const toggleGroup = useCallback((id: number) => toggleGroupUseCase(id), []);
   const updateConfig = useCallback(
     (config: Parameters<typeof updateConfigUseCase>[0]) => updateConfigUseCase(config),

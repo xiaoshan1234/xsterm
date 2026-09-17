@@ -49,7 +49,9 @@ export interface SessionStoreState {
   // --- tmux retry-banner state -----------------------------------------
   tmuxControllerErrors: Map<number, TmuxControllerError>;
   setTmuxControllerErrors: (
-    next: Map<number, TmuxControllerError> | ((prev: Map<number, TmuxControllerError>) => Map<number, TmuxControllerError>),
+    next:
+      | Map<number, TmuxControllerError>
+      | ((prev: Map<number, TmuxControllerError>) => Map<number, TmuxControllerError>),
   ) => void;
   /** `controllerId → TmuxCcConfig` for retry banner. Survives pane teardown. */
   tmuxControllerConfigsRef: { current: Map<number, TmuxCcConfig> };
@@ -122,15 +124,94 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   tmuxControllerConfigsRef: initialTmuxConfigsRef,
   tmuxWindowListsRef: initialTmuxWindowsRef,
 
-  // Stub actions — Commit 4 replaces these with real implementations.
-  addSession: () => {},
-  removeSession: () => {},
-  updateSession: () => {},
-  markSessionConnected: () => {},
-  setSessionName: () => {},
-  applyDisplayConfig: () => {},
-  beginEstablishing: () => {},
-  endEstablishing: () => {},
+  // Session registry mutations also write through `sessionsRef.current`
+  // so non-React callers see the latest snapshot synchronously.
+  addSession: (session) => {
+    set((state) => {
+      if (state.sessions.some((s) => s.id === session.id)) return state;
+      const sessions = [...state.sessions, session];
+      initialSessionsRef.current = sessions;
+      return { sessions };
+    });
+  },
+  removeSession: (id) => {
+    set((state) => {
+      if (!state.sessions.some((s) => s.id === id)) return state;
+      const sessions = state.sessions.filter((s) => s.id !== id);
+      initialSessionsRef.current = sessions;
+      return { sessions };
+    });
+  },
+  updateSession: (id, patch) => {
+    set((state) => {
+      let changed = false;
+      const sessions = state.sessions.map((s) => {
+        if (s.id !== id) return s;
+        changed = true;
+        return { ...s, ...patch };
+      });
+      if (!changed) return state;
+      initialSessionsRef.current = sessions;
+      return { sessions };
+    });
+  },
+  markSessionConnected: (id, isConnected) => {
+    set((state) => {
+      let changed = false;
+      const sessions = state.sessions.map((s) => {
+        if (s.id !== id) return s;
+        if (s.isConnected === isConnected) return s;
+        changed = true;
+        return { ...s, isConnected };
+      });
+      if (!changed) return state;
+      initialSessionsRef.current = sessions;
+      return { sessions };
+    });
+  },
+  setSessionName: (id, name) => {
+    set((state) => {
+      let changed = false;
+      const sessions = state.sessions.map((s) => {
+        if (s.id !== id) return s;
+        if (s.name === name) return s;
+        changed = true;
+        return { ...s, name };
+      });
+      if (!changed) return state;
+      initialSessionsRef.current = sessions;
+      return { sessions };
+    });
+  },
+  applyDisplayConfig: (id, patch) => {
+    set((state) => {
+      let changed = false;
+      const sessions = state.sessions.map((s) => {
+        if (s.id !== id) return s;
+        const merged = { ...(s.displayConfig ?? {}), ...patch } as Session["displayConfig"];
+        if (merged === s.displayConfig) return s;
+        changed = true;
+        return { ...s, displayConfig: merged };
+      });
+      if (!changed) return state;
+      initialSessionsRef.current = sessions;
+      return { sessions };
+    });
+  },
+  beginEstablishing: (id) => {
+    const ref = get().establishingSessionsRef;
+    if (ref.current.has(id)) return;
+    const next = new Set(ref.current);
+    next.add(id);
+    ref.current = next;
+  },
+  endEstablishing: (id) => {
+    const ref = get().establishingSessionsRef;
+    if (!ref.current.has(id)) return;
+    const next = new Set(ref.current);
+    next.delete(id);
+    ref.current = next;
+  },
   setGlobalLocalEchoAction: (enabled) => set({ globalLocalEcho: enabled }),
   setSessionLocalEchoOverride: (id, enabled) => {
     set((state) => {

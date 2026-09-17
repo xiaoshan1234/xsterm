@@ -27,10 +27,9 @@ describe("useWorkspaceStore", () => {
     useWorkspaceStore.getState().setWorkspaces([ws1]);
     expect(useWorkspaceStore.getState().workspaces).toHaveLength(1);
 
-    useWorkspaceStore.getState().setWorkspaces((prev) => [
-      ...prev,
-      { ...ws1, id: "ws-2", name: "Workspace 2" },
-    ]);
+    useWorkspaceStore
+      .getState()
+      .setWorkspaces((prev) => [...prev, { ...ws1, id: "ws-2", name: "Workspace 2" }]);
     expect(useWorkspaceStore.getState().workspaces).toHaveLength(2);
     expect(useWorkspaceStore.getState().workspacesRef.current).toHaveLength(2);
   });

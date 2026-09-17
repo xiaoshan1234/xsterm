@@ -32,7 +32,10 @@ export function closeWorkspace(workspaceId: string): void {
     const closedIndex = currentWorkspaces.findIndex((w) => w.id === workspaceId);
     const remaining = currentWorkspaces.filter((w) => w.id !== workspaceId);
     const fallback =
-      remaining[closedIndex - 1] ?? remaining[closedIndex] ?? remaining[remaining.length - 1] ?? null;
+      remaining[closedIndex - 1] ??
+      remaining[closedIndex] ??
+      remaining[remaining.length - 1] ??
+      null;
     return fallback?.id ?? null;
   });
 }

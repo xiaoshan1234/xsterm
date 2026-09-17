@@ -128,8 +128,7 @@ export default function CreateSessionDialog({
           form.setSectionId("session");
           return;
         }
-        const sshSub: SSHSessionConfig | undefined =
-          base.type === "ssh" ? base.config : undefined;
+        const sshSub: SSHSessionConfig | undefined = base.type === "ssh" ? base.config : undefined;
         if (sshSub) {
           const validationError = validateSshConfig(sshSub);
           if (validationError) {
@@ -205,8 +204,7 @@ export default function CreateSessionDialog({
           form.setSectionId("session");
           return;
         }
-        const sshSub: SSHSessionConfig | undefined =
-          base.type === "ssh" ? base.config : undefined;
+        const sshSub: SSHSessionConfig | undefined = base.type === "ssh" ? base.config : undefined;
         if (sshSub) {
           const validationError = validateSshConfig(sshSub);
           if (validationError) {
@@ -227,9 +225,7 @@ export default function CreateSessionDialog({
           ...(sshSub ? { ssh: sshSub } : {}),
         };
         const trimmedName = form.name.trim();
-        config = trimmedName
-          ? { ...baseTmuxConfig, name: trimmedName }
-          : baseTmuxConfig;
+        config = trimmedName ? { ...baseTmuxConfig, name: trimmedName } : baseTmuxConfig;
       } else {
         type = "local";
         const trimmedName = form.name.trim();

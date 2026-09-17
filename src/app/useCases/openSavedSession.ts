@@ -14,12 +14,15 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession, dispatchByType } from "../../model/rules/sessionRules";
 import { createLeafPane, generateId } from "../../model/entities/paneTree";
-import type { LocalSessionConfig, Session, SSHSessionConfig, TmuxCcConfig } from "../../model/entities";
+import type {
+  LocalSessionConfig,
+  Session,
+  SSHSessionConfig,
+  TmuxCcConfig,
+} from "../../model/entities";
 
 export async function openSavedSession(configId: string): Promise<Session> {
-  const config = usePersistenceStore
-    .getState()
-    .savedConfigs.find((c) => c.id === configId);
+  const config = usePersistenceStore.getState().savedConfigs.find((c) => c.id === configId);
   if (!config) throw new Error("Saved config not found");
 
   const info = await dispatchByType(

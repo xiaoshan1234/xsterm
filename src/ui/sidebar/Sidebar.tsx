@@ -1,5 +1,9 @@
 import { useState, useCallback } from "react";
-import { type SavedWindowConfig, type SavedWorkspace, type Workspace } from "../../service/legacy/types/session";
+import {
+  type SavedWindowConfig,
+  type SavedWorkspace,
+  type Workspace,
+} from "../../service/legacy/types/session";
 import { useDragResize } from "../../service/legacy/hooks/useDragResize";
 import { SidebarToolbar, type SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";

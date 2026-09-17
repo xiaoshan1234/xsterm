@@ -23,7 +23,9 @@ vi.mock("../../service/persistence/store", () => ({
   usePersistenceStore: { getState: () => ({ savedWindowConfigs: mocks.savedWindowConfigs }) },
 }));
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }) },
+  useWorkspaceStore: {
+    getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }),
+  },
 }));
 vi.mock("./openSavedSession", () => ({
   openSavedSession: vi.fn(async () => ({

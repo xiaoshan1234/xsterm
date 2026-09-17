@@ -10,10 +10,7 @@
  * the plain factory use case for the rest of the legacy surface.
  */
 import { useCallback } from "react";
-import type {
-  Workspace,
-  Session,
-} from "../../../../model/entities";
+import type { Workspace, Session } from "../../../../model/entities";
 import {
   createDefaultWorkspace as createDefaultWorkspaceUseCase,
   createWorkspace as createWorkspaceUseCase,

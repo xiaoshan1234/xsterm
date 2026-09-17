@@ -20,10 +20,12 @@ describe("saveConfigOnly", () => {
   });
 
   it("saves an SSH config with derived default name", () => {
-    const out = saveConfigOnly(
-      "ssh",
-      { host: "h", port: 22, username: "u", auth_type: "password" },
-    );
+    const out = saveConfigOnly("ssh", {
+      host: "h",
+      port: 22,
+      username: "u",
+      auth_type: "password",
+    });
     expect(out.name).toBe("u@h");
     expect(mocks.upsertSavedConfig).toHaveBeenCalled();
   });

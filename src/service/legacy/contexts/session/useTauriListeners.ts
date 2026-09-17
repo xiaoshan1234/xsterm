@@ -116,9 +116,11 @@ export function useTauriListeners(): void {
     (async () => {
       const unlistenSessionDisconnected = await subscribeSessionDisconnected((sessionId) => {
         getEstablishingRef().current.delete(sessionId);
-        useSessionStore.getState().setSessions((prev) =>
-          prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s)),
-        );
+        useSessionStore
+          .getState()
+          .setSessions((prev) =>
+            prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s)),
+          );
       }).catch((e) => {
         console.error("Failed to listen session-disconnected:", e);
         return null;
@@ -326,9 +328,9 @@ export function useTauriListeners(): void {
           getEstablishingRef().current.delete(xstermSessionId);
           const stillExists = getSessionsRef().current.some((s) => s.id === xstermSessionId);
           if (!stillExists) return;
-          useSessionStore.getState().setSessions((prev) =>
-            prev.filter((s) => s.id !== xstermSessionId),
-          );
+          useSessionStore
+            .getState()
+            .setSessions((prev) => prev.filter((s) => s.id !== xstermSessionId));
           useWorkspaceStore.getState().setWorkspaces((prev) =>
             prev.map((workspace) =>
               withRecomputedSessionIds({
@@ -389,13 +391,17 @@ export function useTauriListeners(): void {
                 { type: "tmux-cc", config: {} },
               );
               session.tmuxWindowId = tmuxWindowId;
-              useSessionStore.getState().setSessions((prev) =>
-                prev.some((s) => s.id === xstermSessionId) ? prev : [...prev, session],
-              );
+              useSessionStore
+                .getState()
+                .setSessions((prev) =>
+                  prev.some((s) => s.id === xstermSessionId) ? prev : [...prev, session],
+                );
             } else {
-              useSessionStore.getState().setSessions((prev) =>
-                prev.map((s) => (s.id === xstermSessionId ? { ...s, tmuxWindowId } : s)),
-              );
+              useSessionStore
+                .getState()
+                .setSessions((prev) =>
+                  prev.map((s) => (s.id === xstermSessionId ? { ...s, tmuxWindowId } : s)),
+                );
             }
             return;
           }
@@ -416,15 +422,19 @@ export function useTauriListeners(): void {
             // `tmux-window-closed` listener can find this Session when
             // the window is killed.
             session.tmuxWindowId = tmuxWindowId;
-            useSessionStore.getState().setSessions((prev) =>
-              prev.some((s) => s.id === xstermSessionId) ? prev : [...prev, session],
-            );
+            useSessionStore
+              .getState()
+              .setSessions((prev) =>
+                prev.some((s) => s.id === xstermSessionId) ? prev : [...prev, session],
+              );
           } else {
             // Session already in state — just stamp the tmuxWindowId
             // so window-close can find it.
-            useSessionStore.getState().setSessions((prev) =>
-              prev.map((s) => (s.id === xstermSessionId ? { ...s, tmuxWindowId } : s)),
-            );
+            useSessionStore
+              .getState()
+              .setSessions((prev) =>
+                prev.map((s) => (s.id === xstermSessionId ? { ...s, tmuxWindowId } : s)),
+              );
           }
 
           // Pick a target workspace: prefer the one that already
@@ -551,7 +561,9 @@ export function useTauriListeners(): void {
             for (const id of deadIds) {
               getEstablishingRef().current.delete(id);
             }
-            useSessionStore.getState().setSessions((prev) => prev.filter((s) => !deadIds.includes(s.id)));
+            useSessionStore
+              .getState()
+              .setSessions((prev) => prev.filter((s) => !deadIds.includes(s.id)));
           }
 
           // Find the workspace containing the xsterm Window and drop
@@ -689,8 +701,9 @@ export function useTauriListeners(): void {
               );
               if (withControl) return withControl.id;
               const active =
-                getWorkspacesRef().current.find((w) => w.id === getWorkspacesRef().current[0]?.id) ??
-                prev[0];
+                getWorkspacesRef().current.find(
+                  (w) => w.id === getWorkspacesRef().current[0]?.id,
+                ) ?? prev[0];
               return active?.id ?? null;
             })();
             if (!targetId) return prev;

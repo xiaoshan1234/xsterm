@@ -54,9 +54,10 @@ export function WindowTabBar({
   );
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ index: number; position: "before" | "after" } | null>(
-    null,
-  );
+  const [dropTarget, setDropTarget] = useState<{
+    index: number;
+    position: "before" | "after";
+  } | null>(null);
   // Drag origin: which tab index was grabbed, and where the cursor started.
   // Using a ref so the document-level mousemove/mouseup handlers always see
   // the value at the moment the drag began (avoids stale closure captures).
@@ -128,7 +129,9 @@ export function WindowTabBar({
 
       if (movedFar && currentDropTarget && currentDropTarget.index !== drag.index) {
         let toIndex =
-          currentDropTarget.position === "before" ? currentDropTarget.index : currentDropTarget.index + 1;
+          currentDropTarget.position === "before"
+            ? currentDropTarget.index
+            : currentDropTarget.index + 1;
         // When dragging forward, removing the source shifts subsequent indices down by 1.
         if (drag.index < toIndex) toIndex -= 1;
         if (drag.index !== toIndex) {

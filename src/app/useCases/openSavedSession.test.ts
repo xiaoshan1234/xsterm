@@ -85,7 +85,12 @@ describe("openSavedSession", () => {
       type: "ssh",
       config: { host: "h", port: 22, username: "u", auth_type: "password" },
     });
-    const mockInfo = { id: 201, name: "Ssh1", sessionType: { type: "ssh", config: {} }, isConnected: true } as any;
+    const mockInfo = {
+      id: 201,
+      name: "Ssh1",
+      sessionType: { type: "ssh", config: {} },
+      isConnected: true,
+    } as any;
     vi.mocked(createSsh).mockResolvedValue(mockInfo);
 
     await openSavedSession("cfg-ssh");

@@ -23,10 +23,7 @@ const CURSOR_STYLES = [
   { value: "bar", label: "Bar" },
 ];
 
-export default function AppearanceTab({
-  config = {},
-  onChange,
-}: AppearanceTabProps) {
+export default function AppearanceTab({ config = {}, onChange }: AppearanceTabProps) {
   const update = (patch: Partial<SessionDisplayConfig>) => {
     onChange({ ...config, ...patch });
   };
@@ -91,7 +88,6 @@ export default function AppearanceTab({
           onChange={(cursorWidth) => update({ cursorWidth })}
         />
       </div>
-
     </div>
   );
 }

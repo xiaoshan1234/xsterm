@@ -2,7 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import { type PaneNode, type SplitDirection, type Workspace } from "../model/entities";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import * as paneTree from "../model/entities/paneTree";
-import { isSessionUsedInOtherWindow, getPaneNumber } from "../service/legacy/contexts/session/paneUtils";
+import {
+  isSessionUsedInOtherWindow,
+  getPaneNumber,
+} from "../service/legacy/contexts/session/paneUtils";
 import { useTheme } from "../service/legacy/contexts/ThemeContext";
 import Terminal, { type TerminalRef } from "./Terminal";
 import { ContextMenu, type ContextMenuRef } from "./primitives/ContextMenu";
@@ -79,7 +82,11 @@ export function Pane({
       // step because the new pane IS the new tmux pane. The
       // `tmux-pane-added` listener / `splitTmuxPaneInternal` updates
       // React state and the pane tree.
-      if (session?.capabilities?.supportsMultiplex && session.id !== undefined && pane.sessionId !== undefined) {
+      if (
+        session?.capabilities?.supportsMultiplex &&
+        session.id !== undefined &&
+        pane.sessionId !== undefined
+      ) {
         splitPane(workspace.id, windowId, pane.id, direction, pane.sessionId);
         return;
       }

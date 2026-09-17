@@ -36,7 +36,9 @@ vi.mock("../../service/session/store", () => ({
 }));
 
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }) },
+  useWorkspaceStore: {
+    getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }),
+  },
 }));
 
 import { replaceInitWindowWithSession } from "./replaceInitWindowWithSession";

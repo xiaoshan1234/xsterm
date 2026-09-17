@@ -32,12 +32,7 @@ interface TmuxFormProps {
  * an SSH config and through a local `tokio::process::Command` child
  * otherwise.
  */
-export function TmuxForm({
-  name,
-  onNameChange,
-  config,
-  onConfigChange,
-}: TmuxFormProps) {
+export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFormProps) {
   const { savedConfigs } = useSession();
 
   // Only SSH + Local saved configs are valid bases for a tmux session.
@@ -47,9 +42,7 @@ export function TmuxForm({
     const eligible: SavedSessionConfig[] = savedConfigs.filter(
       (c) => c.type === "local" || c.type === "ssh",
     );
-    const options: FormSelectOption[] = [
-      { value: "", label: "Select a saved config…" },
-    ];
+    const options: FormSelectOption[] = [{ value: "", label: "Select a saved config…" }];
     for (const c of eligible) {
       const transportLabel = c.type === "ssh" ? "SSH" : "Shell";
       options.push({
@@ -76,9 +69,7 @@ export function TmuxForm({
         <FormSelectField
           label="Rides on"
           value={config.baseConfigId ?? ""}
-          onChange={(v) =>
-            onConfigChange({ ...config, baseConfigId: v || undefined })
-          }
+          onChange={(v) => onConfigChange({ ...config, baseConfigId: v || undefined })}
           options={baseOptions}
         />
       </div>

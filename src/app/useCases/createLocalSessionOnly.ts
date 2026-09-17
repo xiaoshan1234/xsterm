@@ -8,7 +8,12 @@ import { useSessionStore } from "../../service/session/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession } from "../../model/rules/sessionRules";
 import { generateId } from "../../model/entities/paneTree";
-import type { LocalSessionConfig, SavedSessionConfig, Session, SessionDisplayConfig } from "../../model/entities";
+import type {
+  LocalSessionConfig,
+  SavedSessionConfig,
+  Session,
+  SessionDisplayConfig,
+} from "../../model/entities";
 
 export async function createLocalSessionOnly(
   config: LocalSessionConfig,

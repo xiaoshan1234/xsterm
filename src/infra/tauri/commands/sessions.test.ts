@@ -55,7 +55,9 @@ describe("createSession", () => {
     const result = await createSession({ type: "local", config: cfg });
     expect(result).toEqual(sampleInfo);
     expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith("create_session", { config: { type: "local", config: cfg } });
+    expect(invokeMock).toHaveBeenCalledWith("create_session", {
+      config: { type: "local", config: cfg },
+    });
   });
 });
 

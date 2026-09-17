@@ -29,9 +29,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = useThemeStore((s) => s.setTheme);
 
   return (
-    <ThemeContext.Provider
-      value={{ currentTheme, currentThemeKey, setTheme, themeKeys }}
-    >
+    <ThemeContext.Provider value={{ currentTheme, currentThemeKey, setTheme, themeKeys }}>
       {children}
     </ThemeContext.Provider>
   );

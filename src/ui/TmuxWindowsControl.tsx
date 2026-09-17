@@ -36,9 +36,7 @@ export function TmuxWindowsControl({
     sessionService
       .createTmuxWindow(controllerId, trimmed === "" ? undefined : trimmed)
       .catch((e) =>
-        window.alert(
-          `Failed to create tmux window: ${e instanceof Error ? e.message : String(e)}`,
-        ),
+        window.alert(`Failed to create tmux window: ${e instanceof Error ? e.message : String(e)}`),
       );
   }, [controllerId, tmuxSessionName]);
 
@@ -50,9 +48,7 @@ export function TmuxWindowsControl({
     sessionService
       .renameTmuxWindow(entry.xstermWindowId, trimmed)
       .catch((e) =>
-        window.alert(
-          `Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`,
-        ),
+        window.alert(`Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`),
       );
   }, []);
 
@@ -64,9 +60,7 @@ export function TmuxWindowsControl({
     sessionService
       .killTmuxWindow(entry.xstermWindowId)
       .catch((e) =>
-        window.alert(
-          `Failed to delete tmux window: ${e instanceof Error ? e.message : String(e)}`,
-        ),
+        window.alert(`Failed to delete tmux window: ${e instanceof Error ? e.message : String(e)}`),
       );
   }, []);
 
@@ -79,8 +73,8 @@ export function TmuxWindowsControl({
       <div className="tmux-card__divider" />
       {windows.length === 0 ? (
         <div className="tmux-windows-empty">
-          No tmux windows registered yet. They will appear here as soon as the controller
-          reports them via `tmux-window-list`.
+          No tmux windows registered yet. They will appear here as soon as the controller reports
+          them via `tmux-window-list`.
         </div>
       ) : (
         <ul className="tmux-windows-list">

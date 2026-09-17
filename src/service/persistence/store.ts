@@ -10,8 +10,6 @@
  * bridge and the sidebars; synchronous non-React reads happen
  * through `usePersistenceStore.getState()`. No refs needed (the
  * arrays themselves are the canonical state).
- *
- * **Stub actions** are filled in by Commit 4.
  */
 import { create } from "zustand";
 import type {
@@ -24,9 +22,7 @@ import type {
 export interface PersistenceStoreState {
   savedConfigs: SavedSessionConfig[];
   setSavedConfigs: (
-    next:
-      | SavedSessionConfig[]
-      | ((p: SavedSessionConfig[]) => SavedSessionConfig[]),
+    next: SavedSessionConfig[] | ((p: SavedSessionConfig[]) => SavedSessionConfig[]),
   ) => void;
   savedWorkspaces: SavedWorkspace[];
   setSavedWorkspaces: (
@@ -104,21 +100,99 @@ export const usePersistenceStore = create<PersistenceStoreState>((set) => ({
     }));
   },
 
-  // Stubs.
-  upsertSavedConfig: () => {},
-  removeSavedConfig: () => {},
-  upsertSavedWorkspace: () => {},
-  removeSavedWorkspace: () => {},
-  renameSavedWorkspace: () => {},
-  upsertSavedWindowConfig: () => {},
-  removeSavedWindowConfig: () => {},
-  renameSavedWindowConfig: () => {},
-  addGroup: () => {},
-  removeGroup: () => {},
-  renameGroup: () => {},
-  toggleGroup: () => {},
-  addConfigToGroup: () => {},
-  removeConfigFromGroup: () => {},
+  upsertSavedConfig: (config) => {
+    set((state) => {
+      const idx = state.savedConfigs.findIndex((c) => c.id === config.id);
+      const savedConfigs =
+        idx === -1
+          ? [...state.savedConfigs, config]
+          : state.savedConfigs.map((c) => (c.id === config.id ? config : c));
+      return { savedConfigs };
+    });
+  },
+  removeSavedConfig: (configId) => {
+    set((state) => ({
+      savedConfigs: state.savedConfigs.filter((c) => c.id !== configId),
+      groups: state.groups.map((g) => ({
+        ...g,
+        configIds: g.configIds.filter((id) => id !== configId),
+      })),
+    }));
+  },
+  upsertSavedWorkspace: (workspace) => {
+    set((state) => {
+      const idx = state.savedWorkspaces.findIndex((w) => w.id === workspace.id);
+      const savedWorkspaces =
+        idx === -1
+          ? [...state.savedWorkspaces, workspace]
+          : state.savedWorkspaces.map((w) => (w.id === workspace.id ? workspace : w));
+      return { savedWorkspaces };
+    });
+  },
+  removeSavedWorkspace: (id) => {
+    set((state) => ({
+      savedWorkspaces: state.savedWorkspaces.filter((w) => w.id !== id),
+    }));
+  },
+  renameSavedWorkspace: (id, name) => {
+    set((state) => ({
+      savedWorkspaces: state.savedWorkspaces.map((w) => (w.id === id ? { ...w, name } : w)),
+    }));
+  },
+  upsertSavedWindowConfig: (config) => {
+    set((state) => {
+      const idx = state.savedWindowConfigs.findIndex((c) => c.id === config.id);
+      const savedWindowConfigs =
+        idx === -1
+          ? [...state.savedWindowConfigs, config]
+          : state.savedWindowConfigs.map((c) => (c.id === config.id ? config : c));
+      return { savedWindowConfigs };
+    });
+  },
+  removeSavedWindowConfig: (id) => {
+    set((state) => ({
+      savedWindowConfigs: state.savedWindowConfigs.filter((c) => c.id !== id),
+    }));
+  },
+  renameSavedWindowConfig: (id, name) => {
+    set((state) => ({
+      savedWindowConfigs: state.savedWindowConfigs.map((c) => (c.id === id ? { ...c, name } : c)),
+    }));
+  },
+  addGroup: (group) => {
+    set((state) => ({ groups: [...state.groups, group] }));
+  },
+  removeGroup: (id) => {
+    set((state) => ({
+      groups: state.groups.filter((g) => g.id !== id),
+    }));
+  },
+  renameGroup: (id, name) => {
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === id ? { ...g, name } : g)),
+    }));
+  },
+  toggleGroup: (id) => {
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)),
+    }));
+  },
+  addConfigToGroup: (groupId, configId) => {
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId && !g.configIds.includes(configId)
+          ? { ...g, configIds: [...g.configIds, configId] }
+          : g,
+      ),
+    }));
+  },
+  removeConfigFromGroup: (groupId, configId) => {
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId ? { ...g, configIds: g.configIds.filter((id) => id !== configId) } : g,
+      ),
+    }));
+  },
   reset: () => {
     set({
       savedConfigs: [],

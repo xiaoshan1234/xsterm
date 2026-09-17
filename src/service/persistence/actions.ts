@@ -67,9 +67,7 @@ export function renameSavedWindowConfig(id: string, name: string): void {
   usePersistenceStore.getState().renameSavedWindowConfig(id, name);
 }
 
-export function setGroups(
-  next: SessionGroup[] | ((p: SessionGroup[]) => SessionGroup[]),
-): void {
+export function setGroups(next: SessionGroup[] | ((p: SessionGroup[]) => SessionGroup[])): void {
   usePersistenceStore.getState().setGroups(next);
 }
 
@@ -123,11 +121,7 @@ export function resetPersistenceService(): void {
 
 export function usePersistenceActions(): Pick<
   PersistenceStoreState,
-  | "savedConfigs"
-  | "savedWorkspaces"
-  | "savedWindowConfigs"
-  | "groups"
-  | "nextGroupId"
+  "savedConfigs" | "savedWorkspaces" | "savedWindowConfigs" | "groups" | "nextGroupId"
 > {
   return usePersistenceStore((s) => ({
     savedConfigs: s.savedConfigs,

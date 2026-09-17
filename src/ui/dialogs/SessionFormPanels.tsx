@@ -42,10 +42,7 @@ export function SessionFormPanels({
         );
       case "ssh":
         return (
-          <SSHSettingsPanel
-            sshConfig={form.sshConfig}
-            onSshConfigChange={form.setSshConfig}
-          />
+          <SSHSettingsPanel sshConfig={form.sshConfig} onSshConfigChange={form.setSshConfig} />
         );
       case "appearance":
         return <AppearanceTab config={form.displayConfig} onChange={form.setDisplayConfig} />;
@@ -62,7 +59,9 @@ export function SessionFormPanels({
           />
         );
       case "input":
-        return <InputTab displayConfig={form.displayConfig} onDisplayChange={form.setDisplayConfig} />;
+        return (
+          <InputTab displayConfig={form.displayConfig} onDisplayChange={form.setDisplayConfig} />
+        );
       case "logging":
         return <LoggingTab config={form.displayConfig} onChange={form.setDisplayConfig} />;
     }

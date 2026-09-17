@@ -31,9 +31,7 @@ import type {
 } from "../../model/entities";
 import { useSessionStore, type SessionStoreState } from "./store";
 
-export function setSessions(
-  next: Session[] | ((prev: Session[]) => Session[]),
-): void {
+export function setSessions(next: Session[] | ((prev: Session[]) => Session[])): void {
   useSessionStore.getState().setSessions(next);
 }
 
@@ -57,10 +55,7 @@ export function setSessionName(id: number, name: string): void {
   useSessionStore.getState().setSessionName(id, name);
 }
 
-export function applyDisplayConfig(
-  id: number,
-  patch: Partial<Session["displayConfig"]>,
-): void {
+export function applyDisplayConfig(id: number, patch: Partial<Session["displayConfig"]>): void {
   useSessionStore.getState().applyDisplayConfig(id, patch);
 }
 
@@ -76,10 +71,7 @@ export function setGlobalLocalEcho(enabled: boolean): void {
   useSessionStore.getState().setGlobalLocalEchoAction(enabled);
 }
 
-export function setSessionLocalEchoOverride(
-  id: number,
-  enabled: boolean | undefined,
-): void {
+export function setSessionLocalEchoOverride(id: number, enabled: boolean | undefined): void {
   useSessionStore.getState().setSessionLocalEchoOverride(id, enabled);
 }
 
@@ -94,10 +86,7 @@ export function setTmuxControllerError(
   useSessionStore.getState().setTmuxControllerError(controllerId, error);
 }
 
-export function rememberTmuxControllerConfig(
-  controllerId: number,
-  config: TmuxCcConfig,
-): void {
+export function rememberTmuxControllerConfig(controllerId: number, config: TmuxCcConfig): void {
   useSessionStore.getState().rememberTmuxControllerConfig(controllerId, config);
 }
 
@@ -105,24 +94,15 @@ export function forgetTmuxControllerConfig(controllerId: number): void {
   useSessionStore.getState().forgetTmuxControllerConfig(controllerId);
 }
 
-export function rememberTmuxWindowList(
-  controllerId: number,
-  entries: TmuxWindowListEntry[],
-): void {
+export function rememberTmuxWindowList(controllerId: number, entries: TmuxWindowListEntry[]): void {
   useSessionStore.getState().rememberTmuxWindowList(controllerId, entries);
 }
 
-export function upsertTmuxWindowListEntry(
-  controllerId: number,
-  entry: TmuxWindowListEntry,
-): void {
+export function upsertTmuxWindowListEntry(controllerId: number, entry: TmuxWindowListEntry): void {
   useSessionStore.getState().upsertTmuxWindowListEntry(controllerId, entry);
 }
 
-export function removeTmuxWindowListEntry(
-  controllerId: number,
-  tmuxWindowId: string,
-): void {
+export function removeTmuxWindowListEntry(controllerId: number, tmuxWindowId: string): void {
   useSessionStore.getState().removeTmuxWindowListEntry(controllerId, tmuxWindowId);
 }
 

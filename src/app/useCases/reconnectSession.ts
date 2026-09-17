@@ -16,7 +16,12 @@ import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { buildFrontendSession, dispatchByType } from "../../model/rules/sessionRules";
 import { replaceSessionIdInPaneTree } from "../../model/entities/paneTree";
 import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
-import type { LocalSessionConfig, Session, SSHSessionConfig, TmuxCcConfig } from "../../model/entities";
+import type {
+  LocalSessionConfig,
+  Session,
+  SSHSessionConfig,
+  TmuxCcConfig,
+} from "../../model/entities";
 
 export async function reconnectSession(id: number): Promise<Session> {
   const sessions = useSessionStore.getState().sessions;

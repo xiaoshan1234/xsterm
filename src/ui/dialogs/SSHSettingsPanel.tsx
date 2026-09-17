@@ -19,9 +19,7 @@ export function SSHSettingsPanel({ sshConfig, onSshConfigChange }: SSHSettingsPa
             label="Keepalive Interval"
             placeholder="(disabled)"
             value={sshConfig.keepaliveInterval}
-            onChange={(keepaliveInterval) =>
-              onSshConfigChange({ ...sshConfig, keepaliveInterval })
-            }
+            onChange={(keepaliveInterval) => onSshConfigChange({ ...sshConfig, keepaliveInterval })}
           />
 
           <FormTextField
@@ -47,9 +45,7 @@ export function SSHSettingsPanel({ sshConfig, onSshConfigChange }: SSHSettingsPa
             label="Connection Timeout"
             placeholder="30"
             value={sshConfig.connectionTimeout}
-            onChange={(connectionTimeout) =>
-              onSshConfigChange({ ...sshConfig, connectionTimeout })
-            }
+            onChange={(connectionTimeout) => onSshConfigChange({ ...sshConfig, connectionTimeout })}
           />
           <FormCheckboxField
             label="TCP No Delay"
@@ -71,9 +67,7 @@ export function SSHSettingsPanel({ sshConfig, onSshConfigChange }: SSHSettingsPa
           <FormCheckboxField
             label="Enable Compression"
             checked={sshConfig.enableCompression ?? false}
-            onChange={(enableCompression) =>
-              onSshConfigChange({ ...sshConfig, enableCompression })
-            }
+            onChange={(enableCompression) => onSshConfigChange({ ...sshConfig, enableCompression })}
           />
         </div>
       </div>

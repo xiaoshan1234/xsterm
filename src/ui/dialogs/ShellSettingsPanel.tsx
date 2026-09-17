@@ -23,10 +23,7 @@ function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-export function ShellSettingsPanel({
-  localConfig,
-  onLocalConfigChange,
-}: ShellSettingsPanelProps) {
+export function ShellSettingsPanel({ localConfig, onLocalConfigChange }: ShellSettingsPanelProps) {
   const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
     const env = localConfig.envConfig?.env || {};
     return (Object.entries(env) as [string, string][]).map(([key, value]) => ({ key, value }));

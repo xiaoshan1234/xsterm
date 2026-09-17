@@ -110,14 +110,7 @@ function buildHarness(
       exposed.setDisplayConfig = setDisplayConfig;
     }, []);
 
-    useTerminalResize(
-      containerRef,
-      termRef,
-      fitAddonRef,
-      42,
-      displayConfig,
-      opts?.isWindowActive,
-    );
+    useTerminalResize(containerRef, termRef, fitAddonRef, 42, displayConfig, opts?.isWindowActive);
 
     // Capture each resizeSession call onto exposed for richer assertions.
     useEffect(() => {
@@ -142,7 +135,7 @@ function buildHarness(
 }
 
 describe("useTerminalResize", () => {
-  it('auto mode: ResizeObserver fires → after 150ms debounce, fit + resizeSession(rows=24, cols=80) are called', async () => {
+  it("auto mode: ResizeObserver fires → after 150ms debounce, fit + resizeSession(rows=24, cols=80) are called", async () => {
     vi.useFakeTimers();
     const { Host, exposed } = buildHarness({ sizingMode: "auto" });
     render(<Host />);
@@ -158,7 +151,7 @@ describe("useTerminalResize", () => {
     expect(exposed.resizeSessionCalls).toContainEqual({ rows: 24, cols: 80 });
   });
 
-  it('fixed mode: ResizeObserver fires → after 150ms, NEITHER fit NOR resizeSession is called', async () => {
+  it("fixed mode: ResizeObserver fires → after 150ms, NEITHER fit NOR resizeSession is called", async () => {
     vi.useFakeTimers();
     const { Host, exposed } = buildHarness({ sizingMode: "fixed", cols: 100, rows: 30 });
     render(<Host />);
@@ -196,14 +189,14 @@ describe("useTerminalResize", () => {
     expect(exposed.resizeSessionCalls).toContainEqual({ rows: 24, cols: 80 });
   });
 
-  it('skip when isWindowActive === false', () => {
+  it("skip when isWindowActive === false", () => {
     const { Host, exposed } = buildHarness({ sizingMode: "auto" }, { isWindowActive: false });
     render(<Host />);
 
     expect(exposed.resizeSessionCalls).toEqual([]);
   });
 
-  it('skip when container.offsetHeight === 0', () => {
+  it("skip when container.offsetHeight === 0", () => {
     const { Host, exposed } = buildHarness({ sizingMode: "auto" }, { containerHeight: 0 });
     render(<Host />);
 

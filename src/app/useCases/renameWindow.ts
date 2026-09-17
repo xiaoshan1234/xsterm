@@ -15,11 +15,13 @@ export function renameWindow(workspaceId: string, windowId: string, name: string
   const trimmed = name.trim();
   if (!trimmed) return;
   const wsStore = useWorkspaceStore.getState();
-  const window = wsStore.workspaces.find((w) => w.id === workspaceId)?.windows.find((w) => w.id === windowId);
+  const window = wsStore.workspaces
+    .find((w) => w.id === workspaceId)
+    ?.windows.find((w) => w.id === windowId);
   if (window?.xstermWindowId !== undefined) {
-    tmuxTauri.renameTmuxWindow(window.xstermWindowId, trimmed).catch((e) =>
-      console.error("Failed to rename tmux window:", e),
-    );
+    tmuxTauri
+      .renameTmuxWindow(window.xstermWindowId, trimmed)
+      .catch((e) => console.error("Failed to rename tmux window:", e));
     return;
   }
   wsStore.setWorkspaces((prev) =>

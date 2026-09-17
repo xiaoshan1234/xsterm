@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import {
-  type SavedSessionConfig,
-  type SessionGroup,
-} from "../../service/legacy/types/session";
+import { type SavedSessionConfig, type SessionGroup } from "../../service/legacy/types/session";
 import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";
 import SessionTab from "./SessionTab";
@@ -42,8 +39,7 @@ export function EditSessionDialog({
     initialName: config.name,
     initialGroupId: groupId ?? DEFAULT_GROUP_ID,
     initialLocalConfig: config.type === "local" ? config.config : {},
-    initialSshConfig:
-      config.type === "ssh" ? config.config : DEFAULT_SSH,
+    initialSshConfig: config.type === "ssh" ? config.config : DEFAULT_SSH,
     initialDisplayConfig: config.displayConfig,
   });
 
@@ -121,9 +117,8 @@ export function EditSessionDialog({
         <>
           {inlineFields}
           <p className="edit-session-note">
-            Tmux setup (base configuration, socket name, start command) is
-            fixed at creation time and cannot be changed. Use the other
-            sidebar tabs to edit display settings.
+            Tmux setup (base configuration, socket name, start command) is fixed at creation time
+            and cannot be changed. Use the other sidebar tabs to edit display settings.
           </p>
         </>
       );

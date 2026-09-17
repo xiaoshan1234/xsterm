@@ -95,7 +95,9 @@ export function PasteConfirmDialog({ isOpen, text, onConfirm, onCancel }: PasteC
           <input
             type="checkbox"
             checked={options.convertTabs}
-            onChange={(e) => setOptions((prev) => patchPasteOptions(prev, { convertTabs: e.target.checked }))}
+            onChange={(e) =>
+              setOptions((prev) => patchPasteOptions(prev, { convertTabs: e.target.checked }))
+            }
           />
           <span>Convert tabs to spaces</span>
           <input

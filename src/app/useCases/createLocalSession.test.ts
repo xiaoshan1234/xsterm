@@ -71,7 +71,12 @@ describe("createLocalSession", () => {
   });
 
   it("skips persistence when save=false", async () => {
-    const mockInfo = { id: 1, name: "n", sessionType: { type: "local", config: {} }, isConnected: true } as any;
+    const mockInfo = {
+      id: 1,
+      name: "n",
+      sessionType: { type: "local", config: {} },
+      isConnected: true,
+    } as any;
     vi.mocked(createLocal).mockResolvedValue(mockInfo);
     const upsertMock = vi.mocked(usePersistenceStore.getState().upsertSavedConfig);
 

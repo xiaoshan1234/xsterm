@@ -14,7 +14,9 @@ vi.mock("../../service/session/store", () => ({
 }));
 
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: [], activeWorkspaceId: null, addWindow: mocks.addWindow }) },
+  useWorkspaceStore: {
+    getState: () => ({ workspaces: [], activeWorkspaceId: null, addWindow: mocks.addWindow }),
+  },
 }));
 
 vi.mock("../../service/persistence/store", () => ({
@@ -30,7 +32,12 @@ describe("createLocalSessionOnly", () => {
   });
 
   it("creates a backend session without binding it to a window", async () => {
-    const mockInfo = { id: 11, name: "n", sessionType: { type: "local", config: {} }, isConnected: true } as any;
+    const mockInfo = {
+      id: 11,
+      name: "n",
+      sessionType: { type: "local", config: {} },
+      isConnected: true,
+    } as any;
     vi.mocked(createLocal).mockResolvedValue(mockInfo);
 
     const session = await createLocalSessionOnly({ shell: "bash" });

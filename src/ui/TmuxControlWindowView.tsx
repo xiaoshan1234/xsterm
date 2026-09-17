@@ -23,7 +23,8 @@ interface TmuxControlWindowViewProps {
  * `--hairline` dividers, `--radius-lg` cards, 400/500 typography.
  */
 export function TmuxControlWindowView({ window: controlWindow }: TmuxControlWindowViewProps) {
-  const { tmuxWindowListsRef, tmuxControllerErrors, tmuxControllerConfigsRef, createTmuxSession } = useSession();
+  const { tmuxWindowListsRef, tmuxControllerErrors, tmuxControllerConfigsRef, createTmuxSession } =
+    useSession();
   const controllerId = controlWindow.tmuxControlWindowId ?? 0;
   const tmuxSessionName = controlWindow.tmuxControlName ?? `tmux-${controllerId}`;
 
@@ -84,10 +85,7 @@ export function TmuxControlWindowView({ window: controlWindow }: TmuxControlWind
         </div>
       )}
       <div className="tmux-control-window-view__grid">
-        <TmuxSessionControl
-          controllerId={controllerId}
-          tmuxSessionName={tmuxSessionName}
-        />
+        <TmuxSessionControl controllerId={controllerId} tmuxSessionName={tmuxSessionName} />
         <TmuxWindowsControl
           controllerId={controllerId}
           tmuxSessionName={tmuxSessionName}

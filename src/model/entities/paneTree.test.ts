@@ -23,10 +23,7 @@ import {
   replaceSessionIdInPaneTree,
   stripSessionIdFromPaneTree,
 } from "./paneTree";
-import {
-  collectSessionIdsFromWorkspace,
-  withRecomputedSessionIds,
-} from "../rules/workspaceRules";
+import { collectSessionIdsFromWorkspace, withRecomputedSessionIds } from "../rules/workspaceRules";
 
 // ---------- Test fixtures --------------------------------------------------
 

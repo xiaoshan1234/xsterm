@@ -1,4 +1,8 @@
-import { type LocalSessionConfig, type SSHSessionConfig, type SessionDisplayConfig } from "../../service/legacy/types/session";
+import {
+  type LocalSessionConfig,
+  type SSHSessionConfig,
+  type SessionDisplayConfig,
+} from "../../service/legacy/types/session";
 import { FormNumberField } from "./FormNumberField";
 import { FormRadioGroup } from "./FormRadioGroup";
 import { FormSelectField } from "./FormSelectField";
@@ -52,9 +56,10 @@ export default function TerminalTab({
   // In auto mode the startup size is only a one-shot hint; in fixed mode the
   // runtime size comes from `config.cols`/`rows` (the new displayConfig
   // fields), not the startup sizes — so we leave both surfaces editable.
-  const terminalSize = connectionType === "ssh"
-    ? { cols: sshConfig.initialCols, rows: sshConfig.initialRows }
-    : { cols: localConfig.initialCols, rows: localConfig.initialRows };
+  const terminalSize =
+    connectionType === "ssh"
+      ? { cols: sshConfig.initialCols, rows: sshConfig.initialRows }
+      : { cols: localConfig.initialCols, rows: localConfig.initialRows };
 
   const handleTerminalSizeChange = (cols: number | undefined, rows: number | undefined) => {
     if (connectionType === "ssh") {
@@ -118,9 +123,7 @@ export default function TerminalTab({
             min={1}
             max={isFixed ? 500 : 9999}
             onChange={(cols) =>
-              isFixed
-                ? update({ cols })
-                : handleTerminalSizeChange(cols, terminalSize.rows)
+              isFixed ? update({ cols }) : handleTerminalSizeChange(cols, terminalSize.rows)
             }
           />
           <FormNumberField
@@ -131,9 +134,7 @@ export default function TerminalTab({
             min={1}
             max={isFixed ? 200 : 9999}
             onChange={(rows) =>
-              isFixed
-                ? update({ rows })
-                : handleTerminalSizeChange(terminalSize.cols, rows)
+              isFixed ? update({ rows }) : handleTerminalSizeChange(terminalSize.cols, rows)
             }
           />
         </div>

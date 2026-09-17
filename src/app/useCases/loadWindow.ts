@@ -7,7 +7,12 @@
  */
 import { usePersistenceStore } from "../../service/persistence/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { createLeafPane, generateId, getDefaultWindowName, getLeafPaneIds } from "../../model/entities/paneTree";
+import {
+  createLeafPane,
+  generateId,
+  getDefaultWindowName,
+  getLeafPaneIds,
+} from "../../model/entities/paneTree";
 import { getUniqueWindowName } from "../../model/rules/sessionRules";
 import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
 import { openSavedSession } from "./openSavedSession";

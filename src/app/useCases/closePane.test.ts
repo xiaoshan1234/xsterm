@@ -32,7 +32,9 @@ vi.mock("../../service/session/store", () => ({
   useSessionStore: { getState: () => ({ setSessions: mocks.setSessions }) },
 }));
 vi.mock("../../service/workspace/store", () => ({
-  useWorkspaceStore: { getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }) },
+  useWorkspaceStore: {
+    getState: () => ({ workspaces: mocks.workspaces, setWorkspaces: mocks.setWorkspaces }),
+  },
 }));
 
 import { closePane } from "./closePane";

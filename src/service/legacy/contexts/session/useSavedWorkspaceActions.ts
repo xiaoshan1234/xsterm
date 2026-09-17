@@ -8,11 +8,7 @@
  * `loadWorkspace` use case. This hook is purely the surface adapter.
  */
 import { useCallback } from "react";
-import type {
-  SavedWorkspace,
-  Session,
-  Workspace,
-} from "../../../../model/entities";
+import type { SavedWorkspace, Session, Workspace } from "../../../../model/entities";
 import { saveWorkspace as saveWorkspaceUseCase } from "../../../../app/useCases/saveWorkspace";
 import { loadWorkspace as loadWorkspaceUseCase } from "../../../../app/useCases/loadWorkspace";
 import { deleteSavedWorkspace as deleteSavedWorkspaceUseCase } from "../../../../app/useCases/deleteSavedWorkspace";
@@ -41,10 +37,7 @@ export function useSavedWorkspaceActions(_deps: UseSavedWorkspaceActionsDeps) {
     [],
   );
 
-  const deleteSavedWorkspace = useCallback(
-    (id: string) => deleteSavedWorkspaceUseCase(id),
-    [],
-  );
+  const deleteSavedWorkspace = useCallback((id: string) => deleteSavedWorkspaceUseCase(id), []);
 
   const renameSavedWorkspace = useCallback(
     (id: string, name: string) => renameSavedWorkspaceUseCase(id, name),

@@ -12,12 +12,7 @@
  * passthrough to `useWorkspaceStore.getState().updateWindowPaneTree`.
  */
 import { useCallback } from "react";
-import type {
-  PaneNode,
-  Session,
-  SplitDirection,
-  Workspace,
-} from "../../../../model/entities";
+import type { PaneNode, Session, SplitDirection, Workspace } from "../../../../model/entities";
 import { splitPane as splitPaneUseCase } from "../../../../app/useCases/splitPane";
 import { closePane as closePaneUseCase } from "../../../../app/useCases/closePane";
 import { writeSession as writeSessionUseCase } from "../../../../app/useCases/writeSession";
@@ -54,10 +49,7 @@ export function usePaneActions(_deps: UsePaneActionsDeps) {
     [],
   );
 
-  const writeSession = useCallback(
-    (id: number, data: string) => writeSessionUseCase(id, data),
-    [],
-  );
+  const writeSession = useCallback((id: number, data: string) => writeSessionUseCase(id, data), []);
 
   const resizeSession = useCallback(
     (id: number, rows: number, cols: number) => resizeSessionUseCase(id, rows, cols),
