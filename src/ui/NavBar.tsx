@@ -13,9 +13,11 @@ const MENU_ITEMS = ["File", "Edit", "View", "Terminal", "Help"];
 
 export default function NavBar({ onMenuAction }: NavBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
+  // null when not running inside Tauri webview (e.g. plain `npm run dev` in a browser)
   const appWindow = getCurrentWindow();
 
   useEffect(() => {
+    if (!appWindow) return;
     const updateState = async () => {
       try {
         setIsMaximized(await appWindow.isMaximized());
@@ -40,15 +42,16 @@ export default function NavBar({ onMenuAction }: NavBarProps) {
     };
   }, [appWindow]);
 
-  const handleMinimize = () => appWindow.minimize();
+  const handleMinimize = () => appWindow?.minimize();
   const handleMaximize = () => {
+    if (!appWindow) return;
     if (isMaximized) {
       appWindow.unmaximize();
     } else {
       appWindow.maximize();
     }
   };
-  const handleClose = () => appWindow.close();
+  const handleClose = () => appWindow?.close();
 
   return (
     <div className="navbar" data-tauri-drag-region>
