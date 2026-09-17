@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { type Session, type Workspace } from "../service/legacy/types/session";
+import { type Session, type Workspace } from "../model/entities";
 import { useDragResize } from "../service/legacy/hooks/useDragResize";
 import { getDefaultPaneId, useCommandTargets } from "./useCommandTargets";
 import { useCommandExecutor } from "./useCommandExecutor";

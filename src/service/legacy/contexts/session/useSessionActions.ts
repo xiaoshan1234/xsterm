@@ -34,7 +34,7 @@ import type {
   SessionGroup,
   Window,
   Workspace,
-} from "../../types/session";
+} from "../../../../model/entities";
 
 interface UseSessionActionsOptions {
   savedConfigs: LegacySavedSessionConfig[];

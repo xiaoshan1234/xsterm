@@ -15,7 +15,7 @@
 import { createContext, useContext, useCallback, useEffect, type ReactNode } from "react";
 // eslint-disable-next-line boundaries/dependencies -- legacy shim: tauri-apps IPC bridge before infra layer existed
 import { invoke } from "@tauri-apps/api/core";
-import { LogLevel } from "../types/log";
+import { LogLevel } from "../../../infra/logger/types";
 import { useLoggerStore } from "../../logger/store";
 
 interface LoggerContextType {

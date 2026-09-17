@@ -1,5 +1,5 @@
 import * as sessionService from "../../services/sessionService";
-import type { Session } from "../../types/session";
+import type { Session } from "../../../../model/entities";
 import { clearSessionOutput } from "../../../../infra/buffers/sessionOutputBuffer";
 
 interface RollbackDeps {

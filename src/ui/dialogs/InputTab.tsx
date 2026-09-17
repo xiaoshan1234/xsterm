@@ -1,4 +1,4 @@
-import { type SessionDisplayConfig } from "../../service/legacy/types/session";
+import { type SessionDisplayConfig } from "../../model/entities";
 import { FormCheckboxField } from "./FormCheckboxField";
 import { FormRadioGroup } from "./FormRadioGroup";
 import "./InputTab.css";

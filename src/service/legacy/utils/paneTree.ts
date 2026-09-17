@@ -1,4 +1,4 @@
-import { type PaneNode } from "../types/session";
+import { type PaneNode } from "../../../model/entities";
 
 export function findPaneNode<T extends { id: string; children?: T[] }>(
   node: T,

@@ -10,7 +10,7 @@ import {
   type SessionGroup,
   type SSHSessionConfig,
   type TmuxCcConfig,
-} from "../types/session";
+} from "../../../model/entities";
 
 interface GroupStore {
   groups: SessionGroup[];

@@ -16,7 +16,7 @@ import {
   createWorkspace as createWorkspaceUseCase,
 } from "../../../../app/useCases/createWorkspace";
 import { closeWorkspace as closeWorkspaceUseCase } from "../../../../app/useCases/closeWorkspace";
-import { setActiveWorkspace as setActiveWorkspaceUseCase } from "../../../../app/useCases/setActiveWorkspace";
+import { useWorkspaceStore } from "../../../../service/workspace/store";
 
 interface UseWorkspaceActionsDeps {
   workspacesRef: React.MutableRefObject<Workspace[]>;
@@ -40,7 +40,7 @@ export function useWorkspaceActions(_deps: UseWorkspaceActionsDeps) {
     [],
   );
   const setActiveWorkspace = useCallback(
-    (workspaceId: string) => setActiveWorkspaceUseCase(workspaceId),
+    (workspaceId: string) => useWorkspaceStore.getState().setActiveWorkspace(workspaceId),
     [],
   );
   const closeWorkspace = useCallback(

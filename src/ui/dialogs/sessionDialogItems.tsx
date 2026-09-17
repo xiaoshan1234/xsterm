@@ -8,7 +8,7 @@ import {
   KeyboardIcon,
   LogIcon,
 } from "../icons/Icon";
-import type { SSHSessionConfig } from "../../service/legacy/types/session";
+import type { SSHSessionConfig } from "../../model/entities";
 
 /**
  * Shared sidebar config for the Create / Edit session dialogs.

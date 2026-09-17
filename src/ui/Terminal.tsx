@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import { useTheme } from "../service/legacy/contexts/ThemeContext";
-import { type SessionDisplayConfig } from "../service/legacy/types/session";
+import { type SessionDisplayConfig } from "../model/entities";
 import { uploadImageToSshSession } from "../service/legacy/services/sessionService";
 // depcruise-disable-next-line no-ui-to-infra
 import { readClipboardText } from "../infra/clipboard/read";

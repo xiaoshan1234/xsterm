@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { type Workspace, type PaneNode } from "../service/legacy/types/session";
+import { type Workspace, type PaneNode } from "../model/entities";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import { useClampedPanelHeight } from "../service/legacy/hooks/useClampedPanelHeight";
 import { PaneTree } from "./PaneTree";

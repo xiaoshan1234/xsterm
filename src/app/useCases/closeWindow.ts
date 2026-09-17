@@ -13,7 +13,7 @@
  *    + drop the Window.
  */
 import * as tauri from "../../infra/tauri/commands/sessions";
-import * as tmuxTauri from "../../infra/tauri/commands/tmux";
+import { unmarkAttachedTmux } from "../../infra/tauri/commands/tmux";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
@@ -77,9 +77,9 @@ export function closeWindow(workspaceId: string, windowId: string): void {
         .getState()
         .setSessions((prev) => prev.filter((s) => !sessionIdsToClose.has(s.id)));
     }
-    tmuxTauri
-      .unmarkAttachedTmux(controllerId)
-      .catch((e) => console.error("Failed to unmark tmux:", e));
+    unmarkAttachedTmux(controllerId).catch((e: unknown) =>
+      console.error("Failed to unmark tmux:", e),
+    );
     return;
   }
 

@@ -37,8 +37,6 @@ import {
   removeSessionAndCollapse,
 } from "../../../../model/entities/paneTree";
 import { withRecomputedSessionIds } from "../../../../model/rules/workspaceRules";
-import { subscribeSessionDisconnected } from "../../../../infra/tauri/events/tmuxEvents";
-import { subscribeSessionClosed } from "../../../../infra/tauri/events/sessionClosed";
 import {
   subscribeTmuxPaused,
   subscribeTmuxContinued,
@@ -114,51 +112,9 @@ export function useTauriListeners(): void {
     const getTmuxWindowsRef = () => useSessionStore.getState().tmuxWindowListsRef;
 
     (async () => {
-      const unlistenSessionDisconnected = await subscribeSessionDisconnected((sessionId) => {
-        getEstablishingRef().current.delete(sessionId);
-        useSessionStore
-          .getState()
-          .setSessions((prev) =>
-            prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s)),
-          );
-      }).catch((e) => {
-        console.error("Failed to listen session-disconnected:", e);
-        return null;
-      });
-      if (cancelled) {
-        unlistenSessionDisconnected?.();
-        return;
-      }
-      if (unlistenSessionDisconnected) unlisteners.push(unlistenSessionDisconnected);
-
-      const unlistenSessionClosed = await subscribeSessionClosed((sessionId) => {
-        getEstablishingRef().current.delete(sessionId);
-        const stillExists = getSessionsRef().current.some((s) => s.id === sessionId);
-        if (!stillExists) return;
-        useSessionStore.getState().setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-        useWorkspaceStore.getState().setWorkspaces((prev) =>
-          prev.map((workspace) =>
-            withRecomputedSessionIds({
-              ...workspace,
-              windows: workspace.windows.map((window) => {
-                const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
-                const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
-                  ? window.activePaneId
-                  : (getLeafPaneIds(newRoot)[0] ?? null);
-                return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
-              }),
-            }),
-          ),
-        );
-      }).catch((e) => {
-        console.error("Failed to listen session-closed:", e);
-        return null;
-      });
-      if (cancelled) {
-        unlistenSessionClosed?.();
-        return;
-      }
-      if (unlistenSessionClosed) unlisteners.push(unlistenSessionClosed);
+      // session-disconnected / session-closed subscriptions moved to
+      // src/service/bridges/sessionBridge.tsx — both bridges share the
+      // same infraEventBus, so leaving duplicates here would double-fire.
 
       // tmux paused / continued markers. These are read-only —
       // we do not mutate session state because the underlying tmux session

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { Window } from "../service/legacy/types/session";
+import type { Window } from "../model/entities";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import { ContextMenu, type ContextMenuItem } from "./primitives/ContextMenu";
 import { PlusIcon, SaveIcon, CloseIcon } from "./icons/Icon";

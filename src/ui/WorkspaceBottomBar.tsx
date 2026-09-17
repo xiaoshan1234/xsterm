@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { type Workspace } from "../service/legacy/types/session";
+import { type Workspace } from "../model/entities";
 import { CloseIcon } from "./icons/Icon";
 import "./WorkspaceBottomBar.css";
 

@@ -198,7 +198,3 @@ async function createTmuxServerWindow(
     windowType: "terminal",
   };
 }
-
-export const _legacy_createWindowFromSession = createWindowFromSession;
-export const _legacy_createInitWindow = createInitWindow;
-export const _legacy_replaceInitWindowWithSession = replaceInitWindowWithSession;

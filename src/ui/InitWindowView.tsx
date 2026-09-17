@@ -1,5 +1,5 @@
 import { useSession } from "../service/legacy/contexts/SessionContext";
-import { type Workspace } from "../service/legacy/types/session";
+import { type Workspace } from "../model/entities";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
 

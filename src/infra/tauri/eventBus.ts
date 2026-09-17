@@ -25,15 +25,24 @@ export function createInfraEventBus(): InfraEventBus {
   const handlers = new Map<string, Set<EventHandler<unknown>>>();
   const unsubscribers = new Map<string, UnlistenFn>();
 
-  function ensureListening(eventName: string): void {
-    if (unsubscribers.has(eventName)) return;
-    listen(eventName, (event) => {
+  // Track in-flight listen() Promises so concurrent subscribe() calls
+  // don't race the `.then(...)` that registers the unlistener.
+  const pending = new Map<string, Promise<UnlistenFn>>();
+
+  function ensureListening(eventName: string): Promise<UnlistenFn> | undefined {
+    if (unsubscribers.has(eventName)) return undefined;
+    if (pending.has(eventName)) return pending.get(eventName);
+    const p = listen(eventName, (event) => {
       const set = handlers.get(eventName);
       if (!set) return;
       for (const h of set) h(event.payload);
     }).then((un) => {
       unsubscribers.set(eventName, un);
+      pending.delete(eventName);
+      return un;
     });
+    pending.set(eventName, p);
+    return p;
   }
 
   return {

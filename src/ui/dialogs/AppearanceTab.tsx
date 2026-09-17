@@ -1,4 +1,4 @@
-import { type SessionDisplayConfig } from "../../service/legacy/types/session";
+import { type SessionDisplayConfig } from "../../model/entities";
 import { FormNumberField } from "./FormNumberField";
 import { FormSelectField } from "./FormSelectField";
 import { FormCheckboxField } from "./FormCheckboxField";

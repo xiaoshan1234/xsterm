@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type SavedWorkspace, type Workspace } from "../../service/legacy/types/session";
+import { type SavedWorkspace, type Workspace } from "../../model/entities";
 import { useSession } from "../../service/legacy/contexts/SessionContext";
 import { LayoutIcon } from "../icons/Icon";
 import { Dialog } from "../primitives/Dialog";

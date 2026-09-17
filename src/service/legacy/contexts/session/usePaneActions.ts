@@ -15,9 +15,9 @@ import { useCallback } from "react";
 import type { PaneNode, Session, SplitDirection, Workspace } from "../../../../model/entities";
 import { splitPane as splitPaneUseCase } from "../../../../app/useCases/splitPane";
 import { closePane as closePaneUseCase } from "../../../../app/useCases/closePane";
-import { writeSession as writeSessionUseCase } from "../../../../app/useCases/writeSession";
-import { resizeSession as resizeSessionUseCase } from "../../../../app/useCases/resizeSession";
-import { killTmuxPane as killTmuxPaneUseCase } from "../../../../app/useCases/killTmuxPane";
+import { writeSession as writeSessionFn } from "../../../../infra/tauri/commands/sessions";
+import { resizeSession as resizeSessionFn } from "../../../../infra/tauri/commands/sessions";
+import { killTmuxPane as killTmuxPaneFn } from "../../../../infra/tauri/commands/tmux";
 import { useWorkspaceStore } from "../../../../service/workspace/store";
 
 interface UsePaneActionsDeps {
@@ -49,15 +49,15 @@ export function usePaneActions(_deps: UsePaneActionsDeps) {
     [],
   );
 
-  const writeSession = useCallback((id: number, data: string) => writeSessionUseCase(id, data), []);
+  const writeSession = useCallback((id: number, data: string) => writeSessionFn(id, data), []);
 
   const resizeSession = useCallback(
-    (id: number, rows: number, cols: number) => resizeSessionUseCase(id, rows, cols),
+    (id: number, rows: number, cols: number) => resizeSessionFn(id, rows, cols),
     [],
   );
 
   const killTmuxPane = useCallback(
-    (xstermSessionId: number) => killTmuxPaneUseCase(xstermSessionId),
+    (xstermSessionId: number) => void killTmuxPaneFn(xstermSessionId),
     [],
   );
 

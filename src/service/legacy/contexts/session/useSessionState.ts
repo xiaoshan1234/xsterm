@@ -51,7 +51,7 @@ import type {
   SavedSessionConfig as LegacySavedSessionConfig,
   SavedWindowConfig as LegacySavedWindowConfig,
   SavedWorkspace as LegacySavedWorkspace,
-} from "../../types/session";
+} from "../../../../model/entities";
 import { type SessionState, type TmuxControllerError } from "./types";
 
 export function useSessionState(): SessionState {

@@ -3,7 +3,7 @@ import type {
   LocalSessionConfig,
   SSHSessionConfig,
   SessionDisplayConfig,
-} from "../../service/legacy/types/session";
+} from "../../model/entities";
 import { type SectionId } from "./sessionDialogItems";
 
 export interface UseSessionFormOptions {

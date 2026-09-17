@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { PaneNode, Window, Workspace } from "../service/legacy/types/session";
+import type { PaneNode, Window, Workspace } from "../model/entities";
 import {
   findFirstLeafWithSession,
   findPaneNode,

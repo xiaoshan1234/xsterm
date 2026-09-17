@@ -1,5 +1,5 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
-import { type PaneNode, type Workspace } from "../service/legacy/types/session";
+import { type PaneNode, type Workspace } from "../model/entities";
 import { useDragResize } from "../service/legacy/hooks/useDragResize";
 import { Pane } from "./Pane";
 

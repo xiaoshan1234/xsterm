@@ -7,7 +7,7 @@
  * For control windows and ordinary terminal windows, the rename is
  * local-only.
  */
-import * as tmuxTauri from "../../infra/tauri/commands/tmux";
+import { renameTmuxWindow } from "../../infra/tauri/commands/tmux";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { getUniqueWindowName } from "../../model/rules/sessionRules";
 
@@ -19,9 +19,9 @@ export function renameWindow(workspaceId: string, windowId: string, name: string
     .find((w) => w.id === workspaceId)
     ?.windows.find((w) => w.id === windowId);
   if (window?.xstermWindowId !== undefined) {
-    tmuxTauri
-      .renameTmuxWindow(window.xstermWindowId, trimmed)
-      .catch((e) => console.error("Failed to rename tmux window:", e));
+    renameTmuxWindow(window.xstermWindowId, trimmed).catch((e: unknown) =>
+      console.error("Failed to rename tmux window:", e),
+    );
     return;
   }
   wsStore.setWorkspaces((prev) =>

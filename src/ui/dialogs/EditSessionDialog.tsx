@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { type SavedSessionConfig, type SessionGroup } from "../../service/legacy/types/session";
+import { type SavedSessionConfig, type SessionGroup } from "../../model/entities";
 import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";
 import SessionTab from "./SessionTab";

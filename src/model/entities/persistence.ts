@@ -6,14 +6,9 @@ import type {
   TmuxCcConfig,
 } from "./session";
 
-export interface SavedSessionConfig {
-  id: string;
-  name: string;
-  version: number;
-  type: SessionType["type"];
-  config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig;
+export type SavedSessionConfig = ({ id: string; name: string; version: number } & SessionType) & {
   displayConfig?: SessionDisplayConfig;
-}
+};
 
 export interface SessionGroup {
   id: number;

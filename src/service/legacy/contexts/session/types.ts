@@ -14,7 +14,7 @@ import {
   type TmuxWindowListEntry,
   type Window,
   type Workspace,
-} from "../../types/session";
+} from "../../../../model/entities";
 
 export interface SessionContextType {
   sessions: Session[];

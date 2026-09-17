@@ -5,7 +5,7 @@ import {
   dispatchByType,
   getUniqueWindowName,
 } from "./useSessionActions.helpers";
-import type { Session, SessionDisplayConfig, Window, Workspace } from "../../types/session";
+import type { Session, SessionDisplayConfig, Window, Workspace } from "../../../../model/entities";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 // ---------- Fixtures --------------------------------------------------------

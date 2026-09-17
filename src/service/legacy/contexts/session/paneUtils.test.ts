@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type PaneNode, type Session, type Workspace } from "../../types/session";
+import { type PaneNode, type Session, type Workspace } from "../../../../model/entities";
 import {
   collapseEmptySplits,
   collectSessionIdsFromPaneTree,
