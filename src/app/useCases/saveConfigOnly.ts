@@ -4,7 +4,7 @@
  * dialog's "Save Only" button.
  */
 import { usePersistenceStore } from "../../service/persistence/store";
-import { generateId } from "../../model/entities/paneTree";
+import { generateId } from "../../app/rules/paneTree";
 import type {
   LocalSessionConfig,
   SavedSessionConfig,

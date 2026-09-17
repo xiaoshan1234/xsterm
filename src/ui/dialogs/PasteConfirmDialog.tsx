@@ -7,7 +7,7 @@ import {
   patchPasteOptions,
   type PasteConfirmOptions,
 } from "./pasteConfirm";
-import { countChars, countLines } from "../../model/textTransform/textTransform";
+import { countChars, countLines } from "../../app/rules/textTransform";
 import "./PasteConfirmDialog.css";
 
 interface PasteConfirmDialogProps {

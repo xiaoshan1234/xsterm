@@ -9,12 +9,8 @@ import * as tauri from "../../infra/tauri/commands/sessions";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
-import {
-  findPaneNode,
-  getLeafPaneIds,
-  removeSessionAndCollapse,
-} from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 
 export async function closeSession(id: number): Promise<void> {
   try {

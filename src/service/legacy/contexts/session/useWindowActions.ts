@@ -15,16 +15,12 @@ import type {
   Window,
   Workspace,
 } from "../../../../model/entities";
-import {
-  createLeafPane,
-  generateId,
-  getDefaultWindowName,
-} from "../../../../model/entities/paneTree";
+import { createLeafPane, generateId, getDefaultWindowName } from "../../../../app/rules/paneTree";
 import {
   assertSessionNotUsedElsewhere,
   getUniqueWindowName,
-} from "../../../../model/rules/sessionRules";
-import { withRecomputedSessionIds } from "../../../../model/rules/workspaceRules";
+} from "../../../../app/rules/sessionRules";
+import { withRecomputedSessionIds } from "../../../../app/rules/workspaceRules";
 import { createWindow as createWindowUseCase } from "../../../../app/useCases/createWindow";
 import { createInitWindow as createInitWindowUseCase } from "../../../../app/useCases/createInitWindow";
 import { replaceInitWindowWithSession as replaceInitWindowWithSessionUseCase } from "../../../../app/useCases/replaceInitWindowWithSession";

@@ -9,9 +9,9 @@
 import { usePersistenceStore } from "../../service/persistence/store";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { createLeafPane, generateId, getLeafPaneIds } from "../../model/entities/paneTree";
+import { createLeafPane, generateId, getLeafPaneIds } from "../../app/rules/paneTree";
 import { openSavedSession } from "./openSavedSession";
-import { collectSessionIdsFromWorkspace } from "../../model/rules/workspaceRules";
+import { collectSessionIdsFromWorkspace } from "../../app/rules/workspaceRules";
 import type { PaneNode, Workspace } from "../../model/entities";
 
 export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace> {

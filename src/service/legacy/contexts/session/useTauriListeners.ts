@@ -35,8 +35,8 @@ import {
   findPaneNode,
   getLeafPaneIds,
   removeSessionAndCollapse,
-} from "../../../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../../../model/rules/workspaceRules";
+} from "../../../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../../../app/rules/workspaceRules";
 import {
   subscribeTmuxPaused,
   subscribeTmuxContinued,

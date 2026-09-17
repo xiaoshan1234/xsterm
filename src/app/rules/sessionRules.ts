@@ -1,6 +1,6 @@
-import type { CapabilityFlags } from "../entities/capabilities";
-import type { Session, SessionDisplayConfig, SessionType } from "../entities/session";
-import type { Workspace } from "../entities/workspace";
+import type { CapabilityFlags } from "../../model/entities/capabilities";
+import type { Session, SessionDisplayConfig, SessionType } from "../../model/entities/session";
+import type { Workspace } from "../../model/entities/workspace";
 import { isSessionUsedInOtherWindow } from "./paneTreeRules";
 
 /**

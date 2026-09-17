@@ -3,7 +3,7 @@
  */
 import { usePersistenceStore } from "../../service/persistence/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { generateId, stripSessionIdFromPaneTree } from "../../model/entities/paneTree";
+import { generateId, stripSessionIdFromPaneTree } from "../../app/rules/paneTree";
 
 export function saveWindow(workspaceId: string, windowId: string, name: string): void {
   const wsStore = useWorkspaceStore.getState();

@@ -21,12 +21,8 @@ import { useEffect } from "react";
 import { infraEventBus } from "../../infra/tauri/eventBus";
 import { useSessionStore } from "../session/store";
 import { useWorkspaceStore } from "../workspace/store";
-import {
-  findPaneNode,
-  getLeafPaneIds,
-  removeSessionAndCollapse,
-} from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 
 export function SessionBridge(): null {
   useEffect(() => {

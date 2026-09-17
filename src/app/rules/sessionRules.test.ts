@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace } from "../entities/workspace";
-import type { SessionType } from "../entities/session";
+import type { Workspace } from "../../model/entities/workspace";
+import type { SessionType } from "../../model/entities/session";
 import {
   assertSessionNotUsedElsewhere,
   buildFrontendSession,

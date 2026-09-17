@@ -1,4 +1,4 @@
-import { convertLineEndings, convertTabs } from "../../model/textTransform/textTransform";
+import { convertLineEndings, convertTabs } from "../../app/rules/textTransform";
 
 /**
  * Pure state + transformation logic for the paste-confirmation dialog.

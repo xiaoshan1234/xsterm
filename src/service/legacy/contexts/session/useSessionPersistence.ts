@@ -31,7 +31,7 @@ import { loadSavedWindowConfigs, persistWindowConfigs } from "../../../../infra/
 import { getSettingsStore } from "../../../../infra/tauri/commands/persistence";
 import { usePersistenceStore } from "../../../../service/persistence/store";
 import { useSessionStore } from "../../../../service/session/store";
-import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "../../../../model/rules/constants";
+import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "../../../../app/rules/constants";
 import { type SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {

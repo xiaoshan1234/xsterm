@@ -1,5 +1,5 @@
-import type { Workspace } from "../entities/workspace";
-import { collectSessionIdsFromPaneTree } from "../entities/paneTree";
+import type { Workspace } from "../../model/entities/workspace";
+import { collectSessionIdsFromPaneTree } from "./paneTree";
 
 /**
  * Union of session ids attached to panes across every window of a workspace,

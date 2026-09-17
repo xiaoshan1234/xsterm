@@ -6,8 +6,8 @@ import * as tauri from "../../infra/tauri/commands/sessions";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
-import { findPaneNode, getLeafPaneIds, removePaneFromTree } from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { findPaneNode, getLeafPaneIds, removePaneFromTree } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 
 export async function closePane(
   workspaceId: string,

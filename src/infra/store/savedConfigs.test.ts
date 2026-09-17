@@ -110,7 +110,7 @@ describe("persistConfigs", () => {
     stubStoreApi.mockResolvedValueOnce(store);
     vi.resetModules();
     const { persistConfigs } = await import("./savedConfigs");
-    const { migrateSavedConfigList } = await import("../../model/entities");
+    const { migrateSavedConfigList } = await import("./migrations");
 
     const cfgs = migrateSavedConfigList([
       {

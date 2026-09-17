@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { writeSessionBytes } from "../services/sessionService";
-import { convertLineEndings } from "../../../model/textTransform/textTransform";
+import { convertLineEndings } from "../../../app/rules/textTransform";
 
 /**
  * Bracketed-paste mode wrap markers. Sent to the PTY before / after a paste

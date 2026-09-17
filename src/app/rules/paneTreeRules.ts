@@ -1,5 +1,5 @@
-import type { Workspace } from "../entities/workspace";
-import { isSessionInPaneTree } from "../entities/paneTree";
+import type { Workspace } from "../../model/entities/workspace";
+import { isSessionInPaneTree } from "./paneTree";
 
 /**
  * Scans every workspace and window's pane tree (depth-first) and returns

@@ -13,9 +13,9 @@ import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
-import { buildFrontendSession, dispatchByType } from "../../model/rules/sessionRules";
-import { replaceSessionIdInPaneTree } from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { buildFrontendSession, dispatchByType } from "../../app/rules/sessionRules";
+import { replaceSessionIdInPaneTree } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 import type {
   LocalSessionConfig,
   Session,

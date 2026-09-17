@@ -3,7 +3,7 @@ import {
   migrateSavedConfig,
   migrateSavedConfigList,
   SAVED_SESSION_CONFIG_VERSION,
-} from "./persistence";
+} from "./migrations";
 
 describe("SAVED_SESSION_CONFIG_VERSION", () => {
   it("is 1 (the current on-disk schema version)", () => {

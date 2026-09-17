@@ -8,7 +8,7 @@
  */
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { createLeafPane, generateId } from "../../model/entities/paneTree";
+import { createLeafPane, generateId } from "../../app/rules/paneTree";
 import { createInitWindow } from "./createInitWindow";
 import type { Workspace } from "../../model/entities";
 

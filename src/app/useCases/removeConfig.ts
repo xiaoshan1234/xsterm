@@ -8,12 +8,8 @@ import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
-import {
-  findPaneNode,
-  getLeafPaneIds,
-  removeSessionAndCollapse,
-} from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 
 export function removeConfig(configId: string): void {
   usePersistenceStore.getState().removeSavedConfig(configId);

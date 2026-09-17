@@ -4,9 +4,9 @@
  */
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../model/rules/sessionRules";
-import { createLeafPane } from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../app/rules/sessionRules";
+import { createLeafPane } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 
 export function replaceInitWindowWithSession(
   workspaceId: string,

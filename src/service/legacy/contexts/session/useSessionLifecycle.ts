@@ -157,4 +157,4 @@ export function useSessionLifecycle(_deps: UseSessionLifecycleDeps = {}) {
  *   helpers so the test file that imports it from this module keeps
  *   working.
  */
-export { assertSessionNotUsedElsewhere } from "../../../../model/rules/sessionRules";
+export { assertSessionNotUsedElsewhere } from "../../../../app/rules/sessionRules";

@@ -4,7 +4,7 @@
  */
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { findPaneNode } from "../../model/entities/paneTree";
+import { findPaneNode } from "../../app/rules/paneTree";
 
 export function setActivePane(workspaceId: string, windowId: string, paneId: string): void {
   useWorkspaceStore.getState().setWorkspaces((prev) =>

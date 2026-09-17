@@ -16,8 +16,8 @@ import {
   createSplitNode,
   findPaneNode,
   replacePaneNode,
-} from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+} from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 import type { Session, SplitDirection } from "../../model/entities";
 
 export interface SplitPaneInput {

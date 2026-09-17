@@ -12,9 +12,9 @@ import {
   generateId,
   getDefaultWindowName,
   getLeafPaneIds,
-} from "../../model/entities/paneTree";
-import { getUniqueWindowName } from "../../model/rules/sessionRules";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+} from "../../app/rules/paneTree";
+import { getUniqueWindowName } from "../../app/rules/sessionRules";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 import { openSavedSession } from "./openSavedSession";
 import type { PaneNode, Window } from "../../model/entities";
 

@@ -7,7 +7,7 @@ import {
   patchPasteOptions,
   type PasteConfirmOptions,
 } from "./pasteConfirm";
-import { convertTabs, convertLineEndings } from "../../model/textTransform/textTransform";
+import { convertTabs, convertLineEndings } from "../../app/rules/textTransform";
 
 describe("DEFAULT_PASTE_OPTIONS", () => {
   it("enables both conversions by default", () => {

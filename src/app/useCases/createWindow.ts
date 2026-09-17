@@ -15,9 +15,9 @@
 import * as tmuxTauri from "../../infra/tauri/commands/tmux";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../model/rules/sessionRules";
-import { createLeafPane, generateId, getDefaultWindowName } from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../app/rules/sessionRules";
+import { createLeafPane, generateId, getDefaultWindowName } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 import type { Window } from "../../model/entities";
 import { openSavedSession } from "./openSavedSession";
 

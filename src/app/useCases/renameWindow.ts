@@ -9,7 +9,7 @@
  */
 import { renameTmuxWindow } from "../../infra/tauri/commands/tmux";
 import { useWorkspaceStore } from "../../service/workspace/store";
-import { getUniqueWindowName } from "../../model/rules/sessionRules";
+import { getUniqueWindowName } from "../../app/rules/sessionRules";
 
 export function renameWindow(workspaceId: string, windowId: string, name: string): void {
   const trimmed = name.trim();

@@ -3,7 +3,7 @@
  * Window for fresh workspaces. Extracted from `createWindow` so the
  * init-only path is easy to mock and reuse.
  */
-import { generateId } from "../../model/entities/paneTree";
+import { generateId } from "../../app/rules/paneTree";
 import type { Window } from "../../model/entities";
 
 export function createInitWindow(): Window {

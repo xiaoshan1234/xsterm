@@ -13,7 +13,7 @@ import { useTauriTerminalOutput } from "../service/hooks/useTauriTerminalOutput"
 import { useTerminalResize } from "../service/legacy/hooks/useTerminalResize";
 import { useLineNumberOverlay } from "../service/legacy/hooks/useLineNumberOverlay";
 import { usePasteBatcher } from "../service/legacy/hooks/usePasteBatcher";
-import { countLines } from "../model/textTransform/textTransform";
+import { countLines } from "../app/rules/textTransform";
 import { PasteConfirmDialog } from "./dialogs/PasteConfirmDialog";
 import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";

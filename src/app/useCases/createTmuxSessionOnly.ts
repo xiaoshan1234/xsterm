@@ -5,8 +5,8 @@
 import * as tmuxTauri from "../../infra/tauri/commands/tmux";
 import { useSessionStore } from "../../service/session/store";
 import { usePersistenceStore } from "../../service/persistence/store";
-import { buildFrontendSession } from "../../model/rules/sessionRules";
-import { generateId } from "../../model/entities/paneTree";
+import { buildFrontendSession } from "../../app/rules/sessionRules";
+import { generateId } from "../../app/rules/paneTree";
 import type {
   SavedSessionConfig,
   Session,

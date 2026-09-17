@@ -17,8 +17,8 @@ import { unmarkAttachedTmux } from "../../infra/tauri/commands/tmux";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
-import { forEachPane } from "../../model/entities/paneTree";
-import { withRecomputedSessionIds } from "../../model/rules/workspaceRules";
+import { forEachPane } from "../../app/rules/paneTree";
+import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 import { createInitWindow } from "./createInitWindow";
 
 export function closeWindow(workspaceId: string, windowId: string): void {
