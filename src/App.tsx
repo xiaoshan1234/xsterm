@@ -8,8 +8,8 @@ import { LoggerBridge } from "./service/bridges/loggerBridge";
 import { SessionProvider } from "./service/legacy/contexts/SessionContext";
 import { ThemeProvider } from "./service/legacy/contexts/ThemeContext";
 import { LoggerProvider } from "./service/legacy/contexts/LoggerContext";
-import "./styles/global.css";
-import "./styles/layout.css";
+import "./ui/styles/global.css";
+import "./ui/styles/layout.css";
 
 export default function App() {
   return (

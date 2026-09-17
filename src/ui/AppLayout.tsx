@@ -9,7 +9,7 @@ import { WorkspaceContainer } from "./WorkspaceContainer";
 import { WorkspaceBottomBar } from "./WorkspaceBottomBar";
 import { SettingsView } from "./settings/SettingsView";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
-import "../styles/pane.css";
+import "./styles/pane.css";
 
 export default function AppLayout() {
   const {

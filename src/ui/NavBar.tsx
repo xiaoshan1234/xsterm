@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { getCurrentWindow } from "../infra/tauri/commands/window";
 import { CloseIcon, MinimizeIcon, MaximizeIcon, RestoreIcon } from "./icons/Icon";
 import "./NavBar.css";
-import logo from "../assets/logo.svg";
+import logo from "./assets/logo.svg";
 
 interface NavBarProps {
   onMenuAction?: (menu: string) => void;
