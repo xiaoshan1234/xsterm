@@ -1,0 +1,43 @@
+/* Compound selector so this wins against .dialog--medium from Dialog.css.
+ * Height bumped to 720px to fit SSH edit: Name + Group + Link fields + title bar. */
+.dialog.edit-session-dialog {
+  width: 780px;
+  height: 720px;
+  max-width: 780px;
+  max-height: 720px;
+}
+
+.dialog.edit-session-dialog .dialog-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.session-form-layout .dialog-sidebar {
+  overflow: hidden;
+}
+.session-form-layout .dialog-panel {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.edit-session-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding-bottom: var(--space-lg);
+  margin-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.edit-session-note {
+  margin: 0;
+  padding: var(--space-base);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  background: var(--canvas-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
