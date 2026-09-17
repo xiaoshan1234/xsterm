@@ -6,6 +6,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
+import boundaries from "eslint-plugin-boundaries";
 
 export default tseslint.config(
   // Global ignores — generated and dependency directories.
@@ -69,12 +70,50 @@ export default tseslint.config(
     },
   },
 
+  // Layered architecture boundary rules.
+  {
+    plugins: { boundaries },
+    settings: {
+      "boundaries/elements": [
+        { type: "model", pattern: "src/model" },
+        { type: "infra", pattern: "src/infra" },
+        { type: "service", pattern: "src/service" },
+        { type: "service-legacy", pattern: "src/service/legacy" },
+        { type: "app", pattern: "src/app" },
+        { type: "ui", pattern: "src/ui" },
+      ],
+    },
+    rules: {
+      "boundaries/dependencies": [
+        "error",
+        {
+          default: "disallow",
+          policies: [
+            { from: { element: { type: "model" } }, disallow: [{ to: { element: { type: "_" } } }] },
+            { from: { element: { type: "infra" } }, allow: [{ to: { element: { type: "model" } } }] },
+            { from: { element: { type: "service" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "infra" } } }, { to: { element: { type: "app" } } }] },
+            { from: { element: { type: "service-legacy" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "infra" } } }, { to: { element: { type: "service" } } }, { to: { element: { type: "app" } } }] },
+            { from: { element: { type: "app" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "infra" } } }, { to: { element: { type: "service" } } }, { to: { element: { type: "service-legacy" } } }] },
+            { from: { element: { type: "ui" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "service" } } }, { to: { element: { type: "service-legacy" } } }, { to: { element: { type: "app" } } }] },
+          ],
+        },
+      ],
+    },
+  },
+
   // Test files get a more relaxed set (they often use any / globals).
   {
     files: ["**/*.test.ts", "**/*.test.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
+    },
+  },
+
+  {
+    files: ["src/ui/Pane.tsx"],
+    rules: {
+      "react-hooks/rules-of-hooks": "warn",
     },
   },
 );
