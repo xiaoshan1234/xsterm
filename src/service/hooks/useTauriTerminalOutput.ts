@@ -1,9 +1,7 @@
 import { useEffect, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
-// eslint-disable-next-line boundaries/dependencies -- legacy: tauri-apps event/listen used before infra layer refactor
-import { listen } from "@tauri-apps/api/event";
-// eslint-disable-next-line boundaries/dependencies -- legacy: tauri-apps clipboard used before infra layer refactor
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { subscribeSessionOutput } from "../../infra/tauri/events/sessionOutput";
+import { writeClipboardText } from "../../infra/clipboard/write";
 import { useSessionStore } from "../session/store";
 import { appendSessionOutput, getSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { captureTmuxPane } from "../../infra/tauri/commands/tmux";
@@ -46,7 +44,7 @@ function extractAndCopyOsc52(text: string): string {
     if (!encoded || encoded.length === 0) continue;
     try {
       const decoded = decodeBase64Utf8(encoded);
-      writeText(decoded).catch((err: unknown) => {
+      writeClipboardText(decoded).catch((err: unknown) => {
         console.error("[xsterm] Failed to write OSC52 selection to clipboard:", err);
       });
     } catch (err: unknown) {
@@ -133,10 +131,9 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
       }
     };
 
-    listen<[number, number[]]>("session-output", (event) => {
-      const [id, data] = event.payload;
+    subscribeSessionOutput((id, data) => {
       if (id === sessionId) {
-        handleOutput(extractAndCopyOsc52(decodeOutput(data)));
+        handleOutput(extractAndCopyOsc52(decodeOutput(Array.from(data))));
       }
     })
       .then((fn) => {

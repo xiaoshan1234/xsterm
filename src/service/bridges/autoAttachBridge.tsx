@@ -14,7 +14,7 @@
 import { useEffect, useRef } from "react";
 import { autoAttachTmuxServers } from "../../infra/tauri/commands/tmux";
 import { subscribeAutoAttachOutcome } from "../../infra/tauri/events/autoAttach";
-import { useLogger } from "../legacy/contexts/LoggerContext";
+import { useLogger } from "../logger/useLogger";
 
 export function AutoAttachBridge(): null {
   const logger = useLogger();

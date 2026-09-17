@@ -23,7 +23,7 @@ import type {
   TmuxWindowClosedEvent,
   TmuxWindowRenamedEvent,
 } from "../../model/entities";
-import { useLogger } from "../legacy/contexts/LoggerContext";
+import { useLogger } from "../logger/useLogger";
 
 export function TmuxBridge(): null {
   const logger = useLogger();

@@ -426,10 +426,9 @@ describe("isSessionUsedInOtherWindow", () => {
     expect(isSessionUsedInOtherWindow([ws1, ws2], "ws1", "w1-a", 5)).toBe(true);
   });
 
-  // TODO: isSessionUsedInOtherWindow currently returns true even when the
-  // only matching window IS the current window (early-return bug in paneUtils.ts).
-  // Flip this to it() once the implementation is fixed.
-  it.todo("isSessionUsedInOtherWindow returns false when session is only in the current window");
+  it("is false when the only matching window IS the current window", () => {
+    expect(isSessionUsedInOtherWindow([ws1], "ws1", "w1-a", 5)).toBe(false);
+  });
 
   it("treats null current ids as 'no current window' -> true if found anywhere", () => {
     expect(isSessionUsedInOtherWindow([ws1], null, null, 5)).toBe(true);

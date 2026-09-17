@@ -91,7 +91,7 @@ export default tseslint.config(
           policies: [
             { from: { element: { type: "model" } }, disallow: [{ to: { element: { type: "_" } } }] },
             { from: { element: { type: "infra" } }, allow: [{ to: { element: { type: "model" } } }] },
-            { from: { element: { type: "service" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "infra" } } }, { to: { element: { type: "app" } } }] },
+            { from: { element: { type: "service" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "infra" } } }] },
             { from: { element: { type: "service-legacy" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "infra" } } }, { to: { element: { type: "service" } } }, { to: { element: { type: "app" } } }] },
             { from: { element: { type: "app" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "infra" } } }, { to: { element: { type: "service" } } }, { to: { element: { type: "service-legacy" } } }] },
             { from: { element: { type: "ui" } }, allow: [{ to: { element: { type: "model" } } }, { to: { element: { type: "service" } } }, { to: { element: { type: "service-legacy" } } }, { to: { element: { type: "app" } } }] },
