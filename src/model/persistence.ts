@@ -5,20 +5,11 @@
  * `src/infra/store/migrations.ts` (IO-adjacent, tied to the
  * on-disk format that the `tauri-plugin-store` adapters read).
  */
-import type { SessionDisplayConfig } from "./session";
+import type { SessionDisplayConfig, SessionType } from "./session";
 
-export interface SavedSessionConfig {
-  id: string;
-  name: string;
-  version: number;
-  /** Transport used to reach the backend (matches `Session.sessionType`). */
-  type: "local" | "ssh" | "tmux-cc";
-  /** Per-transport configuration. */
-  config: object;
+export type SavedSessionConfig = ({ id: string; name: string; version: number } & SessionType) & {
   displayConfig?: SessionDisplayConfig;
-  /** @deprecated Alias for `type` from pre-refactor model. */
-  kind?: string;
-}
+};
 
 export interface SessionGroup {
   id: number;
