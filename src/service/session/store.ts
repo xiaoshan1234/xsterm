@@ -24,12 +24,7 @@
  * **Actions are stubs** — Commit 4 fills them in.
  */
 import { create } from "zustand";
-import type {
-  Session,
-  TmuxCcConfig,
-  TmuxControllerError,
-  TmuxWindowListEntry,
-} from "../../model/entities";
+import type { Session, TmuxCcConfig, TmuxControllerError, TmuxWindowListEntry } from "../../model";
 
 export interface SessionStoreState {
   // --- session registry -----------------------------------------------

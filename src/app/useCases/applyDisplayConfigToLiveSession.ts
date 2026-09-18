@@ -4,7 +4,7 @@
  * Persistence is the caller's responsibility.
  */
 import { useSessionStore } from "../../service/session/store";
-import type { SessionDisplayConfig } from "../../model/entities";
+import type { SessionDisplayConfig } from "../../model";
 
 export function applyDisplayConfigToLiveSession(
   id: number,

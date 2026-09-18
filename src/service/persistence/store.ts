@@ -17,7 +17,7 @@ import type {
   SavedWindowConfig,
   SavedWorkspace,
   SessionGroup,
-} from "../../model/entities";
+} from "../../model";
 
 export interface PersistenceStoreState {
   savedConfigs: SavedSessionConfig[];

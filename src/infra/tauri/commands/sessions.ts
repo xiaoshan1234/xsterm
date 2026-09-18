@@ -6,7 +6,7 @@ import {
   type Session,
   type SessionType,
   type TmuxCcConfig,
-} from "../../../model/entities";
+} from "../../../model";
 import { logger } from "../../logger/logger";
 
 /**

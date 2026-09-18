@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { Terminal as XTerm, type ITerminalOptions } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { type TerminalTheme } from "../../../model/entities/theme";
+import { type TerminalTheme } from "../../../model/theme";
 
 export function themeToXtermTheme(theme: TerminalTheme) {
   return {

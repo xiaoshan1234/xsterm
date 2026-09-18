@@ -1,6 +1,6 @@
 import { useShortcuts } from "./useShortcut";
 import { useSession } from "../contexts/SessionContext";
-import type { PaneNode, SplitDirection } from "../../../model/entities";
+import type { PaneNode, SplitDirection } from "../../../model";
 
 export function useAppShortcuts({
   onCreateSession,

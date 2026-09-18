@@ -14,7 +14,7 @@ import type {
   SavedWindowConfig,
   SavedWorkspace,
   SessionGroup,
-} from "../../model/entities";
+} from "../../model";
 import { usePersistenceStore, type PersistenceStoreState } from "./store";
 
 export function setSavedConfigs(

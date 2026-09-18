@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type LocalSessionConfig } from "../../model/entities";
+import { type LocalSessionConfig } from "../../model";
 import { FormTextField } from "./FormTextField";
 import "./ShellSettingsPanel.css";
 

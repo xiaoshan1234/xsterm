@@ -32,7 +32,7 @@ import {
   unmarkAttachedTmux,
 } from "./tmux";
 import type { SessionInfo } from "./sessions";
-import type { AttachedTmuxServer, TmuxCcConfig } from "../../../model/entities";
+import type { AttachedTmuxServer, TmuxCcConfig } from "../../../model";
 
 const tmuxInfo: SessionInfo = {
   id: 11,

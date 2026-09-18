@@ -7,7 +7,7 @@
  * **No cross-service imports**: this file MUST NOT import from
  * `service/session/*` or any other service. Bridges compose.
  */
-import type { PaneNode, Window, Workspace } from "../../model/entities";
+import type { PaneNode, Window, Workspace } from "../../model";
 import { useWorkspaceStore, type WorkspaceStoreState } from "./store";
 
 export function setWorkspaces(next: Workspace[] | ((prev: Workspace[]) => Workspace[])): void {

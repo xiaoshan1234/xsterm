@@ -28,7 +28,7 @@ import {
   writeSessionBytes,
 } from "./sessions";
 import type { SessionInfo } from "./sessions";
-import type { LocalSessionConfig, SSHSessionConfig, TmuxCcConfig } from "../../../model/entities";
+import type { LocalSessionConfig, SSHSessionConfig, TmuxCcConfig } from "../../../model";
 
 const sampleInfo: SessionInfo = {
   id: 7,

@@ -1,6 +1,6 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { migrateSavedConfigList } from "./migrations";
-import type { SavedSessionConfig } from "../../model/entities";
+import type { SavedSessionConfig } from "../../model";
 import { logger } from "../logger/logger";
 
 let storeInstance: Store | null = null;

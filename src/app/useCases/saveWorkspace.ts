@@ -6,7 +6,7 @@ import { usePersistenceStore } from "../../service/persistence/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { stripSessionIdFromPaneTree } from "../../app/rules/paneTree";
 import { generateId } from "../../app/rules/paneTree";
-import type { SavedWorkspace, SavedWindow } from "../../model/entities";
+import type { SavedWorkspace, SavedWindow } from "../../model";
 
 export function saveWorkspace(workspaceId: string, name: string): void {
   const wsStore = useWorkspaceStore.getState();

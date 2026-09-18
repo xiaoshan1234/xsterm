@@ -8,13 +8,7 @@
  * `store.getState()`.
  */
 import { useCallback } from "react";
-import type {
-  PaneNode,
-  SavedSessionConfig,
-  Session,
-  Window,
-  Workspace,
-} from "../../../../model/entities";
+import type { PaneNode, SavedSessionConfig, Session, Window, Workspace } from "../../../../model";
 import { createLeafPane, generateId, getDefaultWindowName } from "../../../../app/rules/paneTree";
 import {
   assertSessionNotUsedElsewhere,

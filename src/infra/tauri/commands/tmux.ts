@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { type AttachedTmuxServer, type TmuxCcConfig } from "../../../model/entities";
+import { type AttachedTmuxServer, type TmuxCcConfig } from "../../../model";
 import { logger } from "../../logger/logger";
 import type { SessionInfo } from "./sessions";
 

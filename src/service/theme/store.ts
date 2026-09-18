@@ -11,7 +11,7 @@
  * Commit 6. For now we keep the import path stable.
  */
 import { create } from "zustand";
-import { PRESET_THEMES, THEME_KEYS, type TerminalTheme } from "../../model/entities/theme";
+import { PRESET_THEMES, THEME_KEYS, type TerminalTheme } from "../../model/theme";
 
 export interface ThemeStoreState {
   currentThemeKey: string;

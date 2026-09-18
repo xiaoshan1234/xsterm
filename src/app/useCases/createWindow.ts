@@ -18,7 +18,7 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../app/rules/sessionRules";
 import { createLeafPane, generateId, getDefaultWindowName } from "../../app/rules/paneTree";
 import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
-import type { Window } from "../../model/entities";
+import type { Window } from "../../model";
 import { openSavedSession } from "./openSavedSession";
 
 export interface CreateWindowFromSessionInput {

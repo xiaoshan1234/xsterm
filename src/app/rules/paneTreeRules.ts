@@ -1,4 +1,4 @@
-import type { Workspace } from "../../model/entities/workspace";
+import type { Workspace } from "../../model/workspace";
 import { isSessionInPaneTree } from "./paneTree";
 
 /**

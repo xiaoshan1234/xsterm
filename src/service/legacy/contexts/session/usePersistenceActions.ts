@@ -1,9 +1,4 @@
-import type {
-  SavedWindowConfig,
-  SavedWorkspace,
-  Session,
-  Workspace,
-} from "../../../../model/entities";
+import type { SavedWindowConfig, SavedWorkspace, Session, Workspace } from "../../../../model";
 import { useSavedWindowActions } from "./useSavedWindowActions";
 import { useSavedWorkspaceActions } from "./useSavedWorkspaceActions";
 

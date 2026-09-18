@@ -19,7 +19,7 @@
  * to wire event subscriptions to the stores.
  */
 import { useEffect } from "react";
-import type { CapabilityFlags } from "../../../../model/entities/capabilities";
+import type { CapabilityFlags } from "../../../../model/capabilities";
 import type {
   Session,
   SessionType,
@@ -30,7 +30,7 @@ import type {
   TmuxWindowListEntry,
   TmuxWindowRenamedEvent,
   Window,
-} from "../../../../model/entities";
+} from "../../../../model";
 import {
   findPaneNode,
   getLeafPaneIds,

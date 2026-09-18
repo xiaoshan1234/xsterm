@@ -5,7 +5,7 @@ import {
   type SSHSessionConfig,
   type Session,
   type TmuxCcConfig,
-} from "../model/entities";
+} from "../model";
 import { PlusIcon, FolderOpenIcon } from "./icons/Icon";
 import CreateSessionDialog from "./dialogs/CreateSessionDialog";
 import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";

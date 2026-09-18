@@ -23,12 +23,7 @@
  * import from another service's store. Bridges are the only
  * place that fans events out across services.
  */
-import type {
-  Session,
-  TmuxCcConfig,
-  TmuxControllerError,
-  TmuxWindowListEntry,
-} from "../../model/entities";
+import type { Session, TmuxCcConfig, TmuxControllerError, TmuxWindowListEntry } from "../../model";
 import { useSessionStore, type SessionStoreState } from "./store";
 
 export function setSessions(next: Session[] | ((prev: Session[]) => Session[])): void {

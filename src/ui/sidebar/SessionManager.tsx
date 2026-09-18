@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useSession } from "../../service/legacy/contexts/SessionContext";
 import { DEFAULT_GROUP_ID } from "../../service/legacy/contexts/session/constants";
-import { type SavedSessionConfig, type SessionGroup } from "../../model/entities";
+import { type SavedSessionConfig, type SessionGroup } from "../../model";
 import { ShellIcon, SshIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
 import { ContextMenu } from "../primitives/ContextMenu";
 import { EditGroupDialog } from "../dialogs/EditGroupDialog";

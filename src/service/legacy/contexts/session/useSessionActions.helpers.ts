@@ -1,10 +1,5 @@
 import type * as sessionService from "../../services/sessionService";
-import type {
-  Session,
-  SessionDisplayConfig,
-  SessionType,
-  Workspace,
-} from "../../../../model/entities";
+import type { Session, SessionDisplayConfig, SessionType, Workspace } from "../../../../model";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 /**

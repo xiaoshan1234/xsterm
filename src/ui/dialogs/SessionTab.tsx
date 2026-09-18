@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { type LocalSessionConfig, type SSHSessionConfig } from "../../model/entities";
+import { type LocalSessionConfig, type SSHSessionConfig } from "../../model";
 import { FormNumberField } from "./FormNumberField";
 import { FormSelectField } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";

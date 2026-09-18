@@ -12,7 +12,7 @@
  * both `service/tmux/*` (config / window list) and
  * `service/session/*` (session rows) stores.
  */
-import type { TmuxCcConfig, TmuxWindowListEntry } from "../../model/entities";
+import type { TmuxCcConfig, TmuxWindowListEntry } from "../../model";
 import { useTmuxStore, type TmuxStoreState } from "./store";
 
 export function setTmuxControllerConfigs(

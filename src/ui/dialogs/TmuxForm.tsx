@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useSession } from "../../service/legacy/contexts/SessionContext";
-import { type SavedSessionConfig, type TmuxCcConfig } from "../../model/entities";
+import { type SavedSessionConfig, type TmuxCcConfig } from "../../model";
 import { FormSelectField, type FormSelectOption } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";
 

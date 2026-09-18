@@ -22,7 +22,7 @@ import type {
   TmuxWindowAddedEvent,
   TmuxWindowClosedEvent,
   TmuxWindowRenamedEvent,
-} from "../../model/entities";
+} from "../../model";
 import { useLogger } from "../logger/useLogger";
 
 export function TmuxBridge(): null {

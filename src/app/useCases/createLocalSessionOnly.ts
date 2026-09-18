@@ -13,7 +13,7 @@ import type {
   SavedSessionConfig,
   Session,
   SessionDisplayConfig,
-} from "../../model/entities";
+} from "../../model";
 
 export async function createLocalSessionOnly(
   config: LocalSessionConfig,

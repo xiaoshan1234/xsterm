@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import * as sessionService from "../service/legacy/services/sessionService";
-import type { TmuxWindowListEntry } from "../model/entities";
+import type { TmuxWindowListEntry } from "../model";
 import "./TmuxControlWindowView.css";
 
 interface TmuxWindowsControlProps {

@@ -12,7 +12,7 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { createLeafPane, generateId, getLeafPaneIds } from "../../app/rules/paneTree";
 import { openSavedSession } from "./openSavedSession";
 import { collectSessionIdsFromWorkspace } from "../../app/rules/workspaceRules";
-import type { PaneNode, Workspace } from "../../model/entities";
+import type { PaneNode, Workspace } from "../../model";
 
 export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace> {
   const persistenceStore = usePersistenceStore.getState();

@@ -12,7 +12,7 @@
  * passthrough to `useWorkspaceStore.getState().updateWindowPaneTree`.
  */
 import { useCallback } from "react";
-import type { PaneNode, Session, SplitDirection, Workspace } from "../../../../model/entities";
+import type { PaneNode, Session, SplitDirection, Workspace } from "../../../../model";
 import { splitPane as splitPaneUseCase } from "../../../../app/useCases/splitPane";
 import { closePane as closePaneUseCase } from "../../../../app/useCases/closePane";
 import { writeSession as writeSessionFn } from "../../../../infra/tauri/commands/sessions";

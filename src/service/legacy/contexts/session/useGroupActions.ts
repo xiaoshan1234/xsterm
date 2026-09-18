@@ -6,7 +6,7 @@
  */
 import { useCallback } from "react";
 import { usePersistenceStore } from "../../../persistence/store";
-import type { SavedSessionConfig } from "../../../../model/entities";
+import type { SavedSessionConfig } from "../../../../model";
 import { createGroup as createGroupUseCase } from "../../../../app/useCases/createGroup";
 import { deleteGroup as deleteGroupUseCase } from "../../../../app/useCases/deleteGroup";
 import { moveConfigToGroup as moveConfigToGroupUseCase } from "../../../../app/useCases/moveConfigToGroup";

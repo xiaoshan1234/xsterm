@@ -16,7 +16,7 @@ import type { RefObject } from "react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { useTerminalResize } from "./useTerminalResize";
-import type { SessionDisplayConfig } from "../../../model/entities";
+import type { SessionDisplayConfig } from "../../../model";
 
 const resizeSessionMock = vi.fn(async (_id: number, _rows: number, _cols: number) => {});
 vi.mock("../contexts/SessionContext", () => ({

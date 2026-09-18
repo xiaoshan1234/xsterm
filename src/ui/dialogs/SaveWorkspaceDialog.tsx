@@ -1,5 +1,5 @@
 import { SaveDialog } from "./SaveDialog";
-import { type SavedWorkspace } from "../../model/entities";
+import { type SavedWorkspace } from "../../model";
 
 interface SaveWorkspaceDialogProps {
   isOpen: boolean;

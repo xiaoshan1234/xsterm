@@ -46,12 +46,12 @@ import {
   type Workspace,
   type TmuxCcConfig,
   type TmuxWindowListEntry,
-} from "../../../../model/entities";
+} from "../../../../model";
 import type {
   SavedSessionConfig as LegacySavedSessionConfig,
   SavedWindowConfig as LegacySavedWindowConfig,
   SavedWorkspace as LegacySavedWorkspace,
-} from "../../../../model/entities";
+} from "../../../../model";
 import { type SessionState, type TmuxControllerError } from "./types";
 
 export function useSessionState(): SessionState {

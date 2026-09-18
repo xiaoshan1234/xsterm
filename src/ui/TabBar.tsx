@@ -1,5 +1,5 @@
 import { type MouseEvent, type KeyboardEvent } from "react";
-import { type Workspace, type PaneNode, type Session } from "../model/entities";
+import { type Workspace, type PaneNode, type Session } from "../model";
 import { CloseIcon, ShellIcon, SshIcon, LayoutIcon } from "./icons/Icon";
 import { ContextMenu, type ContextMenuItem } from "./primitives/ContextMenu";
 import "./TabBar.css";

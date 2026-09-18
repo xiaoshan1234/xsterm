@@ -4,7 +4,7 @@
  * init-only path is easy to mock and reuse.
  */
 import { generateId } from "../../app/rules/paneTree";
-import type { Window } from "../../model/entities";
+import type { Window } from "../../model";
 
 export function createInitWindow(): Window {
   const paneId = generateId();

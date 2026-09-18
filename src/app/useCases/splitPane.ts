@@ -18,7 +18,7 @@ import {
   replacePaneNode,
 } from "../../app/rules/paneTree";
 import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
-import type { Session, SplitDirection } from "../../model/entities";
+import type { Session, SplitDirection } from "../../model";
 
 export interface SplitPaneInput {
   workspaceId: string;

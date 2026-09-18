@@ -1,6 +1,6 @@
 import { useTheme } from "../../service/legacy/contexts/ThemeContext";
 import { useSession } from "../../service/legacy/contexts/SessionContext";
-import { PRESET_THEMES } from "../../model/entities/theme";
+import { PRESET_THEMES } from "../../model/theme";
 import "./SettingsView.css";
 
 const SHORTCUTS = [

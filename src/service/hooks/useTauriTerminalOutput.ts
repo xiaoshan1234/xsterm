@@ -5,7 +5,7 @@ import { writeClipboardText } from "../../infra/clipboard/write";
 import { useSessionStore } from "../session/store";
 import { appendSessionOutput, getSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { captureTmuxPane } from "../../infra/tauri/commands/tmux";
-import type { Session } from "../../model/entities";
+import type { Session } from "../../model";
 
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;

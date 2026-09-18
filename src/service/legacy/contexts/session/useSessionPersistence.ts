@@ -22,8 +22,8 @@
  * side-effects of this hook, not part of the public interface.
  */
 import { useCallback, useEffect } from "react";
-import type { SavedWindowConfig, SavedWorkspace, SessionGroup } from "../../../../model/entities";
-import type { SavedSessionConfig } from "../../../../model/entities";
+import type { SavedWindowConfig, SavedWorkspace, SessionGroup } from "../../../../model";
+import type { SavedSessionConfig } from "../../../../model";
 import { loadSavedConfigs, persistConfigs } from "../../../../infra/store/savedConfigs";
 import { loadSavedGroups, persistGroups } from "../../../../infra/store/groups";
 import { loadSavedWorkspaces, persistWorkspaces } from "../../../../infra/store/savedWorkspaces";

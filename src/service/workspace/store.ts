@@ -13,7 +13,7 @@
  * **Stub actions** are filled in by Commit 4.
  */
 import { create } from "zustand";
-import type { PaneNode, Window, Workspace } from "../../model/entities";
+import type { PaneNode, Window, Workspace } from "../../model";
 
 export interface WorkspaceStoreState {
   // --- registry ------------------------------------------------------

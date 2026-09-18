@@ -1,9 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type {
-  LocalSessionConfig,
-  SSHSessionConfig,
-  SessionDisplayConfig,
-} from "../../model/entities";
+import type { LocalSessionConfig, SSHSessionConfig, SessionDisplayConfig } from "../../model";
 import { type SectionId } from "./sessionDialogItems";
 
 export interface UseSessionFormOptions {

@@ -15,7 +15,7 @@ import type {
   Session,
   SessionDisplayConfig,
   SSHSessionConfig,
-} from "../../model/entities";
+} from "../../model";
 
 export async function createSshSession(
   config: SSHSessionConfig,

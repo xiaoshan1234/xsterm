@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace } from "../../model/entities/workspace";
+import type { Workspace } from "../../model/workspace";
 import { findSessionWindow, isSessionUsedInOtherWindow } from "./paneTreeRules";
 
 function leaf(size: number, sessionId?: number) {

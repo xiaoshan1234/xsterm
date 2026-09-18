@@ -18,7 +18,7 @@
  * **Stub actions** are filled in by Commit 4.
  */
 import { create } from "zustand";
-import type { TmuxCcConfig, TmuxWindowListEntry } from "../../model/entities";
+import type { TmuxCcConfig, TmuxWindowListEntry } from "../../model";
 
 export interface TmuxStoreState {
   /** `controllerId → TmuxCcConfig` (proxy — kept in sync with session store). */

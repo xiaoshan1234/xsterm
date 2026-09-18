@@ -1,5 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { type SessionGroup } from "../../model/entities";
+import { type SessionGroup } from "../../model";
 import { logger } from "../logger/logger";
 
 export interface GroupStore {

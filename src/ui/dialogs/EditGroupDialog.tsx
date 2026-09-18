@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { type SessionGroup } from "../../model/entities";
+import { type SessionGroup } from "../../model";
 import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";
 

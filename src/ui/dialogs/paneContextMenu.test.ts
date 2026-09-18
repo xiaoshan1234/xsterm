@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPaneContextMenu, type PaneMenuActions } from "./paneContextMenu";
-import type { Session } from "../../model/entities";
+import type { Session } from "../../model";
 
 function session(overrides: Partial<Session> = {}): Session {
   return {

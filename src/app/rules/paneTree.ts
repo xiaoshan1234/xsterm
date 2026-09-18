@@ -1,5 +1,5 @@
-import type { PaneNode, SplitDirection } from "../../model/entities/workspace";
-import type { Session } from "../../model/entities/session";
+import type { PaneNode, SplitDirection } from "../../model/workspace";
+import type { Session } from "../../model/session";
 
 export function generateId(): string {
   return crypto.randomUUID();

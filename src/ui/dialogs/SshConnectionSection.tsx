@@ -1,4 +1,4 @@
-import { type SSHSessionConfig } from "../../model/entities";
+import { type SSHSessionConfig } from "../../model";
 import { FormCheckboxField } from "./FormCheckboxField";
 import { FormNumberField } from "./FormNumberField";
 import { FormSelectField } from "./FormSelectField";

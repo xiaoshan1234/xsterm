@@ -2,7 +2,7 @@ import {
   type LocalSessionConfig,
   type SSHSessionConfig,
   type SessionDisplayConfig,
-} from "../../model/entities";
+} from "../../model";
 import { FormNumberField } from "./FormNumberField";
 import { FormRadioGroup } from "./FormRadioGroup";
 import { FormSelectField } from "./FormSelectField";

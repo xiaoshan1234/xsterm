@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type SSHSessionConfig } from "../../model/entities";
+import { type SSHSessionConfig } from "../../model";
 import { FormNumberField } from "./FormNumberField";
 import { FormSelectField } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";

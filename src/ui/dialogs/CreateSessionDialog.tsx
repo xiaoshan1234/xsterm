@@ -6,7 +6,7 @@ import {
   type Session,
   type SessionDisplayConfig,
   type TmuxCcConfig,
-} from "../../model/entities";
+} from "../../model";
 import { Dialog } from "../primitives/Dialog";
 import SessionTab from "./SessionTab";
 import TmuxForm from "./TmuxForm";

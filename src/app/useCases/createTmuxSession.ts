@@ -18,7 +18,7 @@ import type {
   SessionDisplayConfig,
   TmuxCcConfig,
   Window,
-} from "../../model/entities";
+} from "../../model";
 
 export async function createTmuxSession(
   config: TmuxCcConfig,

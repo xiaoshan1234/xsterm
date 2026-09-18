@@ -6,7 +6,7 @@ import type {
   TmuxWindowClosedEvent,
   TmuxWindowListEntry,
   TmuxWindowRenamedEvent,
-} from "../../../model/entities";
+} from "../../../model";
 
 /**
  * Subscribe to `tmux-pane-added`. Fired by the TmuxController dispatch

@@ -14,12 +14,7 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession, dispatchByType } from "../../app/rules/sessionRules";
 import { createLeafPane, generateId } from "../../app/rules/paneTree";
-import type {
-  LocalSessionConfig,
-  Session,
-  SSHSessionConfig,
-  TmuxCcConfig,
-} from "../../model/entities";
+import type { LocalSessionConfig, Session, SSHSessionConfig, TmuxCcConfig } from "../../model";
 
 export async function openSavedSession(configId: string): Promise<Session> {
   const config = usePersistenceStore.getState().savedConfigs.find((c) => c.id === configId);

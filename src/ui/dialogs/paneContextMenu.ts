@@ -1,5 +1,5 @@
 import type { ContextMenuItem } from "../primitives/ContextMenu";
-import type { Session, SplitDirection, Window } from "../../model/entities";
+import type { Session, SplitDirection, Window } from "../../model";
 
 export interface PaneMenuActions {
   startSplit: (direction: SplitDirection) => void;

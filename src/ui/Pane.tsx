@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { type PaneNode, type SplitDirection, type Workspace } from "../model/entities";
+import { type PaneNode, type SplitDirection, type Workspace } from "../model";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import * as paneTree from "../app/rules/paneTree";
 import {

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useSession } from "../service/legacy/contexts/SessionContext";
-import type { Session, TmuxCcConfig } from "../model/entities";
+import type { Session, TmuxCcConfig } from "../model";
 import type { TmuxControllerError } from "../service/legacy/contexts/session/types";
 import "./TmuxControllerErrorBanner.css";
 

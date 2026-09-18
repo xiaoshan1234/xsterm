@@ -1,5 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { type SavedWindowConfig } from "../../model/entities";
+import { type SavedWindowConfig } from "../../model";
 import { logger } from "../logger/logger";
 
 let storeInstance: Store | null = null;

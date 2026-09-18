@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import type { Window } from "../model/entities";
+import type { Window } from "../model";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import { TmuxSessionControl } from "./TmuxSessionControl";
 import { TmuxWindowsControl } from "./TmuxWindowsControl";

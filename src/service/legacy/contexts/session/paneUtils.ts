@@ -3,7 +3,7 @@ import {
   type Session,
   type SplitDirection,
   type Workspace,
-} from "../../../../model/entities";
+} from "../../../../model";
 
 export function generateId(): string {
   return crypto.randomUUID();

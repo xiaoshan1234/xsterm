@@ -11,7 +11,7 @@ import type {
   SessionDisplayConfig,
   SSHSessionConfig,
   TmuxCcConfig,
-} from "../../model/entities";
+} from "../../model";
 
 export function saveConfigOnly(
   type: SavedSessionConfig["type"],

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type SavedWindowConfig } from "../../model/entities";
+import { type SavedWindowConfig } from "../../model";
 import { WindowIcon } from "../icons/Icon";
 import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";

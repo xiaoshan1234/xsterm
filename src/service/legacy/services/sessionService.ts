@@ -8,8 +8,8 @@ import {
   type SSHSessionConfig,
   type SessionType,
   type TmuxCcConfig,
-} from "../../../model/entities";
-import type { CapabilityFlags } from "../../../model/entities/capabilities";
+} from "../../../model";
+import type { CapabilityFlags } from "../../../model/capabilities";
 
 export interface SessionInfo {
   id: number;

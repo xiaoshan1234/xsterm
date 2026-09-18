@@ -16,7 +16,7 @@ import {
 import { getUniqueWindowName } from "../../app/rules/sessionRules";
 import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
 import { openSavedSession } from "./openSavedSession";
-import type { PaneNode, Window } from "../../model/entities";
+import type { PaneNode, Window } from "../../model";
 
 export async function loadWindow(savedWindowId: string, workspaceId?: string): Promise<Window> {
   const persistenceStore = usePersistenceStore.getState();

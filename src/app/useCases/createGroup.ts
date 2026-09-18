@@ -2,7 +2,7 @@
  * createGroup — create a new group with the next available id.
  */
 import { usePersistenceStore } from "../../service/persistence/store";
-import type { SessionGroup } from "../../model/entities";
+import type { SessionGroup } from "../../model";
 
 export function createGroup(name: string): void {
   const persistenceStore = usePersistenceStore.getState();
