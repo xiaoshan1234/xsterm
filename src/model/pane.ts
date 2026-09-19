@@ -62,3 +62,31 @@ export interface PaneLeafNode {
   /** Undefined for an init placeholder pane. */
   binding?: PaneBinding;
 }
+
+// ---------------------------------------------------------------------------
+// Persisted pane trees — mirror the runtime discriminated union but
+// without the runtime-only `binding.sessionId`. The frontend reads
+// `configId` at restore time and resolves it to a fresh session.
+
+/**
+ * Frozen pane tree stored in `SavedWindowConfig`. Mirrors the runtime
+ * discriminated union but without the runtime `binding.sessionId` —
+ * persisted configs only carry `configId` so the runtime can resolve
+ * to a fresh session on reload.
+ */
+export type SavedPaneNode = PaneSavedSplitNode | PaneSavedLeafNode;
+
+export interface PaneSavedSplitNode {
+  id: string;
+  kind: "split";
+  size: number;
+  layout: SplitLayout;
+}
+
+export interface PaneSavedLeafNode {
+  id: string;
+  kind: "leaf";
+  size: number;
+  /** Undefined for an init placeholder pane. */
+  binding?: { configId: string };
+}
