@@ -1,4 +1,38 @@
 /**
+ * Backend-side handle attached to a `Window` of kind `"terminal"` when
+ * that window was created via `create_tmux_window`.
+ *
+ * `tmuxWindowId` is the u32 the backend uses to address the window
+ * over IPC; `tmuxControllerId` ties it to the controller. Used by the
+ * `tmux-window-closed` / `tmux-window-renamed` listeners to find the
+ * matching frontend `Window`.
+ */
+export interface TmuxTerminalBackend {
+  /** Backend-allocated window id (u32). */
+  tmuxWindowId: number;
+  /** Owning tmux controller id (u32). */
+  tmuxControllerId: number;
+}
+
+/**
+ * Backend-side handle attached to a `Session` of type `"tmux-cc"`.
+ * Identifies the pane inside the tmux controller and lets the frontend
+ * route UI events to the right backend session.
+ *
+ * `tmuxPaneId` is the tmux-side pane id (e.g. `"%5"`).
+ * `tmuxControllerId` is the controller id.
+ * `tmuxServerWindowId` is the tmux-side window id (e.g. `"@1"`).
+ * `tmuxWindowId` is the backend-allocated window id (u32).
+ */
+export interface TmuxSessionBackend {
+  tmuxPaneId: string;
+  tmuxControllerId: number;
+  tmuxServerWindowId: string;
+  tmuxWindowId: number;
+  isHidden?: boolean;
+}
+
+/**
  * Payload of the `tmux-pane-added` event emitted by the
  * `TmuxController` dispatch task on `%window-pane-changed`.
  *
