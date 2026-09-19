@@ -20,6 +20,8 @@ export interface WindowBase {
   id: string;
   /** Tab-bar label. */
   name: string;
+
+  kind: WindowKind;
   /** Currently-focused pane; `null` for empty windows. */
   activePaneId: string | null;
 }
