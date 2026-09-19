@@ -27,12 +27,6 @@ export interface Workspace {
   savedWorkspaceId?: string;
 }
 
-/** App-wide identity: list of workspaces + active selection. */
-export interface App {
-  workspaces: Workspace[];
-  activeWorkspaceId: string | null;
-}
-
 // ---------------------------------------------------------------------------
 // Persisted snapshots.
 

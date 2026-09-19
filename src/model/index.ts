@@ -4,6 +4,7 @@ export * from "./session";
 export * from "./pane";
 export * from "./window";
 export * from "./workspace";
+export * from "./app";
 export * from "./tmux-handles";
 export * from "./tmux-events";
 export * from "./persistence";
