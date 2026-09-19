@@ -11,8 +11,8 @@
  * - `LocalSessionConfig` / `SSHSessionConfig` / `TmuxCcConfig` /
  *   `CreateSessionInput` / `SavedSessionConfig` / `SessionGroup`
  *   (user-input + persisted shapes) live in `./session-config.ts`.
- * - `TmuxTerminalBackend` / `TmuxSessionBackend` (backend-side
- *   handles) live in `./tmux-handles.ts`.
+ * - `TmuxSessionBackend` (backend-side handle for tmux-cc sessions)
+ *   lives in `./tmux-handles.ts`.
  * - `Tmux*Event` payloads, `TmuxControllerError`, `AttachedTmuxServer`,
  *   `TmuxWindowListEntry` (transient event metadata) live in
  *   `./tmux-events.ts`.

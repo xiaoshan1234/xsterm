@@ -10,7 +10,6 @@
  */
 
 import type { PaneNode } from "./pane";
-import type { TmuxTerminalBackend } from "./tmux-handles";
 
 export type WindowKind = "terminal" | "tmux-control" | "init";
 
@@ -26,15 +25,10 @@ export interface WindowBase {
   activePaneId: string | null;
 }
 
-/** A normal terminal window. May also be a tmux-backed terminal (carries a `tmuxBackend`). */
+/** A normal terminal window. */
 export interface TerminalWindow extends WindowBase {
   kind: "terminal";
   rootPane: PaneNode;
-  /**
-   * Backend-allocated tmux window handle. Set only when this window was
-   * created by `create_tmux_window`.
-   */
-  tmuxBackend?: TmuxTerminalBackend;
 }
 
 /** Per-controller "session/window control" surface (ADR 0009 §2.1). */
