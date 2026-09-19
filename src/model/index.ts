@@ -1,4 +1,3 @@
-export * from "./capabilities";
 export * from "./session-config";
 export * from "./session";
 export * from "./pane";

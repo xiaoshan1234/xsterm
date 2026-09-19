@@ -4,25 +4,71 @@
  * `Session` is what the React tree reads when it needs the current
  * state of an open terminal connection: identity (id, configId, name),
  * transport (type), connection state (isConnected), backend-advertised
- * capabilities, the user's per-session display config, and the optional
- * `tmuxBackend` handle (set only when `type === "tmux-cc"`).
+ * `CapabilityFlags`, the user's per-session display config, and the
+ * optional `tmuxBackend` handle (set only when `type === "tmux-cc"`).
  *
- * Two related shapes live elsewhere:
+ * Related shapes live elsewhere:
  * - `LocalSessionConfig` / `SSHSessionConfig` / `TmuxCcConfig` /
- *   `CreateSessionInput` (the user-input shapes for the New Session
- *   dialog) live in `./session-config.ts`.
+ *   `CreateSessionInput` / `SavedSessionConfig` / `SessionGroup`
+ *   (user-input + persisted shapes) live in `./session-config.ts`.
  * - `TmuxTerminalBackend` / `TmuxSessionBackend` (backend-side
  *   handles) live in `./tmux-handles.ts`.
  * - `Tmux*Event` payloads, `TmuxControllerError`, `AttachedTmuxServer`,
  *   `TmuxWindowListEntry` (transient event metadata) live in
  *   `./tmux-events.ts`.
+ * - `SavedWindow` / `SavedWorkspace` (persisted snapshots) live in
+ *   `./window-config.ts` / `./workspace-config.ts`.
  */
-import type { CapabilityFlags } from "./capabilities";
 import type { CreateSessionInput } from "./session-config";
 import type { TmuxSessionBackend } from "./tmux-handles";
 
 /** Transport used to reach the backend — runtime tag on a `Session`. */
 export type SessionConnectionType = "local" | "ssh" | "tmux-cc";
+
+/**
+ * Backend-advertised capability flags attached to a `Session`.
+ *
+ * Each flag describes a feature the backend session actually
+ * implements. The frontend uses them to decide between alternative UI
+ * flows — e.g. `splitPane` looks at `supportsMultiplex` to pick
+ * `createTmuxPane` (server-side split) over a UI-only split.
+ *
+ * Set on the backend's wire shape (`sessionService.SessionInfo`)
+ * for `local` and `ssh` sessions; tmux-cc sessions always carry
+ * `supportsMultiplex: true`.
+ */
+export interface CapabilityFlags {
+  /**
+   * Backend will accept a follow-up resize signal after the session
+   * is established. True for `local` PTY and `ssh` exec channels; may
+   * be false for restricted SSH configurations.
+   */
+  supportsResize: boolean;
+
+  /**
+   * The session can be re-attached after the underlying transport
+   * closes (e.g. SSH reconnect). False for one-shot PTY sessions.
+   * Consulted by the `reconnectSession` use case before attempting
+   * re-attach.
+   */
+  supportsReconnect: boolean;
+
+  /**
+   * Backend implements its own local-echo (sending input bytes back
+   * to the frontend before the remote echoes them). Distinct from
+   * xterm.js's `localEcho` render option. Not currently consumed by
+   * the frontend — kept for forward-compat with backends that need it.
+   */
+  supportsLocalEcho: boolean;
+
+  /**
+   * The session can be split into multiple panes by the backend.
+   * True for tmux-cc sessions (server-side tmux pane split); false
+   * for plain `local` / `ssh` sessions (frontend falls back to a
+   * UI-only split that produces an empty leaf).
+   */
+  supportsMultiplex: boolean;
+}
 
 /**
  * One open terminal session in the frontend.
