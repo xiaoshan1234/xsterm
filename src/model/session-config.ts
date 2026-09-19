@@ -1,15 +1,20 @@
 /**
- * Session connection configurations — the user-input shapes for the
- * New Session dialog.
+ * Session connection configurations + persistence shapes.
  *
- * `CreateSessionInput` is the discriminated union the backend IPC
- * accepts; `LocalSessionConfig` / `SSHSessionConfig` / `TmuxCcConfig`
- * are the per-transport config shapes nested in it. `SessionEnvConfig`
- * is shared by local / ssh / tmux-cc.
+ * Holds three responsibilities:
+ * - Per-transport user-input configs (`LocalSessionConfig` /
+ *   `SSHSessionConfig` / `TmuxCcConfig` / `SessionEnvConfig`) — the
+ *   shapes the New Session dialog fills in.
+ * - `CreateSessionInput` — the discriminated union the backend IPC
+ *   accepts; combines `type` + per-transport `config`.
+ * - `SavedSessionConfig` + `SessionGroup` — the on-disk shapes the
+ *   `tauri-plugin-store` adapters read and write. Migration logic
+ *   lives in `src/infra/store/migrations.ts`.
  *
- * Runtime view-models of an open session live in `./session.ts`; the
- * persisted shape of a user-saved config lives in `./persistence.ts`.
+ * Runtime view-models of an open session (`Session`, `SessionDisplayConfig`)
+ * live in `./session.ts`.
  */
+import type { SessionDisplayConfig } from "./session";
 
 /** Shared environment overrides; nested under each transport config. */
 export interface SessionEnvConfig {
@@ -124,3 +129,29 @@ export type CreateSessionInput =
   | { type: "local"; config: LocalSessionConfig }
   | { type: "ssh"; config: SSHSessionConfig }
   | { type: "tmux-cc"; config: TmuxCcConfig };
+
+// ---------------------------------------------------------------------------
+// Persistence shapes (formerly in `./persistence.ts`).
+
+/**
+ * Persisted shape of a user-saved session config. Adds `id` / `name`
+ * / `version` over `CreateSessionInput` (the version drives the
+ * `migrateSavedConfig` matrix in `src/infra/store/migrations.ts`).
+ */
+export type SavedSessionConfig = {
+  id: string;
+  name: string;
+  version: number;
+} & CreateSessionInput & {
+    displayConfig?: SessionDisplayConfig;
+  };
+
+/** A group of saved session configs in the sidebar. */
+export interface SessionGroup {
+  id: number;
+  name: string;
+  /** Ids of `SavedSessionConfig`s in this group. */
+  configIds: string[];
+  /** Whether the group is collapsed in the sidebar. */
+  collapsed: boolean;
+}
