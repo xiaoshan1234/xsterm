@@ -22,7 +22,6 @@
 import type { CreateSessionInput, SessionDisplayConfig } from "./session-config";
 import type { TmuxSessionBackend } from "./tmux-handles";
 
-
 /** Transport used to reach the backend — runtime tag on a `Session`. */
 export type SessionConnectionType = "local" | "ssh" | "tmux-cc";
 

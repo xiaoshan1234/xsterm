@@ -6,8 +6,12 @@
  * `tmux-window-renamed` events against the right window.
  *
  * `TmuxSessionBackend` is held on `Session.tmuxBackend` (when the
- * session type is `"tmux-cc"`) so the frontend can route UI events
- * back to the right backend pane.
+ * session type is `"tmux-cc"`). It carries the controller id plus two
+ * `Map<number, string>` lookups that translate the backend's xsterm
+ * (u32) window / pane ids to the tmux server-side ids (`"@N"` /
+ * `"%N"`). The maps exist because a tmux-cc session can be split into
+ * multiple panes — each pane has its own xsterm pane id and tmux
+ * pane id, all owned by the same session.
  *
  * Both shapes mirror the backend Rust structs. Identifiers are kept
  * distinct:
@@ -28,19 +32,19 @@ export interface TmuxTerminalBackend {
 }
 
 /**
- * Handle attached to a `Session` of type `"tmux-cc"`. Identifies the
- * pane inside the tmux controller and lets the frontend route UI
- * events to the right backend session.
+ * Handle attached to a `Session` of type `"tmux-cc"`.
+ *
+ * Tracks every pane (and window) this session is currently visible in.
+ * A single session can be split into multiple panes — each pane has
+ * its own (xsterm pane id, tmux pane id) pair, all mapped here.
  */
 export interface TmuxSessionBackend {
-  /** tmux pane id (e.g. `"%5"`). */
-  tmuxPaneId: string;
   /** Owning tmux controller id (u32). */
   tmuxControllerId: number;
-  /** tmux server-side window id (e.g. `"@1"`). */
-  tmuxServerWindowId: string;
-  /** Backend-allocated window id (u32). */
-  tmuxWindowId: number;
   /** `true` for the bootstrap pane; UI renders nothing for it. */
   isHidden?: boolean;
+  /** Backend-allocated xsterm window id → tmux server-side window id. */
+  xsWindowToTmuxWindow: Map<number, string>;
+  /** Backend-allocated xsterm pane id → tmux server-side pane id. */
+  xsPaneToTmuxPane: Map<number, string>;
 }
