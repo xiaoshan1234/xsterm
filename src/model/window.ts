@@ -2,16 +2,11 @@
  * Window schema.
  *
  * `Window` is a discriminated union of the three runtime window kinds.
- * The persisted snapshot (`SavedWindow` / `SavedWindowConfig`) lives in
- * `./persistence.ts` alongside the other persisted shapes — frozen
- * pane trees and missing `activePaneId` / tmux handles.
+ * Common fields (`id`, `name`, `kind`, `activePaneId`) live on
+ * `WindowBase`; each kind extends it with its own per-kind payload.
  *
- * Common fields on every runtime window kind: `id` (frontend-local
- * uuid), `name` (tab-bar label), `kind` (discriminator), `activePaneId`
- * (currently-focused pane or `null` for empty windows).
- *
- * Persisted pane trees (`SavedPaneNode` etc.) live in `./pane.ts`
- * alongside their runtime counterparts.
+ * Persisted snapshot (`SavedWindow`) lives in `./window-config.ts`.
+ * Persisted pane tree (`SavedPaneNode`) lives in `./pane.ts`.
  */
 
 import type { PaneNode } from "./pane";
@@ -19,12 +14,19 @@ import type { TmuxTerminalBackend } from "./tmux-handles";
 
 export type WindowKind = "terminal" | "tmux-control" | "init";
 
-/** A normal terminal window. May also be a tmux-backed terminal (carries a `tmuxBackend`). */
-export interface TerminalWindow {
-  kind: "terminal";
+/** Common fields shared by every runtime window kind. */
+export interface WindowBase {
+  /** Frontend-local uuid. */
   id: string;
+  /** Tab-bar label. */
   name: string;
+  /** Currently-focused pane; `null` for empty windows. */
   activePaneId: string | null;
+}
+
+/** A normal terminal window. May also be a tmux-backed terminal (carries a `tmuxBackend`). */
+export interface TerminalWindow extends WindowBase {
+  kind: "terminal";
   rootPane: PaneNode;
   /**
    * Backend-allocated tmux window handle. Set only when this window was
@@ -34,11 +36,8 @@ export interface TerminalWindow {
 }
 
 /** Per-controller "session/window control" surface (ADR 0009 §2.1). */
-export interface TmuxControlWindow {
+export interface TmuxControlWindow extends WindowBase {
   kind: "tmux-control";
-  id: string;
-  name: string;
-  activePaneId: string | null;
   /** tmux controller id (`TmuxController::controller_id`, u32). */
   tmuxControllerId: number;
   /** tmux session name (e.g. `"work"`); drives the tab label. */
@@ -46,11 +45,8 @@ export interface TmuxControlWindow {
 }
 
 /** Empty placeholder shown in a fresh workspace until a session is attached. */
-export interface InitWindow {
+export interface InitWindow extends WindowBase {
   kind: "init";
-  id: string;
-  name: string;
-  activePaneId: string | null;
 }
 
 export type Window = TerminalWindow | TmuxControlWindow | InitWindow;
