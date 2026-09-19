@@ -14,7 +14,13 @@
  * Runtime view-models of an open session (`Session`, `SessionDisplayConfig`)
  * live in `./session.ts`.
  */
-import type { SessionDisplayConfig } from "./session";
+/**
+ * Persistence shapes (formerly in `./persistence.ts`).
+ *
+ * `SessionDisplayConfig` is inlined below rather than imported from
+ * `./session.ts` to avoid a cycle: `session.ts` imports
+ * `CreateSessionInput` from this file.
+ */
 
 /** Shared environment overrides; nested under each transport config. */
 export interface SessionEnvConfig {
@@ -143,7 +149,13 @@ export type SavedSessionConfig = {
   name: string;
   version: number;
 } & CreateSessionInput & {
-    displayConfig?: SessionDisplayConfig;
+    /**
+     * Inlined SessionDisplayConfig (per-session visual config).
+     * The field set is identical to the runtime one — see
+     * `./session.ts` `SessionDisplayConfig` for the full schema. Kept
+     * inline here to avoid a cycle through `./session.ts`.
+     */
+    displayConfig?: import("./session").SessionDisplayConfig;
   };
 
 /** A group of saved session configs in the sidebar. */

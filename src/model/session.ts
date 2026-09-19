@@ -152,3 +152,7 @@ export interface SessionLoggingConfig {
   /** Format string for log lines. %v is the actual output content. @default "[%Y-%m-%d %H:%M:%S] %v" */
   lineFormat?: string;
 }
+
+/** A group of saved session configs in the sidebar. */
+// (moved to ./session-config.ts — `SessionGroup` is a persisted/UI
+//  shape, not a runtime Session view-model.)
