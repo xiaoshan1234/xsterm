@@ -41,8 +41,8 @@ const tmuxInfo: SessionInfo = {
   isConnected: true,
   tmuxPaneId: "%1",
   tmuxControllerId: 1,
-  tmuxWindowId: "@1",
-  xstermWindowId: 101,
+  tmuxServerWindowId: "@1",
+  tmuxWindowId: 101,
 };
 
 const tmuxCfg: TmuxCcConfig = { tmuxSessionName: "work" };
@@ -86,12 +86,13 @@ describe("attachTmux", () => {
 });
 
 describe("captureTmuxPane", () => {
-  it("invokes capture_tmux_pane with xstermSessionId/lines", async () => {
+  it("invokes capture_tmux_pane with controller/tmuxPaneId/lines", async () => {
     invokeMock.mockResolvedValueOnce("scrollback-text");
-    const result = await captureTmuxPane(7, 100);
+    const result = await captureTmuxPane(1, "%5", 100);
     expect(result).toBe("scrollback-text");
     expect(invokeMock).toHaveBeenCalledWith("capture_tmux_pane", {
-      xstermSessionId: 7,
+      controllerId: 1,
+      tmuxPaneId: "%5",
       lines: 100,
     });
   });
@@ -119,23 +120,26 @@ describe("autoAttachTmuxServers", () => {
 });
 
 describe("createTmuxPane", () => {
-  it("invokes create_tmux_pane with controller/parent/direction", async () => {
+  it("invokes create_tmux_pane with controller/parentTmuxPaneId/direction", async () => {
     invokeMock.mockResolvedValueOnce(tmuxInfo);
-    const result = await createTmuxPane(1, 7, "vertical");
+    const result = await createTmuxPane(1, "%5", "vertical");
     expect(result).toEqual(tmuxInfo);
     expect(invokeMock).toHaveBeenCalledWith("create_tmux_pane", {
       controllerId: 1,
-      parentXstermSessionId: 7,
+      parentTmuxPaneId: "%5",
       direction: "vertical",
     });
   });
 });
 
 describe("killTmuxPane", () => {
-  it("invokes kill_tmux_pane with the xsterm session id", async () => {
+  it("invokes kill_tmux_pane with controllerId/tmuxPaneId", async () => {
     invokeMock.mockResolvedValueOnce(undefined);
-    await killTmuxPane(7);
-    expect(invokeMock).toHaveBeenCalledWith("kill_tmux_pane", { xstermSessionId: 7 });
+    await killTmuxPane(1, "%5");
+    expect(invokeMock).toHaveBeenCalledWith("kill_tmux_pane", {
+      controllerId: 1,
+      tmuxPaneId: "%5",
+    });
   });
 });
 
@@ -160,19 +164,23 @@ describe("createTmuxWindow", () => {
 });
 
 describe("killTmuxWindow", () => {
-  it("invokes kill_tmux_window with the xsterm window id", async () => {
+  it("invokes kill_tmux_window with controllerId/tmuxWindowId", async () => {
     invokeMock.mockResolvedValueOnce(undefined);
-    await killTmuxWindow(101);
-    expect(invokeMock).toHaveBeenCalledWith("kill_tmux_window", { xstermWindowId: 101 });
+    await killTmuxWindow(1, "@1");
+    expect(invokeMock).toHaveBeenCalledWith("kill_tmux_window", {
+      controllerId: 1,
+      tmuxWindowId: "@1",
+    });
   });
 });
 
 describe("renameTmuxWindow", () => {
-  it("invokes rename_tmux_window with xstermWindowId and name", async () => {
+  it("invokes rename_tmux_window with controllerId/tmuxWindowId/name", async () => {
     invokeMock.mockResolvedValueOnce(undefined);
-    await renameTmuxWindow(101, "new-name");
+    await renameTmuxWindow(1, "@1", "new-name");
     expect(invokeMock).toHaveBeenCalledWith("rename_tmux_window", {
-      xstermWindowId: 101,
+      controllerId: 1,
+      tmuxWindowId: "@1",
       name: "new-name",
     });
   });

@@ -3,12 +3,24 @@
  *
  * The five `*Event` interfaces mirror the payloads emitted by the
  * backend `TmuxController` dispatch task in response to tmux control
- * mode replies. The other two interfaces — `TmuxControllerError`,
+ * mode replies. The other three interfaces — `TmuxControllerError`,
  * `AttachedTmuxServer`, `TmuxWindowListEntry` — are runtime metadata
  * the frontend tracks alongside open tmux controllers.
  *
- * For the backend-side window / session references themselves, see
- * `./tmux-handles.ts`.
+ * Identifier convention used across these payloads:
+ * - `tmuxServerWindowId: string` — tmux server-side window id (e.g.
+ *   `"@1"`). The IPC parameter passed to `kill_tmux_window` /
+ *   `rename_tmux_window`.
+ * - `tmuxWindowId: number` — backend-allocated window u32. Used to
+ *   match the event to the right xsterm Window in React state (the
+ *   same id is also stamped on `Window.tmuxWindowId` /
+ *   `Session.tmuxWindowId`).
+ * - `tmuxPaneId: string` / `xstermSessionId: number` — pane-level
+ *   counterparts, used to match tmux pane events to xsterm Sessions.
+ *
+ * For the Session/Window shapes that hold these fields at rest, see
+ * `./session.ts` and `./window.ts`. The `{ isHidden }` marker carried
+ * on bootstrap panes lives in `./tmux-handles.ts`.
  */
 
 /**

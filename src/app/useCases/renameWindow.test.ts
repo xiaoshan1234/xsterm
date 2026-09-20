@@ -52,10 +52,11 @@ describe("renameWindow", () => {
       windowType: "terminal",
       rootPane: { id: "p1", type: "leaf", size: 100 },
       activePaneId: "p1",
-      xstermWindowId: 5,
+      tmuxControllerId: 1,
+      tmuxServerWindowId: "@5",
     };
     renameWindow("ws1", "w1", "NewName");
-    expect(renameTmuxWindow).toHaveBeenCalledWith(5, "NewName");
+    expect(renameTmuxWindow).toHaveBeenCalledWith(1, "@5", "NewName");
     expect(mocks.setWorkspaces).not.toHaveBeenCalled();
   });
 

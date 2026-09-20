@@ -57,7 +57,7 @@ export function usePaneActions(_deps: UsePaneActionsDeps) {
   );
 
   const killTmuxPane = useCallback(
-    (xstermSessionId: number) => void killTmuxPaneFn(xstermSessionId),
+    (controllerId: number, tmuxPaneId: string) => void killTmuxPaneFn(controllerId, tmuxPaneId),
     [],
   );
 

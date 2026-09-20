@@ -74,10 +74,15 @@ async function splitTmuxPaneInternal(
   paneId: string,
   direction: SplitDirection,
 ): Promise<void> {
-  const controllerId = parent.tmuxControllerId!;
+  const controllerId = parent.tmuxControllerId;
+  const parentTmuxPaneId = parent.tmuxPaneId;
+  if (controllerId === undefined || parentTmuxPaneId === undefined) {
+    console.error("splitTmuxPane: parent session missing tmux identifiers", parent.id);
+    return;
+  }
   let info: Awaited<ReturnType<typeof tmuxTauri.createTmuxPane>>;
   try {
-    info = await tmuxTauri.createTmuxPane(controllerId, parent.id, direction);
+    info = await tmuxTauri.createTmuxPane(controllerId, parentTmuxPaneId, direction);
   } catch (e) {
     console.error("splitTmuxPane: backend create_tmux_pane failed:", e);
     return;

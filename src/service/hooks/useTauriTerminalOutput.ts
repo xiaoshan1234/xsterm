@@ -58,7 +58,11 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
   const setSessions = useSessionStore((s) => s.setSessions);
   const sessions = useSessionStore((s) => s.sessions);
   // tmux scrollback replay applies only to tmux-backed panes.
-  const isTmuxPane = !!sessions.find((s: Session) => s.id === sessionId && !!s.tmuxPaneId);
+  const tmuxSession = sessions.find(
+    (s: Session) =>
+      s.id === sessionId && s.tmuxControllerId !== undefined && s.tmuxPaneId !== undefined,
+  );
+  const isTmuxPane = tmuxSession !== undefined;
 
   // replay tmux scrollback once per pane per app session. The
   // replay happens BEFORE the live listener attaches so the user sees
@@ -71,7 +75,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
     const xterm = termRef.current;
     if (!xterm) return;
     scrollbackReplayedRef.add(sessionId);
-    captureTmuxPane(sessionId, SCROLLBACK_LINES)
+    captureTmuxPane(tmuxSession.tmuxControllerId!, tmuxSession.tmuxPaneId!, SCROLLBACK_LINES)
       .then((text: string) => {
         if (!text) return;
         try {
@@ -83,7 +87,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
       .catch((err: unknown) => {
         console.error("[xsterm] captureTmuxPane failed:", err);
       });
-  }, [isTmuxPane, sessionId, termRef]);
+  }, [isTmuxPane, sessionId, termRef, tmuxSession]);
 
   // TEMPORARY REVERT (Perf 001 follow-up): reverted from binary
   // Channel<Vec<u8>> path back to listen<[number, number[]]>. The

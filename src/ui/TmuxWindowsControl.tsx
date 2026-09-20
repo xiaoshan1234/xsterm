@@ -40,29 +40,39 @@ export function TmuxWindowsControl({
       );
   }, [controllerId, tmuxSessionName]);
 
-  const handleRename = useCallback((entry: TmuxWindowListEntry) => {
-    const name = window.prompt(`Rename tmux window "${entry.name}":`, entry.name);
-    if (name === null) return;
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === entry.name) return;
-    sessionService
-      .renameTmuxWindow(entry.xstermWindowId, trimmed)
-      .catch((e) =>
-        window.alert(`Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`),
-      );
-  }, []);
+  const handleRename = useCallback(
+    (entry: TmuxWindowListEntry) => {
+      const name = window.prompt(`Rename tmux window "${entry.name}":`, entry.name);
+      if (name === null) return;
+      const trimmed = name.trim();
+      if (!trimmed || trimmed === entry.name) return;
+      sessionService
+        .renameTmuxWindow(controllerId, entry.tmuxServerWindowId, trimmed)
+        .catch((e) =>
+          window.alert(
+            `Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        );
+    },
+    [controllerId],
+  );
 
-  const handleKill = useCallback((entry: TmuxWindowListEntry) => {
-    const confirmed = window.confirm(
-      `Permanently delete tmux window "${entry.name}" (${entry.tmuxWindowId}) on the server?`,
-    );
-    if (!confirmed) return;
-    sessionService
-      .killTmuxWindow(entry.xstermWindowId)
-      .catch((e) =>
-        window.alert(`Failed to delete tmux window: ${e instanceof Error ? e.message : String(e)}`),
+  const handleKill = useCallback(
+    (entry: TmuxWindowListEntry) => {
+      const confirmed = window.confirm(
+        `Permanently delete tmux window "${entry.name}" (${entry.tmuxServerWindowId}) on the server?`,
       );
-  }, []);
+      if (!confirmed) return;
+      sessionService
+        .killTmuxWindow(controllerId, entry.tmuxServerWindowId)
+        .catch((e) =>
+          window.alert(
+            `Failed to delete tmux window: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        );
+    },
+    [controllerId],
+  );
 
   return (
     <section className="tmux-card" aria-label="Tmux windows control">
@@ -79,11 +89,11 @@ export function TmuxWindowsControl({
       ) : (
         <ul className="tmux-windows-list">
           {windows.map((entry) => (
-            <li key={entry.tmuxWindowId} className="tmux-windows-row">
+            <li key={entry.tmuxServerWindowId} className="tmux-windows-row">
               <div className="tmux-windows-row__label">
                 <span className="tmux-windows-row__name">{entry.name}</span>
                 <span className="tmux-windows-row__id">
-                  {entry.tmuxWindowId} · xsterm {entry.xstermWindowId}
+                  {entry.tmuxServerWindowId} · xsterm {entry.tmuxWindowId}
                 </span>
               </div>
               <div className="tmux-windows-row__actions">

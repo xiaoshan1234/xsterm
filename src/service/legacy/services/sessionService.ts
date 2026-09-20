@@ -21,15 +21,17 @@ export interface SessionInfo {
   tmuxPaneId?: string;
   /** id of the tmux controller process that owns this pane. */
   tmuxControllerId?: number;
-  /** tmux window id (e.g. `@1`) the pane belongs to. Surfaced by
-   * `create_tmux_session` / `attach_tmux_session` so the frontend can
-   * render the matching xsterm Window synchronously on return (the
-   * `tmux-window-added` listener does not fire for the bootstrap window). */
-  tmuxWindowId?: string;
-  /** xsterm window id paired with `tmuxWindowId`. Frontend uses this to
-   * construct the matching xsterm Window on `create_tmux_session` /
-   * `attach_tmux_session` return. Undefined for non-tmux sessions. */
-  xstermWindowId?: number;
+  /** tmux server-side window id (e.g. `@1`) the pane belongs to.
+   * Surfaced by `create_tmux_session` / `attach_tmux_session` so the
+   * frontend can render the matching xsterm Window synchronously on
+   * return (the `tmux-window-added` listener does not fire for the
+   * bootstrap window). */
+  tmuxServerWindowId?: string;
+  /** Backend-allocated window id (u32) paired with `tmuxServerWindowId`.
+   * Frontend uses this to construct the matching xsterm Window on
+   * `create_tmux_session` / `attach_tmux_session` return. Undefined
+   * for non-tmux sessions. */
+  tmuxWindowId?: number;
   /**
    * hidden (bootstrap) tmux panes are not rendered by the frontend.
    * MVP `tmux -CC new` panes have `is_hidden = false`; tmux attaches
@@ -112,11 +114,20 @@ export async function attachTmux(config: TmuxCcConfig): Promise<SessionInfo> {
  * Frontend use: called once when a tmux pane becomes focused (after a
  * `Pane` mounts) so the user sees existing scrollback before live
  * `session-output` events stream in.
+ *
+ * `controllerId` + `tmuxPaneId` follow the convention documented in
+ * AGENTS.md: the frontend resolves the xsterm session id locally and
+ * sends the tmux-side identifiers directly.
  */
-export async function captureTmuxPane(xstermSessionId: number, lines: number): Promise<string> {
-  logger.debug("sessionService", "captureTmuxPane", { xstermSessionId, lines });
+export async function captureTmuxPane(
+  controllerId: number,
+  tmuxPaneId: string,
+  lines: number,
+): Promise<string> {
+  logger.debug("sessionService", "captureTmuxPane", { controllerId, tmuxPaneId, lines });
   const result = await invoke<string>("capture_tmux_pane", {
-    xstermSessionId,
+    controllerId,
+    tmuxPaneId,
     lines,
   });
   logger.debug("sessionService", "captureTmuxPane:result", { bytes: result.length });
@@ -207,33 +218,39 @@ export async function uploadImageToSshSession(
 }
 
 /**
- * split an xsterm session (whose backend is a tmux pane) into two panes.
+ * split a tmux pane into two panes.
  *
  * The backend invokes `create_tmux_pane`, which sends `split-window`
  * to the tmux controller, waits for tmux's matching
  * `%window-pane-changed` reply (with a 5 s timeout), and returns the
- * new pane's metadata. The frontend uses the returned
- * `xstermSessionId` to bind the new tmux pane to a new xsterm pane
+ * new pane's metadata. The frontend uses the returned `id` (the new
+ * xsterm session id) to bind the new tmux pane to a new xsterm pane
  * leaf in the PaneTree.
  *
- * Both `controllerId` and `parentXstermSessionId` are **xsterm**
- * identifiers (controller id and `Session.id` from React state) — NOT
- * tmux pane ids (those stay internal to the Rust controller). Mirrors
- * req-006 §4.5.
+ * `parentTmuxPaneId` is the **server-side** tmux pane id (e.g. `"%5"`)
+ * of the parent — NOT an xsterm session id, NOT an xsterm pane UUID.
+ * The frontend received this id from the `tmux-pane-added` event
+ * payload (which also carries the matching `controllerId`) and tracks
+ * it alongside the xsterm pane leaf.
+ *
+ * The frontend performs the local-id → server-id resolution before
+ * invoking this command (xsterm session id ↦
+ * `(controller_id, tmux_pane_id)`); the backend does not look up
+ * either side via `sessions`. Mirrors req-006 §4.5.
  */
 export async function createTmuxPane(
   controllerId: number,
-  parentXstermSessionId: number,
+  parentTmuxPaneId: string,
   direction: "horizontal" | "vertical",
 ): Promise<SessionInfo> {
   logger.debug("sessionService", "createTmuxPane", {
     controllerId,
-    parentXstermSessionId,
+    parentTmuxPaneId,
     direction,
   });
   const result = await invoke<SessionInfo>("create_tmux_pane", {
     controllerId,
-    parentXstermSessionId,
+    parentTmuxPaneId,
     direction,
   });
   logger.debug("sessionService", "createTmuxPane:result", result);
@@ -241,22 +258,19 @@ export async function createTmuxPane(
 }
 
 /**
- * kill the tmux pane backing an xsterm session via `kill-pane`.
+ * kill a tmux pane via `kill-pane`.
  *
- * `xstermSessionId` is the **xsterm** session id (the `Session.id`
- * from React state that was bound to this tmux pane), NOT a tmux pane
- * id and NOT an xsterm pane UUID. The function name reflects the
- * tmux-side effect (`kill-pane`); the parameter name reflects the
- * xsterm-side caller identifier.
- *
- * The backend returns immediately after writing the command to the
- * controller's stdin FIFO; the resulting `%pane-exited` reply drives
- * the `tmux-pane-removed` event which the frontend listener uses to
- * drop the matching `Session` from React state.
+ * `controllerId` + `tmuxPaneId` follow the same convention as
+ * [`createTmuxPane`](Self::createTmuxPane): the frontend resolves the
+ * xsterm session id locally and sends the tmux-side identifiers
+ * directly. The backend returns immediately after writing the command
+ * to the controller's stdin FIFO; the resulting `%pane-exited` reply
+ * drives the `tmux-pane-removed` event which the frontend listener
+ * uses to drop the matching `Session` from React state.
  */
-export async function killTmuxPane(xstermSessionId: number): Promise<void> {
-  logger.debug("sessionService", "killTmuxPane", { xstermSessionId });
-  await invoke("kill_tmux_pane", { xstermSessionId });
+export async function killTmuxPane(controllerId: number, tmuxPaneId: string): Promise<void> {
+  logger.debug("sessionService", "killTmuxPane", { controllerId, tmuxPaneId });
+  await invoke("kill_tmux_pane", { controllerId, tmuxPaneId });
   logger.debug("sessionService", "killTmuxPane:result", undefined);
 }
 
@@ -265,10 +279,10 @@ export async function killTmuxPane(xstermSessionId: number): Promise<void> {
  * `new-window`. The backend blocks until tmux confirms via
  * `%window-pane-changed` (Promise coordination, parallel to
  * `createTmuxPane`) and returns the new window's first pane as a
- * `SessionInfo`. The frontend uses the returned `xstermSessionId` /
- * `tmuxWindowId` to build the new xsterm Window and attach the Session
- * to it; the `tmux-window-added` event from the controller's dispatch
- * task is a defensive cross-check (idempotent).
+ * `SessionInfo`. The frontend uses the returned `id` (xsterm session
+ * id) to build the new xsterm Window and attach the Session to it;
+ * the `tmux-window-added` event from the controller's dispatch task
+ * is a defensive cross-check (idempotent).
  *
  * Mirrors req-006 §4.5.
  */
@@ -289,13 +303,18 @@ export async function createTmuxWindow(controllerId: number, name?: string): Pro
  * event which the frontend listener uses to drop every Session in the
  * matching xsterm Window and then drop the Window itself.
  *
- * `xstermWindowId` is the **xsterm** window id (NOT the tmux window
- * id). The frontend looks this up from the `tmux-window-added`
- * event payload when it created the Window.
+ * `controllerId` + `tmuxWindowId` follow the convention documented in
+ * AGENTS.md: the frontend tracks these alongside each xsterm Window —
+ * `controllerId` is the same field carried by the
+ * `tmux-window-added` / `tmux-window-closed` event payloads, and
+ * `tmuxWindowId` is the **server-side** tmux window id (e.g. `"@5"`)
+ * also received from the `tmux-window-added` event. The backend
+ * dispatches the command directly to that controller; it does not
+ * scan every controller's bindings to look them up.
  */
-export async function killTmuxWindow(xstermWindowId: number): Promise<void> {
-  logger.debug("sessionService", "killTmuxWindow", { xstermWindowId });
-  await invoke("kill_tmux_window", { xstermWindowId });
+export async function killTmuxWindow(controllerId: number, tmuxWindowId: string): Promise<void> {
+  logger.debug("sessionService", "killTmuxWindow", { controllerId, tmuxWindowId });
+  await invoke("kill_tmux_window", { controllerId, tmuxWindowId });
   logger.debug("sessionService", "killTmuxWindow:result", undefined);
 }
 
@@ -306,13 +325,16 @@ export async function killTmuxWindow(xstermWindowId: number): Promise<void> {
  * `tmux-window-renamed` event which the frontend listener uses to
  * update the matching xsterm Window's `name`.
  *
- * `xstermWindowId` is the **xsterm** window id (NOT the tmux window
- * id). The frontend looks this up from the `tmux-window-added`
- * event payload when it created the Window.
+ * `controllerId` + `tmuxWindowId` follow the same convention as
+ * [`killTmuxWindow`](Self::killTmuxWindow).
  */
-export async function renameTmuxWindow(xstermWindowId: number, name: string): Promise<void> {
-  logger.debug("sessionService", "renameTmuxWindow", { xstermWindowId, name });
-  await invoke("rename_tmux_window", { xstermWindowId, name });
+export async function renameTmuxWindow(
+  controllerId: number,
+  tmuxWindowId: string,
+  name: string,
+): Promise<void> {
+  logger.debug("sessionService", "renameTmuxWindow", { controllerId, tmuxWindowId, name });
+  await invoke("rename_tmux_window", { controllerId, tmuxWindowId, name });
   logger.debug("sessionService", "renameTmuxWindow:result", undefined);
 }
 

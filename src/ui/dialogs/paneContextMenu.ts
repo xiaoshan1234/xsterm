@@ -62,7 +62,7 @@ export function buildPaneContextMenu(
   // tmux window management (only when the session is a tmux pane
   // and the optional tmux handlers are provided by the caller).
   const isTmux = session?.type === "tmux-cc";
-  const hasTmuxWindowId = containingWindow?.xstermWindowId !== undefined;
+  const hasTmuxWindowId = containingWindow?.tmuxServerWindowId !== undefined;
   if (isTmux) {
     if (actions.createTmuxWindow) {
       items.push({ label: "New Tmux Window", onClick: actions.createTmuxWindow });

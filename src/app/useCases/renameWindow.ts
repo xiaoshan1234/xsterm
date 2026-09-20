@@ -1,8 +1,9 @@
 /**
  * renameWindow — rename a Window. For tmux-backed windows
- * (`xstermWindowId !== undefined`), the rename round-trips through
- * `infra.renameTmuxWindow`; the actual UI state change is driven by
- * the `tmux-window-renamed` event (idempotent cross-check).
+ * (`tmuxControllerId` + `tmuxServerWindowId` both set), the rename
+ * round-trips through `infra.renameTmuxWindow`; the actual UI state
+ * change is driven by the `tmux-window-renamed` event (idempotent
+ * cross-check).
  *
  * For control windows and ordinary terminal windows, the rename is
  * local-only.
@@ -18,9 +19,9 @@ export function renameWindow(workspaceId: string, windowId: string, name: string
   const window = wsStore.workspaces
     .find((w) => w.id === workspaceId)
     ?.windows.find((w) => w.id === windowId);
-  if (window?.xstermWindowId !== undefined) {
-    renameTmuxWindow(window.xstermWindowId, trimmed).catch((e: unknown) =>
-      console.error("Failed to rename tmux window:", e),
+  if (window?.tmuxControllerId !== undefined && window.tmuxServerWindowId !== undefined) {
+    renameTmuxWindow(window.tmuxControllerId, window.tmuxServerWindowId, trimmed).catch(
+      (e: unknown) => console.error("Failed to rename tmux window:", e),
     );
     return;
   }

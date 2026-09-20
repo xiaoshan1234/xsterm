@@ -237,28 +237,30 @@ export function Pane({
   }, [session?.tmuxControllerId]);
 
   const handleKillTmuxWindow = useCallback(async () => {
-    const xid = selectedWindow?.xstermWindowId;
-    if (xid === undefined) return;
+    const tmuxControllerId = selectedWindow?.tmuxControllerId;
+    const tmuxServerWindowId = selectedWindow?.tmuxServerWindowId;
+    if (tmuxControllerId === undefined || tmuxServerWindowId === undefined) return;
     try {
-      await sessionService.killTmuxWindow(xid);
+      await sessionService.killTmuxWindow(tmuxControllerId, tmuxServerWindowId);
     } catch (e) {
       console.error("Failed to kill tmux window:", e);
       window.alert(`Failed to kill tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [selectedWindow?.xstermWindowId]);
+  }, [selectedWindow?.tmuxControllerId, selectedWindow?.tmuxServerWindowId]);
 
   const handleRenameTmuxWindow = useCallback(async () => {
-    const xid = selectedWindow?.xstermWindowId;
-    if (xid === undefined) return;
+    const tmuxControllerId = selectedWindow?.tmuxControllerId;
+    const tmuxServerWindowId = selectedWindow?.tmuxServerWindowId;
+    if (tmuxControllerId === undefined || tmuxServerWindowId === undefined) return;
     const name = window.prompt("Rename tmux window:");
     if (name === null || name.trim() === "") return;
     try {
-      await sessionService.renameTmuxWindow(xid, name.trim());
+      await sessionService.renameTmuxWindow(tmuxControllerId, tmuxServerWindowId, name.trim());
     } catch (e) {
       console.error("Failed to rename tmux window:", e);
       window.alert(`Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [selectedWindow?.xstermWindowId]);
+  }, [selectedWindow?.tmuxControllerId, selectedWindow?.tmuxServerWindowId]);
 
   const contextMenuItems = buildPaneContextMenu(
     session,

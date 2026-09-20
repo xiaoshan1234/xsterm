@@ -1,57 +1,32 @@
 /**
- * Backend-side handle for tmux-attached sessions.
+ * Backend-side metadata for tmux-attached sessions.
  *
- * `TmuxSessionBackend` is held on `Session.tmuxBackend` (when the
- * session type is `"tmux-cc"`). It carries the controller id plus two
- * `Map<number, string>` lookups that translate the backend's xsterm
- * (u32) window / pane ids to the tmux server-side ids (`"@N"` /
- * `"%N"`).
+ * The fields are kept flat on `Session` itself (see `./session.ts`) so
+ * that IPC client wrappers can read them directly without dereferencing
+ * a nested object — the only thing that survives here is the boolean
+ * bootstrap-pane marker.
  *
- * # Why two maps (the id-namespace problem)
- *
- * IPC events carry **backend-allocated u32 ids** for windows and
- * panes (`event.tmuxWindowId: number`, `event.xstermSessionId:
- * number`), while tmux's own control-mode protocol emits **string
- * ids** (`"@1"`, `"%5"`). The two namespaces exist because:
- *
- * - **Backend u32 ids are transient** — they are the backend's
- *   in-process counters and change on every backend restart. They
- *   exist to give the IPC wire format a stable fixed-size key.
- * - **Tmux string ids are persistent** within a tmux server lifetime
- *   and survive backend restarts (since the tmux server keeps them).
- *
- * The maps translate between the two — needed whenever an event
- * arrives with a backend u32 but the consumer (e.g. `TmuxControlWindow`,
- * `kill-tmux-window`) needs the tmux-side id to talk back to tmux.
- *
- * # Why maps (not flat fields)
- *
- * A tmux-cc session can be split into multiple panes — each pane has
- * its own (xsterm pane id, tmux pane id) pair, all owned by the same
- * session. Flat fields can't represent N pairs; a map does.
- *
- * # Cost
- *
- * Every IPC event that mentions a window or pane id triggers a
- * map write on the receiving session. The maps grow and shrink
- * with the session's visible panes. Empty when the session is
- * disconnected.
+ * History: an earlier shape carried two `Map<number, string>` lookups
+ * (`xsWindowToTmuxWindow`, `xsPaneToTmuxPane`) used to translate
+ * backend-allocated u32 ids into tmux server-side string ids before
+ * invoking `kill_tmux_window` / `kill_tmux_pane` / etc. Rust IPC
+ * commands now take the tmux-side identifiers directly, so the
+ * translation lives on the backend and the maps were deleted.
  */
 
 /**
- * Handle attached to a `Session` of type `"tmux-cc"`.
+ * Bootstrap-pane marker attached to a `Session` of type `"tmux-cc"`.
  *
- * Tracks every pane (and window) this session is currently visible in.
- * A single session can be split into multiple panes — each pane has
- * its own (xsterm pane id, tmux pane id) pair, all mapped here.
+ * `true` for the very first pane a controller registers (the pane that
+ * spawned the xsterm Window the bootstrap pane lives in) — the UI
+ * renders nothing for it. Splits driven by the user (`create_tmux_pane`)
+ * are NOT hidden and produce a normal leaf.
+ *
+ * Most callers do not need this shape directly; `Session.isHidden?`
+ * carries the boolean. The interface is kept for documentation and as
+ * a hook for any future per-session backend state that needs grouping.
  */
 export interface TmuxSessionBackend {
-  /** Owning tmux controller id (u32). */
-  tmuxControllerId: number;
   /** `true` for the bootstrap pane; UI renders nothing for it. */
   isHidden?: boolean;
-  /** Backend-allocated xsterm window id → tmux server-side window id. */
-  xsWindowToTmuxWindow: Map<number, string>;
-  /** Backend-allocated xsterm pane id → tmux server-side pane id. */
-  xsPaneToTmuxPane: Map<number, string>;
 }
