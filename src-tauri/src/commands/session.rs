@@ -79,9 +79,8 @@ pub async fn create_session(
     }
     .inspect(|info| {
         tracing::info!(
-            "[DEBUG-0009-RUST] Session created via generic command: id={} xsterm_window_id={:?} tmux_window_id={:?}",
+            "[DEBUG-0009-RUST] Session created via generic command: id={} tmux_window_id={:?}",
             info.id,
-            info.xsterm_window_id,
             info.tmux_window_id
         );
         tracing::info!("Session created via generic command: id={}", info.id);
@@ -112,14 +111,48 @@ pub async fn write_session(
 }
 
 /// Resize the PTY of an existing session.
+/// Resize a tmux pane via `resize-pane -t %<pane> -x <cols> -y <rows>`.
+///
+/// Symmetric with `kill_tmux_pane` / `capture_tmux_pane`: takes the
+/// server-side `(controller_id, tmux_pane_id)` pair, no xsterm session
+/// id involved (the frontend resolves the mapping locally from the
+/// `tmux-pane-added` event payload).
 #[tauri::command]
-pub async fn resize_session(
+pub async fn resize_tmux_pane(
+    controller_id: u32,
+    tmux_pane_id: String,
+    rows: u16,
+    cols: u16,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<(), String> {
+    state
+        .resize_tmux_pane(controller_id, &tmux_pane_id, rows, cols)
+        .await
+}
+
+/// Resize a local PTY session via TIOCSWINSZ ioctl. Takes the
+/// universal `Session.id` (the same one `write_session` /
+/// `close_session` use).
+#[tauri::command]
+pub async fn resize_pty_session(
     session_id: u32,
     rows: u16,
     cols: u16,
     state: State<'_, Arc<SessionManager>>,
 ) -> Result<(), String> {
-    state.resize(session_id, rows, cols)
+    state.resize_pty_session(session_id, rows, cols)
+}
+
+/// Resize an SSH session's russh channel via `window-change`. Takes
+/// the universal `Session.id`.
+#[tauri::command]
+pub async fn resize_ssh_session(
+    session_id: u32,
+    rows: u16,
+    cols: u16,
+    state: State<'_, Arc<SessionManager>>,
+) -> Result<(), String> {
+    state.resize_ssh_session(session_id, rows, cols)
 }
 
 /// Close an existing session.
@@ -552,7 +585,6 @@ pub async fn register_existing_tmux_panes(
             None,
             None,
             false,
-            None,
             None,
         );
         let capabilities = CapabilityFlags::for_tmux();

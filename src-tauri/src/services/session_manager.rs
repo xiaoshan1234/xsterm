@@ -14,7 +14,8 @@ use crate::infrastructure::ssh::{
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{
     build_remote_image_path, tmux_pane_info, AttachedTmuxServer, LocalSessionConfig,
-    SSHSessionConfig, SessionInfo, SessionLoggingConfig, SplitDirection, TmuxCcConfig,
+    SSHSessionConfig, SessionIdSource, SessionInfo, SessionLoggingConfig, SplitDirection,
+    TmuxCcConfig,
 };
 use crate::services::local_session::create_local_session;
 use crate::services::session_log::start_session_logging;
@@ -212,7 +213,12 @@ impl ActiveSession {
 /// `TmuxPaneHandle.controller.controller_id()` ties them back here.
 pub struct SessionManager {
     sessions: DashMap<u32, Arc<ActiveSession>>,
-    next_id: AtomicU32,
+    /// Shared with every `TmuxController` so the dispatch task can
+    /// mint fresh Session.ids for newly-registered panes (split,
+    /// bootstrap-list-panes, …). Replaces the controller's old local
+    /// `next_xsterm_id` allocator — local PTY / SSH / tmux now share
+    /// the same id space, sourced from this one counter.
+    session_id_source: Arc<SessionIdSource>,
     pty_system: Box<dyn PtySystem>,
     ssh_backend: Arc<dyn SshBackend>,
     tmux_controllers: DashMap<u32, Arc<TmuxController>>,
@@ -233,24 +239,12 @@ fn tmux_probe_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-/// Look up the xsterm window id paired with a tmux window id from a
-/// controller's `window_bindings` snapshot. Returns `None` when the
-/// controller has not yet inserted the binding (rare race during the
-/// bootstrap path) or when the binding has been dropped after a
-/// `tmux-window-closed`.
-fn xsterm_window_id_for(controller: &TmuxController, tmux_window_id: &str) -> Option<u32> {
-    controller
-        .window_bindings()
-        .into_iter()
-        .find_map(|(win_id, xid)| (win_id == tmux_window_id).then_some(xid))
-}
-
 impl SessionManager {
     /// Create a new session manager with default platform backends.
     pub fn new() -> Self {
         Self {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(NativePtySystem::new()),
             ssh_backend: Arc::new(SshBackendImpl::new()),
             tmux_controllers: DashMap::new(),
@@ -320,40 +314,39 @@ impl SessionManager {
             config
         );
         let controller_id = self.allocate_controller_id();
-        let controller =
-            TmuxController::spawn_local(config, backend, self.ssh_backend.as_ref(), controller_id)?;
+        // Pre-allocate the bootstrap Session.id and an allocator
+        // closure that the controller's dispatch task will use for
+        // any panes registered after the bootstrap (split,
+        // list-panes, …). The bootstrap id travels into the
+        // controller and is consumed by `record_first_pane` on the
+        // first `%window-pane-changed` reply.
+        let bootstrap_session_id = self.allocate_session_id();
+        let session_id_allocator =
+            crate::models::session::SessionIdSource::shared_allocator(&self.session_id_source);
+        let controller = TmuxController::spawn_local(
+            config,
+            backend,
+            self.ssh_backend.as_ref(),
+            controller_id,
+            session_id_allocator,
+        )?;
 
-        let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
+        let (session_id, tmux_pane_id) = controller.await_first_pane().await?;
         tracing::info!(
-            "[DEBUG-0009-RUST] await_first_pane returned xsterm_id={} tmux_pane_id={:?}",
-            xsterm_id,
+            "[DEBUG-0009-RUST] await_first_pane returned session_id={} tmux_pane_id={:?}",
+            session_id,
             tmux_pane_id
         );
 
-        // look up the bootstrap tmux window id so the
-        // `SessionInfo` carries it. The dispatch task records the
-        // pane → window mapping when it handles `%window-pane-changed`
-        // for the bootstrap pane.
+        // Look up the bootstrap tmux window id so the `SessionInfo`
+        // carries it. The dispatch task records the pane → window
+        // mapping when it handles `%window-pane-changed` for the
+        // bootstrap pane.
         let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
         tracing::info!(
             "[DEBUG-0009-RUST] tmux_window_id_for_pane returned {:?} for pane {:?}",
             tmux_window_id,
             tmux_pane_id
-        );
-        // Pair with the xsterm window id allocated by the bootstrap
-        // `list-windows` reply (the dispatch task inserted it into
-        // `window_bindings` before resolving the first-pane signal).
-        // The frontend uses this so `createAndActivateSession` can
-        // render the matching xsterm Window synchronously — the
-        // `tmux-window-added` listener does NOT fire for the
-        // bootstrap window.
-        let xsterm_window_id = tmux_window_id
-            .as_deref()
-            .and_then(|wid| xsterm_window_id_for(&controller, wid));
-        tracing::info!(
-            "[DEBUG-0009-RUST] xsterm_window_id resolved = {:?} (raw tmux_window_id={:?})",
-            xsterm_window_id,
-            tmux_window_id
         );
 
         // MVP supports both `tmux -CC new -s <name>` (the first pane tmux
@@ -363,21 +356,19 @@ impl SessionManager {
         // suppresses it from the UI; see D3 in req-006). For `new-session`
         // there is no "useless" bootstrap pane to hide.
         let info = tmux_pane_info(
-            xsterm_id,
+            session_id,
             controller_id,
             tmux_pane_id.clone(),
             config.tmux_session_name.as_deref(),
             config.name.as_deref(),
             false,
             tmux_window_id.as_deref(),
-            xsterm_window_id,
         );
         tracing::info!(
-            "[DEBUG-0009-RUST] tmux_pane_info returned SessionInfo: id={} name={:?} tmuxWindowId={:?} xstermWindowId={:?} tmuxControllerId={:?} isHidden={:?}",
+            "[DEBUG-0009-RUST] tmux_pane_info returned SessionInfo: id={} name={:?} tmuxWindowId={:?} tmuxControllerId={:?} isHidden={:?}",
             info.id,
             info.name,
             info.tmux_window_id,
-            info.xsterm_window_id,
             info.tmux_controller_id,
             info.is_hidden
         );
@@ -390,13 +381,13 @@ impl SessionManager {
         };
 
         self.tmux_controllers.insert(controller_id, controller);
-        let self_ref = self.insert_session(xsterm_id, ActiveSession::TmuxPane(Box::new(handle)));
-        debug_assert_eq!(self_ref.id, xsterm_id);
+        let self_ref = self.insert_session(session_id, ActiveSession::TmuxPane(Box::new(handle)));
+        debug_assert_eq!(self_ref.id, session_id);
 
         tracing::info!(
-            "tmux controller {} spawned; bootstrap pane xsterm_id={}",
+            "tmux controller {} spawned; bootstrap pane session_id={}",
             controller_id,
-            xsterm_id
+            session_id
         );
         Ok(info)
     }
@@ -493,29 +484,28 @@ impl SessionManager {
         backend: Arc<dyn AppBackend>,
     ) -> Result<SessionInfo, String> {
         let controller_id = self.allocate_controller_id();
-        let controller = TmuxController::spawn_attach(
+        let session_id_allocator =
+            crate::models::session::SessionIdSource::shared_allocator(&self.session_id_source);
+        let controller = TmuxController::spawn_local(
             config,
             backend,
             self.ssh_backend.as_ref(),
             controller_id,
+            session_id_allocator,
         )?;
 
-        let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
+        let (session_id, tmux_pane_id) = controller.await_first_pane().await?;
 
         let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
-        let xsterm_window_id = tmux_window_id
-            .as_deref()
-            .and_then(|wid| xsterm_window_id_for(&controller, wid));
 
         let info = tmux_pane_info(
-            xsterm_id,
+            session_id,
             controller_id,
             tmux_pane_id.clone(),
             config.tmux_session_name.as_deref(),
             config.name.as_deref(),
             true, // is_hidden: bootstrap pane of an attach (D3).
             tmux_window_id.as_deref(),
-            xsterm_window_id,
         );
 
         let handle = TmuxPaneHandle {
@@ -526,14 +516,14 @@ impl SessionManager {
         };
 
         self.tmux_controllers.insert(controller_id, controller);
-        let self_ref = self.insert_session(xsterm_id, ActiveSession::TmuxPane(Box::new(handle)));
-        debug_assert_eq!(self_ref.id, xsterm_id);
+        let self_ref = self.insert_session(session_id, ActiveSession::TmuxPane(Box::new(handle)));
+        debug_assert_eq!(self_ref.id, session_id);
 
         tracing::info!(
-            "tmux controller {} attached to session {:?}; bootstrap pane xsterm_id={}",
+            "tmux controller {} attached to session {:?}; bootstrap pane session_id={}",
             controller_id,
             config.tmux_session_name.as_deref(),
-            xsterm_id
+            session_id
         );
         Ok(info)
     }
@@ -917,7 +907,6 @@ impl SessionManager {
             None,
             false,
             Some(&_new_tmux_window_id),
-            xsterm_window_id_for(&controller, &_new_tmux_window_id),
         );
 
         let handle = TmuxPaneHandle {
@@ -1003,21 +992,22 @@ impl SessionManager {
             .map(|c| Arc::clone(c.value()))
             .ok_or_else(|| format!("tmux controller {controller_id} is not registered"))?;
 
-        let (xsterm_window_id, tmux_window_id, xsterm_session_id, tmux_pane_id) =
-            controller.new_window(window_name).await?;
+        // Returns `(tmux_window_id, session_id, tmux_pane_id)`. The
+        // `tmux_window_id` IS the new window's React `Window.id`
+        // (no parallel `xsterm_window_id` exists); `session_id` is
+        // the new window's first pane's `Session.id`, allocated by
+        // the controller's injected `SessionIdSource` during the
+        // dispatch handshake.
+        let (tmux_window_id, session_id, tmux_pane_id) = controller.new_window(window_name).await?;
 
-        // The frontend uses the SessionInfo's `id` to find the matching
-        // Session — we register the new pane with the id tmux assigned
-        // (the controller allocated it during dispatch).
         let info = tmux_pane_info(
-            xsterm_session_id,
+            session_id,
             controller_id,
             tmux_pane_id.clone(),
             None,
             window_name,
             false,
             Some(&tmux_window_id),
-            Some(xsterm_window_id),
         );
 
         let handle = TmuxPaneHandle {
@@ -1026,16 +1016,14 @@ impl SessionManager {
             info: info.clone(),
             capabilities: CapabilityFlags::for_tmux(),
         };
-        let result =
-            self.insert_session(xsterm_session_id, ActiveSession::TmuxPane(Box::new(handle)));
-        debug_assert_eq!(result.id, xsterm_session_id);
+        let result = self.insert_session(session_id, ActiveSession::TmuxPane(Box::new(handle)));
+        debug_assert_eq!(result.id, session_id);
 
         tracing::info!(
-            "tmux controller {}: created window xsterm_id={} tmux_id={} pane_xsterm_id={} pane_tmux_id={}",
+            "tmux controller {}: created window tmux_id={} pane_session_id={} pane_tmux_id={}",
             controller_id,
-            xsterm_window_id,
             tmux_window_id,
-            xsterm_session_id,
+            session_id,
             result.tmux_pane_id.as_deref().unwrap_or("?"),
         );
 
@@ -1157,10 +1145,41 @@ impl SessionManager {
         session.backend().write(data)
     }
 
-    /// Resize the PTY of the session with the given `id`.
-    pub fn resize(&self, id: u32, rows: u16, cols: u16) -> Result<(), String> {
-        let session = self.get(id)?;
-        session.backend().resize(rows, cols)
+    /// Resize a tmux pane via `resize-pane -t %<pane> -x <cols> -y <rows>`.
+    ///
+    /// `controller_id` + `tmux_pane_id` flow through [`TmuxController::resize_pane`]
+    /// — same convention as `kill_tmux_pane` / `capture_tmux_pane`.
+    pub async fn resize_tmux_pane(
+        &self,
+        controller_id: u32,
+        tmux_pane_id: &str,
+        rows: u16,
+        cols: u16,
+    ) -> Result<(), String> {
+        let controller = self
+            .tmux_controllers
+            .get(&controller_id)
+            .map(|c| Arc::clone(c.value()))
+            .ok_or_else(|| format!("tmux controller {controller_id} is not registered"))?;
+        controller
+            .resize_pane(tmux_pane_id, rows, cols)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Resize a local PTY session. Looks the session up by its
+    /// universal `Session.id` (the same one `write_session` /
+    /// `close_session` use) and delegates to the backend's
+    /// `SessionBackend::resize`. Returns `Err` if the session is not
+    /// a local PTY (the only backend that takes the ioctl).
+    pub fn resize_pty_session(&self, session_id: u32, rows: u16, cols: u16) -> Result<(), String> {
+        self.get(session_id)?.backend().resize(rows, cols)
+    }
+
+    /// Resize an SSH session's russh channel via `window-change`.
+    /// Same `Session.id` lookup as `resize_pty_session`. Returns
+    /// `Err` if the session is not an SSH session.
+    pub fn resize_ssh_session(&self, session_id: u32, rows: u16, cols: u16) -> Result<(), String> {
+        self.get(session_id)?.backend().resize(rows, cols)
     }
 
     /// Upload an image file to the SSH server for the given session and return
@@ -1214,9 +1233,11 @@ impl SessionManager {
             .collect()
     }
 
-    /// Allocate the next unique session id.
+    /// Allocate the next unique session id. Pulled from the shared
+    /// [`SessionIdSource`] so the controller's dispatch task can mint
+    /// ids from the same counter for newly-registered tmux panes.
     fn allocate_session_id(&self) -> u32 {
-        self.next_id.fetch_add(1, Ordering::Relaxed)
+        self.session_id_source.allocate()
     }
 }
 
@@ -1427,7 +1448,6 @@ mod tests {
                 tmux_pane_id: None,
                 tmux_controller_id: None,
                 tmux_window_id: None,
-                xsterm_window_id: None,
                 is_hidden: false,
             },
             capabilities: CapabilityFlags::for_local(),
@@ -1442,7 +1462,7 @@ mod tests {
     fn build_mock_manager(mock_pty_system: MockPtySystemM) -> SessionManager {
         SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(mock_pty_system),
             ssh_backend: Arc::new(MockSshBackendM::new()),
             tmux_controllers: DashMap::new(),
@@ -1761,14 +1781,14 @@ mod tests {
         assert!(result.is_ok());
         let info = result.unwrap();
 
-        let result = manager.resize(info.id, 24, 80);
+        let result = manager.resize_pty_session(info.id, 24, 80);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_resize_nonexistent_session_returns_ok() {
         let manager = SessionManager::new();
-        let result = manager.resize(999, 24, 80);
+        let result = manager.resize_pty_session(999, 24, 80);
         assert!(result.is_err());
     }
 
@@ -1793,7 +1813,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
@@ -1861,7 +1881,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
@@ -1920,7 +1940,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
@@ -1979,7 +1999,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
@@ -2035,7 +2055,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
@@ -2081,7 +2101,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(MockPtySystemM::new()),
             ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
@@ -2142,7 +2162,7 @@ mod tests {
         let mock_backend = TestAppBackend::default();
         let manager = SessionManager {
             sessions: DashMap::new(),
-            next_id: AtomicU32::new(1),
+            session_id_source: SessionIdSource::new(1),
             pty_system: Box::new(mock_pty_system),
             ssh_backend: Arc::new(mock_ssh_backend),
             tmux_controllers: DashMap::new(),
@@ -2239,7 +2259,7 @@ mod tests {
         assert_eq!(write_called.load(Ordering::SeqCst), 1);
         assert_eq!(*write_data.lock().unwrap(), b"hello".to_vec());
 
-        manager.resize(999, 24, 80).unwrap();
+        manager.resize_pty_session(999, 24, 80).unwrap();
         assert_eq!(resize_called.load(Ordering::SeqCst), 1);
         assert_eq!(*resize_dims.lock().unwrap(), vec![(24, 80)]);
 
@@ -2278,7 +2298,7 @@ mod tests {
         assert_eq!(write_called.load(Ordering::SeqCst), 1);
         assert_eq!(*write_data.lock().unwrap(), b"unified".to_vec());
 
-        manager.resize(999, 30, 100).unwrap();
+        manager.resize_pty_session(999, 30, 100).unwrap();
         assert_eq!(resize_called.load(Ordering::SeqCst), 1);
         assert_eq!(*resize_dims.lock().unwrap(), vec![(30, 100)]);
 
@@ -2487,7 +2507,6 @@ mod tests {
     /// `WindowPaneChanged` reply).
     fn make_test_controller(
         controller_id: u32,
-        base_xsterm_id: u32,
     ) -> (
         Arc<crate::services::tmux::TmuxController>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
@@ -2517,7 +2536,6 @@ mod tests {
         >();
         let controller = crate::services::tmux::TmuxController::new_for_tests(
             controller_id,
-            base_xsterm_id,
             stdin_tx,
             backend.clone(),
         );
@@ -2537,14 +2555,14 @@ mod tests {
     #[tokio::test]
     async fn create_tmux_pane_returns_session_info() {
         let manager = SessionManager::new();
-        let (controller, _stdin_rx, dispatch_tx) = make_test_controller(1, 1_000_001);
+        let (controller, _stdin_rx, dispatch_tx) = make_test_controller(1);
 
         // Pre-register a parent pane binding on the controller so
         // `controller.split_pane`'s `pane_bindings` check accepts
         // `%5`. Also record the first pane so the dispatch task takes
         // the split-result path (not the bootstrap path).
         controller.register_pane("%5".to_string(), 1_000_001);
-        controller.record_first_pane(1_000_001, "%5".to_string());
+        controller.record_first_pane(0, "%5".to_string());
 
         manager.tmux_controllers.insert(1, Arc::clone(&controller));
 
@@ -2635,7 +2653,7 @@ mod tests {
     #[tokio::test]
     async fn create_tmux_pane_errors_on_unknown_parent_pane_id() {
         let manager = SessionManager::new();
-        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
+        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1);
         manager.tmux_controllers.insert(1, Arc::clone(&controller));
 
         let result = manager.create_tmux_pane(1, "%unknown", "horizontal").await;
@@ -2653,7 +2671,7 @@ mod tests {
     #[tokio::test]
     async fn kill_tmux_pane_invokes_controller_kill_pane() {
         let manager = SessionManager::new();
-        let (controller, mut stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
+        let (controller, mut stdin_rx, _dispatch_tx) = make_test_controller(1);
         controller.register_pane("%5".to_string(), 1_000_001);
 
         manager.tmux_controllers.insert(1, Arc::clone(&controller));
@@ -2694,7 +2712,7 @@ mod tests {
     #[tokio::test]
     async fn kill_tmux_pane_errors_on_unknown_tmux_pane_id() {
         let manager = SessionManager::new();
-        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
+        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1);
         manager.tmux_controllers.insert(1, Arc::clone(&controller));
 
         let err = manager.kill_tmux_pane(1, "%missing").unwrap_err();
@@ -2714,12 +2732,12 @@ mod tests {
     #[tokio::test]
     async fn create_tmux_window_returns_session_info_with_window_id() {
         let manager = SessionManager::new();
-        let (controller, _stdin_rx, dispatch_tx) = make_test_controller(2, 2_000_001);
+        let (controller, _stdin_rx, dispatch_tx) = make_test_controller(2);
 
         // Pre-register the bootstrap pane so the dispatch task does NOT
         // take the bootstrap path on the WindowPaneChanged reply.
         controller.register_pane("%0".to_string(), 2_000_001);
-        controller.record_first_pane(2_000_001, "%0".to_string());
+        controller.record_first_pane(0, "%0".to_string());
 
         manager.tmux_controllers.insert(2, Arc::clone(&controller));
 
@@ -2788,8 +2806,7 @@ mod tests {
         // The controller must have recorded the window binding.
         let bindings = controller.window_bindings();
         assert!(
-            bindings.contains(&("@3".to_string(), info.id + 500_000))
-                || bindings.iter().any(|(tid, _)| tid == "@3"),
+            bindings.contains(&"@3".to_string()),
             "window_bindings must contain @3, got {bindings:?}"
         );
     }
@@ -2803,7 +2820,7 @@ mod tests {
     #[tokio::test]
     async fn kill_and_rename_tmux_window_invoke_controller_commands() {
         let manager = SessionManager::new();
-        let (controller, mut stdin_rx, _dispatch_tx) = make_test_controller(3, 3_000_001);
+        let (controller, mut stdin_rx, _dispatch_tx) = make_test_controller(3);
         // Seed `window_bindings` so `controller.kill_window` /
         // `controller.rename_window` accept "@11". The dispatch task
         // populates `window_bindings` on the bootstrap
@@ -2892,7 +2909,7 @@ mod tests {
     #[tokio::test]
     async fn capture_tmux_pane_resolves_via_session_manager() {
         let manager = SessionManager::new();
-        let (controller, _stdin_rx, dispatch_tx) = make_test_controller(20, 20_000_001);
+        let (controller, _stdin_rx, dispatch_tx) = make_test_controller(20);
         // Register the pane on the controller so its own
         // `pane_bindings.contains_key` check inside `capture_pane`
         // accepts "%1".
@@ -2974,7 +2991,7 @@ mod tests {
     #[tokio::test]
     async fn capture_tmux_pane_errors_on_unknown_tmux_pane_id() {
         let manager = SessionManager::new();
-        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
+        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1);
         manager.tmux_controllers.insert(1, Arc::clone(&controller));
 
         let err = manager
@@ -3008,7 +3025,6 @@ mod tests {
         let backend: Arc<dyn AppBackend> = Arc::new(StubBackend);
         let controller = TmuxController::new_for_tests(
             50,
-            50_000_001,
             tokio::sync::mpsc::unbounded_channel::<String>().0,
             backend.clone(),
         );
@@ -3022,7 +3038,6 @@ mod tests {
 
         let plain = TmuxController::new_for_tests(
             51,
-            51_000_001,
             tokio::sync::mpsc::unbounded_channel::<String>().0,
             backend,
         );

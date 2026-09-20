@@ -151,6 +151,7 @@ xsterm 的几个概念容易混淆（特别是 "session"）。**session = backen
 - **Tauri 命令后缀** `_tmux_pane` / `_tmux_window` 反映**该命令的 tmux 视角效果**（如 `kill-pane` / `split-window`），且**参数也都是 tmux 视角**。两类对照:
   - **`_tmux_pane` 命令**（`kill_tmux_pane` / `create_tmux_pane` / `capture_tmux_pane` 等）接收 `(controller_id: u32, tmux_pane_id: String)`（`tmux_pane_id` 是 server-side id 如 `"%5"`，来自 `tmux-pane-added` 事件的 payload）。
   - **`_tmux_window` 命令**（`kill_tmux_window` / `rename_tmux_window` 等）接收 `(controller_id: u32, tmux_window_id: String)`（`tmux_window_id` 是 server-side id 如 `"@5"`，来自 `tmux-window-added` 事件的 payload）。
+  - **resize 按后端类型分命令**：原本单一的 `resizeSession` 拆成 `resizePane(controller_id, tmux_pane_id, rows, cols)`（tmux pane resize，对应 `resize-pane`）、`resizePty(session_id, rows, cols)`（local PTY ioctl）、`resizeSsh(session_id, rows, cols)`（russh channel `window-change`）。TS 通过 `Session.type` 字段决定 invoke 哪个。
   - **本地 id 对 server id 的转换在 ts 层完成**：ts 持有 xsterm Window / xsterm Session ↔ tmux window / tmux pane 的映射（从 `tmux-*-added` 事件 payload 里拿到的 `(controllerId, tmux_*)`），invoke 前直接传 server id；rs 层不再查 `sessions` 也不再做 controller 全表扫描。
 
 **命名禁忌**（读代码 / 写文档时务必注意）：

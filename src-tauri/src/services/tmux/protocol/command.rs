@@ -260,16 +260,6 @@ pub struct EventWaiter {
     /// it to `Some(<new window_id>)` so the subsequent
     /// `%window-pane-changed` for that window resolves it.
     pub tmux_window_id: Option<String>,
-    /// Allocated by the dispatcher at `WindowAdd` time for the
-    /// `Bootstrap` and `NewWindowResult` paths. Stashed here so the
-    /// `WindowPaneChanged` handler can insert it into `window_bindings`
-    /// without having to re-allocate (Bootstrap) or having to look it up
-    /// from a separate map (NewWindowResult — the W2 design carried it
-    /// in `PendingWindow { xsterm_window_id, .. }`; W3b folds that
-    /// struct's payload into this field).
-    ///
-    /// `None` for `SplitResult` (no xsterm window id involved).
-    pub xsterm_window_id: Option<u32>,
 }
 
 impl ResponseOutcome {

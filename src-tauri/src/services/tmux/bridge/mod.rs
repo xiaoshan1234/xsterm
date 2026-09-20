@@ -149,33 +149,23 @@ impl TmuxBridge {
     }
 
     /// `tmux-pane-added` — overload for the `list-panes` bootstrap
-    /// path where the parent xsterm window id is already known.
-    ///
-    /// Identical wire shape to [`Self::emit_tmux_pane_added`] but
-    /// uses the integer xsterm_window_id (rather than the tmux
-    /// `@N` window id) because that's what `emit_pane_list` already
-    /// allocated during the `emit_window_list` pass.
+    /// path where the parent `tmux_window_id` is already known
+    /// (populated by the prior `emit_window_list` pass).
     pub(crate) fn emit_tmux_pane_added_with_window(
         &self,
-        xsterm_session_id: u32,
+        session_id: u32,
         tmux_pane_id: &str,
-        xsterm_window_id: u32,
+        tmux_window_id: &str,
     ) {
-        // Match the legacy inline payload shape so the frontend
-        // listener doesn't need to special-case the bootstrap path:
-        // the field is still `tmux_window_id` but it carries the
-        // xsterm id (the frontend's `useTauriListeners` already
-        // expects this; see `tmux-pane-list`/`tmux-pane-added`
-        // handlers in `useTauriListeners.ts`).
         let payload = json!({
             "controllerId": self.controller.controller_id(),
             "tmuxPaneId": tmux_pane_id,
-            "xstermSessionId": xsterm_session_id,
-            "parentTmuxWindowId": xsterm_window_id,
+            "xstermSessionId": session_id,
+            "parentTmuxWindowId": tmux_window_id,
         });
         self.try_emit("tmux-pane-added", &payload, || {
             format!(
-                "tmux-pane-added emit failed for pane {tmux_pane_id} (xsterm_session_id={xsterm_session_id}, xsterm_window_id={xsterm_window_id})"
+                "tmux-pane-added emit failed for pane {tmux_pane_id} (session_id={session_id}, tmux_window_id={tmux_window_id})"
             )
         });
     }
@@ -184,8 +174,10 @@ impl TmuxBridge {
     /// about a new window (from `%window-add`, `list-windows`, etc.).
     ///
     /// Frontend contract (see `useTauriListeners.ts`):
-    /// `{ controllerId, tmuxWindowId, xstermWindowId, sessionName,
-    ///   xstermSessionId?, xstermPaneId? }`.
+    /// `{ controllerId, tmuxWindowId, sessionName,
+    ///   xstermSessionId?, xstermPaneId? }`. The `tmuxWindowId` is
+    /// the frontend's `Window.id` directly — there is no parallel
+    /// `xsterm_window_id` any more.
     ///
     /// `xsterm_session_id` and `xsterm_pane_id` are `Option<u32>` /
     /// `Option<&str>` — the frontend can construct the React state for
@@ -196,14 +188,13 @@ impl TmuxBridge {
     /// `tmux-pane-added` event.
     pub(crate) fn emit_tmux_window_added(
         &self,
-        xsterm_window_id: u32,
         tmux_window_id: &str,
         session_name: Option<&str>,
         xsterm_session_id: Option<u32>,
         xsterm_pane_id: Option<&str>,
     ) {
         let payload = json!({
-            "xsterm_window_id": xsterm_window_id,
+            "xsterm_window_id": tmux_window_id,
             "tmux_window_id": tmux_window_id,
             "tmux_controller_id": self.controller.controller_id(),
             "session_name": session_name,
@@ -211,9 +202,7 @@ impl TmuxBridge {
             "xsterm_pane_id": xsterm_pane_id,
         });
         self.try_emit("tmux-window-added", &payload, || {
-            format!(
-                "tmux-window-added emit failed for window {tmux_window_id} (xsterm_window_id={xsterm_window_id})"
-            )
+            format!("tmux-window-added emit failed for window {tmux_window_id}")
         });
     }
 
@@ -265,12 +254,13 @@ impl TmuxBridge {
     /// `tmux-window-closed` — emitted when the controller observes a
     /// `%window-close` notification.
     ///
-    /// Frontend contract: `{ controller_id, tmux_window_id, xsterm_window_id }`.
-    pub(crate) fn emit_tmux_window_closed(&self, tmux_window_id: &str, xsterm_window_id: u32) {
+    /// Frontend contract: `{ controller_id, tmux_window_id }`.
+    /// (`tmux_window_id` IS the frontend's Window.id — there is no
+    /// parallel `xsterm_window_id`.)
+    pub(crate) fn emit_tmux_window_closed(&self, tmux_window_id: &str) {
         let payload = json!({
             "controller_id": self.controller.controller_id(),
             "tmux_window_id": tmux_window_id,
-            "xsterm_window_id": xsterm_window_id,
         });
         self.try_emit("tmux-window-closed", &payload, || {
             format!("tmux-window-closed emit failed for window {tmux_window_id}")
@@ -279,17 +269,11 @@ impl TmuxBridge {
 
     /// `tmux-window-renamed` — emitted on `%window-renamed`.
     ///
-    /// Frontend contract: `{ controller_id, tmux_window_id, xsterm_window_id, name }`.
-    pub(crate) fn emit_tmux_window_renamed(
-        &self,
-        tmux_window_id: &str,
-        xsterm_window_id: u32,
-        name: &str,
-    ) {
+    /// Frontend contract: `{ controller_id, tmux_window_id, name }`.
+    pub(crate) fn emit_tmux_window_renamed(&self, tmux_window_id: &str, name: &str) {
         let payload = json!({
             "controller_id": self.controller.controller_id(),
             "tmux_window_id": tmux_window_id,
-            "xsterm_window_id": xsterm_window_id,
             "name": name,
         });
         self.try_emit("tmux-window-renamed", &payload, || {

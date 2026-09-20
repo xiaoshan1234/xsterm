@@ -421,7 +421,6 @@ mod tests {
             Arc::new(NoopBackend);
         let controller = TmuxController::new_for_tests(
             0, // controller_id
-            0, // base_xsterm_id
             stdin_tx,
             backend.clone(),
         );

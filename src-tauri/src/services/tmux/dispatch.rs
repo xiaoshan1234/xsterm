@@ -98,14 +98,14 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
             // 2. Split-result path. A `SplitResult` event waiter exists →
             //    this `%window-pane-changed` is the reply to our own
             //    `split-window` request. Pop it from the registry,
-            //    allocate a fresh xsterm id, register the binding, emit
+            //    allocate a fresh Session.id, register the binding, emit
             //    `tmux-pane-added`, and resolve the oneshot.
             if let Some(tx) = controller.registry.take_event_waiter_for_split() {
-                let xsterm_id = controller.allocate_xsterm_id();
-                controller.register_pane(pane_id.clone(), xsterm_id);
-                controller.record_pane_window(pane_id.clone(), window_id.clone(), xsterm_id);
-                bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
-                let _ = tx.send(Ok((xsterm_id, pane_id.clone(), window_id.clone())));
+                let session_id = controller.allocate_session_id();
+                controller.register_pane(pane_id.clone(), session_id);
+                controller.record_pane_window(pane_id.clone(), window_id.clone());
+                bridge.emit_tmux_pane_added(session_id, &pane_id, Some(&window_id));
+                let _ = tx.send(Ok((session_id, pane_id.clone(), window_id.clone())));
                 return;
             }
 
@@ -114,43 +114,26 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
             //    `%window-pane-changed` is either the bootstrap
             //    window's first pane or the first pane of a
             //    user-driven `new-window` request. Allocate a fresh
-            //    xsterm session id, register the binding, move the
-            //    pre-allocated xsterm window id from the waiter into
-            //    `window_bindings`, emit `tmux-pane-added` (always),
-            //    and — for user-driven `new-window` only — emit
-            //    `tmux-window-added` and resolve the pending sender.
+            //    Session.id via the injected allocator, register the
+            //    binding, record the window as observed, emit
+            //    `tmux-pane-added` (always), and — for user-driven
+            //    `new-window` only — emit `tmux-window-added` and
+            //    resolve the pending sender.
             if let Some(pending) = controller.registry.take_event_waiter_for_window(&window_id) {
-                let xsterm_id = controller.allocate_xsterm_id();
-                controller.register_pane(pane_id.clone(), xsterm_id);
-                controller.record_pane_window(pane_id.clone(), window_id.clone(), xsterm_id);
-                // Both NewWindowResult (re-registered by WindowAdd case a)
-                // and Bootstrap (registered by WindowAdd case b / list-windows)
-                // carry an xsterm_window_id allocated earlier; insert it.
-                if let Some(xsterm_wid) = pending.xsterm_window_id {
-                    if let Ok(mut bindings) = controller.window_bindings.lock() {
-                        bindings.insert(window_id.clone(), xsterm_wid);
-                    }
-                }
-                bridge.emit_tmux_pane_added(xsterm_id, &pane_id, Some(&window_id));
                 match pending.kind {
                     EventWaiterKind::NewWindowResult => {
+                        let session_id = controller.allocate_session_id();
+                        controller.register_pane(pane_id.clone(), session_id);
+                        controller.record_pane_window(pane_id.clone(), window_id.clone());
+                        bridge.emit_tmux_pane_added(session_id, &pane_id, Some(&window_id));
                         if let EventWaiterSender::NewWindow(tx) = pending.sender {
-                            let xsterm_wid = pending
-                                .xsterm_window_id
-                                .expect("NewWindowResult must carry xsterm_window_id");
                             bridge.emit_tmux_window_added(
-                                xsterm_wid,
                                 &window_id,
                                 None,
-                                Some(xsterm_id),
+                                Some(session_id),
                                 Some(&pane_id),
                             );
-                            let _ = tx.send(Ok((
-                                xsterm_wid,
-                                window_id.clone(),
-                                xsterm_id,
-                                pane_id.clone(),
-                            )));
+                            let _ = tx.send(Ok((window_id.clone(), session_id, pane_id.clone())));
                         }
                     }
                     EventWaiterKind::Bootstrap => {
@@ -160,7 +143,11 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
                         // `tmux-window-added`; we just need the
                         // dispatch task to register the first pane so
                         // `await_first_pane` resolves.
-                        controller.record_first_pane(xsterm_id, pane_id.clone());
+                        let session_id = controller.allocate_session_id();
+                        controller.register_pane(pane_id.clone(), session_id);
+                        controller.record_pane_window(pane_id.clone(), window_id.clone());
+                        controller.record_first_pane(session_id, pane_id.clone());
+                        bridge.emit_tmux_pane_added(session_id, &pane_id, Some(&window_id));
                     }
                     // SplitResult + tmux_window_id: Some(...) is
                     // unreachable: take_event_waiter_for_window does
@@ -224,18 +211,16 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
                 .registry
                 .take_event_waiter_for_new_window_unbound();
             if let Some(mut pending) = pending_tx {
-                let xsterm_window_id = controller.allocate_xsterm_window_id();
                 // P8 W3b: re-key the waiter from `tmux_window_id: None`
                 // to `Some(window_id)` so the matching
                 // `%window-pane-changed` resolves it via
                 // `take_event_waiter_for_window`.
                 pending.tmux_window_id = Some(window_id.clone());
-                pending.xsterm_window_id = Some(xsterm_window_id);
                 controller.registry.register_event_waiter(pending);
                 // No event yet — we need the matching `%window-pane-changed`
                 // for the first pane of the new window so the
                 // `tmux-window-added` payload can carry a valid
-                // `xsterm_pane_id` / `xsterm_session_id`.
+                // Session.id for the first pane.
                 return;
             }
             let is_first_window = controller
@@ -245,18 +230,15 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
                 .unwrap_or(true)
                 && controller.registry.event_waiter_count() == 0;
             if is_first_window {
-                let xsterm_window_id = controller.allocate_xsterm_window_id();
                 controller.registry.register_event_waiter(EventWaiter {
                     kind: EventWaiterKind::Bootstrap,
                     sender: EventWaiterSender::None,
                     tmux_window_id: Some(window_id.clone()),
-                    xsterm_window_id: Some(xsterm_window_id),
                 });
                 tracing::debug!(
-                    "tmux controller {}: bootstrap %window-add for window {} — xsterm_window_id={}",
+                    "tmux controller {}: bootstrap %window-add for window {}",
                     controller.controller_id(),
                     window_id,
-                    xsterm_window_id
                 );
                 return;
             }
@@ -267,15 +249,17 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
             );
         }
         ProtocolEvent::WindowClose { window_id } => {
-            // Look up the xsterm window id for the closing window. If we
-            // never bound it (e.g. external window), there is nothing to
-            // emit.
-            let xsterm_window_id = controller
+            // Drop the window binding (if any). After dropping the
+            // parallel `xsterm_window_id` allocator we no longer need
+            // to look anything up — the frontend uses `tmux_window_id`
+            // directly as the Window.id, so the bridge event only
+            // carries the tmux-side id.
+            let was_bound = controller
                 .window_bindings
                 .lock()
-                .ok()
-                .and_then(|mut m| m.remove(&window_id));
-            if let Some(xsterm_window_id) = xsterm_window_id {
+                .map(|mut m| m.remove(&window_id))
+                .unwrap_or(false);
+            if was_bound {
                 // Defensive cleanup: also drop any pane bindings that
                 // belonged to this window so a subsequent `send_keys` /
                 // `resize_pane` for one of them fails fast instead of
@@ -298,7 +282,7 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
                         }
                     }
                 }
-                bridge.emit_tmux_window_closed(&window_id, xsterm_window_id);
+                bridge.emit_tmux_window_closed(&window_id);
             } else {
                 tracing::debug!(
                     "tmux controller {}: %window-close for unbound window {} — no tmux-window-closed emitted",
@@ -308,13 +292,13 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
             }
         }
         ProtocolEvent::WindowRenamed { window_id, name } => {
-            let xsterm_window_id = controller
+            let was_bound = controller
                 .window_bindings
                 .lock()
-                .ok()
-                .and_then(|m| m.get(&window_id).copied());
-            if let Some(xsterm_window_id) = xsterm_window_id {
-                bridge.emit_tmux_window_renamed(&window_id, xsterm_window_id, &name);
+                .map(|m| m.contains(&window_id))
+                .unwrap_or(false);
+            if was_bound {
+                bridge.emit_tmux_window_renamed(&window_id, &name);
             } else {
                 tracing::debug!(
                     "tmux controller {}: %window-renamed for unbound window {} — no tmux-window-renamed emitted",
@@ -549,33 +533,28 @@ fn emit_window_list(
     // Pre-populate the registry's event_waiters AND the controller's
     // `window_bindings` map for every window we see in this list —
     //
-    // 1. The server won't fire `%window-add` for windows that already
-    //    existed before this controller attached, so `emit_pane_list`
-    //    needs the binding to resolve the bootstrap pane → window
-    //    mapping.
-    // 2. `SessionManager::create_tmux` calls
-    //    `xsterm_window_id_for(&controller, tmux_window_id)` which
-    //    queries `window_bindings` — if it's empty there, the
-    //    bootstrap `SessionInfo.xsterm_window_id = None` and the
-    //    frontend's control-window sync insert skips (Bug 0009).
+    // The server won't fire `%window-add` for windows that already
+    // existed before this controller attached, so `emit_pane_list`
+    // needs the binding to know which window each pane belongs to.
+    // After dropping the parallel `xsterm_window_id` allocator we
+    // just record the `tmux_window_id` set so the dispatch task's
+    // bootstrap-detection predicate in `WindowAdd` case (b) can tell
+    // whether a subsequent `%window-add` is the very first one.
     //
-    // Allocate a fresh `xsterm_window_id` for each window. P8 W3b:
-    // use `Bootstrap` event waiters instead of the deleted
-    // `pending_window_pane` field.
-    let window_ids: std::collections::HashMap<String, u32> = entries
+    // P8 W3b: use `Bootstrap` event waiters so the matching
+    // `%window-pane-changed` resolves them.
+    let _ = entries
         .iter()
         .map(|e| {
-            let xsterm_wid = controller.allocate_xsterm_window_id();
             controller.registry.register_event_waiter(EventWaiter {
                 kind: EventWaiterKind::Bootstrap,
                 sender: EventWaiterSender::None,
                 tmux_window_id: Some(e.window_id.clone()),
-                xsterm_window_id: Some(xsterm_wid),
             });
-            // **Bug 0009 fix:** also persist the binding in
+            // **Bug 0009 fix:** persist the binding in
             // `window_bindings` so the following `list-panes`
-            // response (and `SessionManager::create_tmux`'s
-            // xsterm_window_id_for lookup) can resolve it.
+            // response can resolve the pane → window mapping for
+            // `record_pane_window`.
             //
             // PR-0009-fix: also log `window_name` so a tmux session
             // operator can verify (a) `-t <session>` scoping landed
@@ -583,18 +562,16 @@ fn emit_window_list(
             // through DCS / control-mode parsing intact. Format is
             // stable for grep: `[PR-0009-fix] window`.
             tracing::info!(
-                "[DEBUG-0009-RUST] emit_window_list: inserting tmux_window_id={:?} name={:?} -> xsterm_window_id={} into window_bindings (controller {})",
+                "[PR-0009-fix] emit_window_list: inserting tmux_window_id={:?} name={:?} into window_bindings (controller {})",
                 e.window_id,
                 e.name,
-                xsterm_wid,
                 controller.controller_id()
             );
             if let Ok(mut bindings) = controller.window_bindings.lock() {
-                bindings.insert(e.window_id.clone(), xsterm_wid);
+                bindings.insert(e.window_id.clone());
             }
-            (e.window_id.clone(), xsterm_wid)
         })
-        .collect();
+        .collect::<Vec<_>>();
     // PR-0009-fix: single-line summary so an operator reading the log
     // can see the whole snapshot at a glance without grepping.
     tracing::info!(
@@ -611,11 +588,9 @@ fn emit_window_list(
     let rows = entries
         .iter()
         .map(|entry| {
-            let xsterm_wid = window_ids.get(&entry.window_id).copied().unwrap_or(0);
             serde_json::json!({
                 "controllerId": session_id,
                 "tmuxWindowId": entry.window_id,
-                "xstermWindowId": xsterm_wid,
                 "xstermSessionId": session_id,
                 "xstermPaneId": "",
             })
@@ -649,50 +624,39 @@ fn emit_pane_list(
         tracing::debug!("command {} body had no parseable list rows", cmd_id);
         return;
     }
-    // Look up the xsterm window id per tmux window id (populated by
-    // `emit_window_list`) and bind each pane to its window.
-    let window_to_xsterm: std::collections::HashMap<String, u32> =
-        if let Ok(bindings) = controller.window_bindings.lock() {
-            bindings.clone()
-        } else {
-            std::collections::HashMap::new()
-        };
     // Best-effort: register every pane we see. The first one wakes
     // `await_first_pane`; the rest are bound to their windows for
-    // `%output` routing via the `pane_bindings` map.
+    // `%output` routing via the `pane_bindings` map. After dropping
+    // the parallel `xsterm_window_id` allocator we no longer need a
+    // `window_to_xsterm` lookup here — `tmux_window_id` IS the
+    // window's identity.
     let mut first_registered = false;
     for entry in &entries {
-        let xsterm_id = controller.allocate_xsterm_id();
-        controller.register_pane(entry.pane_id.clone(), xsterm_id);
-        let xsterm_window_id = window_to_xsterm.get(&entry.window_id).copied().unwrap_or(0);
-        // Persist the pane → window + window → xsterm-window bindings so
-        // `create_tmux` can populate the bootstrap `SessionInfo` with
-        // both `tmux_window_id` and `xsterm_window_id`. ADR 0009.
-        controller.record_pane_window(
-            entry.pane_id.clone(),
-            entry.window_id.clone(),
-            xsterm_window_id,
-        );
-        bridge.emit_tmux_pane_added_with_window(xsterm_id, &entry.pane_id, xsterm_window_id);
+        let session_id = controller.allocate_session_id();
+        controller.register_pane(entry.pane_id.clone(), session_id);
+        // Persist the pane → window binding so the next
+        // `record_pane_window` / `tmux_window_id_for_pane` lookup
+        // can resolve it. ADR 0009.
+        controller.record_pane_window(entry.pane_id.clone(), entry.window_id.clone());
+        bridge.emit_tmux_pane_added_with_window(session_id, &entry.pane_id, &entry.window_id);
         if let Ok(mut pane_bindings) = controller.pane_bindings.lock() {
-            pane_bindings.insert(entry.pane_id.clone(), xsterm_id);
+            pane_bindings.insert(entry.pane_id.clone(), session_id);
         }
         if !first_registered {
-            controller.record_first_pane(xsterm_id, entry.pane_id.clone());
+            controller.record_first_pane(session_id, entry.pane_id.clone());
             first_registered = true;
             tracing::info!(
-                "bootstrap first pane registered from list-panes: window={} pane={} xsterm_id={} xsterm_window_id={}",
+                "bootstrap first pane registered from list-panes: window={} pane={} session_id={}",
                 entry.window_id,
                 entry.pane_id,
-                xsterm_id,
-                xsterm_window_id,
+                session_id,
             );
         } else {
             tracing::info!(
-                "bootstrap additional pane registered from list-panes: window={} pane={} xsterm_id={}",
+                "bootstrap additional pane registered from list-panes: window={} pane={} session_id={}",
                 entry.window_id,
                 entry.pane_id,
-                xsterm_id,
+                session_id,
             );
         }
     }

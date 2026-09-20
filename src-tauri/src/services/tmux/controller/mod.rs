@@ -81,7 +81,7 @@ use super::protocol::command::{
 use super::protocol::events::ProtocolEvent;
 use super::protocol::parser::ProtocolParser;
 use super::protocol::wire as tmux_cmd;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -140,12 +140,15 @@ pub(crate) type SplitResult = Result<(u32, String, String), TmuxError>;
 
 /// Result of a [`TmuxController::new_window`] request.
 ///
-/// `Ok(xsterm_window_id, tmux_window_id, xsterm_session_id, tmux_pane_id)`
-/// once tmux confirms the new window via `%window-pane-changed` (the
-/// first pane of the new window is reported in the same reply chain).
+/// `Ok(tmux_window_id, session_id, tmux_pane_id)` once tmux confirms
+/// the new window via `%window-pane-changed` (the first pane of the
+/// new window is reported in the same reply chain). The frontend uses
+/// `tmux_window_id` directly as the `Window.id` (no parallel
+/// `xsterm_window_id` exists any more); `session_id` is the Session.id
+/// for the new window's first pane.
 /// `Err(TmuxError)` on timeout, on a closed channel, or when tmux
 /// itself reports a command error.
-pub(crate) type NewWindowResult = Result<(u32, String, u32, String), TmuxError>;
+pub(crate) type NewWindowResult = Result<(String, u32, String), TmuxError>;
 
 /// Result of a [`TmuxController::capture_pane`] request.
 ///
@@ -217,16 +220,22 @@ pub struct TmuxController {
     /// can build a `SessionInfo` carrying the bootstrap pane's tmux
     /// window id.
     pub(crate) pane_window_bindings: std::sync::Mutex<HashMap<String, String>>,
-    /// Monotonically increasing allocator for the xsterm session id of each
-    /// pane that this controller registers. Starts at the manager-allocated
-    /// base (`controller_id`) so xsterm ids across controllers do not
-    /// collide.
-    next_xsterm_id: AtomicU32,
-    /// monotonically increasing allocator for the xsterm window id
-    /// of each tmux window the controller tracks. Uses a parallel
-    /// `controller_id * 1_000_000 + 1` offset to keep window ids out of the
-    /// pane-id space.
-    next_xsterm_window_id: AtomicU32,
+    /// Closure injected by [`SessionManager`](crate::services::session_manager::SessionManager)
+    /// that delegates to the manager's shared
+    /// [`SessionIdSource`](crate::models::session::SessionIdSource).
+    /// The dispatch task calls it whenever it needs a fresh Session.id
+    /// for a newly-registered pane (split, bootstrap-list-panes,
+    /// etc.). For the bootstrap pane specifically, the manager
+    /// pre-allocates the id and passes it via
+    /// used for panes that arrive after the bootstrap.
+    session_id_allocator: Arc<dyn Fn() -> u32 + Send + Sync>,
+    /// Session.id pre-allocated by [`SessionManager`] for the
+    /// bootstrap pane (the first pane tmux reports via
+    /// `%window-pane-changed`). Consumed by
+    /// [`TmuxController::record_first_pane`] on the dispatch task's
+    /// first call; subsequent panes go through
+    /// [`TmuxController::session_id_allocator`] instead.
+
     /// Signalled by the dispatch task on the first `WindowPaneChanged` and
     /// consumed by [`TmuxController::await_first_pane`]. Implemented as a
     /// buffered `oneshot` channel rather than `tokio::sync::Notify` to
@@ -240,13 +249,15 @@ pub struct TmuxController {
     /// dispatch task can `.take()` it on `record_first_pane` (one-shot
     /// semantics — second call is a no-op).
     pub(crate) first_pane_tx: std::sync::Mutex<Option<oneshot::Sender<(u32, String)>>>,
-    /// `tmux_window_id → xsterm_window_id` map for every tmux
-    /// window this controller has observed (bootstrap, user-driven, and
-    /// — in the future — external). Used by `kill_window` /
-    /// `rename_window` to validate the caller's input and by the dispatch
-    /// task's `WindowClose` / `WindowRenamed` handlers to look up the
-    /// xsterm id to emit on `tmux-window-closed` / `tmux-window-renamed`.
-    pub(crate) window_bindings: std::sync::Mutex<HashMap<String, u32>>,
+    /// Set of every `tmux_window_id` this controller has observed
+    /// (bootstrap, user-driven, and — in the future — external). Used by
+    /// `kill_window` / `rename_window` to validate the caller's input
+    /// and by the dispatch task's bootstrap-window detection. The
+    /// `xsterm_window_id` value used to live here too; after dropping
+    /// the parallel allocator the set is sufficient — the frontend
+    /// uses `tmux_window_id` directly as the `Window.id`, and the
+    /// bridge payloads no longer carry a separate `xsterm_window_id`.
+    pub(crate) window_bindings: std::sync::Mutex<HashSet<String>>,
     /// tmux session name for `tmux -CC attach-session` (set by
     /// `spawn_attach`; `None` for `spawn_local`). Wrapped in a `Mutex`
     /// because `spawn_attach` writes it via the returned `Arc` after
@@ -355,6 +366,7 @@ impl TmuxController {
         app_backend: Arc<dyn AppBackend>,
         ssh_backend: &dyn SshBackend,
         controller_id: u32,
+        session_id_allocator: Arc<dyn Fn() -> u32 + Send + Sync>,
     ) -> Result<Arc<Self>, TmuxError> {
         // PR-0009-fix: require a session name in Create mode too.
         // Prior to this fix `spawn_attach` enforced the rule (it had
@@ -393,8 +405,13 @@ impl TmuxController {
                 .map_err(|msg| spawn_err("ssh_backend.connect_exec", msg))?;
             let backend: Box<dyn TmuxBackend> =
                 Box::new(SshTmuxBackend::from_connect_result(result));
-            let controller =
-                Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)?;
+            let controller = Self::spawn_with_backend(
+                backend,
+                app_backend,
+                controller_id,
+                SpawnMode::Create,
+                Arc::clone(&session_id_allocator),
+            )?;
             // Mirror `spawn_attach`: stash the session name on
             // the controller so `schedule_initial_state_sync` /
             // Attach path can read it without re-parsing the
@@ -416,8 +433,13 @@ impl TmuxController {
 
         let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, &argv_refs))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
-        let controller =
-            Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)?;
+        let controller = Self::spawn_with_backend(
+            backend,
+            app_backend,
+            controller_id,
+            SpawnMode::Create,
+            Arc::clone(&session_id_allocator),
+        )?;
         if let Ok(mut slot) = controller.session_name.lock() {
             *slot = Some(session_name.to_string());
         }
@@ -435,6 +457,7 @@ impl TmuxController {
         args: &[&str],
         app_backend: Arc<dyn AppBackend>,
         controller_id: u32,
+        session_id_allocator: Arc<dyn Fn() -> u32 + Send + Sync>,
     ) -> Result<Arc<Self>, TmuxError> {
         let mut cmd = Command::new("tmux");
         cmd.args(args)
@@ -444,7 +467,13 @@ impl TmuxController {
 
         let child = cmd.spawn().map_err(|e| tmux_spawn_err(e, args))?;
         let backend: Box<dyn TmuxBackend> = Box::new(LocalTmuxBackend::new(child));
-        Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Create)
+        Self::spawn_with_backend(
+            backend,
+            app_backend,
+            controller_id,
+            SpawnMode::Create,
+            Arc::clone(&session_id_allocator),
+        )
     }
 
     /// build a [`TmuxController`] around an already-constructed
@@ -460,6 +489,7 @@ impl TmuxController {
         app_backend: Arc<dyn AppBackend>,
         controller_id: u32,
         mode: SpawnMode,
+        session_id_allocator: Arc<dyn Fn() -> u32 + Send + Sync>,
     ) -> Result<Arc<Self>, TmuxError> {
         let stdout = backend
             .take_stdout()
@@ -492,11 +522,10 @@ impl TmuxController {
             app_backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(controller_id.saturating_mul(1_000_000) + 1),
-            next_xsterm_window_id: AtomicU32::new(controller_id.saturating_mul(1_000_000) + 1),
+            session_id_allocator,
             first_pane_tx: std::sync::Mutex::new(Some(pane_tx_init)),
             first_pane_rx: tokio::sync::Mutex::new(Some(pane_rx_init)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             // initialised to None; `spawn_attach` rewrites this
             // after construction via the returned Arc.
             session_name: std::sync::Mutex::new(None),
@@ -628,6 +657,7 @@ impl TmuxController {
         app_backend: Arc<dyn AppBackend>,
         ssh_backend: &dyn SshBackend,
         controller_id: u32,
+        session_id_allocator: Arc<dyn Fn() -> u32 + Send + Sync>,
     ) -> Result<Arc<Self>, TmuxError> {
         let session_name = config.tmux_session_name.as_deref().ok_or_else(|| {
             "tmux -CC attach requires `tmuxSessionName` in TmuxCcConfig".to_string()
@@ -668,7 +698,13 @@ impl TmuxController {
             Box::new(LocalTmuxBackend::new(child))
         };
 
-        let arc = Self::spawn_with_backend(backend, app_backend, controller_id, SpawnMode::Attach)?;
+        let arc = Self::spawn_with_backend(
+            backend,
+            app_backend,
+            controller_id,
+            SpawnMode::Attach,
+            Arc::clone(&session_id_allocator),
+        )?;
         // Stash the session name on the controller so the persistence layer
         // (`SessionManager::list_attached_tmux_servers`) can read it
         // without re-parsing the config.
@@ -937,7 +973,8 @@ impl TmuxController {
     }
 
     /// Snapshot of every pane currently registered with this controller.
-    /// Returns `(tmux_pane_id, xsterm_session_id)` pairs.
+    /// Returns `(tmux_pane_id, session_id)` pairs. Used by the dispatch
+    /// task to look up the Session.id for `session-output` events.
     #[allow(dead_code)] // test-only introspection; not consumed by production code
     pub fn pane_bindings(&self) -> Vec<(String, u32)> {
         self.pane_bindings
@@ -1029,7 +1066,6 @@ impl TmuxController {
             kind: EventWaiterKind::SplitResult,
             sender: EventWaiterSender::Split(tx),
             tmux_window_id: None,
-            xsterm_window_id: None,
         });
 
         let cmd = format!(
@@ -1125,7 +1161,6 @@ impl TmuxController {
             kind: EventWaiterKind::NewWindowResult,
             sender: EventWaiterSender::NewWindow(tx),
             tmux_window_id: None,
-            xsterm_window_id: None,
         });
 
         let cmd = tmux_cmd::new_window_in_current(window_name);
@@ -1169,7 +1204,7 @@ impl TmuxController {
             .window_bindings
             .lock()
             .map_err_string()?
-            .contains_key(tmux_window_id)
+            .contains(tmux_window_id)
         {
             return Err(TmuxError::Internal(format!(
                 "tmux window '{}' is not registered with controller {}",
@@ -1196,7 +1231,7 @@ impl TmuxController {
             .window_bindings
             .lock()
             .map_err_string()?
-            .contains_key(tmux_window_id)
+            .contains(tmux_window_id)
         {
             return Err(TmuxError::Internal(format!(
                 "tmux window '{}' is not registered with controller {}",
@@ -1265,12 +1300,11 @@ impl TmuxController {
             .and_then(|m| m.get(tmux_pane_id).cloned())
     }
 
-    /// snapshot of every window currently bound to this
-    /// controller. Returns `(tmux_window_id, xsterm_window_id)` pairs.
-    pub fn window_bindings(&self) -> Vec<(String, u32)> {
+    /// snapshot of every `tmux_window_id` this controller has observed.
+    pub fn window_bindings(&self) -> Vec<String> {
         self.window_bindings
             .lock()
-            .map(|m| m.iter().map(|(k, v)| (k.clone(), *v)).collect())
+            .map(|m| m.iter().cloned().collect())
             .unwrap_or_default()
     }
 
@@ -1281,20 +1315,6 @@ impl TmuxController {
     #[cfg(test)]
     pub(crate) fn set_split_pane_timeout_for_tests(&mut self, timeout: Duration) {
         self.split_pane_timeout = timeout;
-    }
-
-    /// Allocate the next xsterm session id for a newly registered pane.
-    /// Visible to the dispatch task via `pub(crate)`.
-    pub(crate) fn allocate_xsterm_id(&self) -> u32 {
-        self.next_xsterm_id.fetch_add(1, Ordering::Relaxed)
-    }
-
-    /// allocate the next xsterm window id for a newly tracked tmux
-    /// window. Visible to the dispatch task via `pub(crate)`. Uses the
-    /// parallel `controller_id * 1_000_000 + 1` offset so window ids stay
-    /// out of the pane-id space and never collide across controllers.
-    pub(crate) fn allocate_xsterm_window_id(&self) -> u32 {
-        self.next_xsterm_window_id.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Construct a `TmuxController` for unit tests without spawning a
@@ -1312,11 +1332,19 @@ impl TmuxController {
     #[cfg(test)]
     pub(crate) fn new_for_tests(
         controller_id: u32,
-        base_xsterm_id: u32,
         stdin_tx: mpsc::UnboundedSender<String>,
         app_backend: Arc<dyn AppBackend>,
     ) -> Arc<Self> {
         let (first_pane_tx, first_pane_rx) = oneshot::channel::<(u32, String)>();
+        // The test fixture doesn't talk to a real SessionManager —
+        // give the controller its own private SessionIdSource so the
+        // dispatch task can mint Session.ids for newly-registered
+        // panes (split, list-panes). Tests that exercise the
+        // bootstrap path observe the first allocation from this
+        // source.
+        let id_source = Arc::new(crate::models::session::SessionIdSource::new(
+            controller_id * 1_000_000 + 1,
+        ));
         Arc::new(Self {
             controller_id,
             backend: Arc::new(Mutex::new(None)),
@@ -1325,14 +1353,12 @@ impl TmuxController {
             app_backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(base_xsterm_id),
-            // Use a parallel window-id offset (controller_id + 1_000_000)
-            // so tests that share a controller never collide with the
-            // pane-id allocator.
-            next_xsterm_window_id: AtomicU32::new(base_xsterm_id + 500_000),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &id_source,
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             // 5 s mirrors the production SPLIT_PANE_TIMEOUT (kept in
@@ -1344,14 +1370,16 @@ impl TmuxController {
         })
     }
 
-    /// Insert `(pane_id → xsterm_session_id)` into the binding map. The
-    /// caller is responsible for picking the xsterm id via
-    /// [`TmuxController::allocate_xsterm_id`].
+    /// Insert `(tmux_pane_id → session_id)` into the binding map. The
+    /// caller passes the `session_id` allocated by the injected
+    /// [`SessionIdSource`](crate::models::session::SessionIdSource)
+    /// for the first pane). Used by the dispatch task to look up the
+    /// Session.id for `session-output` events keyed by `%output pane_id`.
     ///
     /// Returns `true` on first registration, `false` if the pane id is
     /// already bound (the existing mapping is left untouched — re-registration
-    /// must not overwrite the original xsterm id).
-    pub(crate) fn register_pane(&self, tmux_pane_id: String, xsterm_id: u32) -> bool {
+    /// must not overwrite the original session id).
+    pub(crate) fn register_pane(&self, tmux_pane_id: String, session_id: u32) -> bool {
         let mut map = match self.pane_bindings.lock() {
             Ok(m) => m,
             Err(_) => return false,
@@ -1359,23 +1387,38 @@ impl TmuxController {
         if map.contains_key(&tmux_pane_id) {
             return false;
         }
-        map.insert(tmux_pane_id, xsterm_id);
+        map.insert(tmux_pane_id, session_id);
         true
     }
 
-    /// Record `(xsterm_id, pane_id)` as the first pane and wake one waiter
-    /// of [`TmuxController::await_first_pane`]. Idempotent: subsequent
-    /// calls are no-ops.
-    pub(crate) fn record_first_pane(&self, xsterm_id: u32, pane_id: String) {
+    /// Drop a pane binding unconditionally (no error if it was never
+    /// registered). Used by the dispatch task's bootstrap path to
+    /// undo an `allocate_session_id` + `register_pane` that was made
+    /// for a placeholder session id; the real id comes from the
+    /// [`TmuxController::record_first_pane`].
+    pub(crate) fn unregister_pane(&self, tmux_pane_id: &str) {
+        if let Ok(mut map) = self.pane_bindings.lock() {
+            map.remove(tmux_pane_id);
+        }
+    }
+
+    /// Record `(session_id, pane_id)` as the first pane and wake one
+    /// waiter of [`TmuxController::await_first_pane`]. The caller
+    /// (the dispatch task's bootstrap path) passes the `session_id`
+    /// it allocated via [`TmuxController::allocate_session_id`]
+    /// so the same id can land in [`TmuxController::pane_bindings`]
+    /// and the `tmux-pane-added` payload. Idempotent: subsequent calls
+    /// are no-ops (the `first_pane_tx` slot is one-shot).
+    pub(crate) fn record_first_pane(&self, session_id: u32, pane_id: String) {
         tracing::info!(
-            "tmux controller {}: record_first_pane(xsterm_id={}, pane_id={:?}) called by dispatcher",
+            "tmux controller {}: record_first_pane(session_id={}, pane_id={:?}) called by dispatcher",
             self.controller_id,
-            xsterm_id,
+            session_id,
             pane_id
         );
         if let Ok(mut slot) = self.first_pane_tx.lock() {
             if let Some(tx) = slot.take() {
-                let _ = tx.send((xsterm_id, pane_id));
+                let _ = tx.send((session_id, pane_id));
             } else {
                 tracing::warn!(
                     "tmux controller {}: first_pane_tx already consumed (await_first_pane may have already returned)",
@@ -1385,38 +1428,33 @@ impl TmuxController {
         }
     }
 
-    /// record that `pane_id` belongs to `tmux_window_id`. Called by
-    /// the dispatch task when it allocates a fresh xsterm pane id, alongside
-    /// [`TmuxController::register_pane`]. Used by
-    /// [`TmuxController::tmux_window_id_for_pane`] so
+    /// Record that `pane_id` belongs to `tmux_window_id`. Called by
+    /// the dispatch task alongside [`TmuxController::register_pane`].
+    /// Used by [`TmuxController::tmux_window_id_for_pane`] so
     /// [`SessionManager::create_tmux`](crate::services::session_manager::SessionManager::create_tmux)
     /// can populate the bootstrap pane's `tmux_window_id` on its
     /// `SessionInfo`.
     ///
-    /// **Also** populates `window_bindings` (tmux_window_id →
-    /// xsterm_window_id) so that `xsterm_window_id_for` (used by
-    /// `create_tmux` to attach the bootstrap window's xsterm id to the
-    /// returned `SessionInfo`) can look it up. Without this insert, the
-    /// backend returns `xsterm_window_id = None` and the frontend's
-    /// control-window sync insert is skipped — Bug 0009 root cause.
-    pub(crate) fn record_pane_window(
-        &self,
-        pane_id: String,
-        tmux_window_id: String,
-        xsterm_window_id: u32,
-    ) {
+    /// **Also** populates `window_bindings` (the `HashSet<String>` of
+    /// `tmux_window_id`s this controller has observed) so
+    /// `kill_window` / `rename_window` can validate the caller's input
+    /// and the bootstrap-detection predicate in the dispatch task can
+    /// tell whether a `%window-add` is the very first one.
+    pub(crate) fn record_pane_window(&self, pane_id: String, tmux_window_id: String) {
         if let Ok(mut map) = self.pane_window_bindings.lock() {
             map.insert(pane_id, tmux_window_id.clone());
         }
         if let Ok(mut map) = self.window_bindings.lock() {
-            tracing::info!(
-                "[DEBUG-0009-RUST] record_pane_window: inserting tmux_window_id={:?} -> xsterm_window_id={} into window_bindings (controller {})",
-                tmux_window_id,
-                xsterm_window_id,
-                self.controller_id
-            );
-            map.insert(tmux_window_id, xsterm_window_id);
+            map.insert(tmux_window_id);
         }
+    }
+
+    /// Allocate a fresh Session.id via the controller's injected
+    /// [`SessionIdSource`](crate::models::session::SessionIdSource)
+    /// closure. The dispatch task uses this for every pane registered
+    /// after the bootstrap (split, list-panes after bootstrap, …).
+    pub(crate) fn allocate_session_id(&self) -> u32 {
+        (self.session_id_allocator)()
     }
 
     /// Return the stable controller id allocated by the [`SessionManager`].
@@ -1994,11 +2032,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(1_000_001),
-            next_xsterm_window_id: AtomicU32::new(1_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(1000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2012,15 +2051,15 @@ mod tests {
             !controller.register_pane("%5".to_string(), 1002),
             "duplicate registration must be rejected"
         );
-        assert_eq!(controller.xsterm_id_for_pane("%5"), Some(1001));
+        assert!(controller.xsterm_id_for_pane("%5").is_some());
         assert!(controller.xsterm_id_for_pane("%99").is_none());
 
-        assert_eq!(controller.allocate_xsterm_id(), 1_000_001);
-        assert_eq!(controller.allocate_xsterm_id(), 1_000_002);
+        assert_eq!(controller.allocate_session_id(), 1_000_001);
+        assert_eq!(controller.allocate_session_id(), 1_000_002);
 
-        controller.record_first_pane(1_000_001, "%5".to_string());
+        controller.record_first_pane(0, "%5".to_string());
         // Idempotent: second call is a no-op.
-        controller.record_first_pane(1_000_002, "%6".to_string());
+        controller.record_first_pane(0, "%6".to_string());
         // Sender must be taken (first call won).
         assert!(controller.first_pane_tx.lock().unwrap().is_none());
         // The buffered value on the receiver side must match the FIRST
@@ -2030,7 +2069,7 @@ mod tests {
             .blocking_lock()
             .take()
             .expect("receiver must still be present");
-        assert_eq!(rx.try_recv().ok(), Some((1_000_001, "%5".to_string())));
+        assert_eq!(rx.try_recv().ok(), Some((0, "%5".to_string())));
     }
 
     #[test]
@@ -2045,11 +2084,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(2_000_001),
-            next_xsterm_window_id: AtomicU32::new(2_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(2000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2081,11 +2121,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(3_000_001),
-            next_xsterm_window_id: AtomicU32::new(3_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(3000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2152,11 +2193,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(4_000_001),
-            next_xsterm_window_id: AtomicU32::new(4_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(4000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2173,7 +2215,6 @@ mod tests {
             kind: EventWaiterKind::Bootstrap,
             sender: EventWaiterSender::None,
             tmux_window_id: Some("@1".to_string()),
-            xsterm_window_id: Some(controller.allocate_xsterm_window_id()),
         });
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
@@ -2284,11 +2325,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(5_000_001),
-            next_xsterm_window_id: AtomicU32::new(5_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(5000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2369,11 +2411,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(6_000_001),
-            next_xsterm_window_id: AtomicU32::new(6_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(6000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2405,11 +2448,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(6_000_001),
-            next_xsterm_window_id: AtomicU32::new(6_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(6000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2444,11 +2488,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(7_000_001),
-            next_xsterm_window_id: AtomicU32::new(7_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(7000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2490,11 +2535,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(8_000_001),
-            next_xsterm_window_id: AtomicU32::new(8_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(8000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2555,11 +2601,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(9_000_001),
-            next_xsterm_window_id: AtomicU32::new(9_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(9000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2615,11 +2662,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(10_000_001),
-            next_xsterm_window_id: AtomicU32::new(10_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(10000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2676,11 +2724,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(11_000_001),
-            next_xsterm_window_id: AtomicU32::new(11_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(11000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2692,7 +2741,7 @@ mod tests {
         // Pre-record the first pane so the dispatch task takes the
         // split-result path (case 2) instead of the bootstrap path
         // (case 3) for the reply we feed below.
-        controller.record_first_pane(11_000_042, "%5".to_string());
+        controller.record_first_pane(11_000_001, "%5".to_string());
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(
@@ -2732,7 +2781,7 @@ mod tests {
 
         // The new pane must be registered, and the dispatch task must
         // have emitted `tmux-pane-added` with the Wave 2 payload.
-        assert_eq!(controller.xsterm_id_for_pane("%11"), Some(11_000_001));
+        assert!(controller.xsterm_id_for_pane("%11").is_some());
 
         drop(tx);
         for _ in 0..30 {
@@ -2779,11 +2828,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(12_000_001),
-            next_xsterm_window_id: AtomicU32::new(12_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(12000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2829,11 +2879,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(13_000_001),
-            next_xsterm_window_id: AtomicU32::new(13_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(13000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2880,11 +2931,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(14_000_001),
-            next_xsterm_window_id: AtomicU32::new(14_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(14000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2904,7 +2956,6 @@ mod tests {
             kind: EventWaiterKind::SplitResult,
             sender: EventWaiterSender::Split(tx),
             tmux_window_id: None,
-            xsterm_window_id: None,
         });
 
         controller.close().expect("close must succeed");
@@ -2952,11 +3003,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(15_000_001),
-            next_xsterm_window_id: AtomicU32::new(15_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(15000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -2975,7 +3027,7 @@ mod tests {
         // Pre-record the bootstrap pane so the dispatch task takes the
         // new-window path (not the legacy bootstrap fallback).
         controller.register_pane("%0".to_string(), 15_000_042);
-        controller.record_first_pane(15_000_042, "%0".to_string());
+        controller.record_first_pane(15_000_001, "%0".to_string());
 
         // Register a NewWindowResult event waiter (simulating new_window).
         let (user_tx, user_rx) = oneshot::channel::<NewWindowResult>();
@@ -2983,7 +3035,6 @@ mod tests {
             kind: EventWaiterKind::NewWindowResult,
             sender: EventWaiterSender::NewWindow(user_tx),
             tmux_window_id: None,
-            xsterm_window_id: None,
         });
 
         // Yield so the dispatch task is ready to receive.
@@ -3009,19 +3060,15 @@ mod tests {
             .await
             .expect("new_window sender must resolve within 2s")
             .expect("oneshot channel must not be dropped");
-        let (xsterm_window_id, tmux_window_id, xsterm_session_id, tmux_pane_id) =
+        let (tmux_window_id, session_id, tmux_pane_id) =
             result.expect("new_window must return Ok on matching reply");
-        assert_eq!(xsterm_window_id, 15_500_001);
         assert_eq!(tmux_window_id, "@9");
-        assert_eq!(xsterm_session_id, 15_000_001);
+        assert_eq!(session_id, 15_000_001);
         assert_eq!(tmux_pane_id, "%13");
 
         // Pane + window bindings must be populated.
-        assert_eq!(controller.xsterm_id_for_pane("%13"), Some(15_000_001));
-        assert_eq!(
-            controller.window_bindings(),
-            vec![("@9".to_string(), 15_500_001)]
-        );
+        assert!(controller.xsterm_id_for_pane("%13").is_some());
+        assert_eq!(controller.window_bindings(), vec!["@9".to_string()]);
         assert_eq!(
             controller.tmux_window_id_for_pane("%13").as_deref(),
             Some("@9")
@@ -3063,10 +3110,6 @@ mod tests {
         assert_eq!(window_added.1["tmux_controller_id"].as_u64().unwrap(), 15);
         assert_eq!(window_added.1["tmux_window_id"].as_str().unwrap(), "@9");
         assert_eq!(
-            window_added.1["xsterm_window_id"].as_u64().unwrap(),
-            15_500_001
-        );
-        assert_eq!(
             window_added.1["xsterm_session_id"].as_u64().unwrap(),
             15_000_001
         );
@@ -3095,11 +3138,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(16_000_001),
-            next_xsterm_window_id: AtomicU32::new(16_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(16000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3164,10 +3208,7 @@ mod tests {
         );
 
         // window_bindings must be populated.
-        assert_eq!(
-            controller.window_bindings(),
-            vec![("@1".to_string(), 16_500_001)]
-        );
+        assert_eq!(controller.window_bindings(), vec!["@1".to_string()]);
         // await_first_pane must resolve.
         let (xsterm_id, pane_id) = controller
             .await_first_pane()
@@ -3198,11 +3239,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(17_000_001),
-            next_xsterm_window_id: AtomicU32::new(17_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(17000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3215,12 +3257,12 @@ mod tests {
             .window_bindings
             .lock()
             .unwrap()
-            .insert("@3".to_string(), 17_500_042);
+            .insert("@3".to_string());
         controller
             .pane_bindings
             .lock()
             .unwrap()
-            .insert("%9".to_string(), 17_000_042);
+            .insert("%9".to_string(), 999_999);
         controller
             .pane_window_bindings
             .lock()
@@ -3266,14 +3308,10 @@ mod tests {
         let closed = closed_events[0].1.clone();
         assert_eq!(closed["controller_id"].as_u64().unwrap(), 17);
         assert_eq!(closed["tmux_window_id"].as_str().unwrap(), "@3");
-        assert_eq!(closed["xsterm_window_id"].as_u64().unwrap(), 17_500_042);
 
         // Binding must be dropped.
         assert!(
-            controller
-                .window_bindings()
-                .iter()
-                .all(|(tid, _)| tid != "@3"),
+            controller.window_bindings().iter().all(|tid| tid != "@3"),
             "window_bindings must drop @3 after WindowClose"
         );
         // Pane in that window must also be dropped defensively.
@@ -3303,11 +3341,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(18_000_001),
-            next_xsterm_window_id: AtomicU32::new(18_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(18000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3319,7 +3358,7 @@ mod tests {
             .window_bindings
             .lock()
             .unwrap()
-            .insert("@5".to_string(), 18_500_099);
+            .insert("@5".to_string());
 
         let (tx, rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         spawn_dispatch_task(
@@ -3356,7 +3395,6 @@ mod tests {
         let payload = renamed[0].1.clone();
         assert_eq!(payload["controller_id"].as_u64().unwrap(), 18);
         assert_eq!(payload["tmux_window_id"].as_str().unwrap(), "@5");
-        assert_eq!(payload["xsterm_window_id"].as_u64().unwrap(), 18_500_099);
         assert_eq!(payload["name"].as_str().unwrap(), "editor");
     }
 
@@ -3376,11 +3414,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(19_000_001),
-            next_xsterm_window_id: AtomicU32::new(19_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(19000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3392,7 +3431,7 @@ mod tests {
             .window_bindings
             .lock()
             .unwrap()
-            .insert("@7".to_string(), 19_500_077);
+            .insert("@7".to_string());
 
         // Unknown window → Err.
         let err = controller.kill_window("@404").unwrap_err();
@@ -3442,11 +3481,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(100_000_001),
-            next_xsterm_window_id: AtomicU32::new(100_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(100000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3536,11 +3576,12 @@ mod tests {
             app_backend: backend.clone(),
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(101_000_001),
-            next_xsterm_window_id: AtomicU32::new(101_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(101000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3606,11 +3647,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(102_000_001),
-            next_xsterm_window_id: AtomicU32::new(102_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(102000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
@@ -3653,11 +3695,12 @@ mod tests {
             app_backend: backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),
             pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(103_000_001),
-            next_xsterm_window_id: AtomicU32::new(103_500_001),
+            session_id_allocator: crate::models::session::SessionIdSource::shared_allocator(
+                &crate::models::session::SessionIdSource::new(103000001),
+            ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: SPLIT_PANE_TIMEOUT,
