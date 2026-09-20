@@ -538,34 +538,33 @@ impl SessionManager {
         Ok(info)
     }
 
-    /// capture scrollback text from an existing tmux pane.
+    /// capture scrollback text from a tmux pane.
     ///
-    /// Resolves the xsterm session id → tmux pane id mapping in `sessions`,
-    /// delegates to [`TmuxController::capture_pane`], and returns the
-    /// resulting text. Returns `Err` when the session is unknown, is not a
-    /// tmux pane, or when tmux itself responds with `%error` / timeout.
+    /// Same local-id → server-id convention as
+    /// [`SessionManager::kill_tmux_pane`]: the frontend resolves
+    /// the xsterm session id locally and sends the tmux-side
+    /// identifiers; the backend delegates straight to
+    /// [`TmuxController::capture_pane`].
+    ///
+    /// Errors:
+    /// - `Err(_)` when `controller_id` is not registered.
+    /// - `Err(_)` propagated from [`TmuxController::capture_pane`]
+    ///   when `tmux_pane_id` is not in the controller's
+    ///   `pane_bindings` map, when tmux itself responds with
+    ///   `%error`, or when the call times out after 5 s.
     pub async fn capture_tmux_pane(
         &self,
-        xsterm_session_id: u32,
+        controller_id: u32,
+        tmux_pane_id: &str,
         lines: i32,
     ) -> Result<String, String> {
-        let entry = self
-            .sessions
-            .get(&xsterm_session_id)
-            .ok_or_else(|| format!("session {xsterm_session_id} not found"))?;
-        let controller = entry
-            .value()
-            .tmux_controller()
-            .ok_or_else(|| format!("session {xsterm_session_id} is not a tmux pane session"))?;
-        let tmux_pane_id = entry
-            .value()
-            .tmux_pane_id()
-            .ok_or_else(|| format!("session {xsterm_session_id} has no tmux_pane_id"))?
-            .to_string();
-        drop(entry);
-
+        let controller = self
+            .tmux_controllers
+            .get(&controller_id)
+            .map(|c| Arc::clone(c.value()))
+            .ok_or_else(|| format!("tmux controller {controller_id} is not registered"))?;
         controller
-            .capture_pane(&tmux_pane_id, lines)
+            .capture_pane(tmux_pane_id, lines)
             .await
             .map_err(|e| e.to_string())
     }
@@ -856,82 +855,54 @@ impl SessionManager {
         save_attached_tmux_servers_impl(app, &filtered)
     }
 
-    /// Split `parent_xsterm_session_id` (a tmux pane session that already
-    /// exists in `sessions`) and register the new pane under a freshly
-    /// allocated xsterm session id.
+    /// Split `parent_tmux_pane_id` on the given controller and
+    /// register the new pane under a freshly allocated xsterm session
+    /// id.
     ///
-    /// The parent session must be a `TmuxPane` variant; if it is a local
-    /// PTY or SSH session, this method returns
-    /// `Err("parent is not a tmux pane session")`. The split is delegated
-    /// to [`TmuxController::split_pane`], which returns the new pane's
-    /// `(xsterm_session_id, tmux_pane_id, tmux_window_id)` triple once
-    /// tmux confirms via `%window-pane-changed`.
+    /// The frontend performs the local-id → server-id resolution
+    /// (xsterm session id ↦ `(controller_id, tmux_pane_id)`) and
+    /// passes the tmux-side identifiers directly. The manager
+    /// looks up the controller via its id and delegates to
+    /// [`TmuxController::split_pane`]; no scan of `sessions` is
+    /// needed.
+    ///
+    /// Validation:
+    /// - `controller_id` must be registered (else `Err`).
+    /// - `parent_tmux_pane_id` must be in the controller's
+    ///   `pane_bindings` (else `Err` propagated from
+    ///   [`TmuxController::split_pane`]). This is what guarantees
+    ///   the parent belongs to the named controller — the previous
+    ///   "parent belongs to controller_id" lookup is no longer
+    ///   needed because the controller's own check is stricter.
     ///
     /// On success the new pane is inserted into `sessions` with
     /// `is_hidden = false` (the user explicitly created it via the
-    /// split UI) and its `SessionInfo` is returned to the frontend so it
-    /// can update its pane tree immediately. The `tmux-pane-added` event
-    /// emitted by the controller is still useful for the frontend
-    /// listener as a defensive cross-check.
+    /// split UI) and its `SessionInfo` is returned to the frontend so
+    /// it can update its pane tree immediately. The `tmux-pane-added`
+    /// event emitted by the controller is still useful for the
+    /// frontend listener as a defensive cross-check.
     pub async fn create_tmux_pane(
         &self,
         controller_id: u32,
-        parent_xsterm_session_id: u32,
+        parent_tmux_pane_id: &str,
         direction: &str,
     ) -> Result<SessionInfo, String> {
         let direction = SplitDirection::parse(direction)
             .ok_or_else(|| format!("invalid split direction: {direction:?}"))?;
 
-        // Look up the controller (must exist on this SessionManager).
         let controller = self
             .tmux_controllers
             .get(&controller_id)
             .map(|c| Arc::clone(c.value()))
             .ok_or_else(|| format!("tmux controller {controller_id} is not registered"))?;
 
-        // Look up the parent pane session and extract its tmux pane id.
-        let parent_tmux_pane_id = {
-            let parent_entry = self
-                .sessions
-                .get(&parent_xsterm_session_id)
-                .ok_or_else(|| {
-                    format!("parent session {parent_xsterm_session_id} not found in SessionManager")
-                })?;
-            parent_entry
-                .value()
-                .tmux_pane_id()
-                .ok_or_else(|| {
-                    format!("parent session {parent_xsterm_session_id} is not a tmux pane session")
-                })?
-                .to_string()
-        };
-        // Also assert the parent belongs to this controller — the
-        // controller_id argument must agree with the parent's controller.
-        let parent_controller_id = self
-            .sessions
-            .get(&parent_xsterm_session_id)
-            .and_then(|e| e.value().tmux_controller_id());
-        match parent_controller_id {
-            Some(id) if id == controller_id => {}
-            Some(other) => {
-                return Err(format!(
-                    "parent session {parent_xsterm_session_id} belongs to controller {other}, not {controller_id}"
-                ));
-            }
-            None => {
-                // Reached only if the session disappeared between the
-                // two `sessions` lookups; the prior branch already
-                // surfaced this case.
-                return Err(format!(
-                    "parent session {parent_xsterm_session_id} is not a tmux pane session"
-                ));
-            }
-        }
-
         // Issue the split. The controller registers the binding and
-        // returns the new pane's ids.
+        // returns the new pane's ids. Its own `pane_bindings`
+        // contains-check rejects any `parent_tmux_pane_id` that is
+        // not in this controller — i.e. the "parent belongs to the
+        // named controller" invariant is enforced here.
         let (new_xsterm_id, new_tmux_pane_id, _new_tmux_window_id) = controller
-            .split_pane(&parent_tmux_pane_id, direction)
+            .split_pane(parent_tmux_pane_id, direction)
             .await?;
 
         // Build the SessionInfo and TmuxPaneHandle for the new pane.
@@ -963,38 +934,40 @@ impl SessionManager {
             controller_id,
             new_xsterm_id,
             direction,
-            parent_xsterm_session_id
+            parent_tmux_pane_id
         );
 
         Ok(info)
     }
 
-    /// Send `kill-pane` for the tmux pane backing `xsterm_session_id`.
+    /// Send `kill-pane` for the given tmux pane.
     ///
-    /// The frontend listens for the resulting `tmux-pane-removed` event
-    /// (emitted by the controller's dispatch task on `%pane-exited`) and
-    /// drops the matching `Session` from React state at that point. This
-    /// keeps the cleanup path symmetric with `close_session` while
-    /// letting the React listener own the UI state mutation.
+    /// Same local-id → server-id convention as
+    /// [`SessionManager::create_tmux_pane`]: the frontend resolves
+    /// the xsterm session id locally and sends the tmux-side
+    /// identifiers; the backend delegates straight to
+    /// [`TmuxController::kill_pane`].
     ///
-    /// Returns `Err` if the session is unknown or is not a tmux pane.
-    pub fn kill_tmux_pane(&self, xsterm_session_id: u32) -> Result<(), String> {
-        let entry = self
-            .sessions
-            .get(&xsterm_session_id)
-            .ok_or_else(|| format!("session {xsterm_session_id} not found"))?;
-        let controller = entry
-            .value()
-            .tmux_controller()
-            .ok_or_else(|| format!("session {xsterm_session_id} is not a tmux pane session"))?;
-        let tmux_pane_id = entry
-            .value()
-            .tmux_pane_id()
-            .ok_or_else(|| format!("session {xsterm_session_id} has no tmux_pane_id"))?
-            .to_string();
-        drop(entry); // release the DashMap shard lock before the I/O.
+    /// The frontend listens for the resulting `tmux-pane-removed`
+    /// event (emitted by the controller's dispatch task on
+    /// `%pane-exited`) and drops the matching `Session` from React
+    /// state at that point. This keeps the cleanup path symmetric with
+    /// `close_session` while letting the React listener own the UI
+    /// state mutation.
+    ///
+    /// Errors:
+    /// - `Err(_)` when `controller_id` is not registered.
+    /// - `Err(_)` propagated from [`TmuxController::kill_pane`]
+    ///   when `tmux_pane_id` is not in the controller's
+    ///   `pane_bindings` map.
+    pub fn kill_tmux_pane(&self, controller_id: u32, tmux_pane_id: &str) -> Result<(), String> {
+        let controller = self
+            .tmux_controllers
+            .get(&controller_id)
+            .map(|c| Arc::clone(c.value()))
+            .ok_or_else(|| format!("tmux controller {controller_id} is not registered"))?;
         controller
-            .kill_pane(&tmux_pane_id)
+            .kill_pane(tmux_pane_id)
             .map_err(|e| e.to_string())
     }
 
@@ -1071,12 +1044,12 @@ impl SessionManager {
 
     /// kill a tmux window via `kill-window`.
     ///
-    /// `xsterm_window_id` is the **xsterm** window id (matches
-    /// `killTmuxWindow` on the frontend). The frontend looks up which
-    /// tmux window this corresponds to via the `tmux-window-added`
-    /// event's payload; here we resolve it via the controller's
-    /// `window_bindings` map (popped by `tmux-window-closed` once the
-    /// dispatch task sees the matching `%window-close`).
+    /// The frontend performs the local-id → server-id resolution
+    /// (xsterm Window id ↦ `(controller_id, tmux_window_id)`) and
+    /// passes the tmux-side identifiers directly. The manager looks
+    /// up the controller via its id and delegates to
+    /// [`TmuxController::kill_window`]; no controller-wide scan of
+    /// `window_bindings` is needed.
     ///
     /// Synchronous: writes the command to the controller's stdin FIFO
     /// and returns. The dispatch task will eventually emit
@@ -1084,58 +1057,49 @@ impl SessionManager {
     /// frontend listener uses to drop every Session in the matching
     /// xsterm Window and then drop the Window itself.
     ///
-    /// Returns `Err` if the controller is unknown or the xsterm window
-    /// id is not bound to any controller.
-    pub fn kill_tmux_window(&self, xsterm_window_id: u32) -> Result<(), String> {
-        // Find the controller that owns this xsterm window id by
-        // scanning every controller's `window_bindings`.
-        let mut found: Option<(Arc<TmuxController>, String)> = None;
-        for entry in self.tmux_controllers.iter() {
-            let controller = entry.value().clone();
-            for (tmux_window_id, xid) in controller.window_bindings() {
-                if xid == xsterm_window_id {
-                    found = Some((controller, tmux_window_id));
-                    break;
-                }
-            }
-            if found.is_some() {
-                break;
-            }
-        }
-        let (controller, tmux_window_id) = found.ok_or_else(|| {
-            format!("xsterm window {xsterm_window_id} is not bound to any tmux controller")
-        })?;
+    /// Errors:
+    /// - `Err(_)` when `controller_id` is not registered (the
+    ///   controller already closed or was never spawned).
+    /// - `Err(_)` propagated from [`TmuxController::kill_window`]
+    ///   when `tmux_window_id` is not in the controller's
+    ///   `window_bindings` map (e.g. the frontend passed a stale id).
+    pub fn kill_tmux_window(&self, controller_id: u32, tmux_window_id: &str) -> Result<(), String> {
+        let controller = self
+            .tmux_controllers
+            .get(&controller_id)
+            .map(|c| Arc::clone(c.value()))
+            .ok_or_else(|| format!("tmux controller {controller_id} is not registered"))?;
         controller
-            .kill_window(&tmux_window_id)
+            .kill_window(tmux_window_id)
             .map_err(|e| e.to_string())
     }
 
     /// rename a tmux window via `rename-window`.
+    ///
+    /// Same local-id → server-id convention as
+    /// [`SessionManager::kill_tmux_window`]: the frontend resolves
+    /// the xsterm Window id locally and sends the tmux-side
+    /// identifiers; the backend delegates straight to
+    /// [`TmuxController::rename_window`].
     ///
     /// Synchronous: writes the command to the controller's stdin FIFO
     /// and returns. The dispatch task will eventually emit
     /// `tmux-window-renamed` when tmux sends `%window-renamed`, which
     /// the frontend listener uses to update the matching xsterm
     /// Window's `name`.
-    pub fn rename_tmux_window(&self, xsterm_window_id: u32, name: &str) -> Result<(), String> {
-        let mut found: Option<(Arc<TmuxController>, String)> = None;
-        for entry in self.tmux_controllers.iter() {
-            let controller = entry.value().clone();
-            for (tmux_window_id, xid) in controller.window_bindings() {
-                if xid == xsterm_window_id {
-                    found = Some((controller, tmux_window_id));
-                    break;
-                }
-            }
-            if found.is_some() {
-                break;
-            }
-        }
-        let (controller, tmux_window_id) = found.ok_or_else(|| {
-            format!("xsterm window {xsterm_window_id} is not bound to any tmux controller")
-        })?;
+    pub fn rename_tmux_window(
+        &self,
+        controller_id: u32,
+        tmux_window_id: &str,
+        name: &str,
+    ) -> Result<(), String> {
+        let controller = self
+            .tmux_controllers
+            .get(&controller_id)
+            .map(|c| Arc::clone(c.value()))
+            .ok_or_else(|| format!("tmux controller {controller_id} is not registered"))?;
         controller
-            .rename_window(&tmux_window_id, name)
+            .rename_window(tmux_window_id, name)
             .map_err(|e| e.to_string())
     }
 
@@ -2575,27 +2539,14 @@ mod tests {
         let manager = SessionManager::new();
         let (controller, _stdin_rx, dispatch_tx) = make_test_controller(1, 1_000_001);
 
-        // Pre-register a parent pane binding so `create_tmux_pane` can
-        // find it.
+        // Pre-register a parent pane binding on the controller so
+        // `controller.split_pane`'s `pane_bindings` check accepts
+        // `%5`. Also record the first pane so the dispatch task takes
+        // the split-result path (not the bootstrap path).
         controller.register_pane("%5".to_string(), 1_000_001);
-        // Record the first pane so the dispatch task takes the
-        // split-result path (not the bootstrap path).
         controller.record_first_pane(1_000_001, "%5".to_string());
 
         manager.tmux_controllers.insert(1, Arc::clone(&controller));
-
-        // Insert a TmuxPane session for the parent so
-        // `create_tmux_pane`'s `tmux_pane_id` lookup succeeds.
-        let parent_info = tmux_pane_info(1_000_001, 1, "%5", Some("dev"), None, false, None, None);
-        manager.sessions.insert(
-            1_000_001,
-            Arc::new(ActiveSession::TmuxPane(Box::new(TmuxPaneHandle {
-                controller: Arc::clone(&controller),
-                tmux_pane_id: "%5".to_string(),
-                info: parent_info,
-                capabilities: CapabilityFlags::for_tmux(),
-            }))),
-        );
 
         // Kick off `create_tmux_pane` in the background. It will block
         // until we feed the dispatch task a `WindowPaneChanged` reply.
@@ -2603,7 +2554,7 @@ mod tests {
         let manager_for_split = Arc::clone(&manager_arc);
         let split_handle = tokio::spawn(async move {
             manager_for_split
-                .create_tmux_pane(1, 1_000_001, "horizontal")
+                .create_tmux_pane(1, "%5", "horizontal")
                 .await
         });
 
@@ -2665,58 +2616,51 @@ mod tests {
     /// `create_tmux_pane` rejects an unknown `direction` string
     /// (anything other than `"horizontal"` / `"vertical"`) instead of
     /// silently defaulting. The frontend uses the typed
-    /// `SplitDirection` enum so this is a defensive guard.
+    /// `SplitDirection` enum so this is a defensive guard. The
+    /// `parent_tmux_pane_id` value is irrelevant — direction parsing
+    /// runs first.
     #[tokio::test]
     async fn create_tmux_pane_rejects_unknown_direction() {
         let manager = SessionManager::new();
-        let result = manager.create_tmux_pane(1, 1, "diagonal").await;
+        let result = manager.create_tmux_pane(1, "%any", "diagonal").await;
         let err = result.expect_err("unknown direction must error");
         assert!(err.contains("invalid split direction"), "got: {err}");
     }
 
-    /// `create_tmux_pane` rejects a parent session id that is
-    /// not registered with the manager (e.g. caller typo'd the id).
+    /// `create_tmux_pane` rejects a parent pane id that is not
+    /// registered on the controller (e.g. caller typo'd the id, or
+    /// the frontend passed a stale id after a pane closed). The
+    /// controller's own `pane_bindings.contains_key` guard surfaces
+    /// this — the manager no longer needs to scan `sessions`.
     #[tokio::test]
-    async fn create_tmux_pane_errors_on_unknown_parent_session() {
+    async fn create_tmux_pane_errors_on_unknown_parent_pane_id() {
         let manager = SessionManager::new();
         let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
         manager.tmux_controllers.insert(1, Arc::clone(&controller));
 
-        let result = manager.create_tmux_pane(1, 999_999, "horizontal").await;
-        let err = result.expect_err("unknown parent must error");
+        let result = manager.create_tmux_pane(1, "%unknown", "horizontal").await;
+        let err = result.expect_err("unknown parent pane id must error");
         assert!(
-            err.contains("parent session") && err.contains("not found"),
-            "expected 'parent session ... not found' message, got: {err}"
+            err.contains("%unknown") && err.contains("not registered with controller"),
+            "expected '%unknown ... not registered with controller' message, got: {err}"
         );
     }
 
-    /// `kill_tmux_pane` looks up the session, fetches the
-    /// underlying tmux controller, and writes `kill-pane -t %<id>` to
-    /// the controller's stdin. The test asserts that the queued
-    /// command matches the expected literal.
+    /// `kill_tmux_pane` accepts `(controller_id, tmux_pane_id)`
+    /// directly and writes `kill-pane -t %<id>` to the controller's
+    /// stdin. The test asserts that the queued command matches the
+    /// expected literal.
     #[tokio::test]
     async fn kill_tmux_pane_invokes_controller_kill_pane() {
         let manager = SessionManager::new();
         let (controller, mut stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
         controller.register_pane("%5".to_string(), 1_000_001);
 
-        // Insert a TmuxPane session bound to the controller.
-        let info = tmux_pane_info(1_000_001, 1, "%5", Some("dev"), None, false, None, None);
-        manager.sessions.insert(
-            1_000_001,
-            Arc::new(ActiveSession::TmuxPane(Box::new(TmuxPaneHandle {
-                controller: Arc::clone(&controller),
-                tmux_pane_id: "%5".to_string(),
-                info,
-                capabilities: CapabilityFlags::for_tmux(),
-            }))),
-        );
+        manager.tmux_controllers.insert(1, Arc::clone(&controller));
 
         // Kill the pane. The command must land on the controller's
         // stdin FIFO.
-        manager
-            .kill_tmux_pane(1_000_001)
-            .expect("kill must succeed");
+        manager.kill_tmux_pane(1, "%5").expect("kill must succeed");
 
         let cmd = tokio::time::timeout(std::time::Duration::from_millis(100), stdin_rx.recv())
             .await
@@ -2728,54 +2672,35 @@ mod tests {
         );
     }
 
-    /// `kill_tmux_pane` returns `Err` when the session id is
-    /// unknown (rather than silently no-op'ing). The frontend uses the
-    /// Err to surface a clear UI message.
+    /// `kill_tmux_pane` returns `Err` when `controller_id` is not
+    /// registered (rather than silently no-op'ing). The frontend
+    /// uses the Err to surface a clear UI message.
     #[test]
-    fn kill_tmux_pane_errors_on_unknown_session() {
+    fn kill_tmux_pane_errors_on_unknown_controller_id() {
         let manager = SessionManager::new();
-        let err = manager.kill_tmux_pane(999_999).unwrap_err();
+        let err = manager.kill_tmux_pane(999, "%5").unwrap_err();
         assert!(
-            err.contains("999999") && err.contains("not found"),
-            "expected 'session 999999 not found' message, got: {err}"
+            err.contains("tmux controller 999") && err.contains("not registered"),
+            "expected 'tmux controller 999 ... not registered' message, got: {err}"
         );
     }
 
-    /// `kill_tmux_pane` returns `Err` when the session is NOT
-    /// a tmux pane (e.g. caller passes a local PTY session id). This
-    /// prevents accidental `kill-pane` on the wrong transport.
-    #[test]
-    fn kill_tmux_pane_errors_on_non_tmux_session() {
+    /// `kill_tmux_pane` returns `Err` when `tmux_pane_id` is not in
+    /// the controller's `pane_bindings` — i.e. the pane was never
+    /// bound to this controller, or it was already unbound via
+    /// [`TmuxController::unbind_pane`]. Replaces the pre-refactor
+    /// "non-tmux session" test, which became obsolete when the
+    /// manager stopped looking up `sessions`.
+    #[tokio::test]
+    async fn kill_tmux_pane_errors_on_unknown_tmux_pane_id() {
         let manager = SessionManager::new();
-        // Insert a non-tmux session.
-        manager.sessions.insert(
-            42,
-            Arc::new(ActiveSession::Pty(Box::new({
-                struct Dummy;
-                impl crate::infrastructure::session_backend::SessionBackend for Dummy {
-                    fn info(&self) -> &SessionInfo {
-                        unreachable!("info() should not be called in this test")
-                    }
-                    fn capabilities(&self) -> &CapabilityFlags {
-                        unreachable!("capabilities() should not be called in this test")
-                    }
-                    fn write(&self, _data: &[u8]) -> Result<(), String> {
-                        Ok(())
-                    }
-                    fn resize(&self, _rows: u16, _cols: u16) -> Result<(), String> {
-                        Ok(())
-                    }
-                    fn close(self: Box<Self>) -> Result<(), String> {
-                        Ok(())
-                    }
-                }
-                Dummy
-            }))),
-        );
-        let err = manager.kill_tmux_pane(42).unwrap_err();
+        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
+        manager.tmux_controllers.insert(1, Arc::clone(&controller));
+
+        let err = manager.kill_tmux_pane(1, "%missing").unwrap_err();
         assert!(
-            err.contains("not a tmux pane"),
-            "expected 'not a tmux pane' in error, got: {err}"
+            err.contains("%missing") && err.contains("not registered with controller"),
+            "expected '%missing ... not registered with controller' message, got: {err}"
         );
     }
 
@@ -2869,17 +2794,21 @@ mod tests {
         );
     }
 
-    /// `kill_tmux_window` and `rename_tmux_window` look up the
-    /// tmux window id from `controller.window_bindings` and queue the
-    /// right tmux command on the controller's stdin FIFO.
+    /// `kill_tmux_window` and `rename_tmux_window` accept the tmux-side
+    /// identifiers directly (the frontend resolves the xsterm Window
+    /// id locally). They look up the controller via
+    /// `tmux_controllers.get(&controller_id)` and queue the right tmux
+    /// command on that controller's stdin FIFO. The controller's own
+    /// `window_bindings` map is what rejects a stale `tmux_window_id`.
     #[tokio::test]
     async fn kill_and_rename_tmux_window_invoke_controller_commands() {
         let manager = SessionManager::new();
         let (controller, mut stdin_rx, _dispatch_tx) = make_test_controller(3, 3_000_001);
-        // Seed a known tmux_window_id → xsterm_window_id binding by
-        // driving the dispatch task through the bootstrap path (no
-        // pending_windows sender → window_bindings gets populated on
-        // the matching WindowPaneChanged).
+        // Seed `window_bindings` so `controller.kill_window` /
+        // `controller.rename_window` accept "@11". The dispatch task
+        // populates `window_bindings` on the bootstrap
+        // `WindowAdd` → `WindowPaneChanged` pair (no pending sender →
+        // controller takes the Bootstrap path).
         let dispatch_tx_clone = _dispatch_tx.clone();
         dispatch_tx_clone
             .send(
@@ -2901,10 +2830,10 @@ mod tests {
 
         manager.tmux_controllers.insert(3, Arc::clone(&controller));
 
-        // kill_tmux_window resolves the tmux window id from the
-        // binding and writes `kill-window -t @11` to stdin.
+        // kill_tmux_window writes `kill-window -t @11` to the
+        // controller's stdin FIFO.
         manager
-            .kill_tmux_window(3_500_001)
+            .kill_tmux_window(3, "@11")
             .expect("kill_tmux_window on bound window must succeed");
         let cmd1 = tokio::time::timeout(std::time::Duration::from_millis(100), stdin_rx.recv())
             .await
@@ -2914,7 +2843,7 @@ mod tests {
 
         // rename_tmux_window writes `rename-window -t @11 "..."`.
         manager
-            .rename_tmux_window(3_500_001, "my dev shell")
+            .rename_tmux_window(3, "@11", "my dev shell")
             .expect("rename_tmux_window on bound window must succeed");
         let cmd2 = tokio::time::timeout(std::time::Duration::from_millis(100), stdin_rx.recv())
             .await
@@ -2922,16 +2851,31 @@ mod tests {
             .expect("stdin channel must not be closed");
         assert_eq!(cmd2, "rename-window -t @11 \"my dev shell\"\n");
 
-        // Unknown xsterm_window_id must error.
-        let err = manager.kill_tmux_window(99_999_999).unwrap_err();
+        // Unknown controller_id surfaces from the manager's
+        // `tmux_controllers.get` lookup.
+        let err = manager.kill_tmux_window(999, "@11").unwrap_err();
         assert!(
-            err.contains("99999999") && err.contains("not bound"),
-            "expected 'xsterm window 99999999 ... not bound' message, got: {err}"
+            err.contains("tmux controller 999") && err.contains("not registered"),
+            "expected 'tmux controller 999 ... not registered' message, got: {err}"
         );
-        let err = manager.rename_tmux_window(99_999_999, "x").unwrap_err();
+        let err = manager.rename_tmux_window(999, "@11", "x").unwrap_err();
         assert!(
-            err.contains("99999999") && err.contains("not bound"),
-            "expected 'xsterm window 99999999 ... not bound' message, got: {err}"
+            err.contains("tmux controller 999") && err.contains("not registered"),
+            "expected 'tmux controller 999 ... not registered' message, got: {err}"
+        );
+
+        // Unknown tmux_window_id on a known controller surfaces from
+        // `controller.kill_window`'s `window_bindings.contains_key`
+        // guard — i.e. the controller still validates.
+        let err = manager.kill_tmux_window(3, "@missing").unwrap_err();
+        assert!(
+            err.contains("@missing") && err.contains("not registered with controller"),
+            "expected '@missing ... not registered with controller' message, got: {err}"
+        );
+        let err = manager.rename_tmux_window(3, "@missing", "x").unwrap_err();
+        assert!(
+            err.contains("@missing") && err.contains("not registered with controller"),
+            "expected '@missing ... not registered with controller' message, got: {err}"
         );
     }
 
@@ -2940,31 +2884,25 @@ mod tests {
     // ===========================================================================
 
     /// `capture_tmux_pane` resolves with the captured text once the
-    /// dispatch task receives a matching `%begin..%end` block. Mirrors the
-    /// controller-level test but goes through the SessionManager façade so
-    /// the xsterm-id → tmux-pane-id translation is exercised.
+    /// dispatch task receives a matching `%begin..%end` block. Mirrors
+    /// the controller-level test but goes through the SessionManager
+    /// façade — the manager's role is now just to look up the
+    /// controller via `tmux_controllers.get` and delegate; the
+    /// session-manager's `sessions` map is NOT consulted.
     #[tokio::test]
     async fn capture_tmux_pane_resolves_via_session_manager() {
         let manager = SessionManager::new();
         let (controller, _stdin_rx, dispatch_tx) = make_test_controller(20, 20_000_001);
+        // Register the pane on the controller so its own
+        // `pane_bindings.contains_key` check inside `capture_pane`
+        // accepts "%1".
         controller.register_pane("%1".to_string(), 20_000_001);
         manager.tmux_controllers.insert(20, Arc::clone(&controller));
-
-        let info = tmux_pane_info(20_000_001, 20, "%1", Some("dev"), None, false, None, None);
-        manager.sessions.insert(
-            20_000_001,
-            Arc::new(ActiveSession::TmuxPane(Box::new(TmuxPaneHandle {
-                controller: Arc::clone(&controller),
-                tmux_pane_id: "%1".to_string(),
-                info,
-                capabilities: CapabilityFlags::for_tmux(),
-            }))),
-        );
 
         let manager_arc = Arc::new(manager);
         let manager_clone = Arc::clone(&manager_arc);
         let capture_handle =
-            tokio::spawn(async move { manager_clone.capture_tmux_pane(20_000_001, 200).await });
+            tokio::spawn(async move { manager_clone.capture_tmux_pane(20, "%1", 200).await });
 
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
@@ -3014,16 +2952,39 @@ mod tests {
         assert_eq!(text, "scrollback line");
     }
 
-    /// `capture_tmux_pane` errors out cleanly when the session id
-    /// is unknown or refers to a non-tmux transport.
+    /// `capture_tmux_pane` errors out cleanly when `controller_id`
+    /// is not registered.
     #[tokio::test]
-    async fn capture_tmux_pane_errors_on_unknown_session() {
+    async fn capture_tmux_pane_errors_on_unknown_controller_id() {
         let manager = SessionManager::new();
         let err = manager
-            .capture_tmux_pane(404, 100)
+            .capture_tmux_pane(999, "%1", 100)
             .await
-            .expect_err("unknown session must error");
-        assert!(err.contains("not found"), "got: {err}");
+            .expect_err("unknown controller must error");
+        assert!(
+            err.contains("tmux controller 999") && err.contains("not registered"),
+            "expected 'tmux controller 999 ... not registered' message, got: {err}"
+        );
+    }
+
+    /// `capture_tmux_pane` errors out cleanly when `tmux_pane_id` is
+    /// not bound on the named controller — surfaces from
+    /// `controller.capture_pane`'s own `pane_bindings.contains_key`
+    /// guard.
+    #[tokio::test]
+    async fn capture_tmux_pane_errors_on_unknown_tmux_pane_id() {
+        let manager = SessionManager::new();
+        let (controller, _stdin_rx, _dispatch_tx) = make_test_controller(1, 1_000_001);
+        manager.tmux_controllers.insert(1, Arc::clone(&controller));
+
+        let err = manager
+            .capture_tmux_pane(1, "%missing", 100)
+            .await
+            .expect_err("unknown tmux pane id must error");
+        assert!(
+            err.contains("%missing") && err.contains("not registered with controller"),
+            "expected '%missing ... not registered with controller' message, got: {err}"
+        );
     }
 
     /// `list_attached_tmux_servers` projects every tmux controller

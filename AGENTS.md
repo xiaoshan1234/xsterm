@@ -148,7 +148,10 @@ xsterm 的几个概念容易混淆（特别是 "session"）。**session = backen
   - `tmux split` (`create_tmux_pane`) → 不创建 ws/window；在已存在的 PaneTree 里 split 出新 leaf 绑新 session
   - `tmux new-window` (`create_tmux_window`) → 创建新 xsterm Window + 第一个 pane leaf 绑新 session
 - **关闭 session 时**：`closeSession` → 关闭 backend → 删 session → 在所有 workspace 调 `removeSessionAndCollapse` 移除绑它的 leaf。
-- **Tauri 命令后缀** `_tmux_pane` / `_tmux_window` 反映**该命令的 tmux 视角效果**（如 `kill-pane` / `split-window`），但**参数是 xsterm 视角**（`xsterm_session_id` = `Session.id` u32；`xsterm_window_id` = xsterm 内部 Window id）。**没有命令接收 tmux 内部 pane id 作为参数**——tmux id 在 backend 内部消化。
+- **Tauri 命令后缀** `_tmux_pane` / `_tmux_window` 反映**该命令的 tmux 视角效果**（如 `kill-pane` / `split-window`），且**参数也都是 tmux 视角**。两类对照:
+  - **`_tmux_pane` 命令**（`kill_tmux_pane` / `create_tmux_pane` / `capture_tmux_pane` 等）接收 `(controller_id: u32, tmux_pane_id: String)`（`tmux_pane_id` 是 server-side id 如 `"%5"`，来自 `tmux-pane-added` 事件的 payload）。
+  - **`_tmux_window` 命令**（`kill_tmux_window` / `rename_tmux_window` 等）接收 `(controller_id: u32, tmux_window_id: String)`（`tmux_window_id` 是 server-side id 如 `"@5"`，来自 `tmux-window-added` 事件的 payload）。
+  - **本地 id 对 server id 的转换在 ts 层完成**：ts 持有 xsterm Window / xsterm Session ↔ tmux window / tmux pane 的映射（从 `tmux-*-added` 事件 payload 里拿到的 `(controllerId, tmux_*)`），invoke 前直接传 server id；rs 层不再查 `sessions` 也不再做 controller 全表扫描。
 
 **命名禁忌**（读代码 / 写文档时务必注意）：
 

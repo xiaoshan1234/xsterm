@@ -1253,23 +1253,6 @@ impl TmuxController {
             .map_err(|_| TmuxError::AlreadyClosed)
     }
 
-    /// snapshot of every pane currently registered with this
-    /// controller. Returns `(tmux_pane_id, tmux_window_id)` pairs. Used by
-    /// [`SessionManager::kill_tmux_window`](crate::services::session_manager::SessionManager::kill_tmux_window)
-    /// to find every pane that belongs to a window the caller is about
-    /// to close so they can be unbound from the controller.
-    #[allow(dead_code)]
-    pub fn panes_for_window(&self, tmux_window_id: &str) -> Vec<String> {
-        self.pane_window_bindings
-            .lock()
-            .map(|m| {
-                m.iter()
-                    .filter_map(|(pane, win)| (win == tmux_window_id).then(|| pane.clone()))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
     /// look up the tmux window id for a given tmux pane id. Used by
     /// [`SessionManager::create_tmux`](crate::services::session_manager::SessionManager::create_tmux)
     /// so the bootstrap pane's `SessionInfo` carries the bootstrap
