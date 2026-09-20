@@ -7,16 +7,19 @@
  * `AttachedTmuxServer`, `TmuxWindowListEntry` — are runtime metadata
  * the frontend tracks alongside open tmux controllers.
  *
- * Identifier convention used across these payloads:
+ * Identifier convention used across these payloads (after Rust commit
+ * `2871e76 refactor tmux controller to replace xsterm_id with
+ * session_id`):
  * - `tmuxServerWindowId: string` — tmux server-side window id (e.g.
- *   `"@1"`). The IPC parameter passed to `kill_tmux_window` /
- *   `rename_tmux_window`.
- * - `tmuxWindowId: number` — backend-allocated window u32. Used to
- *   match the event to the right xsterm Window in React state (the
- *   same id is also stamped on `Window.tmuxWindowId` /
- *   `Session.tmuxWindowId`).
- * - `tmuxPaneId: string` / `xstermSessionId: number` — pane-level
- *   counterparts, used to match tmux pane events to xsterm Sessions.
+ *   `"@1"`). The single window identity on the wire (no parallel
+ *   backend u32). Used for `kill_tmux_window` / `rename_tmux_window`
+ *   IPC and for matching the event to the right xsterm Window.
+ * - `tmuxPaneId: string` — server-side pane id (e.g. `"%5"`).
+ *   Used for `kill_tmux_pane` / `capture_tmux_pane` / `resize_tmux_pane`
+ *   IPC and for matching the event to the right xsterm Session.
+ * - `xstermSessionId: number` — backend u32 (`Session.id`) of the
+ *   session a pane belongs to; primary key for `session-output` /
+ *   `session-closed` events.
  *
  * For the Session/Window shapes that hold these fields at rest, see
  * `./session.ts` and `./window.ts`. The `{ isHidden }` marker carried
@@ -73,10 +76,8 @@ export interface TmuxPaneRemovedEvent {
  */
 export interface TmuxWindowAddedEvent {
   controllerId: number;
-  /** tmux server-side window id (e.g. `"@1"`). */
+  /** tmux server-side window id (e.g. `"@1"`) — the Window identity. */
   tmuxServerWindowId: string;
-  /** Backend-allocated window id (u32). */
-  tmuxWindowId: number;
   /** Backend-allocated xsterm session id of this window's first pane. */
   xstermSessionId: number;
   /** tmux pane id of this window's first pane. */
@@ -86,7 +87,7 @@ export interface TmuxWindowAddedEvent {
 /**
  * Payload of the `tmux-window-closed` event emitted by the
  * `TmuxController` dispatch task on `%window-close`. The frontend
- * listener finds every Session with `tmuxWindowId === payload.tmuxWindowId`,
+ * listener finds every Session whose `tmuxServerWindowId` matches,
  * drops them from React state, then drops the matching xsterm Window
  * (collapsing the workspace to an init window if it becomes empty).
  *
@@ -96,8 +97,6 @@ export interface TmuxWindowClosedEvent {
   controllerId: number;
   /** tmux server-side window id (e.g. `"@1"`). */
   tmuxServerWindowId: string;
-  /** Backend-allocated window id (u32). */
-  tmuxWindowId: number;
 }
 
 /**
@@ -111,8 +110,6 @@ export interface TmuxWindowRenamedEvent {
   controllerId: number;
   /** tmux server-side window id (e.g. `"@1"`). */
   tmuxServerWindowId: string;
-  /** Backend-allocated window id (u32). */
-  tmuxWindowId: number;
   name: string;
 }
 
@@ -157,10 +154,8 @@ export interface AttachedTmuxServer {
  * the per-window rename / disconnect / delete actions.
  */
 export interface TmuxWindowListEntry {
-  /** tmux server-side window id (e.g. `"@1"`). */
+  /** tmux server-side window id (e.g. `"@1"`) — the Window identity. */
   tmuxServerWindowId: string;
-  /** Backend-allocated window id (matches `Window.tmuxWindowId`). */
-  tmuxWindowId: number;
   /** xsterm session id of the window's first pane, when known. */
   xstermSessionId?: number;
   /** tmux pane id of the window's first pane, when known. */

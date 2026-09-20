@@ -11,15 +11,15 @@
  *
  * # Identifier namespaces on a tmux Window
  *
- * The tmux-cc metadata mirrors the same five fields carried on
- * `Session` (see `./session.ts`):
+ * The tmux-cc metadata mirrors the same fields carried on `Session`
+ * (see `./session.ts`). The parallel backend u32 (`xsterm_window_id`)
+ * was removed by Rust commit `2871e76`; `tmuxServerWindowId` is the
+ * single window identity on the wire.
  * - `tmuxControllerId: number` — backend u32; required on every tmux
  *   IPC command.
  * - `tmuxServerWindowId: string` — tmux server-side window id (e.g.
- *   `"@1"`); used for `kill_tmux_window` / `rename_tmux_window`.
- * - `tmuxWindowId: number` — backend-allocated u32; matches the
- *   `xsterm_window_id` that appears in `tmux-window-added` /
- *   `tmux-window-closed` / `tmux-window-renamed` event payloads.
+ *   `"@1"`); used for `kill_tmux_window` / `rename_tmux_window` and
+ *   to match `tmux-window-added` / `-closed` / `-renamed` events.
  */
 
 import type { PaneNode } from "./pane";
@@ -41,8 +41,6 @@ export interface WindowBase {
   tmuxControllerId?: number;
   /** tmux server-side window id (e.g. `"@1"`). */
   tmuxServerWindowId?: string;
-  /** Backend-allocated window id (u32). */
-  tmuxWindowId?: number;
   /** `true` for the bootstrap window — the Window renders nothing. */
   isHidden?: boolean;
 }

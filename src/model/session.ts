@@ -74,13 +74,21 @@ export interface CapabilityFlags {
  * One open terminal session in the frontend.
  *
  * The tmux-cc-only fields (`tmuxControllerId`, `tmuxPaneId`,
- * `tmuxServerWindowId`, `tmuxWindowId`, `isHidden`) are flat on the
- * shape rather than nested under a `tmuxBackend` wrapper so that IPC
- * client wrappers can read them directly without dereferencing a
- * nested object. TS narrowing on `type === "tmux-cc"` lets consumers
- * branch without a null check.
+ * `tmuxServerWindowId`, `isHidden`) are flat on the shape rather than
+ * nested under a `tmuxBackend` wrapper so that IPC client wrappers
+ * can read them directly without dereferencing a nested object. TS
+ * narrowing on `type === "tmux-cc"` lets consumers branch without a
+ * null check.
  *
  * # Identifier namespaces on a tmux-cc Session
+ *
+ * The parallel backend u32 (previously `xsterm_window_id` /
+ * `tmuxWindowId`) was removed by the Rust commit
+ * `2871e76 refactor tmux controller to replace xsterm_id with
+ * session_id` — the controller no longer allocates its own per-window
+ * id; the tmux server-side id (`"@1"`) IS the Window identity on the
+ * wire. Consequence: the matching `xsterm Window` is keyed by
+ * `tmuxServerWindowId` (the string), not by a parallel u32.
  *
  * - `id: number` — backend-allocated u32, stable for the lifetime of
  *   the in-process session; used as the React store key and as the
@@ -89,14 +97,11 @@ export interface CapabilityFlags {
  *   every tmux IPC command alongside the server-side id.
  * - `tmuxPaneId: string` — tmux server-side pane id (e.g. `"%5"`).
  *   Used for `kill_tmux_pane` / `capture_tmux_pane` / parent pane in
- *   `create_tmux_pane`.
+ *   `create_tmux_pane` / `resize_tmux_pane`.
  * - `tmuxServerWindowId: string` — tmux server-side window id (e.g.
- *   `"@1"`). Used for `kill_tmux_window` / `rename_tmux_window`.
- * - `tmuxWindowId: number` — backend-allocated u32 (matches the
- *   `xsterm_window_id` field the Rust `SessionInfo` no longer carries
- *   in current builds but that still appears in `tmux-window-added`
- *   event payloads for backwards compatibility). Used to look up the
- *   matching `xsterm Window` in `useTauriListeners`.
+ *   `"@1"`). Used for `kill_tmux_window` / `rename_tmux_window` and
+ *   for matching `tmux-window-added` / `-closed` / `-renamed` events
+ *   to xsterm Windows.
  */
 export interface Session {
   /** Backend-assigned id; matches the row in `useSessionStore.sessions`. */
@@ -129,8 +134,6 @@ export interface Session {
   tmuxPaneId?: string;
   /** tmux server-side window id (e.g. `"@1"`). */
   tmuxServerWindowId?: string;
-  /** Backend-allocated window id (u32) — matches the `xsterm Window`. */
-  tmuxWindowId?: number;
   /** `true` for the bootstrap pane; UI renders nothing for it. */
   isHidden?: boolean;
 }

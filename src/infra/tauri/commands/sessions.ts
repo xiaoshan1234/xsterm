@@ -14,9 +14,8 @@ import { logger } from "../../logger/logger";
  * (`create_session`, `create_tmux_session`, `attach_tmux_session`,
  * `create_tmux_pane`, `create_tmux_window`). Defines the structural
  * shape used by both local/ssh sessions and tmux-backed sessions —
- * the `tmuxPaneId` / `tmuxControllerId` / `tmuxWindowId` /
- * `xstermWindowId` / `isHidden` fields are populated only for tmux
- * sessions.
+ * the `tmuxPaneId` / `tmuxControllerId` / `tmuxServerWindowId` /
+ * `isHidden` fields are populated only for tmux sessions.
  *
  * This type lives in `infra/tauri/commands/sessions.ts` (rather than
  * `model/entities/`) because it is purely the IPC wire shape of the
@@ -34,15 +33,12 @@ export interface SessionInfo {
   tmuxPaneId?: string;
   /** id of the tmux controller process that owns this pane. */
   tmuxControllerId?: number;
-  /** tmux window id (e.g. `@1`) the pane belongs to. Surfaced by
-   * `create_tmux_session` / `attach_tmux_session` so the frontend can
-   * render the matching xsterm Window synchronously on return (the
-   * `tmux-window-added` listener does not fire for the bootstrap window). */
-  tmuxWindowId?: string;
-  /** xsterm window id paired with `tmuxWindowId`. Frontend uses this to
-   * construct the matching xsterm Window on `create_tmux_session` /
-   * `attach_tmux_session` return. Undefined for non-tmux sessions. */
-  xstermWindowId?: number;
+  /** tmux server-side window id (e.g. `@1`) the pane belongs to.
+   * Surfaced by `create_tmux_session` / `attach_tmux_session` so the
+   * frontend can render the matching xsterm Window synchronously on
+   * return (the `tmux-window-added` listener does not fire for the
+   * bootstrap window). */
+  tmuxServerWindowId?: string;
   /**
    * hidden (bootstrap) tmux panes are not rendered by the frontend.
    * MVP `tmux -CC new` panes have `is_hidden = false`; tmux attaches
@@ -102,8 +98,58 @@ export function writeSessionBytes(id: number, data: Uint8Array): Promise<void> {
 
 export async function resizeSession(id: number, rows: number, cols: number): Promise<void> {
   logger.debug("sessionService", "resizeSession", { id, rows, cols });
-  await invoke("resize_session", { sessionId: id, rows, cols });
+  // Legacy / unknown transport fallback — kept as a safety net for
+  // call sites that don't have a Session in hand (the `infra`
+  // dispatch-by-type variant below is the one used by the live UI).
+  await invoke("resize_pty_session", { sessionId: id, rows, cols });
   logger.debug("sessionService", "resizeSession:result", undefined);
+}
+
+/**
+ * Resize a tmux pane via `resize-pane -t %<pane> -x <cols> -y <rows>`.
+ *
+ * Symmetric with `kill_tmux_pane` / `capture_tmux_pane`: takes the
+ * server-side `(controller_id, tmux_pane_id)` pair, no xsterm session
+ * id involved (the frontend resolves the mapping locally from the
+ * `tmux-pane-added` event payload).
+ */
+export async function resizeTmuxPane(
+  controllerId: number,
+  tmuxPaneId: string,
+  rows: number,
+  cols: number,
+): Promise<void> {
+  logger.debug("sessionService", "resizeTmuxPane", { controllerId, tmuxPaneId, rows, cols });
+  await invoke("resize_tmux_pane", { controllerId, tmuxPaneId, rows, cols });
+  logger.debug("sessionService", "resizeTmuxPane:result", undefined);
+}
+
+/**
+ * Resize a local PTY session via TIOCSWINSZ ioctl. Takes the universal
+ * `Session.id` (the same one `write_session` / `close_session` use).
+ */
+export async function resizePtySession(
+  sessionId: number,
+  rows: number,
+  cols: number,
+): Promise<void> {
+  logger.debug("sessionService", "resizePtySession", { sessionId, rows, cols });
+  await invoke("resize_pty_session", { sessionId, rows, cols });
+  logger.debug("sessionService", "resizePtySession:result", undefined);
+}
+
+/**
+ * Resize an SSH session's exec channel via the russh `window-change`
+ * request. Takes the universal `Session.id`.
+ */
+export async function resizeSshSession(
+  sessionId: number,
+  rows: number,
+  cols: number,
+): Promise<void> {
+  logger.debug("sessionService", "resizeSshSession", { sessionId, rows, cols });
+  await invoke("resize_ssh_session", { sessionId, rows, cols });
+  logger.debug("sessionService", "resizeSshSession:result", undefined);
 }
 
 export async function closeSession(id: number): Promise<void> {

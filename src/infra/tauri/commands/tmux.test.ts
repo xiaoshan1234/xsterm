@@ -42,7 +42,6 @@ const tmuxInfo: SessionInfo = {
   tmuxPaneId: "%1",
   tmuxControllerId: 1,
   tmuxServerWindowId: "@1",
-  tmuxWindowId: 101,
 };
 
 const tmuxCfg: TmuxCcConfig = { tmuxSessionName: "work" };

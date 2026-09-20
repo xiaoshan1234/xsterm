@@ -92,9 +92,7 @@ export function TmuxWindowsControl({
             <li key={entry.tmuxServerWindowId} className="tmux-windows-row">
               <div className="tmux-windows-row__label">
                 <span className="tmux-windows-row__name">{entry.name}</span>
-                <span className="tmux-windows-row__id">
-                  {entry.tmuxServerWindowId} · xsterm {entry.tmuxWindowId}
-                </span>
+                <span className="tmux-windows-row__id">{entry.tmuxServerWindowId}</span>
               </div>
               <div className="tmux-windows-row__actions">
                 <button

@@ -27,11 +27,6 @@ export interface SessionInfo {
    * return (the `tmux-window-added` listener does not fire for the
    * bootstrap window). */
   tmuxServerWindowId?: string;
-  /** Backend-allocated window id (u32) paired with `tmuxServerWindowId`.
-   * Frontend uses this to construct the matching xsterm Window on
-   * `create_tmux_session` / `attach_tmux_session` return. Undefined
-   * for non-tmux sessions. */
-  tmuxWindowId?: number;
   /**
    * hidden (bootstrap) tmux panes are not rendered by the frontend.
    * MVP `tmux -CC new` panes have `is_hidden = false`; tmux attaches
@@ -188,8 +183,57 @@ export function writeSessionBytes(id: number, data: Uint8Array): Promise<void> {
 
 export async function resizeSession(id: number, rows: number, cols: number): Promise<void> {
   logger.debug("sessionService", "resizeSession", { id, rows, cols });
-  await invoke("resize_session", { sessionId: id, rows, cols });
+  // Legacy / unknown transport fallback — kept as a safety net for
+  // call sites that don't have a Session in hand (the type-dispatching
+  // variants below are the ones used by the live UI).
+  await invoke("resize_pty_session", { sessionId: id, rows, cols });
   logger.debug("sessionService", "resizeSession:result", undefined);
+}
+
+/**
+ * Resize a tmux pane via `resize-pane -t %<pane> -x <cols> -y <rows>`.
+ *
+ * Symmetric with `killTmuxPane` / `captureTmuxPane`: takes the
+ * server-side `(controllerId, tmuxPaneId)` pair, no xsterm session id
+ * involved.
+ */
+export async function resizeTmuxPane(
+  controllerId: number,
+  tmuxPaneId: string,
+  rows: number,
+  cols: number,
+): Promise<void> {
+  logger.debug("sessionService", "resizeTmuxPane", { controllerId, tmuxPaneId, rows, cols });
+  await invoke("resize_tmux_pane", { controllerId, tmuxPaneId, rows, cols });
+  logger.debug("sessionService", "resizeTmuxPane:result", undefined);
+}
+
+/**
+ * Resize a local PTY session via TIOCSWINSZ ioctl. Takes the universal
+ * `Session.id`.
+ */
+export async function resizePtySession(
+  sessionId: number,
+  rows: number,
+  cols: number,
+): Promise<void> {
+  logger.debug("sessionService", "resizePtySession", { sessionId, rows, cols });
+  await invoke("resize_pty_session", { sessionId, rows, cols });
+  logger.debug("sessionService", "resizePtySession:result", undefined);
+}
+
+/**
+ * Resize an SSH session's exec channel via the russh `window-change`
+ * request. Takes the universal `Session.id`.
+ */
+export async function resizeSshSession(
+  sessionId: number,
+  rows: number,
+  cols: number,
+): Promise<void> {
+  logger.debug("sessionService", "resizeSshSession", { sessionId, rows, cols });
+  await invoke("resize_ssh_session", { sessionId, rows, cols });
+  logger.debug("sessionService", "resizeSshSession:result", undefined);
 }
 
 export async function closeSession(id: number): Promise<void> {

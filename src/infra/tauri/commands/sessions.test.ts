@@ -22,7 +22,10 @@ import {
   createSsh,
   closeSession,
   listSessions,
+  resizePtySession,
   resizeSession,
+  resizeSshSession,
+  resizeTmuxPane,
   uploadImageToSshSession,
   writeSession,
   writeSessionBytes,
@@ -125,10 +128,51 @@ describe("writeSessionBytes", () => {
 });
 
 describe("resizeSession", () => {
-  it("invokes resize_session with rows/cols", async () => {
+  it("invokes resize_pty_session with rows/cols (legacy fallback for unknown transports)", async () => {
     invokeMock.mockResolvedValueOnce(undefined);
     await resizeSession(5, 24, 80);
-    expect(invokeMock).toHaveBeenCalledWith("resize_session", { sessionId: 5, rows: 24, cols: 80 });
+    expect(invokeMock).toHaveBeenCalledWith("resize_pty_session", {
+      sessionId: 5,
+      rows: 24,
+      cols: 80,
+    });
+  });
+});
+
+describe("resizeTmuxPane", () => {
+  it("invokes resize_tmux_pane with controllerId/tmuxPaneId/rows/cols", async () => {
+    invokeMock.mockResolvedValueOnce(undefined);
+    await resizeTmuxPane(1, "%5", 24, 80);
+    expect(invokeMock).toHaveBeenCalledWith("resize_tmux_pane", {
+      controllerId: 1,
+      tmuxPaneId: "%5",
+      rows: 24,
+      cols: 80,
+    });
+  });
+});
+
+describe("resizePtySession", () => {
+  it("invokes resize_pty_session with sessionId/rows/cols", async () => {
+    invokeMock.mockResolvedValueOnce(undefined);
+    await resizePtySession(5, 24, 80);
+    expect(invokeMock).toHaveBeenCalledWith("resize_pty_session", {
+      sessionId: 5,
+      rows: 24,
+      cols: 80,
+    });
+  });
+});
+
+describe("resizeSshSession", () => {
+  it("invokes resize_ssh_session with sessionId/rows/cols", async () => {
+    invokeMock.mockResolvedValueOnce(undefined);
+    await resizeSshSession(5, 24, 80);
+    expect(invokeMock).toHaveBeenCalledWith("resize_ssh_session", {
+      sessionId: 5,
+      rows: 24,
+      cols: 80,
+    });
   });
 });
 
