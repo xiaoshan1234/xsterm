@@ -126,7 +126,7 @@ impl SessionBackend for TmuxPaneHandle {
 pub(crate) enum ActiveSession {
     Pty(Box<dyn SessionBackend + Send>),
     Ssh(Box<SshSessionWrapper>),
-    TmuxPane(Box<TmuxPaneHandle>),
+    Tmux(Box<TmuxPaneHandle>),
 }
 
 impl ActiveSession {
@@ -135,7 +135,7 @@ impl ActiveSession {
         match self {
             ActiveSession::Pty(b) => &**b,
             ActiveSession::Ssh(b) => &**b,
-            ActiveSession::TmuxPane(b) => &**b,
+            ActiveSession::Tmux(b) => &**b,
         }
     }
 
@@ -145,7 +145,7 @@ impl ActiveSession {
         match self {
             ActiveSession::Pty(b) => b,
             ActiveSession::Ssh(b) => b,
-            ActiveSession::TmuxPane(b) => b,
+            ActiveSession::Tmux(b) => b,
         }
     }
 
@@ -161,7 +161,7 @@ impl ActiveSession {
     /// otherwise return `None`.
     fn tmux_controller_id(&self) -> Option<u32> {
         match self {
-            ActiveSession::TmuxPane(b) => Some(b.controller.controller_id()),
+            ActiveSession::Tmux(b) => Some(b.controller.controller_id()),
             _ => None,
         }
     }
@@ -172,7 +172,7 @@ impl ActiveSession {
     /// of a split).
     fn tmux_pane_id(&self) -> Option<&str> {
         match self {
-            ActiveSession::TmuxPane(b) => Some(b.tmux_pane_id.as_str()),
+            ActiveSession::Tmux(b) => Some(b.tmux_pane_id.as_str()),
             _ => None,
         }
     }
@@ -183,7 +183,7 @@ impl ActiveSession {
     /// so cloning the `Arc` here is cheap and safe.
     fn tmux_controller(&self) -> Option<Arc<TmuxController>> {
         match self {
-            ActiveSession::TmuxPane(b) => Some(Arc::clone(&b.controller)),
+            ActiveSession::Tmux(b) => Some(Arc::clone(&b.controller)),
             _ => None,
         }
     }
@@ -381,7 +381,7 @@ impl SessionManager {
         };
 
         self.tmux_controllers.insert(controller_id, controller);
-        let self_ref = self.insert_session(session_id, ActiveSession::TmuxPane(Box::new(handle)));
+        let self_ref = self.insert_session(session_id, ActiveSession::Tmux(Box::new(handle)));
         debug_assert_eq!(self_ref.id, session_id);
 
         tracing::info!(
@@ -516,7 +516,7 @@ impl SessionManager {
         };
 
         self.tmux_controllers.insert(controller_id, controller);
-        let self_ref = self.insert_session(session_id, ActiveSession::TmuxPane(Box::new(handle)));
+        let self_ref = self.insert_session(session_id, ActiveSession::Tmux(Box::new(handle)));
         debug_assert_eq!(self_ref.id, session_id);
 
         tracing::info!(
@@ -608,7 +608,7 @@ impl SessionManager {
             let handle = TmuxPaneHandle::new(controller, pane_id, info, capabilities);
             self.sessions.insert(
                 xsterm_id,
-                Arc::new(ActiveSession::TmuxPane(Box::new(handle))),
+                Arc::new(ActiveSession::Tmux(Box::new(handle))),
             );
             registered.push(xsterm_id);
         }
@@ -915,7 +915,7 @@ impl SessionManager {
             info: info.clone(),
             capabilities: CapabilityFlags::for_tmux(),
         };
-        let result = self.insert_session(new_xsterm_id, ActiveSession::TmuxPane(Box::new(handle)));
+        let result = self.insert_session(new_xsterm_id, ActiveSession::Tmux(Box::new(handle)));
         debug_assert_eq!(result.id, new_xsterm_id);
 
         tracing::info!(
@@ -1016,7 +1016,7 @@ impl SessionManager {
             info: info.clone(),
             capabilities: CapabilityFlags::for_tmux(),
         };
-        let result = self.insert_session(session_id, ActiveSession::TmuxPane(Box::new(handle)));
+        let result = self.insert_session(session_id, ActiveSession::Tmux(Box::new(handle)));
         debug_assert_eq!(result.id, session_id);
 
         tracing::info!(
