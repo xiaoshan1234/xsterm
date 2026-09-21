@@ -21,6 +21,7 @@
  *   `./window-config.ts` / `./workspace-config.ts`.
  */
 import type { CreateSessionInput, SessionDisplayConfig } from "./session-config";
+import { TmuxSessionBackend } from "./tmux";
 
 /** Transport used to reach the backend — runtime tag on a `Session`. */
 export type SessionConnectionType = "local" | "ssh" | "tmux-cc";
@@ -127,13 +128,8 @@ export interface Session {
   createdAt?: number;
   /** ms epoch — updated on pane focus + terminal output (debounced). */
   lastActivityAt?: number;
-  /** --- tmux-cc-only fields. All `undefined` for `local` / `ssh` sessions. --- */
-  /** Owning tmux controller id (u32). Required for every tmux IPC command. */
-  tmuxControllerId?: number;
-  /** tmux server-side pane id (e.g. `"%5"`). */
-  tmuxPaneId?: string;
-  /** tmux server-side window id (e.g. `"@1"`). */
-  tmuxServerWindowId?: string;
+  /** */
+  tmuxBackend?: TmuxSessionBackend;
   /** `true` for the bootstrap pane; UI renders nothing for it. */
   isHidden?: boolean;
 }
