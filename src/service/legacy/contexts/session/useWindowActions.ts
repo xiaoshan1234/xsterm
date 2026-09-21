@@ -90,7 +90,6 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
           rootPane: createLeafPane(100, sessionId, configId),
           activePaneId: "",
           windowType,
-          xstermWindowId: undefined,
         };
       }
       // Branch B: fromSession — synchronous local mutation.

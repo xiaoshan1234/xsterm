@@ -321,19 +321,22 @@ export function useTauriListeners(): void {
       //
       // The bootstrap xsterm Window is also installed synchronously by
       // `createAndActivateSession` (Bug fix 2026-09-13), so we dedupe
-      // by `xstermWindowId` to avoid inserting a second Window when
+      // by `tmuxServerWindowId` to avoid inserting a second Window when
       // the bridge fires `tmux-window-added` for the bootstrap pane
       // shortly after the backend return.
       const unlistenTmuxWindowAdded = await subscribeTmuxWindowAdded(
         (event: TmuxWindowAddedEvent) => {
-          const { controllerId, tmuxWindowId, xstermWindowId, xstermSessionId, xstermPaneId } =
-            event;
+          const { controllerId, tmuxWindowId, xstermSessionId, xstermPaneId } = event;
           // Bootstrap xsterm Window already inserted by the sync
           // `createAndActivateSession` path — keep the Session
           // mutation logic (below) but skip the Window insert.
+          //
+          // Under the new IA (`TmuxSessionInit`), the bootstrap
+          // window is keyed by `tmuxServerWindowId`, so we dedupe
+          // by the tmux window id here.
           if (
             getWorkspacesRef().current.some((w) =>
-              w.windows.some((win) => win.xstermWindowId === xstermWindowId),
+              w.windows.some((win) => win.tmuxServerWindowId === tmuxWindowId),
             )
           ) {
             if (!getSessionsRef().current.some((s) => s.id === xstermSessionId)) {
@@ -479,7 +482,8 @@ export function useTauriListeners(): void {
                 rootPane,
                 activePaneId: rootPane.id,
                 windowType: "terminal",
-                xstermWindowId,
+                tmuxControllerId: controllerId,
+                tmuxServerWindowId: tmuxWindowId,
               };
               const baseWindows = hasControlWindow
                 ? workspace.windows
@@ -508,7 +512,7 @@ export function useTauriListeners(): void {
       // it with an init window so the workspace stays usable.
       const unlistenTmuxWindowClosed = await subscribeTmuxWindowClosed(
         (event: TmuxWindowClosedEvent) => {
-          const { tmuxWindowId, xstermWindowId } = event;
+          const { tmuxWindowId } = event;
           // Drop every Session that belonged to this tmux window.
           const deadIds = getSessionsRef()
             .current.filter((s) => s.tmuxWindowId === tmuxWindowId)
@@ -528,16 +532,11 @@ export function useTauriListeners(): void {
           useWorkspaceStore.getState().setWorkspaces((prev) =>
             prev.map((workspace) => {
               const targetWindow = workspace.windows.find(
-                (w) => w.xstermWindowId === xstermWindowId,
+                (w) => w.tmuxServerWindowId === tmuxWindowId,
               );
-              // The frontend may not have a Window for this
-              // xstermWindowId (e.g. the controller exited before
-              // the user-facing Window was created, or this is the
-              // bootstrap window which doesn't have xstermWindowId
-              // exposed to the frontend). Skip.
               if (!targetWindow) return workspace;
               const remaining = workspace.windows.filter(
-                (w) => w.xstermWindowId !== xstermWindowId,
+                (w) => w.tmuxServerWindowId !== tmuxWindowId,
               );
               let nextWindows = remaining;
               let nextActiveId = workspace.activeWindowId;
@@ -558,7 +557,7 @@ export function useTauriListeners(): void {
                 nextActiveId = initWindow.id;
               } else if (nextActiveId === targetWindow.id) {
                 const closedIndex = workspace.windows.findIndex(
-                  (w) => w.xstermWindowId === xstermWindowId,
+                  (w) => w.tmuxServerWindowId === tmuxWindowId,
                 );
                 const fallback =
                   remaining[closedIndex - 1] ??
@@ -589,12 +588,12 @@ export function useTauriListeners(): void {
       // `name` is rendered in the tab bar.
       const unlistenTmuxWindowRenamed = await subscribeTmuxWindowRenamed(
         (event: TmuxWindowRenamedEvent) => {
-          const { xstermWindowId, name } = event;
+          const { tmuxWindowId, name } = event;
           useWorkspaceStore.getState().setWorkspaces((prev) =>
             prev.map((workspace) => ({
               ...workspace,
               windows: workspace.windows.map((w) =>
-                w.xstermWindowId === xstermWindowId ? { ...w, name } : w,
+                w.tmuxServerWindowId === tmuxWindowId ? { ...w, name } : w,
               ),
             })),
           );
@@ -603,7 +602,7 @@ export function useTauriListeners(): void {
           // for a fresh `tmux-window-list` event.
           for (const [controllerId, entries] of getTmuxWindowsRef().current) {
             const updated = entries.map((e) =>
-              e.xstermWindowId === xstermWindowId ? { ...e, name } : e,
+              e.tmuxServerWindowId === tmuxWindowId ? { ...e, name } : e,
             );
             getTmuxWindowsRef().current.set(controllerId, updated);
           }
@@ -665,19 +664,14 @@ export function useTauriListeners(): void {
             if (!targetId) return prev;
             return prev.map((workspace) => {
               if (workspace.id !== targetId) return workspace;
-              const existingXstermIds = new Set(
+              const existingTmuxIds = new Set(
                 workspace.windows
-                  .map((w) => w.xstermWindowId)
-                  .filter((id): id is number => id !== undefined),
+                  .map((w) => w.tmuxServerWindowId)
+                  .filter((id): id is string => id !== undefined),
               );
               const newWindows: Window[] = [];
               for (const row of entries) {
-                const xid = row.xstermWindowId;
-                if (xid === undefined || xid === 0) continue;
-                if (existingXstermIds.has(xid)) continue;
-                // Skip the bootstrap pane's xsterm pane id when
-                // xsterm_pane_id is empty (the row represents a
-                // window whose first pane we haven't bound yet).
+                if (existingTmuxIds.has(row.tmuxWindowId)) continue;
                 const rootPane = {
                   id: crypto.randomUUID(),
                   type: "leaf" as const,
@@ -690,9 +684,10 @@ export function useTauriListeners(): void {
                   rootPane,
                   activePaneId: rootPane.id,
                   windowType: "terminal",
-                  xstermWindowId: xid,
+                  tmuxControllerId: row.controllerId,
+                  tmuxServerWindowId: row.tmuxWindowId,
                 });
-                existingXstermIds.add(xid);
+                existingTmuxIds.add(row.tmuxWindowId);
               }
               if (newWindows.length === 0) return workspace;
               return withRecomputedSessionIds({

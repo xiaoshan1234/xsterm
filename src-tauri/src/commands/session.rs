@@ -5,7 +5,7 @@ use tauri::{AppHandle, State};
 use crate::infrastructure::app_backend::{AppBackend, RealAppBackend};
 use crate::models::session::{
     AttachedTmuxServer, LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo,
-    TmuxCcConfig,
+    TmuxCcConfig, TmuxSessionInit,
 };
 use crate::services::session_manager::{AutoAttachOutcome, SessionManager};
 
@@ -62,28 +62,47 @@ pub async fn create_session(
     config: SessionConfig,
     state: State<'_, Arc<SessionManager>>,
     app: AppHandle,
-) -> Result<SessionInfo, String> {
+) -> Result<serde_json::Value, String> {
     tracing::info!("Creating session via generic SessionConfig");
     let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
         Arc::new(RealAppBackend::new(app));
     match config {
-        SessionConfig::Local(local) => state.create_local(local, backend),
-        SessionConfig::Ssh(ssh) => state.create_ssh(ssh, backend),
+        SessionConfig::Local(local) => state
+            .create_local(local, backend)
+            .map(serde_json::to_value)
+            .and_then(|r| r.map_err(|e| e.to_string())),
+        SessionConfig::Ssh(ssh) => state
+            .create_ssh(ssh, backend)
+            .map(serde_json::to_value)
+            .and_then(|r| r.map_err(|e| e.to_string())),
         SessionConfig::TmuxCc(tmux) => {
             tracing::info!(
                 "[DEBUG-0009-RUST] create_session routing to create_tmux config={:?}",
                 tmux
             );
-            state.create_tmux(&tmux, backend).await
+            state
+                .create_tmux(&tmux, backend)
+                .await
+                .map(serde_json::to_value)
+                .and_then(|r| r.map_err(|e| e.to_string()))
         }
     }
-    .inspect(|info| {
-        tracing::info!(
-            "[DEBUG-0009-RUST] Session created via generic command: id={} tmux_window_id={:?}",
-            info.id,
-            info.tmux_window_id
-        );
-        tracing::info!("Session created via generic command: id={}", info.id);
+    .inspect(|value| {
+        if let Some(id) = value
+            .get("session")
+            .and_then(|s| s.get("id"))
+            .and_then(|v| v.as_u64())
+        {
+            tracing::info!(
+                "[DEBUG-0009-RUST] Session created via generic command: id={}",
+                id
+            );
+        } else if let Some(id) = value.get("id").and_then(|v| v.as_u64()) {
+            tracing::info!(
+                "[DEBUG-0009-RUST] Session created via generic command: id={}",
+                id
+            );
+        }
     })
 }
 
@@ -186,17 +205,16 @@ pub fn upload_image_to_ssh_session(
 /// Create a new tmux `-CC` controller session.
 ///
 /// Spawns a `tmux -CC` child process and waits for the first pane to be
-/// reported before returning. The registered pane is the bootstrap pane
-/// tmux occupies on `tmux -CC new` (D3 in
-/// `doc/requirements/prd-0.1/req-006-tmux.md`) and is marked
-/// `is_hidden = true` so the frontend suppresses it.
+/// Synchronously returns the full initial state of the controller
+/// (n windows + m panes + 1 control window) so the frontend can
+/// render the entire workspace from one IPC reply.
 #[tauri::command]
 pub async fn create_tmux_session(
     config: TmuxCcConfig,
     state: State<'_, Arc<SessionManager>>,
     backend: State<'_, Arc<RealAppBackend>>,
     app: AppHandle,
-) -> Result<SessionInfo, String> {
+) -> Result<TmuxSessionInit, String> {
     tracing::info!(
         "[DEBUG-0009-RUST] create_tmux_session command ENTRY config={:?}",
         config
@@ -215,7 +233,9 @@ pub async fn create_tmux_session(
     tracing::info!(
         "[DEBUG-0009-RUST] create_tmux_session command EXIT ok={} info={:?}",
         result.is_ok(),
-        result.as_ref().ok()
+        result
+            .as_ref()
+            .map(|init| (init.session.id, init.windows.len(), init.panes.len()))
     );
     if let Err(ref e) = result {
         tracing::error!(
@@ -239,13 +259,13 @@ pub async fn create_tmux_session(
             tracing::warn!("create_tmux_session: persistence failed: {e}");
         }
     }
-    result.inspect(|info| {
+    result.inspect(|init| {
         tracing::info!(
-            "tmux session created: id={} controller_id={} pane={:?} hidden={}",
-            info.id,
-            info.tmux_controller_id.unwrap_or(0),
-            info.tmux_pane_id,
-            info.is_hidden,
+            "tmux session created: id={} controller_id={} {} windows, {} panes returned",
+            init.session.id,
+            init.session.tmux_controller_id.unwrap_or(0),
+            init.windows.len(),
+            init.panes.len(),
         );
     })
 }
@@ -353,7 +373,7 @@ pub async fn attach_tmux_session(
     state: State<'_, Arc<SessionManager>>,
     backend: State<'_, Arc<RealAppBackend>>,
     app: AppHandle,
-) -> Result<SessionInfo, String> {
+) -> Result<TmuxSessionInit, String> {
     tracing::info!(
         "Attaching to tmux server: name={:?} tmux_session={:?} socket={:?}",
         config.name,
@@ -371,13 +391,13 @@ pub async fn attach_tmux_session(
             tracing::warn!("attach_tmux_session: persistence failed: {e}");
         }
     }
-    result.inspect(|info| {
+    result.inspect(|init| {
         tracing::info!(
-            "tmux attach succeeded: id={} controller_id={} pane={:?} hidden={}",
-            info.id,
-            info.tmux_controller_id.unwrap_or(0),
-            info.tmux_pane_id,
-            info.is_hidden,
+            "tmux attach succeeded: id={} controller_id={} {} windows, {} panes returned",
+            init.session.id,
+            init.session.tmux_controller_id.unwrap_or(0),
+            init.windows.len(),
+            init.panes.len(),
         );
     })
 }

@@ -68,7 +68,6 @@ describe("buildFrontendSession", () => {
     expect(session.tmuxPaneId).toBeUndefined();
     expect(session.tmuxControllerId).toBeUndefined();
     expect(session.tmuxWindowId).toBeUndefined();
-    expect(session.xstermWindowId).toBeUndefined();
     expect(session.isHidden).toBeUndefined();
     expect(session.createdAt).toBeGreaterThanOrEqual(before);
     expect(session.createdAt).toBeLessThanOrEqual(after);
@@ -88,7 +87,6 @@ describe("buildFrontendSession", () => {
       tmuxPaneId: "%5",
       tmuxControllerId: 42,
       tmuxWindowId: "@1",
-      xstermWindowId: 7,
       isHidden: true,
     };
     const session = buildFrontendSession(info, "cfg-3", "tmux-cc");
@@ -96,7 +94,6 @@ describe("buildFrontendSession", () => {
     expect(session.tmuxPaneId).toBe("%5");
     expect(session.tmuxControllerId).toBe(42);
     expect(session.tmuxWindowId).toBe("@1");
-    expect(session.xstermWindowId).toBe(7);
     expect(session.isHidden).toBe(true);
   });
 
@@ -105,7 +102,6 @@ describe("buildFrontendSession", () => {
     expect("tmuxPaneId" in session).toBe(false);
     expect("tmuxControllerId" in session).toBe(false);
     expect("tmuxWindowId" in session).toBe(false);
-    expect("xstermWindowId" in session).toBe(false);
     expect("isHidden" in session).toBe(false);
   });
 

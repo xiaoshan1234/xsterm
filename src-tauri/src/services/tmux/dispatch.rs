@@ -451,6 +451,9 @@ fn handle_classified_response(
         trigger_followup_list_panes(controller);
     } else if first.starts_with('%') {
         emit_pane_list(bridge, controller_id, controller, cmd_id, &lines);
+        // Both list-windows and list-panes have been processed.
+        // Signal the controller so `take_initial_state` can return.
+        controller.signal_initial_state_ready();
     } else {
         tracing::debug!(
             "command {} body does not look like a list query (first line {:?}); ignoring",
@@ -518,7 +521,7 @@ fn parse_pane_list_row(line: &str) -> Option<PaneListRow> {
 fn emit_window_list(
     bridge: &TmuxBridge,
     session_id: u32,
-    controller: &TmuxController,
+    controller: &Arc<TmuxController>,
     cmd_id: u32,
     lines: &[String],
 ) {
@@ -530,19 +533,20 @@ fn emit_window_list(
         tracing::debug!("command {} body had no parseable list rows", cmd_id);
         return;
     }
-    // Pre-populate the registry's event_waiters AND the controller's
-    // `window_bindings` map for every window we see in this list —
-    //
     // The server won't fire `%window-add` for windows that already
-    // existed before this controller attached, so `emit_pane_list`
-    // needs the binding to know which window each pane belongs to.
+    // existed before this controller attached, so we register a
+    // Bootstrap event waiter for every window we see in this list.
     // After dropping the parallel `xsterm_window_id` allocator we
     // just record the `tmux_window_id` set so the dispatch task's
     // bootstrap-detection predicate in `WindowAdd` case (b) can tell
     // whether a subsequent `%window-add` is the very first one.
     //
-    // P8 W3b: use `Bootstrap` event waiters so the matching
-    // `%window-pane-changed` resolves them.
+    // **New IA (TmuxSessionInit):** stash the parsed rows into
+    // `controller.initial_windows` so [`TmuxController::take_initial_state`]
+    // can return them synchronously. We no longer emit a
+    // `tmux-window-list` event — the frontend gets the same data as
+    // part of the `create_tmux_session` / `attach_tmux_session`
+    // return value.
     let _ = entries
         .iter()
         .map(|e| {
@@ -551,16 +555,6 @@ fn emit_window_list(
                 sender: EventWaiterSender::None,
                 tmux_window_id: Some(e.window_id.clone()),
             });
-            // **Bug 0009 fix:** persist the binding in
-            // `window_bindings` so the following `list-panes`
-            // response can resolve the pane → window mapping for
-            // `record_pane_window`.
-            //
-            // PR-0009-fix: also log `window_name` so a tmux session
-            // operator can verify (a) `-t <session>` scoping landed
-            // the right rows and (b) the name field round-trips
-            // through DCS / control-mode parsing intact. Format is
-            // stable for grep: `[PR-0009-fix] window`.
             tracing::info!(
                 "[PR-0009-fix] emit_window_list: inserting tmux_window_id={:?} name={:?} into window_bindings (controller {})",
                 e.window_id,
@@ -572,8 +566,6 @@ fn emit_window_list(
             }
         })
         .collect::<Vec<_>>();
-    // PR-0009-fix: single-line summary so an operator reading the log
-    // can see the whole snapshot at a glance without grepping.
     tracing::info!(
         "[PR-0009-fix] emit_window_list: session={:?} controller={} rows={} windows=[{}]",
         controller.session_name().as_deref().unwrap_or("<unbound>"),
@@ -585,34 +577,27 @@ fn emit_window_list(
             .collect::<Vec<_>>()
             .join(", "),
     );
-    let rows = entries
+    let inits: Vec<crate::models::session::TmuxWindowInit> = entries
         .iter()
-        .map(|entry| {
-            serde_json::json!({
-                "controllerId": session_id,
-                "tmuxWindowId": entry.window_id,
-                "xstermSessionId": session_id,
-                "xstermPaneId": "",
-            })
+        .map(|entry| crate::models::session::TmuxWindowInit {
+            tmux_window_id: entry.window_id.clone(),
+            name: entry.name.clone(),
+            active: entry.active,
+            layout: entry.layout.clone(),
         })
-        .collect::<Vec<_>>();
-    tracing::info!(
-        "[DEBUG-0009-RUST] emit_window_list: controller {} cmd_id={} entries={} windows={:?}",
-        session_id,
-        cmd_id,
-        entries.len(),
-        entries
-            .iter()
-            .map(|e| (&e.window_id, "..."))
-            .collect::<Vec<_>>()
-    );
-    bridge.emit_tmux_window_added_for_list(session_id, serde_json::json!(rows));
+        .collect();
+    controller.stash_initial_windows(inits);
+    // Bridge / session_id are unused for the new IA but kept in
+    // the signature for the legacy tests that still pass them.
+    let _ = bridge;
+    let _ = session_id;
+    let _ = cmd_id;
 }
 
 fn emit_pane_list(
     bridge: &TmuxBridge,
     session_id: u32,
-    controller: &TmuxController,
+    controller: &Arc<TmuxController>,
     cmd_id: u32,
     lines: &[String],
 ) {
@@ -626,56 +611,55 @@ fn emit_pane_list(
     }
     // Best-effort: register every pane we see. The first one wakes
     // `await_first_pane`; the rest are bound to their windows for
-    // `%output` routing via the `pane_bindings` map. After dropping
-    // the parallel `xsterm_window_id` allocator we no longer need a
-    // `window_to_xsterm` lookup here — `tmux_window_id` IS the
-    // window's identity.
+    // `%output` routing via the `pane_bindings` map.
+    //
+    // **New IA (TmuxSessionInit):** stash the parsed rows into
+    // `controller.initial_panes` (with each pane's Session.id
+    // pre-allocated by `allocate_session_id`) and signal
+    // `initial_state_ready` once both lists are processed.
     let mut first_registered = false;
+    let mut inits: Vec<crate::models::session::TmuxPaneInit> = Vec::with_capacity(entries.len());
     for entry in &entries {
-        let session_id = controller.allocate_session_id();
-        controller.register_pane(entry.pane_id.clone(), session_id);
-        // Persist the pane → window binding so the next
-        // `record_pane_window` / `tmux_window_id_for_pane` lookup
-        // can resolve it. ADR 0009.
+        let pane_session_id = controller.allocate_session_id();
+        controller.register_pane(entry.pane_id.clone(), pane_session_id);
         controller.record_pane_window(entry.pane_id.clone(), entry.window_id.clone());
-        bridge.emit_tmux_pane_added_with_window(session_id, &entry.pane_id, &entry.window_id);
         if let Ok(mut pane_bindings) = controller.pane_bindings.lock() {
-            pane_bindings.insert(entry.pane_id.clone(), session_id);
+            pane_bindings.insert(entry.pane_id.clone(), pane_session_id);
         }
+        inits.push(crate::models::session::TmuxPaneInit {
+            session_id: pane_session_id,
+            tmux_pane_id: entry.pane_id.clone(),
+            tmux_window_id: entry.window_id.clone(),
+            active: entry.active,
+            width: entry.width,
+            height: entry.height,
+            title: entry.title.clone(),
+            cwd: entry.cwd.clone(),
+        });
         if !first_registered {
-            controller.record_first_pane(session_id, entry.pane_id.clone());
+            controller.record_first_pane(pane_session_id, entry.pane_id.clone());
             first_registered = true;
             tracing::info!(
                 "bootstrap first pane registered from list-panes: window={} pane={} session_id={}",
                 entry.window_id,
                 entry.pane_id,
-                session_id,
+                pane_session_id,
             );
         } else {
             tracing::info!(
                 "bootstrap additional pane registered from list-panes: window={} pane={} session_id={}",
                 entry.window_id,
                 entry.pane_id,
-                session_id,
+                pane_session_id,
             );
         }
     }
-    let rows = entries
-        .iter()
-        .map(|e| {
-            serde_json::json!({
-                "paneId": e.pane_id,
-                "windowId": e.window_id,
-                "sessionId": e.session_id,
-                "active": e.active,
-                "width": e.width,
-                "height": e.height,
-                "cwd": e.cwd,
-                "title": e.title,
-            })
-        })
-        .collect::<Vec<_>>();
-    bridge.emit_tmux_pane_added_for_list(session_id, serde_json::json!(rows));
+    controller.stash_initial_panes(inits);
+    // Bridge / session_id are unused for the new IA but kept in
+    // the signature for the legacy tests that still pass them.
+    let _ = bridge;
+    let _ = session_id;
+    let _ = cmd_id;
 }
 
 /// Send `list-panes ""` on a detached OS thread so the dispatch loop

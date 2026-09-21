@@ -383,6 +383,89 @@ pub fn tmux_pane_info(
     }
 }
 
+/// Synchronous return shape of `create_tmux_session` / `attach_tmux_session`
+/// (and the auto-attach-on-startup path).
+///
+/// The IA contract: the backend hands the frontend **everything it needs
+/// to render the initial workspace state in one round-trip**:
+/// - `session` — the bootstrap pane's [`SessionInfo`]. Frontend uses this
+///   to call `buildFrontendSession` for the primary Session row (kept
+///   as a separate field so the existing frontend code can keep reading
+///   `info.id` / `info.tmuxPaneId` directly).
+/// - `windows` — all n tmux windows on the server at creation/attach
+///   time. Frontend creates one [`Window`] (kind: `"terminal"`) per
+///   entry, keyed by `tmux_window_id`.
+/// - `panes` — all m tmux panes on the server at creation/attach time,
+///   **including the bootstrap pane** (which also appears as
+///   `session`). Each carries a pre-allocated `session_id` (from the
+///   shared [`SessionIdSource`]) so the frontend can build 1:1 Session
+///   rows for every pane — there is no longer a separate async
+///   `tmux-pane-list` path for the initial state.
+/// - `control_window` — per-controller "session/window control" surface
+///   (ADR 0009 §2.1). Frontend creates exactly one
+///   [`TmuxControlWindow`] per controller.
+///
+/// After this initial state is delivered, subsequent panes / windows
+/// (created via user-driven `split-window` / `new-window`) still come
+/// through the existing `tmux-pane-added` / `tmux-window-added` async
+/// events — those are unaffected.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TmuxSessionInit {
+    /// Bootstrap pane's `SessionInfo`. Identical to what the legacy
+    /// `create_tmux_session` command returned.
+    pub session: SessionInfo,
+    /// All n tmux windows (including the bootstrap window).
+    pub windows: Vec<TmuxWindowInit>,
+    /// All m tmux panes (including the bootstrap pane — same id as
+    /// `session.id`). Each carries its own pre-allocated
+    /// [`SessionIdSource`] id.
+    pub panes: Vec<TmuxPaneInit>,
+    /// Per-controller "control window" (ADR 0009 §2.1).
+    pub control_window: TmuxControlWindowInit,
+}
+
+/// One row of [`TmuxSessionInit::windows`]. Matches the shape of the
+/// legacy `tmux-window-list` event payload (minus the now-removed
+/// `xsterm_window_id` parallel allocator fields).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TmuxWindowInit {
+    /// tmux server-side window id (e.g. `"@5"`).
+    pub tmux_window_id: String,
+    /// Tab-bar label.
+    pub name: String,
+    /// Currently-active window.
+    pub active: bool,
+    /// `tmux list-windows` layout string (informational; not parsed).
+    pub layout: String,
+}
+
+/// One row of [`TmuxSessionInit::panes`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TmuxPaneInit {
+    /// Pre-allocated [`SessionIdSource`] id — the frontend builds a
+    /// 1:1 Session row for each entry.
+    pub session_id: u32,
+    /// tmux server-side pane id (e.g. `"%5"`).
+    pub tmux_pane_id: String,
+    /// Owning tmux window id (matches `TmuxWindowInit::tmux_window_id`).
+    pub tmux_window_id: String,
+    /// Currently-active pane.
+    pub active: bool,
+    pub width: u16,
+    pub height: u16,
+    pub title: String,
+    pub cwd: String,
+}
+
+/// One row of [`TmuxSessionInit::control_window`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TmuxControlWindowInit {
+    /// Owning tmux controller id (u32).
+    pub tmux_controller_id: u32,
+    /// Display name for the tab (e.g. `"tmux-7"`).
+    pub name: String,
+}
+
 /// Discriminated union for the configuration required to create a session.
 ///
 /// Used by the generic `create_session` Tauri command so the frontend can pass

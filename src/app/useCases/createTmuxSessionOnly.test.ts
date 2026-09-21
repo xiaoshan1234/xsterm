@@ -25,15 +25,20 @@ describe("createTmuxSessionOnly", () => {
   });
 
   it("creates tmux backend session and adds it to the store", async () => {
-    const mockInfo = {
-      id: 50,
-      name: "t",
-      sessionType: { type: "tmux-cc", config: {} },
-      isConnected: true,
-      tmuxPaneId: "%1",
-      tmuxControllerId: 1,
+    const mockInit = {
+      session: {
+        id: 50,
+        name: "t",
+        sessionType: { type: "tmux-cc", config: {} },
+        isConnected: true,
+        tmuxPaneId: "%1",
+        tmuxControllerId: 1,
+      },
+      windows: [],
+      panes: [],
+      controlWindow: { tmuxControllerId: 1, name: "tmux-1" },
     } as any;
-    vi.mocked(createTmux).mockResolvedValue(mockInfo);
+    vi.mocked(createTmux).mockResolvedValue(mockInit);
 
     const session = await createTmuxSessionOnly({});
 

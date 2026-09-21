@@ -92,7 +92,6 @@ export interface TmuxWindowListRawEvent {
   controller_id: number;
   windows: Array<{
     tmux_window_id: string;
-    xsterm_window_id?: number;
     xsterm_session_id?: number;
     xsterm_pane_id?: string;
     name: string;
@@ -106,7 +105,6 @@ export function subscribeTmuxWindowList(
     const { controller_id: controllerId, windows: rows } = event.payload;
     const entries: TmuxWindowListEntry[] = rows.map((row) => ({
       tmuxWindowId: row.tmux_window_id,
-      xstermWindowId: row.xsterm_window_id ?? 0,
       xstermSessionId: row.xsterm_session_id,
       xstermPaneId: row.xsterm_pane_id,
       name: row.name,

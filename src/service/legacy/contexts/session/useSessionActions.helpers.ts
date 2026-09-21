@@ -46,7 +46,7 @@ export function getUniqueWindowName(
  * Builds the frontend `Session` object from a backend `SessionInfo` returned
  * by `sessionService.createLocal` / `createSsh` / `createTmux`. The tmux
  * fields (`tmuxPaneId`, `tmuxControllerId`, `tmuxWindowId`,
- * `xstermWindowId`, `isHidden`) are forwarded when present.
+ * `isHidden`) are forwarded when present.
  */
 export function buildFrontendSession(
   info: sessionService.SessionInfo,
@@ -68,7 +68,6 @@ export function buildFrontendSession(
     ...(info.tmuxPaneId !== undefined ? { tmuxPaneId: info.tmuxPaneId } : {}),
     ...(info.tmuxControllerId !== undefined ? { tmuxControllerId: info.tmuxControllerId } : {}),
     ...(info.tmuxWindowId !== undefined ? { tmuxWindowId: info.tmuxWindowId } : {}),
-    ...(info.xstermWindowId !== undefined ? { xstermWindowId: info.xstermWindowId } : {}),
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),
   };
 }

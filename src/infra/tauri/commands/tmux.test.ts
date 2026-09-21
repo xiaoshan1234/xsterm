@@ -34,14 +34,32 @@ import {
 import type { SessionInfo } from "./sessions";
 import type { AttachedTmuxServer, TmuxCcConfig } from "../../../model";
 
-const tmuxInfo: SessionInfo = {
-  id: 11,
-  name: "tmux-demo",
-  sessionType: { type: "tmux-cc", config: {} },
-  isConnected: true,
-  tmuxPaneId: "%1",
-  tmuxControllerId: 1,
-  tmuxServerWindowId: "@1",
+const tmuxInfo = {
+  session: {
+    id: 11,
+    name: "tmux-demo",
+    sessionType: { type: "tmux-cc", config: {} },
+    isConnected: true,
+    tmuxPaneId: "%1",
+    tmuxControllerId: 1,
+    tmuxServerWindowId: "@1",
+  },
+  windows: [
+    { tmuxWindowId: "@1", name: "win-1", active: true, layout: "" },
+  ],
+  panes: [
+    {
+      sessionId: 11,
+      tmuxPaneId: "%1",
+      tmuxWindowId: "@1",
+      active: true,
+      width: 80,
+      height: 24,
+      title: "bash",
+      cwd: "/home/u",
+    },
+  ],
+  controlWindow: { tmuxControllerId: 1, name: "tmux-1" },
 };
 
 const tmuxCfg: TmuxCcConfig = { tmuxSessionName: "work" };
@@ -58,7 +76,7 @@ beforeEach(() => {
 });
 
 describe("createTmux", () => {
-  it("invokes create_tmux_session and returns SessionInfo", async () => {
+  it("invokes create_tmux_session and returns TmuxSessionInit", async () => {
     invokeMock.mockResolvedValueOnce(tmuxInfo);
     const result = await createTmux(tmuxCfg);
     expect(result).toEqual(tmuxInfo);
@@ -76,7 +94,7 @@ describe("probeTmuxSessionExists", () => {
 });
 
 describe("attachTmux", () => {
-  it("invokes attach_tmux_session and returns SessionInfo", async () => {
+  it("invokes attach_tmux_session and returns TmuxSessionInit", async () => {
     invokeMock.mockResolvedValueOnce(tmuxInfo);
     const result = await attachTmux(tmuxCfg);
     expect(result).toEqual(tmuxInfo);

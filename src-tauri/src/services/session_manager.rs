@@ -15,7 +15,7 @@ use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{
     build_remote_image_path, tmux_pane_info, AttachedTmuxServer, LocalSessionConfig,
     SSHSessionConfig, SessionIdSource, SessionInfo, SessionLoggingConfig, SplitDirection,
-    TmuxCcConfig,
+    TmuxCcConfig, TmuxControlWindowInit, TmuxSessionInit,
 };
 use crate::services::local_session::create_local_session;
 use crate::services::session_log::start_session_logging;
@@ -36,9 +36,13 @@ pub struct AutoAttachOutcome {
     /// frontend can match the outcome back to a persisted entry even
     /// when session names repeat.
     pub session_key: String,
-    /// `Some(SessionInfo)` on a successful re-attach, `None` otherwise.
+    /// `Some(TmuxSessionInit)` on a successful re-attach, `None`
+    /// otherwise. The new IA returns the full initial state (n
+    /// windows + m panes + control window) in one synchronous
+    /// payload so the frontend can render the workspace without
+    /// waiting for additional async events.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub info: Option<SessionInfo>,
+    pub info: Option<crate::models::session::TmuxSessionInit>,
     /// `Some(message)` on a failed re-attach, `None` otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -308,7 +312,7 @@ impl SessionManager {
         &self,
         config: &TmuxCcConfig,
         backend: Arc<dyn AppBackend>,
-    ) -> Result<SessionInfo, String> {
+    ) -> Result<crate::models::session::TmuxSessionInit, String> {
         tracing::info!(
             "[DEBUG-0009-RUST] SessionManager::create_tmux ENTRY controller_id=pending config={:?}",
             config
@@ -338,6 +342,19 @@ impl SessionManager {
             tmux_pane_id
         );
 
+        // **New IA (TmuxSessionInit):** wait for the dispatch task to
+        // finish processing BOTH `list-windows` AND `list-panes`
+        // responses, then assemble the full initial state into one
+        // synchronous return payload. The dispatch task stashes the
+        // parsed rows into `controller.initial_{windows,panes}` and
+        // signals `initial_state_ready` after the second list arrives.
+        let (initial_windows, initial_panes) = controller.take_initial_state().await?;
+        tracing::info!(
+            "[DEBUG-0009-RUST] take_initial_state returned {} windows, {} panes",
+            initial_windows.len(),
+            initial_panes.len()
+        );
+
         // Look up the bootstrap tmux window id so the `SessionInfo`
         // carries it. The dispatch task records the pane → window
         // mapping when it handles `%window-pane-changed` for the
@@ -364,32 +381,54 @@ impl SessionManager {
             false,
             tmux_window_id.as_deref(),
         );
-        tracing::info!(
-            "[DEBUG-0009-RUST] tmux_pane_info returned SessionInfo: id={} name={:?} tmuxWindowId={:?} tmuxControllerId={:?} isHidden={:?}",
-            info.id,
-            info.name,
-            info.tmux_window_id,
-            info.tmux_controller_id,
-            info.is_hidden
-        );
 
+        // Insert the bootstrap session into `sessions` and the
+        // controller into `tmux_controllers`. Other panes / windows
+        // come in via `panes[1..]` / `windows[..]` and are handled by
+        // the caller via the new IA payload — we don't pre-create
+        // TmuxPaneHandle rows for them here (the dispatcher already
+        // registered their bindings, and the frontend builds 1:1
+        // Session rows from `init.panes`).
         let handle = TmuxPaneHandle {
             controller: Arc::clone(&controller),
-            tmux_pane_id,
+            tmux_pane_id: tmux_pane_id.clone(),
             info: info.clone(),
             capabilities: CapabilityFlags::for_tmux(),
         };
 
-        self.tmux_controllers.insert(controller_id, controller);
+        self.tmux_controllers
+            .insert(controller_id, Arc::clone(&controller));
         let self_ref = self.insert_session(session_id, ActiveSession::Tmux(Box::new(handle)));
         debug_assert_eq!(self_ref.id, session_id);
 
+        // Build the new IA payload.
+        let control_window = crate::models::session::TmuxControlWindowInit {
+            tmux_controller_id: controller_id,
+            name: tmux_window_id
+                .as_deref()
+                .map(|_| {
+                    config
+                        .tmux_session_name
+                        .clone()
+                        .unwrap_or_else(|| format!("tmux-{controller_id}"))
+                })
+                .unwrap_or_else(|| format!("tmux-{controller_id}")),
+        };
+
+        let init = crate::models::session::TmuxSessionInit {
+            session: info,
+            windows: initial_windows,
+            panes: initial_panes,
+            control_window,
+        };
+
         tracing::info!(
-            "tmux controller {} spawned; bootstrap pane session_id={}",
+            "tmux controller {} spawned; {} windows, {} panes returned synchronously",
             controller_id,
-            session_id
+            init.windows.len(),
+            init.panes.len()
         );
-        Ok(info)
+        Ok(init)
     }
 
     /// Probe the tmux server (local or via SSH) for a session with the
@@ -482,7 +521,7 @@ impl SessionManager {
         &self,
         config: &TmuxCcConfig,
         backend: Arc<dyn AppBackend>,
-    ) -> Result<SessionInfo, String> {
+    ) -> Result<TmuxSessionInit, String> {
         let controller_id = self.allocate_controller_id();
         let session_id_allocator =
             crate::models::session::SessionIdSource::shared_allocator(&self.session_id_source);
@@ -495,6 +534,10 @@ impl SessionManager {
         )?;
 
         let (session_id, tmux_pane_id) = controller.await_first_pane().await?;
+
+        // **New IA:** wait for the dispatch task to process the
+        // initial list-windows + list-panes responses before returning.
+        let (initial_windows, initial_panes) = controller.take_initial_state().await?;
 
         let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
 
@@ -515,17 +558,34 @@ impl SessionManager {
             capabilities: CapabilityFlags::for_tmux(),
         };
 
-        self.tmux_controllers.insert(controller_id, controller);
+        self.tmux_controllers
+            .insert(controller_id, Arc::clone(&controller));
         let self_ref = self.insert_session(session_id, ActiveSession::Tmux(Box::new(handle)));
         debug_assert_eq!(self_ref.id, session_id);
 
+        let control_window = TmuxControlWindowInit {
+            tmux_controller_id: controller_id,
+            name: config
+                .tmux_session_name
+                .clone()
+                .unwrap_or_else(|| format!("tmux-{controller_id}")),
+        };
+
+        let init = TmuxSessionInit {
+            session: info,
+            windows: initial_windows,
+            panes: initial_panes,
+            control_window,
+        };
+
         tracing::info!(
-            "tmux controller {} attached to session {:?}; bootstrap pane session_id={}",
+            "tmux controller {} attached to session {:?}; {} windows, {} panes returned synchronously",
             controller_id,
             config.tmux_session_name.as_deref(),
-            session_id
+            init.windows.len(),
+            init.panes.len()
         );
-        Ok(info)
+        Ok(init)
     }
 
     /// capture scrollback text from a tmux pane.
@@ -606,10 +666,8 @@ impl SessionManager {
         let mut registered = Vec::with_capacity(panes.len());
         for (xsterm_id, controller, pane_id, info, capabilities) in panes {
             let handle = TmuxPaneHandle::new(controller, pane_id, info, capabilities);
-            self.sessions.insert(
-                xsterm_id,
-                Arc::new(ActiveSession::Tmux(Box::new(handle))),
-            );
+            self.sessions
+                .insert(xsterm_id, Arc::new(ActiveSession::Tmux(Box::new(handle))));
             registered.push(xsterm_id);
         }
         Ok(registered)

@@ -15,13 +15,13 @@ export async function createTmuxSessionOnly(
   displayConfig?: SessionDisplayConfig,
 ): Promise<Session> {
   const configId = generateId();
-  const info = await tmuxTauri.createTmux(config);
-  const session = buildFrontendSession(info, configId, "tmux-cc", displayConfig);
+  const init = await tmuxTauri.createTmux(config);
+  const session = buildFrontendSession(init.session, configId, "tmux-cc", displayConfig);
 
   if (save) {
     const saved: SavedSessionConfig = {
       id: configId,
-      name: info.name,
+      name: init.session.name,
       version: 1,
       type: "tmux-cc",
       config,

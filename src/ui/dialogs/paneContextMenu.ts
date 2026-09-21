@@ -14,7 +14,7 @@ export interface PaneMenuActions {
   createTmuxWindow?: () => void;
   /**
    * kill the pane's tmux window. Only enabled when the
-   * containing Window has a known `xstermWindowId` (i.e. it was
+   * containing Window has a known `tmuxServerWindowId` (i.e. it was
    * created via `create_tmux_window`, not the bootstrap window).
    */
   killTmuxWindow?: () => void;

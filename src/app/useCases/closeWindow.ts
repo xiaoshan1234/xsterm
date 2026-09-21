@@ -6,7 +6,7 @@
  *    ordinary tmux-window in this workspace that belongs to the same
  *    controller, drops the control-window itself, and unmarks the
  *    attached tmux server.
- * 2. ordinary tmux-window (`xstermWindowId !== undefined`): just
+ * 2. ordinary tmux-window (`tmuxServerWindowId !== undefined`): just
  *    close the leaf sessions. No `kill_tmux_window` (destructive ops
  *    are explicit).
  * 3. everything else (init / non-tmux terminal): close leaf sessions

@@ -4,6 +4,68 @@ import { logger } from "../../logger/logger";
 import type { SessionInfo } from "./sessions";
 
 /**
+ * Initial state for a tmux controller, returned synchronously by
+ * `createTmux` / `attachTmux` (and `autoAttachTmuxServers`).
+ *
+ * The IA contract: every tmux controller's initial state is delivered
+ * in a single round-trip:
+ * - `session` — the bootstrap pane's `SessionInfo`.
+ * - `windows` — all n tmux windows on the server at creation/attach
+ *   time. The frontend creates one `Window` per entry, keyed by
+ *   `tmux_window_id`.
+ * - `panes` — all m tmux panes (including the bootstrap pane — same id
+ *   as `session.id`). Each carries a pre-allocated `session_id` from
+ *   the shared `SessionIdSource` so the frontend builds 1:1 Session
+ *   rows for every pane.
+ * - `controlWindow` — per-controller "session/window control" surface
+ *   (ADR 0009 §2.1). Frontend creates exactly one `TmuxControlWindow`.
+ *
+ * After this initial state is delivered, subsequent panes / windows
+ * (created via user-driven `split-window` / `new-window`) still come
+ * through the existing `tmux-pane-added` / `tmux-window-added` async
+ * events — those are unaffected.
+ */
+export interface TmuxSessionInit {
+  session: SessionInfo;
+  windows: TmuxWindowInit[];
+  panes: TmuxPaneInit[];
+  controlWindow: TmuxControlWindowInit;
+}
+
+export interface TmuxWindowInit {
+  /** tmux server-side window id (e.g. `"@5"`). */
+  tmuxWindowId: string;
+  /** Tab-bar label. */
+  name: string;
+  /** Currently-active window. */
+  active: boolean;
+  /** `tmux list-windows` layout string (informational; not parsed). */
+  layout: string;
+}
+
+export interface TmuxPaneInit {
+  /** Pre-allocated Session.id — 1:1 with a Session row the frontend builds. */
+  sessionId: number;
+  /** tmux server-side pane id (e.g. `"%5"`). */
+  tmuxPaneId: string;
+  /** Owning tmux window id. */
+  tmuxWindowId: string;
+  /** Currently-active pane. */
+  active: boolean;
+  width: number;
+  height: number;
+  title: string;
+  cwd: string;
+}
+
+export interface TmuxControlWindowInit {
+  /** Owning tmux controller id (u32). */
+  tmuxControllerId: number;
+  /** Display name for the tab (e.g. `"tmux-7"`). */
+  name: string;
+}
+
+/**
  * ask the backend to re-attach every tmux server from the
  * persisted `attached_tmux.json` store. Called once on app startup by
  * `useTmuxAutoAttach`. Each entry is a unified object: `info` is
@@ -12,22 +74,26 @@ import type { SessionInfo } from "./sessions";
 export interface AutoAttachOutcome {
   /** Stable key (`<session_name>::<socket_name>`) for matching back to the persisted entry. */
   sessionKey: string;
-  /** Set on a successful re-attach. */
-  info?: SessionInfo;
+  /** Set on a successful re-attach — carries the full initial state. */
+  info?: TmuxSessionInit;
   /** Set on a failed re-attach. */
   error?: string;
 }
 
 /**
  * starts a new local tmux control-mode session by invoking
- * `create_tmux_session`. The backend returns a `SessionInfo` whose
- * `sessionType.type === "tmux-cc"`; the frontend builds the corresponding
- * `Session` (with `tmuxPaneId` / `tmuxControllerId`).
+ * `create_tmux_session`. The backend returns the full initial state
+ * (n windows + m panes + 1 control window) in one round-trip — the
+ * frontend builds every Window and Session row from this payload,
+ * without waiting for additional async events.
  */
-export async function createTmux(config: TmuxCcConfig): Promise<SessionInfo> {
+export async function createTmux(config: TmuxCcConfig): Promise<TmuxSessionInit> {
   logger.debug("sessionService", "createTmux", { config });
-  const result = await invoke<SessionInfo>("create_tmux_session", { config });
-  logger.debug("sessionService", "createTmux:result", result);
+  const result = await invoke<TmuxSessionInit>("create_tmux_session", { config });
+  logger.debug("sessionService", "createTmux:result", {
+    windows: result.windows.length,
+    panes: result.panes.length,
+  });
   return result;
 }
 
@@ -55,11 +121,17 @@ export async function probeTmuxSessionExists(config: TmuxCcConfig): Promise<bool
  * `attach_tmux_session`. The frontend auto-attach flow (see
  * `useTmuxAutoAttach`) calls this for every entry persisted in
  * `attached_tmux.json`.
+ *
+ * Same IA as [`createTmux`]: returns the full initial state (n windows
+ * + m panes + control window) synchronously.
  */
-export async function attachTmux(config: TmuxCcConfig): Promise<SessionInfo> {
+export async function attachTmux(config: TmuxCcConfig): Promise<TmuxSessionInit> {
   logger.debug("sessionService", "attachTmux", { config });
-  const result = await invoke<SessionInfo>("attach_tmux_session", { config });
-  logger.debug("sessionService", "attachTmux:result", result);
+  const result = await invoke<TmuxSessionInit>("attach_tmux_session", { config });
+  logger.debug("sessionService", "attachTmux:result", {
+    windows: result.windows.length,
+    panes: result.panes.length,
+  });
   return result;
 }
 

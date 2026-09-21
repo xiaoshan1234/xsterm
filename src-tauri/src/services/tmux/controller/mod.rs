@@ -249,6 +249,25 @@ pub struct TmuxController {
     /// dispatch task can `.take()` it on `record_first_pane` (one-shot
     /// semantics — second call is a no-op).
     pub(crate) first_pane_tx: std::sync::Mutex<Option<oneshot::Sender<(u32, String)>>>,
+    /// Buffered windows from the initial `list-windows` response. The
+    /// dispatch task stashes them here instead of emitting a
+    /// `tmux-window-list` event — the controller hands them to the
+    /// caller (SessionManager) synchronously via
+    /// [`TmuxController::take_initial_state`] so the new
+    /// `create_tmux_session` / `attach_tmux_session` IA returns the
+    /// full initial state in one round-trip.
+    initial_windows: std::sync::Mutex<Option<Vec<crate::models::session::TmuxWindowInit>>>,
+    /// Buffered panes from the initial `list-panes` response. Same IA
+    /// rationale as [`TmuxController::initial_windows`].
+    initial_panes: std::sync::Mutex<Option<Vec<crate::models::session::TmuxPaneInit>>>,
+    /// Signalled by the dispatch task when **both** `list-windows` AND
+    /// `list-panes` have been processed. Consumed by
+    /// [`TmuxController::take_initial_state`] (one-shot). Buffered
+    /// `oneshot` for the same T2→T3 race-avoidance reason as
+    /// `first_pane_rx`.
+    initial_state_rx: tokio::sync::Mutex<Option<oneshot::Receiver<()>>>,
+    /// Sender half of `initial_state_rx`.
+    pub(crate) initial_state_tx: std::sync::Mutex<Option<oneshot::Sender<()>>>,
     /// Set of every `tmux_window_id` this controller has observed
     /// (bootstrap, user-driven, and — in the future — external). Used by
     /// `kill_window` / `rename_window` to validate the caller's input
@@ -504,6 +523,7 @@ impl TmuxController {
         let (stdin_tx, stdin_rx) = mpsc::unbounded_channel::<String>();
         let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
         let (pane_tx_init, pane_rx_init) = oneshot::channel::<(u32, String)>();
+        let (initial_state_tx_init, initial_state_rx_init) = oneshot::channel::<()>();
 
         let killed = Arc::new(AtomicBool::new(false));
         let backend_slot: Arc<tokio::sync::Mutex<Option<Box<dyn TmuxBackend>>>> =
@@ -525,6 +545,10 @@ impl TmuxController {
             session_id_allocator,
             first_pane_tx: std::sync::Mutex::new(Some(pane_tx_init)),
             first_pane_rx: tokio::sync::Mutex::new(Some(pane_rx_init)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(Some(initial_state_rx_init)),
+            initial_state_tx: std::sync::Mutex::new(Some(initial_state_tx_init)),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             // initialised to None; `spawn_attach` rewrites this
             // after construction via the returned Arc.
@@ -972,6 +996,83 @@ impl TmuxController {
         }
     }
 
+    /// Block until the dispatch task reports that the initial
+    /// `list-windows` AND `list-panes` responses have been processed
+    /// (and their payloads stashed in `initial_windows` /
+    /// `initial_panes`). Consumed once per controller.
+    ///
+    /// Used by `SessionManager::create_tmux` / `attach_tmux` to wait for
+    /// the full initial state before assembling
+    /// [`TmuxSessionInit`](crate::models::session::TmuxSessionInit) and
+    /// returning it to the frontend in a single round-trip.
+    pub async fn take_initial_state(
+        &self,
+    ) -> Result<
+        (
+            Vec<crate::models::session::TmuxWindowInit>,
+            Vec<crate::models::session::TmuxPaneInit>,
+        ),
+        TmuxError,
+    > {
+        let rx = {
+            let mut guard = self.initial_state_rx.lock().await;
+            guard.take()
+        };
+        let rx = rx.ok_or_else(|| {
+            TmuxError::Internal(format!(
+                "tmux controller {}: initial state already taken",
+                self.controller_id
+            ))
+        })?;
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(10), rx).await?;
+        let windows = self
+            .initial_windows
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take())
+            .unwrap_or_default();
+        let panes = self
+            .initial_panes
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take())
+            .unwrap_or_default();
+        Ok((windows, panes))
+    }
+
+    /// Stash the parsed `list-windows` body so
+    /// [`TmuxController::take_initial_state`] can return it. Called by
+    /// the dispatch task's `emit_window_list` path.
+    pub(crate) fn stash_initial_windows(
+        &self,
+        windows: Vec<crate::models::session::TmuxWindowInit>,
+    ) {
+        if let Ok(mut slot) = self.initial_windows.lock() {
+            *slot = Some(windows);
+        }
+    }
+
+    /// Stash the parsed `list-panes` body so
+    /// [`TmuxController::take_initial_state`] can return it. Called by
+    /// the dispatch task's `emit_pane_list` path.
+    pub(crate) fn stash_initial_panes(&self, panes: Vec<crate::models::session::TmuxPaneInit>) {
+        if let Ok(mut slot) = self.initial_panes.lock() {
+            *slot = Some(panes);
+        }
+    }
+
+    /// Signal that **both** `list-windows` AND `list-panes` have been
+    /// processed and stashed. Called by the dispatch task after the
+    /// second of the two has its body parsed. Idempotent (subsequent
+    /// calls are no-ops because the receiver was already consumed).
+    pub(crate) fn signal_initial_state_ready(&self) {
+        if let Ok(mut slot) = self.initial_state_tx.lock() {
+            if let Some(tx) = slot.take() {
+                let _ = tx.send(());
+            }
+        }
+    }
+
     /// Snapshot of every pane currently registered with this controller.
     /// Returns `(tmux_pane_id, session_id)` pairs. Used by the dispatch
     /// task to look up the Session.id for `session-output` events.
@@ -1358,6 +1459,10 @@ impl TmuxController {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2037,6 +2142,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2089,6 +2198,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2126,6 +2239,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2198,6 +2315,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2330,6 +2451,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2416,6 +2541,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2453,6 +2582,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2493,6 +2626,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2540,6 +2677,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2606,6 +2747,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2667,6 +2812,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2729,6 +2878,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2833,6 +2986,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2884,6 +3041,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -2936,6 +3097,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3008,6 +3173,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3143,6 +3312,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3244,6 +3417,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3346,6 +3523,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3419,6 +3600,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3486,6 +3671,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3581,6 +3770,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3652,6 +3845,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
@@ -3700,6 +3897,10 @@ mod tests {
             ),
             first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
             first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(None),
+            initial_state_tx: std::sync::Mutex::new(None),
             window_bindings: std::sync::Mutex::new(HashSet::new()),
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
