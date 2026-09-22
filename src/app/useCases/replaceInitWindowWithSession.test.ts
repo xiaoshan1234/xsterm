@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({
         {
           id: "win-init",
           name: "New Session",
-          windowType: "init",
-          rootPane: { id: "pane1", type: "leaf", size: 100 },
+          kind: "init",
           activePaneId: "pane1",
         },
       ],
@@ -59,8 +58,13 @@ describe("replaceInitWindowWithSession", () => {
       {
         id: "other",
         name: "Other",
-        windowType: "terminal",
-        rootPane: { id: "pane2", type: "leaf", size: 100, sessionId: 5, configId: "cfg5" },
+        kind: "terminal",
+        rootPane: {
+          id: "pane2",
+          kind: "leaf",
+          size: 100,
+          binding: { sessionId: 5, configId: "cfg5" },
+        },
         activePaneId: "pane2",
       },
       (mocks.workspaces[0] as { windows: unknown[] }).windows[0],

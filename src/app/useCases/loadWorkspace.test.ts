@@ -11,9 +11,9 @@ const mocks = vi.hoisted(() => ({
           name: "Win1",
           rootPane: {
             id: "p-snap",
-            type: "leaf",
+            kind: "leaf",
             size: 100,
-            configId: "cfg-snap",
+            binding: { sessionId: 0, configId: "cfg-snap" },
           },
         },
       ],

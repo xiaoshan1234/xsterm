@@ -9,8 +9,13 @@ const mocks = vi.hoisted(() => ({
         {
           id: "win-1",
           name: "Local",
-          windowType: "terminal",
-          rootPane: { id: "pane1", type: "leaf", size: 100, sessionId: 7, configId: "cfg7" },
+          kind: "terminal",
+          rootPane: {
+            id: "pane1",
+            kind: "leaf",
+            size: 100,
+            binding: { sessionId: 7, configId: "cfg7" },
+          },
           activePaneId: "pane1",
         },
       ],

@@ -7,9 +7,9 @@ const mocks = vi.hoisted(() => ({
       name: "SnapWin",
       rootPane: {
         id: "p-snap",
-        type: "leaf",
+        kind: "leaf",
         size: 100,
-        configId: "cfg-snap",
+        binding: { sessionId: 0, configId: "cfg-snap" },
       },
     },
   ] as Array<Record<string, unknown>>,

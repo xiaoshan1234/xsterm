@@ -106,15 +106,17 @@ describe("openSavedSession", () => {
       type: "tmux-cc",
       config: {},
     });
-    const mockInfo = {
-      id: 202,
-      name: "Tmux1",
-      sessionType: { type: "tmux-cc", config: {} },
-      isConnected: true,
-      tmuxPaneId: "%1",
-      tmuxControllerId: 1,
+    const mockInit = {
+      session: {
+        id: 202,
+        name: "Tmux1",
+        sessionType: { type: "tmux-cc", config: {} },
+        isConnected: true,
+        tmuxPaneId: "%1",
+        tmuxControllerId: 1,
+      },
     } as any;
-    vi.mocked(createTmux).mockResolvedValue(mockInfo);
+    vi.mocked(createTmux).mockResolvedValue(mockInit);
 
     await openSavedSession("cfg-tmux");
     expect(createTmux).toHaveBeenCalled();

@@ -11,8 +11,13 @@ const mocks = vi.hoisted(() => ({
         {
           id: "a",
           name: "A",
-          windowType: "terminal",
-          rootPane: { id: "p1", type: "leaf", size: 100, sessionId: 5 },
+          kind: "terminal",
+          rootPane: {
+            id: "p1",
+            kind: "leaf",
+            size: 100,
+            binding: { sessionId: 5, configId: "" },
+          },
           activePaneId: "p1",
         },
       ],
@@ -48,8 +53,12 @@ describe("setActivePane", () => {
     (mocks.workspaces[0].windows as Array<Record<string, unknown>>)[0] = {
       id: "a",
       name: "A",
-      windowType: "terminal",
-      rootPane: { id: "p1", type: "leaf", size: 100 },
+      kind: "terminal",
+      rootPane: {
+        id: "p1",
+        kind: "leaf",
+        size: 100,
+      },
       activePaneId: "p1",
     };
     setActivePane("ws1", "a", "p1");
