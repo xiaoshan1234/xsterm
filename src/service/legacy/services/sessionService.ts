@@ -3,37 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { logger } from "../contexts/LoggerContext";
 import {
   type AttachedTmuxServer,
-  type Session,
   type LocalSessionConfig,
   type SSHSessionConfig,
   type SessionType,
   type TmuxCcConfig,
 } from "../../../model";
-import type { CapabilityFlags } from "../../../model/capabilities";
+import type { SessionInfo } from "../../../infra/tauri/commands/sessions";
+import type { AutoAttachOutcome } from "../../../infra/tauri/commands/tmux";
 
-export interface SessionInfo {
-  id: number;
-  name: string;
-  sessionType: Session["sessionType"];
-  isConnected: boolean;
-  capabilities?: CapabilityFlags;
-  /** tmux pane id (`%<N>`) when this session is backed by a tmux pane. */
-  tmuxPaneId?: string;
-  /** id of the tmux controller process that owns this pane. */
-  tmuxControllerId?: number;
-  /** tmux server-side window id (e.g. `@1`) the pane belongs to.
-   * Surfaced by `create_tmux_session` / `attach_tmux_session` so the
-   * frontend can render the matching xsterm Window synchronously on
-   * return (the `tmux-window-added` listener does not fire for the
-   * bootstrap window). */
-  tmuxServerWindowId?: string;
-  /**
-   * hidden (bootstrap) tmux panes are not rendered by the frontend.
-   * MVP `tmux -CC new` panes have `is_hidden = false`; tmux attaches
-   * flag the bootstrap pane as hidden.
-   */
-  isHidden?: boolean;
-}
+export type { SessionInfo, AutoAttachOutcome };
 
 export async function createSession(config: SessionType): Promise<SessionInfo> {
   logger.debug("sessionService", "createSession", { config });
@@ -143,15 +121,6 @@ export async function getAttachedTmuxServers(): Promise<AttachedTmuxServer[]> {
  * `useTmuxAutoAttach`. Each entry is a unified object: `info` is
  * populated on success, `error` on failure (never both).
  */
-export interface AutoAttachOutcome {
-  /** Stable key (`<session_name>::<socket_name>`) for matching back to the persisted entry. */
-  sessionKey: string;
-  /** Set on a successful re-attach. */
-  info?: SessionInfo;
-  /** Set on a failed re-attach. */
-  error?: string;
-}
-
 export async function autoAttachTmuxServers(): Promise<AutoAttachOutcome[]> {
   return invoke<AutoAttachOutcome[]>("auto_attach_tmux_servers");
 }

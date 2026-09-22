@@ -51,8 +51,9 @@ import type {
   SavedSessionConfig as LegacySavedSessionConfig,
   SavedWindowConfig as LegacySavedWindowConfig,
   SavedWorkspace as LegacySavedWorkspace,
+  TmuxControllerError,
 } from "../../../../model";
-import { type SessionState, type TmuxControllerError } from "./types";
+import { type SessionState } from "./types";
 
 export function useSessionState(): SessionState {
   // --- session registry ------------------------------------------------

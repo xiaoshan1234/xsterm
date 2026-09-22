@@ -1,12 +1,16 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  TmuxControllerExitEvent,
   TmuxPaneAddedEvent,
   TmuxPaneRemovedEvent,
   TmuxWindowAddedEvent,
   TmuxWindowClosedEvent,
   TmuxWindowListEntry,
+  TmuxWindowListRawEvent,
   TmuxWindowRenamedEvent,
 } from "../../../model";
+
+export type { TmuxWindowListRawEvent, TmuxControllerExitEvent };
 
 /**
  * Subscribe to `tmux-pane-added`. Fired by the TmuxController dispatch
@@ -80,24 +84,11 @@ export function subscribeTmuxWindowRenamed(
 
 /**
  * Subscribe to `tmux-window-list`. The bridge module emits this once
- * per controller after the bootstrap `list-windows` reply. The payload
- * shape is `{ controller_id: number; windows: Array<{ tmux_window_id,
- * xsterm_window_id?, xsterm_session_id?, xsterm_pane_id?, name }> }`.
- *
- * The listener normalises the snake_case Rust payload into the
- * camelCase `TmuxWindowListEntry[]` shape so the rest of the app can
- * speak one dialect. ADR 0009 §2.8 / §2.6.
+ * per controller after the bootstrap `list-windows` reply. The listener
+ * normalises the snake_case Rust payload into the camelCase
+ * `TmuxWindowListEntry[]` shape so the rest of the app can speak one
+ * dialect. ADR 0009 §2.8 / §2.6.
  */
-export interface TmuxWindowListRawEvent {
-  controller_id: number;
-  windows: Array<{
-    tmux_window_id: string;
-    xsterm_session_id?: number;
-    xsterm_pane_id?: string;
-    name: string;
-  }>;
-}
-
 export function subscribeTmuxWindowList(
   handler: (controllerId: number, entries: TmuxWindowListEntry[]) => void,
 ): Promise<UnlistenFn> {
@@ -121,11 +112,6 @@ export function subscribeTmuxWindowList(
  *
  * ADR 0009 §2.7.
  */
-export interface TmuxControllerExitEvent {
-  controllerId: number;
-  reason?: string;
-}
-
 export function subscribeTmuxControllerExit(
   handler: (event: TmuxControllerExitEvent) => void,
 ): Promise<UnlistenFn> {

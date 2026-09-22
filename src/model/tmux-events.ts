@@ -163,3 +163,32 @@ export interface TmuxWindowListEntry {
   /** current tmux window name. */
   name: string;
 }
+
+/**
+ * Raw payload of the `tmux-window-list` event as emitted by the
+ * backend bridge module. The frontend listener normalises the
+ * snake_case Rust payload into the camelCase `TmuxWindowListEntry[]`
+ * shape so the rest of the app can speak one dialect. ADR 0009 §2.8 /
+ * §2.6.
+ */
+export interface TmuxWindowListRawEvent {
+  controller_id: number;
+  windows: Array<{
+    tmux_window_id: string;
+    xsterm_session_id?: number;
+    xsterm_pane_id?: string;
+    name: string;
+  }>;
+}
+
+/**
+ * Payload of the `tmux-controller-exit` event. Fired when the
+ * underlying `tmux -CC` child terminates. The frontend listener
+ * drops every frontend Session bound to the controller from React
+ * state, then surfaces a retry banner by pushing into
+ * `tmuxControllerErrors`. ADR 0009 §2.7.
+ */
+export interface TmuxControllerExitEvent {
+  controllerId: number;
+  reason?: string;
+}

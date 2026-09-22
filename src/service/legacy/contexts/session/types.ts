@@ -11,6 +11,7 @@ import {
   type SessionGroup,
   type SplitDirection,
   type TmuxCcConfig,
+  type TmuxControllerError,
   type TmuxWindowListEntry,
   type Window,
   type Workspace,
@@ -128,20 +129,6 @@ export type SetWorkspaces = Dispatch<SetStateAction<Workspace[]>>;
 export type SetSavedWorkspaces = Dispatch<SetStateAction<SavedWorkspace[]>>;
 export type SetSavedWindowConfigs = Dispatch<SetStateAction<SavedWindowConfig[]>>;
 export type SetGroups = Dispatch<SetStateAction<SessionGroup[]>>;
-
-/**
- * a tmux controller that has exited unexpectedly (e.g. tmux
- * died with a `%exit reason` message). Holds the config that can be
- * passed back to `attachTmux` / `createTmux` for a retry.
- */
-export interface TmuxControllerError {
-  /** The original config the controller was built from. */
-  config: TmuxCcConfig;
-  /** Reported reason (the `reason` field from the `tmux-controller-exit` event). */
-  reason?: string;
-  /** ms epoch when the error was first surfaced. */
-  timestamp: number;
-}
 
 export interface SessionState {
   savedConfigs: SavedSessionConfig[];

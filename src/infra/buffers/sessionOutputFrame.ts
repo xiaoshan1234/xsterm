@@ -14,14 +14,13 @@
  * cross-platform transport (x86 / ARM).
  */
 
+import type { ParsedSessionOutput } from "../../model/session-output";
+
+export type { ParsedSessionOutput };
+
 export const FRAME_MAGIC = 0xa1;
 export const FRAME_VERSION = 0x01;
 export const HEADER_LEN = 10;
-
-export interface ParsedSessionOutput {
-  sessionId: number;
-  data: Uint8Array;
-}
 
 /**
  * Parse a binary `session-output` frame. Returns `null` for a malformed

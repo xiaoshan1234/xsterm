@@ -6,6 +6,7 @@ export * from "./window-config";
 export * from "./workspace";
 export * from "./workspace-config";
 export * from "./app";
-export * from "./tmux-handles";
 export * from "./tmux-events";
+export * from "./tmux-init";
+export * from "./session-output";
 export * from "./theme";

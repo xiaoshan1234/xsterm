@@ -1,51 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
-  type CapabilityFlags,
   type LocalSessionConfig,
   type SSHSessionConfig,
-  type Session,
+  type SessionInfo,
   type SessionType,
   type TmuxCcConfig,
 } from "../../../model";
 import { logger } from "../../logger/logger";
 
-/**
- * Metadata returned by every session-creating Tauri command
- * (`create_session`, `create_tmux_session`, `attach_tmux_session`,
- * `create_tmux_pane`, `create_tmux_window`). Defines the structural
- * shape used by both local/ssh sessions and tmux-backed sessions —
- * the `tmuxPaneId` / `tmuxControllerId` / `tmuxServerWindowId` /
- * `isHidden` fields are populated only for tmux sessions.
- *
- * This type lives in `infra/tauri/commands/sessions.ts` (rather than
- * `model/entities/`) because it is purely the IPC wire shape of the
- * Rust `SessionInfo` struct — there is no business-logic that lives in
- * `model/` for it. Mirrors the original `SessionInfo` exported from
- * `src/services/sessionService.ts` 1:1.
- */
-export interface SessionInfo {
-  id: number;
-  name: string;
-  sessionType: Session["sessionType"];
-  isConnected: boolean;
-  capabilities?: CapabilityFlags;
-  /** tmux pane id (`%<N>`) when this session is backed by a tmux pane. */
-  tmuxPaneId?: string;
-  /** id of the tmux controller process that owns this pane. */
-  tmuxControllerId?: number;
-  /** tmux server-side window id (e.g. `@1`) the pane belongs to.
-   * Surfaced by `create_tmux_session` / `attach_tmux_session` so the
-   * frontend can render the matching xsterm Window synchronously on
-   * return (the `tmux-window-added` listener does not fire for the
-   * bootstrap window). */
-  tmuxServerWindowId?: string;
-  /**
-   * hidden (bootstrap) tmux panes are not rendered by the frontend.
-   * MVP `tmux -CC new` panes have `is_hidden = false`; tmux attaches
-   * flag the bootstrap pane as hidden.
-   */
-  isHidden?: boolean;
-}
+export type { SessionInfo };
 
 export async function createSession(config: SessionType): Promise<SessionInfo> {
   logger.debug("sessionService", "createSession", { config });

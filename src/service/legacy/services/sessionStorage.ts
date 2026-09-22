@@ -11,11 +11,7 @@ import {
   type SSHSessionConfig,
   type TmuxCcConfig,
 } from "../../../model";
-
-interface GroupStore {
-  groups: SessionGroup[];
-  nextGroupId: number;
-}
+import type { GroupStore } from "../../../infra/store/groups";
 
 /**
  * Schema versions of the `SavedSessionConfig` on-disk format.
