@@ -22,7 +22,7 @@ import { infraEventBus } from "../../infra/tauri/eventBus";
 import { useSessionStore } from "../session/store";
 import { useWorkspaceStore } from "../workspace/store";
 import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 
 export function SessionBridge(): null {
   useEffect(() => {
@@ -45,6 +45,7 @@ export function SessionBridge(): null {
             withRecomputedSessionIds({
               ...workspace,
               windows: workspace.windows.map((window) => {
+                if (window.kind !== "terminal") return window;
                 const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
                 const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
                   ? window.activePaneId

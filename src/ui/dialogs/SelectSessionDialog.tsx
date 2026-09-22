@@ -23,11 +23,13 @@ export function SelectSessionDialog({
     const used = new Set<number>();
     workspaces.forEach((workspace) => {
       workspace.windows.forEach((window) => {
+        if (window.kind !== "terminal") return;
         const collect = (node: typeof window.rootPane) => {
-          if (node.type === "leaf" && node.sessionId !== undefined) {
-            used.add(node.sessionId);
+          if (node.kind === "leaf" && node.binding?.sessionId !== undefined) {
+            used.add(node.binding.sessionId);
           }
-          node.children?.forEach(collect);
+          const children = node.kind === "split" ? node.layout.children : undefined;
+          children?.forEach(collect);
         };
         collect(window.rootPane);
       });

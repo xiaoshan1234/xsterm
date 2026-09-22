@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace } from "../../model/workspace";
-import type { SessionType } from "../../model/session";
+import type { SessionType } from "../../model/session-config";
 import {
   assertSessionNotUsedElsewhere,
   buildFrontendSession,
@@ -67,7 +67,7 @@ describe("buildFrontendSession", () => {
     expect(session.displayConfig).toBeUndefined();
     expect(session.tmuxPaneId).toBeUndefined();
     expect(session.tmuxControllerId).toBeUndefined();
-    expect(session.tmuxWindowId).toBeUndefined();
+    expect(session.tmuxServerWindowId).toBeUndefined();
     expect(session.isHidden).toBeUndefined();
     expect(session.createdAt).toBeGreaterThanOrEqual(before);
     expect(session.createdAt).toBeLessThanOrEqual(after);
@@ -86,14 +86,14 @@ describe("buildFrontendSession", () => {
       ...makeTmuxInfo(),
       tmuxPaneId: "%5",
       tmuxControllerId: 42,
-      tmuxWindowId: "@1",
+      tmuxServerWindowId: "@1",
       isHidden: true,
     };
     const session = buildFrontendSession(info, "cfg-3", "tmux-cc");
     expect(session.type).toBe("tmux-cc");
     expect(session.tmuxPaneId).toBe("%5");
     expect(session.tmuxControllerId).toBe(42);
-    expect(session.tmuxWindowId).toBe("@1");
+    expect(session.tmuxServerWindowId).toBe("@1");
     expect(session.isHidden).toBe(true);
   });
 
@@ -101,7 +101,7 @@ describe("buildFrontendSession", () => {
     const session = buildFrontendSession(makeTmuxInfo(), "cfg-3", "tmux-cc");
     expect("tmuxPaneId" in session).toBe(false);
     expect("tmuxControllerId" in session).toBe(false);
-    expect("tmuxWindowId" in session).toBe(false);
+    expect("tmuxServerWindowId" in session).toBe(false);
     expect("isHidden" in session).toBe(false);
   });
 
@@ -179,11 +179,12 @@ describe("assertSessionNotUsedElsewhere", () => {
       {
         id: windowId,
         name: windowId,
+        kind: "terminal",
         rootPane: {
           id: "root",
-          type: "leaf",
+          kind: "leaf",
           size: 1,
-          sessionId,
+          binding: { sessionId, configId: "" },
         },
         activePaneId: null,
       },

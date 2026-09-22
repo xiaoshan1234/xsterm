@@ -136,6 +136,8 @@ export type CreateSessionInput =
   | { type: "ssh"; config: SSHSessionConfig }
   | { type: "tmux-cc"; config: TmuxCcConfig };
 
+export type SessionType = CreateSessionInput;
+
 // ---------------------------------------------------------------------------
 // Persistence shapes (formerly in `./persistence.ts`).
 

@@ -12,6 +12,7 @@ export function findSessionWindow(
 ): { workspaceId: string; windowId: string } | null {
   for (const workspace of workspaces) {
     for (const window of workspace.windows) {
+      if (window.kind !== "terminal") continue;
       if (isSessionInPaneTree(window.rootPane, sessionId)) {
         return { workspaceId: workspace.id, windowId: window.id };
       }
@@ -34,6 +35,7 @@ export function isSessionUsedInOtherWindow(
 ): boolean {
   for (const workspace of workspaces) {
     for (const window of workspace.windows) {
+      if (window.kind !== "terminal") continue;
       if (!isSessionInPaneTree(window.rootPane, sessionId)) continue;
       if (currentWorkspaceId === null || currentWindowId === null) return true;
       if (workspace.id !== currentWorkspaceId || window.id !== currentWindowId) return true;

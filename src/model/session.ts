@@ -164,10 +164,15 @@ export interface Session {
   createdAt?: number;
   /** ms epoch — updated on pane focus + terminal output (debounced). */
   lastActivityAt?: number;
-  /** */
-  tmuxBackend?: TmuxSessionBackend;
+  /** Backend tmux controller u32. */
+  tmuxControllerId?: number;
+  /** tmux server-side pane id (e.g. `"%5"`). */
+  tmuxPaneId?: string;
+  /** tmux server-side window id (e.g. `"@1"`). */
+  tmuxServerWindowId?: string;
   /** `true` for the bootstrap pane; UI renders nothing for it. */
   isHidden?: boolean;
+  tmuxBackend?: TmuxSessionBackend;
 }
 
 /** A group of saved session configs in the sidebar. */

@@ -1,18 +1,18 @@
 import { useMemo, useState, useCallback } from "react";
-import type { Window } from "../model";
+import type { TmuxControlWindow } from "../model/window";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import { TmuxSessionControl } from "./TmuxSessionControl";
 import { TmuxWindowsControl } from "./TmuxWindowsControl";
 import "./TmuxControlWindowView.css";
 
 interface TmuxControlWindowViewProps {
-  /** The control-window itself; carries `tmuxControlWindowId` + `tmuxControlName`. */
-  window: Window;
+  /** The control-window itself; carries `tmuxControllerId` + `tmuxSessionName`. */
+  window: TmuxControlWindow;
 }
 
 /**
  * Per-controller "session/window control" surface (ADR 0009 §2.6).
- * Replaces the normal `PaneTree` for `windowType === "tmux-control"`
+ * Replaces the normal `PaneTree` for `window.kind === "tmux-control"`
  * windows. Lays out two cards side-by-side:
  *
  * - Left  — session-control: connect/disconnect + remote-delete buttons.
@@ -25,8 +25,8 @@ interface TmuxControlWindowViewProps {
 export function TmuxControlWindowView({ window: controlWindow }: TmuxControlWindowViewProps) {
   const { tmuxWindowListsRef, tmuxControllerErrors, tmuxControllerConfigsRef, createTmuxSession } =
     useSession();
-  const controllerId = controlWindow.tmuxControlWindowId ?? 0;
-  const tmuxSessionName = controlWindow.tmuxControlName ?? `tmux-${controllerId}`;
+  const controllerId = controlWindow.tmuxControllerId ?? 0;
+  const tmuxSessionName = controlWindow.tmuxSessionName ?? `tmux-${controllerId}`;
 
   const windows = useMemo(
     () => tmuxWindowListsRef.current.get(controllerId) ?? [],

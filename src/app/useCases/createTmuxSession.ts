@@ -44,12 +44,7 @@ export async function createTmuxSession(
   }
 
   // Build the bootstrap Session (whose id matches `init.session.id`).
-  const bootstrapSession = buildFrontendSession(
-    init.session,
-    configId,
-    "tmux-cc",
-    displayConfig,
-  );
+  const bootstrapSession = buildFrontendSession(init.session, configId, "tmux-cc", displayConfig);
 
   if (save) {
     const saved: SavedSessionConfig = {
@@ -115,23 +110,18 @@ function makeSessionInfoFromPane(
     name: pane.title || `tmux:${pane.tmuxPaneId}`,
     sessionType: {
       type: "tmux-cc" as const,
-      controllerId,
-      paneId: pane.tmuxPaneId,
-      sessionName: "",
-      socketName: undefined,
+      config: { controllerId, paneId: pane.tmuxPaneId, sessionName: "" },
     },
     isConnected: true,
     capabilities: {
-      // tmux panes don't expose PTY-style capability flags; use
-      // the same set `buildFrontendSession` already uses for tmux.
       supportsMultiplex: true,
     },
     tmuxPaneId: pane.tmuxPaneId,
     tmuxControllerId: controllerId,
-    tmuxWindowId: pane.tmuxWindowId,
+    tmuxServerWindowId: pane.tmuxWindowId,
     configId,
     isHidden: false,
-  };
+  } as unknown as Parameters<typeof buildFrontendSession>[0];
 }
 
 /**
@@ -150,10 +140,7 @@ function makeSessionInfoFromPane(
  * — we render that one as the first Window so its `activePaneId` /
  * `name` matches the active tmux state.
  */
-function installInitialWindows(
-  init: tmuxTauri.TmuxSessionInit,
-  bootstrapSession: Session,
-): void {
+function installInitialWindows(init: tmuxTauri.TmuxSessionInit, bootstrapSession: Session): void {
   const workspaceStore = useWorkspaceStore.getState();
   const workspaces = workspaceStore.workspaces;
   const targetId = workspaceStore.activeWorkspaceId ?? workspaces[0]?.id;
@@ -196,9 +183,7 @@ function installInitialWindows(
   // tag its id.
   const bootstrapWindowId = (() => {
     const bootstrapWin = newWindows.find(
-      (w) =>
-        w.windowType === "terminal" &&
-        w.tmuxServerWindowId === bootstrapSession.tmuxWindowId,
+      (w) => w.kind === "terminal" && w.tmuxServerWindowId === bootstrapSession.tmuxServerWindowId,
     );
     return bootstrapWin?.id ?? newWindows[0]?.id ?? "";
   })();

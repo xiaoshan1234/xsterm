@@ -95,7 +95,7 @@ export function subscribeTmuxWindowList(
   return listen<TmuxWindowListRawEvent>("tmux-window-list", (event) => {
     const { controller_id: controllerId, windows: rows } = event.payload;
     const entries: TmuxWindowListEntry[] = rows.map((row) => ({
-      tmuxWindowId: row.tmux_window_id,
+      tmuxServerWindowId: row.tmux_window_id,
       xstermSessionId: row.xsterm_session_id,
       xstermPaneId: row.xsterm_pane_id,
       name: row.name,

@@ -15,7 +15,7 @@ import { usePersistenceStore } from "../../service/persistence/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { buildFrontendSession, dispatchByType } from "../../app/rules/sessionRules";
 import { replaceSessionIdInPaneTree } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 import type { LocalSessionConfig, Session, SSHSessionConfig, TmuxCcConfig } from "../../model";
 
 export async function reconnectSession(id: number): Promise<Session> {
@@ -35,7 +35,7 @@ export async function reconnectSession(id: number): Promise<Session> {
     config.type,
     () => tauri.createLocal(config.config as LocalSessionConfig),
     () => tauri.createSsh(config.config as SSHSessionConfig),
-    () => tmuxTauri.createTmux(config.config as TmuxCcConfig),
+    async () => (await tmuxTauri.createTmux(config.config as TmuxCcConfig)).session,
   );
 
   const newSession = buildFrontendSession(
@@ -54,10 +54,13 @@ export async function reconnectSession(id: number): Promise<Session> {
     prev.map((workspace) =>
       withRecomputedSessionIds({
         ...workspace,
-        windows: workspace.windows.map((window) => ({
-          ...window,
-          rootPane: replaceSessionIdInPaneTree(window.rootPane, id, newSession.id),
-        })),
+        windows: workspace.windows.map((window) => {
+          if (window.kind !== "terminal") return window;
+          return {
+            ...window,
+            rootPane: replaceSessionIdInPaneTree(window.rootPane, id, newSession.id),
+          };
+        }),
       }),
     ),
   );

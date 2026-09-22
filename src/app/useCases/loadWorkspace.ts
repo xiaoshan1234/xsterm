@@ -12,7 +12,9 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { createLeafPane, generateId, getLeafPaneIds } from "../../app/rules/paneTree";
 import { openSavedSession } from "./openSavedSession";
 import { collectSessionIdsFromWorkspace } from "../../app/rules/workspaceRules";
-import type { PaneNode, Workspace } from "../../model";
+import type { PaneLeafNode, PaneSplitNode, SavedPaneNode } from "../../model/pane";
+import type { TerminalWindow } from "../../model/window";
+import type { Workspace } from "../../model";
 
 export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace> {
   const persistenceStore = usePersistenceStore.getState();
@@ -21,9 +23,9 @@ export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace
 
   const configIdToSession = new Map<string, Awaited<ReturnType<typeof openSavedSession>>>();
 
-  const buildTree = async (node: PaneNode): Promise<PaneNode> => {
-    if (node.type === "leaf") {
-      const configId = node.configId;
+  const buildTree = async (node: SavedPaneNode): Promise<PaneLeafNode | PaneSplitNode> => {
+    if (node.kind === "leaf") {
+      const configId = node.binding?.configId;
       if (configId) {
         let session = configIdToSession.get(configId);
         if (!session) {
@@ -32,27 +34,29 @@ export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace
         }
         return createLeafPane(node.size, session.id, configId);
       }
-      return { ...createLeafPane(node.size), id: generateId() };
+      return createLeafPane(node.size);
     }
-    const children = await Promise.all((node.children ?? []).map((child) => buildTree(child)));
-    return {
+    const children = await Promise.all(node.layout.children.map((child) => buildTree(child)));
+    const split: PaneSplitNode = {
       id: generateId(),
-      type: "split",
-      direction: node.direction,
+      kind: "split",
       size: node.size,
-      children,
+      layout: { direction: node.layout.direction, children },
     };
+    return split;
   };
 
   const builtWindows = await Promise.all(
     saved.windows.map(async (savedWindow) => {
       const rootPane = await buildTree(savedWindow.rootPane);
-      return {
+      const window: TerminalWindow = {
         id: generateId(),
         name: savedWindow.name,
+        kind: "terminal",
         rootPane,
         activePaneId: getLeafPaneIds(rootPane)[0] ?? null,
       };
+      return window;
     }),
   );
 
@@ -75,7 +79,6 @@ export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace
     name: saved.name,
     windows,
     activeWindowId: windows[0]?.id ?? null,
-    sessionIds: [],
     savedWorkspaceId: saved.id,
   };
   const workspace: Workspace = {
@@ -86,7 +89,6 @@ export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace
   const wsStore = useWorkspaceStore.getState();
   wsStore.addWorkspace(workspace);
   wsStore.setActiveWorkspace(workspace.id);
-  // Refresh sessionIds in case the store's pre-add shape diverged.
   useSessionStore.getState();
   return workspace;
 }

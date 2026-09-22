@@ -7,3 +7,12 @@ export interface SavedWindow {
   name: string;
   rootPane: import("./pane").SavedPaneNode;
 }
+
+/**
+ * Legacy alias for `SavedWindow`. Older code paths (especially
+ * `service/legacy/contexts/session/types.ts` and the persistence
+ * store) imported `SavedWindowConfig` from `./persistence.ts` /
+ * `./window-config.ts`. The current canonical name is `SavedWindow`;
+ * this alias preserves the old import surface.
+ */
+export type SavedWindowConfig = SavedWindow;

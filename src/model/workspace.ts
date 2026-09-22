@@ -19,6 +19,13 @@ export interface Workspace {
   /** Active window id; `null` while the workspace is empty (transient). */
   activeWindowId: string | null;
   /**
+   * Union of session ids attached to panes across every window of this
+   * workspace. Optional — populated by `withRecomputedSessionIds` and
+   * read by persistence + drag-side window close flows. Derive from
+   * pane bindings via `collectSessionIdsFromWorkspace` if absent.
+   */
+  sessionIds?: number[];
+  /**
    * Id of the `SavedWorkspace` this workspace was loaded from, or
    * `undefined` for an unsaved workspace. Distinct from `id` — the
    * workspace `id` is per-session (changes every boot); the

@@ -44,15 +44,19 @@ function makeMockInit(sessionId: number, controllerId: number) {
     session: {
       id: sessionId,
       name: `tmux-${controllerId}`,
-      sessionType: { type: "tmux-cc", controllerId, paneId: "%1", sessionName: "", socketName: undefined },
+      sessionType: {
+        type: "tmux-cc",
+        controllerId,
+        paneId: "%1",
+        sessionName: "",
+        socketName: undefined,
+      },
       isConnected: true,
       tmuxPaneId: "%1",
       tmuxControllerId: controllerId,
       tmuxWindowId: "@1",
     },
-    windows: [
-      { tmuxWindowId: "@1", name: "win-1", active: true, layout: "" },
-    ],
+    windows: [{ tmuxWindowId: "@1", name: "win-1", active: true, layout: "" }],
     panes: [
       {
         sessionId,

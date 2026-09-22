@@ -92,7 +92,7 @@ export const useTmuxStore = create<TmuxStoreState>((set, get) => ({
   upsertWindowListEntry: (controllerId, entry) => {
     const state = get();
     const existing = state.tmuxWindowLists.get(controllerId) ?? [];
-    const filtered = existing.filter((e) => e.tmuxWindowId !== entry.tmuxWindowId);
+    const filtered = existing.filter((e) => e.tmuxServerWindowId !== entry.tmuxServerWindowId);
     const next = new Map(state.tmuxWindowLists);
     next.set(controllerId, [...filtered, entry]);
     set({ tmuxWindowLists: next });
@@ -101,7 +101,7 @@ export const useTmuxStore = create<TmuxStoreState>((set, get) => ({
     const state = get();
     const existing = state.tmuxWindowLists.get(controllerId);
     if (!existing) return;
-    const filtered = existing.filter((e) => e.tmuxWindowId !== tmuxWindowId);
+    const filtered = existing.filter((e) => e.tmuxServerWindowId !== tmuxWindowId);
     const next = new Map(state.tmuxWindowLists);
     if (filtered.length === 0) {
       next.delete(controllerId);
@@ -114,7 +114,9 @@ export const useTmuxStore = create<TmuxStoreState>((set, get) => ({
     const state = get();
     const existing = state.tmuxWindowLists.get(controllerId);
     if (!existing) return;
-    const renamed = existing.map((e) => (e.tmuxWindowId === tmuxWindowId ? { ...e, name } : e));
+    const renamed = existing.map((e) =>
+      e.tmuxServerWindowId === tmuxWindowId ? { ...e, name } : e,
+    );
     const next = new Map(state.tmuxWindowLists);
     next.set(controllerId, renamed);
     set({ tmuxWindowLists: next });

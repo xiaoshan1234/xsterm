@@ -17,7 +17,7 @@ import {
   findPaneNode,
   replacePaneNode,
 } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 import type { Session, SplitDirection } from "../../model";
 
 export interface SplitPaneInput {
@@ -46,9 +46,9 @@ export async function splitPane(input: SplitPaneInput): Promise<void> {
     prev.map((workspace) => {
       if (workspace.id !== workspaceId) return workspace;
       const window = workspace.windows.find((w) => w.id === windowId);
-      if (!window) return workspace;
+      if (!window || window.kind !== "terminal") return workspace;
       const target = findPaneNode(window.rootPane, paneId);
-      if (!target || target.type !== "leaf") return workspace;
+      if (!target || target.kind !== "leaf") return workspace;
 
       const halfSize = target.size / 2;
       const originalPane = { ...target, size: halfSize };
@@ -120,9 +120,9 @@ async function splitTmuxPaneInternal(
     prev.map((workspace) => {
       if (workspace.id !== workspaceId) return workspace;
       const window = workspace.windows.find((w) => w.id === windowId);
-      if (!window) return workspace;
+      if (!window || window.kind !== "terminal") return workspace;
       const target = findPaneNode(window.rootPane, paneId);
-      if (!target || target.type !== "leaf") return workspace;
+      if (!target || target.kind !== "leaf") return workspace;
       const halfSize = target.size / 2;
       const originalPane = { ...target, size: halfSize };
       const newPane = createLeafPane(halfSize, newSessionId, "");

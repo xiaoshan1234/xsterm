@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { type PaneNode, type SplitDirection, type Workspace } from "../model";
+import { type PaneLeafNode, type SplitDirection } from "../model/pane";
+import { type Workspace } from "../model";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import * as paneTree from "../app/rules/paneTree";
 import {
@@ -19,7 +20,7 @@ import "./Pane.css";
 interface PaneProps {
   workspace: Workspace;
   windowId: string;
-  pane: PaneNode;
+  pane: PaneLeafNode;
   isActive: boolean;
   isWindowActive: boolean;
   onActivate: () => void;
@@ -66,9 +67,14 @@ export function Pane({
   };
 
   const session =
-    pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
+    pane.binding?.sessionId !== undefined
+      ? sessions.find((s) => s.id === pane.binding?.sessionId)
+      : undefined;
   const selectedWindow = workspace.windows.find((w) => w.id === windowId);
-  const paneNumber = selectedWindow ? getPaneNumber(selectedWindow.rootPane, pane.id) : null;
+  const paneNumber =
+    selectedWindow && selectedWindow.kind === "terminal"
+      ? getPaneNumber(selectedWindow.rootPane, pane.id)
+      : null;
 
   // hidden panes (from tmux -CC attach) are suppressed. MVP panes have is_hidden = false.
   if (session?.isHidden) {
@@ -85,9 +91,9 @@ export function Pane({
       if (
         session?.capabilities?.supportsMultiplex &&
         session.id !== undefined &&
-        pane.sessionId !== undefined
+        pane.binding?.sessionId !== undefined
       ) {
-        splitPane(workspace.id, windowId, pane.id, direction, pane.sessionId);
+        splitPane(workspace.id, windowId, pane.id, direction, pane.binding.sessionId);
         return;
       }
       // Non-multiplex path: open the dialog so the user picks what
@@ -96,7 +102,7 @@ export function Pane({
       setDialogMode("split");
       setShowSessionDialog(true);
     },
-    [session, pane.sessionId, splitPane, workspace.id, windowId, pane.id],
+    [session, pane.binding?.sessionId, splitPane, workspace.id, windowId, pane.id],
   );
 
   const handleStartAttach = useCallback(() => {
@@ -115,8 +121,7 @@ export function Pane({
       updateWindowPaneTree(workspace.id, windowId, (root) =>
         paneTree.replacePaneNode(root, pane.id, {
           ...pane,
-          sessionId,
-          configId: attachedSession?.configId,
+          binding: { sessionId, configId: attachedSession?.configId ?? "" },
         }),
       );
       onActivate();
@@ -195,10 +200,10 @@ export function Pane({
   );
 
   const handleCloseSession = useCallback(() => {
-    if (pane.sessionId !== undefined) {
-      closeSession(pane.sessionId);
+    if (pane.binding?.sessionId !== undefined) {
+      closeSession(pane.binding.sessionId);
     }
-  }, [pane.sessionId, closeSession]);
+  }, [pane.binding?.sessionId, closeSession]);
 
   const handleClear = useCallback(() => {
     terminalRef.current?.clear();

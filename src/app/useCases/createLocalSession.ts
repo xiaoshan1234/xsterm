@@ -62,6 +62,6 @@ function attachSessionToNewWindow(session: Session): void {
     name: session.name,
     rootPane,
     activePaneId: rootPane.id,
-    windowType: "terminal",
+    kind: "terminal",
   });
 }

@@ -1,5 +1,6 @@
 import type { CapabilityFlags } from "../../model/capabilities";
-import type { Session, SessionDisplayConfig, SessionType } from "../../model/session";
+import type { Session } from "../../model/session";
+import type { SessionDisplayConfig, SessionType } from "../../model/session-config";
 import type { Workspace } from "../../model/workspace";
 import { isSessionUsedInOtherWindow } from "./paneTreeRules";
 
@@ -18,7 +19,7 @@ export interface SessionInfoLike {
   capabilities?: CapabilityFlags;
   tmuxPaneId?: string;
   tmuxControllerId?: number;
-  tmuxWindowId?: string;
+  tmuxServerWindowId?: string;
   isHidden?: boolean;
 }
 
@@ -87,7 +88,9 @@ export function buildFrontendSession(
     lastActivityAt: now,
     ...(info.tmuxPaneId !== undefined ? { tmuxPaneId: info.tmuxPaneId } : {}),
     ...(info.tmuxControllerId !== undefined ? { tmuxControllerId: info.tmuxControllerId } : {}),
-    ...(info.tmuxWindowId !== undefined ? { tmuxWindowId: info.tmuxWindowId } : {}),
+    ...(info.tmuxServerWindowId !== undefined
+      ? { tmuxServerWindowId: info.tmuxServerWindowId }
+      : {}),
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),
   };
 }

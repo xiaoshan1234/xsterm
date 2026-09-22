@@ -77,7 +77,7 @@ function createWorkspaceFromSession(sessionId: number, configId: string, name?: 
         name: name ?? session?.name ?? "Window",
         rootPane,
         activePaneId: rootPane.id,
-        windowType: "terminal",
+        kind: "terminal",
       },
     ],
     activeWindowId: "",

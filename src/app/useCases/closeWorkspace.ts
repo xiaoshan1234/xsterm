@@ -16,8 +16,8 @@ export function closeWorkspace(workspaceId: string): void {
   const workspace = wsStore.workspaces.find((w) => w.id === workspaceId);
   if (!workspace || workspace.name === "default") return;
 
-  if (workspace.sessionIds.length > 0) {
-    const ids = new Set(workspace.sessionIds);
+  if ((workspace.sessionIds?.length ?? 0) > 0) {
+    const ids = new Set(workspace.sessionIds ?? []);
     ids.forEach((sessionId) => {
       tauri.closeSession(sessionId).catch((e) => console.error("Failed to close session:", e));
       clearSessionOutput(sessionId);

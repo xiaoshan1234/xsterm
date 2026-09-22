@@ -29,7 +29,7 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
             {
               id: crypto.randomUUID(),
               name: legacy.name || "Window",
-              rootPane: legacy.rootPane as PaneNode,
+              rootPane: legacy.rootPane as unknown as PaneNode,
             },
           ],
         };

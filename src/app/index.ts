@@ -18,7 +18,6 @@ export * from "./useCases/renameSession";
 export * from "./useCases/applyDisplayConfigToLiveSession";
 
 export * from "./useCases/createWindow";
-export * from "./useCases/createInitWindow";
 export * from "./useCases/replaceInitWindowWithSession";
 export * from "./useCases/closeWindow";
 export * from "./useCases/reorderWindows";

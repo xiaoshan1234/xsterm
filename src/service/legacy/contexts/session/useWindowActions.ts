@@ -8,13 +8,15 @@
  * `store.getState()`.
  */
 import { useCallback } from "react";
-import type { PaneNode, SavedSessionConfig, Session, Window, Workspace } from "../../../../model";
+import type { PaneLeafNode } from "../../../../model/pane";
+import type { InitWindow, TerminalWindow, Window } from "../../../../model/window";
+import type { SavedSessionConfig, Session, Workspace } from "../../../../model";
 import { createLeafPane, generateId, getDefaultWindowName } from "../../../../app/rules/paneTree";
 import {
   assertSessionNotUsedElsewhere,
   getUniqueWindowName,
 } from "../../../../app/rules/sessionRules";
-import { withRecomputedSessionIds } from "../../../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../../../service/legacy/contexts/session/paneUtils";
 import { createWindow as createWindowUseCase } from "../../../../app/useCases/createWindow";
 import { createInitWindow as createInitWindowUseCase } from "../../../../app/useCases/createInitWindow";
 import { replaceInitWindowWithSession as replaceInitWindowWithSessionUseCase } from "../../../../app/useCases/replaceInitWindowWithSession";
@@ -84,19 +86,21 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
         tmuxTauri
           .createTmuxWindow(tmuxControlWindowId, name)
           .catch((e) => console.error("Failed to create tmux window:", e));
-        return {
+        const leafPane = createLeafPane(100, sessionId, configId);
+        const placeholder: TerminalWindow = {
           id: generateId(),
           name: name ?? "Window",
-          rootPane: createLeafPane(100, sessionId, configId),
-          activePaneId: "",
-          windowType,
+          kind: "terminal",
+          rootPane: leafPane,
+          activePaneId: leafPane.id,
         };
+        return placeholder;
       }
       // Branch B: fromSession — synchronous local mutation.
       if (sessionId !== undefined) {
         const wsStore = useWorkspaceStore.getState();
         assertSessionNotUsedElsewhere(wsStore.workspaces, workspaceId, null, sessionId);
-        const rootPane = createLeafPane(100, sessionId, configId);
+        const rootPane: PaneLeafNode = createLeafPane(100, sessionId, configId);
         const sessionStore = useSessionStore.getState();
         const baseName =
           name ??
@@ -105,16 +109,16 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
             sessionStore.sessions,
             windowType === "init" ? "New Session" : "Window",
           );
-        const window: Window = {
+        const window: TerminalWindow = {
           id: generateId(),
           name: baseName,
+          kind: "terminal",
           rootPane,
           activePaneId: rootPane.id,
-          windowType,
         };
         wsStore.setWorkspaces((prev) => {
           const uniqueName = getUniqueWindowName(prev, workspaceId, baseName);
-          const finalWindow: Window = { ...window, name: uniqueName };
+          const finalWindow: TerminalWindow = { ...window, name: uniqueName };
           return prev.map((workspace) =>
             workspace.id === workspaceId
               ? withRecomputedSessionIds({
@@ -128,13 +132,13 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
         return window;
       }
       // Branch C: no sessionId — return an init window.
-      return {
+      const init: InitWindow = {
         id: generateId(),
         name: "New Session",
-        activePaneId: generateId(),
-        windowType: "init",
-        rootPane: { id: generateId(), type: "leaf", size: 100 },
+        activePaneId: null,
+        kind: "init",
       };
+      return init;
     },
     [],
   );
@@ -181,9 +185,6 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
       renameWindowUseCase(workspaceId, windowId, name),
     [],
   );
-
-  // Re-export so the legacy `PaneNode` type import still resolves.
-  void (null as unknown as PaneNode);
 
   return {
     createWindowFromSavedConfig,

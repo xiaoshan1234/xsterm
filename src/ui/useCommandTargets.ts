@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { PaneNode, Window, Workspace } from "../model";
+import type { PaneNode } from "../model/pane";
+import type { Window, Workspace } from "../model";
 import {
   findFirstLeafWithSession,
   findPaneNode,
@@ -9,21 +10,27 @@ import {
 function getLeafPanesWithSession(root: PaneNode): PaneNode[] {
   const panes: PaneNode[] = [];
   forEachPane(root, (node) => {
-    if (node.type === "leaf" && node.sessionId !== undefined) {
+    if (node.kind === "leaf" && node.binding?.sessionId !== undefined) {
       panes.push(node);
     }
   });
   return panes;
 }
 
+function getTerminalRoot(window: Window): PaneNode | null {
+  return window.kind === "terminal" ? window.rootPane : null;
+}
+
 function getDefaultPaneId(window: Window): string | null {
+  const root = getTerminalRoot(window);
+  if (!root) return null;
   if (window.activePaneId) {
-    const pane = findPaneNode(window.rootPane, window.activePaneId);
-    if (pane?.type === "leaf" && pane.sessionId !== undefined) {
+    const pane = findPaneNode(root, window.activePaneId);
+    if (pane?.kind === "leaf" && pane.binding?.sessionId !== undefined) {
       return pane.id;
     }
   }
-  return findFirstLeafWithSession(window.rootPane)?.id ?? null;
+  return findFirstLeafWithSession(root)?.id ?? null;
 }
 
 export interface CommandTargets {
@@ -44,7 +51,7 @@ export function useCommandTargets(workspace: Workspace): CommandTargets {
       targetWindowId === "active" ? workspace.activeWindowId : targetWindowId;
     const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
 
-    if (!selectedWindow) {
+    if (!selectedWindow || selectedWindow.kind !== "terminal") {
       setTargetWindowId("active");
       setTargetPaneId("active");
       return;
@@ -69,12 +76,12 @@ export function useCommandTargets(workspace: Workspace): CommandTargets {
     const resolvedWindowId =
       targetWindowId === "active" ? workspace.activeWindowId : targetWindowId;
     const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
-    if (!selectedWindow) return [];
+    if (!selectedWindow || selectedWindow.kind !== "terminal") return [];
 
     const resolvedPaneId = targetPaneId === "active" ? selectedWindow.activePaneId : targetPaneId;
     const pane = resolvedPaneId ? findPaneNode(selectedWindow.rootPane, resolvedPaneId) : null;
-    if (pane && pane.type === "leaf" && pane.sessionId !== undefined) {
-      return [pane.sessionId];
+    if (pane && pane.kind === "leaf" && pane.binding?.sessionId !== undefined) {
+      return [pane.binding.sessionId];
     }
     return [];
   }, [workspace, targetWindowId, targetPaneId]);
@@ -83,7 +90,7 @@ export function useCommandTargets(workspace: Workspace): CommandTargets {
     const resolvedWindowId =
       targetWindowId === "active" ? workspace.activeWindowId : targetWindowId;
     const selectedWindow = workspace.windows.find((w) => w.id === resolvedWindowId);
-    if (!selectedWindow) return [];
+    if (!selectedWindow || selectedWindow.kind !== "terminal") return [];
     return getLeafPanesWithSession(selectedWindow.rootPane).map((pane, idx) => ({
       pane,
       number: idx + 1,

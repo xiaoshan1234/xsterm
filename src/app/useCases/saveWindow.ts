@@ -9,7 +9,7 @@ export function saveWindow(workspaceId: string, windowId: string, name: string):
   const wsStore = useWorkspaceStore.getState();
   const workspace = wsStore.workspaces.find((w) => w.id === workspaceId);
   const window = workspace?.windows.find((w) => w.id === windowId);
-  if (!workspace || !window) return;
+  if (!workspace || !window || window.kind !== "terminal") return;
 
   usePersistenceStore.getState().upsertSavedWindowConfig({
     id: generateId(),

@@ -1,6 +1,7 @@
 import { useShortcuts } from "./useShortcut";
 import { useSession } from "../contexts/SessionContext";
 import type { PaneNode, SplitDirection } from "../../../model";
+import type { Window } from "../../../model/window";
 
 export function useAppShortcuts({
   onCreateSession,
@@ -11,22 +12,17 @@ export function useAppShortcuts({
 }) {
   const { workspaces, activeWorkspaceId, setActivePane, closeSession, splitPane } = useSession();
 
-  const activeWindowFor = (workspace: (typeof workspaces)[number]) =>
+  const activeWindowFor = (workspace: (typeof workspaces)[number]): Window | undefined =>
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
 
-  // Ctrl+\ / Ctrl+Shift+\ split the active pane (vertical /
-  // horizontal). The split is routed through `splitPane` which detects
-  // tmux sessions via `supportsMultiplex` and dispatches to the
-  // backend; non-multiplex sessions fall through to the existing
-  // "open dialog and let the user pick a session" flow.
   const splitActivePane = (direction: SplitDirection): void => {
     const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) return;
     const window = activeWindowFor(workspace);
-    if (!window || !window.activePaneId) return;
+    if (!window || window.kind !== "terminal" || !window.activePaneId) return;
     const pane = findPane(window.rootPane, window.activePaneId);
-    if (!pane || pane.type !== "leaf" || pane.sessionId === undefined) return;
-    splitPane(workspace.id, window.id, pane.id, direction, pane.sessionId);
+    if (!pane || pane.kind !== "leaf" || pane.binding?.sessionId === undefined) return;
+    splitPane(workspace.id, window.id, pane.id, direction, pane.binding.sessionId);
   };
 
   useShortcuts([
@@ -38,7 +34,7 @@ export function useAppShortcuts({
         const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
         if (!workspace) return;
         const window = activeWindowFor(workspace);
-        if (!window) return;
+        if (!window || window.kind !== "terminal") return;
         const leafIds = collectLeafIds(window.rootPane);
         if (leafIds.length <= 1) return;
         const currentIndex = window.activePaneId ? leafIds.indexOf(window.activePaneId) : -1;
@@ -54,7 +50,7 @@ export function useAppShortcuts({
         const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
         if (!workspace) return;
         const window = activeWindowFor(workspace);
-        if (!window) return;
+        if (!window || window.kind !== "terminal") return;
         const leafIds = collectLeafIds(window.rootPane);
         if (leafIds.length <= 1) return;
         const currentIndex = window.activePaneId ? leafIds.indexOf(window.activePaneId) : -1;
@@ -72,10 +68,10 @@ export function useAppShortcuts({
         const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
         if (!workspace) return;
         const window = activeWindowFor(workspace);
-        if (!window || !window.activePaneId) return;
+        if (!window || window.kind !== "terminal" || !window.activePaneId) return;
         const pane = findPane(window.rootPane, window.activePaneId);
-        if (pane?.sessionId !== undefined) {
-          closeSession(pane.sessionId);
+        if (pane?.kind === "leaf" && pane.binding?.sessionId !== undefined) {
+          closeSession(pane.binding.sessionId);
         }
       },
     },
@@ -101,11 +97,12 @@ export function useAppShortcuts({
 function collectLeafIds(root: PaneNode): string[] {
   const ids: string[] = [];
   const traverse = (node: PaneNode) => {
-    if (node.type === "leaf") {
+    if (node.kind === "leaf") {
       ids.push(node.id);
       return;
     }
-    node.children?.forEach(traverse);
+    const children = node.kind === "split" ? node.layout.children : undefined;
+    children?.forEach(traverse);
   };
   traverse(root);
   return ids;
@@ -113,8 +110,9 @@ function collectLeafIds(root: PaneNode): string[] {
 
 function findPane(root: PaneNode, id: string): PaneNode | null {
   if (root.id === id) return root;
-  if (root.children) {
-    for (const child of root.children) {
+  const children = root.kind === "split" ? root.layout.children : undefined;
+  if (children) {
+    for (const child of children) {
       const found = findPane(child, id);
       if (found) return found;
     }

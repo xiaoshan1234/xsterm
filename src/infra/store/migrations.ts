@@ -10,8 +10,13 @@
  * in `src/model/entities/persistence.ts`; this file only owns the
  * version-conversion logic.
  */
-import type { LocalSessionConfig, SSHSessionConfig, TmuxCcConfig } from "../../model/session";
-import type { SavedSessionConfig } from "../../model/persistence";
+import type {
+  LocalSessionConfig,
+  SSHSessionConfig,
+  TmuxCcConfig,
+  SavedSessionConfig,
+} from "../../model/session-config";
+export type { SavedSessionConfig };
 
 /**
  * Schema versions of the `SavedSessionConfig` on-disk format.

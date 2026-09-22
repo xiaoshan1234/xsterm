@@ -41,7 +41,7 @@ export function WindowTabBar({
   const closeWindowWithConfirm = useCallback(
     (windowId: string) => {
       const target = workspace.windows.find((w) => w.id === windowId);
-      if (target?.windowType === "tmux-control") {
+      if (target?.kind === "tmux-control") {
         const ok = window.confirm(
           "Close this session? All windows will disconnect from tmux server. " +
             "The session itself stays on the server.",
@@ -281,7 +281,7 @@ export function WindowTab({
       >
         {dropIndicatorPosition === "before" && <div className="tab-drop-indicator" />}
         <span className="tab-title">
-          {window.windowType === "tmux-control" ? "▶ " : ""}
+          {window.kind === "tmux-control" ? "▶ " : ""}
           {position}. {window.name}
         </span>
         <button

@@ -23,8 +23,9 @@ export function setActivePane(workspaceId: string, windowId: string, paneId: str
 
   const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
   const win = ws?.windows.find((w) => w.id === windowId);
-  const target = win ? findPaneNode(win.rootPane, paneId) : null;
-  const sessionId = target?.type === "leaf" ? target.sessionId : undefined;
+  const root = win?.kind === "terminal" ? win.rootPane : null;
+  const target = root ? findPaneNode(root, paneId) : null;
+  const sessionId = target?.kind === "leaf" ? target.binding?.sessionId : undefined;
   if (sessionId !== undefined) {
     const now = Date.now();
     useSessionStore

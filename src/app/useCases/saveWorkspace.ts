@@ -22,11 +22,16 @@ export function saveWorkspace(workspaceId: string, name: string): void {
   const build = (id: string): SavedWorkspace => ({
     id,
     name: finalName,
-    windows: workspace.windows.map((window): SavedWindow => ({
-      id: generateId(),
-      name: window.name,
-      rootPane: stripSessionIdFromPaneTree(window.rootPane),
-    })),
+    windows: workspace.windows.flatMap((window): SavedWindow[] => {
+      if (window.kind !== "terminal") return [];
+      return [
+        {
+          id: generateId(),
+          name: window.name,
+          rootPane: stripSessionIdFromPaneTree(window.rootPane),
+        },
+      ];
+    }),
   });
 
   if (isDefault) {

@@ -14,9 +14,10 @@ import {
   getLeafPaneIds,
 } from "../../app/rules/paneTree";
 import { getUniqueWindowName } from "../../app/rules/sessionRules";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 import { openSavedSession } from "./openSavedSession";
-import type { PaneNode, Window } from "../../model";
+import type { PaneLeafNode, PaneSplitNode, SavedPaneNode } from "../../model/pane";
+import type { Window } from "../../model/window";
 
 export async function loadWindow(savedWindowId: string, workspaceId?: string): Promise<Window> {
   const persistenceStore = usePersistenceStore.getState();
@@ -25,9 +26,9 @@ export async function loadWindow(savedWindowId: string, workspaceId?: string): P
 
   const configIdToSession = new Map<string, Awaited<ReturnType<typeof openSavedSession>>>();
 
-  const buildTree = async (node: PaneNode): Promise<PaneNode> => {
-    if (node.type === "leaf") {
-      const configId = node.configId;
+  const buildTree = async (node: SavedPaneNode): Promise<PaneLeafNode | PaneSplitNode> => {
+    if (node.kind === "leaf") {
+      const configId = node.binding?.configId;
       if (configId) {
         let session = configIdToSession.get(configId);
         if (!session) {
@@ -36,16 +37,16 @@ export async function loadWindow(savedWindowId: string, workspaceId?: string): P
         }
         return createLeafPane(node.size, session.id, configId);
       }
-      return { ...createLeafPane(node.size), id: generateId() };
+      return createLeafPane(node.size);
     }
-    const children = await Promise.all((node.children ?? []).map((child) => buildTree(child)));
-    return {
+    const children = await Promise.all(node.layout.children.map((child) => buildTree(child)));
+    const split: PaneSplitNode = {
       id: generateId(),
-      type: "split",
-      direction: node.direction,
+      kind: "split",
       size: node.size,
-      children,
+      layout: { direction: node.layout.direction, children },
     };
+    return split;
   };
 
   const rootPane = await buildTree(saved.rootPane);
@@ -53,6 +54,7 @@ export async function loadWindow(savedWindowId: string, workspaceId?: string): P
   const window: Window = {
     id: generateId(),
     name: baseName,
+    kind: "terminal",
     rootPane,
     activePaneId: getLeafPaneIds(rootPane)[0] ?? null,
   };

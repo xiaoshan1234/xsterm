@@ -1,38 +1,56 @@
-import type { PaneNode, SplitDirection } from "../../model/workspace";
+import type {
+  PaneBinding,
+  PaneLeafNode,
+  PaneNode,
+  PaneSplitNode,
+  SplitDirection,
+} from "../../model/pane";
 import type { Session } from "../../model/session";
 
 export function generateId(): string {
   return crypto.randomUUID();
 }
 
-export function createLeafPane(size: number, sessionId?: number, configId?: string): PaneNode {
+export function createLeafPane(size: number, sessionId?: number, configId?: string): PaneLeafNode {
+  const binding: PaneBinding | undefined =
+    sessionId !== undefined ? { sessionId, configId: configId ?? "" } : undefined;
   return {
     id: generateId(),
-    type: "leaf",
+    kind: "leaf",
     size,
-    sessionId,
-    configId,
+    binding,
   };
+}
+
+function asSplit(node: PaneNode): PaneSplitNode {
+  if (node.kind !== "split") {
+    throw new Error(`expected split node, got ${node.kind} (id=${node.id})`);
+  }
+  return node;
 }
 
 export function createSplitNode(
   direction: SplitDirection,
   first: PaneNode,
   second: PaneNode,
-): PaneNode {
+): PaneSplitNode {
   return {
     id: generateId(),
-    type: "split",
-    direction,
+    kind: "split",
     size: first.size + second.size,
-    children: [first, second],
+    layout: { direction, children: [first, second] },
   };
+}
+
+function getChildren(root: PaneNode): PaneSplitNode["layout"]["children"] | undefined {
+  return root.kind === "split" ? root.layout.children : undefined;
 }
 
 export function findPaneNode(root: PaneNode, id: string): PaneNode | null {
   if (root.id === id) return root;
-  if (root.children) {
-    for (const child of root.children) {
+  const children = getChildren(root);
+  if (children) {
+    for (const child of children) {
       const found = findPaneNode(child, id);
       if (found) return found;
     }
@@ -42,23 +60,29 @@ export function findPaneNode(root: PaneNode, id: string): PaneNode | null {
 
 export function mapPaneTree(root: PaneNode, mapper: (node: PaneNode) => PaneNode): PaneNode {
   const mapped = mapper(root);
-  if (mapped.children) {
-    return { ...mapped, children: mapped.children.map((child) => mapPaneTree(child, mapper)) };
+  const children = getChildren(mapped);
+  if (children) {
+    const split = asSplit(mapped);
+    return {
+      ...split,
+      layout: { ...split.layout, children: children.map((child) => mapPaneTree(child, mapper)) },
+    };
   }
   return mapped;
 }
 
 export function forEachPane(root: PaneNode, callback: (node: PaneNode) => void): void {
   callback(root);
-  if (root.children) {
-    root.children.forEach((child) => forEachPane(child, callback));
+  const children = getChildren(root);
+  if (children) {
+    children.forEach((child) => forEachPane(child, callback));
   }
 }
 
 export function getLeafPaneIds(root: PaneNode): string[] {
   const ids: string[] = [];
   forEachPane(root, (node) => {
-    if (node.type === "leaf") {
+    if (node.kind === "leaf") {
       ids.push(node.id);
     }
   });
@@ -67,8 +91,8 @@ export function getLeafPaneIds(root: PaneNode): string[] {
 
 export function removeSessionFromPaneTree(root: PaneNode, sessionId: number): PaneNode {
   return mapPaneTree(root, (node) => {
-    if (node.type === "leaf" && node.sessionId === sessionId) {
-      return { ...node, sessionId: undefined };
+    if (node.kind === "leaf" && node.binding?.sessionId === sessionId) {
+      return { ...node, binding: undefined };
     }
     return node;
   });
@@ -80,20 +104,22 @@ export function replaceSessionIdInPaneTree(
   newSessionId: number,
 ): PaneNode {
   return mapPaneTree(root, (node) => {
-    if (node.type === "leaf" && node.sessionId === oldSessionId) {
-      return { ...node, sessionId: newSessionId };
+    if (node.kind === "leaf" && node.binding?.sessionId === oldSessionId) {
+      return { ...node, binding: { ...node.binding, sessionId: newSessionId } };
     }
     return node;
   });
 }
 
 export function collapseEmptySplits(root: PaneNode): PaneNode {
-  if (root.type === "leaf") return root;
-  const collapsedChildren = root.children?.map(collapseEmptySplits) ?? [];
-  if (collapsedChildren.every((child) => child.type === "leaf" && child.sessionId === undefined)) {
+  if (root.kind === "leaf") return root;
+  const children = getChildren(root) ?? [];
+  const collapsedChildren = children.map(collapseEmptySplits);
+  if (collapsedChildren.every((child) => child.kind === "leaf" && child.binding === undefined)) {
     return createLeafPane(root.size);
   }
-  return { ...root, children: collapsedChildren };
+  const split = asSplit(root);
+  return { ...split, layout: { ...split.layout, children: collapsedChildren } };
 }
 
 export function removeSessionAndCollapse(root: PaneNode, sessionId: number): PaneNode {
@@ -102,10 +128,15 @@ export function removeSessionAndCollapse(root: PaneNode, sessionId: number): Pan
 
 export function replacePaneNode(root: PaneNode, targetId: string, replacement: PaneNode): PaneNode {
   if (root.id === targetId) return replacement;
-  if (!root.children) return root;
+  const children = getChildren(root);
+  if (!children) return root;
+  const split = asSplit(root);
   return {
-    ...root,
-    children: root.children.map((child) => replacePaneNode(child, targetId, replacement)),
+    ...split,
+    layout: {
+      ...split.layout,
+      children: children.map((child) => replacePaneNode(child, targetId, replacement)),
+    },
   };
 }
 
@@ -113,12 +144,13 @@ export function replacePaneNode(root: PaneNode, targetId: string, replacement: P
  * Returns the first leaf node (depth-first) that has a defined `sessionId`.
  * Used to derive a default window name from the first session attached to the window.
  */
-export function findFirstLeafWithSession(root: PaneNode): PaneNode | null {
-  if (root.type === "leaf") {
-    return root.sessionId !== undefined ? root : null;
+export function findFirstLeafWithSession(root: PaneNode): PaneLeafNode | null {
+  if (root.kind === "leaf") {
+    return root.binding?.sessionId !== undefined ? root : null;
   }
-  if (!root.children) return null;
-  for (const child of root.children) {
+  const children = getChildren(root);
+  if (!children) return null;
+  for (const child of children) {
     const found = findFirstLeafWithSession(child);
     if (found) return found;
   }
@@ -135,8 +167,8 @@ export function getDefaultWindowName(
   fallback: string,
 ): string {
   const firstLeaf = findFirstLeafWithSession(rootPane);
-  if (!firstLeaf || firstLeaf.sessionId === undefined) return fallback;
-  const session = sessions.find((s) => s.id === firstLeaf.sessionId);
+  if (!firstLeaf || firstLeaf.binding?.sessionId === undefined) return fallback;
+  const session = sessions.find((s) => s.id === firstLeaf.binding?.sessionId);
   return session?.name ?? fallback;
 }
 
@@ -145,11 +177,12 @@ export function getDefaultWindowName(
  * anywhere in the given pane tree (depth-first search).
  */
 export function isSessionInPaneTree(root: PaneNode, sessionId: number): boolean {
-  if (root.type === "leaf") {
-    return root.sessionId === sessionId;
+  if (root.kind === "leaf") {
+    return root.binding?.sessionId === sessionId;
   }
-  if (!root.children) return false;
-  for (const child of root.children) {
+  const children = getChildren(root);
+  if (!children) return false;
+  for (const child of children) {
     if (isSessionInPaneTree(child, sessionId)) return true;
   }
   return false;
@@ -158,8 +191,8 @@ export function isSessionInPaneTree(root: PaneNode, sessionId: number): boolean 
 export function collectSessionIdsFromPaneTree(root: PaneNode): number[] {
   const ids = new Set<number>();
   forEachPane(root, (node) => {
-    if (node.type === "leaf" && node.sessionId !== undefined) {
-      ids.add(node.sessionId);
+    if (node.kind === "leaf" && node.binding?.sessionId !== undefined) {
+      ids.add(node.binding.sessionId);
     }
   });
   return Array.from(ids);
@@ -169,7 +202,7 @@ export function getPaneNumberMap(root: PaneNode): Map<string, number> {
   const map = new Map<string, number>();
   let number = 1;
   forEachPane(root, (node) => {
-    if (node.type === "leaf") {
+    if (node.kind === "leaf") {
       map.set(node.id, number++);
     }
   });
@@ -182,7 +215,7 @@ export function getPaneNumber(root: PaneNode, paneId: string): number | null {
 
 export function stripSessionIdFromPaneTree(root: PaneNode): PaneNode {
   return mapPaneTree(root, (node) =>
-    node.type === "leaf" ? { ...node, sessionId: undefined } : node,
+    node.kind === "leaf" ? { ...node, binding: undefined } : node,
   );
 }
 
@@ -190,11 +223,11 @@ function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
   if (root.id === paneId) {
     return null;
   }
-  if (root.type === "leaf") {
+  if (root.kind === "leaf") {
     return root;
   }
   const children =
-    root.children
+    getChildren(root)
       ?.map((child) => removePaneRecursive(child, paneId))
       .filter((child): child is PaneNode => child !== null) ?? [];
   if (children.length === 0) {
@@ -203,7 +236,8 @@ function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
   if (children.length === 1) {
     return { ...children[0], size: root.size };
   }
-  return { ...root, children };
+  const split = asSplit(root);
+  return { ...split, layout: { ...split.layout, children } };
 }
 
 export function removePaneFromTree(root: PaneNode, paneId: string): PaneNode {

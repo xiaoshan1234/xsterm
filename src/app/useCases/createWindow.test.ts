@@ -32,18 +32,18 @@ describe("createWindow", () => {
 
   it("creates an init placeholder window", async () => {
     const w = await createWindow({ variant: "init" });
-    expect(w.windowType).toBe("init");
+    expect(w.kind).toBe("init");
   });
 
   it("creates a window bound to a session (legacy form)", async () => {
     const w = await createWindow({ sessionId: 1, configId: "cfg" });
-    expect(w.windowType).toBe("terminal");
+    expect(w.kind).toBe("terminal");
     expect(mocks.setWorkspaces).toHaveBeenCalled();
   });
 
   it("creates a window from variant=fromSession", async () => {
     const w = await createWindow({ variant: "fromSession", sessionId: 2, configId: "c2" });
-    expect(w.windowType).toBe("terminal");
+    expect(w.kind).toBe("terminal");
     expect(mocks.setWorkspaces).toHaveBeenCalled();
   });
 

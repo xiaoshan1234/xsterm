@@ -17,8 +17,8 @@ import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../app/rules/sessionRules";
 import { createLeafPane, generateId, getDefaultWindowName } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
-import type { Window } from "../../model";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
+import type { InitWindow, TerminalWindow, Window } from "../../model/window";
 import { openSavedSession } from "./openSavedSession";
 
 export interface CreateWindowFromSessionInput {
@@ -41,7 +41,6 @@ export interface CreateWindowOptions {
 export async function createWindow(
   opts: CreateWindowFromSessionInput | CreateWindowOptions,
 ): Promise<Window> {
-  // Legacy short-form: a single object carrying sessionId/configId/name/workspaceId.
   if ("sessionId" in opts && "configId" in opts && !("variant" in opts)) {
     return createWindowFromSession(opts as CreateWindowFromSessionInput);
   }
@@ -83,12 +82,12 @@ function createWindowFromSession(input: CreateWindowFromSessionInput): Window {
 
   const rootPane = createLeafPane(100, input.sessionId, input.configId);
   const baseName = input.name ?? getDefaultWindowName(rootPane, sessionStore.sessions, "Window");
-  const window: Window = {
+  const window: TerminalWindow = {
     id: generateId(),
     name: baseName,
+    kind: "terminal",
     rootPane,
     activePaneId: rootPane.id,
-    windowType: "terminal",
   };
 
   wsStore.setWorkspaces((prev) =>
@@ -123,15 +122,14 @@ async function createWindowFromSavedConfig(
   });
 }
 
-function createInitWindow(): Window {
-  const paneId = generateId();
-  return {
+export function createInitWindow(): Window {
+  const init: InitWindow = {
     id: generateId(),
     name: "New Session",
-    activePaneId: paneId,
-    windowType: "init",
-    rootPane: { id: paneId, type: "leaf", size: 100 },
+    activePaneId: null,
+    kind: "init",
   };
+  return init;
 }
 
 function replaceInitWindowWithSession(
@@ -160,7 +158,7 @@ function replaceInitWindowWithSession(
                 name: getUniqueWindowName(prev, workspaceId, baseName, windowId),
                 rootPane,
                 activePaneId: rootPane.id,
-                windowType: "terminal",
+                kind: "terminal",
               }
             : window,
         ),
@@ -171,9 +169,9 @@ function replaceInitWindowWithSession(
   return {
     id: windowId,
     name: baseName,
+    kind: "terminal",
     rootPane,
     activePaneId: rootPane.id,
-    windowType: "terminal",
   };
 }
 
@@ -182,8 +180,6 @@ async function createTmuxServerWindow(
   name: string | undefined,
   workspaceId: string | undefined,
 ): Promise<Window> {
-  // Fire-and-forget — the actual `Window` row arrives via the
-  // `tmux-window-added` listener.
   try {
     await tmuxTauri.createTmuxWindow(controllerId, name);
   } catch (e) {
@@ -193,8 +189,8 @@ async function createTmuxServerWindow(
   return {
     id: generateId(),
     name: name ?? "Window",
+    kind: "terminal",
     rootPane: createLeafPane(100),
     activePaneId: "",
-    windowType: "terminal",
   };
 }

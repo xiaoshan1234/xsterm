@@ -15,6 +15,7 @@ import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession, dispatchByType } from "../../app/rules/sessionRules";
 import { createLeafPane, generateId } from "../../app/rules/paneTree";
 import type { LocalSessionConfig, Session, SSHSessionConfig, TmuxCcConfig } from "../../model";
+import type { TerminalWindow } from "../../model/window";
 
 export async function openSavedSession(configId: string): Promise<Session> {
   const config = usePersistenceStore.getState().savedConfigs.find((c) => c.id === configId);
@@ -24,7 +25,7 @@ export async function openSavedSession(configId: string): Promise<Session> {
     config.type,
     () => tauri.createLocal(config.config as LocalSessionConfig),
     () => tauri.createSsh(config.config as SSHSessionConfig),
-    () => tmuxTauri.createTmux(config.config as TmuxCcConfig),
+    async () => (await tmuxTauri.createTmux(config.config as TmuxCcConfig)).session,
   );
 
   const sessionType = config.type === "tmux-cc" ? "tmux-cc" : config.type;
@@ -43,11 +44,12 @@ function attachSessionToNewWindow(session: Session): void {
   const activeId = workspaceStore.activeWorkspaceId ?? workspaceStore.workspaces[0]?.id;
   if (!activeId) return;
   const rootPane = createLeafPane(100, session.id, session.configId);
-  workspaceStore.addWindow(activeId, {
+  const window: TerminalWindow = {
     id: generateId(),
     name: session.name,
+    kind: "terminal",
     rootPane,
     activePaneId: rootPane.id,
-    windowType: "terminal",
-  });
+  };
+  workspaceStore.addWindow(activeId, window);
 }

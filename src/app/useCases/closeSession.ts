@@ -10,7 +10,7 @@ import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 
 export async function closeSession(id: number): Promise<void> {
   try {
@@ -27,6 +27,7 @@ export async function closeSession(id: number): Promise<void> {
         withRecomputedSessionIds({
           ...workspace,
           windows: workspace.windows.map((window) => {
+            if (window.kind !== "terminal") return window;
             const newRoot = removeSessionAndCollapse(window.rootPane, id);
             const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
               ? window.activePaneId

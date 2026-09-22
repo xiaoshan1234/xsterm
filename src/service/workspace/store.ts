@@ -204,6 +204,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set) => ({
         if (i !== idx) return w;
         const windows = w.windows.map((win) => {
           if (win.id !== windowId) return win;
+          if (win.kind !== "terminal") return win;
           const next = updater(win.rootPane);
           if (next === win.rootPane) return win;
           changed = true;

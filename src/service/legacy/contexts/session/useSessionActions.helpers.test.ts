@@ -5,7 +5,8 @@ import {
   dispatchByType,
   getUniqueWindowName,
 } from "./useSessionActions.helpers";
-import type { Session, SessionDisplayConfig, Window, Workspace } from "../../../../model";
+import type { SessionDisplayConfig } from "../../../../model/session-config";
+import type { Session, TerminalWindow, Window, Workspace } from "../../../../model";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 // ---------- Fixtures --------------------------------------------------------
@@ -14,15 +15,15 @@ function leafWindow(id: string, name: string, sessionIds: number[]): Window {
   return {
     id,
     name,
-    windowType: "terminal",
+    kind: "terminal",
     activePaneId: "p",
     rootPane: {
       id: "p",
-      type: "leaf",
+      kind: "leaf",
       size: 100,
-      sessionId: sessionIds[0],
+      binding: sessionIds[0] !== undefined ? { sessionId: sessionIds[0], configId: "" } : undefined,
     },
-  };
+  } as TerminalWindow;
 }
 
 function workspace(id: string, name: string, windows: Window[]): Workspace {
@@ -32,8 +33,10 @@ function workspace(id: string, name: string, windows: Window[]): Workspace {
     windows,
     activeWindowId: windows[0]?.id ?? null,
     sessionIds: windows.flatMap((w) =>
-      w.rootPane.type === "leaf" && w.rootPane.sessionId !== undefined
-        ? [w.rootPane.sessionId]
+      w.kind === "terminal" &&
+      w.rootPane.kind === "leaf" &&
+      w.rootPane.binding?.sessionId !== undefined
+        ? [w.rootPane.binding.sessionId]
         : [],
     ),
   };

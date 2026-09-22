@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { type Workspace, type PaneNode } from "../model";
+import { type PaneNode } from "../model/pane";
+import { type Workspace } from "../model";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import { useClampedPanelHeight } from "../service/legacy/hooks/useClampedPanelHeight";
 import { PaneTree } from "./PaneTree";
@@ -19,10 +20,13 @@ function updateNodeInTree(
   if (root.id === nodeId) {
     return updater(root);
   }
-  if (!root.children) return root;
+  if (root.kind !== "split") return root;
   return {
     ...root,
-    children: root.children.map((child) => updateNodeInTree(child, nodeId, updater)),
+    layout: {
+      ...root.layout,
+      children: root.layout.children.map((child) => updateNodeInTree(child, nodeId, updater)),
+    },
   };
 }
 
@@ -109,17 +113,14 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   // local init Window that prompts the user to attach / create a
   // session).
   const handleAdd = useCallback(() => {
-    if (
-      activeWindow?.windowType === "tmux-control" &&
-      activeWindow.tmuxControlWindowId !== undefined
-    ) {
+    if (activeWindow?.kind === "tmux-control" && activeWindow.tmuxControllerId !== undefined) {
       createWindow(
         workspace.id,
         undefined,
         undefined,
         undefined,
         "terminal",
-        activeWindow.tmuxControlWindowId,
+        activeWindow.tmuxControllerId,
       );
       return;
     }
@@ -153,9 +154,9 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
           key={window.id}
           className={`terminal-pane ${window.id === activeWindow?.id ? "terminal-pane--active" : ""}`}
         >
-          {window.windowType === "init" ? (
+          {window.kind === "init" ? (
             <InitWindowView workspace={workspace} windowId={window.id} />
-          ) : window.windowType === "tmux-control" ? (
+          ) : window.kind === "tmux-control" ? (
             <TmuxControlWindowView window={window} />
           ) : (
             <PaneTree

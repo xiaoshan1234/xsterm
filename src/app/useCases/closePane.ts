@@ -7,7 +7,7 @@ import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { findPaneNode, getLeafPaneIds, removePaneFromTree } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 
 export async function closePane(
   workspaceId: string,
@@ -17,10 +17,10 @@ export async function closePane(
   const wsStore = useWorkspaceStore.getState();
   const workspace = wsStore.workspaces.find((w) => w.id === workspaceId);
   const window = workspace?.windows.find((w) => w.id === windowId);
-  const pane = window ? findPaneNode(window.rootPane, paneId) : null;
+  const pane = window && window.kind === "terminal" ? findPaneNode(window.rootPane, paneId) : null;
   if (!pane) return;
 
-  const sessionId = pane.type === "leaf" ? pane.sessionId : undefined;
+  const sessionId = pane.kind === "leaf" ? pane.binding?.sessionId : undefined;
   if (sessionId !== undefined) {
     try {
       await tauri.closeSession(sessionId);
@@ -38,6 +38,7 @@ export async function closePane(
         ...workspace,
         windows: workspace.windows.map((window) => {
           if (window.id !== windowId) return window;
+          if (window.kind !== "terminal") return window;
           const newRoot = removePaneFromTree(window.rootPane, paneId);
           const newActivePaneId =
             window.activePaneId === paneId

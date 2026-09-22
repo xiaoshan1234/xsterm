@@ -1,12 +1,21 @@
-import { type PaneNode } from "../../../model";
+import type { PaneNode, PaneSplitNode } from "../../../model/pane";
 
-export function findPaneNode<T extends { id: string; children?: T[] }>(
-  node: T,
-  paneId: string,
-): T | null {
+function asSplit(node: PaneNode): PaneSplitNode {
+  if (node.kind !== "split") {
+    throw new Error(`expected split node, got ${node.kind} (id=${node.id})`);
+  }
+  return node;
+}
+
+function getChildren(node: PaneNode): PaneNode[] | undefined {
+  return node.kind === "split" ? node.layout.children : undefined;
+}
+
+export function findPaneNode(node: PaneNode, paneId: string): PaneNode | null {
   if (node.id === paneId) return node;
-  if (node.children) {
-    for (const child of node.children) {
+  const children = getChildren(node);
+  if (children) {
+    for (const child of children) {
       const found = findPaneNode(child, paneId);
       if (found) return found;
     }
@@ -17,12 +26,13 @@ export function findPaneNode<T extends { id: string; children?: T[] }>(
 export function getLeafPaneIds(node: PaneNode): string[] {
   const ids: string[] = [];
   function collect(n: PaneNode): void {
-    if (n.type === "leaf") {
+    if (n.kind === "leaf") {
       ids.push(n.id);
       return;
     }
-    if (n.children) {
-      for (const child of n.children) {
+    const children = getChildren(n);
+    if (children) {
+      for (const child of children) {
         collect(child);
       }
     }
@@ -31,26 +41,32 @@ export function getLeafPaneIds(node: PaneNode): string[] {
   return ids;
 }
 
-export function replacePaneNode<T extends { id: string; children?: T[] }>(
-  node: T,
-  paneId: string,
-  newNode: T,
-): T {
+export function replacePaneNode(node: PaneNode, paneId: string, newNode: PaneNode): PaneNode {
   if (node.id === paneId) return newNode;
-  if (!node.children) return node;
+  const children = getChildren(node);
+  if (!children) return node;
+  const split = asSplit(node);
   return {
-    ...node,
-    children: node.children.map((child) => replacePaneNode(child, paneId, newNode)),
+    ...split,
+    layout: {
+      ...split.layout,
+      children: children.map((child) => replacePaneNode(child, paneId, newNode)),
+    },
   };
 }
 
-export function mapPaneTree<T extends { id: string; children?: T[] }>(
-  node: T,
-  mapper: (node: T) => T,
-): T {
+export function mapPaneTree(node: PaneNode, mapper: (node: PaneNode) => PaneNode): PaneNode {
   const mapped = mapper(node);
-  if (mapped.children) {
-    return { ...mapped, children: mapped.children.map((child) => mapPaneTree(child, mapper)) };
+  const children = getChildren(mapped);
+  if (children) {
+    const split = asSplit(mapped);
+    return {
+      ...split,
+      layout: {
+        ...split.layout,
+        children: children.map((child) => mapPaneTree(child, mapper)),
+      },
+    };
   }
   return mapped;
 }

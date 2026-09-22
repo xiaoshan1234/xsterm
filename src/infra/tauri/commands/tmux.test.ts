@@ -31,7 +31,7 @@ import {
   renameTmuxWindow,
   unmarkAttachedTmux,
 } from "./tmux";
-import type { SessionInfo } from "./sessions";
+
 import type { AttachedTmuxServer, TmuxCcConfig } from "../../../model";
 
 const tmuxInfo = {
@@ -44,9 +44,7 @@ const tmuxInfo = {
     tmuxControllerId: 1,
     tmuxServerWindowId: "@1",
   },
-  windows: [
-    { tmuxWindowId: "@1", name: "win-1", active: true, layout: "" },
-  ],
+  windows: [{ tmuxWindowId: "@1", name: "win-1", active: true, layout: "" }],
   panes: [
     {
       sessionId: 11,

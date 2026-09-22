@@ -6,7 +6,7 @@ import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../app/rules/sessionRules";
 import { createLeafPane } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 
 export function replaceInitWindowWithSession(
   workspaceId: string,

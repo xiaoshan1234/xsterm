@@ -1,5 +1,6 @@
 import { type MouseEvent, type KeyboardEvent } from "react";
-import { type Workspace, type PaneNode, type Session } from "../model";
+import { type PaneLeafNode, type PaneNode } from "../model/pane";
+import { type Workspace, type Session } from "../model";
 import { CloseIcon, ShellIcon, SshIcon, LayoutIcon } from "./icons/Icon";
 import { ContextMenu, type ContextMenuItem } from "./primitives/ContextMenu";
 import "./TabBar.css";
@@ -55,10 +56,15 @@ interface WorkspaceTabProps {
   onSave: () => void;
 }
 
+function getSplitChildren(root: PaneNode): PaneNode[] | undefined {
+  return root.kind === "split" ? root.layout.children : undefined;
+}
+
 function findPaneNode(root: PaneNode, id: string): PaneNode | null {
   if (root.id === id) return root;
-  if (root.children) {
-    for (const child of root.children) {
+  const children = getSplitChildren(root);
+  if (children) {
+    for (const child of children) {
       const found = findPaneNode(child, id);
       if (found) return found;
     }
@@ -66,10 +72,11 @@ function findPaneNode(root: PaneNode, id: string): PaneNode | null {
   return null;
 }
 
-function getFirstLeafWithSession(root: PaneNode): PaneNode | null {
-  if (root.type === "leaf" && root.sessionId !== undefined) return root;
-  if (root.children) {
-    for (const child of root.children) {
+function getFirstLeafWithSession(root: PaneNode): PaneLeafNode | null {
+  if (root.kind === "leaf" && root.binding?.sessionId !== undefined) return root;
+  const children = getSplitChildren(root);
+  if (children) {
+    for (const child of children) {
       const found = getFirstLeafWithSession(child);
       if (found) return found;
     }
@@ -83,16 +90,23 @@ function getWorkspaceSessionType(
 ): Session["type"] | null {
   const activeWindow =
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
-  if (!activeWindow) return null;
+  if (!activeWindow || activeWindow.kind !== "terminal") return null;
   let leaf: PaneNode | null = null;
   if (activeWindow.activePaneId) {
     leaf = findPaneNode(activeWindow.rootPane, activeWindow.activePaneId);
   }
-  if (!leaf || leaf.sessionId === undefined) {
-    leaf = getFirstLeafWithSession(activeWindow.rootPane);
-  }
-  if (!leaf || leaf.sessionId === undefined) return null;
-  return sessions.find((s) => s.id === leaf!.sessionId)?.type ?? null;
+  const sessionId = (() => {
+    if (leaf && leaf.kind === "leaf" && leaf.binding?.sessionId !== undefined) {
+      return leaf.binding.sessionId;
+    }
+    const fallback = getFirstLeafWithSession(activeWindow.rootPane);
+    if (fallback && fallback.binding?.sessionId !== undefined) {
+      return fallback.binding.sessionId;
+    }
+    return undefined;
+  })();
+  if (sessionId === undefined) return null;
+  return sessions.find((s) => s.id === sessionId)?.type ?? null;
 }
 
 function SessionTypeIcon({ type, size }: { type: Session["type"]; size: number }) {

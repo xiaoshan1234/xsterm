@@ -18,7 +18,7 @@ import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { forEachPane } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 import { createInitWindow } from "./createInitWindow";
 
 export function closeWindow(workspaceId: string, windowId: string): void {
@@ -28,17 +28,18 @@ export function closeWindow(workspaceId: string, windowId: string): void {
   if (!window) return;
 
   // Branch 1: tmux-control window
-  if (window.windowType === "tmux-control" && window.tmuxControlWindowId !== undefined) {
-    const controllerId = window.tmuxControlWindowId;
+  if (window.kind === "tmux-control" && window.tmuxControllerId !== undefined) {
+    const controllerId = window.tmuxControllerId;
     const sessionIdsToClose = new Set<number>();
     const windowsToDrop: string[] = [windowId];
     const siblingWindows = workspace?.windows ?? [];
     for (const w of siblingWindows) {
       if (w.id === windowId) continue;
-      if (w.windowType === "tmux-control") continue;
+      if (w.kind === "tmux-control") continue;
+      if (w.kind !== "terminal") continue;
       forEachPane(w.rootPane, (node) => {
-        if (node.type === "leaf" && node.sessionId !== undefined) {
-          sessionIdsToClose.add(node.sessionId);
+        if (node.kind === "leaf" && node.binding?.sessionId !== undefined) {
+          sessionIdsToClose.add(node.binding.sessionId);
         }
       });
       windowsToDrop.push(w.id);
@@ -85,11 +86,13 @@ export function closeWindow(workspaceId: string, windowId: string): void {
 
   // Branches 2 & 3: ordinary tmux-window / non-tmux terminal
   const sessionIdsToClose = new Set<number>();
-  forEachPane(window.rootPane, (node) => {
-    if (node.type === "leaf" && node.sessionId !== undefined) {
-      sessionIdsToClose.add(node.sessionId);
-    }
-  });
+  if (window.kind === "terminal") {
+    forEachPane(window.rootPane, (node) => {
+      if (node.kind === "leaf" && node.binding?.sessionId !== undefined) {
+        sessionIdsToClose.add(node.binding.sessionId);
+      }
+    });
+  }
 
   wsStore.setWorkspaces((prev) =>
     prev.map((workspace) => {

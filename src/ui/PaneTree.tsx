@@ -1,5 +1,6 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
-import { type PaneNode, type Workspace } from "../model";
+import { type PaneNode } from "../model/pane";
+import { type Workspace } from "../model/workspace";
 import { useDragResize } from "../service/legacy/hooks/useDragResize";
 import { Pane } from "./Pane";
 
@@ -14,6 +15,14 @@ interface PaneTreeProps {
   onUpdateNode: (windowId: string, nodeId: string, updater: (node: PaneNode) => PaneNode) => void;
 }
 
+function getSplitChildren(node: PaneNode): PaneNode[] {
+  return node.kind === "split" ? node.layout.children : [];
+}
+
+function getSplitDirection(node: PaneNode): "horizontal" | "vertical" {
+  return node.kind === "split" ? node.layout.direction : "horizontal";
+}
+
 export function PaneTree({
   workspace,
   windowId,
@@ -24,7 +33,7 @@ export function PaneTree({
   onActivatePane,
   onUpdateNode,
 }: PaneTreeProps) {
-  if (node.type === "leaf") {
+  if (node.kind === "leaf") {
     return (
       <Pane
         key={node.id}
@@ -73,8 +82,8 @@ function SplitNode({
   onActivatePane,
   onUpdateNode,
 }: SplitNodeProps) {
-  const direction = node.direction ?? "horizontal";
-  const children = node.children ?? [];
+  const direction = getSplitDirection(node);
+  const children = getSplitChildren(node);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeIndexRef = useRef(0);
 
@@ -96,14 +105,14 @@ function SplitNode({
       const clampedPct = Math.max(10, Math.min(totalSize - 10, pct));
 
       onUpdateNode(windowId, node.id, (current) => {
-        if (!current.children) return current;
-        const updatedChildren = [...current.children];
+        if (current.kind !== "split") return current;
+        const updatedChildren = [...current.layout.children];
         updatedChildren[childIndex] = { ...updatedChildren[childIndex], size: clampedPct };
         updatedChildren[childIndex + 1] = {
           ...updatedChildren[childIndex + 1],
           size: totalSize - clampedPct,
         };
-        return { ...current, children: updatedChildren };
+        return { ...current, layout: { ...current.layout, children: updatedChildren } };
       });
     },
   });

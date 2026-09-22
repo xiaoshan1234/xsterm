@@ -9,7 +9,7 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { clearSessionOutput } from "../../infra/buffers/sessionOutputBuffer";
 import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../app/rules/workspaceRules";
+import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 
 export function removeConfig(configId: string): void {
   usePersistenceStore.getState().removeSavedConfig(configId);
@@ -31,6 +31,7 @@ export function removeConfig(configId: string): void {
       withRecomputedSessionIds({
         ...workspace,
         windows: workspace.windows.map((window) => {
+          if (window.kind !== "terminal") return window;
           const newRoot = removeSessionAndCollapse(window.rootPane, session.id);
           const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
             ? window.activePaneId

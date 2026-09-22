@@ -1,4 +1,3 @@
-
 export interface TmuxSessionBackend {
   /** `true` for the bootstrap pane; UI renders nothing for it. */
   isHidden?: boolean;

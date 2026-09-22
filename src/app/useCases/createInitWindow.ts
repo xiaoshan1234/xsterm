@@ -4,15 +4,14 @@
  * init-only path is easy to mock and reuse.
  */
 import { generateId } from "../../app/rules/paneTree";
-import type { Window } from "../../model";
+import type { InitWindow, Window } from "../../model/window";
 
 export function createInitWindow(): Window {
-  const paneId = generateId();
-  return {
+  const init: InitWindow = {
     id: generateId(),
     name: "New Session",
-    activePaneId: paneId,
-    windowType: "init",
-    rootPane: { id: paneId, type: "leaf", size: 100 },
+    activePaneId: null,
+    kind: "init",
   };
+  return init;
 }
