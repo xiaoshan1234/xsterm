@@ -372,9 +372,6 @@ impl TmuxBackend for SshTmuxBackend {
                         }
                     }
                     _ = tokio::time::sleep(remaining) => {
-                        tracing::warn!(
-                            "SshTmuxBackend::wait timed out after 5 s waiting for ExitStatus"
-                        );
                         return Ok(exit_code.lock().ok().and_then(|g| *g).unwrap_or(-1));
                     }
                 }

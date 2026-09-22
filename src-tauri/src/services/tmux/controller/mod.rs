@@ -1700,7 +1700,7 @@ where
                     // DEBUG AID: log every raw byte tmux emits so we can
                     // diagnose wire-protocol mismatches from the rolling
                     // log without re-running with a debugger.
-                    tracing::info!(
+                    tracing::debug!(
                         "tmux reader: RAW line ({} bytes, hex preview {:?}): {:?}",
                         line.len(),
                         preview_hex(&line, 64),
@@ -1717,13 +1717,13 @@ where
                         .trim_end_matches(DCS_END);
                     let was_dcs =
                         stripped.as_ptr() != line.as_ptr() || stripped.len() != line.len();
-                    tracing::info!(
+                    tracing::debug!(
                         "tmux reader: stripped line (DCS {}): {:?}",
                         if was_dcs { "yes" } else { "no" },
                         stripped
                     );
                     if let Some(event) = parser.feed(stripped) {
-                        tracing::info!("tmux reader: parser emitted event: {:?}", event);
+                        tracing::debug!("tmux reader: parser emitted event: {:?}", event);
                         if dispatch_tx.send(event).is_err() {
                             tracing::debug!("tmux reader: dispatch channel closed, exiting");
                             break;
@@ -1835,7 +1835,7 @@ fn spawn_monitor_task(
             Ok(code) => Some(format!("exit code: {code}")),
             Err(e) => Some(format!("wait error: {e}")),
         };
-        tracing::info!(
+        tracing::debug!(
             "tmux controller monitor: backend.wait() returned reason={:?}, killed={}",
             reason,
             killed.load(Ordering::SeqCst)

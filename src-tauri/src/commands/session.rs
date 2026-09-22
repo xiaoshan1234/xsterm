@@ -78,7 +78,7 @@ pub async fn create_session(
         SessionConfig::TmuxCc(tmux) => {
             tracing::info!(
                 "[DEBUG-0009-RUST] create_session routing to create_tmux config={:?}",
-                tmux
+                tmux.debug_redacted()
             );
             state
                 .create_tmux(&tmux, backend)
@@ -217,7 +217,7 @@ pub async fn create_tmux_session(
 ) -> Result<TmuxSessionInit, String> {
     tracing::info!(
         "[DEBUG-0009-RUST] create_tmux_session command ENTRY config={:?}",
-        config
+        config.debug_redacted()
     );
     tracing::info!(
         "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?} base_config_id={:?} has_ssh={}",

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::{self, Debug};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
@@ -317,6 +318,73 @@ pub struct TmuxCcConfig {
     // transport is determined by whether `ssh` is set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_config_id: Option<String>,
+}
+
+/// Opaque `Debug` view of [`SSHSessionConfig`] with `password` /
+/// `key_file` / `passphrase` replaced by `"<redacted>"`. Use
+/// [`SSHSessionConfig::debug_redacted`] to log this struct.
+struct SshSessionConfigDebug<'a>(&'a SSHSessionConfig);
+
+impl Debug for SshSessionConfigDebug<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = self.0;
+        f.debug_struct("SSHSessionConfig")
+            .field("name", &s.name)
+            .field("host", &s.host)
+            .field("port", &s.port)
+            .field("username", &s.username)
+            .field("auth_type", &s.auth_type)
+            .field("password", &"<redacted>")
+            .field("key_file", &s.key_file.as_ref().map(|_| "<redacted>"))
+            .field("passphrase", &"<redacted>")
+            .field("term_type", &s.term_type)
+            .field("initial_rows", &s.initial_rows)
+            .field("initial_cols", &s.initial_cols)
+            .field("keepalive_interval", &s.keepalive_interval)
+            .field("connection_timeout", &s.connection_timeout)
+            .field("tcp_nodelay", &s.tcp_nodelay)
+            .field("so_keepalive", &s.so_keepalive)
+            .field("null_packet_keepalive", &s.null_packet_keepalive)
+            .field("charset", &s.charset)
+            .field("enable_compression", &s.enable_compression)
+            .field("known_hosts_path", &s.known_hosts_path)
+            .field("proxy_jump", &s.proxy_jump)
+            .finish()
+    }
+}
+
+impl SSHSessionConfig {
+    pub fn debug_redacted(&self) -> impl Debug + '_ {
+        SshSessionConfigDebug(self)
+    }
+}
+
+/// Opaque `Debug` view of [`TmuxCcConfig`] with the embedded
+/// `ssh: Option<SSHSessionConfig>` redacted. See
+/// [`SSHSessionConfig::debug_redacted`].
+struct TmuxCcConfigDebug<'a>(&'a TmuxCcConfig);
+
+impl Debug for TmuxCcConfigDebug<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let c = self.0;
+        f.debug_struct("TmuxCcConfig")
+            .field("name", &c.name)
+            .field("tmux_session_name", &c.tmux_session_name)
+            .field("socket_name", &c.socket_name)
+            .field("start_command", &c.start_command)
+            .field("env_config", &c.env_config)
+            .field("initial_rows", &c.initial_rows)
+            .field("initial_cols", &c.initial_cols)
+            .field("ssh", &c.ssh.as_ref().map(|s| s.debug_redacted()))
+            .field("base_config_id", &c.base_config_id)
+            .finish()
+    }
+}
+
+impl TmuxCcConfig {
+    pub fn debug_redacted(&self) -> impl Debug + '_ {
+        TmuxCcConfigDebug(self)
+    }
 }
 
 /// Build a [`SessionInfo`] for a tmux pane freshly registered with
@@ -1499,5 +1567,92 @@ mod split_direction_tests {
         assert_eq!(horizontal, SplitDirection::Horizontal);
         let vertical: SplitDirection = serde_json::from_str("\"vertical\"").unwrap();
         assert_eq!(vertical, SplitDirection::Vertical);
+    }
+
+    #[test]
+    fn ssh_session_config_debug_redacted_omits_credentials() {
+        use super::SSHSessionConfig;
+        let cfg = SSHSessionConfig {
+            password: Some("super-secret-password".to_string()),
+            key_file: Some("/path/to/id_ed25519".to_string()),
+            passphrase: Some("key-passphrase".to_string()),
+            ..SSHSessionConfig::default()
+        };
+        let redacted = format!("{:?}", cfg.debug_redacted());
+        assert!(
+            !redacted.contains("super-secret-password"),
+            "redacted Debug view leaked password: {redacted}"
+        );
+        assert!(
+            !redacted.contains("/path/to/id_ed25519"),
+            "redacted Debug view leaked key_file path: {redacted}"
+        );
+        assert!(
+            !redacted.contains("key-passphrase"),
+            "redacted Debug view leaked passphrase: {redacted}"
+        );
+        assert!(
+            redacted.contains("<redacted>"),
+            "missing <redacted> marker: {redacted}"
+        );
+        assert!(
+            redacted.contains("host"),
+            "host field should still render: {redacted}"
+        );
+    }
+
+    #[test]
+    fn tmux_cc_config_debug_redacted_redacts_inner_ssh_credentials() {
+        use super::{SSHSessionConfig, TmuxCcConfig};
+        let cfg = TmuxCcConfig {
+            tmux_session_name: Some("work".to_string()),
+            ssh: Some(SSHSessionConfig {
+                password: Some("inner-secret".to_string()),
+                passphrase: Some("inner-pass".to_string()),
+                ..SSHSessionConfig::default()
+            }),
+            ..TmuxCcConfig::default()
+        };
+        let redacted = format!("{:?}", cfg.debug_redacted());
+        assert!(
+            !redacted.contains("inner-secret"),
+            "leaked inner password: {redacted}"
+        );
+        assert!(
+            !redacted.contains("inner-pass"),
+            "leaked inner passphrase: {redacted}"
+        );
+        assert!(
+            redacted.contains("work"),
+            "non-sensitive name should still render: {redacted}"
+        );
+        assert!(
+            redacted.contains("<redacted>"),
+            "missing <redacted> marker: {redacted}"
+        );
+    }
+
+    #[test]
+    fn tmux_cc_config_debug_redacted_preserves_serde_round_trip() {
+        // Redaction is Debug-only; JSON wire format must still carry creds.
+        use super::{SSHSessionConfig, TmuxCcConfig};
+        let original = TmuxCcConfig {
+            tmux_session_name: Some("work".to_string()),
+            ssh: Some(SSHSessionConfig {
+                password: Some("secret".to_string()),
+                ..SSHSessionConfig::default()
+            }),
+            ..TmuxCcConfig::default()
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        assert!(
+            json.contains("secret"),
+            "wire JSON must keep credentials — redaction is Debug-only, got: {json}"
+        );
+        let back: TmuxCcConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(
+            back.ssh.as_ref().unwrap().password.as_deref(),
+            Some("secret")
+        );
     }
 }

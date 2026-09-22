@@ -315,7 +315,7 @@ impl SessionManager {
     ) -> Result<crate::models::session::TmuxSessionInit, String> {
         tracing::info!(
             "[DEBUG-0009-RUST] SessionManager::create_tmux ENTRY controller_id=pending config={:?}",
-            config
+            config.debug_redacted()
         );
         let controller_id = self.allocate_controller_id();
         // Pre-allocate the bootstrap Session.id and an allocator
@@ -336,7 +336,7 @@ impl SessionManager {
         )?;
 
         let (session_id, tmux_pane_id) = controller.await_first_pane().await?;
-        tracing::info!(
+        tracing::debug!(
             "[DEBUG-0009-RUST] await_first_pane returned session_id={} tmux_pane_id={:?}",
             session_id,
             tmux_pane_id
@@ -349,7 +349,7 @@ impl SessionManager {
         // parsed rows into `controller.initial_{windows,panes}` and
         // signals `initial_state_ready` after the second list arrives.
         let (initial_windows, initial_panes) = controller.take_initial_state().await?;
-        tracing::info!(
+        tracing::debug!(
             "[DEBUG-0009-RUST] take_initial_state returned {} windows, {} panes",
             initial_windows.len(),
             initial_panes.len()
@@ -360,7 +360,7 @@ impl SessionManager {
         // mapping when it handles `%window-pane-changed` for the
         // bootstrap pane.
         let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
-        tracing::info!(
+        tracing::debug!(
             "[DEBUG-0009-RUST] tmux_window_id_for_pane returned {:?} for pane {:?}",
             tmux_window_id,
             tmux_pane_id

@@ -1053,7 +1053,7 @@ async fn run_data_loop(
                 match resize {
                     Some((cols, rows)) => {
                         if channel.window_change(u32::from(cols), u32::from(rows), 0, 0).await.is_ok() {
-                            tracing::info!("SSH PTY resized to {}x{}", cols, rows);
+                            tracing::debug!("SSH PTY resized to {}x{}", cols, rows);
                         }
                     }
                     None => {
