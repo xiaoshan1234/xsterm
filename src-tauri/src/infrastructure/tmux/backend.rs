@@ -56,7 +56,7 @@ use std::sync::mpsc as sync_mpsc;
 /// I/O streams.
 ///
 /// Implementations are constructed by
-/// [`TmuxController::spawn_local`](super::controller::TmuxController::spawn_local) /
+/// [`TmuxController::spawn_create`](super::controller::TmuxController::spawn_create) /
 /// [`TmuxController::spawn_attach`](super::controller::TmuxController::spawn_attach)
 /// after deciding whether to route through local PTY or SSH exec. The
 /// controller never holds more than one `TmuxBackend` at a time — see

@@ -324,10 +324,9 @@ impl SessionManager {
         // list-panes, …). The bootstrap id travels into the
         // controller and is consumed by `record_first_pane` on the
         // first `%window-pane-changed` reply.
-        let bootstrap_session_id = self.allocate_session_id();
         let session_id_allocator =
             crate::models::session::SessionIdSource::shared_allocator(&self.session_id_source);
-        let controller = TmuxController::spawn_local(
+        let controller = TmuxController::spawn_create(
             config,
             backend,
             self.ssh_backend.as_ref(),
@@ -525,7 +524,7 @@ impl SessionManager {
         let controller_id = self.allocate_controller_id();
         let session_id_allocator =
             crate::models::session::SessionIdSource::shared_allocator(&self.session_id_source);
-        let controller = TmuxController::spawn_local(
+        let controller = TmuxController::spawn_create(
             config,
             backend,
             self.ssh_backend.as_ref(),
@@ -3066,7 +3065,7 @@ mod tests {
     /// with a non-empty `session_name` into an `AttachedTmuxServer`. The
     /// `session_name()` accessor round-trips the value `spawn_attach`
     /// would have written. A controller with `session_name == None`
-    /// (e.g. `spawn_local`) is filtered out of the projection.
+    /// (e.g. `spawn_create`) is filtered out of the projection.
     #[test]
     fn session_name_and_list_attached_tmux_servers_round_trip() {
         let manager = SessionManager::new();

@@ -138,7 +138,7 @@ impl std::fmt::Display for CommandKind {
 
 /// Convenience constructor for `TmuxError::Spawn` from an
 /// `std::io::Error`. The `context` is a short static label like
-/// `"spawn_local cmd.spawn"`.
+/// `"spawn_create cmd.spawn"`.
 pub fn spawn_err<E: Into<Box<dyn std::error::Error + Send + Sync>>>(
     context: &'static str,
     source: E,
@@ -289,10 +289,10 @@ mod tests {
     #[test]
     fn spawn_helpers_wrap_io_error() {
         let io = std::io::Error::new(std::io::ErrorKind::NotFound, "tmux not in PATH");
-        let err = spawn_err("spawn_local cmd.spawn", io);
+        let err = spawn_err("spawn_create cmd.spawn", io);
         match err {
             TmuxError::Spawn { context, source } => {
-                assert_eq!(context, "spawn_local cmd.spawn");
+                assert_eq!(context, "spawn_create cmd.spawn");
                 let source_msg = source.expect("source should be preserved").to_string();
                 assert!(source_msg.contains("tmux not in PATH"));
             }

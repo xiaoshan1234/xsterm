@@ -1,7 +1,11 @@
 use std::path::Path;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
+use tracing::Event;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::fmt::format::{FormatEvent, FormatFields};
+use tracing_subscriber::fmt::FmtContext;
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 
 use crate::error::StringError;
@@ -68,6 +72,34 @@ pub fn cleanup_old_logs(log_dir: &Path, max_total_size_mb: u64) {
     }
 }
 
+/// Prepends `[BE] ` or `[FE] ` based on the event's `target`. The frontend
+/// `log_message` Tauri command uses `target = "frontend"`; everything else
+/// (regular `tracing::*!` calls in the Rust backend) defaults to the
+/// module target.
+struct SidePrefix<F>(F);
+
+impl<S, N, F> FormatEvent<S, N> for SidePrefix<F>
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+    F: FormatEvent<S, N>,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, S, N>,
+        mut writer: tracing_subscriber::fmt::format::Writer<'_>,
+        event: &Event<'_>,
+    ) -> std::fmt::Result {
+        let prefix = if event.metadata().target() == "frontend" {
+            "[FE] "
+        } else {
+            "[BE] "
+        };
+        write!(writer, "{prefix}")?;
+        self.0.format_event(ctx, writer, event)
+    }
+}
+
 /// Initialize the global tracing subscriber with a rolling file appender and
 /// stderr output.
 ///
@@ -100,13 +132,15 @@ pub fn init_logging(
                 .with_target(true)
                 .with_thread_ids(false)
                 .with_file(true)
-                .with_line_number(true),
+                .with_line_number(true)
+                .map_event_format(SidePrefix),
         )
         .with(
             fmt::layer()
                 .with_writer(std::io::stderr)
                 .with_ansi(true)
-                .with_target(false),
+                .with_target(false)
+                .map_event_format(SidePrefix),
         )
         .init();
 

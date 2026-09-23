@@ -111,7 +111,7 @@ impl HandshakeStep {
     /// `session_name` is required for steps that target a specific
     /// tmux session ([`HandshakeStep::ListWindows`] /
     /// [`HandshakeStep::ListPanesAll`]); other steps ignore it.
-    /// Validated at the caller side (see `TmuxController::spawn_local`):
+    /// Validated at the caller side (see `TmuxController::spawn_create`):
     /// the config's `tmux_session_name` must be `Some` before we reach
     /// the handshake.
     pub fn encode(&self, session_name: &str) -> String {
