@@ -54,14 +54,14 @@ use std::time::Duration;
 
 use tokio::time::timeout;
 
-use crate::services::tmux::controller::id_map::{CommandRegistry, RegisteredCommand};
-use crate::services::tmux::protocol::command::{
+use crate::services::tmux_session::controller::id_map::{CommandRegistry, RegisteredCommand};
+use crate::services::tmux_session::protocol::command::{
     CommandId, CommandKind, ResponseOutcome, ResponseWaiter, TaggedCommand,
 };
-use crate::services::tmux::protocol::version::{
+use crate::services::tmux_session::protocol::version::{
     infer_capabilities, parse_version, CapabilityMatrix, CommandListEntry, TmuxProtocolVersion,
 };
-use crate::services::tmux::protocol::wire;
+use crate::services::tmux_session::protocol::wire;
 
 /// Maximum time we wait for any single handshake step's `%begin..%end`
 /// reply. tmux typically responds in <100 ms; 5 s is the same value the

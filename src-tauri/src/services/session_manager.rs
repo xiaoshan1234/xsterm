@@ -20,7 +20,7 @@ use crate::models::session::{
 use crate::services::local_session::create_local_session;
 use crate::services::session_log::start_session_logging;
 use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
-use crate::services::tmux::TmuxController;
+use crate::services::tmux_session::TmuxController;
 
 /// per-server outcome from
 /// [`SessionManager::auto_attach_on_startup`].
@@ -1179,7 +1179,7 @@ impl SessionManager {
     pub fn tmux_controller_by_id(
         &self,
         controller_id: u32,
-    ) -> Result<Arc<crate::services::tmux::controller::TmuxController>, String> {
+    ) -> Result<Arc<crate::services::tmux_session::controller::TmuxController>, String> {
         self.tmux_controllers
             .get(&controller_id)
             .map(|entry| entry.value().clone())
@@ -2565,12 +2565,12 @@ mod tests {
     fn make_test_controller(
         controller_id: u32,
     ) -> (
-        Arc<crate::services::tmux::TmuxController>,
+        Arc<crate::services::tmux_session::TmuxController>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
-        tokio::sync::mpsc::UnboundedSender<crate::services::tmux::protocol::events::ProtocolEvent>,
+        tokio::sync::mpsc::UnboundedSender<crate::services::tmux_session::protocol::events::ProtocolEvent>,
     ) {
         use crate::infrastructure::app_backend::AppBackend;
-        use crate::services::tmux::dispatch::spawn_dispatch_task;
+        use crate::services::tmux_session::dispatch::spawn_dispatch_task;
 
         // Hand-rolled backend stub — `RecordingBackend` lives in the
         // controller.rs tests module and is not `pub`. Re-roll a
@@ -2589,9 +2589,9 @@ mod tests {
 
         let (stdin_tx, stdin_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let (dispatch_tx, dispatch_rx) = tokio::sync::mpsc::unbounded_channel::<
-            crate::services::tmux::protocol::events::ProtocolEvent,
+            crate::services::tmux_session::protocol::events::ProtocolEvent,
         >();
-        let controller = crate::services::tmux::TmuxController::new_for_tests(
+        let controller = crate::services::tmux_session::TmuxController::new_for_tests(
             controller_id,
             stdin_tx,
             backend.clone(),
@@ -2599,7 +2599,7 @@ mod tests {
         spawn_dispatch_task(
             dispatch_rx,
             controller.clone(),
-            crate::services::tmux::bridge::TmuxBridge::new(backend.clone(), controller.clone()),
+            crate::services::tmux_session::bridge::TmuxBridge::new(backend.clone(), controller.clone()),
         );
         (controller, stdin_rx, dispatch_tx)
     }
@@ -2639,7 +2639,7 @@ mod tests {
 
         dispatch_tx
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::WindowPaneChanged {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::WindowPaneChanged {
                     window_id: "@7".to_string(),
                     pane_id: "%11".to_string(),
                 },
@@ -2815,7 +2815,7 @@ mod tests {
         // Feed the matching WindowAdd reply.
         dispatch_tx
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::WindowAdd {
                     window_id: "@3".to_string(),
                 },
             )
@@ -2825,7 +2825,7 @@ mod tests {
         // Feed the matching WindowPaneChanged reply.
         dispatch_tx
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::WindowPaneChanged {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::WindowPaneChanged {
                     window_id: "@3".to_string(),
                     pane_id: "%7".to_string(),
                 },
@@ -2886,14 +2886,14 @@ mod tests {
         let dispatch_tx_clone = _dispatch_tx.clone();
         dispatch_tx_clone
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::WindowAdd {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::WindowAdd {
                     window_id: "@11".to_string(),
                 },
             )
             .unwrap();
         dispatch_tx_clone
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::WindowPaneChanged {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::WindowPaneChanged {
                     window_id: "@11".to_string(),
                     pane_id: "%99".to_string(),
                 },
@@ -2993,7 +2993,7 @@ mod tests {
 
         dispatch_tx
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::CommandBegin {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::CommandBegin {
                     id: cmd_id,
                     timestamp: 0,
                     flags: 0,
@@ -3002,7 +3002,7 @@ mod tests {
             .unwrap();
         dispatch_tx
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::CommandOutput {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::CommandOutput {
                     id: cmd_id,
                     line: "scrollback line".to_string(),
                 },
@@ -3010,7 +3010,7 @@ mod tests {
             .unwrap();
         dispatch_tx
             .send(
-                crate::services::tmux::protocol::events::ProtocolEvent::CommandEnd {
+                crate::services::tmux_session::protocol::events::ProtocolEvent::CommandEnd {
                     id: cmd_id,
                     timestamp: 0,
                     flags: 0,

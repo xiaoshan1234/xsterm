@@ -37,7 +37,7 @@ use tokio::sync::mpsc;
 use super::bridge::TmuxBridge;
 use super::controller::{RouterAction, TmuxController};
 use super::protocol::events::ProtocolEvent;
-use crate::services::tmux::protocol::command::{EventWaiter, EventWaiterKind, EventWaiterSender};
+use crate::services::tmux_session::protocol::command::{EventWaiter, EventWaiterKind, EventWaiterSender};
 
 /// Spawn the dispatch task that turns parsed [`ProtocolEvent`]s into
 /// [`AppBackend`] emits.

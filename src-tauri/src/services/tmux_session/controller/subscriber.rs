@@ -67,13 +67,13 @@
 
 use std::collections::HashMap;
 
-use crate::services::tmux::bridge::TmuxBridge;
-use crate::services::tmux::controller::id_map::{send_to_waiter, CommandRegistry};
-use crate::services::tmux::controller::TmuxController;
-use crate::services::tmux::protocol::command::{
+use crate::services::tmux_session::bridge::TmuxBridge;
+use crate::services::tmux_session::controller::id_map::{send_to_waiter, CommandRegistry};
+use crate::services::tmux_session::controller::TmuxController;
+use crate::services::tmux_session::protocol::command::{
     CommandId, ResponseOutcome, ResponseWaiter, TaggedCommand,
 };
-use crate::services::tmux::protocol::events::ProtocolEvent;
+use crate::services::tmux_session::protocol::events::ProtocolEvent;
 
 /// One event's outcome as far as the command router is concerned.
 ///
@@ -451,7 +451,7 @@ mod tests {
         // Register a waiter for the next id (0).
         let (waiter, rx) = make_waiter();
         let _ = registry.register(
-            crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
+            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
             "display-message -p '#{version}'\n".to_string(),
             Some(waiter),
         );
@@ -612,7 +612,7 @@ mod tests {
 
         let (waiter, rx) = make_waiter();
         let _ = registry.register(
-            crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
+            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
             "x".to_string(),
             Some(waiter),
         );
@@ -678,7 +678,7 @@ mod tests {
 
         let (waiter, _rx) = make_waiter();
         let _ = registry.register(
-            crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
+            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
             "x".to_string(),
             Some(waiter),
         );
@@ -809,7 +809,7 @@ mod tests {
 
         let (waiter, _rx) = make_waiter();
         let _ = registry.register(
-            crate::services::tmux::protocol::command::CommandKind::DisplayVersion,
+            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
             "x".to_string(),
             Some(waiter),
         );
@@ -845,7 +845,7 @@ mod tests {
 
         let (waiter, rx) = make_waiter();
         let _ = registry.register(
-            crate::services::tmux::protocol::command::CommandKind::ListWindows,
+            crate::services::tmux_session::protocol::command::CommandKind::ListWindows,
             "list-windows -a\n".to_string(),
             Some(waiter),
         );

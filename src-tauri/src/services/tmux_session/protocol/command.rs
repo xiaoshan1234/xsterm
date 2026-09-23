@@ -169,7 +169,7 @@ pub enum ResponseWaiter {
     /// Await the next event matching the predicate (PR-T5+).
     /// Reserved for future use; PR-T3 wires nothing that emits it.
     #[allow(dead_code)]
-    Event(tokio::sync::oneshot::Sender<crate::services::tmux::protocol::events::ProtocolEvent>),
+    Event(tokio::sync::oneshot::Sender<crate::services::tmux_session::protocol::events::ProtocolEvent>),
 }
 
 /// Result delivered to a `BeginEnd` waiter.
@@ -226,9 +226,9 @@ pub enum EventWaiterKind {
 #[derive(Debug)]
 pub enum EventWaiterSender {
     /// Back-channel for [`crate::services::tmux::controller::TmuxController::split_pane`].
-    Split(tokio::sync::oneshot::Sender<crate::services::tmux::controller::SplitResult>),
+    Split(tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::SplitResult>),
     /// Back-channel for [`crate::services::tmux::controller::TmuxController::new_window`].
-    NewWindow(tokio::sync::oneshot::Sender<crate::services::tmux::controller::NewWindowResult>),
+    NewWindow(tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::NewWindowResult>),
     /// Bootstrap has no sender — the dispatch handler just removes the
     /// entry so `await_first_pane`'s separate `first_pane_tx` mechanism
     /// resolves on the next `%window-pane-changed`.

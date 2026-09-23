@@ -1,6 +1,6 @@
 use super::*;
 use super::io_tasks::{spawn_reader_task, spawn_writer_task};
-use crate::services::tmux::bridge::TmuxBridge;
+use crate::services::tmux_session::bridge::TmuxBridge;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::{duplex, AsyncReadExt};

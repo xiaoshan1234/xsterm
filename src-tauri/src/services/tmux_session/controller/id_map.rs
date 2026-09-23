@@ -50,7 +50,7 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
-use crate::services::tmux::protocol::command::{
+use crate::services::tmux_session::protocol::command::{
     CommandId, CommandKind, EventWaiter, EventWaiterSender, ResponseOutcome, ResponseWaiter,
     TaggedCommand,
 };
@@ -211,7 +211,7 @@ impl CommandRegistry {
     /// `%window-pane-changed` layer 2 (the split-result path).
     pub fn take_event_waiter_for_split(
         &self,
-    ) -> Option<tokio::sync::oneshot::Sender<crate::services::tmux::controller::SplitResult>> {
+    ) -> Option<tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::SplitResult>> {
         let mut v = self
             .event_waiters
             .lock()
@@ -219,7 +219,7 @@ impl CommandRegistry {
         let pos = v.iter().position(|w| {
             matches!(
                 w.kind,
-                crate::services::tmux::protocol::command::EventWaiterKind::SplitResult
+                crate::services::tmux_session::protocol::command::EventWaiterKind::SplitResult
             ) && w.tmux_window_id.is_none()
         })?;
         match v.remove(pos).sender {
@@ -241,7 +241,7 @@ impl CommandRegistry {
         let pos = v.iter().position(|w| {
             matches!(
                 w.kind,
-                crate::services::tmux::protocol::command::EventWaiterKind::NewWindowResult
+                crate::services::tmux_session::protocol::command::EventWaiterKind::NewWindowResult
             ) && w.tmux_window_id.is_none()
         })?;
         Some(v.remove(pos))
