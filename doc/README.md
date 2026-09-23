@@ -59,7 +59,7 @@ doc/
 | 我想…… | 看 |
 |---|---|
 | 了解整个项目 | `dev/architecture/README.md` → `01-logical-view.md` §1-§2 |
-| 了解 tmux 子系统 | `dev/architecture/01-logical-view.md` §3 + `02-process-view.md` §3 + `03-development-view.md` §3 + `dev/adr/0005-tmux-redesign-v0.md` |
+| 了解 tmux 子系统 | `dev/architecture/01-logical-view.md` §3 + `02-process-view.md` §3 + `03-development-view.md` §3 + [`dev/architecture/06-tmux-runtime-architecture.md`](dev/architecture/06-tmux-runtime-architecture.md)（30 分钟入门）+ `dev/adr/0005-tmux-redesign-v0.md` |
 | 改 UI 之前 | `design-system.md`（必读）+ AGENTS.md §"Pre-commit verification" |
 | 改 bug 之前 | `dev/changelog/bugs.md`（最近踩过什么坑）|
 | 改性能之前 | `dev/changelog/perf.md` Perf 001-009（按 ROI 排序）|

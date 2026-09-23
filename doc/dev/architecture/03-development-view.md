@@ -57,41 +57,47 @@
 
 **约束**：组件**不直接** import `@tauri-apps/api`；所有 Tauri IPC 走 `src/services/sessionService.ts`（invoke）和 `src/contexts/session/useTauriListeners.ts`（listen）。
 
-## 3. tmux 子系统模块树（重构后）
+## 3. tmux 子系统模块树（重构后 + 2026 二次拆分）
 
 > P1-P5 把 `tmux/controller.rs`（3622 行 monolith）拆成 `controller/` 子模块，新增 `protocol/` 子模块。
-> PR 切片见 `dev/roadmap/migration-prs.md`，设计意图见 `dev/adr/0005-tmux-redesign-v0.md`。
+> 2026 年又把 `controller/mod.rs` 3939 → 373 行（拆出 spawn / commands / io_tasks / sync / registry 五个子文件）。
+> PR 切片见 `dev/roadmap/migration-prs.md`，设计意图见 `dev/adr/0005-tmux-redesign-v0.md`，详细字段 / task / waiter 解释见 [`06-tmux-runtime-architecture.md`](06-tmux-runtime-architecture.md)。
 
 ```
-src-tauri/src/services/tmux/
-├── mod.rs                    模块入口；re-export TmuxController + From<TmuxError> for String
-├── commands.rs               老 shim，re-export protocol::wire（**保留供旧调用方**）
-├── events.rs                 老 shim，ProtocolEvent 别名 ControlEvent（已 deprecated）
-├── parser.rs                 老 shim，re-export protocol::parser
-├── escape.rs                 老 shim，re-export protocol::codec
-├── errors.rs                 thiserror 派生的 TmuxError 枚举
-├── dispatch.rs               spawn_dispatch_task + dispatch_event
+src-tauri/src/services/tmux_session/
+├── mod.rs                       模块入口；re-export TmuxController + From<TmuxError> for String
+├── dispatch.rs                  spawn_dispatch_task + dispatch_event（解析 ProtocolEvent → TmuxBridge emit）
+├── errors.rs                    thiserror 派生的 TmuxError 枚举
 ├── bridge/
-│   └── mod.rs                TmuxBridge — 把 ProtocolEvent 翻译成 Tauri 事件 + JSON
-├── protocol/                 纯协议层，无 I/O 无 runtime state
+│   └── mod.rs                   TmuxBridge — ProtocolEvent → Tauri 事件 + JSON payload
+├── protocol/                    纯协议层，**无 I/O、无 runtime state**
 │   ├── mod.rs
-│   ├── codec.rs              octal \nnn 编解码
-│   ├── command.rs            CommandId / CommandKind / ResponseWaiter / TaggedCommand
-│   ├── events.rs             ProtocolEvent 枚举（30+ 变体）
-│   ├── parser.rs             line → Option<ProtocolEvent> 状态机
-│   ├── version.rs            CapabilityMatrix + parse_version + infer_capabilities
-│   └── wire.rs               高层 "send-keys" / "split-window" / ... 文本构造器
-└── controller/               状态机 + task 管理
-    ├── mod.rs                TmuxController 主类 + reader/writer/monitor 任务
-    ├── id_map.rs             CommandRegistry — id → waiter + event_waiters FIFO
-    ├── handshake.rs          PR-T4 v2 handshake 计划 (version + capability → 步骤序列)
-    └── subscriber.rs         RouterState — 在 %begin..%end 之间累积 body line
+│   ├── codec.rs                 octal \nnn 编解码
+│   ├── command.rs               CommandId / CommandKind / ResponseWaiter / TaggedCommand
+│   ├── events.rs                ProtocolEvent 枚举（30+ 变体）
+│   ├── parser.rs                line → Option<ProtocolEvent> 状态机
+│   ├── version.rs               CapabilityMatrix + parse_version + infer_capabilities
+│   └── wire.rs                  高层 "send-keys" / "split-window" 文本构造器
+└── controller/                  状态机 + task 管理
+    ├── mod.rs        [121]      TmuxController struct 定义 + 共享 helper（lock_or_warn）+ test fixture
+    ├── spawn.rs     [293]       4 个构造函数 + argv / shell / process helper
+    ├── commands.rs  [257]       11 个用户面向的 tmux command
+    ├── io_tasks.rs             4 个 spawn_*_task（reader / writer / stderr_drain / monitor）
+    │                           + preview_hex + schedule_initial_state_sync
+    ├── registry.rs              binding 访问器 + register/unregister/record_* + allocate_session_id
+    ├── sync.rs                  lifecycle：close + session_name + bootstrap rendezvous
+    ├── id_map.rs   [285]       CommandRegistry — id → waiter + event_waiters FIFO
+    ├── handshake.rs[342]       PR-T4 v2 handshake 计划 (version + capability → 步骤序列)
+    ├── subscriber.rs[580]      RouterState — 在 %begin..%end 之间累积 body line
+    └── tests.rs    [1677]      29 个 #[tokio::test] + RecordingBackend fixture
 ```
+
+> **行数**：纯 LOC。括号外标的是文件总行数。
 
 ```
 src-tauri/src/infrastructure/tmux/
 ├── mod.rs
-└── backend.rs                TmuxBackend trait + LocalTmuxBackend + SshTmuxBackend
+└── backend.rs                    TmuxBackend trait + LocalTmuxBackend + SshTmuxBackend
 ```
 
 ### 3.1 协议层内部模块依赖
@@ -112,17 +118,38 @@ wire.rs        (无依赖，构造字符串)
 
 **关键原则**：`protocol/` 子模块**完全无 I/O、无 runtime state**，可独立单元测试。重构后这部分是测试最密集的区域。
 
-### 3.2 controller 子模块依赖
+### 3.2 controller 子模块依赖（2026 拆分后）
 
 ```
 controller/
-├── id_map.rs        CommandRegistry — 单一等待队列
-├── handshake.rs     handshake 步骤计划（纯函数）
-├── subscriber.rs    RouterState — body 累积（持有 Mutex）
-└── mod.rs           TmuxController 主类（用上面三个）
+├── mod.rs        [121]    TmuxController struct + 共享基础设施
+├── spawn.rs                spawn_* constructors（不依赖 commands）
+├── commands.rs             11 个 user-facing method（依赖 registry）
+├── io_tasks.rs             4 个 spawn_*_task（被 spawn.rs 调用）
+├── registry.rs             binding 表（被 commands / sync 调用）
+├── sync.rs                 lifecycle（独立）
+├── id_map.rs   [285]      CommandRegistry — 单一等待队列（被 commands 调用）
+├── handshake.rs[342]      handshake 计划（纯函数）
+├── subscriber.rs[580]     RouterState — body 累积（被 dispatch 调用）
+└── tests.rs    [1677]     #[cfg(test)] mod tests
 ```
 
-`mod.rs` 是唯一与 IO / tokio runtime 交互的文件；其他三个可独立单测。
+**依赖方向**：所有 submodule 都 `use super::*` 访问 `TmuxController` 类型和共享 helper（`lock_or_warn`、`TMUX_REPLY_TIMEOUT`），但 submodule 之间**不互相 import**——结构扁平，`spawn` 不引用 `commands`，`commands` 不引用 `sync`，都通过 controller 上的方法交互。
+
+`mod.rs` 是唯一与 IO / tokio runtime 交互的"基础设施层"——struct 定义 + 共享 helper + test fixture。业务逻辑（构造、命令、I/O task、binding、lifecycle）全部下沉到对应子文件。
+
+### 3.3 controller 子模块怎么读（推荐路径）
+
+新人第一次接触 code 建议按这个顺序读：
+
+1. **`controller/mod.rs`** —— 22 字段、共享 helper、SpawnMode enum、test fixture
+2. **`controller/io_tasks.rs`** —— 4 个 spawn_*_task，**最直观地看到 tokio 模型怎么跑**
+3. **`controller/spawn.rs::spawn_with_backend`** —— 看到"spawn 4 task + 怎么 wire"
+5. **`controller/sync.rs::await_first_pane`** —— 看 oneshot rendezvous 怎么用
+6. **`controller/commands.rs::capture_pane` 或 `split_pane`** —— 看 waiter registry 怎么用
+7. **`dispatch.rs`** —— 看 dispatch task 怎么消费 reader / monitor 的事件，emit Bridge
+
+更详细的字段语义 / task 行为 / waiter 模式见 [`06-tmux-runtime-architecture.md`](06-tmux-runtime-architecture.md)。
 
 ### 3.3 前端对应物
 

@@ -16,6 +16,7 @@
 | 3 | 开发视图 (Development) | 源码组织、模块依赖、构建链、构建时约束 | dev（新人入门、改构建） | `03-development-view.md` |
 | 4 | 物理视图 (Physical) | 部署拓扑、Tauri capabilities、安全边界、跨 SSH 路径差异 | dev（写 command 加权限）、tm（验收安全） | `04-physical-view.md` |
 | +1 | 场景视图 (Scenarios) | 关键场景把上面 4 个视图串起来 | 所有人（验证视图一致性） | `05-scenarios.md` |
+| ⊕ | **tmux 深入**（任意编号后） | 21 字段、4 task、waiter 注册表、生命周期、跨 transport 抽象 | dev（第一次读 tmux 代码） | [`06-tmux-runtime-architecture.md`](06-tmux-runtime-architecture.md) |
 
 ## 阅读路径
 
@@ -28,6 +29,7 @@
 | 改 UI 之前 | `01-logical-view.md` §2 UI 树层级 + `doc/design-system.md`（必读） |
 | 排查 race / 死锁 / 卡顿 | `02-process-view.md` §3-§4（task/channel）+ `dev/changelog/perf.md` Perf 001-009 |
 | 改模块组织 / 拆 monolith | `03-development-view.md` §1-§3（分层 + 模块依赖） |
+| 第一次接触 `tmux_session/` Rust 代码 | [`06-tmux-runtime-architecture.md`](06-tmux-runtime-architecture.md) 30 分钟入门（字段、task、waiter、生命周期） |
 | 加 Tauri command | `04-physical-view.md` §1-§2（capabilities + IPC 边界） |
 | 看关键场景怎么串起来 | `05-scenarios.md` |
 | 看 ADR 为什么这么设计 | `dev/adr/`（不在本目录） |
