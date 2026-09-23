@@ -47,7 +47,7 @@ function forward(level: LogLevel, source: string, message: string, data?: unknow
 }
 
 function emit(level: LogLevel, source: string, message: string, data?: unknown): void {
-  const prefix = `[${source}]`;
+  const prefix = `[FE] [${source}]`;
   consoleLog(level, prefix, message, data);
   forward(level, source, message, data);
 }

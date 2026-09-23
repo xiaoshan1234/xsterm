@@ -13,6 +13,7 @@
  * events are needed for the initial state.
  */
 import * as tmuxTauri from "../../infra/tauri/commands/tmux";
+import { logger } from "../../infra/logger/logger";
 import { useSessionStore } from "../../service/session/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { usePersistenceStore } from "../../service/persistence/store";
@@ -32,16 +33,58 @@ export async function createTmuxSession(
   save: boolean = true,
   displayConfig?: SessionDisplayConfig,
 ): Promise<Session> {
+  const t0 = Date.now();
   const configId = generateId();
+  logger.debug("createTmuxSession", "entry", {
+    configId,
+    tmuxSessionName: config.tmuxSessionName ?? null,
+    ssh: config.ssh ? "ssh" : "local",
+    save,
+    hasDisplayConfig: displayConfig !== undefined,
+  });
+
   let init: Awaited<ReturnType<typeof tmuxTauri.createTmux>>;
+  let branch: "attach" | "create" = "create";
 
   try {
     const exists = await tmuxTauri.probeTmuxSessionExists(config);
-    init = exists ? await tmuxTauri.attachTmux(config) : await tmuxTauri.createTmux(config);
+    if (exists) {
+      branch = "attach";
+      logger.debug("createTmuxSession", "probe: server already has session, attaching", {
+        tmuxSessionName: config.tmuxSessionName,
+      });
+      init = await tmuxTauri.attachTmux(config);
+    } else {
+      logger.debug("createTmuxSession", "probe: no existing session, creating", {
+        tmuxSessionName: config.tmuxSessionName,
+      });
+      init = await tmuxTauri.createTmux(config);
+    }
   } catch (err) {
-    // Probe is best-effort; fall through to create path.
-    init = await tmuxTauri.createTmux(config);
+    logger.debug("createTmuxSession", "probe failed, falling back to createTmux", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    try {
+      init = await tmuxTauri.createTmux(config);
+    } catch (createErr) {
+      logger.error("createTmuxSession", "createTmux also failed; aborting", {
+        branch: "create",
+        error: createErr instanceof Error ? createErr.message : String(createErr),
+        elapsedMs: Date.now() - t0,
+      });
+      throw createErr;
+    }
   }
+
+  logger.debug("createTmuxSession", "backend init received", {
+    branch,
+    controllerId: init.session.tmuxControllerId ?? null,
+    bootstrapSessionId: init.session.id,
+    bootstrapName: init.session.name,
+    windowCount: init.windows.length,
+    paneCount: init.panes.length,
+    controlWindowName: init.controlWindow.name,
+  });
 
   // Build the bootstrap Session (whose id matches `init.session.id`).
   const bootstrapSession = buildFrontendSession(init.session, configId, "tmux-cc", displayConfig);
@@ -56,6 +99,7 @@ export async function createTmuxSession(
       displayConfig,
     };
     usePersistenceStore.getState().upsertSavedConfig(saved);
+    logger.debug("createTmuxSession", "persisted", { savedConfigId: configId });
   }
 
   // Build 1:1 Session rows for every pane reported by the server.
@@ -86,11 +130,19 @@ export async function createTmuxSession(
     }
   }
   useSessionStore.getState().setSessions((prev) => [...prev, ...sessionsToAdd]);
+  logger.debug("createTmuxSession", "session rows built", {
+    total: sessionsToAdd.length,
+    unique: seenSessionIds.size,
+  });
 
   // Build 1:1 Window rows for every window reported by the server,
   // plus exactly one TmuxControlWindow row.
   installInitialWindows(init, bootstrapSession);
 
+  logger.debug("createTmuxSession", "done", {
+    sessionId: bootstrapSession.id,
+    elapsedMs: Date.now() - t0,
+  });
   return bootstrapSession;
 }
 
@@ -178,6 +230,12 @@ function installInitialWindows(init: tmuxTauri.TmuxSessionInit, bootstrapSession
     });
   }
 
+  logger.debug("createTmuxSession", "terminal windows built", {
+    serverWindowCount: init.windows.length,
+    terminalWindowCount: newWindows.length,
+    skippedWindows: init.windows.length - newWindows.length,
+  });
+
   // Ensure the bootstrap pane's Window is the active one — match
   // `init.session.tmux_window_id` to the Window we just built and
   // tag its id.
@@ -196,6 +254,14 @@ function installInitialWindows(init: tmuxTauri.TmuxSessionInit, bootstrapSession
     tmuxControllerId: controllerId,
     tmuxSessionName: init.controlWindow.name,
   };
+
+  logger.debug("createTmuxSession", "installing into workspace", {
+    targetWorkspaceId: targetId,
+    terminalWindows: newWindows.length,
+    controlWindowInserted: !workspaceStore.workspaces
+      .find((w) => w.id === targetId)
+      ?.windows.some((w) => w.kind === "tmux-control" && w.tmuxControllerId === controllerId),
+  });
 
   workspaceStore.setWorkspaces((prev) => {
     const target = prev.find((w) => w.id === targetId);
