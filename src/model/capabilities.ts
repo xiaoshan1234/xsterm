@@ -1,7 +1,6 @@
 /**
- * Legacy redirect for `CapabilityFlags`. Older code paths imported from
- * `model/capabilities` after the per-transport config shapes migrated
- * to `model/session.ts`. The canonical definition lives in
- * `model/session.ts` next to `Session`.
+ * Legacy re-export shim — `CapabilityFlags` moved to
+ * `model/session/types.ts`. Kept so existing imports of
+ * `model/capabilities` keep resolving.
  */
-export type { CapabilityFlags } from "./session";
+export type { CapabilityFlags } from "./session/index";

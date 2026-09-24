@@ -1,12 +1,25 @@
-export interface TmuxSessionBackend {
-  /** `true` for the bootstrap pane; UI renders nothing for it. */
-  isHidden?: boolean;
-  /** Owning tmux controller id (u32). Required for every tmux IPC command. */
-  tmuxControllerId: number;
-  tmuxServerPaneId: string[];
-  tmuxServerWindowId: string[];
-  localToserverPaneId: Map<string, string>[];
-  localToserverWindowId: Map<string, string>[];
-  serverTolocalPaneId: Map<string, string>[];
-  serverTolocalWindowId: Map<string, string>[];
-}
+/**
+ * Legacy re-export shim — types moved to `model/tmux/types.ts`.
+ *
+ * The path uses the explicit `/index` suffix because TS would
+ * otherwise resolve `./tmux` to this very file (the directory
+ * `./tmux/` and the file `./tmux.ts` both exist here).
+ */
+export type {
+  AttachedTmuxServer,
+  AutoAttachOutcome,
+  TmuxControllerError,
+  TmuxControllerExitEvent,
+  TmuxControlWindowInit,
+  TmuxPaneAddedEvent,
+  TmuxPaneInit,
+  TmuxPaneRemovedEvent,
+  TmuxSessionBackend,
+  TmuxSessionInit,
+  TmuxWindowAddedEvent,
+  TmuxWindowClosedEvent,
+  TmuxWindowInit,
+  TmuxWindowListEntry,
+  TmuxWindowListRawEvent,
+  TmuxWindowRenamedEvent,
+} from "./tmux/index";

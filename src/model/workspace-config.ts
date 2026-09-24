@@ -1,7 +1,5 @@
-import type { SavedWindow } from "./window-config";
-
-export interface SavedWorkspace {
-  id: string;
-  name: string;
-  windows: SavedWindow[];
-}
+/**
+ * Legacy re-export shim — `SavedWorkspace` moved to
+ * `model/persistence/types.ts`.
+ */
+export type { SavedWorkspace } from "./persistence/index";
