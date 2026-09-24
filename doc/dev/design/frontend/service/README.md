@@ -213,7 +213,7 @@ grep -rn 'from\s*"@tauri-apps' src/service/ --include='*.ts' --include='*.tsx'
 # service/<domain>/api.ts 必须存在
 test -f src/service/session/api.ts && echo "OK" || echo "missing"
 test -f src/service/workspace/api.ts && echo "OK" || echo "missing"
-# 8 个 domain 都应当存在 api.ts
+# 9 个 domain 都应当存在 api.ts
 ```
 
 ## 11. 跟 v3 的核心差异
