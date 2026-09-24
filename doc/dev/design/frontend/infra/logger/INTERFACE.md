@@ -1,7 +1,7 @@
-# Service · Logger — 对外接口
+# Infra · Logger — 对外接口
 
-> **位置**：`src/service/logger/api.ts`
-> **唯一进口**：`import { logger, type Logger } from "@/service/logger/api"`
+> **位置**：`src/infra/logger/api.ts`
+> **唯一进口**：`import { logger, type Logger, type LogLevel, type LogEntry } from "@/infra/logger/api"`
 
 ## 1. 接口（**单例**，不是 hook）
 
@@ -12,6 +12,7 @@ export interface LogEntry {
   level: LogLevel;
   message: string;
   meta?: Record<string, unknown>;
+  error?: { name: string; message: string; stack?: string };   // 序列化后的 Error
   timestamp: number;
 }
 
@@ -52,6 +53,15 @@ export const logger: Logger;
 - 不是 logger 的"主路径"——是开发辅助
 - 可以独立做"前端 debug UI"
 
+**`error` 方法的特殊签名**：
+
+```typescript
+error(message: string, error?: Error | unknown, meta?: Record<string, unknown>): void
+```
+
+- `error` 接收 Error 对象（不是 meta）—— 单独处理序列化
+- Error 序列化成 `{ name, message, stack }` 跨 IPC 边界
+
 ## 3. 不对外暴露
 
 - `buffer.ts` 的 RingBuffer 容量（默认 1000）
@@ -61,7 +71,7 @@ export const logger: Logger;
 
 ```
 // 任何 module
-import { logger } from "@/service/logger/api";
+import { logger } from "@/infra/logger/api";
 
 try {
   await sessionSvc.createLocal(config);
@@ -71,8 +81,8 @@ try {
 ```
 
 ```
-// ui/settings 或 debug UI
-import { logger } from "@/service/logger/api";
+// debug UI（如果有）
+import { logger } from "@/infra/logger/api";
 
 function DebugLogView() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
