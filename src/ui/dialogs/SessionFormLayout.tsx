@@ -4,7 +4,7 @@ import "./SessionFormLayout.css";
 export interface SessionFormTab {
   id: string;
   label: string;
-  active: boolean;
+  isActive: boolean;
   onClick: () => void;
 }
 
@@ -12,7 +12,7 @@ export interface SessionFormSidebarItem {
   id: string;
   label: ReactNode;
   icon: ReactNode;
-  active: boolean;
+  isActive: boolean;
   onClick: () => void;
 }
 
@@ -31,7 +31,7 @@ export function SessionFormLayout({ topTabs, sidebarItems, children }: SessionFo
           {topTabs!.map((tab) => (
             <button
               key={tab.id}
-              className={`dialog-tab ${tab.active ? "active" : ""}`}
+              className={`dialog-tab ${tab.isActive ? "isActive" : ""}`}
               onClick={tab.onClick}
             >
               {tab.label}
@@ -46,8 +46,8 @@ export function SessionFormLayout({ topTabs, sidebarItems, children }: SessionFo
               key={item.id}
               role="button"
               tabIndex={0}
-              aria-pressed={item.active}
-              className={`dialog-sidebar-item${item.active ? " dialog-sidebar-item--active" : ""}`}
+              aria-pressed={item.isActive}
+              className={`dialog-sidebar-item${item.isActive ? " dialog-sidebar-item--isActive" : ""}`}
               onClick={item.onClick}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {

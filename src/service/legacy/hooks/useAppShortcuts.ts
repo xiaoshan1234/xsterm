@@ -95,17 +95,17 @@ export function useAppShortcuts({
 }
 
 function collectLeafIds(root: PaneNode): string[] {
-  const ids: string[] = [];
+  const idList: string[] = [];
   const traverse = (node: PaneNode) => {
     if (node.kind === "leaf") {
-      ids.push(node.id);
+      idList.push(node.id);
       return;
     }
     const children = node.kind === "split" ? node.layout.children : undefined;
     children?.forEach(traverse);
   };
   traverse(root);
-  return ids;
+  return idList;
 }
 
 function findPane(root: PaneNode, id: string): PaneNode | null {

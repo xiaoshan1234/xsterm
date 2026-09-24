@@ -19,14 +19,14 @@ import type {
 
 export async function createSshSession(
   config: SSHSessionConfig,
-  save: boolean = true,
+  shouldSave: boolean = true,
   displayConfig?: SessionDisplayConfig,
 ): Promise<Session> {
   const configId = generateId();
   const info = await tauri.createSsh(config);
   const session = buildFrontendSession(info, configId, "ssh", displayConfig);
 
-  if (save) {
+  if (shouldSave) {
     const saved: PersistedSessionConfig = {
       id: configId,
       name: info.name,

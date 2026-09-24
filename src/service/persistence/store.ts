@@ -176,7 +176,7 @@ export const usePersistenceStore = create<PersistenceStoreState>((set) => ({
   },
   toggleGroup: (id) => {
     set((state) => ({
-      groups: state.groups.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)),
+      groups: state.groups.map((g) => (g.id === id ? { ...g, isCollapsed: !g.isCollapsed } : g)),
     }));
   },
   addConfigToGroup: (groupId, configId) => {

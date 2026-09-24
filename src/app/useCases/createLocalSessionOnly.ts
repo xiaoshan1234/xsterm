@@ -17,14 +17,14 @@ import type {
 
 export async function createLocalSessionOnly(
   config: LocalSessionConfig,
-  save: boolean = true,
+  shouldSave: boolean = true,
   displayConfig?: SessionDisplayConfig,
 ): Promise<Session> {
   const configId = generateId();
   const info = await tauri.createLocal(config);
   const session = buildFrontendSession(info, configId, "local", displayConfig);
 
-  if (save) {
+  if (shouldSave) {
     const saved: PersistedSessionConfig = {
       id: configId,
       name: info.name,

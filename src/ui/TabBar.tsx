@@ -151,9 +151,9 @@ function WorkspaceTab({
   return (
     <ContextMenu items={contextMenuItems}>
       <div
-        className={`tab ${isActive ? "active" : ""}`}
+        className={`tab ${isActive ? "isActive" : ""}`}
         role="tab"
-        aria-selected={isActive}
+        aria-isSelected={isActive}
         tabIndex={0}
         onClick={onSelect}
         onMouseDown={(e) => {

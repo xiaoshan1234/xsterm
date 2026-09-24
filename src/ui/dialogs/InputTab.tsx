@@ -77,7 +77,7 @@ export default function InputTab({ displayConfig = {}, onDisplayChange }: InputT
 
           <FormCheckboxField
             label="Alt Sends Escape"
-            checked={displayConfig.altSendsEscape ?? true}
+            isChecked={displayConfig.altSendsEscape ?? true}
             onChange={(altSendsEscape) => updateDisplay({ altSendsEscape })}
           />
         </div>

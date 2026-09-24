@@ -237,7 +237,7 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
         lineTimestamp: true,
         autoWrap: false,
         clipboardRead: "allow" as const,
-        logging: { enabled: true, path: "/tmp/session.log" },
+        logging: { isEnabled: true, path: "/tmp/session.log" },
       },
     };
     const result = migrateSavedConfig(raw);
@@ -253,7 +253,7 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
       lineTimestamp: true,
       autoWrap: false,
       clipboardRead: "allow",
-      logging: { enabled: true, path: "/tmp/session.log" },
+      logging: { isEnabled: true, path: "/tmp/session.log" },
     });
   });
 
@@ -430,10 +430,15 @@ describe("migrateSavedConfigList", () => {
       null, // not an object — should be skipped
       { id: "4", name: "n4", type: "local", localConfig: null }, // null localConfig — skipped
     ];
-    const list = migrateSavedConfigList(raw);
-    expect(list).toHaveLength(2);
-    expect(list[0]).toMatchObject({ id: "1", type: "local", version: 1, config: { shell: "sh" } });
-    expect(list[1]).toMatchObject({ id: "2", type: "ssh", version: 1 });
+    const migratedConfigs = migrateSavedConfigList(raw);
+    expect(migratedConfigs).toHaveLength(2);
+    expect(migratedConfigs[0]).toMatchObject({
+      id: "1",
+      type: "local",
+      version: 1,
+      config: { shell: "sh" },
+    });
+    expect(migratedConfigs[1]).toMatchObject({ id: "2", type: "ssh", version: 1 });
   });
 
   it("returns an empty array for non-array input", () => {

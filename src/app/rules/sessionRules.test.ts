@@ -143,7 +143,7 @@ describe("dispatchByType", () => {
     expect(r).toBe("T");
   });
 
-  it("awaits the selected promise and propagates its value", async () => {
+  it("awaits the isSelected promise and propagates its value", async () => {
     const r = await dispatchByType<number>(
       "ssh",
       async () => 1,

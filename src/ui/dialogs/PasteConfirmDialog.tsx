@@ -94,9 +94,9 @@ export function PasteConfirmDialog({ isOpen, text, onConfirm, onCancel }: PasteC
         <label className="checkbox-group paste-dialog-option">
           <input
             type="checkbox"
-            checked={options.convertTabs}
+            checked={options.shouldConvertTabs}
             onChange={(e) =>
-              setOptions((prev) => patchPasteOptions(prev, { convertTabs: e.target.checked }))
+              setOptions((prev) => patchPasteOptions(prev, { shouldConvertTabs: e.target.checked }))
             }
           />
           <span>Convert tabs to spaces</span>
@@ -107,7 +107,7 @@ export function PasteConfirmDialog({ isOpen, text, onConfirm, onCancel }: PasteC
             step={1}
             className="paste-dialog-number"
             value={options.spacesPerTab}
-            disabled={!options.convertTabs}
+            disabled={!options.shouldConvertTabs}
             onChange={(e) => {
               const v = parseInt(e.target.value, 10);
               setOptions((prev) =>
@@ -122,10 +122,10 @@ export function PasteConfirmDialog({ isOpen, text, onConfirm, onCancel }: PasteC
         <label className="checkbox-group paste-dialog-option">
           <input
             type="checkbox"
-            checked={options.convertLineEndings}
+            checked={options.shouldConvertLineEndings}
             onChange={(e) =>
               setOptions((prev) =>
-                patchPasteOptions(prev, { convertLineEndings: e.target.checked }),
+                patchPasteOptions(prev, { shouldConvertLineEndings: e.target.checked }),
               )
             }
           />

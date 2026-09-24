@@ -30,7 +30,7 @@ import type {
 
 export async function createTmuxSession(
   config: TmuxCcConfig,
-  save: boolean = true,
+  shouldSave: boolean = true,
   displayConfig?: SessionDisplayConfig,
 ): Promise<Session> {
   const t0 = Date.now();
@@ -39,7 +39,7 @@ export async function createTmuxSession(
     configId,
     tmuxSessionName: config.tmuxSessionName ?? null,
     ssh: config.ssh ? "ssh" : "local",
-    save,
+    shouldSave,
     hasDisplayConfig: displayConfig !== undefined,
   });
 
@@ -89,7 +89,7 @@ export async function createTmuxSession(
   // Build the bootstrap Session (whose id matches `init.session.id`).
   const bootstrapSession = buildFrontendSession(init.session, configId, "tmux-cc", displayConfig);
 
-  if (save) {
+  if (shouldSave) {
     const saved: PersistedSessionConfig = {
       id: configId,
       name: init.session.name,
@@ -166,7 +166,7 @@ function makeSessionInfoFromPane(
     },
     isConnected: true,
     capabilities: {
-      supportsMultiplex: true,
+      canMultiplex: true,
     },
     tmuxPaneId: pane.tmuxPaneId,
     tmuxControllerId: controllerId,
@@ -207,9 +207,9 @@ function installInitialWindows(init: tmuxTauri.TmuxSessionInit, bootstrapSession
   // panes that belong to it server-side.
   const panesByWindow = new Map<string, tmuxTauri.TmuxPaneInit[]>();
   for (const pane of init.panes) {
-    const list = panesByWindow.get(pane.tmuxWindowId) ?? [];
-    list.push(pane);
-    panesByWindow.set(pane.tmuxWindowId, list);
+    const panesForWindow = panesByWindow.get(pane.tmuxWindowId) ?? [];
+    panesForWindow.push(pane);
+    panesByWindow.set(pane.tmuxWindowId, panesForWindow);
   }
 
   const newWindows: Window[] = [];
@@ -218,7 +218,7 @@ function installInitialWindows(init: tmuxTauri.TmuxSessionInit, bootstrapSession
   for (const w of init.windows) {
     const panes = panesByWindow.get(w.tmuxWindowId) ?? [];
     if (panes.length === 0) continue;
-    const rootPane = buildRootPane(panes[0].sessionId, w.active);
+    const rootPane = buildRootPane(panes[0].sessionId, w.isActive);
     newWindows.push({
       id: generateId(),
       name: w.name,
@@ -293,7 +293,7 @@ function installInitialWindows(init: tmuxTauri.TmuxSessionInit, bootstrapSession
  * will be wired up by the existing `tmux-pane-added` listener (the
  * user-driven split path).
  */
-function buildRootPane(sessionId: number, _active: boolean): PaneNode {
+function buildRootPane(sessionId: number, _isActive: boolean): PaneNode {
   return {
     id: generateId(),
     kind: "leaf" as const,

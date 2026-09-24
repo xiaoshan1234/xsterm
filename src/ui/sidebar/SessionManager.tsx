@@ -141,7 +141,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
                 <button className="session-group-header" onClick={() => toggleGroup(group.id)}>
                   <span
                     className="session-group-chevron"
-                    style={{ transform: !group.collapsed ? "rotate(90deg)" : "rotate(0deg)" }}
+                    style={{ transform: !group.isCollapsed ? "rotate(90deg)" : "rotate(0deg)" }}
                   >
                     <ChevronIcon size={14} />
                   </span>
@@ -149,7 +149,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
                   <span className="session-group-name">{group.name}</span>
                 </button>
               </ContextMenu>
-              {!group.collapsed && (
+              {!group.isCollapsed && (
                 <div className="session-group-items">
                   {items.map((config) => (
                     <ContextMenu
@@ -167,8 +167,8 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
                       <div draggable onDragStart={(e) => handleDragStart(e, config.id)}>
                         <SessionItem
                           config={config}
-                          selected={selectedConfigId === config.id}
-                          connected={isConnected(config)}
+                          isSelected={selectedConfigId === config.id}
+                          isConnected={isConnected(config)}
                           indented
                           onClick={() => handleConfigClick(config)}
                           onDoubleClick={() => handleConfigDoubleClick(config)}
@@ -231,8 +231,8 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
 
 interface SessionItemProps {
   config: PersistedSessionConfig;
-  selected: boolean;
-  connected: boolean;
+  isSelected: boolean;
+  isConnected: boolean;
   indented?: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
@@ -241,8 +241,8 @@ interface SessionItemProps {
 
 function SessionItem({
   config,
-  selected,
-  connected,
+  isSelected,
+  isConnected,
   indented,
   onClick,
   onDoubleClick,
@@ -250,13 +250,15 @@ function SessionItem({
 }: SessionItemProps) {
   return (
     <div
-      className={`session-item ${selected ? "selected" : ""}`}
+      className={`session-item ${isSelected ? "isSelected" : ""}`}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
       {indented && <span className="session-item-indent" />}
       {config.type === "local" ? <ShellIcon size={14} /> : <SshIcon size={14} />}
-      <span className={`session-item-name ${!connected ? "disconnected" : ""}`}>{config.name}</span>
+      <span className={`session-item-name ${!isConnected ? "disconnected" : ""}`}>
+        {config.name}
+      </span>
       <button className="session-item-close" onClick={onClose}>
         <CloseIcon size={12} />
       </button>

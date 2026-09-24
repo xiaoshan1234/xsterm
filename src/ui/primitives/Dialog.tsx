@@ -57,16 +57,14 @@ export function Dialog({
           <div className="dialog-body">
             <nav className="dialog-sidebar" aria-label="Dialog sections">
               {tabs.map((tab) => {
-                const isActive = tab.id === activeTabId;
+                const active = tab.id === activeTabId;
                 return (
                   <div
                     key={tab.id}
                     role="button"
                     tabIndex={0}
-                    aria-pressed={isActive}
-                    className={`dialog-sidebar-item${
-                      isActive ? " dialog-sidebar-item--active" : ""
-                    }`}
+                    aria-pressed={active}
+                    className={`dialog-sidebar-item${active ? " dialog-sidebar-item--active" : ""}`}
                     onClick={() => {
                       setActiveTabId(tab.id);
                       onTabChange?.(tab.id);

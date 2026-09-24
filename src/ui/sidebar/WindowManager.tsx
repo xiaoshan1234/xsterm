@@ -58,7 +58,7 @@ export function WindowManager({
             ]}
           >
             <div
-              className={`workspace-list-item ${selectedWindowId === window.id ? "selected" : ""}`}
+              className={`workspace-list-item ${selectedWindowId === window.id ? "isSelected" : ""}`}
               onClick={() => handleClick(window)}
               onDoubleClick={() => handleLoad(window)}
             >

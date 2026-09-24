@@ -152,7 +152,7 @@ export function EditSessionDialog({
     id: item.id,
     label: item.label,
     icon: item.icon,
-    active: item.id === form.sectionId,
+    isActive: item.id === form.sectionId,
     onClick: () => {
       form.setSectionId(item.id);
       form.setError("");

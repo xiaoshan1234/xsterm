@@ -7,7 +7,7 @@
  * - Legacy: `useSessionPersistence` used local `useState` setters and
  *   called `sessionStorage.persistConfigs` after every update.
  * - Now: state lives in `src/service/persistence/store.ts` (Zustand) and
- *   `src/service/session/store.ts` (for `globalLocalEcho`). This hook
+ *   `src/service/session/store.ts` (for `isGlobalLocalEcho`). This hook
  *   only owns the *I/O* wiring: load on mount, write on change.
  *
  * **Public surface (`SessionPersistence`)** is preserved:
@@ -41,7 +41,7 @@ interface SessionPersistenceHookOptions {
   savedWindowConfigs: PersistedWindowConfig[];
   groups: SessionGroup[];
   nextGroupId: number;
-  globalLocalEcho: boolean;
+  isGlobalLocalEcho: boolean;
 }
 
 export function useSessionPersistence(options: SessionPersistenceHookOptions): SessionPersistence {
@@ -51,7 +51,7 @@ export function useSessionPersistence(options: SessionPersistenceHookOptions): S
     savedWindowConfigs,
     groups,
     nextGroupId,
-    globalLocalEcho,
+    isGlobalLocalEcho,
   } = options;
   const persistenceStore = usePersistenceStore;
 
@@ -76,7 +76,7 @@ export function useSessionPersistence(options: SessionPersistenceHookOptions): S
               id: DEFAULT_GROUP_ID,
               name: DEFAULT_GROUP_NAME,
               configIds: [],
-              collapsed: false,
+              isCollapsed: false,
             },
             ...savedGroups.groups,
           ]);
@@ -90,7 +90,7 @@ export function useSessionPersistence(options: SessionPersistenceHookOptions): S
 
       try {
         const store = await getSettingsStore();
-        const savedGlobalEcho = await store.get<boolean>("globalLocalEcho");
+        const savedGlobalEcho = await store.get<boolean>("isGlobalLocalEcho");
         if (savedGlobalEcho !== null && savedGlobalEcho !== undefined && !cancelled) {
           useSessionStore.getState().setGlobalLocalEchoAction(savedGlobalEcho);
         }
@@ -160,14 +160,14 @@ export function useSessionPersistence(options: SessionPersistenceHookOptions): S
     };
   }, [savedWindowConfigs]);
 
-  // --- `globalLocalEcho` persists to `settings.json` ---------------------
+  // --- `isGlobalLocalEcho` persists to `settings.json` ---------------------
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const store = await getSettingsStore();
         if (cancelled) return;
-        await store.set("globalLocalEcho", globalLocalEcho);
+        await store.set("isGlobalLocalEcho", isGlobalLocalEcho);
         await store.save();
       } catch (e) {
         console.error("Failed to save global settings:", e);
@@ -176,7 +176,7 @@ export function useSessionPersistence(options: SessionPersistenceHookOptions): S
     return () => {
       cancelled = true;
     };
-  }, [globalLocalEcho]);
+  }, [isGlobalLocalEcho]);
 
   // --- public actions ----------------------------------------------------
   const updateConfigs = useCallback(

@@ -11,9 +11,9 @@ let unlisten: () => void;
 vi.mock("@tauri-apps/api/event", () => ({
   listen: (eventName: string, handler: (e: { payload: unknown }) => void): Promise<() => void> => {
     callCount(eventName);
-    const list = handlers.get(eventName) ?? [];
-    list.push(handler);
-    handlers.set(eventName, list);
+    const eventListeners = handlers.get(eventName) ?? [];
+    eventListeners.push(handler);
+    handlers.set(eventName, eventListeners);
     return Promise.resolve(unlisten);
   },
 }));
@@ -31,15 +31,15 @@ beforeEach(() => {
 describe("createInfraEventBus", () => {
   it("fans out payload to all subscribers", async () => {
     const bus = createInfraEventBus();
-    const got: number[] = [];
-    bus.subscribe<number>("session-output", (id) => got.push(id));
-    bus.subscribe<number>("session-output", (id) => got.push(id + 100));
+    const gotList: number[] = [];
+    bus.subscribe<number>("session-output", (id) => gotList.push(id));
+    bus.subscribe<number>("session-output", (id) => gotList.push(id + 100));
     await flush();
     expect(callCount).toHaveBeenCalledTimes(1);
     expect(callCount).toHaveBeenCalledWith("session-output");
     const h = handlers.get("session-output")![0]!;
     h({ payload: 42 });
-    expect(got).toEqual([42, 142]);
+    expect(gotList).toEqual([42, 142]);
   });
 
   it("shares the underlying listen across subscribers on the same event", async () => {

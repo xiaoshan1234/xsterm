@@ -2,7 +2,7 @@ import type { PaneNode, PaneSplitNode } from "../../../model/pane";
 
 function asSplit(node: PaneNode): PaneSplitNode {
   if (node.kind !== "split") {
-    throw new Error(`expected split node, got ${node.kind} (id=${node.id})`);
+    throw new Error(`expected split node, gotList ${node.kind} (id=${node.id})`);
   }
   return node;
 }
@@ -24,10 +24,10 @@ export function findPaneNode(node: PaneNode, paneId: string): PaneNode | null {
 }
 
 export function getLeafPaneIds(node: PaneNode): string[] {
-  const ids: string[] = [];
+  const idList: string[] = [];
   function collect(n: PaneNode): void {
     if (n.kind === "leaf") {
-      ids.push(n.id);
+      idList.push(n.id);
       return;
     }
     const children = getChildren(n);
@@ -38,7 +38,7 @@ export function getLeafPaneIds(node: PaneNode): string[] {
     }
   }
   collect(node);
-  return ids;
+  return idList;
 }
 
 export function replacePaneNode(node: PaneNode, paneId: string, newNode: PaneNode): PaneNode {

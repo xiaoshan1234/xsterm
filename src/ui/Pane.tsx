@@ -83,13 +83,13 @@ export function Pane({
 
   const handleStartSplit = useCallback(
     (direction: SplitDirection) => {
-      // tmux panes (supportsMultiplex) split immediately
+      // tmux panes (canMultiplex) split immediately
       // through the backend — no "pick a session from the dialog"
       // step because the new pane IS the new tmux pane. The
       // `tmux-pane-added` listener / `splitTmuxPaneInternal` updates
       // React state and the pane tree.
       if (
-        session?.capabilities?.supportsMultiplex &&
+        session?.capabilities?.canMultiplex &&
         session.id !== undefined &&
         pane.binding?.sessionId !== undefined
       ) {
@@ -289,7 +289,7 @@ export function Pane({
     <>
       <ContextMenu ref={contextMenuRef} items={contextMenuItems} className="pane-leaf">
         <div
-          className={`workspace-pane ${isActive ? "workspace-pane--active" : ""}`}
+          className={`workspace-pane ${isActive ? "workspace-pane--isActive" : ""}`}
           onMouseDown={onActivate}
           onContextMenuCapture={handleContextMenuCapture}
         >

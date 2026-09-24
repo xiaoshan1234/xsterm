@@ -264,9 +264,9 @@ export function WindowTab({
   return (
     <ContextMenu items={contextMenuItems}>
       <div
-        className={`tab ${isActive ? "active" : ""} ${isDragging ? "dragging" : ""}`}
+        className={`tab ${isActive ? "isActive" : ""} ${isDragging ? "dragging" : ""}`}
         role="tab"
-        aria-selected={isActive}
+        aria-isSelected={isActive}
         tabIndex={0}
         data-tab-index={position - 1}
         onClick={onSelect}

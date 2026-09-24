@@ -1,6 +1,6 @@
 /**
  * splitPane — split an existing pane in two. When the source session
- * is a tmux pane (supportsMultiplex), route to `infra.createTmuxPane`
+ * is a tmux pane (canMultiplex), route to `infra.createTmuxPane`
  * and bind the new tmux pane to the new leaf. Otherwise create an
  * empty leaf that the user fills with a session from the dialog.
  *
@@ -35,7 +35,7 @@ export async function splitPane(input: SplitPaneInput): Promise<void> {
   // tmux path: backend creates the new pane and returns its SessionInfo.
   if (sessionId !== undefined) {
     const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId);
-    if (session?.capabilities?.supportsMultiplex && session.tmuxControllerId !== undefined) {
+    if (session?.capabilities?.canMultiplex && session.tmuxControllerId !== undefined) {
       await splitTmuxPaneInternal(session, workspaceId, windowId, paneId, direction);
       return;
     }
@@ -105,10 +105,10 @@ async function splitTmuxPaneInternal(
         tmuxControllerId: controllerId,
         isHidden: false,
         capabilities: {
-          supportsResize: true,
-          supportsReconnect: true,
-          supportsLocalEcho: false,
-          supportsMultiplex: true,
+          canResize: true,
+          canReconnect: true,
+          canLocalEcho: false,
+          canMultiplex: true,
         },
         createdAt: Date.now(),
         lastActivityAt: Date.now(),

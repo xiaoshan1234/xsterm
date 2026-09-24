@@ -10,16 +10,16 @@ export const DEFAULT_TAB_WIDTH = 4;
 
 export interface PasteConfirmOptions {
   /** Replace each `\t` with this many spaces. 0 disables expansion. */
-  convertTabs: boolean;
+  shouldConvertTabs: boolean;
   spacesPerTab: number;
   /** Replace every CRLF / CR / LF with a single CR. */
-  convertLineEndings: boolean;
+  shouldConvertLineEndings: boolean;
 }
 
 export const DEFAULT_PASTE_OPTIONS: PasteConfirmOptions = {
-  convertTabs: true,
+  shouldConvertTabs: true,
   spacesPerTab: DEFAULT_TAB_WIDTH,
-  convertLineEndings: true,
+  shouldConvertLineEndings: true,
 };
 
 /**
@@ -36,7 +36,7 @@ export function countTabs(text: string): number {
 }
 
 /**
- * Apply the user-selected transformations in a deterministic order:
+ * Apply the user-isSelected transformations in a deterministic order:
  * tabs first (so a tab character that lands at the start of a "line" doesn't
  * survive into the line-ending pass), then line endings.
  *
@@ -46,10 +46,10 @@ export function countTabs(text: string): number {
  */
 export function applyPasteTransforms(text: string, options: PasteConfirmOptions): string {
   let result = text;
-  if (options.convertTabs && options.spacesPerTab > 0) {
+  if (options.shouldConvertTabs && options.spacesPerTab > 0) {
     result = convertTabs(result, options.spacesPerTab);
   }
-  if (options.convertLineEndings) {
+  if (options.shouldConvertLineEndings) {
     result = convertLineEndings(result);
   }
   return result;

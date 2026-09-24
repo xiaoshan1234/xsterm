@@ -14,7 +14,7 @@ describe("useSessionStore", () => {
   it("starts with empty sessions + default flags", () => {
     const state = useSessionStore.getState();
     expect(state.sessions).toEqual([]);
-    expect(state.globalLocalEcho).toBe(false);
+    expect(state.isGlobalLocalEcho).toBe(false);
     expect(state.tmuxControllerErrors.size).toBe(0);
     expect(state.sessionLocalEchoOverrides.size).toBe(0);
     expect(state.getEffectiveLocalEcho(42)).toBe(false);
@@ -22,7 +22,7 @@ describe("useSessionStore", () => {
 
   it("setGlobalLocalEchoAction toggles the global flag", () => {
     useSessionStore.getState().setGlobalLocalEchoAction(true);
-    expect(useSessionStore.getState().globalLocalEcho).toBe(true);
+    expect(useSessionStore.getState().isGlobalLocalEcho).toBe(true);
     expect(useSessionStore.getState().getEffectiveLocalEcho(1)).toBe(true);
   });
 

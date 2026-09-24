@@ -5,7 +5,7 @@
  * **State ownership**:
  * - `sessions`, `sessionsRef`, `establishingSessionsRef`,
  *   `sessionLocalEchoOverrides`, `getEffectiveLocalEcho`,
- *   `globalLocalEcho`, `setGlobalLocalEcho` — owned here because
+ *   `isGlobalLocalEcho`, `setGlobalLocalEcho` — owned here because
  *   they all describe a session's view-model state (one row per
  *   backend session). The tmux retry-banner state and tmux
  *   controller refs are co-located because the
@@ -36,8 +36,8 @@ export interface SessionStoreState {
   establishingSessionsRef: { current: Set<number> };
 
   // --- local-echo settings --------------------------------------------
-  globalLocalEcho: boolean;
-  setGlobalLocalEcho: (enabled: boolean) => void;
+  isGlobalLocalEcho: boolean;
+  setGlobalLocalEcho: (isEnabled: boolean) => void;
   sessionLocalEchoOverrides: Map<number, boolean>;
   getEffectiveLocalEcho: (sessionId: number) => boolean;
 
@@ -62,8 +62,8 @@ export interface SessionStoreState {
   applyDisplayConfig: (id: number, patch: Partial<Session["displayConfig"]>) => void;
   beginEstablishing: (id: number) => void;
   endEstablishing: (id: number) => void;
-  setGlobalLocalEchoAction: (enabled: boolean) => void;
-  setSessionLocalEchoOverride: (id: number, enabled: boolean | undefined) => void;
+  setGlobalLocalEchoAction: (isEnabled: boolean) => void;
+  setSessionLocalEchoOverride: (id: number, isEnabled: boolean | undefined) => void;
   setTmuxControllerError: (controllerId: number, error: TmuxControllerError | undefined) => void;
   rememberTmuxControllerConfig: (controllerId: number, config: TmuxCcConfig) => void;
   forgetTmuxControllerConfig: (controllerId: number) => void;
@@ -95,13 +95,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   sessionsRef: initialSessionsRef,
   establishingSessionsRef: initialEstablishingRef,
 
-  globalLocalEcho: false,
-  setGlobalLocalEcho: (enabled) => set({ globalLocalEcho: enabled }),
+  isGlobalLocalEcho: false,
+  setGlobalLocalEcho: (isEnabled) => set({ isGlobalLocalEcho: isEnabled }),
   sessionLocalEchoOverrides: initialOverrides,
   getEffectiveLocalEcho: (sessionId) => {
-    const { sessionLocalEchoOverrides, globalLocalEcho } = get();
+    const { sessionLocalEchoOverrides, isGlobalLocalEcho } = get();
     const override = sessionLocalEchoOverrides.get(sessionId);
-    return override ?? globalLocalEcho;
+    return override ?? isGlobalLocalEcho;
   },
 
   tmuxControllerErrors: initialTmuxErrors,
@@ -207,14 +207,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     next.delete(id);
     ref.current = next;
   },
-  setGlobalLocalEchoAction: (enabled) => set({ globalLocalEcho: enabled }),
-  setSessionLocalEchoOverride: (id, enabled) => {
+  setGlobalLocalEchoAction: (isEnabled) => set({ isGlobalLocalEcho: isEnabled }),
+  setSessionLocalEchoOverride: (id, isEnabled) => {
     set((state) => {
       const next = new Map(state.sessionLocalEchoOverrides);
-      if (enabled === undefined) {
+      if (isEnabled === undefined) {
         next.delete(id);
       } else {
-        next.set(id, enabled);
+        next.set(id, isEnabled);
       }
       return { sessionLocalEchoOverrides: next };
     });

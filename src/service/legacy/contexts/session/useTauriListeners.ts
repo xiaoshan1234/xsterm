@@ -56,13 +56,13 @@ import { useWorkspaceStore } from "../../../../service/workspace/store";
  * capability flags mirrored from `CapabilityFlags::for_tmux()`
  * (see `src-tauri/src/models/capabilities.rs`). Tmux panes support
  * resize / reconnect but not local echo; they DO advertise
- * `supportsMultiplex` which is the unlock flag for split UI.
+ * `canMultiplex` which is the unlock flag for split UI.
  */
 const TMUX_PANE_CAPABILITIES: CapabilityFlags = {
-  supportsResize: true,
-  supportsReconnect: true,
-  supportsLocalEcho: false,
-  supportsMultiplex: true,
+  canResize: true,
+  canReconnect: true,
+  canLocalEcho: false,
+  canMultiplex: true,
 };
 
 /**

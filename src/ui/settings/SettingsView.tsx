@@ -19,7 +19,7 @@ interface SettingsViewProps {
 
 export function SettingsView({ activeCategory = "appearance" }: SettingsViewProps) {
   const { currentTheme, currentThemeKey, setTheme, themeKeys } = useTheme();
-  const { globalLocalEcho, setGlobalLocalEcho } = useSession();
+  const { isGlobalLocalEcho, setGlobalLocalEcho } = useSession();
 
   return (
     <div className="settings-view">
@@ -58,7 +58,7 @@ export function SettingsView({ activeCategory = "appearance" }: SettingsViewProp
                 <input
                   id="global-local-echo"
                   type="checkbox"
-                  checked={globalLocalEcho}
+                  checked={isGlobalLocalEcho}
                   onChange={(e) => setGlobalLocalEcho(e.target.checked)}
                 />
                 <span className="settings-toggle-label">Global local echo</span>

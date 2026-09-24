@@ -24,7 +24,7 @@ export function createLeafPane(size: number, sessionId?: number, configId?: stri
 
 function asSplit(node: PaneNode): PaneSplitNode {
   if (node.kind !== "split") {
-    throw new Error(`expected split node, got ${node.kind} (id=${node.id})`);
+    throw new Error(`expected split node, gotList ${node.kind} (id=${node.id})`);
   }
   return node;
 }
@@ -80,13 +80,13 @@ export function forEachPane(root: PaneNode, callback: (node: PaneNode) => void):
 }
 
 export function getLeafPaneIds(root: PaneNode): string[] {
-  const ids: string[] = [];
+  const idList: string[] = [];
   forEachPane(root, (node) => {
     if (node.kind === "leaf") {
-      ids.push(node.id);
+      idList.push(node.id);
     }
   });
-  return ids;
+  return idList;
 }
 
 export function removeSessionFromPaneTree(root: PaneNode, sessionId: number): PaneNode {
@@ -189,13 +189,13 @@ export function isSessionInPaneTree(root: PaneNode, sessionId: number): boolean 
 }
 
 export function collectSessionIdsFromPaneTree(root: PaneNode): number[] {
-  const ids = new Set<number>();
+  const idList = new Set<number>();
   forEachPane(root, (node) => {
     if (node.kind === "leaf" && node.binding?.sessionId !== undefined) {
-      ids.add(node.binding.sessionId);
+      idList.add(node.binding.sessionId);
     }
   });
-  return Array.from(ids);
+  return Array.from(idList);
 }
 
 export function getPaneNumberMap(root: PaneNode): Map<string, number> {

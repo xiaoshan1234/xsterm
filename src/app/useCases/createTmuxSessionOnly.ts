@@ -17,7 +17,7 @@ import type {
 
 export async function createTmuxSessionOnly(
   config: TmuxCcConfig,
-  save: boolean = true,
+  shouldSave: boolean = true,
   displayConfig?: SessionDisplayConfig,
 ): Promise<Session> {
   const t0 = Date.now();
@@ -26,7 +26,7 @@ export async function createTmuxSessionOnly(
     configId,
     tmuxSessionName: config.tmuxSessionName ?? null,
     ssh: config.ssh ? "ssh" : "local",
-    save,
+    shouldSave,
     hasDisplayConfig: displayConfig !== undefined,
   });
 
@@ -39,7 +39,7 @@ export async function createTmuxSessionOnly(
 
   const session = buildFrontendSession(init.session, configId, "tmux-cc", displayConfig);
 
-  if (save) {
+  if (shouldSave) {
     const saved: PersistedSessionConfig = {
       id: configId,
       name: init.session.name,

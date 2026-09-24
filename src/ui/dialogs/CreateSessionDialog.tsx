@@ -32,17 +32,17 @@ interface SessionDialogProps {
   onClose: () => void;
   onCreateLocal: (
     config: LocalSessionConfig,
-    save: boolean,
+    shouldSave: boolean,
     displayConfig?: SessionDisplayConfig,
   ) => Promise<Session>;
   onCreateSsh: (
     config: SSHSessionConfig,
-    save: boolean,
+    shouldSave: boolean,
     displayConfig?: SessionDisplayConfig,
   ) => Promise<Session>;
   onCreateTmux: (
     config: TmuxCcConfig,
-    save: boolean,
+    shouldSave: boolean,
     displayConfig?: SessionDisplayConfig,
   ) => Promise<Session>;
   initialTab?: "local" | "ssh" | "tmux-cc";
@@ -236,7 +236,7 @@ export default function CreateSessionDialog({
       addToGroup(form.selectedGroupId, saved.id);
       onClose();
     } catch (err) {
-      console.error("Failed to save config:", err);
+      console.error("Failed to shouldSave config:", err);
       form.setError(err instanceof Error ? err.message : String(err));
     }
   };
@@ -288,7 +288,7 @@ export default function CreateSessionDialog({
     id: item.id,
     label: item.label,
     icon: item.icon,
-    active: item.id === form.sectionId,
+    isActive: item.id === form.sectionId,
     onClick: () => {
       form.setSectionId(item.id);
       form.setError("");
@@ -299,19 +299,19 @@ export default function CreateSessionDialog({
     {
       id: "local",
       label: "Shell",
-      active: topTab === "local",
+      isActive: topTab === "local",
       onClick: () => handleTopTabChange("local"),
     },
     {
       id: "ssh",
       label: "SSH",
-      active: topTab === "ssh",
+      isActive: topTab === "ssh",
       onClick: () => handleTopTabChange("ssh"),
     },
     {
       id: "tmux-cc",
       label: "Tmux",
-      active: topTab === "tmux-cc",
+      isActive: topTab === "tmux-cc",
       onClick: () => handleTopTabChange("tmux-cc"),
     },
   ];

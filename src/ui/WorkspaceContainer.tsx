@@ -32,10 +32,10 @@ function updateNodeInTree(
 
 interface WorkspaceContainerProps {
   workspace: Workspace;
-  commandPanelOpen: boolean;
+  isCommandPanelOpen: boolean;
 }
 
-export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceContainerProps) {
+export function WorkspaceContainer({ workspace, isCommandPanelOpen }: WorkspaceContainerProps) {
   const {
     sessions,
     setActiveWorkspace,
@@ -172,7 +172,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
           )}
         </div>
       ))}
-      {commandPanelOpen && (
+      {isCommandPanelOpen && (
         <CommandSendPanel
           workspace={workspace}
           sessions={sessions}

@@ -21,12 +21,12 @@ export default function LoggingTab({ config = {}, onChange }: LoggingTabProps) {
       <span className="logging-tab__group-title">Log Output</span>
       <FormCheckboxField
         label="Enabled"
-        checked={logging.enabled ?? false}
-        onChange={(enabled) => updateLogging({ enabled })}
+        isChecked={logging.isEnabled ?? false}
+        onChange={(isEnabled) => updateLogging({ isEnabled })}
       />
       <FormCheckboxField
         label="Append (vs Overwrite)"
-        checked={logging.append ?? true}
+        isChecked={logging.append ?? true}
         onChange={(append) => updateLogging({ append })}
       />
       <FormTextField

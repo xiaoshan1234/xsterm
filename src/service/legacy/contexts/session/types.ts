@@ -26,8 +26,8 @@ export interface SessionContextType {
   savedWorkspaces: PersistedWorkspace[];
   savedWindowConfigs: PersistedWindowConfig[];
   groups: SessionGroup[];
-  globalLocalEcho: boolean;
-  setGlobalLocalEcho: (enabled: boolean) => void;
+  isGlobalLocalEcho: boolean;
+  setGlobalLocalEcho: (isEnabled: boolean) => void;
   getEffectiveLocalEcho: (sessionId: number) => boolean;
   // tmux retry-banner state. Exposed here (not just on
   // SessionState) so the listener and the banner can read/write
@@ -147,7 +147,7 @@ export interface SessionState {
   setGroups: GroupsSetter;
   nextGroupId: number;
   setNextGroupId: Dispatch<SetStateAction<number>>;
-  globalLocalEcho: boolean;
+  isGlobalLocalEcho: boolean;
   setGlobalLocalEcho: Dispatch<SetStateAction<boolean>>;
   sessionLocalEchoOverrides: Map<number, boolean>;
   sessionsRef: MutableRefObject<Session[]>;

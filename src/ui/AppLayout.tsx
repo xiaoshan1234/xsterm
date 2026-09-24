@@ -114,7 +114,7 @@ export default function AppLayout() {
                 key={workspace.id}
                 className={`workspace-view ${workspace.id === activeWorkspaceId ? "workspace-view--active" : ""}`}
               >
-                <WorkspaceContainer workspace={workspace} commandPanelOpen={showCommandPanel} />
+                <WorkspaceContainer workspace={workspace} isCommandPanelOpen={showCommandPanel} />
               </div>
             ))
           )}
@@ -125,7 +125,7 @@ export default function AppLayout() {
               activeWorkspaceId={activeWorkspaceId}
               onSelectWorkspace={setActiveWorkspace}
               onCloseWorkspace={closeWorkspace}
-              commandPanelOpen={showCommandPanel}
+              isCommandPanelOpen={showCommandPanel}
               onToggleCommandPanel={() => setShowCommandPanel((prev) => !prev)}
             />
           )}

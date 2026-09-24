@@ -8,12 +8,12 @@ interface ShellSettingsPanelProps {
   onLocalConfigChange: (config: LocalSessionConfig) => void;
 }
 
-interface EnvVar {
+interface EnvironmentVariableItem {
   key: string;
   value: string;
 }
 
-function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
+function envVarsToMap(vars: EnvironmentVariableItem[]): Record<string, string> | undefined {
   const result: Record<string, string> = {};
   for (const v of vars) {
     if (v.key.trim()) {
@@ -24,12 +24,12 @@ function envVarsToMap(vars: EnvVar[]): Record<string, string> | undefined {
 }
 
 export function ShellSettingsPanel({ localConfig, onLocalConfigChange }: ShellSettingsPanelProps) {
-  const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
+  const [envVars, setEnvVars] = useState<EnvironmentVariableItem[]>(() => {
     const env = localConfig.envConfig?.env || {};
     return (Object.entries(env) as [string, string][]).map(([key, value]) => ({ key, value }));
   });
 
-  const updateEnvVars = (next: EnvVar[]) => {
+  const updateEnvVars = (next: EnvironmentVariableItem[]) => {
     setEnvVars(next);
     const envMap = envVarsToMap(next);
     onLocalConfigChange({

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type SplitMode = "line" | "character";
 type ExecutionState = "idle" | "running" | "paused";
 
-interface LineSendMeta {
+interface LineSendMetadata {
   timestamp: string;
   number: number;
 }
@@ -21,12 +21,12 @@ export interface CommandExecutor {
   runState: ExecutionState;
   breakpoints: Set<number>;
   setBreakpoints: React.Dispatch<React.SetStateAction<Set<number>>>;
-  lineMeta: Record<number, LineSendMeta>;
+  lineMeta: Record<number, LineSendMetadata>;
   toggleBreakpoint: (lineIndex: number) => void;
   handlePlay: () => void;
   handleStop: () => void;
   markIntervalUserSet: () => void;
-  intervalUserSet: boolean;
+  isIntervalUserSet: boolean;
   getActiveLineIndex: () => number | null;
 }
 
@@ -42,8 +42,8 @@ export function useCommandExecutor(deps: CommandExecutorHookDeps): CommandExecut
 
   const [runState, setRunState] = useState<ExecutionState>("idle");
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
-  const [lineMeta, setLineMeta] = useState<Record<number, LineSendMeta>>({});
-  const [intervalUserSet, setIntervalUserSet] = useState(false);
+  const [lineMeta, setLineMeta] = useState<Record<number, LineSendMetadata>>({});
+  const [isIntervalUserSet, setIntervalUserSet] = useState(false);
 
   const stopRef = useRef(false);
   const lineCounterRef = useRef(0);
@@ -292,7 +292,7 @@ export function useCommandExecutor(deps: CommandExecutorHookDeps): CommandExecut
     handlePlay,
     handleStop,
     markIntervalUserSet,
-    intervalUserSet,
+    isIntervalUserSet,
     getActiveLineIndex,
   };
 }

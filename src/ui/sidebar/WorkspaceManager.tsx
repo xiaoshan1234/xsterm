@@ -80,7 +80,7 @@ export function WorkspaceManager({
           ]}
         >
           <div
-            className={`workspace-list-item ${selectedWorkspaceId === DEFAULT_WORKSPACE_ID ? "selected" : ""}`}
+            className={`workspace-list-item ${selectedWorkspaceId === DEFAULT_WORKSPACE_ID ? "isSelected" : ""}`}
             onClick={() => setSelectedWorkspaceId(DEFAULT_WORKSPACE_ID)}
             onDoubleClick={handleOpenDefault}
           >
@@ -107,7 +107,7 @@ export function WorkspaceManager({
               ]}
             >
               <div
-                className={`workspace-list-item ${selectedWorkspaceId === workspace.id ? "selected" : ""}`}
+                className={`workspace-list-item ${selectedWorkspaceId === workspace.id ? "isSelected" : ""}`}
                 onClick={() => handleWorkspaceClick(workspace)}
                 onDoubleClick={() => handleOpen(workspace)}
               >

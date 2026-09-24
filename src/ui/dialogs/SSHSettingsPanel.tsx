@@ -49,24 +49,24 @@ export function SSHSettingsPanel({ sshConfig, onSshConfigChange }: SSHSettingsPa
           />
           <FormCheckboxField
             label="TCP No Delay"
-            checked={sshConfig.tcpNoDelay ?? true}
+            isChecked={sshConfig.tcpNoDelay ?? true}
             onChange={(tcpNoDelay) => onSshConfigChange({ ...sshConfig, tcpNoDelay })}
           />
           <FormCheckboxField
             label="SO Keepalive"
-            checked={sshConfig.soKeepalive ?? false}
+            isChecked={sshConfig.soKeepalive ?? false}
             onChange={(soKeepalive) => onSshConfigChange({ ...sshConfig, soKeepalive })}
           />
           <FormCheckboxField
             label="Null Packet Keepalive"
-            checked={sshConfig.nullPacketKeepalive ?? false}
+            isChecked={sshConfig.nullPacketKeepalive ?? false}
             onChange={(nullPacketKeepalive) =>
               onSshConfigChange({ ...sshConfig, nullPacketKeepalive })
             }
           />
           <FormCheckboxField
             label="Enable Compression"
-            checked={sshConfig.enableCompression ?? false}
+            isChecked={sshConfig.enableCompression ?? false}
             onChange={(enableCompression) => onSshConfigChange({ ...sshConfig, enableCompression })}
           />
         </div>

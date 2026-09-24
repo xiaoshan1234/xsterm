@@ -25,12 +25,12 @@ interface FakeStore {
 }
 
 function makeStore(initial: Record<string, unknown> = {}): FakeStore {
-  const data = new Map<string, unknown>(Object.entries(initial));
+  const store = new Map<string, unknown>(Object.entries(initial));
   return {
-    data,
-    get: vi.fn(async (key: string) => data.get(key)),
+    data: store,
+    get: vi.fn(async (key: string) => store.get(key)),
     set: vi.fn(async (key: string, value: unknown) => {
-      data.set(key, value);
+      store.set(key, value);
     }),
     save: vi.fn(async () => {}),
   };

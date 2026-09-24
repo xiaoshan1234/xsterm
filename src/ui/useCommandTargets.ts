@@ -33,7 +33,7 @@ function getDefaultPaneId(window: Window): string | null {
   return findFirstLeafWithSession(root)?.id ?? null;
 }
 
-export interface CommandTargets {
+export interface CommandTargetList {
   targetWindowId: string;
   setTargetWindowId: (id: string) => void;
   targetPaneId: string | null;
@@ -42,7 +42,7 @@ export interface CommandTargets {
   getTargetSessions: () => number[];
 }
 
-export function useCommandTargets(workspace: Workspace): CommandTargets {
+export function useCommandTargets(workspace: Workspace): CommandTargetList {
   const [targetWindowId, setTargetWindowId] = useState<string>("active");
   const [targetPaneId, setTargetPaneId] = useState<string | null>("active");
 

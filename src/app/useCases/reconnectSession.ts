@@ -22,7 +22,7 @@ export async function reconnectSession(id: number): Promise<Session> {
   const sessions = useSessionStore.getState().sessions;
   const oldSession = sessions.find((s) => s.id === id);
   if (!oldSession) throw new Error("Session not found");
-  if (oldSession.capabilities && !oldSession.capabilities.supportsReconnect) {
+  if (oldSession.capabilities && !oldSession.capabilities.canReconnect) {
     throw new Error("Reconnect not supported for this transport");
   }
 

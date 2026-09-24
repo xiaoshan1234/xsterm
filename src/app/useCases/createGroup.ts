@@ -7,7 +7,7 @@ import type { SessionGroup } from "../../model";
 export function createGroup(name: string): void {
   const persistenceStore = usePersistenceStore.getState();
   const id = persistenceStore.nextGroupId;
-  const group: SessionGroup = { id, name, configIds: [], collapsed: false };
+  const group: SessionGroup = { id, name, configIds: [], isCollapsed: false };
   persistenceStore.setNextGroupId((prev) => prev + 1);
   persistenceStore.addGroup(group);
 }

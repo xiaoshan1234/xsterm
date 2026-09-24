@@ -260,8 +260,8 @@ export interface TmuxWindowInit {
   tmuxWindowId: string;
   /** Tab-bar label. */
   name: string;
-  /** Currently-active window. */
-  active: boolean;
+  /** Currently-isActive window. */
+  isActive: boolean;
   /** `tmux list-windows` layout string (informational; not parsed). */
   layout: string;
 }
@@ -273,8 +273,8 @@ export interface TmuxPaneInit {
   tmuxPaneId: string;
   /** Owning tmux window id. */
   tmuxWindowId: string;
-  /** Currently-active pane. */
-  active: boolean;
+  /** Currently-isActive pane. */
+  isActive: boolean;
   width: number;
   height: number;
   title: string;

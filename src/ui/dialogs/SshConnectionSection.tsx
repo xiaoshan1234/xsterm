@@ -128,22 +128,22 @@ export function SshConnectionSection({ config, onChange }: SshConnectionSectionP
           />
           <FormCheckboxField
             label="TCP No Delay (disable Nagle)"
-            checked={config.tcpNoDelay ?? true}
+            isChecked={config.tcpNoDelay ?? true}
             onChange={(tcpNoDelay) => onChange({ ...config, tcpNoDelay })}
           />
           <FormCheckboxField
             label="SO Keepalive"
-            checked={config.soKeepalive ?? false}
+            isChecked={config.soKeepalive ?? false}
             onChange={(soKeepalive) => onChange({ ...config, soKeepalive })}
           />
           <FormCheckboxField
             label="Null Packet Keepalive"
-            checked={config.nullPacketKeepalive ?? false}
+            isChecked={config.nullPacketKeepalive ?? false}
             onChange={(nullPacketKeepalive) => onChange({ ...config, nullPacketKeepalive })}
           />
           <FormCheckboxField
             label="Enable Compression"
-            checked={config.enableCompression ?? false}
+            isChecked={config.enableCompression ?? false}
             onChange={(enableCompression) => onChange({ ...config, enableCompression })}
           />
         </div>

@@ -100,7 +100,7 @@ export default function TerminalTab({
         <span className="terminal-tab__group-title">Terminal</span>
         <FormCheckboxField
           label="Show Line Numbers"
-          checked={config.lineNumberEnabled ?? true}
+          isChecked={config.lineNumberEnabled ?? true}
           onChange={(lineNumberEnabled) => update({ lineNumberEnabled })}
         />
         <FormRadioGroup

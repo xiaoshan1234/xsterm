@@ -159,14 +159,20 @@ describe("mapPaneTree", () => {
 
 describe("forEachPane", () => {
   it("calls the callback for every node (root + 2 leaves + 1 inner split)", () => {
-    const seen: string[] = [];
-    forEachPane(tree, (n) => seen.push(n.id));
-    expect(seen.sort()).toEqual(["inner-split", "leaf-100-1", "leaf-50-1", "leaf-50-2", "root"]);
+    const seenList: string[] = [];
+    forEachPane(tree, (n) => seenList.push(n.id));
+    expect(seenList.sort()).toEqual([
+      "inner-split",
+      "leaf-100-1",
+      "leaf-50-1",
+      "leaf-50-2",
+      "root",
+    ]);
   });
 });
 
 describe("getLeafPaneIds", () => {
-  it("returns ids of leaves only, depth-first", () => {
+  it("returns idList of leaves only, depth-first", () => {
     expect(getLeafPaneIds(tree).sort()).toEqual(["leaf-100-1", "leaf-50-1", "leaf-50-2"]);
   });
 
@@ -205,8 +211,8 @@ describe("removeSessionFromPaneTree", () => {
 describe("replaceSessionIdInPaneTree", () => {
   it("rewrites sessionId everywhere it appears", () => {
     const result = replaceSessionIdInPaneTree(tree, 1, 999);
-    const ids = collectSessionIdsFromPaneTree(result);
-    expect(ids.sort()).toEqual([2, 999]);
+    const idList = collectSessionIdsFromPaneTree(result);
+    expect(idList.sort()).toEqual([2, 999]);
     let count = 0;
     forEachPane(result, (n) => {
       if (n.kind === "leaf" && n.binding?.sessionId === 999) count++;
@@ -221,9 +227,9 @@ describe("replaceSessionIdInPaneTree", () => {
 });
 
 describe("collectSessionIdsFromPaneTree", () => {
-  it("deduplicates and preserves first-seen order", () => {
-    const ids = collectSessionIdsFromPaneTree(tree);
-    expect(ids).toEqual([1, 2]);
+  it("deduplicates and preserves first-seenList order", () => {
+    const idList = collectSessionIdsFromPaneTree(tree);
+    expect(idList).toEqual([1, 2]);
   });
 
   it("returns an empty array when no leaf has a session", () => {
@@ -253,9 +259,9 @@ describe("collapseEmptySplits", () => {
         children: [createLeafPane(50), createLeafPane(50)],
       },
     };
-    const collapsed = collapseEmptySplits(root);
-    expect(collapsed.kind).toBe("leaf");
-    expect(collapsed.size).toBe(100);
+    const isCollapsed = collapseEmptySplits(root);
+    expect(isCollapsed.kind).toBe("leaf");
+    expect(isCollapsed.size).toBe(100);
   });
 
   it("keeps a leaf intact", () => {
@@ -282,9 +288,9 @@ describe("collapseEmptySplits", () => {
         children: [inner, createLeafPane(50)],
       },
     };
-    const collapsed = collapseEmptySplits(outer);
-    expect(collapsed.kind).toBe("leaf");
-    expect(collapsed.size).toBe(100);
+    const isCollapsed = collapseEmptySplits(outer);
+    expect(isCollapsed.kind).toBe("leaf");
+    expect(isCollapsed.size).toBe(100);
   });
 });
 
@@ -429,13 +435,13 @@ describe("isSessionUsedInOtherWindow", () => {
     expect(isSessionUsedInOtherWindow([ws1], "ws1", "w1-a", 5)).toBe(false);
   });
 
-  it("treats null current ids as 'no current window' -> true if found anywhere", () => {
+  it("treats null current idList as 'no current window' -> true if found anywhere", () => {
     expect(isSessionUsedInOtherWindow([ws1], null, null, 5)).toBe(true);
   });
 });
 
 describe("collectSessionIdsFromWorkspace", () => {
-  it("unions session ids across all windows with deduplication", () => {
+  it("unions session idList across all windows with deduplication", () => {
     const ws = workspace("ws", [
       { id: "w1", name: "W1", kind: "terminal", rootPane: tree, activePaneId: null },
       {
@@ -478,7 +484,7 @@ describe("getPaneNumberMap / getPaneNumber", () => {
     expect(getPaneNumber(tree, "leaf-50-2")).toBe(2);
   });
 
-  it("getPaneNumber returns null for unknown ids", () => {
+  it("getPaneNumber returns null for unknown idList", () => {
     expect(getPaneNumber(tree, "missing")).toBeNull();
     expect(getPaneNumber(tree, "root")).toBeNull();
   });

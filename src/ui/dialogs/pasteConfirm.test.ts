@@ -11,8 +11,8 @@ import { convertTabs, convertLineEndings } from "../../app/rules/textTransform";
 
 describe("DEFAULT_PASTE_OPTIONS", () => {
   it("enables both conversions by default", () => {
-    expect(DEFAULT_PASTE_OPTIONS.convertTabs).toBe(true);
-    expect(DEFAULT_PASTE_OPTIONS.convertLineEndings).toBe(true);
+    expect(DEFAULT_PASTE_OPTIONS.shouldConvertTabs).toBe(true);
+    expect(DEFAULT_PASTE_OPTIONS.shouldConvertLineEndings).toBe(true);
   });
 
   it("uses a sensible default tab width", () => {
@@ -44,40 +44,40 @@ describe("applyPasteTransforms", () => {
 
   it("applies both when both flags are on", () => {
     const out = applyPasteTransforms(sample, {
-      convertTabs: true,
+      shouldConvertTabs: true,
       spacesPerTab: 4,
-      convertLineEndings: true,
+      shouldConvertLineEndings: true,
     });
-    // Tabs expanded to 4 spaces, newlines all collapsed to \r.
+    // Tabs expanded to 4 spaces, newlines all isCollapsed to \r.
     expect(out).toBe(convertLineEndings(convertTabs(sample, 4)));
   });
 
   it("returns text unchanged when both flags are off", () => {
     const out = applyPasteTransforms(sample, {
-      convertTabs: false,
+      shouldConvertTabs: false,
       spacesPerTab: 4,
-      convertLineEndings: false,
+      shouldConvertLineEndings: false,
     });
     expect(out).toBe(sample);
   });
 
   it("skips tab expansion when checkbox is off but spacesPerTab > 0", () => {
     const out = applyPasteTransforms("a\tb", {
-      convertTabs: false,
+      shouldConvertTabs: false,
       spacesPerTab: 4,
-      convertLineEndings: false,
+      shouldConvertLineEndings: false,
     });
     expect(out).toBe("a\tb");
   });
 
   it("applies tabs first, then line endings (ordering matters)", () => {
     // A line that begins with a tab: "\tfoo\n" — if we ran line endings
-    // first, the trailing \n is collapsed to \r; if we ran tabs first, the
+    // first, the trailing \n is isCollapsed to \r; if we ran tabs first, the
     // \t becomes spaces (no \n to collapse). Order must be tabs → LE.
     const out = applyPasteTransforms("\tfoo\n", {
-      convertTabs: true,
+      shouldConvertTabs: true,
       spacesPerTab: 2,
-      convertLineEndings: true,
+      shouldConvertLineEndings: true,
     });
     expect(out).toBe("  foo\r");
   });
@@ -85,9 +85,9 @@ describe("applyPasteTransforms", () => {
   it("skips tab expansion when spacesPerTab is 0 even if checkbox is on", () => {
     // convertTabs guards against <= 0 internally.
     const out = applyPasteTransforms("a\tb", {
-      convertTabs: true,
+      shouldConvertTabs: true,
       spacesPerTab: 0,
-      convertLineEndings: false,
+      shouldConvertLineEndings: false,
     });
     expect(out).toBe("a\tb");
   });
@@ -95,8 +95,8 @@ describe("applyPasteTransforms", () => {
 
 describe("patchPasteOptions", () => {
   it("merges a single-field patch", () => {
-    const next = patchPasteOptions(DEFAULT_PASTE_OPTIONS, { convertTabs: false });
-    expect(next).toEqual({ ...DEFAULT_PASTE_OPTIONS, convertTabs: false });
+    const next = patchPasteOptions(DEFAULT_PASTE_OPTIONS, { shouldConvertTabs: false });
+    expect(next).toEqual({ ...DEFAULT_PASTE_OPTIONS, shouldConvertTabs: false });
   });
 
   it("does not mutate the previous state", () => {
@@ -107,13 +107,13 @@ describe("patchPasteOptions", () => {
 
   it("supports multi-field patches", () => {
     const next = patchPasteOptions(DEFAULT_PASTE_OPTIONS, {
-      convertTabs: false,
-      convertLineEndings: false,
+      shouldConvertTabs: false,
+      shouldConvertLineEndings: false,
       spacesPerTab: 8,
     });
     expect(next).toEqual({
-      convertTabs: false,
-      convertLineEndings: false,
+      shouldConvertTabs: false,
+      shouldConvertLineEndings: false,
       spacesPerTab: 8,
     });
   });

@@ -2,8 +2,8 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const groups = [
-    { id: 1, name: "g1", configIds: ["cfg1", "cfg2"], collapsed: false },
-    { id: 2, name: "g2", configIds: [], collapsed: false },
+    { id: 1, name: "g1", configIds: ["cfg1", "cfg2"], isCollapsed: false },
+    { id: 2, name: "g2", configIds: [], isCollapsed: false },
   ];
   return { groups, setGroups: vi.fn() };
 });
@@ -21,8 +21,8 @@ describe("moveConfigToGroup", () => {
 
   it("moves a config to a target group", () => {
     const stateAfterRemove = [
-      { id: 1, name: "g1", configIds: ["cfg2"], collapsed: false },
-      { id: 2, name: "g2", configIds: [], collapsed: false },
+      { id: 1, name: "g1", configIds: ["cfg2"], isCollapsed: false },
+      { id: 2, name: "g2", configIds: [], isCollapsed: false },
     ];
     moveConfigToGroup("cfg1", 2);
     const addUpdater = mocks.setGroups.mock.calls[1][0];

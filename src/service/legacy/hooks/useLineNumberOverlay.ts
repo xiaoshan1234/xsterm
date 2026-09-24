@@ -39,7 +39,7 @@ interface LineNumberOverlayHookOptions {
   /** Re-initialises the overlay when the pane is bound to another session. */
   sessionId: number;
   /** Show or hide the line number gutter. @default true */
-  enabled?: boolean;
+  isEnabled?: boolean;
 }
 
 /**
@@ -115,10 +115,10 @@ export function useLineNumberOverlay({
   hostRef,
   overlayRef,
   sessionId,
-  enabled = true,
+  isEnabled = true,
 }: LineNumberOverlayHookOptions): void {
   useEffect(() => {
-    if (enabled === false) {
+    if (isEnabled === false) {
       const overlay = overlayRef.current;
       if (overlay) {
         overlay.replaceChildren();
@@ -211,5 +211,5 @@ export function useLineNumberOverlay({
         overlay.style.display = "none";
       }
     };
-  }, [termRef, hostRef, overlayRef, sessionId, enabled]);
+  }, [termRef, hostRef, overlayRef, sessionId, isEnabled]);
 }

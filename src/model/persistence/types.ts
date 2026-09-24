@@ -52,8 +52,8 @@ export interface SessionGroup {
   name: string;
   /** Ids of `PersistedSessionConfig`s in this group. */
   configIds: string[];
-  /** Whether the group is collapsed in the sidebar. */
-  collapsed: boolean;
+  /** Whether the group is isCollapsed in the sidebar. */
+  isCollapsed: boolean;
 }
 
 /**

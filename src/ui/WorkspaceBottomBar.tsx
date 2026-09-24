@@ -9,7 +9,7 @@ export interface WorkspaceBottomBarProps {
   activeWorkspaceId: string | null;
   onSelectWorkspace: (workspaceId: string) => void;
   onCloseWorkspace: (workspaceId: string) => void;
-  commandPanelOpen: boolean;
+  isCommandPanelOpen: boolean;
   onToggleCommandPanel: () => void;
 }
 
@@ -20,7 +20,7 @@ export function WorkspaceBottomBar({
   onSelectWorkspace,
   onCloseWorkspace,
   onToggleCommandPanel,
-  commandPanelOpen,
+  isCommandPanelOpen,
 }: WorkspaceBottomBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -76,7 +76,7 @@ export function WorkspaceBottomBar({
           className="workspace-bottom-bar-button"
           type="button"
           onClick={onToggleCommandPanel}
-          title={commandPanelOpen ? "Hide emit panel" : "Show emit panel"}
+          title={isCommandPanelOpen ? "Hide emit panel" : "Show emit panel"}
         >
           <span>Emit</span>
         </button>
@@ -98,18 +98,18 @@ export function WorkspaceBottomBar({
           {menuOpen && (
             <div ref={menuRef} className="workspace-switcher-menu" role="menu">
               {workspaces.map((w) => {
-                const isActive = w.id === activeWorkspaceId;
+                const active = w.id === activeWorkspaceId;
                 const isDefault = w.name === "default";
                 return (
                   <button
                     key={w.id}
-                    className={`workspace-switcher-item ${isActive ? "active" : ""}`}
+                    className={`workspace-switcher-item ${active ? "active" : ""}`}
                     type="button"
                     role="menuitem"
                     onClick={() => handleSelect(w.id)}
                   >
                     <span className="workspace-switcher-item-left">
-                      {isActive && (
+                      {active && (
                         <span className="workspace-switcher-check" aria-hidden="true">
                           ●
                         </span>

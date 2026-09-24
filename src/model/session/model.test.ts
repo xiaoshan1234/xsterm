@@ -62,10 +62,10 @@ function makeTmuxSessionInfo(id: number, controllerId: number): SessionInfo {
     sessionType: TMUX_INPUT,
     isConnected: true,
     capabilities: {
-      supportsMultiplex: true,
-      supportsResize: true,
-      supportsReconnect: true,
-      supportsLocalEcho: false,
+      canMultiplex: true,
+      canResize: true,
+      canReconnect: true,
+      canLocalEcho: false,
     },
     tmuxPaneId: `%${id}`,
     tmuxControllerId: controllerId,
@@ -90,7 +90,7 @@ interface FakeRepo {
 }
 
 function makeFakeRepo(): FakeRepo {
-  const list = vi.fn(async () => [] as SessionInfo[]);
+  const listFn = vi.fn(async () => [] as SessionInfo[]);
   const create = vi.fn(async (input: SessionType) => makeSessionInfo(1, input.type));
   const close = vi.fn(async () => undefined);
   const write = vi.fn(async () => undefined);
@@ -99,8 +99,17 @@ function makeFakeRepo(): FakeRepo {
   const resizeTmuxPane = vi.fn(async () => undefined);
   const uploadImageToSsh = vi.fn(async () => "remote-path");
   return {
-    repo: { list, create, close, write, resizePty, resizeSsh, resizeTmuxPane, uploadImageToSsh },
-    list,
+    repo: {
+      list: listFn,
+      create,
+      close,
+      write,
+      resizePty,
+      resizeSsh,
+      resizeTmuxPane,
+      uploadImageToSsh,
+    },
+    list: listFn,
     create,
     close,
     write,
@@ -339,8 +348,8 @@ describe("SessionModel", () => {
         makeTmuxSessionInfo(30, 100),
       ]);
       await h.model.hydrate();
-      const ids = h.model.list().map((s) => s.id);
-      expect(ids).toEqual([10, 20, 30]);
+      const idList = h.model.list().map((s) => s.id);
+      expect(idList).toEqual([10, 20, 30]);
       expect(h.mirror.replaces).toHaveLength(1);
       expect(h.mirror.replacedSessionIds()).toEqual([10, 20, 30]);
       // tmux session synthesises backend fields.
@@ -424,9 +433,9 @@ describe("SessionModel", () => {
   describe("write()", () => {
     it("proxies to repo.write", async () => {
       const h = makeHarness();
-      const data = new Uint8Array([0x61, 0x62]);
-      await h.model.write(99, data);
-      expect(h.repo.write).toHaveBeenCalledWith(99, data);
+      const bytes = new Uint8Array([0x61, 0x62]);
+      await h.model.write(99, bytes);
+      expect(h.repo.write).toHaveBeenCalledWith(99, bytes);
       h.model.dispose();
     });
   });
@@ -592,16 +601,16 @@ describe("SessionModel", () => {
   describe("subscribe()", () => {
     it("notifies on every mutator and after hydrate()", async () => {
       const h = makeHarness();
-      const seen: number[] = [];
-      const off = h.model.subscribe(() => seen.push(h.model.list().length));
+      const seenList: number[] = [];
+      const off = h.model.subscribe(() => seenList.push(h.model.list().length));
       await h.model.hydrate(); // empty list — still notifies (1x)
       h.repo.create.mockResolvedValueOnce(makeSessionInfo(1, "local"));
       await h.model.create(LOCAL_INPUT);
       h.model.markConnected(1, false);
-      expect(seen).toEqual([0, 1, 1]);
+      expect(seenList).toEqual([0, 1, 1]);
       off();
       h.model.markConnected(1, true);
-      expect(seen).toEqual([0, 1, 1]); // unsubscribed — no more notifications
+      expect(seenList).toEqual([0, 1, 1]); // unsubscribed — no more notifications
       h.model.dispose();
     });
   });

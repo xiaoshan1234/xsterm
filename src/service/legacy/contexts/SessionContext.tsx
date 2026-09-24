@@ -24,7 +24,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     savedWorkspaces: state.savedWorkspaces,
     savedWindowConfigs: state.savedWindowConfigs,
     groups: state.groups,
-    globalLocalEcho: state.globalLocalEcho,
+    isGlobalLocalEcho: state.isGlobalLocalEcho,
     setGlobalLocalEcho: state.setGlobalLocalEcho,
     getEffectiveLocalEcho: state.getEffectiveLocalEcho,
     tmuxControllerErrors: state.tmuxControllerErrors,

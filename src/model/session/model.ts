@@ -289,8 +289,8 @@ export function createSessionModel(deps: SessionModelDeps): SessionModel {
 
   const onClosed: SessionLifecycleHandler = (sessionId) => {
     if (removeRow(sessionId)) {
-      const list = snapshot();
-      mirror.replaceSessions(list);
+      const snapshotList = snapshot();
+      mirror.replaceSessions(snapshotList);
       mirror.removeSession(sessionId);
       deps.onSessionClosed?.(sessionId);
       notify();
@@ -328,8 +328,8 @@ export function createSessionModel(deps: SessionModelDeps): SessionModel {
         reg.byId.set(session.id, session);
         reg.order.push(session.id);
       }
-      const list = listFromRegistry(reg);
-      mirror.replaceSessions(list);
+      const registryList = listFromRegistry(reg);
+      mirror.replaceSessions(registryList);
       notify();
     },
 

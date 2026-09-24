@@ -104,7 +104,7 @@ export function useSessionState(): SessionState {
   >;
 
   // --- local-echo settings ---------------------------------------------
-  const globalLocalEcho = useSessionStore((s) => s.globalLocalEcho);
+  const isGlobalLocalEcho = useSessionStore((s) => s.isGlobalLocalEcho);
   const setGlobalLocalEchoAction = useSessionStore((s) => s.setGlobalLocalEchoAction);
   // Compatibility alias: the legacy hook named the setter `setGlobalLocalEcho`,
   // but the store internally uses `setGlobalLocalEchoAction` (the public
@@ -114,7 +114,7 @@ export function useSessionState(): SessionState {
     (next: boolean | ((prev: boolean) => boolean)) => {
       if (typeof next === "function") {
         const resolved = (next as (prev: boolean) => boolean)(
-          useSessionStore.getState().globalLocalEcho,
+          useSessionStore.getState().isGlobalLocalEcho,
         );
         setGlobalLocalEchoAction(resolved);
       } else {
@@ -163,7 +163,7 @@ export function useSessionState(): SessionState {
     setGroups,
     nextGroupId,
     setNextGroupId,
-    globalLocalEcho,
+    isGlobalLocalEcho,
     setGlobalLocalEcho: setGlobalLocalEcho as Dispatch<SetStateAction<boolean>>,
     sessionLocalEchoOverrides,
     sessionsRef: sessionsRef as MutableRefObject<Session[]>,

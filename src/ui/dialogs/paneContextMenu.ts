@@ -13,7 +13,7 @@ export interface PaneMenuActions {
   /** create a new tmux window on the pane's controller. */
   createTmuxWindow?: () => void;
   /**
-   * kill the pane's tmux window. Only enabled when the
+   * kill the pane's tmux window. Only isEnabled when the
    * containing Window has a known `tmuxServerWindowId` (i.e. it was
    * created via `create_tmux_window`, not the bootstrap window).
    */

@@ -1,11 +1,11 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  groups: [{ id: 1, name: "g1", configIds: ["cfg1", "cfg2"], collapsed: false }] as Array<{
+  groups: [{ id: 1, name: "g1", configIds: ["cfg1", "cfg2"], isCollapsed: false }] as Array<{
     id: number;
     name: string;
     configIds: string[];
-    collapsed: boolean;
+    isCollapsed: boolean;
   }>,
   savedConfigs: [{ id: "cfg1", name: "L", version: 1, type: "local", config: {} }] as Array<
     Record<string, unknown>

@@ -49,61 +49,61 @@ export function migrateSavedConfig(raw: unknown): PersistedSessionConfig | null 
   if (raw === null || typeof raw !== "object") {
     return null;
   }
-  const obj = raw as Record<string, unknown>;
+  const rawRecord = raw as Record<string, unknown>;
 
-  if (typeof obj.type === "string" && "config" in obj) {
-    if (obj.config === null || typeof obj.config !== "object") {
+  if (typeof rawRecord.type === "string" && "config" in rawRecord) {
+    if (rawRecord.config === null || typeof rawRecord.config !== "object") {
       return null;
     }
-    if ("version" in obj && obj.version !== SAVED_SESSION_CONFIG_VERSION) {
+    if ("version" in rawRecord && rawRecord.version !== SAVED_SESSION_CONFIG_VERSION) {
       return null;
     }
-    const id = String(obj.id ?? "");
-    const name = String(obj.name ?? "");
+    const id = String(rawRecord.id ?? "");
+    const name = String(rawRecord.name ?? "");
     const displayConfig =
-      obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
+      rawRecord.displayConfig !== undefined && rawRecord.displayConfig !== null
+        ? { displayConfig: rawRecord.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {};
-    if (obj.type === "local") {
+    if (rawRecord.type === "local") {
       return {
         id,
         name,
         version: SAVED_SESSION_CONFIG_VERSION,
         type: "local",
-        config: obj.config as LocalSessionConfig,
+        config: rawRecord.config as LocalSessionConfig,
         ...displayConfig,
       };
     }
-    if (obj.type === "ssh") {
+    if (rawRecord.type === "ssh") {
       return {
         id,
         name,
         version: SAVED_SESSION_CONFIG_VERSION,
         type: "ssh",
-        config: obj.config as SSHSessionConfig,
+        config: rawRecord.config as SSHSessionConfig,
         ...displayConfig,
       };
     }
-    if (obj.type === "tmux-cc") {
+    if (rawRecord.type === "tmux-cc") {
       return {
         id,
         name,
         version: SAVED_SESSION_CONFIG_VERSION,
         type: "tmux-cc",
-        config: obj.config as TmuxCcConfig,
+        config: rawRecord.config as TmuxCcConfig,
         ...displayConfig,
       };
     }
     return null;
   }
 
-  if (obj.type === "local" && "localConfig" in obj) {
-    const localConfig = obj.localConfig;
+  if (rawRecord.type === "local" && "localConfig" in rawRecord) {
+    const localConfig = rawRecord.localConfig;
     if (localConfig === null || typeof localConfig !== "object") {
       return null;
     }
-    const id = typeof obj.id === "string" ? obj.id : "";
-    const name = typeof obj.name === "string" ? obj.name : "";
+    const id = typeof rawRecord.id === "string" ? rawRecord.id : "";
+    const name = typeof rawRecord.name === "string" ? rawRecord.name : "";
     if (!id || !name) {
       return null;
     }
@@ -113,19 +113,19 @@ export function migrateSavedConfig(raw: unknown): PersistedSessionConfig | null 
       version: SAVED_SESSION_CONFIG_VERSION,
       type: "local",
       config: localConfig as LocalSessionConfig,
-      ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
+      ...(rawRecord.displayConfig !== undefined && rawRecord.displayConfig !== null
+        ? { displayConfig: rawRecord.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {}),
     };
   }
 
-  if (obj.type === "ssh" && "sshConfig" in obj) {
-    const sshConfig = obj.sshConfig;
+  if (rawRecord.type === "ssh" && "sshConfig" in rawRecord) {
+    const sshConfig = rawRecord.sshConfig;
     if (sshConfig === null || typeof sshConfig !== "object") {
       return null;
     }
-    const id = typeof obj.id === "string" ? obj.id : "";
-    const name = typeof obj.name === "string" ? obj.name : "";
+    const id = typeof rawRecord.id === "string" ? rawRecord.id : "";
+    const name = typeof rawRecord.name === "string" ? rawRecord.name : "";
     if (!id || !name) {
       return null;
     }
@@ -135,8 +135,8 @@ export function migrateSavedConfig(raw: unknown): PersistedSessionConfig | null 
       version: SAVED_SESSION_CONFIG_VERSION,
       type: "ssh",
       config: sshConfig as SSHSessionConfig,
-      ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
+      ...(rawRecord.displayConfig !== undefined && rawRecord.displayConfig !== null
+        ? { displayConfig: rawRecord.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {}),
     };
   }
@@ -152,11 +152,11 @@ export function migrateSavedConfigList(raw: unknown): PersistedSessionConfig[] {
   if (!Array.isArray(raw)) {
     return [];
   }
-  const migrated: PersistedSessionConfig[] = [];
+  const migratedList: PersistedSessionConfig[] = [];
   for (const entry of raw) {
     const result = migrateSavedConfig(entry);
     if (result !== null) {
-      migrated.push(result);
+      migratedList.push(result);
     } else {
       console.warn(
         "sessionStorage: skipping malformed saved session config (missing 'type' or unrecognised shape)",
@@ -164,5 +164,5 @@ export function migrateSavedConfigList(raw: unknown): PersistedSessionConfig[] {
       );
     }
   }
-  return migrated;
+  return migratedList;
 }

@@ -60,14 +60,14 @@ export function PaneInitCard({
     return session;
   };
 
-  const handleCreateLocal = (config: LocalSessionConfig, save: boolean) =>
-    handleCreate(() => createLocalSessionOnly(config, save));
+  const handleCreateLocal = (config: LocalSessionConfig, shouldSave: boolean) =>
+    handleCreate(() => createLocalSessionOnly(config, shouldSave));
 
-  const handleCreateSsh = (config: SSHSessionConfig, save: boolean) =>
-    handleCreate(() => createSshSessionOnly(config, save));
+  const handleCreateSsh = (config: SSHSessionConfig, shouldSave: boolean) =>
+    handleCreate(() => createSshSessionOnly(config, shouldSave));
 
-  const handleCreateTmux = (config: TmuxCcConfig, save: boolean) =>
-    handleCreate(() => createTmuxSessionOnly(config, save));
+  const handleCreateTmux = (config: TmuxCcConfig, shouldSave: boolean) =>
+    handleCreate(() => createTmuxSessionOnly(config, shouldSave));
 
   const handleSelectSession = (sessionId: number) => {
     if (!startSubmitting()) return;

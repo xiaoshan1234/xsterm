@@ -29,7 +29,7 @@ describe("createGroup", () => {
       id: 5,
       name: "MyGroup",
       configIds: [],
-      collapsed: false,
+      isCollapsed: false,
     });
     expect(mocks.setNextGroupId).toHaveBeenCalled();
   });

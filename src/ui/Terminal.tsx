@@ -21,8 +21,8 @@ import "./Terminal.css";
 // Props:
 // - sessionId: Tauri session handle; all terminal operations (write, key) are routed to the backend via this ID
 // - sessionType: session type, "local" for local shell, "ssh" for remote connection
-// - isActive: whether the current pane is active, determines focus/blur
-// - onFocus: triggered when clicked, notifies parent to switch active pane
+// - isActive: whether the current pane is isActive, determines focus/blur
+// - onFocus: triggered when clicked, notifies parent to switch isActive pane
 interface TerminalProps {
   sessionId: number;
   // tmux control-mode sessions use the same write/resize/close IPC
@@ -196,7 +196,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     // When reconnecting, a brand-new PTY/SSH session is created, but the xterm instance still retains
     // the old session's mode state (e.g., mouse tracking mode). Without resetting these internal
     // states, xterm will still generate mouse event escape sequences on mouse movement and send them
-    // to the new PTY, which has not enabled the corresponding mode, treating these sequences as
+    // to the new PTY, which has not isEnabled the corresponding mode, treating these sequences as
     // regular characters and displaying garbled output. reset() is equivalent to RIS, clearing the
     // screen and resetting all modes.
     xterm.reset();
@@ -314,7 +314,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     hostRef,
     overlayRef: lineNumberOverlayRef,
     sessionId,
-    enabled: displayConfig?.lineNumberEnabled ?? true,
+    isEnabled: displayConfig?.lineNumberEnabled ?? true,
   });
 
   useImperativeHandle(

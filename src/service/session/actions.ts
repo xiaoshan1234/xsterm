@@ -62,12 +62,12 @@ export function endEstablishing(id: number): void {
   useSessionStore.getState().endEstablishing(id);
 }
 
-export function setGlobalLocalEcho(enabled: boolean): void {
-  useSessionStore.getState().setGlobalLocalEchoAction(enabled);
+export function setGlobalLocalEcho(isEnabled: boolean): void {
+  useSessionStore.getState().setGlobalLocalEchoAction(isEnabled);
 }
 
-export function setSessionLocalEchoOverride(id: number, enabled: boolean | undefined): void {
-  useSessionStore.getState().setSessionLocalEchoOverride(id, enabled);
+export function setSessionLocalEchoOverride(id: number, isEnabled: boolean | undefined): void {
+  useSessionStore.getState().setSessionLocalEchoOverride(id, isEnabled);
 }
 
 export function getEffectiveLocalEcho(sessionId: number): boolean {
@@ -135,7 +135,7 @@ export function useSessionActions(): Pick<
   SessionStoreState,
   | "sessions"
   | "setSessions"
-  | "globalLocalEcho"
+  | "isGlobalLocalEcho"
   | "setGlobalLocalEcho"
   | "tmuxControllerErrors"
   | "setTmuxControllerErrors"
@@ -147,7 +147,7 @@ export function useSessionActions(): Pick<
   return useSessionStore((s) => ({
     sessions: s.sessions,
     setSessions: s.setSessions,
-    globalLocalEcho: s.globalLocalEcho,
+    isGlobalLocalEcho: s.isGlobalLocalEcho,
     setGlobalLocalEcho: s.setGlobalLocalEcho,
     tmuxControllerErrors: s.tmuxControllerErrors,
     setTmuxControllerErrors: s.setTmuxControllerErrors,

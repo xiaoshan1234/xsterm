@@ -45,10 +45,10 @@ export default function CommandSendPanel({
   });
 
   useEffect(() => {
-    if (!executor.intervalUserSet) {
+    if (!executor.isIntervalUserSet) {
       setIntervalMs(splitMode === "line" ? 1000 : 20);
     }
-  }, [splitMode, executor.intervalUserSet]);
+  }, [splitMode, executor.isIntervalUserSet]);
 
   const adjustCount = (delta: number) => {
     setCount((prev) => Math.max(1, prev + delta));
@@ -198,13 +198,13 @@ export default function CommandSendPanel({
         <div className="panel-gutter">
           {lines.map((_, lineIndex) => {
             const hasBreakpoint = executor.breakpoints.has(lineIndex);
-            const isActive = activeLineIndex === lineIndex && executor.runState !== "idle";
+            const active = activeLineIndex === lineIndex && executor.runState !== "idle";
             const meta = executor.lineMeta[lineIndex];
             const displayNumber = meta ? meta.number : lineIndex + 1;
             return (
               <div
                 key={lineIndex}
-                className={`panel-gutter-line ${isActive ? "panel-gutter-line--active" : ""}`}
+                className={`panel-gutter-line ${active ? "panel-gutter-line--active" : ""}`}
                 onClick={() => executor.toggleBreakpoint(lineIndex)}
                 title={hasBreakpoint ? "Remove breakpoint" : "Add breakpoint"}
               >
