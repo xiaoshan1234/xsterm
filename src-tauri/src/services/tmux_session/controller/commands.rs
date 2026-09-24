@@ -10,11 +10,12 @@
 
 use super::super::errors::TmuxError;
 use super::super::protocol::command::{
-    CommandKind, EventWaiter, EventWaiterKind, EventWaiterSender, ResponseOutcome, ResponseWaiter,
+    EventWaiter, EventWaiterKind, EventWaiterSender, ResponseOutcome, ResponseWaiter,
 };
 use super::super::protocol::wire as tmux_cmd;
 use super::{
-    CaptureResult, CommandRegistry, NewWindowResult, SplitResult, TmuxController, TMUX_REPLY_TIMEOUT,
+    CaptureResult, CommandRegistry, NewWindowResult, SplitResult, TmuxController,
+    TMUX_REPLY_TIMEOUT,
 };
 use crate::error::StringError;
 use crate::models::session::SplitDirection;
@@ -152,10 +153,6 @@ impl TmuxController {
         // `registry.take(id)` on the matching `CommandEnd` / `CommandError`.
         let (tx, rx) = oneshot::channel::<ResponseOutcome>();
         let reg = self.registry.register(
-            CommandKind::CapturePane {
-                pane_id: tmux_pane_id.to_string(),
-                lines,
-            },
             tmux_cmd::capture_pane(tmux_pane_id, lines),
             Some(ResponseWaiter::BeginEnd(tx)),
         );
@@ -184,12 +181,10 @@ impl TmuxController {
                 "tmux controller {}: capture response channel closed",
                 self.controller_id
             ))),
-            Err(_elapsed) => {
-                Err(TmuxError::Internal(format!(
-                    "tmux controller {}: capture timed out after {:?}",
-                    self.controller_id, TMUX_REPLY_TIMEOUT
-                )))
-            }
+            Err(_elapsed) => Err(TmuxError::Internal(format!(
+                "tmux controller {}: capture timed out after {:?}",
+                self.controller_id, TMUX_REPLY_TIMEOUT
+            ))),
         }
     }
 
@@ -275,13 +270,7 @@ impl TmuxController {
         );
         send_with_rollback(&self.stdin_tx, &self.registry, cmd)?;
 
-        await_reply_commands(
-            rx,
-            self.split_pane_timeout,
-            self.controller_id,
-            "split",
-        )
-        .await
+        await_reply_commands(rx, self.split_pane_timeout, self.controller_id, "split").await
     }
 
     /// Send `kill-pane -t %<tmux_pane_id>` to tmux.

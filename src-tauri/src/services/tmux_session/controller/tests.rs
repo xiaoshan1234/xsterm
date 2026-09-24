@@ -1,5 +1,5 @@
-use super::*;
 use super::io_tasks::{spawn_reader_task, spawn_writer_task};
+use super::*;
 use crate::services::tmux_session::bridge::TmuxBridge;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -63,9 +63,8 @@ impl AppBackend for RecordingBackend {
 
 #[tokio::test]
 async fn reader_task_emits_parsed_events_until_eof() {
-    let stdout = Cursor::new(
-        b"%begin 1 7 0\nline one\nline two\n%end 1 7 0\n%sessions-changed\n".to_vec(),
-    );
+    let stdout =
+        Cursor::new(b"%begin 1 7 0\nline one\nline two\n%end 1 7 0\n%sessions-changed\n".to_vec());
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ProtocolEvent>();
     spawn_reader_task(stdout, event_tx);
 
@@ -301,7 +300,7 @@ fn register_pane_idempotent_and_lookup_round_trip() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -357,7 +356,7 @@ fn unbind_pane_removes_entry_and_errors_for_unknown() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -398,7 +397,7 @@ async fn dispatch_emits_session_output_for_registered_pane() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -474,7 +473,7 @@ async fn dispatch_emits_pane_added_and_records_first_pane() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -541,11 +540,11 @@ async fn dispatch_emits_pane_added_and_records_first_pane() {
         "expected exactly 1 tmux-pane-added event (bootstrap only); got {recorded:?}"
     );
     let first = &pane_adds[0];
-    // Wire contract: payload keys are snake_case on the wire;
-    // Tauri's IPC layer camelCases them for the frontend, which
-    // destructures `{ xstermSessionId, controllerId, tmuxPaneId,
-    // tmuxWindowId }` (see `useTauriListeners.ts`). The test
-    // asserts the snake_case keys the bridge emits directly.
+    // Wire contract: payload keys are snake_case on the wire and the
+    // frontend destructure is also snake_case (`session_id` /
+    // `tmux_controller_id` / `tmux_pane_id` / `tmux_window_id`,
+    // see `useTauriListeners.ts`). The test asserts the snake_case
+    // keys the bridge emits directly.
     assert_eq!(first["tmux_controller_id"].as_u64().unwrap(), 4);
     assert_eq!(first["tmux_pane_id"].as_str().unwrap(), "%3");
     assert_eq!(
@@ -554,8 +553,8 @@ async fn dispatch_emits_pane_added_and_records_first_pane() {
         "P7 bridge payload: tmux_window_id carries the parent window id (matches frontend contract)"
     );
     assert!(
-        first.get("xsterm_session_id").is_some(),
-        "P7 bridge payload: xsterm_session_id must be set (frontend uses it as React Session id)"
+        first.get("session_id").is_some(),
+        "P7 bridge payload: session_id must be set (frontend uses it as React Session id)"
     );
     assert!(
         first.get("parent_tmux_window_id").is_none(),
@@ -579,10 +578,7 @@ async fn dispatch_emits_pane_added_and_records_first_pane() {
         .await
         .expect("first pane must resolve");
     assert_eq!(awaited_pane, "%3");
-    assert_eq!(
-        awaited_id,
-        first["xsterm_session_id"].as_u64().unwrap() as u32
-    );
+    assert_eq!(awaited_id, first["session_id"].as_u64().unwrap() as u32);
 }
 
 #[tokio::test]
@@ -610,7 +606,7 @@ async fn dispatch_forwards_pause_continue_and_exit() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -700,7 +696,7 @@ async fn await_first_pane_resolves_when_record_first_pane_runs_before_caller() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -741,7 +737,7 @@ async fn await_first_pane_resolves_after_record_first_pane() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -785,7 +781,7 @@ fn pane_bindings_snapshot_contains_all_registered_panes() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -809,7 +805,7 @@ fn pane_bindings_snapshot_contains_all_registered_panes() {
 /// Drive the dispatch task directly (no real tmux) and feed it a
 /// `%pane-exited` for an already-bound pane. The dispatch task must
 /// emit `tmux-pane-removed` with the right `controller_id`,
-/// `tmux_pane_id`, and `xsterm_session_id` triple, and remove the
+/// `tmux_pane_id`, and `session_id` triple, and remove the
 /// binding from `pane_bindings`.
 #[tokio::test]
 async fn dispatch_routes_pane_exited_to_tmux_pane_removed() {
@@ -836,7 +832,7 @@ async fn dispatch_routes_pane_exited_to_tmux_pane_removed() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -869,7 +865,7 @@ async fn dispatch_routes_pane_exited_to_tmux_pane_removed() {
         .expect("tmux-pane-removed must be emitted for bound pane");
     assert_eq!(removed.1["controller_id"].as_u64().unwrap(), 8);
     assert_eq!(removed.1["tmux_pane_id"].as_str().unwrap(), "%5");
-    assert_eq!(removed.1["xsterm_session_id"].as_u64().unwrap(), 8_000_042);
+    assert_eq!(removed.1["session_id"].as_u64().unwrap(), 8_000_042);
 
     // The binding must be removed so subsequent send_keys / resize_pane
     // calls fail fast with a "not registered" error.
@@ -906,7 +902,7 @@ async fn dispatch_routes_pane_died_to_tmux_pane_removed() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -939,7 +935,7 @@ async fn dispatch_routes_pane_died_to_tmux_pane_removed() {
         .expect("tmux-pane-removed must be emitted on %pane-died");
     assert_eq!(removed.1["controller_id"].as_u64().unwrap(), 9);
     assert_eq!(removed.1["tmux_pane_id"].as_str().unwrap(), "%9");
-    assert_eq!(removed.1["xsterm_session_id"].as_u64().unwrap(), 9_000_007);
+    assert_eq!(removed.1["session_id"].as_u64().unwrap(), 9_000_007);
 }
 
 /// Pane-exited / pane-died for an UNBOUND pane (e.g. an external
@@ -971,7 +967,7 @@ async fn dispatch_does_not_emit_removed_for_unbound_pane() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1037,7 +1033,7 @@ async fn split_pane_resolves_when_dispatch_sees_window_pane_changed() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1106,7 +1102,7 @@ async fn split_pane_resolves_when_dispatch_sees_window_pane_changed() {
     // available as a tmux id string, not an xsterm id.
     assert_eq!(added.1["tmux_controller_id"].as_u64().unwrap(), 11);
     assert_eq!(added.1["tmux_pane_id"].as_str().unwrap(), "%11");
-    assert_eq!(added.1["xsterm_session_id"].as_u64().unwrap(), 11_000_001);
+    assert_eq!(added.1["session_id"].as_u64().unwrap(), 11_000_001);
     assert_eq!(
         added.1["tmux_window_id"].as_str().unwrap(),
         "@7",
@@ -1145,7 +1141,7 @@ async fn split_pane_times_out_when_no_response() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     };
@@ -1200,7 +1196,7 @@ async fn kill_pane_writes_correct_command_to_stdin() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     };
@@ -1256,7 +1252,7 @@ async fn close_drains_event_waiters_with_error() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1332,7 +1328,7 @@ async fn dispatch_resolves_new_window_via_window_add_then_pane_changed() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1409,10 +1405,7 @@ async fn dispatch_resolves_new_window_via_window_add_then_pane_changed() {
         .expect("tmux-pane-added must be emitted for the new window's first pane");
     assert_eq!(pane_added.1["tmux_controller_id"].as_u64().unwrap(), 15);
     assert_eq!(pane_added.1["tmux_pane_id"].as_str().unwrap(), "%13");
-    assert_eq!(
-        pane_added.1["xsterm_session_id"].as_u64().unwrap(),
-        15_000_001
-    );
+    assert_eq!(pane_added.1["session_id"].as_u64().unwrap(), 15_000_001);
     assert_eq!(
         pane_added.1["tmux_window_id"].as_str().unwrap(),
         "@9",
@@ -1425,15 +1418,12 @@ async fn dispatch_resolves_new_window_via_window_add_then_pane_changed() {
         .expect("tmux-window-added must be emitted for user-driven new-window");
     // P7 bridge payload: see `emit_tmux_window_added` in
     // `services/tmux/bridge/mod.rs`. The new-window path populates
-    // `xsterm_session_id` and `xsterm_pane_id` so the frontend can
+    // `session_id` and `tmux_pane_id` so the frontend can
     // build the Window + Session + first-pane in one event.
     assert_eq!(window_added.1["tmux_controller_id"].as_u64().unwrap(), 15);
     assert_eq!(window_added.1["tmux_window_id"].as_str().unwrap(), "@9");
-    assert_eq!(
-        window_added.1["xsterm_session_id"].as_u64().unwrap(),
-        15_000_001
-    );
-    assert_eq!(window_added.1["xsterm_pane_id"].as_str().unwrap(), "%13");
+    assert_eq!(window_added.1["session_id"].as_u64().unwrap(), 15_000_001);
+    assert_eq!(window_added.1["tmux_pane_id"].as_str().unwrap(), "%13");
 }
 
 /// the bootstrap window is the first `%window-add` we see
@@ -1471,7 +1461,7 @@ async fn dispatch_handles_bootstrap_window_without_pending_sender() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1526,10 +1516,7 @@ async fn dispatch_handles_bootstrap_window_without_pending_sender() {
         "@1",
         "P7 bridge payload: bootstrap pane uses tmux_window_id (frontend contract)"
     );
-    assert_eq!(
-        pane_added.1["xsterm_session_id"].as_u64().unwrap(),
-        16_000_001
-    );
+    assert_eq!(pane_added.1["session_id"].as_u64().unwrap(), 16_000_001);
 
     // window_bindings must be populated.
     assert_eq!(controller.window_bindings(), vec!["@1".to_string()]);
@@ -1576,7 +1563,7 @@ async fn dispatch_routes_window_close_to_tmux_window_closed() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1682,7 +1669,7 @@ async fn dispatch_routes_window_renamed_to_tmux_window_renamed() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1759,7 +1746,7 @@ async fn kill_window_and_rename_window_write_correct_commands_to_stdin() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     };
@@ -1830,7 +1817,7 @@ async fn capture_pane_resolves_on_command_end_after_command_output() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1929,7 +1916,7 @@ async fn capture_pane_resolves_with_err_on_command_error() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -1943,8 +1930,7 @@ async fn capture_pane_resolves_with_err_on_command_error() {
     );
 
     let controller_clone = Arc::clone(&controller);
-    let capture_handle =
-        tokio::spawn(async move { controller_clone.capture_pane("%9", 50).await });
+    let capture_handle = tokio::spawn(async move { controller_clone.capture_pane("%9", 50).await });
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     // P8 W2: dispatch correlates `%error` by the registry id.
@@ -1970,8 +1956,7 @@ async fn capture_pane_resolves_with_err_on_command_error() {
         .expect("capture_pane task did not panic");
     let err = result.expect_err("capture_pane must return Err on %error");
     assert!(
-        err.to_string().contains("capture-pane failed")
-            && err.to_string().contains("pane gone"),
+        err.to_string().contains("capture-pane failed") && err.to_string().contains("pane gone"),
         "expected error to surface tmux's message, got: {err}"
     );
 }
@@ -2004,7 +1989,7 @@ async fn capture_pane_errors_on_unbound_pane() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     };
@@ -2056,7 +2041,7 @@ async fn close_drains_pending_capture_with_error() {
         session_name: std::sync::Mutex::new(None),
         capture_lock: tokio::sync::Mutex::new(()),
         split_pane_timeout: TMUX_REPLY_TIMEOUT,
-        spawn_mode: SpawnMode::Create,
+
         registry: CommandRegistry::new(),
         router_state: std::sync::Mutex::new(RouterState::default()),
     });
@@ -2068,10 +2053,6 @@ async fn close_drains_pending_capture_with_error() {
     // `capture_pane` (which would block on the no-op stdin_tx).
     let (tx, rx) = oneshot::channel::<ResponseOutcome>();
     controller.registry.register(
-        CommandKind::CapturePane {
-            pane_id: "%1".to_string(),
-            lines: 100,
-        },
         "capture-pane -p -e -J -S -100 -t %1\n".to_string(),
         Some(ResponseWaiter::BeginEnd(tx)),
     );

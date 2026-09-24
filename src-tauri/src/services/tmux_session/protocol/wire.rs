@@ -144,16 +144,6 @@ pub fn rename_window(window_id: &str, name: &str) -> String {
     format!("rename-window -t {window_id} {}\n", quote_arg(name))
 }
 
-/// `attach-session -c ""` — attach (and create if absent) the default
-/// control session. Sent immediately after `refresh_client_control`
-/// at controller startup; without it, `tmux -CC new-session -d` on
-/// the server creates a detached session and the client never sees
-/// the `%session-changed` / `%window-add` / `%window-pane-changed`
-/// notifications needed to register the first pane (Bug 014).
-pub fn attach_session_create() -> String {
-    "attach-session -c \"\"\n".to_string()
-}
-
 /// `resize-pane -t %<pane_id> -x <cols> -y <rows>` — resize the pane to the
 /// given character dimensions. tmux updates the child process's TIOCSWINSZ
 /// and propagates a SIGWINCH down the pty chain.
@@ -208,9 +198,7 @@ pub fn list_panes(window_id: &str) -> String {
 /// **Known imperfection**: both branches keep `-a`. The non-empty
 /// branch's `-t <window_id>` is enough on its own (single window, no
 /// need to fan out to "all") — the `-a` is redundant. Same applies
-/// to `list_windows` before PR-0009-fix. Out of scope for this PR;
-/// tracked as future cleanup once the per-window list-panes dance
-/// (see TODO on `list_panes_for_bootstrap`) is implemented.
+/// to `list_windows` before PR-0009-fix. Out of scope for this PR.
 pub fn list_panes_with_format(window_id: &str, format: &str) -> String {
     if window_id.is_empty() {
         format!("list-panes -a -F '{format}'\n")
@@ -275,30 +263,6 @@ pub fn list_sessions() -> String {
 #[allow(dead_code)]
 pub fn refresh_client() -> String {
     "refresh-client -A\n".to_string()
-}
-
-/// `refresh-client -C` — register the calling client as a **control
-/// client**. This is the first command every tmux `-CC` integration
-/// must send after starting the child process; without it tmux
-/// server closes the control session and the client process exits
-/// with code 0 immediately after the initial `%begin` block.
-pub fn refresh_client_control() -> String {
-    "refresh-client -C\n".to_string()
-}
-
-/// `list-panes -a -F "..."` — bootstrap pass query.
-///
-/// **TODO (post-PR-0009-fix)**: req-006-tmux.md §3 line 117 mandates
-/// `list-panes -t @<window>` (one query per window). That requires a
-/// two-step protocol: first `list-windows -t <session>` → collect
-/// `@<win>` ids → then per-window `list-panes -t @<win>`. The current
-/// single `list-panes -a` works because each `TmuxController` owns
-/// exactly one tmux session (so `-a` ≈ `-t <our_session>` for panes),
-/// but the per-window form is more precise and prevents surprise if
-/// the 1:1 invariant ever breaks. Defer until dispatch queue
-/// supports a "follow-up per-window list-panes" fan-out.
-pub fn list_panes_for_bootstrap() -> String {
-    "list-panes -a -F \"#{session_name} #{window_id} #{window_name} #{pane_id}\"\n".to_string()
 }
 
 /// `detach-client -s "<session_name>"` — detach the calling control

@@ -10,8 +10,8 @@
 //!
 //! Every other public method on the controller is in `super::commands`.
 
-use super::lock_or_warn;
 use super::super::errors::TmuxError;
+use super::lock_or_warn;
 use super::TmuxController;
 use std::sync::atomic::Ordering;
 
@@ -30,7 +30,8 @@ impl TmuxController {
     /// `#[cfg(test)]` so it never links into production binaries.
     #[cfg(test)]
     pub(crate) fn set_session_name_for_tests(&self, name: impl Into<String>) {
-        if let Some(mut slot) = lock_or_warn(&self.session_name, "session_name", self.controller_id) {
+        if let Some(mut slot) = lock_or_warn(&self.session_name, "session_name", self.controller_id)
+        {
             *slot = Some(name.into());
         }
     }
@@ -164,7 +165,9 @@ impl TmuxController {
         &self,
         windows: Vec<crate::models::session::TmuxWindowInit>,
     ) {
-        if let Some(mut slot) = lock_or_warn(&self.initial_windows, "initial_windows", self.controller_id) {
+        if let Some(mut slot) =
+            lock_or_warn(&self.initial_windows, "initial_windows", self.controller_id)
+        {
             *slot = Some(windows);
         }
     }
@@ -173,7 +176,9 @@ impl TmuxController {
     /// [`TmuxController::take_initial_state`] can return it. Called by
     /// the dispatch task's `emit_pane_list` path.
     pub(crate) fn stash_initial_panes(&self, panes: Vec<crate::models::session::TmuxPaneInit>) {
-        if let Some(mut slot) = lock_or_warn(&self.initial_panes, "initial_panes", self.controller_id) {
+        if let Some(mut slot) =
+            lock_or_warn(&self.initial_panes, "initial_panes", self.controller_id)
+        {
             *slot = Some(panes);
         }
     }
@@ -183,7 +188,11 @@ impl TmuxController {
     /// second of the two has its body parsed. Idempotent (subsequent
     /// calls are no-ops because the receiver was already consumed).
     pub(crate) fn signal_initial_state_ready(&self) {
-        if let Some(mut slot) = lock_or_warn(&self.initial_state_tx, "initial_state_tx", self.controller_id) {
+        if let Some(mut slot) = lock_or_warn(
+            &self.initial_state_tx,
+            "initial_state_tx",
+            self.controller_id,
+        ) {
             if let Some(tx) = slot.take() {
                 let _ = tx.send(());
             }

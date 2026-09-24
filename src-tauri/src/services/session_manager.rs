@@ -55,37 +55,10 @@ pub struct AutoAttachOutcome {
 /// the controller so the [`SessionBackend`] contract is honoured without
 /// duplicating the tmux wire format per pane.
 pub struct TmuxPaneHandle {
-    /// `pub(crate)` so [`dispatch`](crate::services::tmux::dispatch) can
-    /// construct a handle for a pane discovered via the bootstrap
-    /// `list-panes -a` query without going through `create_tmux_pane`
-    /// (which would issue an extra `split-window`). See
-    /// [`SessionManager::register_existing_tmux_panes`].
     pub controller: Arc<TmuxController>,
     pub tmux_pane_id: String,
     pub info: SessionInfo,
     pub capabilities: CapabilityFlags,
-}
-
-impl TmuxPaneHandle {
-    /// Construct a handle for an already-existing pane the dispatch task
-    /// learned about via the bootstrap `list-panes` query. Mirrors the
-    /// shape `create_tmux` / `create_tmux_pane` produce internally; the
-    /// only difference is no underlying `split-window`/`new-window`
-    /// round-trip — the pane was already created server-side before we
-    /// attached.
-    pub fn new(
-        controller: Arc<TmuxController>,
-        tmux_pane_id: String,
-        info: SessionInfo,
-        capabilities: CapabilityFlags,
-    ) -> Self {
-        Self {
-            controller,
-            tmux_pane_id,
-            info,
-            capabilities,
-        }
-    }
 }
 
 impl SessionBackend for TmuxPaneHandle {
@@ -166,28 +139,6 @@ impl ActiveSession {
     fn tmux_controller_id(&self) -> Option<u32> {
         match self {
             ActiveSession::Tmux(b) => Some(b.controller.controller_id()),
-            _ => None,
-        }
-    }
-
-    /// If this session is a tmux pane, return its underlying tmux pane
-    /// id (e.g. `"%5"`). Used by [`SessionManager::kill_tmux_pane`] and
-    /// by [`SessionManager::create_tmux_pane`] (to find the parent pane
-    /// of a split).
-    fn tmux_pane_id(&self) -> Option<&str> {
-        match self {
-            ActiveSession::Tmux(b) => Some(b.tmux_pane_id.as_str()),
-            _ => None,
-        }
-    }
-
-    /// If this session is a tmux pane, return a clone of the underlying
-    /// [`TmuxController`] handle. The handle outlives the session entry
-    /// because it is also stored in `SessionManager::tmux_controllers`,
-    /// so cloning the `Arc` here is cheap and safe.
-    fn tmux_controller(&self) -> Option<Arc<TmuxController>> {
-        match self {
-            ActiveSession::Tmux(b) => Some(Arc::clone(&b.controller)),
             _ => None,
         }
     }
@@ -644,34 +595,6 @@ impl SessionManager {
     /// re-attach every previously-attached tmux server.
     ///
     /// Reads the supplied list of [`AttachedTmuxServer`]s (typically the
-    /// Register panes that the dispatch task discovered via the
-    /// bootstrap `list-panes -a` query but which were never created via
-    /// `create_tmux` / `create_tmux_pane` (Bug 021 — pre-existing panes
-    /// on the tmux server before our controller attached). Each tuple
-    /// `(xsterm_session_id, controller, pane_id, info, capabilities)`
-    /// produces a fresh `TmuxPaneHandle` and inserts it into `sessions`
-    /// so subsequent `writeSession(xsterm_session_id, ...)` from the
-    /// frontend routes correctly. Returns the newly registered ids.
-    pub fn register_existing_tmux_panes(
-        &self,
-        panes: Vec<(
-            u32,
-            Arc<TmuxController>,
-            String,
-            SessionInfo,
-            CapabilityFlags,
-        )>,
-    ) -> Result<Vec<u32>, String> {
-        let mut registered = Vec::with_capacity(panes.len());
-        for (xsterm_id, controller, pane_id, info, capabilities) in panes {
-            let handle = TmuxPaneHandle::new(controller, pane_id, info, capabilities);
-            self.sessions
-                .insert(xsterm_id, Arc::new(ActiveSession::Tmux(Box::new(handle))));
-            registered.push(xsterm_id);
-        }
-        Ok(registered)
-    }
-
     /// contents of `attached_tmux.json`) and tries to attach to each one
     /// in order. Returns one [`AutoAttachOutcome`] per server so the
     /// frontend can show partial-failure UI without crashing on the first
@@ -1169,21 +1092,6 @@ impl SessionManager {
             .get(&id)
             .map(|entry| entry.value().clone())
             .ok_or_else(|| format!("Session {id} not found"))
-    }
-
-    /// Look up a tmux controller by its id (allocated by
-    /// `allocate_controller_id`). Cloned `Arc` so the caller can hold it
-    /// past the lookup. Used by `register_existing_tmux_panes` to
-    /// register panes discovered via the bootstrap `list-panes -a` query
-    /// (Bug 021).
-    pub fn tmux_controller_by_id(
-        &self,
-        controller_id: u32,
-    ) -> Result<Arc<crate::services::tmux_session::controller::TmuxController>, String> {
-        self.tmux_controllers
-            .get(&controller_id)
-            .map(|entry| entry.value().clone())
-            .ok_or_else(|| format!("tmux controller {controller_id} not found"))
     }
 
     /// Return a clone of the SSH config for the session with the given `id`.
@@ -2567,7 +2475,9 @@ mod tests {
     ) -> (
         Arc<crate::services::tmux_session::TmuxController>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
-        tokio::sync::mpsc::UnboundedSender<crate::services::tmux_session::protocol::events::ProtocolEvent>,
+        tokio::sync::mpsc::UnboundedSender<
+            crate::services::tmux_session::protocol::events::ProtocolEvent,
+        >,
     ) {
         use crate::infrastructure::app_backend::AppBackend;
         use crate::services::tmux_session::dispatch::spawn_dispatch_task;
@@ -2599,7 +2509,10 @@ mod tests {
         spawn_dispatch_task(
             dispatch_rx,
             controller.clone(),
-            crate::services::tmux_session::bridge::TmuxBridge::new(backend.clone(), controller.clone()),
+            crate::services::tmux_session::bridge::TmuxBridge::new(
+                backend.clone(),
+                controller.clone(),
+            ),
         );
         (controller, stdin_rx, dispatch_tx)
     }

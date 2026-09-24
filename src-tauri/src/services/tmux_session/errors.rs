@@ -149,19 +149,6 @@ pub fn spawn_err<E: Into<Box<dyn std::error::Error + Send + Sync>>>(
     }
 }
 
-/// Convenience constructor for `TmuxError::Ipc` from an
-/// `std::io::Error`. The `context` is a short static label like
-/// `"reader_task read"`.
-pub fn ipc_err<E: Into<Box<dyn std::error::Error + Send + Sync>>>(
-    context: &'static str,
-    source: E,
-) -> TmuxError {
-    TmuxError::Ipc {
-        context,
-        source: Some(source.into()),
-    }
-}
-
 // ---------------------------------------------------------------------------
 // `From` impls for `?`-propagation.
 //

@@ -7,17 +7,23 @@
  * `AttachedTmuxServer`, `TmuxWindowListEntry` — are runtime metadata
  * the frontend tracks alongside open tmux controllers.
  *
+ * Wire payloads use snake_case field names that match the Rust
+ * `json!` payloads emitted by `TmuxBridge` in
+ * `src-tauri/src/services/tmux_session/bridge/mod.rs`. Internal UI
+ * types (e.g. `TmuxWindowListEntry`, fields on `Session` / `Window`)
+ * use camelCase and live in the rest of `model/`.
+ *
  * Identifier convention used across these payloads (after Rust commit
  * `2871e76 refactor tmux controller to replace xsterm_id with
  * session_id`):
- * - `tmuxServerWindowId: string` — tmux server-side window id (e.g.
+ * - `tmux_window_id: string` — tmux server-side window id (e.g.
  *   `"@1"`). The single window identity on the wire (no parallel
  *   backend u32). Used for `kill_tmux_window` / `rename_tmux_window`
  *   IPC and for matching the event to the right xsterm Window.
- * - `tmuxPaneId: string` — server-side pane id (e.g. `"%5"`).
+ * - `tmux_pane_id: string` — server-side pane id (e.g. `"%5"`).
  *   Used for `kill_tmux_pane` / `capture_tmux_pane` / `resize_tmux_pane`
  *   IPC and for matching the event to the right xsterm Session.
- * - `xstermSessionId: number` — backend u32 (`Session.id`) of the
+ * - `session_id: number` — backend u32 (`Session.id`) of the
  *   session a pane belongs to; primary key for `session-output` /
  *   `session-closed` events.
  *
@@ -31,7 +37,7 @@
  * `TmuxController` dispatch task on `%window-pane-changed`.
  *
  * The frontend listener in `useTauriListeners.ts` is idempotent: if a
- * `Session` with the same `xstermSessionId` already exists (because
+ * `Session` with the same `session_id` already exists (because
  * the backend's `create_tmux_session` return value populated React
  * state for the bootstrap pane), the listener short-circuits. This
  * means the same payload shape covers BOTH the bootstrap pane and
@@ -40,12 +46,14 @@
  * Mirrors req-006 §4.6.
  */
 export interface TmuxPaneAddedEvent {
-  controllerId: number;
-  tmuxPaneId: string;
-  /** Backend-allocated xsterm session id. */
-  xstermSessionId: number;
+  tmux_controller_id: number;
+  tmux_pane_id: string;
+  /** Backend-allocated Session.id (`u32`). */
+  session_id: number;
   /** tmux server-side window id this pane belongs to. */
-  parentTmuxWindowId: string;
+  tmux_window_id?: string;
+  /** Always `"tmux-cc"` for bridge-emitted pane-added events. */
+  session_type?: string;
 }
 
 /**
@@ -58,10 +66,10 @@ export interface TmuxPaneAddedEvent {
  * Mirrors req-006 §4.6.
  */
 export interface TmuxPaneRemovedEvent {
-  controllerId: number;
-  tmuxPaneId: string;
-  /** Backend-allocated xsterm session id. */
-  xstermSessionId: number;
+  controller_id: number;
+  tmux_pane_id: string;
+  /** Backend-allocated Session.id (`u32`). */
+  session_id: number;
 }
 
 /**
@@ -75,13 +83,15 @@ export interface TmuxPaneRemovedEvent {
  * Mirrors req-006 §4.6.
  */
 export interface TmuxWindowAddedEvent {
-  controllerId: number;
+  tmux_controller_id: number;
   /** tmux server-side window id (e.g. `"@1"`) — the Window identity. */
-  tmuxServerWindowId: string;
-  /** Backend-allocated xsterm session id of this window's first pane. */
-  xstermSessionId: number;
+  tmux_window_id: string;
+  /** tmux session name (the `session_name` from `%window-add`). */
+  session_name?: string;
+  /** Backend-allocated Session.id of this window's first pane. */
+  session_id?: number;
   /** tmux pane id of this window's first pane. */
-  xstermPaneId: string;
+  tmux_pane_id?: string;
 }
 
 /**
@@ -94,9 +104,9 @@ export interface TmuxWindowAddedEvent {
  * Mirrors req-006 §4.6.
  */
 export interface TmuxWindowClosedEvent {
-  controllerId: number;
+  controller_id: number;
   /** tmux server-side window id (e.g. `"@1"`). */
-  tmuxServerWindowId: string;
+  tmux_window_id: string;
 }
 
 /**
@@ -107,9 +117,9 @@ export interface TmuxWindowClosedEvent {
  * Mirrors req-006 §4.6.
  */
 export interface TmuxWindowRenamedEvent {
-  controllerId: number;
+  controller_id: number;
   /** tmux server-side window id (e.g. `"@1"`). */
-  tmuxServerWindowId: string;
+  tmux_window_id: string;
   name: string;
 }
 
@@ -143,21 +153,20 @@ export interface AttachedTmuxServer {
 }
 
 /**
- * One row in the `windows` array of a `tmux-window-list` event
- * payload (ADR 0009 §2.6 / §2.8). Populated by the bridge module
- * `emit_tmux_window_added_for_list` from the bootstrap
- * `list-windows -F #{DEFAULT_WINDOW_LIST_FORMAT}` reply, and
- * incrementally refreshed by the per-window `tmux-window-added` /
- * `tmux-window-closed` / `tmux-window-renamed` events.
- *
- * The frontend's `TmuxWindowsControl` component reads these to render
- * the per-window rename / disconnect / delete actions.
+ * Internal UI cache entry: one row from the per-controller tmux
+ * window list. The bridge emits `tmux-window-list` with raw snake_case
+ * rows; `subscribeTmuxWindowList` in `infra/tauri/events/tmuxEvents.ts`
+ * normalises them into this camelCase shape so the rest of the app
+ * can speak one dialect. The cache is consumed by
+ * `TmuxWindowsControl` (rename / disconnect / delete actions) and by
+ * the `tmux-window-list` listener in `useTauriListeners.ts` (sync
+ * insert of xsterm Windows on attach).
  */
 export interface TmuxWindowListEntry {
   /** tmux server-side window id (e.g. `"@1"`) — the Window identity. */
   tmuxServerWindowId: string;
-  /** xsterm session id of the window's first pane, when known. */
-  xstermSessionId?: number;
+  /** Session.id of the window's first pane, when known. */
+  sessionId?: number;
   /** tmux pane id of the window's first pane, when known. */
   tmuxPaneId?: string;
   /** current tmux window name. */
@@ -175,8 +184,8 @@ export interface TmuxWindowListRawEvent {
   controller_id: number;
   windows: Array<{
     tmux_window_id: string;
-    xsterm_session_id?: number;
-    xsterm_pane_id?: string;
+    session_id?: number;
+    tmux_pane_id?: string;
     name: string;
   }>;
 }
@@ -189,6 +198,6 @@ export interface TmuxWindowListRawEvent {
  * `tmuxControllerErrors`. ADR 0009 §2.7.
  */
 export interface TmuxControllerExitEvent {
-  controllerId: number;
+  controller_id: number;
   reason?: string;
 }

@@ -235,7 +235,7 @@ impl SshBackend for RusshBackend {
         // background reader task can finish cleanly.
         let SshConnectResult {
             channel: _channel,
-            mut write_tx,
+            write_tx,
             read_rx,
             exit_code,
             exit_code_tx,

@@ -17,10 +17,12 @@
 import { useEffect } from "react";
 import { infraEventBus } from "../../infra/tauri/eventBus";
 import type {
+  TmuxControllerExitEvent,
   TmuxPaneAddedEvent,
   TmuxPaneRemovedEvent,
   TmuxWindowAddedEvent,
   TmuxWindowClosedEvent,
+  TmuxWindowListRawEvent,
   TmuxWindowRenamedEvent,
 } from "../../model";
 import { useLogger } from "../logger/useLogger";
@@ -56,26 +58,14 @@ export function TmuxBridge(): null {
       }),
     );
     unsubs.push(
-      infraEventBus.subscribe<{
-        controller_id: number;
-        windows: Array<{
-          tmux_window_id: string;
-          xsterm_window_id?: number;
-          xsterm_session_id?: number;
-          xsterm_pane_id?: string;
-          name: string;
-        }>;
-      }>("tmux-window-list", (event) => {
+      infraEventBus.subscribe<TmuxWindowListRawEvent>("tmux-window-list", (event) => {
         logger.debug("tmuxBridge", "tmux-window-list", { controllerId: event.controller_id });
       }),
     );
     unsubs.push(
-      infraEventBus.subscribe<{ controllerId: number; reason?: string }>(
-        "tmux-controller-exit",
-        (event) => {
-          logger.debug("tmuxBridge", "tmux-controller-exit", event);
-        },
-      ),
+      infraEventBus.subscribe<TmuxControllerExitEvent>("tmux-controller-exit", (event) => {
+        logger.debug("tmuxBridge", "tmux-controller-exit", event);
+      }),
     );
 
     return () => {

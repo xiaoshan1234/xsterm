@@ -43,6 +43,7 @@ impl TmuxController {
     }
 
     /// snapshot of every `tmux_window_id` this controller has observed.
+    #[allow(dead_code)] // test-only introspection; not consumed by production code
     pub fn window_bindings(&self) -> Vec<String> {
         self.window_bindings
             .lock()
@@ -71,17 +72,6 @@ impl TmuxController {
         true
     }
 
-    /// Drop a pane binding unconditionally (no error if it was never
-    /// registered). Used by the dispatch task's bootstrap path to
-    /// undo an `allocate_session_id` + `register_pane` that was made
-    /// for a placeholder session id; the real id comes from the
-    /// [`TmuxController::record_first_pane`].
-    pub(crate) fn unregister_pane(&self, tmux_pane_id: &str) {
-        if let Some(mut map) = lock_or_warn(&self.pane_bindings, "pane_bindings", self.controller_id) {
-            map.remove(tmux_pane_id);
-        }
-    }
-
     /// Record `(session_id, pane_id)` as the first pane and wake one
     /// waiter of [`TmuxController::await_first_pane`]. The caller
     /// (the dispatch task's bootstrap path) passes the `session_id`
@@ -96,7 +86,9 @@ impl TmuxController {
             session_id,
             pane_id
         );
-        if let Some(mut slot) = lock_or_warn(&self.first_pane_tx, "first_pane_tx", self.controller_id) {
+        if let Some(mut slot) =
+            lock_or_warn(&self.first_pane_tx, "first_pane_tx", self.controller_id)
+        {
             if let Some(tx) = slot.take() {
                 let _ = tx.send((session_id, pane_id));
             } else {
@@ -121,10 +113,16 @@ impl TmuxController {
     /// and the bootstrap-detection predicate in the dispatch task can
     /// tell whether a `%window-add` is the very first one.
     pub(crate) fn record_pane_window(&self, pane_id: String, tmux_window_id: String) {
-        if let Some(mut map) = lock_or_warn(&self.pane_window_bindings, "pane_window_bindings", self.controller_id) {
+        if let Some(mut map) = lock_or_warn(
+            &self.pane_window_bindings,
+            "pane_window_bindings",
+            self.controller_id,
+        ) {
             map.insert(pane_id, tmux_window_id.clone());
         }
-        if let Some(mut map) = lock_or_warn(&self.window_bindings, "window_bindings", self.controller_id) {
+        if let Some(mut map) =
+            lock_or_warn(&self.window_bindings, "window_bindings", self.controller_id)
+        {
             map.insert(tmux_window_id);
         }
     }

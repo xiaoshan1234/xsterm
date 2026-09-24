@@ -16,7 +16,7 @@ export type { TmuxWindowListRawEvent, TmuxControllerExitEvent };
  * Subscribe to `tmux-pane-added`. Fired by the TmuxController dispatch
  * task on `%window-pane-changed`. The frontend listener (in the legacy
  * `useTauriListeners.ts`) is idempotent: if a Session with the same
- * `xstermSessionId` already exists (because the backend's
+ * `session_id` already exists (because the backend's
  * `create_tmux_session` return value populated React state for the
  * bootstrap pane), the listener short-circuits.
  *
@@ -96,8 +96,8 @@ export function subscribeTmuxWindowList(
     const { controller_id: controllerId, windows: rows } = event.payload;
     const entries: TmuxWindowListEntry[] = rows.map((row) => ({
       tmuxServerWindowId: row.tmux_window_id,
-      xstermSessionId: row.xsterm_session_id,
-      xstermPaneId: row.xsterm_pane_id,
+      sessionId: row.session_id,
+      tmuxPaneId: row.tmux_pane_id,
       name: row.name,
     }));
     handler(controllerId, entries);

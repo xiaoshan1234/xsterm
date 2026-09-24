@@ -13,37 +13,17 @@
 //!    [`AppBackend`], and resolves any in-flight public-method waiters
 //!    (capture / split / new-window).
 //!
-//! The sub-modules `handshake`, `id_map`, and `subscriber` host the
-//! handshake planner, command/event waiter registry, and event-router
-//! state respectively; this file hosts the [`TmuxController`] struct,
-//! its constructors, and its public API.
+//! The sub-modules `id_map` and `subscriber` host the command/event
+//! waiter registry and event-router state respectively; this file hosts
+//! the [`TmuxController`] struct, its constructors, and its public API.
 //!
 //! [`TmuxBackend`]: crate::infrastructure::tmux::backend::TmuxBackend
 //! [`AppBackend`]: crate::infrastructure::app_backend::AppBackend
 //! [`ProtocolParser`]: crate::services::tmux::protocol::parser::ProtocolParser
 //! [`ProtocolEvent`]: crate::services::tmux::protocol::events::ProtocolEvent
 
-/// How this controller was created — drives the dispatch task's
-/// behaviour on the `%window-add` / `%window-pane-changed` /
-/// `list-panes` / `list-windows` replies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SpawnMode {
-    /// `spawn_create` / `spawn_with_args`. We asked tmux to `new-session
-    /// -A`; the server should have created exactly one window for us
-    /// (after the unconditional `new-window` we enqueue). The dispatch
-    /// task only emits `tmux-pane-added` for the **first** pane per
-    /// window so xsterm doesn't get spammed with stale panes.
-    Create,
-    /// `spawn_attach`. We asked tmux to `attach-session -t <name>`;
-    /// the server has *N existing windows and panes*. The dispatch task
-    /// emits `tmux-pane-added` for **every** pane `list-panes -a` returns
-    /// so xsterm mirrors the server's full state.
-    Attach,
-}
-
-pub(crate) mod handshake;
-pub(crate) mod id_map;
 pub(super) mod commands;
+pub(crate) mod id_map;
 pub(super) mod io_tasks;
 pub(super) mod registry;
 pub(super) mod spawn;
@@ -55,18 +35,21 @@ mod tests;
 
 // Re-export so existing `controller::TmuxController` callers (and the
 // `controller::tests` module, which uses `use super::*`) keep working.
-pub use self::handshake::{
-    execute_plan, execute_step, parse_probe, plan_for, FirstPane, HandshakeError, HandshakePlan,
-    HandshakeResult, HandshakeStep, ProbeResult, HANDSHAKE_STEP_TIMEOUT,
-};
-pub use self::id_map::{send_to_waiter, CommandRegistry, RegisteredCommand};
+pub use self::id_map::CommandRegistry;
+#[allow(unused_imports)] // test-only
 pub(crate) use self::spawn::build_tmux_argv;
 pub use self::subscriber::{RouterAction, RouterState};
+// Test-only re-exports — pulled in by `controller::tests`' `use super::*`.
+// Lib code never references these symbols directly.
+#[allow(unused_imports)]
+pub(crate) use super::dispatch::spawn_dispatch_task;
+#[allow(unused_imports)]
 pub(crate) use super::protocol::command::{
     CommandKind, EventWaiter, EventWaiterKind, EventWaiterSender, ResponseOutcome, ResponseWaiter,
 };
+#[allow(unused_imports)]
 pub(crate) use super::protocol::events::ProtocolEvent;
-pub(crate) use super::dispatch::spawn_dispatch_task;
+#[allow(unused_imports)]
 pub(crate) use crate::models::session::{SessionIdSource, SplitDirection, TmuxCcConfig};
 
 use super::errors::TmuxError;
@@ -75,6 +58,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[allow(unused_imports)] // `Mutex` is re-exported for `controller::tests`' `use super::*`
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::infrastructure::app_backend::AppBackend;
@@ -247,7 +231,8 @@ pub struct TmuxController {
     /// [`TmuxController::take_initial_state`] so the new
     /// `create_tmux_session` / `attach_tmux_session` IA returns the
     /// full initial state in one round-trip.
-    pub(crate) initial_windows: std::sync::Mutex<Option<Vec<crate::models::session::TmuxWindowInit>>>,
+    pub(crate) initial_windows:
+        std::sync::Mutex<Option<Vec<crate::models::session::TmuxWindowInit>>>,
     /// Buffered panes from the initial `list-panes` response. Same IA
     /// rationale as [`TmuxController::initial_windows`].
     pub(crate) initial_panes: std::sync::Mutex<Option<Vec<crate::models::session::TmuxPaneInit>>>,
@@ -274,14 +259,6 @@ pub struct TmuxController {
     /// `spawn_with_args` returns. Used by the `attachedTmuxServers`
     /// persistence so we can re-attach on restart.
     pub(crate) session_name: std::sync::Mutex<Option<String>>,
-    /// Whether this controller was created via `spawn_attach` (true) or
-    /// `spawn_create` / `spawn_with_args` (false). The dispatch task
-    /// uses this to decide whether to emit `tmux-pane-added` events
-    /// for *every* pane the server reports (Attach: server already has
-    /// windows/panes, we want xsterm to mirror them) or only the
-    /// bootstrap pane (Create: only one window exists, the one we just
-    /// asked the server to create).
-    pub(crate) spawn_mode: SpawnMode,
     /// tokio mutex serialising concurrent `capture_pane` callers
     /// so two requests never overlap their `%begin..%end` block.
     pub(crate) capture_lock: tokio::sync::Mutex<()>,
@@ -365,7 +342,6 @@ impl TmuxController {
             session_name: std::sync::Mutex::new(None),
             capture_lock: tokio::sync::Mutex::new(()),
             split_pane_timeout: TMUX_REPLY_TIMEOUT,
-            spawn_mode: SpawnMode::Create,
             registry: CommandRegistry::new(),
             router_state: std::sync::Mutex::new(RouterState::default()),
         })

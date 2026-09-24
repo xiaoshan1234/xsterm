@@ -65,14 +65,10 @@
 //! (`first.starts_with('@')` heuristic failed on whitespace-prefixed
 //! or unusual first lines).
 
-use std::collections::HashMap;
-
 use crate::services::tmux_session::bridge::TmuxBridge;
 use crate::services::tmux_session::controller::id_map::{send_to_waiter, CommandRegistry};
 use crate::services::tmux_session::controller::TmuxController;
-use crate::services::tmux_session::protocol::command::{
-    CommandId, ResponseOutcome, ResponseWaiter, TaggedCommand,
-};
+use crate::services::tmux_session::protocol::command::{CommandId, ResponseOutcome};
 use crate::services::tmux_session::protocol::events::ProtocolEvent;
 
 /// One event's outcome as far as the command router is concerned.
@@ -103,6 +99,7 @@ pub enum RouterAction {
     /// waiter (fire-and-forget). Caller logs / ignores. W3 will still
     /// route the eventual `%end` through the notification half if the
     /// originating kind was a list query.
+    #[allow(dead_code)] // diagnostic payload for future logging hook
     UnknownCommandStart { cmd_id: u32 },
 
     /// A `%error` arrived for a command that has no registered waiter.
@@ -111,6 +108,7 @@ pub enum RouterAction {
     /// sitting on `RouterState.in_flight`) so the dispatcher can drain
     /// it via [`RouterState::take_in_flight_lines`] and run
     /// `handle_classified_response` on the fire-and-forget body.
+    #[allow(dead_code)] // diagnostic payload for future logging hook
     UnknownCommandEnd {
         cmd_id: u32,
         errored: bool,
@@ -119,11 +117,13 @@ pub enum RouterAction {
 
     /// Protocol violation: `%end` or `%error` arrived without a matching
     /// `%begin`. Caller logs.
+    #[allow(dead_code)] // diagnostic payload for future logging hook
     OrphanCommandEnd { cmd_id: u32 },
 
     /// A body line arrived inside a `%begin..%end` block. Accumulator
     /// state has been updated. Caller does nothing; this is for logging /
     /// observability only — W3 can hook UI progress here if useful.
+    #[allow(dead_code)] // diagnostic payload for future logging hook
     BodyLine { cmd_id: u32, line: String },
 
     /// RouterState has resolved the registered [`ResponseWaiter`] for a
@@ -361,35 +361,14 @@ impl RouterState {
     }
 }
 
-/// One pre-registered batch of `(cmd_id → waiter)` entries for tests that
-/// don't want to drive [`CommandRegistry`] directly.
-#[derive(Debug, Default)]
-pub struct StaticWaiters {
-    map: HashMap<u32, ResponseWaiter>,
-}
-
-impl StaticWaiters {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    #[allow(dead_code)]
-    pub fn register(&mut self, cmd_id: u32, waiter: ResponseWaiter) {
-        self.map.insert(cmd_id, waiter);
-    }
-
-    fn take(&mut self, cmd_id: u32) -> Option<ResponseWaiter> {
-        self.map.remove(&cmd_id)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::mpsc;
     use tokio::sync::oneshot;
+
+    use crate::services::tmux_session::protocol::command::ResponseWaiter;
 
     fn make_waiter() -> (ResponseWaiter, oneshot::Receiver<ResponseOutcome>) {
         let (tx, rx) = oneshot::channel();
@@ -451,7 +430,6 @@ mod tests {
         // Register a waiter for the next id (0).
         let (waiter, rx) = make_waiter();
         let _ = registry.register(
-            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
             "display-message -p '#{version}'\n".to_string(),
             Some(waiter),
         );
@@ -611,11 +589,7 @@ mod tests {
         let (controller, bridge) = make_fixtures();
 
         let (waiter, rx) = make_waiter();
-        let _ = registry.register(
-            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
-            "x".to_string(),
-            Some(waiter),
-        );
+        let _ = registry.register("x".to_string(), Some(waiter));
         let _ = router.process(
             &ProtocolEvent::CommandBegin {
                 id: 0,
@@ -677,11 +651,7 @@ mod tests {
         let (controller, bridge) = make_fixtures();
 
         let (waiter, _rx) = make_waiter();
-        let _ = registry.register(
-            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
-            "x".to_string(),
-            Some(waiter),
-        );
+        let _ = registry.register("x".to_string(), Some(waiter));
         let _ = router.process(
             &ProtocolEvent::CommandBegin {
                 id: 0,
@@ -808,11 +778,7 @@ mod tests {
         let (controller, bridge) = make_fixtures();
 
         let (waiter, _rx) = make_waiter();
-        let _ = registry.register(
-            crate::services::tmux_session::protocol::command::CommandKind::DisplayVersion,
-            "x".to_string(),
-            Some(waiter),
-        );
+        let _ = registry.register("x".to_string(), Some(waiter));
         let _ = router.process(
             &ProtocolEvent::CommandBegin {
                 id: 0,
@@ -844,11 +810,7 @@ mod tests {
         let (controller, bridge) = make_fixtures();
 
         let (waiter, rx) = make_waiter();
-        let _ = registry.register(
-            crate::services::tmux_session::protocol::command::CommandKind::ListWindows,
-            "list-windows -a\n".to_string(),
-            Some(waiter),
-        );
+        let _ = registry.register("list-windows -a\n".to_string(), Some(waiter));
         let _ = router.process(
             &ProtocolEvent::CommandBegin {
                 id: 0,

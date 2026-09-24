@@ -37,7 +37,9 @@ use tokio::sync::mpsc;
 use super::bridge::TmuxBridge;
 use super::controller::{RouterAction, TmuxController};
 use super::protocol::events::ProtocolEvent;
-use crate::services::tmux_session::protocol::command::{EventWaiter, EventWaiterKind, EventWaiterSender};
+use crate::services::tmux_session::protocol::command::{
+    EventWaiter, EventWaiterKind, EventWaiterSender,
+};
 
 /// Spawn the dispatch task that turns parsed [`ProtocolEvent`]s into
 /// [`AppBackend`] emits.
@@ -311,11 +313,6 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
         // stays whole — we still need `&event` below to read the
         // variant tag for the debug log on unbound panes.
         ProtocolEvent::PaneExited { ref pane_id } | ProtocolEvent::PaneDied { ref pane_id } => {
-            let event_kind = match &event {
-                ProtocolEvent::PaneExited { .. } => "%pane-exited",
-                ProtocolEvent::PaneDied { .. } => "%pane-died",
-                _ => unreachable!("guarded by outer match"),
-            };
             // Look up the xsterm id for the dying pane. If we never
             // bound it (e.g. external pane from case 4 above), there is
             // nothing to emit.
@@ -467,7 +464,6 @@ fn handle_classified_response(
 /// `#{window_id}\t#{session_id}\t#{window_name}\t#{window_active}\t#{window_layout}`.
 struct WindowListRow {
     window_id: String,
-    session_id: String,
     name: String,
     active: bool,
     layout: String,
@@ -479,7 +475,6 @@ struct WindowListRow {
 struct PaneListRow {
     pane_id: String,
     window_id: String,
-    session_id: String,
     active: bool,
     width: u16,
     height: u16,
@@ -494,7 +489,6 @@ fn parse_window_list_row(line: &str) -> Option<WindowListRow> {
     }
     Some(WindowListRow {
         window_id: parts[0].to_string(),
-        session_id: parts[1].to_string(),
         name: parts[2].to_string(),
         active: parts[3] == "1",
         layout: parts[4].to_string(),
@@ -509,7 +503,6 @@ fn parse_pane_list_row(line: &str) -> Option<PaneListRow> {
     Some(PaneListRow {
         pane_id: parts[0].to_string(),
         window_id: parts[1].to_string(),
-        session_id: parts[2].to_string(),
         active: parts[3] == "1",
         width: parts[4].parse().unwrap_or(0),
         height: parts[5].parse().unwrap_or(0),

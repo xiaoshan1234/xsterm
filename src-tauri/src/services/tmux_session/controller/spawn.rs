@@ -5,21 +5,39 @@
 //! extends its `impl` block with the four constructors and the
 //! helpers they share.
 
-use super::{
-    lock_or_warn, SpawnMode, TmuxController, DEFAULT_INITIAL_COLS, DEFAULT_INITIAL_ROWS,
-    DEFAULT_TMUX_SOCKET_NAME, TMUX_REPLY_TIMEOUT,
-};
-use super::io_tasks::{
-    schedule_initial_state_sync, spawn_monitor_task, spawn_reader_task, spawn_stderr_drain_task,
-    spawn_writer_task,
-};
+/// How this controller was created — drives the constructor's choice
+/// of bootstrap path (an unconditional `new-window` vs the
+/// `list-windows` / `list-panes` attach dance).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SpawnMode {
+    /// `spawn_create` / `spawn_with_args`. We asked tmux to
+    /// `new-session -A`; the server creates exactly one window for
+    /// us. The bootstrap path relies on `record_pane_window`
+    /// inserting `window_bindings` synchronously, so no extra
+    /// `new-window` is enqueued.
+    Create,
+    /// `spawn_attach`. We asked tmux to `attach-session -t <name>`;
+    /// the server has *N existing windows and panes*. The bootstrap
+    /// path explicitly runs `list-windows` + per-window `list-panes`
+    /// so xsterm mirrors the server's full state.
+    Attach,
+}
+
 use super::super::bridge::TmuxBridge;
 use super::super::dispatch::spawn_dispatch_task;
 use super::super::errors::{spawn_err, TmuxError};
 use super::super::protocol::events::ProtocolEvent;
 use super::super::protocol::wire as tmux_cmd;
 use super::id_map::CommandRegistry;
+use super::io_tasks::{
+    schedule_initial_state_sync, spawn_monitor_task, spawn_reader_task, spawn_stderr_drain_task,
+    spawn_writer_task,
+};
 use super::subscriber::RouterState;
+use super::{
+    lock_or_warn, TmuxController, DEFAULT_INITIAL_COLS, DEFAULT_INITIAL_ROWS,
+    DEFAULT_TMUX_SOCKET_NAME, TMUX_REPLY_TIMEOUT,
+};
 use std::collections::{HashMap, HashSet};
 use std::process::Stdio;
 use std::sync::atomic::AtomicBool;
@@ -96,8 +114,7 @@ impl TmuxController {
         } else {
             let argv_strings = build_tmux_argv(config)?;
             let argv_refs: Vec<&str> = argv_strings.iter().map(String::as_str).collect();
-            let backend: Box<dyn TmuxBackend> =
-                Box::new(build_local_tmux_backend(&argv_refs)?);
+            let backend: Box<dyn TmuxBackend> = Box::new(build_local_tmux_backend(&argv_refs)?);
             Self::spawn_with_backend(
                 backend,
                 app_backend,
@@ -174,28 +191,27 @@ impl TmuxController {
         spawn_monitor_task(Arc::clone(&backend_slot), killed.clone(), dispatch_tx);
 
         let controller = Arc::new(Self {
-                controller_id,
-                backend: backend_slot,
-                killed,
-                stdin_tx,
-                app_backend,
-                pane_bindings: std::sync::Mutex::new(HashMap::new()),
-                pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-                session_id_allocator,
-                first_pane_tx: std::sync::Mutex::new(Some(pane_tx_init)),
-                first_pane_rx: tokio::sync::Mutex::new(Some(pane_rx_init)),
-                initial_windows: std::sync::Mutex::new(None),
-                initial_panes: std::sync::Mutex::new(None),
-                initial_state_rx: tokio::sync::Mutex::new(Some(initial_state_rx_init)),
-                initial_state_tx: std::sync::Mutex::new(Some(initial_state_tx_init)),
-                window_bindings: std::sync::Mutex::new(HashSet::new()),
-                session_name: std::sync::Mutex::new(None),
-                capture_lock: tokio::sync::Mutex::new(()),
-                split_pane_timeout: TMUX_REPLY_TIMEOUT,
-                spawn_mode: mode,
-                registry: CommandRegistry::new(),
-                router_state: std::sync::Mutex::new(RouterState::default()),
-            });
+            controller_id,
+            backend: backend_slot,
+            killed,
+            stdin_tx,
+            app_backend,
+            pane_bindings: std::sync::Mutex::new(HashMap::new()),
+            pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
+            session_id_allocator,
+            first_pane_tx: std::sync::Mutex::new(Some(pane_tx_init)),
+            first_pane_rx: tokio::sync::Mutex::new(Some(pane_rx_init)),
+            initial_windows: std::sync::Mutex::new(None),
+            initial_panes: std::sync::Mutex::new(None),
+            initial_state_rx: tokio::sync::Mutex::new(Some(initial_state_rx_init)),
+            initial_state_tx: std::sync::Mutex::new(Some(initial_state_tx_init)),
+            window_bindings: std::sync::Mutex::new(HashSet::new()),
+            session_name: std::sync::Mutex::new(None),
+            capture_lock: tokio::sync::Mutex::new(()),
+            split_pane_timeout: TMUX_REPLY_TIMEOUT,
+            registry: CommandRegistry::new(),
+            router_state: std::sync::Mutex::new(RouterState::default()),
+        });
 
         spawn_dispatch_task(
             dispatch_rx,
@@ -247,7 +263,9 @@ impl TmuxController {
         );
 
         if let Some(name) = session_name {
-            if let Some(mut slot) = lock_or_warn(&controller.session_name, "session_name", controller_id) {
+            if let Some(mut slot) =
+                lock_or_warn(&controller.session_name, "session_name", controller_id)
+            {
                 *slot = Some(name.to_string());
             }
         }

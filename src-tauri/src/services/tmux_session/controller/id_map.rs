@@ -51,18 +51,12 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
 use crate::services::tmux_session::protocol::command::{
-    CommandId, CommandKind, EventWaiter, EventWaiterSender, ResponseOutcome, ResponseWaiter,
-    TaggedCommand,
+    CommandId, EventWaiter, EventWaiterSender, ResponseOutcome, ResponseWaiter, TaggedCommand,
 };
 
 /// Outcome of `CommandRegistry::register`.
 pub struct RegisteredCommand {
     pub tagged: TaggedCommand,
-    /// True iff a waiter was registered for this id. Callers that need
-    /// the resulting promise handle `CommandRegistry::take(tagged.id)`
-    /// inside their response router (PR-T5+); the bool here exists so a
-    /// caller that *didn't* request a waiter can short-circuit.
-    pub waiter_registered: bool,
     /// Idempotent access path: same as `tagged.id`. Exposed so callers can
     /// register the waiter first and pass the id to the response router
     /// separately if they prefer.
@@ -85,13 +79,6 @@ pub struct RegisteredCommand {
 pub struct CommandRegistry {
     next_id: AtomicU64,
     by_id: Mutex<HashMap<CommandId, ResponseWaiter>>,
-    /// Origin [`CommandKind`] for each registered id. Mirrors `by_id`
-    /// 1:1 (every id inserted into `by_id` also goes here) and exists
-    /// so `RouterState` can classify a fire-and-forget `%end` body
-    /// without sniffing the first line (P8 W3b closed Bug 017 / Bug 022:
-    /// replaced `first.starts_with('@')` heuristic with a typed lookup).
-    #[allow(dead_code)]
-    kind_by_id: Mutex<HashMap<CommandId, CommandKind>>,
     /// Counts taken (`%end` resolved) waiters, for diagnostics. PR-T5
     /// will log this on close.
     #[allow(dead_code)]
@@ -116,7 +103,6 @@ impl CommandRegistry {
         Self {
             next_id: AtomicU64::new(0),
             by_id: Mutex::new(HashMap::new()),
-            kind_by_id: Mutex::new(HashMap::new()),
             completed: std::sync::atomic::AtomicU64::new(0),
             event_waiters: Mutex::new(Vec::new()),
         }
@@ -130,39 +116,19 @@ impl CommandRegistry {
     /// between them cannot reference an id that has no waiter. This is
     /// the single guarantee that lets us drop the old "fast-path
     /// Mutex<Option<...>>" races (Bug 011 / Bug 014).
-    pub fn register(
-        &self,
-        kind: CommandKind,
-        wire: String,
-        waiter: Option<ResponseWaiter>,
-    ) -> RegisteredCommand {
+    pub fn register(&self, wire: String, waiter: Option<ResponseWaiter>) -> RegisteredCommand {
         let id = CommandId(
             self.next_id
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         );
-        let waiter_registered = waiter.is_some();
         if let Some(w) = waiter {
             self.by_id
                 .lock()
                 .expect("CommandRegistry mutex poisoned")
                 .insert(id, w);
         }
-        // Mirror the kind into `kind_by_id` whenever there is a waiter;
-        // for fire-and-forget commands the dispatcher never classifies
-        // by kind, so we skip the insert. This keeps the two maps 1:1
-        // for any id actually routable via `kind_for`.
-        if waiter_registered {
-            self.kind_by_id
-                .lock()
-                .expect("CommandRegistry mutex poisoned")
-                .insert(id, kind.clone());
-        }
-        let tagged = TaggedCommand { id, kind, wire };
-        RegisteredCommand {
-            id,
-            tagged,
-            waiter_registered,
-        }
+        let tagged = TaggedCommand { id, wire };
+        RegisteredCommand { id, tagged }
     }
 
     /// Take the [`ResponseWaiter`] registered for `id`. Returns `None`
@@ -176,22 +142,6 @@ impl CommandRegistry {
             .lock()
             .expect("CommandRegistry mutex poisoned")
             .remove(&id)
-    }
-
-    /// Look up the [`CommandKind`] that produced the registered waiter
-    /// for `id`. Returns `None` for fire-and-forget commands (which the
-    /// caller never registered against `by_id`) and for ids that have
-    /// already been taken by `take(id)`.
-    ///
-    /// P8 W3b: `RouterState::process` uses this on `%end` so the
-    /// dispatcher can classify the body without sniffing the first line
-    /// (the old `first.starts_with('@')` heuristic — Bug 022).
-    pub fn kind_for(&self, id: CommandId) -> Option<CommandKind> {
-        self.kind_by_id
-            .lock()
-            .expect("CommandRegistry mutex poisoned")
-            .get(&id)
-            .cloned()
     }
 
     /// Register an event-correlated waiter. Returns the entry's index
@@ -211,7 +161,8 @@ impl CommandRegistry {
     /// `%window-pane-changed` layer 2 (the split-result path).
     pub fn take_event_waiter_for_split(
         &self,
-    ) -> Option<tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::SplitResult>> {
+    ) -> Option<tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::SplitResult>>
+    {
         let mut v = self
             .event_waiters
             .lock()
@@ -298,12 +249,6 @@ impl CommandRegistry {
         let mut map = self.by_id.lock().expect("CommandRegistry mutex poisoned");
         let n = map.len();
         map.clear();
-        // Mirror the kind map so a stale entry can't outlive its waiter
-        // and mislead `kind_for` post-shutdown.
-        self.kind_by_id
-            .lock()
-            .expect("CommandRegistry mutex poisoned")
-            .clear();
         n
     }
 
@@ -386,9 +331,9 @@ mod tests {
     #[test]
     fn register_increments_id() {
         let reg = CommandRegistry::new();
-        let a = reg.register(CommandKind::DisplayVersion, "x\n".into(), None);
-        let b = reg.register(CommandKind::ListCommands, "y\n".into(), None);
-        let c = reg.register(CommandKind::Detach, "\n".into(), None);
+        let a = reg.register("x\n".into(), None);
+        let b = reg.register("y\n".into(), None);
+        let c = reg.register("\n".into(), None);
         assert_eq!(a.tagged.id.0, 0);
         assert_eq!(b.tagged.id.0, 1);
         assert_eq!(c.tagged.id.0, 2);
@@ -397,29 +342,21 @@ mod tests {
     #[test]
     fn register_with_waiter_inserts_into_map() {
         let reg = CommandRegistry::new();
-        let _ = reg.register(
-            CommandKind::DisplayVersion,
-            "x\n".into(),
-            Some(dummy_waiter()),
-        );
+        let _ = reg.register("x\n".into(), Some(dummy_waiter()));
         assert_eq!(reg.outstanding(), 1);
     }
 
     #[test]
     fn register_without_waiter_does_not_insert() {
         let reg = CommandRegistry::new();
-        let _ = reg.register(CommandKind::Detach, "\n".into(), None);
+        let _ = reg.register("\n".into(), None);
         assert_eq!(reg.outstanding(), 0);
     }
 
     #[test]
     fn take_returns_and_removes_waiter() {
         let reg = CommandRegistry::new();
-        let r = reg.register(
-            CommandKind::DisplayVersion,
-            "x\n".into(),
-            Some(dummy_waiter()),
-        );
+        let r = reg.register("x\n".into(), Some(dummy_waiter()));
         assert_eq!(reg.outstanding(), 1);
         assert!(reg.take(r.tagged.id).is_some());
         assert_eq!(reg.outstanding(), 0);
@@ -437,11 +374,7 @@ mod tests {
     fn drain_clears_all_waiters() {
         let reg = CommandRegistry::new();
         for _ in 0..5 {
-            let _ = reg.register(
-                CommandKind::DisplayVersion,
-                "x\n".into(),
-                Some(dummy_waiter()),
-            );
+            let _ = reg.register("x\n".into(), Some(dummy_waiter()));
         }
         assert_eq!(reg.outstanding(), 5);
         assert_eq!(reg.drain(), 5);
@@ -455,7 +388,7 @@ mod tests {
         let reg = CommandRegistry::new();
         let mut seen = std::collections::HashSet::new();
         for _ in 0..100 {
-            let r = reg.register(CommandKind::Detach, "\n".into(), None);
+            let r = reg.register("\n".into(), None);
             assert!(seen.insert(r.tagged.id), "duplicate id {:?}", r.tagged.id);
         }
         assert_eq!(seen.len(), 100);

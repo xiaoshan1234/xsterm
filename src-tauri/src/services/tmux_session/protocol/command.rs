@@ -59,8 +59,6 @@
 //! `%-begin..%-end` routing fragile (Bug 011, Bug 014, Bug 016, Bug 017
 //! were all variants of "the queue and the response got out of sync").
 
-use std::sync::atomic::{AtomicU64, Ordering};
-
 /// Monotonically-increasing identifier for an outbound command.
 ///
 /// tmux echoes the same id in `%begin <id>` / `%end <id>` / `%error <id>`,
@@ -75,74 +73,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CommandId(pub u64);
 
-impl CommandId {
-    /// Allocate the next id from a shared counter. Used by
-    /// `CommandRegistry::register` and any standalone caller that wants to
-    /// keep ids monotonic across multiple `CommandRegistry`s (e.g. tests).
-    pub fn next_from(counter: &AtomicU64) -> Self {
-        Self(counter.fetch_add(1, Ordering::Relaxed))
-    }
-}
-
-/// The semantic kind of an outbound command.
-///
-/// The enum is **closed** — adding a new variant forces every match arm in
-/// PR-T5's response router to be revisited. That is intentional: every
-/// command kind we send today has a known wire shape and a known response
-/// shape; adding a new shape without touching the router would be a bug.
-///
-/// Variants without payload (e.g. `KillPane { pane_id }`) carry exactly the
-/// args the wire builder needs. Variants that can be either fire-and-forget
-/// or awaited (e.g. `DisplayVersion`) just have no payload fields — the
-/// waiter (if any) lives in [`ResponseWaiter`].
+/// The semantic kind of an outbound command. The enum is **closed** —
+/// adding a new variant forces every match arm in the response router
+/// to be revisited. Only `CapturePane` is constructed by production
+/// code today; the other variants were dropped when the PR-T4
+/// handshake scaffolding was removed.
+#[allow(dead_code)] // `CapturePane` is only constructed by production code paths today
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandKind {
-    // ----- startup / probe -----------------------------------------------
-    /// `display-message -p '#{version}'` — first probe; PR-T4 always
-    /// sends this.
-    DisplayVersion,
-    /// `list-commands` — second probe; PR-T4 uses this to refine the
-    /// capability matrix.
-    ListCommands,
-    /// `attach-session [-c target-client] [-d] [-r] [-t target-session]`.
-    /// The wire builder picks `-c ""` when the
-    /// `supports_attach_session_dash_c_empty` capability is set.
-    AttachSession,
-    /// `new-session -A` (3.2+) or `-d` fallback.
-    NewSession { attach: bool },
-    /// `new-window [-n name]`. Optional name.
-    NewWindow { name: Option<String> },
-    /// `list-windows -a -F <format>`.
-    ListWindows,
-    /// `list-panes [-a] [-t window] -F <format>`.
-    ListPanes { window_id: Option<String> },
-
-    // ----- runtime operations -------------------------------------------
-    /// `send-keys -t %<pane> <escaped-keys>`.
-    SendKeys { pane_id: String },
-    /// `split-window -h|-v -t %<pane>`.
-    SplitWindow { pane_id: String, horizontal: bool },
-    /// `kill-pane -t %<pane>`.
-    KillPane { pane_id: String },
-    /// `kill-window -t @<window>`.
-    KillWindow { window_id: String },
-    /// `rename-window -t @<window> <new-name>`.
-    RenameWindow { window_id: String, name: String },
-    /// `resize-pane -t %<pane> -x <cols> -y <rows>`.
-    ResizePane {
-        pane_id: String,
-        cols: u16,
-        rows: u16,
-    },
     /// `capture-pane -p -e -J -S -<lines> -t %<pane>`.
     CapturePane { pane_id: String, lines: i32 },
-    /// `refresh-client [-A | -C]`. PR-T4 always uses `-C`.
-    RefreshClient { control_mode: bool },
-    /// `list-sessions`.
-    ListSessions,
-    /// Bare detach: write `\n` to tmux stdin so it closes the control
-    /// session. The wire builder emits an empty newline.
-    Detach,
 }
 
 /// What the caller wants to know after tmux finishes the command.
@@ -169,7 +109,11 @@ pub enum ResponseWaiter {
     /// Await the next event matching the predicate (PR-T5+).
     /// Reserved for future use; PR-T3 wires nothing that emits it.
     #[allow(dead_code)]
-    Event(tokio::sync::oneshot::Sender<crate::services::tmux_session::protocol::events::ProtocolEvent>),
+    Event(
+        tokio::sync::oneshot::Sender<
+            crate::services::tmux_session::protocol::events::ProtocolEvent,
+        >,
+    ),
 }
 
 /// Result delivered to a `BeginEnd` waiter.
@@ -228,7 +172,9 @@ pub enum EventWaiterSender {
     /// Back-channel for [`crate::services::tmux::controller::TmuxController::split_pane`].
     Split(tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::SplitResult>),
     /// Back-channel for [`crate::services::tmux::controller::TmuxController::new_window`].
-    NewWindow(tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::NewWindowResult>),
+    NewWindow(
+        tokio::sync::oneshot::Sender<crate::services::tmux_session::controller::NewWindowResult>,
+    ),
     /// Bootstrap has no sender — the dispatch handler just removes the
     /// entry so `await_first_pane`'s separate `first_pane_tx` mechanism
     /// resolves on the next `%window-pane-changed`.
@@ -262,23 +208,6 @@ pub struct EventWaiter {
     pub tmux_window_id: Option<String>,
 }
 
-impl ResponseOutcome {
-    /// Convenience: flatten the body lines into a single string. Returns
-    /// `Err(message)` for the failure path so callers don't have to
-    /// branch on the outcome shape twice.
-    pub fn into_body_or_err(self) -> Result<Vec<String>, String> {
-        match self {
-            ResponseOutcome::Ok { body_lines } => Ok(body_lines),
-            ResponseOutcome::Err { message } => Err(message),
-        }
-    }
-
-    /// True iff tmux reported success (`%end`).
-    pub fn is_ok(&self) -> bool {
-        matches!(self, ResponseOutcome::Ok { .. })
-    }
-}
-
 /// One outbound command, ready to be handed to the writer task.
 ///
 /// `id` is allocated by `CommandRegistry::register` at the same moment
@@ -289,35 +218,10 @@ impl ResponseOutcome {
 /// `wire` is the encoded `String` produced by the protocol wire builder
 /// (see [`crate::services::tmux::protocol::wire`]). The writer task writes
 /// it byte-for-byte to the tmux child's stdin.
-///
-/// `kind` is metadata only — it does not affect what gets written. It
-/// exists for logging, tracing spans, and (in PR-T5) the response router's
-/// `CommandOutput` → `PaneList` / `WindowList` classifier.
-///
-/// ## Why no `waiter` field?
-///
-/// The waiter is owned exclusively by the [`CommandRegistry`](super::id_map::CommandRegistry)
-/// (one-shot, keyed by id, taken on `%end`). Embedding a clone here would
-/// let two paths try to resolve the same promise; keeping it on the
-/// registry avoids that ambiguity. Callers that need to wait on the result
-/// receive `RegisteredCommand::waiter_already_registered: bool` and
-/// arrange their own routing via `CommandRegistry::take(id)`.
 #[derive(Debug)]
 pub struct TaggedCommand {
     pub id: CommandId,
-    pub kind: CommandKind,
     pub wire: String,
-}
-
-impl TaggedCommand {
-    /// Construct a fire-and-forget command. Allocates the id from `counter`.
-    pub fn fire_and_forget(counter: &AtomicU64, kind: CommandKind, wire: String) -> Self {
-        Self {
-            id: CommandId::next_from(counter),
-            kind,
-            wire,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -325,74 +229,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn command_id_is_monotonic() {
-        let counter = AtomicU64::new(100);
-        let a = CommandId::next_from(&counter);
-        let b = CommandId::next_from(&counter);
-        let c = CommandId::next_from(&counter);
-        assert_eq!(a.0, 100);
-        assert_eq!(b.0, 101);
-        assert_eq!(c.0, 102);
-    }
-
-    #[test]
-    fn command_id_ordering_is_consistent() {
-        let counter = AtomicU64::new(0);
-        let a = CommandId::next_from(&counter);
-        let b = CommandId::next_from(&counter);
-        assert!(a < b);
-        assert!(b > a);
-    }
-
-    #[test]
-    fn fire_and_forget_command_has_no_waiter() {
-        let counter = AtomicU64::new(0);
-        let cmd = TaggedCommand::fire_and_forget(&counter, CommandKind::Detach, "\n".to_string());
-        assert_eq!(cmd.id.0, 0);
-        assert_eq!(cmd.wire, "\n");
-    }
-
-    #[test]
-    fn response_outcome_into_body_or_err() {
-        let ok = ResponseOutcome::Ok {
-            body_lines: vec!["3.4".to_string()],
-        };
-        assert_eq!(ok.into_body_or_err().unwrap(), vec!["3.4"]);
-
-        let err = ResponseOutcome::Err {
-            message: "parse error".to_string(),
-        };
-        assert_eq!(err.into_body_or_err().unwrap_err(), "parse error");
-    }
-
-    #[test]
-    fn response_outcome_is_ok() {
-        let ok = ResponseOutcome::Ok { body_lines: vec![] };
-        assert!(ok.is_ok());
-
-        let err = ResponseOutcome::Err {
-            message: "x".to_string(),
-        };
-        assert!(!err.is_ok());
-    }
-
-    #[test]
-    fn command_kind_eq() {
-        // Eq is required by HashMap/HashSet tests down the line; verify it.
-        assert_eq!(CommandKind::Detach, CommandKind::Detach);
-        assert_ne!(
-            CommandKind::SendKeys {
-                pane_id: "%5".into()
+    fn command_kind_capture_pane_eq() {
+        // Eq is required by HashMap/HashSet tests in id_map.rs; verify
+        // the only remaining variant derives it correctly.
+        assert_eq!(
+            CommandKind::CapturePane {
+                pane_id: "%5".into(),
+                lines: 100,
             },
-            CommandKind::SendKeys {
-                pane_id: "%6".into()
+            CommandKind::CapturePane {
+                pane_id: "%5".into(),
+                lines: 100,
             }
         );
         assert_ne!(
-            CommandKind::NewWindow {
-                name: Some("a".into())
+            CommandKind::CapturePane {
+                pane_id: "%5".into(),
+                lines: 100,
             },
-            CommandKind::NewWindow { name: None }
+            CommandKind::CapturePane {
+                pane_id: "%6".into(),
+                lines: 100,
+            }
         );
     }
 }
