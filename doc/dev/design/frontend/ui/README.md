@@ -1,223 +1,196 @@
-# Frontend · UI 层
+# Frontend · UI 层（v4 从零设计）
 
-> **职责**：React 视图层。把 app 层编排好的 useCase、service 返回的数据、model 类型，渲染成用户看得见、操作得了的 UI。
+> **v4 设计**（2026-09）：5 个 feature module + 1 个内部约定。
+> **跟 v3 的根本区别**：从"按 React 角色分层"改成"按产品功能切分"。
 >
-> UI 层只 render + 交互，**不**装业务、**不**直跳 infra、**不**持有跨组件的全局状态。
->
-> **位置**：`src/ui/`（与 `src/app/` 平级，是 frontend 的第 5 层，详见 [`../README.md`](../../README.md) 与 [`../app/README.md`](../app/README.md)）。
+> 本文档是设计文档，不是现状整理。代码改造按 v4 描述的目标态执行。
 
 ## 1. 一句话架构
 
-`ui/` = **5 个 module（每个 3 份文档）+ 3 个支撑目录**
+**UI = 5 个 feature module + 1 个"内部约定"（api.ts 是 module 唯一对外入口）**
 
 ```
-src/ui/
-├── layout/         L1 shell — app 壳（AppLayout / NavBar / WorkspaceContainer）
-├── terminal/       L2 业务 — pane 渲染 + tab bar（含 tmux 扩展视图簇）
-├── sidebar/        L2 业务 — 左侧三栏（session / window / workspace manager）
-├── ui-kit/         L3+L4 复用层 — dialogs + primitives + settings（统一复用形态）
-├── hooks/          UI 编排 hook — useCommandExecutor / useSessionDragDrop 等
-│
-├── styles/         设计系统落实（global.css / layout.css / pane.css）
-├── icons/          Icon.tsx
-└── assets/         logo / favicon 等静态资源
+src/ui/modules/
+├── shell/         app 的物理壳（标题栏 / 布局 / 初始化 / 跨 module UI 原子）
+├── workspace/     app 主视图（工作区 + tab + 侧栏三栏）
+├── terminal/      终端渲染（xterm + pane + tmux control）
+├── session/       session 全生命周期（创建 / 编辑 / 选择 / 持久化）
+└── settings/      应用设置（5 个 tab 的横切配置）
 ```
-
-> **关键变化**（v3）：dialogs / settings / primitives 三个散落目录合并为 1 个 **ui-kit module**。tmux 并入 terminal module。详见每个 module 的 RESPONSIBILITY.md。
 
 ## 2. 5 个 module 索引
 
-每个 module 有 3 份文档：**职责（RESPONSIBILITY）/ 对外接口（INTERFACE）/ 对下依赖（DOWNSTREAM）**。
+每个 module 有 3 份文档：**职责 / 对外接口 / 对下依赖**
 
-| module | 职责 | 对外接口 | 对下依赖 | 包含文件数 |
+| module | 职责 | 对外接口 | 对下依赖 | 产品功能 |
 |---|---|---|---|---|
-| **layout** | [RESPONSIBILITY](./layout/RESPONSIBILITY.md) | [INTERFACE](./layout/INTERFACE.md) | [DOWNSTREAM](./layout/DOWNSTREAM.md) | 5 |
-| **terminal** | [RESPONSIBILITY](./terminal/RESPONSIBILITY.md) | [INTERFACE](./terminal/INTERFACE.md) | [DOWNSTREAM](./terminal/DOWNSTREAM.md) | 11（含 tmux 4） |
-| **sidebar** | [RESPONSIBILITY](./sidebar/RESPONSIBILITY.md) | [INTERFACE](./sidebar/INTERFACE.md) | [DOWNSTREAM](./sidebar/DOWNSTREAM.md) | 5 |
-| **ui-kit** | [RESPONSIBILITY](./ui-kit/RESPONSIBILITY.md) | [INTERFACE](./ui-kit/INTERFACE.md) | [DOWNSTREAM](./ui-kit/DOWNSTREAM.md) | 34（dialogs 31 + primitives 3） |
-| **hooks** | [RESPONSIBILITY](./hooks/RESPONSIBILITY.md) | [INTERFACE](./hooks/INTERFACE.md) | [DOWNSTREAM](./hooks/DOWNSTREAM.md) | 3（待新增 2 个） |
+| **shell** | [RESPONSIBILITY](./shell/RESPONSIBILITY.md) | [INTERFACE](./shell/INTERFACE.md) | [DOWNSTREAM](./shell/DOWNSTREAM.md) | 标题栏 + 窗口控制 + 整体布局 + UI 原子 |
+| **workspace** | [RESPONSIBILITY](./workspace/RESPONSIBILITY.md) | [INTERFACE](./workspace/INTERFACE.md) | [DOWNSTREAM](./workspace/DOWNSTREAM.md) | 工作区 + tab 切换 + 侧栏 |
+| **terminal** | [RESPONSIBILITY](./terminal/RESPONSIBILITY.md) | [INTERFACE](./terminal/INTERFACE.md) | [DOWNSTREAM](./terminal/DOWNSTREAM.md) | 终端渲染 + 分屏 + tmux control |
+| **session** | [RESPONSIBILITY](./session/RESPONSIBILITY.md) | [INTERFACE](./session/INTERFACE.md) | [DOWNSTREAM](./session/DOWNSTREAM.md) | session CRUD + display config |
+| **settings** | [RESPONSIBILITY](./settings/RESPONSIBILITY.md) | [INTERFACE](./settings/INTERFACE.md) | [DOWNSTREAM](./settings/DOWNSTREAM.md) | 应用设置 5 个 tab |
 
-### 2.1 5 个 module 的依赖图
-
-```
-main.tsx → App.tsx
-            │
-            ▼
-        ┌─────────────────────────────────┐
-        │  L1: layout (唯一允许直跳 infra) │
-        └────────────┬────────────────────┘
-                     │
-       ┌─────────────┼────────────────┐
-       ▼             ▼                ▼
-   L2 terminal   L2 sidebar        L2 ui-kit(settings)
-       │             │                ▲
-       │             │                │
-       └─────────────┴────────────────┘
-                     │
-                     ▼
-                L2 ui-kit(dialogs)
-                     │
-                     ▼
-                L4 ui-kit(primitives)
-
-                ─── 平行 ───
-                L2 hooks（被 layout / terminal / sidebar 消费）
-```
-
-### 2.2 每个 module 的"一句话主语"
-
-| module | 主语 | 唯一进口 |
-|---|---|---|
-| layout | app 的壳 | `main.tsx → App.tsx → <AppLayout>` |
-| terminal | 一个 pane 的渲染 | `layout/WorkspaceContainer` |
-| sidebar | 左侧三栏 + toolbar | `layout/AppLayout` |
-| ui-kit | 所有 UI 复用形态 | 任意 L2（按需） |
-| hooks | React 副作用封装 | 任意 L2（按需） |
-
-## 3. 关键约束
-
-- **不直接 import `infra/`**——所有 IPC 走 service / app / composition。
-- **不写业务规则**——业务规则在 `app/rules/`。UI 里只能有"展示用的纯函数 helper"（例如 ANSI 高亮、tab 顺序计算），且应放在该 helper 服务的那个 view 子目录里，不抽公共。
-- **不直接 import 兄弟 module 的内部 useCase**——只能走 `app/<module>` 的 barrel (`index.ts`)。
-- **不持有跨组件全局状态**——跨组件共享状态在 `service/*/store.ts`（store 是 service 层的职责）。
-- **组件只接受 props / 调编排 hook**——业务编排交给 hook，hook 调 useCase，useCase 调 service。
-
-## 4. 依赖方向
+## 3. 5 个 module 的依赖图
 
 ```
-ui/  ──►  app/  (modules + composition + rules)
-   │
-   └─►  model/   (读 types)
-       service/ (可选 — 仅当纯查询、不需要 useCase 编排时)
+                  ┌──────────────────────────────────────┐
+                  │  shell  (app 物理壳)                  │
+                  │  → 任何 feature module                │
+                  └────────┬─────────────────────────────┘
+                           │
+       ┌───────────────────┼────────────────────┐
+       ▼                   ▼                    ▼
+  workspace ───────►  terminal                 settings
+  (主视图 + sidebar)   │                        │
+       │               ▼                        │
+       │            session ◄──────────────────┘
+       │            (session 是核心，settings 改 session 默认值)
+       │
+       └──► session (侧栏展示 + 嵌入 session 的 dialog)
 ```
 
-**禁止**：
+**依赖规则**：
 
-- `ui/` → `infra/`（任何路径都禁止）
-- `ui/` → `app/modules/<x>/<y>.ts` 的内部文件（必须走 barrel）
-- `ui/` 写 `useSessionStore.getState().setX(...)` 这种直跳 store——store 写操作必须经 useCase
-
-## 5. module 划分的内部依赖图
-
-5 个 module 的内部依赖图（按 L1/L2/L3/L4 角色分层）：
-
-```
-            ┌─────────────────────────────────┐
-            │  L1: layout (唯一允许直跳 infra) │
-            └────────────┬────────────────────┘
-                         │
-       ┌─────────────────┼──────────────────────┐
-       ▼                 ▼                      ▼
-   L2 terminal      L2 sidebar          L2 ui-kit/settings
-       │                 │                      ▲
-       │  (含 tmux/ 4 文件)                    │
-       └─────────────────┴──────────────────────┘
-                         │
-                         ▼
-                  L3 ui-kit/dialogs
-                         │
-                         ▼
-                  L4 ui-kit/primitives
-
-   ─── 平行 ───
-   L2 hooks（被 layout / terminal / sidebar 消费，不消费 ui 其他 module）
-```
-
-**依赖方向**（强制单向）：
-
-- `layout` → `terminal`、`sidebar`、`ui-kit`、`hooks`、`app`、`service`、`model`、`infra`(window control)
-- `terminal` → `ui-kit`(dialogs + primitives)、`hooks`、`app`、`service`、`model`
-- `sidebar` → `ui-kit`(dialogs + primitives)、`hooks`、`app`、`service`、`model`
-- `ui-kit/dialogs` → `ui-kit/primitives`、`ui-kit`(form-atoms)、`model`、`app/rules`
-- `ui-kit/primitives` → （无下层依赖）
-- `ui-kit/settings` → `ui-kit`(form-atoms + primitives)、`service/persistence`、`model`
-- `hooks` → `app`、`service`、`model`、`react`
+- `shell` → 任何 feature module（顶层装配）
+- `workspace` → `terminal` + `session`（侧栏展示 session，嵌入 terminal）
+- `terminal` → `session`（渲染需要 session 数据）
+- `session` → 任何（核心 module，但**不**强依赖任何 feature）
+- `settings` → 任何（横切配置，通过 service/settings 广播）
 
 **严禁**：
 
-- `ui-kit/primitives` → 任何上层（primitives 无业务概念）
-- `ui-kit/dialogs` → `ui-kit/settings`（dialogs 不感知 settings）
-- `terminal` ↔ `sidebar`（L2 之间互不依赖，只通过 layout 协调）
-- `layout` → 任何业务视图的内部组件（layout 只组装 4 个槽位）
-- 任何 ui module 直跳 `infra/`（**唯一例外**：layout 的 `NavBar` 用 `getCurrentWindow()` 做窗口控制）
+- ❌ `terminal` → `workspace`（terminal 不知道 workspace 的存在）
+- ❌ `workspace` → `settings`（settings 通过 service 间接影响）
+- ❌ `session` → `workspace` 或 `terminal`（session 是核心数据，不感知它的展示方式）
+- ❌ 任何 module → `infra/` 除 shell 的窗口控制
 
-### 5.1 为什么 ui-kit 是一个 module 而不是三个
+## 4. 每个 module 的内部约定
 
-`dialogs/` / `primitives/` / `settings/` 三个目录合为一个 **ui-kit module**，理由：
-
-- **dialogs 重度依赖 primitives**（17 处 import）
-- **settings 重度复用 dialogs**（5 个 tab 是 dialogs 的"特例视图"）
-- **primitives 是 dialogs / settings 的公共基础**
-
-如果拆成 3 个 module：
-
-1. 3 个 module 的对外接口高度重合（都是"props 形式"）
-2. 对下依赖几乎相同（都依赖 model / service）
-3. 跨 module 协调成本高（"加 form field 必须先 review primitives"）
-
-合成 1 个 ui-kit 后：单一 barrel 暴露所有可复用形态，对外接口分 4 段（dialogs / primitives / form-atoms / settings），内部依赖单向 `primitives ← dialogs / settings`。
-
-### 5.2 为什么 tmux 并入 terminal 而不是独立 module
-
-tmux -CC 视图（control window / window 列表 / session 控制条 / 错误 banner）跟 session / window / pane 三 module 都强耦合，但走独立事件总线（`eventBuses/tmux`）。
-
-- 在 app module 层**不**单独切 tmux（避免 5 个 module 变成 6 个）
-- 在 UI 层**也**不单独成 module，并入 terminal — 因为 4 个文件过小（不值得 3 份文档开销）
-- terminal 模块通过 `props.renderTmuxControl` 回调让 layout 注入 tmux 视图，避免 terminal 直引 `ui/tmux/`
-
-### 5.3 为什么 hooks 单独成 module
-
-hooks 是**跨 module 共享的副作用封装**——terminal 用 `useSessionDragDrop`，sidebar 也用：
-
-- 放在 `service/` 不能（hooks 是 React-aware，用 useState / useEffect）
-- 放在 ui/ 顶层某个文件会污染 ui 的"组件树"结构
-- 单独 `ui/hooks/` 目录明确边界，3 个文件 + 2 个待新增 = 5 个 hook，全部走 INTERFACE.md 单一入口
-
-### 5.4 业务视图 3 个 module 的边界
-
-| module | 主语 | 唯一进口 | 不允许调 |
-|---|---|---|---|
-| `terminal` | 一个 pane 的渲染（含 tmux） | `layout/WorkspaceContainer` | sidebar / layout 内部组件 |
-| `sidebar` | 三栏 + toolbar | `layout/AppLayout` | terminal / layout 内部组件 |
-| `ui-kit/settings` | 设置页 + 5 tab | `layout/AppLayout`（设置按钮触发） | terminal / sidebar / dialogs |
-
-## 6. 静态资源归位
-
-CSS / icons / assets 跟 ui 层就近放，**不**放 src/assets/ 这种顶层目录：
+每个 module 内部组织是**自由的**，但对外只有 1 个入口：
 
 ```
-ui/styles/    global.css + layout.css + pane.css    设计系统落实
-ui/icons/     Icon.tsx                              图标组件
-ui/assets/    logo.svg / logo-icon.svg / react.svg  静态资源
+modules/<name>/
+├── api.ts            ⭐ 唯一对外入口（其他 module 只能 import 这个）
+├── view/             React 组件（仅本 module 内部用）
+├── store.ts          本 module 状态（跨 module 状态进 service 层）
+├── model.ts          类型 + 派生（如果需要）
+├── index.ts          barrel：只 re-export from api.ts
+└── *.test.ts
 ```
 
-如果以后出现不属于任何 view 子目录的通用 CSS（比如设计系统 tokens），扩展到 `ui/styles/tokens.css`，**不**提到 src/ 顶层。
+**强制规则**：
 
-## 7. 与 app 层的关系
+- `index.ts` 只 export `api.ts`，**不**直接 export view / store / model
+- 其他 module `import { X } from "@/ui/modules/<name>/api"`，**禁止**直接 import `view/*` 或 `store.ts` 或 `model.ts`
+- 这条规则让 module 内部重构（文件挪动 / 拆分）不影响其他 module
+
+## 5. 为什么是 5 个 module（v4 决策记录）
+
+v3 是 5 个 module（layout / terminal / sidebar / ui-kit / hooks），按"React 角色分层"。v4 重构成 5 个 module（shell / workspace / terminal / session / settings），按"产品功能"。
+
+**关键变化**：
+
+| v3 | v4 | 理由 |
+|---|---|---|
+| `layout/`（app shell） | `shell/` | 同名，扩了职责（包含 UI 原子） |
+| `sidebar/`（独立） | 归入 `workspace` | sidebar 在认知上属于 workspace |
+| `ui-kit/`（dialogs + primitives + settings） | 拆成 3 块 | dialog 归各自 feature module，primitives 归 shell，settings 独立 |
+| `hooks/`（独立） | 不存在 | 每个 module 自己声明需要的 hook |
+| `terminal/` | `terminal/` | 同名，但内部组织变化（tmux 并入） |
+| `tmux/`（独立） | 归入 `terminal` | tmux 是 terminal 的子功能 |
+| （无） | `session/` | **新增独立 module**——session 是核心数据实体，比 workspace 更基础 |
+
+**v4 设计的 4 个核心决策**：
+
+1. **session 是独立 module**（不是 useCases）——xsterm 是"session 容器"，session 比 workspace 更基础
+2. **dialog 归各自 feature module**（不是独立 ui-kit）——dialog 跟它的主人在一起，删一个功能就把它的 dialog 一起删掉
+3. **primitives 归 shell**（不是独立 ui-kit）——primitives 是 shell 的实现细节，不是跨 module 产品功能
+4. **没有公共 hooks module**——每个 module 自己声明需要的 hook（hooks 是实现细节，不是产品功能）
+
+## 6. module 间的关键流程
+
+### 6.1 用户点"+"新建 session
 
 ```
-ui/  ──depends on──►  app/
-                       ├── modules/{session,window,pane,workspace}/
-                       ├── composition/{tmuxWindow,savedWindow}.ts
-                       └── rules/{paneTree,sessionRules,...}.ts
+sidebar 的 + 按钮
+    ↓
+const shell = useAppShell();
+shell.openDialog({ kind: "createSession", payload: { workspaceId } })
+    ↓
+shell 内部渲染 <CreateSessionDialog>（由 session module 提供）
+    ↓
+用户填写表单 + 提交
+    ↓
+session module 内部 useSessionApi().createLocal / createSsh / createTmux
+    ↓
+创建完成后调 onCreated(sessionId, configId)
+    ↓
+shell.closeDialog()
+    ↓
+const workspace = useWorkspaceApi();
+workspace.openSession(sessionId, configId)  ← session 装到当前 window
 ```
 
-app 层反过来**不**依赖 ui：
+**关键观察**：
+
+- session 创建 UI 在 `session` module（不是 dialogs）
+- 触发通过 `useAppShell()` 的 dialog 编排
+- 创建后由 `workspace` 编排"装到哪个 window"
+- 全程不直接调 store，全部通过 hook
+
+### 6.2 用户改 font size
 
 ```
-app/  ──╳──►  ui/   (禁止)
+settings 的 TerminalTab onChange({ terminalFontSize: 14 })
+    ↓
+settings 模块内部 useSettingsApi().updateMany({ terminalFontSize: 14 })
+    ↓
+service/settings 更新 store
+    ↓
+service/settings 通知所有订阅者（通过 store change）
+    ↓
+workspace 的 <App> 重新渲染，传新 props 给 <TerminalApp>
+    ↓
+<TerminalApp> 接收到新 fontSize，<Terminal> 重新渲染
 ```
 
-这条约束的可机械校验形式：
+**关键观察**：
 
-```bash
-# app/ 不能 import ui/
-grep -rn 'from\s*"../../ui' src/app/ --include="*.ts" --include="*.tsx"  # 必须为空
-grep -rn 'from\s+"\.\./\.\./ui' src/app/ --include="*.ts" --include="*.tsx"  # 必须为空
+- terminal **不**自己订阅 settings（保持 props 单向数据流）
+- settings **不**直接调 terminal（横切关注点通过 service 广播）
+- workspace 是中间层，负责把 settings 传到 terminal
 
-# app/ 不能有 .tsx
-find src/app -name '*.tsx'  # 必须为空
+### 6.3 用户右键 session 重命名
+
 ```
+侧栏 <SessionListItem> 右键
+    ↓
+session module 内的 ContextMenu 弹出"重命名"
+    ↓
+const shell = useAppShell();
+shell.openDialog({ kind: "editSession", payload: { sessionId } })
+    ↓
+shell 渲染 <EditSessionDialog>（session module 提供）
+    ↓
+提交 → useSessionApi().editSession(...) → service 更新
+    ↓
+shell.closeDialog()
+```
+
+## 7. 跟 v3 的核心差异（详细对比）
+
+| 维度 | v3 | v4 |
+|---|---|---|
+| 划分依据 | React 角色（shell / 业务视图 / 风格 / 原子 / hooks） | 产品功能（shell / workspace / terminal / session / settings） |
+| dialog 归属 | 独立 `dialogs/` module | 归各自 feature module |
+| primitives 归属 | 独立 `ui-kit/` module | 归 `shell` module |
+| hooks 归属 | 独立 `hooks/` module | 每个 module 自己声明 |
+| tmux 归属 | 独立 `tmux/` | 归 `terminal` module |
+| sidebar 归属 | 独立 `sidebar/` | 归 `workspace` module |
+| session 归属 | 散落在 useCases | 独立 `session` module |
+| settings 归属 | dialogs/ 内 5 个 Tab | 独立 `settings` module |
+| UI module 总数 | 5 | 5 |
+| 每个 module 内部 | 自由 | 强制 api.ts 唯一入口 |
 
 ## 8. 设计系统约束
 
@@ -232,11 +205,3 @@ grep -rn "box-shadow:" src/components/ --include="*.css"
 ```
 
 违反任何一条不允许 merge。
-
-## 9. 验收标准（详见 app/README.md §8）
-
-- 59 个旧 UI 文件全部可被 `import { xxx } from "ui/<subdomain>/..."` 找到
-- 7 个静态资源（CSS 3 + icons 1 + assets 3）全部位于 `ui/{styles,icons,assets}/`
-- `find src/app -name '*.tsx'` 必须为空
-- `grep -rn 'ui/' src/app/` 必须为空（app 不引 ui）
-- `npm test` + `npm run lint` + `tsc --noEmit` 全绿

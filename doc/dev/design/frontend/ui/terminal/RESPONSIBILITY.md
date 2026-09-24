@@ -1,62 +1,67 @@
 # Module · Terminal — 职责
 
-> **UI 共有 5 个 module**：layout / terminal / sidebar / ui-kit / hooks（每个都有自己的 3 份文档）。
-> 本文档是 terminal module 的职责文档；UI 顶层划分见 [`../../README.md`](../../README.md) §5。
->
-> **位置（目标态）**：`src/ui/terminal/`
-> **位置（现状）**：散落在 `src/ui/` 顶层—— 改造 PR-1 收编到 `terminal/` 子目录
-> **L 层**：L2 业务视图
-> **主语**：一个 pane 的渲染
-> **唯一进口**：`layout/WorkspaceContainer.tsx`
+> **位置**：`src/ui/modules/terminal/`
+> **用户认知里的位置**：「打字的地方」——xterm 终端、pane 分屏、tmux 控制
+> **核心依赖**：`session` module（终端渲染需要 session 数据）
+> **不依赖**：`workspace`（不感知 tab）、`shell` 内部组件（除初始化）
 
 ## 1. 这个 module 负责什么
 
-把"一个 pane 的渲染 + 一个 window 的 tab bar"做成一个**自包含**的视图块。外部喂入 pane 树 + 当前 session，terminal module 负责：
+terminal module 是 xsterm 的**核心渲染模块**，负责把"一个 session 实例"变成"用户能打字的终端界面"。它承担 3 个产品功能：
 
-1. **xterm.js 终端渲染**：每个 pane 对应一个 xterm 实例，绑定到对应 backend session 的输出流
-2. **pane 树布局**：根据 pane tree 的 split 关系（horizontal/vertical）用 CSS 嵌套 + ResizeHandle 渲染
-3. **tab 切换**：WindowTabBar 列出当前 window 的所有 tab，setActiveWindow 由 layout 通过 props 传入
-4. **init 占位**：当 pane 是 init 类型（kind: "init"），渲染 PaneInitCard 引导用户创建第一个 session
-5. **command 发送**：CommandSendPanel 给 tmux control mode 提供命令行面板（send-keys / new-window 等）
-6. **resize**：用户拖拽 pane 边界时调用 `app/modules/pane/lifecycle` 的 resize useCase
+1. **xterm 终端渲染**——每个 session 对应一个 xterm 实例，绑定 backend PTY 输出流
+2. **pane 分屏布局**——支持任意嵌套的 horizontal/vertical split，用户可拖拽 resize
+3. **tmux -CC 控制**——tmux session 时挂载 tmux 专属视图（control window、window 列表）
 
 ## 2. 这个 module **不**负责什么
 
-- **不创建 session**——会话创建由 `app/modules/session/create` 接管，Terminal 通过 props 接收已创建的 session
-- **不管理 window tab**——tab 列表来自 `service/workspace/store` 的当前 window，Terminal 只 render
-- **不持久化**——所有写持久化的逻辑在 `app/modules/workspace/persistence`
-- **不直接调 backend IPC**——所有 `invoke` 走 service 层（详见 [`DOWNSTREAM.md`](./DOWNSTREAM.md) §3）
-- **不渲染侧栏或设置**——那些归 sidebar / settings module
+- **不创建 session**——session 创建归 `session` module，terminal 只接收已存在的 session
+- **不管理 window tab**——tab 切换归 `workspace` module（用户在 workspace 视角下切换 window）
+- **不管理侧栏**——侧栏归 `workspace` module
+- **不管理设置**——terminal 偏好（字体、字号）通过 `settings` module 的 props 注入
+- **不渲染 app shell**——标题栏、布局归 `shell` module
 
-## 3. 跟其他 L2 业务视图 module 的关系
-
-| 邻居 | 关系 | 接缝位置 |
-|---|---|---|
-| `sidebar/` | 无直接依赖，sidebar 只显示「这个 session 存在」，不感知 pane 树 | props 边界（layout 同时持有两者） |
-| `settings/` | 无直接依赖，settings 改全局偏好通过 store 重渲染 Terminal | service/workspace/store + service/theme/store |
-| `dialogs/` | 当 Terminal 需要让用户选个 session 装进 init pane 时，调 `dialogs/SelectSessionDialog`（通过 props 注入回调） | props callback |
-
-跟 `dialogs/` 的接缝是**当前架构债**——Terminal 直引 dialogs 违反了 L2 → L3 的单向依赖。改造 PR 应在 layout 处统一注入 dialog opener。
-
-## 4. 跟 tmux 子目录的关系
-
-`ui/tmux/` 是 terminal module 的**扩展**，不是独立 module：
-
-- `terminal/Terminal.tsx` 检测当前 session 是 tmux 类型时，挂载 `tmux/TmuxControlWindowView.tsx`
-- 二者通过 props / context 协作，不互相 import 内部文件
-- 详见 [`../README.md` §5.1](../../README.md)
-
-## 5. 子目录组织（目标态）
+## 3. 子结构
 
 ```
-ui/terminal/
-├── Terminal.tsx             单 pane 渲染入口（xterm + 子 pane 递归）
-├── Pane.tsx                 单个 pane 节点（init / terminal 两种 kind）
-├── PaneTree.tsx             pane 树遍历与 ResizeHandle 嵌套
-├── PaneInitCard.tsx         init pane 的引导卡片
-├── TabBar.tsx               window 内 tab 切换条
-├── WindowTabBar.tsx         workspace 级别的 window 切换条
-└── CommandSendPanel.tsx     tmux command 发送面板
+modules/terminal/
+├── api.ts                            # 唯一对外入口（详见 INTERFACE.md）
+├── view/                             # 本 module 内部 React 组件
+│   ├── Terminal.tsx                  # 单 session 渲染入口
+│   ├── Pane.tsx                      # 单个 pane 节点
+│   ├── PaneTree.tsx                  # pane 树遍历与 split 布局
+│   ├── ResizeHandle.tsx              # pane 边界拖拽
+│   ├── SplitPane.tsx                 # 创建/切换 split
+│   ├── TmuxControl.tsx               # tmux session 的 control window 视图
+│   └── TmuxWindowsList.tsx           # tmux session 的 window 列表
+├── store.ts                          # xterm 实例管理（key 是 sessionId）
+├── model.ts                          # PaneNode / SplitDirection 类型 + 派生
+├── index.ts                          # barrel：只 re-export from api.ts
+└── *.test.ts
 ```
 
-每个文件配 `.test.tsx` 位于同目录。
+## 4. 用户故事（从用户视角描述 module 边界）
+
+- **作为用户**，我希望点击"新建 pane"能把当前 pane 拆成两个 → 这是 `SplitPane.tsx` 的职责
+- **作为用户**，我希望拖拽 pane 边界能调整大小 → `ResizeHandle.tsx`
+- **作为用户**，我希望 tmux session 看见专属的 control window → `TmuxControl.tsx`
+- **作为用户**，我希望 terminal 在切换 session 时不丢失滚动历史 → `store.ts` 持有 xterm 实例
+
+## 5. 跟其他 module 的关系
+
+| module | 关系 |
+|---|---|
+| `shell` | shell 调用 terminal 的 `<App>` 入口，terminal 不知道 shell 的存在 |
+| `workspace` | workspace 通过 `terminal/api.ts` 拿到 `<TerminalPane>` 组件，渲染在自己的 window tab 区域。**terminal 不感知 workspace** |
+| `session` | terminal 订阅 session store 拿到 session 元数据（kind / display config）。**terminal 强依赖 session** |
+| `settings` | terminal 通过 props 接收 `terminalFont`、`terminalFontSize`、`terminalTheme` 等设置。terminal 自己不读 settings store |
+
+## 6. 这个 module 的"产品语言"术语
+
+- **pane** — 一个独立的终端显示区域
+- **split** — 两个 pane 之间的水平/垂直分割
+- **pane tree** — 嵌套 split 形成的树状结构
+- **resize** — 用户拖拽改变相邻 pane 的相对大小
+- **tmux control** — tmux -CC 模式下额外的 UI 控件（不是普通 xterm）
+
+术语在 module 内部一致；跨 module 通信时把这些术语翻译成 session/workspace 通用词汇。

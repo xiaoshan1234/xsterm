@@ -1,116 +1,146 @@
 # Module · Terminal — 对外接口
 
-> **位置（目标态）**：`src/ui/terminal/`
-> **消费方**：`layout/WorkspaceContainer.tsx`（唯一进口）、`layout/AppLayout.tsx`（间接持有状态）
->
-> 本文档描述 Terminal module **对外暴露**的 React 组件 prop 接口。模块内部状态与子组件**不**算对外接口。
+> **位置**：`src/ui/modules/terminal/api.ts`
+> **唯一进口**：其他 module 只能 `import { ... } from "@/ui/modules/terminal/api"`
 
-## 1. 顶层入口组件
+## 1. 对外暴露什么
 
-### `Terminal`
+terminal module 对外只暴露 **3 类东西**：
 
-主入口，渲染一个 pane 节点（递归处理 split 子树）。
+1. **React 组件**——给 `workspace` / `shell` 嵌入用
+2. **Hook**——给其他 module 订阅 terminal 状态用
+3. **类型**——跨 module 通信用的契约
+
+**禁止**对外暴露：
+
+- xterm 实例的 ref 句柄（用回调传出，不暴露 ref）
+- pane 树内部算法（应是 module 内部实现）
+- 内部 store 的 mutation 方法（只能通过 hook 暴露）
+
+## 2. 顶层组件
+
+### `<App>`
+
+terminal module 的"自包含入口"——`shell` 把 `<App>` 装在 workspace tab 区域内。
 
 ```typescript
-interface TerminalProps {
-  /** 当前 pane 节点（递归渲染 split 子树） */
-  pane: PaneNode;
-  /** 当前 workspace ID（写回 model 时需要） */
-  workspaceId: string;
-  /** 当前 window ID */
-  windowId: string;
-  /** 用户点击 tab 的回调（layout 负责 setActiveWindow） */
-  onSelectWindow?: (windowId: string) => void;
-  /** 当 init pane 用户选择"新建"时回调，layout 打开 dialog */
-  onRequestCreateSession?: (paneId: string) => void;
-  /** tmux 会话附挂的 control window view（通过 props 注入，避免直引 ui/tmux） */
+interface AppProps {
+  /** 当前激活 session id（workspace 注入） */
+  sessionId: number;
+  /** 当前 pane 树（workspace 注入；如果 session 刚创建传空） */
+  paneTree?: PaneNode;
+  /** 用户 split pane 的回调（terminal 不知道 workspace 怎么响应，由 workspace 提供） */
+  onSplitPane: (paneId: string, direction: SplitDirection, sessionId: number) => void;
+  /** 用户 close pane 的回调 */
+  onClosePane: (paneId: string) => void;
+  /** terminal 偏好（settings 注入） */
+  fontSize: number;
+  fontFamily: string;
+  theme: TerminalTheme;
+  /** tmux 时挂载的 control window（shell 注入） */
   renderTmuxControl?: (sessionId: number) => React.ReactNode;
 }
 ```
 
-**约束**：Terminal 不持有 xterm 实例的生命周期——xterm 实例的生命周期由 Terminal 内部 useEffect 管理，但 xterm 输出流绑定的是 `service/output/sessionOutputChannel`（订阅 backend session-output 事件），而非 Terminal 自己持有 socket。
+`<App>` 内部自动决定：session 是 tmux 类型时挂载 `<TmuxControl>`，否则只渲染 `<Terminal>`。
 
-### `WindowTabBar`
+### `<TerminalPane>`
 
-Workspace 级别的 tab 条，列出当前 workspace 所有 window 的 tab。
+`workspace` 想"嵌入一个 pane"时用（不是入口，是单个 pane）。
 
 ```typescript
-interface WindowTabBarProps {
-  windows: TerminalWindow[];
-  activeWindowId: string;
-  onSelectWindow: (windowId: string) => void;
-  onCloseWindow: (windowId: string) => void;
-  onRenameWindow: (windowId: string, name: string) => void;
-  onReorderWindows: (fromIndex: number, toIndex: number) => void;
+interface TerminalPaneProps {
+  pane: PaneNode;
+  sessionId: number;
+  isActive: boolean;
+  onActivate: () => void;
+  fontSize: number;
+  theme: TerminalTheme;
 }
 ```
 
-**约束**：4 个回调全部走 props 注入，不在内部调 `app/modules/window/*`。layout 把 `app/modules/window/lifecycle` 的 useCase 包成回调传进来。
+## 3. 公开 Hook
 
-### `PaneInitCard`
+### `useTerminal(sessionId)`
 
-Init 占位 pane 的引导卡片（"点击新建"或"从已保存配置选"）。
+其他 module 想"订阅这个 session 的 xterm 状态"时用（例如 session module 想显示"session X 正在打字中"）。
 
 ```typescript
-interface PaneInitCardProps {
-  onCreateNew: () => void;
-  onPickSaved: () => void;
+interface UseTerminalReturn {
+  isReady: boolean;            // xterm 初始化完成
+  cols: number;
+  rows: number;
+  /** 给 sessionId 写入字节（其他 module 不用，列出仅为完整性） */
+  write: (data: Uint8Array) => void;
+}
+
+function useTerminal(sessionId: number): UseTerminalReturn;
+```
+
+### `usePaneTree(sessionId)`
+
+```typescript
+interface UsePaneTreeReturn {
+  tree: PaneNode;
+  split: (paneId: string, direction: SplitDirection, newSessionId: number) => void;
+  close: (paneId: string) => void;
+  resize: (paneId: string, ratio: number) => void;
+}
+
+function usePaneTree(sessionId: number): UsePaneTreeReturn;
+```
+
+## 4. 类型
+
+```typescript
+// 模型核心
+type PaneNode =
+  | { kind: "leaf"; id: string; sessionId: number }
+  | { kind: "split"; id: string; direction: "horizontal" | "vertical"; ratio: number; children: [PaneNode, PaneNode] };
+
+type SplitDirection = "horizontal" | "vertical";
+
+interface TerminalTheme {
+  background: string;
+  foreground: string;
+  cursor: string;
+  selection: string;
+  black: string; red: string; green: string; yellow: string;
+  blue: string; magenta: string; cyan: string; white: string;
+  brightBlack: string; brightRed: string; brightGreen: string; brightYellow: string;
+  brightBlue: string; brightMagenta: string; brightCyan: string; brightWhite: string;
 }
 ```
 
-### `CommandSendPanel`
+## 5. 不对外暴露
 
-tmux command 发送面板（send-keys / new-window 等）。
+- `view/` 目录下的所有内部组件——`Pane.tsx` / `PaneTree.tsx` / `ResizeHandle.tsx` / `SplitPane.tsx` / `TmuxControl.tsx` / `TmuxWindowsList.tsx` 都是 terminal 内部
+- `store.ts` 的 xterm 实例 Map——只能通过 `useTerminal()` 访问
+- pane 树的 DFS 算法 / split 算法——纯函数在 `model.ts`，但仅限 module 内部用
 
-```typescript
-interface CommandSendPanelProps {
-  sessionId: number;        // tmux session
-  /** 命令历史（由父组件从 store 拿，避免面板自己订阅） */
-  recentCommands?: string[];
+## 6. 接缝契约
+
+```
+// workspace/TabContent.tsx
+import { App as TerminalApp } from "@/ui/modules/terminal/api";
+import type { TerminalTheme } from "@/ui/modules/terminal/api";
+
+function TabContent({ sessionId, theme }: { sessionId: number; theme: TerminalTheme }) {
+  return (
+    <TerminalApp
+      sessionId={sessionId}
+      fontSize={theme.fontSize}
+      fontFamily={theme.fontFamily}
+      theme={theme.terminal}
+      onSplitPane={(paneId, dir, newSessionId) => workspaceApi.splitPane(activeWindowId, paneId, dir, newSessionId)}
+      onClosePane={(paneId) => workspaceApi.closePane(activeWindowId, paneId)}
+    />
+  );
 }
-```
-
-## 2. 公开 hook（仅供 layout / 其他 module 复用）
-
-### `useTerminalResize(paneId: string)`
-
-封装"用户拖拽 pane 边界"→ 调 `app/modules/pane/lifecycle.resizePane` 的副作用。**注意**：当前代码 `Terminal.tsx` 内联了这段逻辑，没有独立 hook。改造 PR 应抽出。
-
-返回：
-
-```typescript
-{
-  isDragging: boolean;
-  onResizeStart: (e: React.PointerEvent) => void;
-  onResizeMove: (deltaPx: number) => void;
-  onResizeEnd: () => void;
-}
-```
-
-## 3. 不对外暴露
-
-以下内容是 terminal module **内部**使用，**禁止**被 sidebar / settings / dialogs 直接 import：
-
-- 内部 pane 树遍历辅助函数（应在 `app/rules/paneTree.ts`，terminal 只调用，不实现）
-- xterm 实例的 useRef 句柄（必须用 onOutput / onData 回调传出）
-- ResizeHandle 子组件（仅 Pane / PaneTree 内部使用）
-
-## 4. 跟 layout 接缝的契约
-
-```
-layout/WorkspaceContainer.tsx
-    │ 读 workspace store → 拿到当前 activeWindow
-    ▼
-<WindowTabBar windows={...} activeWindowId={...} onSelectWindow={...} />
-    │
-    ▼
-<Terminal pane={activeWindow.rootPane} workspaceId={...} windowId={...}
-          onSelectWindow={layout.handleSelectWindow}
-          onRequestCreateSession={layout.openSelectSessionDialog}
-          renderTmuxControl={(sid) => <TmuxControlWindowView sessionId={sid} />} />
 ```
 
 **接缝约束**：
 
-- layout 必须提供 `renderTmuxControl`（即使是返回 null），避免 Terminal 自己 `import { TmuxControlWindowView } from "../tmux/..."`
-- layout 必须提供所有 `onXxx` 回调，Terminal 不内联 useCase 调用
+- 调用方必须提供所有 `onXxx` 回调——terminal **不**知道 workspace 怎么响应 split/close
+- terminal **不**自己读 session store——`sessionId` 通过 props 传入
+- terminal **不**直接调 `useSettingsStore`——所有 settings 通过 props 注入
