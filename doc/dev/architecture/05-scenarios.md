@@ -17,12 +17,12 @@
 
 **操作**：用户点 "New Local Session" → 选 shell → 回车。
 
-| 视图 | 关注点 |
-|---|---|
-| 逻辑 | `Session` 注册表新增 1 项；`workspace.windows[]` 增 1 个 Window；Window 内的 PaneTree 是 1 个 Leaf，绑该 Session.id |
-| 进程 | SessionManager 在 DashMap 插入；本地 PTY 在 tokio runtime spawn；stdout → session-output Channel → 前端 |
-| 开发 | 前端 `CreateSessionDialog` → `invoke("create_session", config)` → `commands/session.rs::create_session` → `services::local_session::spawn` → 返回 `Session.id` |
-| 物理 | Tauri WebView2 ↔ 主进程 IPC；local PTY 在用户机 fork；无网络 |
+| 视图  | 关注点                                                                                                                                                        |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 逻辑  | `Session` 注册表新增 1 项；`workspace.windows[]` 增 1 个 Window；Window 内的 PaneTree 是 1 个 Leaf，绑该 Session.id                                                         |
+| 进程  | SessionManager 在 DashMap 插入；本地 PTY 在 tokio runtime spawn；stdout → session-output Channel → 前端                                                              |
+| 开发  | 前端 `CreateSessionDialog` → `invoke("create_session", config)` → `commands/session.rs::create_session` → `services::local_session::spawn` → 返回 `Session.id` |
+| 物理  | Tauri WebView2 ↔ 主进程 IPC；local PTY 在用户机 fork；无网络                                                                                                           |
 
 **数据流**（端到端）：
 
