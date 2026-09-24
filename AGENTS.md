@@ -126,43 +126,6 @@ Tools available in this repo (none of which are wired into a CI pipeline yet —
 
 ## Architecture
 
-### Core Concepts
-
-xsterm 的几个概念容易混淆（特别是 "session"）。**session = backend 连接的抽象，与 UI 树（workspace / window / pane）正交**。
-
-| 概念 | 是什么 | 拥有方 |
-|---|---|---|
-| **xsterm session** (frontend `Session`) | **backend 连接** —— 一个能读写 stdin/stdout 的活动实体。local 模式 = PTY 进程；ssh 模式 = russh channel；tmux-cc 模式 = tmux pane 的逻辑代理。**独立于 UI 树**。 | Rust：`SessionManager.sessions: DashMap<u32, ActiveSession>`。<br>React：`useSessionState` 的 `sessions: Session[]` |
-| **workspace** | UI 顶层容器（`WorkspaceContainer`），承载多个 xsterm Window | `workspaces[]` |
-| **xsterm Window** | UI 二级容器，承载一棵 `PaneTree`。对应 tmux window（1:1）。 | `workspace.windows[]` |
-| **pane** (PaneTree leaf) | UI 三级容器，渲染一个 xterm.js 实例。**绑定**一个 Session（通过 `sessionId` 字段）。对应 tmux pane（1:1）。 | `window.rootPane` 树 |
-| **TmuxController** | 1 个 `tmux -CC` 子进程 / SSH exec channel 的客户端。≈ 1 个 tmux session（对用户不可见）。 | Rust：`SessionManager.tmux_controllers: DashMap<u32, Arc<TmuxController>>` |
-
-**关键关系**：
-
-- **xsterm session ≠ tmux session**。前者是 backend 连接的抽象，后者是 tmux 自己的概念（承载多个 window/pane）。两者**没有对应关系**。
-- **xsterm pane ↔ tmux pane**（1:1 渲染关系）。两者都是 leaf 概念；tmux pane 提供 stdin/stdout 给 xsterm session，xsterm pane leaf 在 PaneTree 里**渲染**该 session。
-- **创建 session 时根据 `type` 自动装配 UI**（`useSessionLifecycle::createAndActivateSession`）：
-  - `local` / `ssh` / `tmux-cc (create)` → 默认调 `createWindowFromSession` → 1 new xsterm Window + 1 new pane leaf 绑该 session
-  - `tmux-cc (attach)` → 通过 `tmux-pane-added` 事件注册已有 pane bindings；listener 决定是否新建 ws/window
-  - `tmux split` (`create_tmux_pane`) → 不创建 ws/window；在已存在的 PaneTree 里 split 出新 leaf 绑新 session
-  - `tmux new-window` (`create_tmux_window`) → 创建新 xsterm Window + 第一个 pane leaf 绑新 session
-- **关闭 session 时**：`closeSession` → 关闭 backend → 删 session → 在所有 workspace 调 `removeSessionAndCollapse` 移除绑它的 leaf。
-- **Tauri 命令后缀** `_tmux_pane` / `_tmux_window` 反映**该命令的 tmux 视角效果**（如 `kill-pane` / `split-window`），且**参数也都是 tmux 视角**。两类对照:
-  - **`_tmux_pane` 命令**（`kill_tmux_pane` / `create_tmux_pane` / `capture_tmux_pane` 等）接收 `(controller_id: u32, tmux_pane_id: String)`（`tmux_pane_id` 是 server-side id 如 `"%5"`，来自 `tmux-pane-added` 事件的 payload）。
-  - **`_tmux_window` 命令**（`kill_tmux_window` / `rename_tmux_window` 等）接收 `(controller_id: u32, tmux_window_id: String)`（`tmux_window_id` 是 server-side id 如 `"@5"`，来自 `tmux-window-added` 事件的 payload）。
-  - **resize 按后端类型分命令**：原本单一的 `resizeSession` 拆成 `resizePane(controller_id, tmux_pane_id, rows, cols)`（tmux pane resize，对应 `resize-pane`）、`resizePty(session_id, rows, cols)`（local PTY ioctl）、`resizeSsh(session_id, rows, cols)`（russh channel `window-change`）。TS 通过 `Session.type` 字段决定 invoke 哪个。
-  - **本地 id 对 server id 的转换在 ts 层完成**：ts 持有 xsterm Window / xsterm Session ↔ tmux window / tmux pane 的映射（从 `tmux-*-added` 事件 payload 里拿到的 `(controllerId, tmux_*)`），invoke 前直接传 server id；rs 层不再查 `sessions` 也不再做 controller 全表扫描。
-
-**命名禁忌**（读代码 / 写文档时务必注意）：
-
-- ❌ "xsterm session = tmux pane" —— 错。xsterm session 是连接，pane 是 UI leaf。
-- ❌ "xsterm session 对应 tmux session" —— 错。xsterm session 代理的是 **tmux pane**，不是 tmux session。
-- ❌ "frontend `Session` 就是 xsterm pane" —— 错。pane 是 PaneTree leaf，通过 `sessionId` 引用 Session。
-- ❌ 把 `xsterm_session_id` 参数类型说成 "tmux pane id" —— 错。它是 `Session.id` u32。
-
-- 详细实现：[`doc/dev/architecture/02-process-view.md` §3](doc/dev/architecture/02-process-view.md) / [`doc/dev/architecture/03-development-view.md` §3](doc/dev/architecture/03-development-view.md) / [`doc/dev/architecture/README.md`](doc/dev/architecture/README.md) / [`doc/dev/history/prd-0.1-requirements/req-006-tmux.md` §2](doc/dev/history/prd-0.1-requirements/req-006-tmux.md)
-
 ### Frontend
 
 - Entry chain: `index.html` → `src/main.tsx` → `src/App.tsx` → `src/components/AppLayout.tsx`.
