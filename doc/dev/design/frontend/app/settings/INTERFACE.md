@@ -10,7 +10,7 @@
 ## 2. 核心接口
 
 ```typescript
-import type { Settings, LogLevel, TerminalPreferences } from "@/app/shared/model";
+import type { Settings, LogLevel, TerminalPreferences } from "@/model";
 
 export interface SettingsApi {
   // ============ 持久化 ============

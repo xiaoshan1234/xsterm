@@ -36,7 +36,7 @@ import { useSettingsApi } from "@/app/modules/settings/api";        // ✅ 跨 m
 import { useWorkspaceApi } from "@/app/modules/workspace/api";
 import { useTerminalApi } from "@/app/modules/terminal/api";
 import { useSessionApi } from "@/app/modules/session/api";
-import { usePersistenceApi } from "@/app/shared/service/persistence/api";
+import { usePersistenceApi } from "@/service/persistence/api";
 
 export async function initialize(): Promise<void> {
   const settings = useSettingsApi();

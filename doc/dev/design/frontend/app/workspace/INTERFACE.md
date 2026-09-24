@@ -18,7 +18,7 @@ import type {
   PaneNode,
   SplitDirection,
   PersistedWorkspace,
-} from "@/app/shared/model";
+} from "@/model";
 
 export interface WorkspaceApi {
   // ============ Workspace CRUD ============
@@ -70,7 +70,7 @@ export function useWorkspaceApi(): WorkspaceApi;
 ```typescript
 // modules/workspace/usecases/openSession.ts
 import { useTerminalApi } from "@/app/modules/terminal/api";   // ✅ 跨 module 调 api.ts
-import { useSessionStore } from "@/app/shared/service/session/store";
+import { useSessionStore } from "@/service/session/store";
 
 export async function openSession(
   sessionId: number,

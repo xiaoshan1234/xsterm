@@ -58,7 +58,7 @@ v3 设计里 createLocalSession 直接 hardcode 默认值。新设计：
 
 ```typescript
 // modules/session/usecases/createLocal.ts
-import { useSettingsStore } from "@/app/shared/service/settings/store";  // ✅ 通过 service
+import { useSettingsStore } from "@/service/settings/store";  // ✅ 通过 service
 
 export async function createLocal(config: LocalSessionConfig, workspaceId: string): Promise<...> {
   const settings = useSettingsStore.getState();

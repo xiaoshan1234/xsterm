@@ -1,86 +1,300 @@
-# Frontend · Infra 层 (= `src/infra/`)
+# Frontend · Infra 层
 
-> **职责**：与外部世界（Tauri IPC、本地 store、剪贴板、文件系统、xterm 缓冲）的适配层。infra = "I/O + 适配"。所有 `invoke()`、`listen()`、`localStorage`、剪贴板读写只允许出现在这一层。
->
-> infra 是 frontend 的"最底层"。它把 `@tauri-apps/api`、浏览器 API、Tauri 插件封到统一接口后面，让 service 层不必知道用的是哪一套实现。
+> **位置**：`src/infra/`
+> **关注点**：物理适配（IPC / 存储 / 剪贴板 / 缓冲）
+> **平级于**：app / ui / model / service（5 个顶层目录之一）
 
-## 1. 模块清单（现状）
+## 1. 职责
+
+infra 是 frontend 的**物理适配层**。它承担 4 类职责：
+
+1. **Tauri IPC 适配**——`invoke()` 封装（commands）、`listen()` 封装（events）、Repository 接口实现
+2. **本地持久化**——`tauri-plugin-store` 包装
+3. **剪贴板**——剪贴板读写（`navigator.clipboard` + `tauri-plugin-clipboard-manager`）
+4. **输出缓冲**——ring buffer、节流、帧解析
+
+**最关键的约束**：
+
+> **infra 是 frontend 唯一允许直接 `import` `@tauri-apps/api` 的地方**。
+> 其他层（model / service / app / ui）必须经过 infra 才能用 IPC。
+
+这条约束把 "IPC 污染" 限制在一个目录——审查 IPC 改动只需要看 infra。
+
+## 2. 目录结构
 
 ```
 src/infra/
-├── index.ts                   barrel
-│
-├── tauri/                     Tauri IPC 适配
-│   ├── commands/              invoke 封装
-│   │   ├── index.ts
-│   │   ├── sessions.ts        createSession / writeSession / resize / close ...
-│   │   ├── tmux.ts            tmux 相关 invoke
-│   │   ├── persistence.ts     save/load
-│   │   └── window.ts
-│   ├── events/                listen 封装
-│   │   ├── sessionOutput.ts   session-output 事件
-│   │   ├── sessionClosed.ts   session-closed 事件
-│   │   ├── tmuxEvents.ts      tmux-events
-│   │   └── autoAttach.ts      auto-attach 触发
-│   ├── eventBus.ts            通用事件总线
-│   ├── eventBuses/            按 domain 的事件总线
+├── tauri/              Tauri IPC 适配
+│   ├── commands/       invoke 封装（按 backend domain 拆）
+│   │   ├── session.ts
+│   │   ├── workspace.ts
+│   │   ├── tmux.ts
+│   │   └── persistence.ts
+│   ├── events/         listen 封装
+│   │   ├── sessionOutput.ts
+│   │   ├── sessionClosed.ts
+│   │   └── tmuxEvents.ts
+│   ├── repositories/   Repository 接口实现（对应 model/repository.ts）
+│   ├── eventBuses/     按 domain 的事件总线
 │   │   ├── session.ts
 │   │   └── tmux.ts
-│   └── repositories/          Repository 接口的实现（与 model/repository.ts 配对）
-│       ├── sessions.ts
-│       ├── persistence.ts
-│       └── tmux.ts
+│   ├── eventBus.ts     通用事件总线底座
+│   └── index.ts
 │
-├── store/                     本地持久化（tauri-plugin-store）
+├── store/              本地持久化（tauri-plugin-store）
 │   ├── savedConfigs.ts
 │   ├── savedWorkspaces.ts
 │   ├── savedWindows.ts
 │   ├── groups.ts
-│   └── migrations.ts          schema 版本迁移
+│   └── migrations.ts
 │
-├── buffers/                   输出帧缓冲
-│   ├── sessionOutputBuffer.ts ring buffer
-│   ├── sessionOutputChannel.ts
-│   └── sessionOutputFrame.ts
-│
-├── clipboard/                 剪贴板读写
+├── clipboard/          剪贴板读写
 │   ├── read.ts
 │   └── write.ts
 │
-└── logger/                    前端 logger（包 console.* 转发到 backend）
-    ├── logger.ts
-    └── types.ts
+├── buffers/            输出帧缓冲
+│   ├── sessionOutputBuffer.ts
+│   ├── sessionOutputChannel.ts
+│   └── sessionOutputFrame.ts
+│
+├── logger/             前端 logger
+│   ├── logger.ts
+│   └── types.ts
+│
+├── icons/              Icon 组件
+│
+└── styles/             设计系统 CSS
+    ├── global.css
+    ├── layout.css
+    └── pane.css
 ```
 
-## 2. 关键约束
+## 3. 关键约束
 
-- **infra 是唯一允许 import `@tauri-apps/api` 的层**。service / app / model 出现 `invoke` 或 `listen` 直接字面量 = 架构违规。
-- **invoke 调用必须经过 `repositories/`**——不允许 service 层写 `invoke('create_session', cfg)`。`infra/tauri/commands/` 里的裸 invoke 仅作为仓库方法的内部实现，不对外暴露。
-- **错误统一抛 typed error**，不是裸 `Error` 或 string。service 层 catch 后转成业务错误。
-- **事件总线 (`eventBus.ts`) 是 infra 的核心**：service 层订阅事件 → 写 model；app 层通过 hook 订阅事件 → re-render。三层的事件契约定义在 `model/<domain>/events.ts`。
-- **`store/` 的 schema 迁移**：`migrations.ts` 是唯一允许写版本号的地方。新加字段必须 append migration，老字段 deprecated 但不能删。
+- **infra 是唯一允许 `import { invoke } from "@tauri-apps/api"` 的层**
+- service / app / ui 出现 `invoke` / `listen` 字面量 = 架构违规
+- invoke 调用必须经过 `repositories/`——不允许 service 直接 import `commands/` 内部
+- 错误统一抛 typed error，不抛裸 `Error` 或 string
+- 事件总线 (`eventBus.ts`) 是 infra 的核心
 
-## 3. 依赖方向
+## 4. invoke / listen 封装模板
+
+### 4.1 `commands/<domain>.ts`
+
+```typescript
+// src/infra/tauri/commands/session.ts
+import { invoke } from "@tauri-apps/api/core";
+import type { LocalSessionConfig, SshSessionConfig } from "@/model/session/types";
+
+export const sessionCommands = {
+  createLocal: (config: LocalSessionConfig) =>
+    invoke<number>("create_local_session", { config }),
+
+  createSsh: (config: SshSessionConfig) =>
+    invoke<number>("create_ssh_session", { config }),
+
+  close: (sessionId: number) =>
+    invoke<void>("close_session", { sessionId }),
+
+  write: (sessionId: number, data: Uint8Array) =>
+    invoke<void>("write_session", { sessionId, data }),
+};
+```
+
+### 4.2 `events/<event>.ts`
+
+```typescript
+// src/infra/tauri/events/sessionOutput.ts
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
+
+export interface SessionOutputPayload {
+  sessionId: number;
+  data: number[];   // backend 发 UTF-8 byte array
+}
+
+export function listenSessionOutput(
+  callback: (event: SessionOutputPayload) => void
+): Promise<UnlistenFn> {
+  return listen<SessionOutputPayload>("session-output", (event) => {
+    callback(event.payload);
+  });
+}
+```
+
+### 4.3 `repositories/<domain>.ts`
+
+```typescript
+// src/infra/tauri/repositories/sessions.ts
+import type { SessionRepository } from "@/model/session/repository";
+import { sessionCommands } from "../commands/session";
+import { listenSessionOutput } from "../events/sessionOutput";
+
+export const sessionRepository: SessionRepository = {
+  async createLocal(config) {
+    const id = await sessionCommands.createLocal(config);
+    return { id, /* ... */ };
+  },
+  async close(id) {
+    await sessionCommands.close(id);
+  },
+  // ...
+};
+```
+
+## 5. event bus 设计
+
+infra 提供 2 层事件总线：
+
+```typescript
+// 底层：通用 eventBus（key-value 事件）
+import { eventBus } from "@/infra/tauri/eventBus";
+
+eventBus.on("session-output", (payload) => { /* ... */ });
+eventBus.emit("session-output", payload);
+
+// 上层：domain-specific eventBuses（带类型化 payload）
+import { sessionEventBus } from "@/infra/tauri/eventBuses/session";
+
+sessionEventBus.onOutput((event) => { /* event 类型安全 */ });
+sessionEventBus.emitOutput(event);
+```
+
+**service 层订阅时只用上层**（带类型）——infra 内部用底层 + listen 桥接到上层。
+
+## 6. store 持久化
+
+`src/infra/store/` 用 `tauri-plugin-store` 持久化本地数据：
+
+```typescript
+// src/infra/store/savedConfigs.ts
+import { Store } from "@tauri-apps/plugin-store";
+
+const store = await Store.load("savedConfigs.json");
+
+export const savedConfigsStore = {
+  async getAll(): Promise<PersistedSessionConfig[]> {
+    return await store.get("configs") ?? [];
+  },
+  async upsert(config: PersistedSessionConfig): Promise<void> {
+    const configs = await this.getAll();
+    const updated = configs.filter(c => c.id !== config.id).concat(config);
+    await store.set("configs", updated);
+    await store.save();
+  },
+};
+```
+
+**schema migration**：当 store 文件从老版本升级时，`migrations.ts` 处理数据转换。
+
+## 7. clipboard 适配
+
+```typescript
+// src/infra/clipboard/read.ts
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
+
+export async function readClipboardText(): Promise<string> {
+  return await readText();
+}
+
+// src/infra/clipboard/write.ts
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+
+export async function writeClipboardText(text: string): Promise<void> {
+  return await writeText(text);
+}
+```
+
+## 8. buffers（输出缓冲）
+
+```typescript
+// src/infra/buffers/sessionOutputBuffer.ts
+export class SessionOutputBuffer {
+  // ring buffer 实现（参考现状代码）
+}
+```
+
+**关键**：
+
+- buffer 在 infra 层（不是 model 层，因为涉及 requestAnimationFrame 副作用）
+- model 层只定义 OutputBuffer **类型**
+- infra 层提供具体实现
+
+## 9. logger
+
+```typescript
+// src/infra/logger/logger.ts
+import { invoke } from "@tauri-apps/api/core";
+
+export const logger = {
+  info(message: string, meta?: object): void {
+    console.info(message, meta);
+    invoke("log_message", { level: "info", message, meta }).catch(() => {});
+  },
+  error(message: string, error?: Error): void {
+    console.error(message, error);
+    invoke("log_message", { level: "error", message, error: error?.message }).catch(() => {});
+  },
+};
+```
+
+## 10. 跟 service / app / ui / model 的依赖关系
 
 ```
-infra/  ──►  model/  (类型契约来自 model/repository.ts 的接口)
-   │
-   └─►  @tauri-apps/api、@tauri-apps/plugin-store、tauri-plugin-clipboard-manager、浏览器 API
+infra  ──►  (无——只依赖 @tauri-apps/api)
+
+service  ──►  infra   (service 通过 infra 的 commands/events 间接调 IPC)
+app     ──►  service  (app 通过 service 调 IPC，**不直接调 infra**)
+ui      ──►  service  (ui 同上)
+model   ──►  (无)
 ```
 
-infra 层**禁止**依赖 service / app / ui。
+**禁止**：
 
-## 4. 重要细节
+- ❌ `infra/` → `service/` 或 `app/` 或 `ui/` 或 `model/`
+- ❌ `app/` 或 `ui/` → `infra/` 直接（必须经过 service）
+- ❌ `model/` → `infra/`（model 是最底层）
 
-- **`eventBus.ts` vs `eventBuses/`**：单例 `eventBus` 是底座，`eventBuses/session.ts` 和 `eventBuses/tmux.ts` 是 domain-specific 的 wrapper（带类型化的 payload）。service 层订阅时只用 wrapper。
-- **`sessionOutputBuffer.ts`** 是 xterm 渲染前的最后一道缓冲。它把后端高频 emit 节流到 ~60fps，避免 xterm 写穿。这个 ring buffer 的设计跟 model/output/ 的类型定义紧耦合，**修改 buffer 大小需要同步更新两处**。
-- **CSP 禁用**（AGENTS.md 记录）：当前 `csp: null`，意味着 frontend 远程脚本不受限制。infra 层如果加新插件（特别是涉及下载 / 网络），必须先回到 app 层决策是否打开 CSP。
+## 11. 现状 infra/ 的问题 → v4 设计意图
 
-## 5. 改进方向
+| 现状 v3 | v4 设计 |
+|---|---|
+| `infra/tauri/commands/` 直接被 service / app import | 必须经过 `infra/tauri/repositories/` |
+| `infra/eventBus.ts` 单例 | 拆分为底层 `eventBus` + 上层 `eventBuses/<domain>.ts` |
+| `infra/store/` 没有 migration 机制 | 加 `migrations.ts` |
+| `infra/clipboard/` 薄包装 | 保持不变（未来扩 image/html 时再分文件） |
 
-- **补齐 `repositories/`**：现状 `infra/tauri/commands/` 的 invoke 已经被 service 直接调用，绕过了 repositories。下一步给每个 commands 文件包一个 repository 实现，service 层通过 repository 接口拿能力，不再直接 import commands。
-- **`infra/logger/` 跟 `service/logger/` 重叠**：如 `frontend/service/README.md` §5 所述，把前端 logger 整体下沉到 infra，service 不再包一层。
-- **`infra/store/` 加 schema 校验**：现在 store 读写都是 `JSON.parse`，没有运行时校验。加 zod schema（model 层定义，infra 层调用）防止 store 文件被外部破坏后整个应用挂掉。
-- **`infra/buffers/` 拆分为 `infra/buffers/{ring,throttle,frame}`**：当前一个文件 200+ 行，承担 ring buffer + 节流 + 帧解析三件事。
-- **`infra/clipboard/` 几乎无内容**：剪贴板读写目前只是 `navigator.clipboard` 的薄包装。如果未来加图片 / 富文本支持，扩成 `clipboard/{text,image,html}.ts`。
-- **`infra/eventBuses/` 跟 `model/<domain>/events.ts` 的契约同步**：现状两边手写对齐，新加事件类型时容易漏改一边。下一步从 `events.ts` 自动生成 eventBus 类型（type-level test 保证编译期对齐）。
+## 12. 强制约束（可机械校验）
+
+```bash
+# infra 是唯一允许直跳 @tauri-apps/api 的层
+grep -rn 'from\s*"@tauri-apps' src/ --include='*.ts' --include='*.tsx' | grep -v 'src/infra/'
+# 必须为空
+
+# app / ui 不能 import infra 内部（只能通过 service）
+grep -rn 'from\s*"\.\./infra/' src/app/ src/ui/ --include='*.ts' --include='*.tsx'
+# 必须为空
+
+# infra 不能 import service / app / ui / model（除 model 类型）
+grep -rn 'from\s*"\.\./\(service\|app\|ui\)' src/infra/ --include='*.ts' --include='*.tsx'
+# 必须为空
+```
+
+## 13. 测试
+
+```
+infra/tauri/commands/session.test.ts       # mock @tauri-apps/api
+infra/store/savedConfigs.test.ts           # mock Store
+infra/buffers/sessionOutputBuffer.test.ts  # ring buffer 单元测试
+```
+
+infra 测试用 vitest mock `@tauri-apps/api` 的 `invoke` 和 `listen`。
+
+## 14. 跟其他层的关系
+
+```
+@tauri-apps/api  ◄────  infra/  (唯一)
+                        │
+                        └────  service/  (通过 commands / events / repositories)
+                                │
+                                └────  app/ + ui/  (通过 service api.ts)
+```

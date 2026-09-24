@@ -41,7 +41,7 @@ modules/settings/
 
 **关键**：settings module **不**直接调 `service/infra`——必须经过 `service/settings` 适配器。`service/settings` 负责把 settings 字段应用到具体的 service（theme/logger/...）。
 
-## 4. shared/ 层
+## 4. 平级层（infra / service / model）
 
 | 调用 | 来源 |
 |---|---|

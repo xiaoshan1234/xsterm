@@ -24,7 +24,7 @@ modules/session/
 - ❌ `modules/session/` → `infra/`（任何路径）
 - ❌ `modules/session/` → `app/`（UI 层不调 useCase）
 
-## 2. shared/ 层
+## 2. 平级层（infra / service / model）
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|

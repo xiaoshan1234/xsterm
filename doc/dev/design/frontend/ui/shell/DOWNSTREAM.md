@@ -48,7 +48,7 @@ modules/shell/
 
 **关键**：shell **不**直接持有 dialog 的 open 状态。dialog 的"什么时候显示"由 session module 注册到 shell 的 `dialogRegistry`，由 shell 统一编排（见 INTERFACE.md §3）。
 
-## 5. shared/ 层（service / model / infra）
+## 5. 平级层（infra / service / model）
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|

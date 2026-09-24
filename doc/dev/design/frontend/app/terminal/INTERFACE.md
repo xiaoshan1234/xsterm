@@ -10,7 +10,7 @@
 ## 2. 核心接口
 
 ```typescript
-import type { SplitDirection, TerminalPreferences } from "@/app/shared/model";
+import type { SplitDirection, TerminalPreferences } from "@/model";
 
 export interface TerminalApi {
   // ============ tmux attach/detach ============
@@ -52,7 +52,7 @@ terminal module **几乎不**调其他 module——它编排的是"调用 backen
 
 ```typescript
 // modules/terminal/usecases/preferences/apply.ts
-import { useTerminalStore } from "@/app/shared/service/terminal/store";
+import { useTerminalStore } from "@/service/terminal/store";
 
 export function applyTerminalPreferences(prefs: TerminalPreferences): void {
   useTerminalStore.getState().applyPreferences(prefs);

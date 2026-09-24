@@ -1,6 +1,7 @@
 # Frontend · UI 层（v4 从零设计）
 
 > **v4 设计**（2026-09）：5 个 feature module + 1 个内部约定。
+> **位置**：`src/ui/`（与 `src/app/` `src/model/` `src/service/` `src/infra/` 平级——5 个顶层目录之一）。
 > **跟 v3 的根本区别**：从"按 React 角色分层"改成"按产品功能切分"。
 >
 > 本文档是设计文档，不是现状整理。代码改造按 v4 描述的目标态执行。
@@ -17,6 +18,8 @@ src/ui/modules/
 ├── session/       session 全生命周期（创建 / 编辑 / 选择 / 持久化）
 └── settings/      应用设置（5 个 tab 的横切配置）
 ```
+
+> **跟平级层的关系**：ui 跟 app/model/service/infra 是 frontend 的 5 个并列顶层目录。ui 通过 `useXxxApi()` 调 app 的业务能力，详见 [`../README.md`](../README.md) §3。
 
 ## 2. 5 个 module 索引
 

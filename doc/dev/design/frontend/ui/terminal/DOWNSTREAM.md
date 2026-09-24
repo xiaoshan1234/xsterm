@@ -44,13 +44,13 @@ modules/terminal/
 
 **为什么从 shell 来**：shell 是"app shell"，承担跨 module 共用 UI 原子的职责。**前提**是这些原子是**纯展示、无业务**的（Icon/Button/Tooltip）。
 
-## 4. shared/ 层（service / model / infra）
+## 4. 平级层（infra / service / model）
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| `PaneNode` 类型 | `shared/types` | model.ts |
-| `SplitDirection` | `shared/types` | model.ts |
-| `TerminalTheme` | `shared/types` | INTERFACE.md §4 已列 |
+| `PaneNode` 类型 | `@/model` (数据层) | model.ts |
+| `SplitDirection` | `@/model` (数据层) | model.ts |
+| `TerminalTheme` | `@/model` (数据层) | INTERFACE.md §4 已列 |
 | session-output 事件订阅 | `service/output/channel` | `store.ts` 把 xterm 写入事件流 |
 | `write(data)` to PTY | `service/output/write` | `store.ts` 把用户键盘输入写入 backend |
 

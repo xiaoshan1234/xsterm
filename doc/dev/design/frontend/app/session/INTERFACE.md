@@ -19,7 +19,7 @@ import type {
   SessionConfig,
   PersistedSessionConfig,
   SessionDisplayConfig,
-} from "@/app/shared/model";
+} from "@/model";
 
 export interface SessionApi {
   // ============ 创建 session ============
@@ -65,7 +65,7 @@ export function useSessionApi(): SessionApi;
 ```typescript
 // modules/session/usecases/openInWorkspace.ts
 import { useWorkspaceApi } from "@/app/modules/workspace/api";   // ✅ 跨 module 调 api.ts
-import { useSessionStore } from "@/app/shared/service/session/store";
+import { useSessionStore } from "@/service/session/store";
 
 export async function openInWorkspace(
   sessionId: number,
@@ -108,7 +108,7 @@ function CreateSessionDialog({ workspaceId, onCreated, onCancel }) {
 **接缝约束**：
 
 - UI 只通过 `useSessionApi()` 拿业务能力
-- UI **不** import `@/app/shared/infra` 或 `@tauri-apps/api`
+- UI **不** import `@/infra` 或 `@tauri-apps/api`
 - 业务逻辑完全在 session module 内部
 
 ## 5. 不对外暴露

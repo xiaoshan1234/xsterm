@@ -69,7 +69,7 @@ shell 内部根据 activeDialog.kind 渲染 <CreateSessionDialog>（由 session 
 shell 自动 closeDialog
 ```
 
-## 5. shared/ 层（service / model / infra）
+## 5. 平级层（infra / service / model）
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|

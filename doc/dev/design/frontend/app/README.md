@@ -1,12 +1,12 @@
 # Frontend · App 层（v4 从零设计）
 
-> **v4 设计**（2026-09）：5 个 feature module + shared/ 4 子目录。
-> **跟 UI v4 的关系**：5 个 app module 跟 5 个 UI module 一一对应。
-> **跟 v3 的根本区别**：从"43 useCases 平铺"改成"5 module × usecases/ 子目录"。
+> **位置**：`src/app/`
+> **关注点**：业务编排（5 module 按产品功能切分）
+> **平级于**：ui / model / service / infra（5 个顶层目录之一）
 
 ## 1. 一句话架构
 
-**app = 5 个 feature module + 4 个 shared 子目录**
+**app = 5 个 feature module**
 
 ```
 src/app/
@@ -17,11 +17,7 @@ src/app/
 │   ├── session/       session 全生命周期业务
 │   └── settings/      设置持久化 + 跨 module 应用
 │
-└── shared/            跨 module 共享基础设施
-    ├── infra/         IPC 适配（唯一允许直跳 @tauri-apps/api）
-    ├── service/       跨 module 状态容器 + IPC 桥
-    ├── model/         纯数据类型 + 派生
-    └── rules/         纯函数（跨 module 算法）
+└── index.ts           barrel
 ```
 
 ## 2. 5 个 module 索引
@@ -62,12 +58,6 @@ src/app/
 - `session` → 任何（核心）
 - `settings` → 任何（横切）
 
-**严禁**：
-
-- ❌ 任何 module → `app/shell/usecases/*`（shell 只在启动/关闭被调）
-- ❌ 任何 module → `infra/` 直接（必须经过 shared/infra）
-- ❌ `settings` → `session`（避免循环：settings 改 session 默认值，session 读默认值——通过 shared/service 中介）
-
 ## 4. 5 个 module ↔ 5 个 UI module 对应表
 
 | app module | UI module | 对应关系 |
@@ -101,20 +91,23 @@ modules/<name>/
 - **禁止** import `usecases/*` / `ipc.ts` / `model.ts` 内部文件
 - 这条规则让 module 内部重构不影响其他 module
 
-## 6. shared/ 4 个子目录
+## 6. app 依赖的 4 个外部层
 
-详见 [shared/README.md](./shared/README.md)。
+app module 依赖 4 个**平级**的基础设施层（不是下层）：
 
-速查：
+| 层 | 位置 | 用途 | 例子 |
+|---|---|---|---|
+| **model** | `@/model/<domain>/` | 读 types + 调 accessor + 调 rules | `import { Session } from "@/model/session/types"` |
+| **service** | `@/service/<domain>/api` | 读写 store + 调 IPC 桥 | `import { useSessionService } from "@/service/session/api"` |
+| **infra** | `@/infra/...` | （**禁止直跳**，必须经过 service） | — |
+| **ui** | `@/ui/<module>/api` | （**禁止反向依赖**） | — |
 
-| 子目录 | 职责 | 谁能 import |
-|---|---|---|
-| `shared/infra` | IPC 适配（唯一允许 `@tauri-apps/api`） | service / module |
-| `shared/service` | 跨 module 状态容器 + IPC 桥 | module |
-| `shared/model` | 纯数据类型 + 派生 | 任何 |
-| `shared/rules` | 纯函数（跨 module 算法） | 任何 |
+**关键**：
 
-**shared 内部依赖方向**：`infra → service → model → rules`（单向）。
+- app 调 model / service 是**正常依赖**
+- app 调 infra **禁止**——必须经过 service
+- app 调 ui **禁止**——app 不感知 UI 存在
+- ui 调 app 是通过 `useXxxApi()` hook（UI 通过 hook 调 app 的业务能力）
 
 ## 7. 跨 module 协调
 
@@ -142,47 +135,28 @@ ui/session: 用户点"新建"，调 useSessionApi()
     ↓
 app/session/usecases/createLocal.ts
     ↓
-1. shared/infra.invoke('create_local_session', config)  → backend 启动 PTY
-2. shared/service/session/store 写入新 session
-3. 如果 shouldSave: shared/service/persistence 写入 saved config
+1. service/session/api.ts 的 createLocal()  → 触发 backend IPC
+2. service/session/store 写入新 session
+3. 如果 shouldSave: service/persistence 写入 saved config
     ↓
 4. app/session/usecases/openInWorkspace.ts
    → useWorkspaceApi().openSession(sessionId, configId, workspaceId)
     ↓
 5. app/workspace/usecases/openSession.ts
-   → 如果 tmux: useTerminalApi().attachTmuxSession(sessionId)
-   → shared/service/workspace/store 更新 pane 树
+   → 如果 tmux: app/terminal/api.ts 的 attachTmuxSession()
+   → service/workspace/store 更新 pane 树
     ↓
 ui/workspace: workspace store 变化 → React re-render → pane 显示 terminal
 ```
 
-### 8.2 用户改 font size
-
-```
-ui/settings: TerminalTab onChange({ terminalFontSize: 14 })
-    ↓
-useSettingsApi().applyTerminalPreferences({ fontSize: 14 })
-    ↓
-app/settings/usecases/apply/terminalPrefs.ts
-    ↓
-useTerminalApi().applyTerminalPreferences({ fontSize: 14 })
-    ↓
-app/terminal/usecases/preferences/apply.ts
-    ↓
-shared/service/terminal/store.applyPreferences(...)   ← 单一数据源
-    ↓
-ui/terminal: 通过 props 接收新 fontSize（不直接订阅 store）
-ui/workspace: 重新渲染，传新 props 给 <TerminalApp>
-```
-
-### 8.3 启动 app
+### 8.2 启动 app
 
 ```
 ui/shell/App.tsx → main.tsx 调 useShellApi().initialize()
     ↓
 app/shell/usecases/initialize.ts 按顺序：
     ↓
-1. shared/service/persistence.checkBackendReady()
+1. service/infra.checkBackendReady()
 2. app/settings.load() → applyTheme / applyLogLevel / applyTerminalPreferences / applySidebarConfig
 3. app/workspace.loadLastWorkspace()
 4. app/terminal.autoAttachTmuxServers()
@@ -191,19 +165,49 @@ app/shell/usecases/initialize.ts 按顺序：
 ui/shell: isReady() = true → 渲染主界面
 ```
 
-## 9. 跟 v3 的核心差异
+## 9. 关键设计决策
+
+### 9.1 为什么 rules 并入 model 不在这里
+
+v3 设计里 rules 在 `app/rules/` 目录。v4 改成 `model/<domain>/rules.ts`，理由：
+
+- **paneTree 操作 PaneNode**——跟 PaneNode 类型同目录更内聚
+- **sessionRules 操作 Session**——跟 Session 类型同目录更内聚
+- **跨 domain 的纯函数**（textTransform、constants）放 `model/common/`
+- **app 不再持有 rules 目录**——app 只负责编排业务，算法归 model
+
+### 9.2 为什么 app 不再依赖 `@/app/shared/*`
+
+v3 设计 app 通过 `@/app/shared/*` 依赖基础设施。v4 改成：
+
+- model / service / infra 是**顶层目录**（跟 app / ui 平级）
+- app 直接 `import { X } from "@/model/..."` 或 `"@/service/..."` 或 `"@/infra/..."`
+- 不再有 `@/app/shared/` 概念
+
+详见 [`app/shared/README.md`](./shared/README.md)（已废弃的归档说明）。
+
+### 9.3 为什么 app 跟 ui 平级而不是 ui 是 app 的子集
+
+v3 设计里 ui 组件放在 `app/ui/` 子目录（"app 包含 ui"）。v4 改成：
+
+- app / ui 是**两个并列的产品功能层**
+- 改一个产品功能 = 改 1 个 app module + 1 个 ui module
+- ui 通过 `useXxxApi()` 调 app 的业务能力——这种"反向依赖"由 hook 边界控制
+
+## 10. 跟 v3 的核心差异
 
 | 维度 | v3 | v4 |
 |---|---|---|
 | 划分依据 | 43 useCases 平铺 | 5 module 按产品功能 |
-| module 内部组织 | 自由 | 强制 api.ts 唯一入口 |
-| 跨 module 协调 | useCase 内部串 | 集中在 usecases/composition/ |
+| module 内部 | 自由 | 强制 api.ts 唯一入口 |
+| 跨 module 协调 | useCase 内部串 | `usecases/composition/` |
 | 跨 module 调用入口 | 自由 import useCases | 只 import api.ts |
-| shared 子目录 | service/ 平铺 | shared/{infra, service, model, rules} 4 个 |
+| shared 位置 | `src/app/shared/` | **废弃**——infra/service/model 提升为顶层 |
+| rules 位置 | `src/app/rules/` | `src/model/<domain>/rules.ts` |
 | 启动序列 | 散落在 main.tsx | app/shell 的 initialize() 编排 |
 | UI module 跟 app module 关系 | 隐式 | 一一对应 |
 
-## 10. 设计系统约束
+## 11. 设计系统约束
 
 所有 UI 改动必读 [`../../../design-system.md`](../../../design-system.md)。
 
