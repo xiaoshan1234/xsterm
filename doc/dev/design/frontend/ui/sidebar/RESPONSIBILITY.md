@@ -1,7 +1,10 @@
 # Module · Sidebar — 职责
 
+> **UI 共有 5 个 module**：layout / terminal / sidebar / ui-kit / hooks。
+> 本文档是 sidebar module 的职责文档。
+>
 > **位置（目标态 / 现状一致）**：`src/ui/sidebar/`
-> **L 层**：L2 业务视图（详见 [`../README.md` §5](../../README.md)）
+> **L 层**：L2 业务视图
 > **主语**：左侧三栏（session / window / workspace）+ toolbar
 > **唯一进口**：`layout/AppLayout.tsx`
 

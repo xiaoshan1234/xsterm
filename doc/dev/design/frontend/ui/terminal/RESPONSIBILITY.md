@@ -1,11 +1,13 @@
 # Module · Terminal — 职责
 
-> **位置（目标态）**：`src/ui/terminal/`
-> **位置（现状）**：散落在 `src/ui/` 顶层（`Terminal.tsx`、`Pane.tsx`、`PaneTree.tsx`、`PaneInitCard.tsx`、`TabBar.tsx`、`WindowTabBar.tsx`、`CommandSendPanel.tsx`）—— 改造 PR-1 收编到 `terminal/` 子目录。
+> **UI 共有 5 个 module**：layout / terminal / sidebar / ui-kit / hooks（每个都有自己的 3 份文档）。
+> 本文档是 terminal module 的职责文档；UI 顶层划分见 [`../../README.md`](../../README.md) §5。
 >
-> **L 层**：L2 业务视图（详见 [`../README.md` §5](../../README.md)）
+> **位置（目标态）**：`src/ui/terminal/`
+> **位置（现状）**：散落在 `src/ui/` 顶层—— 改造 PR-1 收编到 `terminal/` 子目录
+> **L 层**：L2 业务视图
 > **主语**：一个 pane 的渲染
-> **唯一进口**：`layout/WorkspaceContainer.tsx`（layout 把当前激活 window 的 pane 树喂给 Terminal）
+> **唯一进口**：`layout/WorkspaceContainer.tsx`
 
 ## 1. 这个 module 负责什么
 

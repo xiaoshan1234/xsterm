@@ -8,39 +8,71 @@
 
 ## 1. 一句话架构
 
-`ui/` = **7 个业务域视图目录 + 3 个支撑目录 + 顶层壳组件**
+`ui/` = **5 个 module（每个 3 份文档）+ 3 个支撑目录**
 
 ```
 src/ui/
-├── layout/         app shell（永远在场：标题栏、主容器、底部栏）
-├── terminal/       终端渲染核心（Terminal / Pane / TabBar）
-├── sidebar/        左侧三栏（Session / Window / Workspace manager）
-├── dialogs/        所有对话框（按 UI 风格集中）
-├── settings/       设置页 + 5 个 tab
-├── tmux/           tmux -CC 跨域视图集中簇
-├── primitives/     UI 原子（Dialog / FormField / ContextMenu）
+├── layout/         L1 shell — app 壳（AppLayout / NavBar / WorkspaceContainer）
+├── terminal/       L2 业务 — pane 渲染 + tab bar（含 tmux 扩展视图簇）
+├── sidebar/        L2 业务 — 左侧三栏（session / window / workspace manager）
+├── ui-kit/         L3+L4 复用层 — dialogs + primitives + settings（统一复用形态）
+├── hooks/          UI 编排 hook — useCommandExecutor / useSessionDragDrop 等
 │
-├── hooks/          view-level 编排 hook（useCommandExecutor 等）
 ├── styles/         设计系统落实（global.css / layout.css / pane.css）
 ├── icons/          Icon.tsx
-├── assets/         logo / favicon 等静态资源
-│
-├── AppLayout.tsx   顶层壳（在 layout/ 下亦可）
-├── NavBar.tsx
-└── InitWindowView.tsx
+└── assets/         logo / favicon 等静态资源
 ```
 
-## 2. 子目录职责
+> **关键变化**（v3）：dialogs / settings / primitives 三个散落目录合并为 1 个 **ui-kit module**。tmux 并入 terminal module。详见每个 module 的 RESPONSIBILITY.md。
 
-| 目录 | 包含 | 谁触发 | 调谁 |
-|---|---|---|---|
-| `layout/` | AppLayout / NavBar / WorkspaceContainer / WorkspaceBottomBar | 顶层 | terminal + sidebar + dialogs |
-| `terminal/` | Terminal / Pane / PaneTree / PaneInitCard / TabBar / WindowTabBar / CommandSendPanel | layout | `app/modules/pane`、`app/modules/window` |
-| `sidebar/` | Sidebar + 3 个 manager | layout | `app/modules/{session,window,workspace}` |
-| `dialogs/` | 12 dialog + 8 form 原子 + form parsers + context menu helpers | 各业务组件 | `app/modules/*` + `app/composition/*` |
-| `settings/` | SettingsView + 5 tab | layout | `app/service/{theme,logger}` 等只读配置 |
-| `tmux/` | TmuxControlWindowView + TmuxSessionControl + TmuxWindowsControl + ErrorBanner | terminal | `app/modules/session` + `service/tmux` |
-| `primitives/` | Dialog / FormField / ContextMenu | dialogs + settings | （无业务依赖） |
+## 2. 5 个 module 索引
+
+每个 module 有 3 份文档：**职责（RESPONSIBILITY）/ 对外接口（INTERFACE）/ 对下依赖（DOWNSTREAM）**。
+
+| module | 职责 | 对外接口 | 对下依赖 | 包含文件数 |
+|---|---|---|---|---|
+| **layout** | [RESPONSIBILITY](./layout/RESPONSIBILITY.md) | [INTERFACE](./layout/INTERFACE.md) | [DOWNSTREAM](./layout/DOWNSTREAM.md) | 5 |
+| **terminal** | [RESPONSIBILITY](./terminal/RESPONSIBILITY.md) | [INTERFACE](./terminal/INTERFACE.md) | [DOWNSTREAM](./terminal/DOWNSTREAM.md) | 11（含 tmux 4） |
+| **sidebar** | [RESPONSIBILITY](./sidebar/RESPONSIBILITY.md) | [INTERFACE](./sidebar/INTERFACE.md) | [DOWNSTREAM](./sidebar/DOWNSTREAM.md) | 5 |
+| **ui-kit** | [RESPONSIBILITY](./ui-kit/RESPONSIBILITY.md) | [INTERFACE](./ui-kit/INTERFACE.md) | [DOWNSTREAM](./ui-kit/DOWNSTREAM.md) | 34（dialogs 31 + primitives 3） |
+| **hooks** | [RESPONSIBILITY](./hooks/RESPONSIBILITY.md) | [INTERFACE](./hooks/INTERFACE.md) | [DOWNSTREAM](./hooks/DOWNSTREAM.md) | 3（待新增 2 个） |
+
+### 2.1 5 个 module 的依赖图
+
+```
+main.tsx → App.tsx
+            │
+            ▼
+        ┌─────────────────────────────────┐
+        │  L1: layout (唯一允许直跳 infra) │
+        └────────────┬────────────────────┘
+                     │
+       ┌─────────────┼────────────────┐
+       ▼             ▼                ▼
+   L2 terminal   L2 sidebar        L2 ui-kit(settings)
+       │             │                ▲
+       │             │                │
+       └─────────────┴────────────────┘
+                     │
+                     ▼
+                L2 ui-kit(dialogs)
+                     │
+                     ▼
+                L4 ui-kit(primitives)
+
+                ─── 平行 ───
+                L2 hooks（被 layout / terminal / sidebar 消费）
+```
+
+### 2.2 每个 module 的"一句话主语"
+
+| module | 主语 | 唯一进口 |
+|---|---|---|
+| layout | app 的壳 | `main.tsx → App.tsx → <AppLayout>` |
+| terminal | 一个 pane 的渲染 | `layout/WorkspaceContainer` |
+| sidebar | 左侧三栏 + toolbar | `layout/AppLayout` |
+| ui-kit | 所有 UI 复用形态 | 任意 L2（按需） |
+| hooks | React 副作用封装 | 任意 L2（按需） |
 
 ## 3. 关键约束
 
@@ -65,74 +97,89 @@ ui/  ──►  app/  (modules + composition + rules)
 - `ui/` → `app/modules/<x>/<y>.ts` 的内部文件（必须走 barrel）
 - `ui/` 写 `useSessionStore.getState().setX(...)` 这种直跳 store——store 写操作必须经 useCase
 
-## 5. module 划分（UI 内部依赖图）
+## 5. module 划分的内部依赖图
 
-UI 内部按"角色分层"切，**不是按业务域平铺**。这是跟 app 层的 5 个平铺 module 的根本区别——
+5 个 module 的内部依赖图（按 L1/L2/L3/L4 角色分层）：
 
-| 层               | 子目录                                        | 角色                                   | 谁依赖它                                      |
-| --------------- | ------------------------------------------ | ------------------------------------ | ----------------------------------------- |
-| **L1 — shell**  | `layout/`                                  | 顶层壳，决定整个 app 的"长什么样"                 | 入口（main.tsx → App → AppLayout）            |
-| **L2 — 业务视图**   | `terminal/`、`sidebar/`、`settings/`、`tmux/` | 各自承载一类业务视图                           | layout                                    |
-| **L3 — UI 风格层** | `dialogs/`                                 | 复用形态（dialog 长得都一样，集中维护视觉）            | L2 视图 + L2 业务组件（sidebar 调 NewGroupDialog） |
-| **L4 — UI 原子**  | `primitives/`                              | Dialog / FormField / ContextMenu，无业务 | L3 dialogs + L2 settings（直接用 FormField）   |
+```
+            ┌─────────────────────────────────┐
+            │  L1: layout (唯一允许直跳 infra) │
+            └────────────┬────────────────────┘
+                         │
+       ┌─────────────────┼──────────────────────┐
+       ▼                 ▼                      ▼
+   L2 terminal      L2 sidebar          L2 ui-kit/settings
+       │                 │                      ▲
+       │  (含 tmux/ 4 文件)                    │
+       └─────────────────┴──────────────────────┘
+                         │
+                         ▼
+                  L3 ui-kit/dialogs
+                         │
+                         ▼
+                  L4 ui-kit/primitives
+
+   ─── 平行 ───
+   L2 hooks（被 layout / terminal / sidebar 消费，不消费 ui 其他 module）
+```
 
 **依赖方向**（强制单向）：
 
-```
-main.tsx → L1 layout → L2 业务视图 → L3 dialogs → L4 primitives
-                                      ↘
-                                  L4 primitives（settings 也直接用）
-```
+- `layout` → `terminal`、`sidebar`、`ui-kit`、`hooks`、`app`、`service`、`model`、`infra`(window control)
+- `terminal` → `ui-kit`(dialogs + primitives)、`hooks`、`app`、`service`、`model`
+- `sidebar` → `ui-kit`(dialogs + primitives)、`hooks`、`app`、`service`、`model`
+- `ui-kit/dialogs` → `ui-kit/primitives`、`ui-kit`(form-atoms)、`model`、`app/rules`
+- `ui-kit/primitives` → （无下层依赖）
+- `ui-kit/settings` → `ui-kit`(form-atoms + primitives)、`service/persistence`、`model`
+- `hooks` → `app`、`service`、`model`、`react`
 
-反之**严禁**：
+**严禁**：
 
-- `primitives/` → 任何上层（primitives 无业务概念）
-- `dialogs/` → `terminal/` 或 `settings/`（dialogs 不感知具体业务视图）
-- `terminal/` → `sidebar/` 或 `settings/`（业务视图之间互不依赖）
-- `layout/` → 任何业务视图的内部组件（layout 只组装 4 个槽位）
+- `ui-kit/primitives` → 任何上层（primitives 无业务概念）
+- `ui-kit/dialogs` → `ui-kit/settings`（dialogs 不感知 settings）
+- `terminal` ↔ `sidebar`（L2 之间互不依赖，只通过 layout 协调）
+- `layout` → 任何业务视图的内部组件（layout 只组装 4 个槽位）
+- 任何 ui module 直跳 `infra/`（**唯一例外**：layout 的 `NavBar` 用 `getCurrentWindow()` 做窗口控制）
 
-### 5.1 为什么 tmux 单独成簇
+### 5.1 为什么 ui-kit 是一个 module 而不是三个
 
-tmux -CC 视图（control window / window 列表 / session 控制条 / 错误 banner）跟 session/window/pane 三 module 都强耦合，但走独立事件总线（`eventBuses/tmux`）。在 app module 层**不**单独切 tmux（避免 5 个 module 变成 6 个），在 UI 层**单独成簇**集中：
+`dialogs/` / `primitives/` / `settings/` 三个目录合为一个 **ui-kit module**，理由：
 
-```
-ui/tmux/
-├── TmuxControlWindowView.tsx
-├── TmuxSessionControl.tsx
-├── TmuxWindowsControl.tsx
-└── TmuxControllerErrorBanner.tsx
-```
+- **dialogs 重度依赖 primitives**（17 处 import）
+- **settings 重度复用 dialogs**（5 个 tab 是 dialogs 的"特例视图"）
+- **primitives 是 dialogs / settings 的公共基础**
 
-`terminal/Terminal.tsx` 跟 `ui/tmux/TmuxControlWindowView.tsx` 通过 props / context 协作，**不**互相 import。
+如果拆成 3 个 module：
 
-### 5.2 为什么 dialogs 不是 L2 平铺而是 L3 风格层
+1. 3 个 module 的对外接口高度重合（都是"props 形式"）
+2. 对下依赖几乎相同（都依赖 model / service）
+3. 跨 module 协调成本高（"加 form field 必须先 review primitives"）
 
-代码统计显示当前 `dialogs/` 里 31 个文件横跨 4 个业务域（session / group / save / paste）。如果按业务域平铺成 `dialogs/{session,group,save,paste}/`，会出现"group dialog 被 sidebar 调、save dialog 被 layout 调、session dialog 被 settings 调"的**多点散落**，增加跨模块协调成本。
+合成 1 个 ui-kit 后：单一 barrel 暴露所有可复用形态，对外接口分 4 段（dialogs / primitives / form-atoms / settings），内部依赖单向 `primitives ← dialogs / settings`。
 
-把 dialogs 提为 L3 风格层后：
+### 5.2 为什么 tmux 并入 terminal 而不是独立 module
 
-- 所有 dialog 视觉一致（同一个 `primitives/Dialog` 套壳）
-- 业务方按需 import：`sidebar/NewGroupDialog`、`layout/SaveWorkspaceDialog`、`settings/SelectSessionDialog`
-- 新加 dialog 只需决定"放哪个业务文件里"，不用关心模块归属
+tmux -CC 视图（control window / window 列表 / session 控制条 / 错误 banner）跟 session / window / pane 三 module 都强耦合，但走独立事件总线（`eventBuses/tmux`）。
 
-代价：dialogs 目录文件多（31 个），靠命名约定（`<Business><Action>Dialog.tsx`）保持可读性。
+- 在 app module 层**不**单独切 tmux（避免 5 个 module 变成 6 个）
+- 在 UI 层**也**不单独成 module，并入 terminal — 因为 4 个文件过小（不值得 3 份文档开销）
+- terminal 模块通过 `props.renderTmuxControl` 回调让 layout 注入 tmux 视图，避免 terminal 直引 `ui/tmux/`
 
-### 5.3 为什么 sidebar 引用 dialogs 但反过来不行
+### 5.3 为什么 hooks 单独成 module
 
-实际代码里 `ui/sidebar/` 引用 `ui/dialogs/NewGroupDialog`、`EditGroupDialog` ——这是**正确**的跨层调用（sidebar 是 L2 业务视图，dialogs 是 L3 风格层）。反过来如果 dialogs 引用 sidebar，会出现"dialog 知道 sidebar 存在"的乱伦依赖。
+hooks 是**跨 module 共享的副作用封装**——terminal 用 `useSessionDragDrop`，sidebar 也用：
 
-判断规则：
+- 放在 `service/` 不能（hooks 是 React-aware，用 useState / useEffect）
+- 放在 ui/ 顶层某个文件会污染 ui 的"组件树"结构
+- 单独 `ui/hooks/` 目录明确边界，3 个文件 + 2 个待新增 = 5 个 hook，全部走 INTERFACE.md 单一入口
 
-> **被依赖次数多的在下层**。primitives 被引 17 次、dialogs 被引 3 次 —— 越底层被引越多，向上单依赖。
+### 5.4 业务视图 3 个 module 的边界
 
-### 5.4 业务视图 4 个子目录的边界
-
-| 子目录 | 主语 | 唯一进口 | 不允许调 |
+| module | 主语 | 唯一进口 | 不允许调 |
 |---|---|---|---|
-| `terminal/` | 一个 pane 的渲染 | `layout/WorkspaceContainer.tsx` | sidebar/settings/tmux/dialogs（除 layout 通过 props 注入） |
-| `sidebar/` | 三栏（session/window/workspace）+ toolbar | `layout/AppLayout.tsx` | terminal/settings/tmux（侧栏不放终端） |
-| `settings/` | 设置页 + 5 tab | `layout/AppLayout.tsx`（设置按钮触发） | terminal/sidebar/dialogs |
-| `tmux/` | tmux -CC 跨域视图 | `terminal/Terminal.tsx`（判断 session 是 tmux 后挂载） | sidebar/settings/dialogs |
+| `terminal` | 一个 pane 的渲染（含 tmux） | `layout/WorkspaceContainer` | sidebar / layout 内部组件 |
+| `sidebar` | 三栏 + toolbar | `layout/AppLayout` | terminal / layout 内部组件 |
+| `ui-kit/settings` | 设置页 + 5 tab | `layout/AppLayout`（设置按钮触发） | terminal / sidebar / dialogs |
 
 ## 6. 静态资源归位
 
