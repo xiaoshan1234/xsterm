@@ -6,8 +6,8 @@
  * tmux-only metadata) live on `WindowBase`; each kind extends it with
  * its own per-kind payload.
  *
- * Persisted snapshot (`SavedWindow`) lives in
- * `../persistence/types.ts`. Persisted pane tree (`SavedPaneNode`)
+ * Persisted snapshot (`PersistedWindow`) lives in
+ * `../persistence/types.ts`. Persisted pane tree (`PersistedPaneNode`)
  * lives in `../pane`.
  *
  * # Identifier namespaces on a tmux Window
@@ -62,8 +62,8 @@ export interface TmuxControlWindow extends WindowBase {
 }
 
 /** Empty placeholder shown in a fresh workspace until a session is attached. */
-export interface InitWindow extends WindowBase {
+export interface InitialWindow extends WindowBase {
   kind: "init";
 }
 
-export type Window = TerminalWindow | TmuxControlWindow | InitWindow;
+export type Window = TerminalWindow | TmuxControlWindow | InitialWindow;

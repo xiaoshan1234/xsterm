@@ -4,9 +4,9 @@ import { logger } from "../contexts/LoggerContext";
 import {
   type LocalSessionConfig,
   type PaneNode,
-  type SavedSessionConfig,
-  type SavedWindowConfig,
-  type SavedWorkspace,
+  type PersistedSessionConfig,
+  type PersistedWindowConfig,
+  type PersistedWorkspace,
   type SessionGroup,
   type SSHSessionConfig,
   type TmuxCcConfig,
@@ -14,7 +14,7 @@ import {
 import type { GroupStore } from "../../../infra/store/groups";
 
 /**
- * Schema versions of the `SavedSessionConfig` on-disk format.
+ * Schema versions of the `PersistedSessionConfig` on-disk format.
  * - v0 (legacy, pre-T3): `{type, localConfig|sshConfig, id, name, displayConfig?}`
  * - v1 (current): `{type, config, version, id, name, displayConfig?}`
  */
@@ -22,7 +22,7 @@ export const SAVED_SESSION_CONFIG_VERSION = 1;
 
 /**
  * Migrate a raw entry read from the persisted JSON store into the current
- * `SavedSessionConfig` shape.
+ * `PersistedSessionConfig` shape.
  *
  * Behavior:
  * - v1 shape (`type` + `config` + `version`): return as-is after validating
@@ -40,7 +40,7 @@ export const SAVED_SESSION_CONFIG_VERSION = 1;
  *
  * Never throws; never mutates `raw`.
  */
-export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
+export function migrateSavedConfig(raw: unknown): PersistedSessionConfig | null {
   if (raw === null || typeof raw !== "object") {
     return null;
   }
@@ -57,7 +57,7 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
     const name = String(obj.name ?? "");
     const displayConfig =
       obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {};
     if (obj.type === "local") {
       return {
@@ -114,7 +114,7 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
       type: "local",
       config: localConfig as LocalSessionConfig,
       ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {}),
     };
   }
@@ -136,7 +136,7 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
       type: "ssh",
       config: sshConfig as SSHSessionConfig,
       ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {}),
     };
   }
@@ -148,11 +148,11 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
  * Run each element of `raw` through {@link migrateSavedConfig}, drop the nulls
  * with a single `console.warn` per skip, and return the survivors in order.
  */
-export function migrateSavedConfigList(raw: unknown): SavedSessionConfig[] {
+export function migrateSavedConfigList(raw: unknown): PersistedSessionConfig[] {
   if (!Array.isArray(raw)) {
     return [];
   }
-  const migrated: SavedSessionConfig[] = [];
+  const migrated: PersistedSessionConfig[] = [];
   for (const entry of raw) {
     const result = migrateSavedConfig(entry);
     if (result !== null) {
@@ -184,7 +184,7 @@ export async function getSettingsStore(): Promise<Store> {
   return settingsStoreInstance;
 }
 
-export async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
+export async function loadSavedConfigs(): Promise<PersistedSessionConfig[]> {
   logger.debug("sessionStorage", "loadSavedConfigs", undefined);
   try {
     const store = await getStore();
@@ -198,7 +198,7 @@ export async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
   }
 }
 
-export async function persistConfigs(configs: SavedSessionConfig[]): Promise<void> {
+export async function persistConfigs(configs: PersistedSessionConfig[]): Promise<void> {
   logger.debug("sessionStorage", "persistConfigs", { count: configs.length });
   try {
     const store = await getStore();
@@ -244,11 +244,11 @@ export async function persistGroups(groupsData: GroupStore): Promise<void> {
   }
 }
 
-export async function loadSavedWindowConfigs(): Promise<SavedWindowConfig[]> {
+export async function loadSavedWindowConfigs(): Promise<PersistedWindowConfig[]> {
   logger.debug("sessionStorage", "loadSavedWindowConfigs", undefined);
   try {
     const store = await getStore();
-    const configs = (await store.get<SavedWindowConfig[]>("savedWindowConfigs")) || [];
+    const configs = (await store.get<PersistedWindowConfig[]>("savedWindowConfigs")) || [];
     logger.debug("sessionStorage", "loadSavedWindowConfigs:result", { count: configs.length });
     return configs;
   } catch (e) {
@@ -257,7 +257,7 @@ export async function loadSavedWindowConfigs(): Promise<SavedWindowConfig[]> {
   }
 }
 
-export async function persistWindowConfigs(configs: SavedWindowConfig[]): Promise<void> {
+export async function persistWindowConfigs(configs: PersistedWindowConfig[]): Promise<void> {
   logger.debug("sessionStorage", "persistWindowConfigs", { count: configs.length });
   try {
     const store = await getStore();
@@ -273,7 +273,7 @@ export async function deleteSavedWindowConfig(id: string): Promise<void> {
   logger.debug("sessionStorage", "deleteSavedWindowConfig", { id });
   try {
     const store = await getStore();
-    const configs = (await store.get<SavedWindowConfig[]>("savedWindowConfigs")) || [];
+    const configs = (await store.get<PersistedWindowConfig[]>("savedWindowConfigs")) || [];
     const updated = configs.filter((c) => c.id !== id);
     await store.set("savedWindowConfigs", updated);
     await store.save();
@@ -283,15 +283,15 @@ export async function deleteSavedWindowConfig(id: string): Promise<void> {
   }
 }
 
-export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
+export async function loadSavedWorkspaces(): Promise<PersistedWorkspace[]> {
   logger.debug("sessionStorage", "loadSavedWorkspaces", undefined);
   try {
     const store = await getStore();
     const raw =
-      (await store.get<(SavedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) || [];
+      (await store.get<(PersistedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) || [];
     const workspaces = raw.map((w) => {
       if ("rootPane" in w && w.rootPane !== undefined) {
-        const legacy = w as SavedWorkspace & {
+        const legacy = w as PersistedWorkspace & {
           rootPane: { id: string; type: "leaf" | "split"; size: number };
         };
         return {
@@ -306,7 +306,7 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
           ],
         };
       }
-      return w as SavedWorkspace;
+      return w as PersistedWorkspace;
     });
     logger.debug("sessionStorage", "loadSavedWorkspaces:result", { count: workspaces.length });
     return workspaces;
@@ -316,7 +316,7 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
   }
 }
 
-export async function persistWorkspaces(workspaces: SavedWorkspace[]): Promise<void> {
+export async function persistWorkspaces(workspaces: PersistedWorkspace[]): Promise<void> {
   logger.debug("sessionStorage", "persistWorkspaces", { count: workspaces.length });
   try {
     const store = await getStore();
@@ -332,7 +332,7 @@ export async function deleteSavedWorkspace(id: string): Promise<void> {
   logger.debug("sessionStorage", "deleteSavedWorkspace", { id });
   try {
     const store = await getStore();
-    const workspaces = (await store.get<SavedWorkspace[]>("savedWorkspaces")) || [];
+    const workspaces = (await store.get<PersistedWorkspace[]>("savedWorkspaces")) || [];
     const updated = workspaces.filter((w) => w.id !== id);
     await store.set("savedWorkspaces", updated);
     await store.save();

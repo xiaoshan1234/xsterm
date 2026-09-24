@@ -1,6 +1,6 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { migrateSavedConfigList } from "./migrations";
-import type { SavedSessionConfig } from "../../model";
+import type { PersistedSessionConfig } from "../../model";
 import { logger } from "../logger/logger";
 
 let storeInstance: Store | null = null;
@@ -12,7 +12,7 @@ async function getStore(): Promise<Store> {
   return storeInstance;
 }
 
-export async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
+export async function loadSavedConfigs(): Promise<PersistedSessionConfig[]> {
   logger.debug("sessionStorage", "loadSavedConfigs", undefined);
   try {
     const store = await getStore();
@@ -26,7 +26,7 @@ export async function loadSavedConfigs(): Promise<SavedSessionConfig[]> {
   }
 }
 
-export async function persistConfigs(configs: SavedSessionConfig[]): Promise<void> {
+export async function persistConfigs(configs: PersistedSessionConfig[]): Promise<void> {
   logger.debug("sessionStorage", "persistConfigs", { count: configs.length });
   try {
     const store = await getStore();

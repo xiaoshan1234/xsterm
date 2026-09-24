@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { type SavedWindowConfig, type SavedWorkspace, type Workspace } from "../../model";
+import { type PersistedWindowConfig, type PersistedWorkspace, type Workspace } from "../../model";
 import { useDragResize } from "../../service/legacy/hooks/useDragResize";
 import { SidebarToolbar, type SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
@@ -22,11 +22,11 @@ interface SidebarProps {
   onSidebarPanelChange: (panel: SidebarMenu | null) => void;
   activeSettingsCategory?: SettingsCategory;
   onSelectSettingsCategory?: (category: SettingsCategory) => void;
-  savedWorkspaces: SavedWorkspace[];
+  savedWorkspaces: PersistedWorkspace[];
   loadWorkspace: (id: string) => Promise<Workspace>;
   deleteSavedWorkspace: (id: string) => void;
   renameSavedWorkspace: (id: string, name: string) => void;
-  savedWindowConfigs: SavedWindowConfig[];
+  savedWindowConfigs: PersistedWindowConfig[];
   loadWindow: (id: string) => Promise<void>;
   deleteSavedWindow: (id: string) => void;
   renameSavedWindow: (id: string, name: string) => void;

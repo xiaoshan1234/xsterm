@@ -27,16 +27,16 @@ import { useSessionLifecycle } from "./useSessionLifecycle";
 import { useWindowActions } from "./useWindowActions";
 import { useWorkspaceActions } from "./useWorkspaceActions";
 import type {
-  SavedSessionConfig as LegacySavedSessionConfig,
-  SavedWindowConfig as LegacySavedWindowConfig,
-  SavedWorkspace as LegacySavedWorkspace,
+  PersistedSessionConfig as LegacySavedSessionConfig,
+  PersistedWindowConfig as LegacySavedWindowConfig,
+  PersistedWorkspace as LegacySavedWorkspace,
   Session,
   SessionGroup,
   Window,
   Workspace,
 } from "../../../../model";
 
-interface UseSessionActionsOptions {
+interface SessionActionsHookOptions {
   savedConfigs: LegacySavedSessionConfig[];
   savedWorkspaces: LegacySavedWorkspace[];
   savedWindowConfigs: LegacySavedWindowConfig[];
@@ -59,7 +59,7 @@ interface UseSessionActionsOptions {
   persistSavedWindowConfigs: (windowConfigs: LegacySavedWindowConfig[]) => void;
 }
 
-export function useSessionActions(opts: UseSessionActionsOptions): SessionActions {
+export function useSessionActions(opts: SessionActionsHookOptions): SessionActions {
   const {
     savedConfigs,
     savedWorkspaces,

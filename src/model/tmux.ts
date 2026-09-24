@@ -6,7 +6,7 @@
  * `./tmux/` and the file `./tmux.ts` both exist here).
  */
 export type {
-  AttachedTmuxServer,
+  TmuxAttachmentRecord,
   AutoAttachOutcome,
   TmuxControllerError,
   TmuxControllerExitEvent,

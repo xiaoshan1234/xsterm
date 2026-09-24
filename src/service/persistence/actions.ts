@@ -10,20 +10,20 @@
  * **No cross-service imports**.
  */
 import type {
-  SavedSessionConfig,
-  SavedWindowConfig,
-  SavedWorkspace,
+  PersistedSessionConfig,
+  PersistedWindowConfig,
+  PersistedWorkspace,
   SessionGroup,
 } from "../../model";
 import { usePersistenceStore, type PersistenceStoreState } from "./store";
 
 export function setSavedConfigs(
-  next: SavedSessionConfig[] | ((p: SavedSessionConfig[]) => SavedSessionConfig[]),
+  next: PersistedSessionConfig[] | ((p: PersistedSessionConfig[]) => PersistedSessionConfig[]),
 ): void {
   usePersistenceStore.getState().setSavedConfigs(next);
 }
 
-export function upsertSavedConfig(config: SavedSessionConfig): void {
+export function upsertSavedConfig(config: PersistedSessionConfig): void {
   usePersistenceStore.getState().upsertSavedConfig(config);
 }
 
@@ -32,12 +32,12 @@ export function removeSavedConfig(configId: string): void {
 }
 
 export function setSavedWorkspaces(
-  next: SavedWorkspace[] | ((p: SavedWorkspace[]) => SavedWorkspace[]),
+  next: PersistedWorkspace[] | ((p: PersistedWorkspace[]) => PersistedWorkspace[]),
 ): void {
   usePersistenceStore.getState().setSavedWorkspaces(next);
 }
 
-export function upsertSavedWorkspace(workspace: SavedWorkspace): void {
+export function upsertSavedWorkspace(workspace: PersistedWorkspace): void {
   usePersistenceStore.getState().upsertSavedWorkspace(workspace);
 }
 
@@ -50,12 +50,12 @@ export function renameSavedWorkspace(id: string, name: string): void {
 }
 
 export function setSavedWindowConfigs(
-  next: SavedWindowConfig[] | ((p: SavedWindowConfig[]) => SavedWindowConfig[]),
+  next: PersistedWindowConfig[] | ((p: PersistedWindowConfig[]) => PersistedWindowConfig[]),
 ): void {
   usePersistenceStore.getState().setSavedWindowConfigs(next);
 }
 
-export function upsertSavedWindowConfig(config: SavedWindowConfig): void {
+export function upsertSavedWindowConfig(config: PersistedWindowConfig): void {
   usePersistenceStore.getState().upsertSavedWindowConfig(config);
 }
 
@@ -95,15 +95,15 @@ export function removeConfigFromGroup(groupId: number, configId: string): void {
   usePersistenceStore.getState().removeConfigFromGroup(groupId, configId);
 }
 
-export function getSavedConfigs(): SavedSessionConfig[] {
+export function getSavedConfigs(): PersistedSessionConfig[] {
   return usePersistenceStore.getState().savedConfigs;
 }
 
-export function getSavedWorkspaces(): SavedWorkspace[] {
+export function getSavedWorkspaces(): PersistedWorkspace[] {
   return usePersistenceStore.getState().savedWorkspaces;
 }
 
-export function getSavedWindowConfigs(): SavedWindowConfig[] {
+export function getSavedWindowConfigs(): PersistedWindowConfig[] {
   return usePersistenceStore.getState().savedWindowConfigs;
 }
 

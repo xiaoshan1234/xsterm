@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-interface UseSessionDragDropArgs {
+interface SessionDragDropHookArgs {
   /** Called when a configId is dropped onto a groupId. */
   onDrop: (configId: string, groupId: number) => void;
 }
@@ -20,7 +20,7 @@ const SESSION_CONFIG_MIME = "text/x-session-config-id";
  * standard dragstart / dragover / dragleave / drop handlers used by the
  * session manager sidebar.
  */
-export function useSessionDragDrop({ onDrop }: UseSessionDragDropArgs): SessionDragDrop {
+export function useSessionDragDrop({ onDrop }: SessionDragDropHookArgs): SessionDragDrop {
   const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
 
   const handleDragStart = useCallback((e: React.DragEvent, configId: string) => {

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { type SavedSessionConfig, type SessionGroup } from "../../model";
+import { type PersistedSessionConfig, type SessionGroup } from "../../model";
 import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";
 import SessionTab from "./SessionTab";
@@ -19,10 +19,10 @@ import { SessionFormPanels } from "./SessionFormPanels";
 interface EditSessionDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  config: SavedSessionConfig;
+  config: PersistedSessionConfig;
   groups: SessionGroup[];
   groupId: number | null;
-  onSave: (config: SavedSessionConfig, groupId: number | null) => void;
+  onSave: (config: PersistedSessionConfig, groupId: number | null) => void;
 }
 
 export function EditSessionDialog({
@@ -62,7 +62,7 @@ export function EditSessionDialog({
       }
     }
 
-    let updatedConfig: SavedSessionConfig;
+    let updatedConfig: PersistedSessionConfig;
     if (config.type === "local") {
       updatedConfig = {
         ...config,

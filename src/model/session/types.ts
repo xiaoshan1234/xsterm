@@ -7,20 +7,20 @@
  *   (`SessionInfo`).
  * - Backend-advertised feature flags (`CapabilityFlags`).
  * - Per-transport user-input configs (`LocalSessionConfig`,
- *   `SSHSessionConfig`, `TmuxCcConfig`, `CreateSessionInput`,
+ *   `SSHSessionConfig`, `TmuxCcConfig`, `SessionInput`,
  *   `SessionType`).
  * - Per-session visual config (`SessionDisplayConfig`,
  *   `SessionLoggingConfig`).
  *
  * **Out of scope** (lives in sibling domains):
- * - `SavedSessionConfig` / `SessionGroup` — on-disk persisted shapes,
+ * - `PersistedSessionConfig` / `SessionGroup` — on-disk persisted shapes,
  *   live in `../persistence`.
  * - `TmuxPaneAddedEvent` / `TmuxControllerError` / `TmuxSessionInit` /
- *   `AttachedTmuxServer` / `TmuxWindowListEntry` — tmux-specific event
+ *   `TmuxAttachmentRecord` / `TmuxWindowListEntry` — tmux-specific event
  *   payloads and metadata, live in `../tmux`.
- * - `ParsedSessionOutput` — runtime PTY output frames, live in
+ * - `SessionOutputFrame` — runtime PTY output frames, live in
  *   `../output`.
- * - `SavedPaneNode` — frozen pane tree persisted shape, lives in
+ * - `PersistedPaneNode` — frozen pane tree persisted shape, lives in
  *   `../pane`.
  */
 
@@ -153,10 +153,10 @@ export interface Session {
   isConnected: boolean;
   /**
    * Per-session input shape carried alongside the runtime view-model so
-   * the New Session dialog can reconstruct a `SavedSessionConfig` from a
+   * the New Session dialog can reconstruct a `PersistedSessionConfig` from a
    * live `Session` without re-fetching.
    */
-  sessionType: CreateSessionInput;
+  sessionType: SessionInput;
   /** Backend-advertised feature flags (resize / reconnect / local-echo / multiplex). */
   capabilities?: CapabilityFlags;
   /** Per-session visual config (font, scrollback, cursor, logging, …). */
@@ -386,12 +386,12 @@ export interface TmuxCcConfig {
  * User-input shape for the New Session dialog. Discriminated by `type`;
  * the `config` field narrows to the matching per-transport config.
  */
-export type CreateSessionInput =
+export type SessionInput =
   | { type: "local"; config: LocalSessionConfig }
   | { type: "ssh"; config: SSHSessionConfig }
   | { type: "tmux-cc"; config: TmuxCcConfig };
 
-export type SessionType = CreateSessionInput;
+export type SessionType = SessionInput;
 
 /**
  * Marker interface for the legacy `{ isHidden }` shape carried on

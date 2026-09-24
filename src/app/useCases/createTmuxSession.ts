@@ -21,7 +21,7 @@ import { buildFrontendSession } from "../../app/rules/sessionRules";
 import { generateId } from "../../app/rules/paneTree";
 import type {
   PaneNode,
-  SavedSessionConfig,
+  PersistedSessionConfig,
   Session,
   SessionDisplayConfig,
   TmuxCcConfig,
@@ -90,7 +90,7 @@ export async function createTmuxSession(
   const bootstrapSession = buildFrontendSession(init.session, configId, "tmux-cc", displayConfig);
 
   if (save) {
-    const saved: SavedSessionConfig = {
+    const saved: PersistedSessionConfig = {
       id: configId,
       name: init.session.name,
       version: 1,

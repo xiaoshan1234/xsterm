@@ -27,7 +27,7 @@ export function themeToXtermTheme(theme: TerminalTheme) {
   };
 }
 
-export interface UseXtermResult {
+export interface XtermHookResult {
   termRef: RefObject<XTerm | null>;
   fitAddonRef: RefObject<FitAddon | null>;
 }
@@ -60,7 +60,7 @@ export function useXterm(
   containerRef: RefObject<HTMLDivElement | null>,
   theme: TerminalTheme,
   options: ITerminalOptions,
-): UseXtermResult {
+): XtermHookResult {
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const optionsRef = useRef(options);

@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { logger } from "../contexts/LoggerContext";
 import {
-  type AttachedTmuxServer,
+  type TmuxAttachmentRecord,
   type LocalSessionConfig,
   type SSHSessionConfig,
   type SessionType,
@@ -111,8 +111,8 @@ export async function captureTmuxPane(
  * list every tmux server currently attached to live
  * `TmuxController`s. Mirrors the on-disk `attached_tmux.json` shape.
  */
-export async function getAttachedTmuxServers(): Promise<AttachedTmuxServer[]> {
-  return invoke<AttachedTmuxServer[]>("get_attached_tmux_servers");
+export async function getAttachedTmuxServers(): Promise<TmuxAttachmentRecord[]> {
+  return invoke<TmuxAttachmentRecord[]>("get_attached_tmux_servers");
 }
 
 /**

@@ -1,12 +1,12 @@
 import { SaveDialog } from "./SaveDialog";
-import { type SavedWorkspace } from "../../model";
+import { type PersistedWorkspace } from "../../model";
 
-interface SaveWorkspaceDialogProps {
+interface WorkspaceSaveDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (name: string) => void;
   defaultName: string;
-  savedWorkspaces: SavedWorkspace[];
+  savedWorkspaces: PersistedWorkspace[];
 }
 
 export function SaveWorkspaceDialog({
@@ -15,7 +15,7 @@ export function SaveWorkspaceDialog({
   onSave,
   defaultName,
   savedWorkspaces,
-}: SaveWorkspaceDialogProps) {
+}: WorkspaceSaveDialogProps) {
   return (
     <SaveDialog
       isOpen={isOpen}

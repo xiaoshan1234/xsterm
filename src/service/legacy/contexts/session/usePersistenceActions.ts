@@ -1,24 +1,29 @@
-import type { SavedWindowConfig, SavedWorkspace, Session, Workspace } from "../../../../model";
+import type {
+  PersistedWindowConfig,
+  PersistedWorkspace,
+  Session,
+  Workspace,
+} from "../../../../model";
 import { useSavedWindowActions } from "./useSavedWindowActions";
 import { useSavedWorkspaceActions } from "./useSavedWorkspaceActions";
 
-interface UsePersistenceActionsDeps {
-  savedWorkspaces: SavedWorkspace[];
-  savedWindowConfigs: SavedWindowConfig[];
+interface PersistenceActionsHookDeps {
+  savedWorkspaces: PersistedWorkspace[];
+  savedWindowConfigs: PersistedWindowConfig[];
   workspacesRef: React.MutableRefObject<Workspace[]>;
   sessionsRef: React.MutableRefObject<Session[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   setActiveWorkspaceId: React.Dispatch<React.SetStateAction<string | null>>;
-  setSavedWorkspaces: React.Dispatch<React.SetStateAction<SavedWorkspace[]>>;
-  setSavedWindowConfigs: React.Dispatch<React.SetStateAction<SavedWindowConfig[]>>;
+  setSavedWorkspaces: React.Dispatch<React.SetStateAction<PersistedWorkspace[]>>;
+  setSavedWindowConfigs: React.Dispatch<React.SetStateAction<PersistedWindowConfig[]>>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
-  persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
-  persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
+  persistSavedWorkspaces: (workspacesData: PersistedWorkspace[]) => void;
+  persistSavedWindowConfigs: (windowConfigs: PersistedWindowConfig[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Session>;
 }
 
-export function usePersistenceActions(deps: UsePersistenceActionsDeps) {
+export function usePersistenceActions(deps: PersistenceActionsHookDeps) {
   const workspaces = useSavedWorkspaceActions(deps);
   const windows = useSavedWindowActions(deps);
 

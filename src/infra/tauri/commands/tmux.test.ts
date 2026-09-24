@@ -32,7 +32,7 @@ import {
   unmarkAttachedTmux,
 } from "./tmux";
 
-import type { AttachedTmuxServer, TmuxCcConfig } from "../../../model";
+import type { TmuxAttachmentRecord, TmuxCcConfig } from "../../../model";
 
 const tmuxInfo = {
   session: {
@@ -115,7 +115,7 @@ describe("captureTmuxPane", () => {
 
 describe("getAttachedTmuxServers", () => {
   it("invokes get_attached_tmux_servers and returns the array", async () => {
-    const servers: AttachedTmuxServer[] = [
+    const servers: TmuxAttachmentRecord[] = [
       { sessionName: "work", socketName: "dev", attachedAt: 1234 },
     ];
     invokeMock.mockResolvedValueOnce(servers);

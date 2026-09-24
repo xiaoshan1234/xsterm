@@ -16,5 +16,5 @@ export type {
   TmuxWindowListRawEvent,
   TmuxWindowRenamedEvent,
   TmuxControllerError,
-  AttachedTmuxServer,
+  TmuxAttachmentRecord,
 } from "./tmux/index";

@@ -30,7 +30,7 @@ import { applyDisplayConfigToLiveSession as applyDisplayConfigToLiveSessionUseCa
 import { removeConfig as removeConfigUseCase } from "../../../../app/useCases/removeConfig";
 import { saveConfigOnly as saveConfigOnlyUseCase } from "../../../../app/useCases/saveConfigOnly";
 
-interface UseSessionLifecycleDeps {
+interface SessionLifecycleHookDeps {
   /**
    * Legacy hook took a bundle of session/workspace/persistence state plus
    * sub-hook helpers (openFromConfigInternal, createWindowFromSession,
@@ -42,7 +42,7 @@ interface UseSessionLifecycleDeps {
   [key: string]: never;
 }
 
-export function useSessionLifecycle(_deps: UseSessionLifecycleDeps = {}) {
+export function useSessionLifecycle(_deps: SessionLifecycleHookDeps = {}) {
   // --- create flows ---------------------------------------------------
   const createLocalSession = useCallback(
     (

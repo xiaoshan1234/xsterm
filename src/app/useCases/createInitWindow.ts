@@ -4,10 +4,10 @@
  * init-only path is easy to mock and reuse.
  */
 import { generateId } from "../../app/rules/paneTree";
-import type { InitWindow, Window } from "../../model/window";
+import type { InitialWindow, Window } from "../../model/window";
 
 export function createInitWindow(): Window {
-  const init: InitWindow = {
+  const init: InitialWindow = {
     id: generateId(),
     name: "New Session",
     activePaneId: null,

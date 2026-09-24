@@ -1,5 +1,5 @@
 /**
- * loadWorkspace — rebuild a workspace from a `SavedWorkspace` snapshot.
+ * loadWorkspace — rebuild a workspace from a `PersistedWorkspace` snapshot.
  * For each leaf with a `configId`, calls `openFromConfigInternal` to
  * recreate the underlying backend session.
  *
@@ -12,7 +12,7 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { createLeafPane, generateId, getLeafPaneIds } from "../../app/rules/paneTree";
 import { openSavedSession } from "./openSavedSession";
 import { collectSessionIdsFromWorkspace } from "../../app/rules/workspaceRules";
-import type { PaneLeafNode, PaneSplitNode, SavedPaneNode } from "../../model/pane";
+import type { PaneLeafNode, PaneSplitNode, PersistedPaneNode } from "../../model/pane";
 import type { TerminalWindow } from "../../model/window";
 import type { Workspace } from "../../model";
 
@@ -23,7 +23,7 @@ export async function loadWorkspace(savedWorkspaceId: string): Promise<Workspace
 
   const configIdToSession = new Map<string, Awaited<ReturnType<typeof openSavedSession>>>();
 
-  const buildTree = async (node: SavedPaneNode): Promise<PaneLeafNode | PaneSplitNode> => {
+  const buildTree = async (node: PersistedPaneNode): Promise<PaneLeafNode | PaneSplitNode> => {
     if (node.kind === "leaf") {
       const configId = node.binding?.configId;
       if (configId) {

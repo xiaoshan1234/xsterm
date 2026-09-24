@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useSession } from "../../service/legacy/contexts/SessionContext";
-import { type SavedSessionConfig, type TmuxCcConfig } from "../../model";
+import { type PersistedSessionConfig, type TmuxCcConfig } from "../../model";
 import { FormSelectField, type FormSelectOption } from "./FormSelectField";
 import { FormTextField } from "./FormTextField";
 
@@ -39,7 +39,7 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFor
   // (tmux-cc configs are excluded — nesting tmux inside tmux is not
   // supported, and the dialog already filters that case at submit time.)
   const baseOptions: FormSelectOption[] = useMemo(() => {
-    const eligible: SavedSessionConfig[] = savedConfigs.filter(
+    const eligible: PersistedSessionConfig[] = savedConfigs.filter(
       (c) => c.type === "local" || c.type === "ssh",
     );
     const options: FormSelectOption[] = [{ value: "", label: "Select a saved config…" }];

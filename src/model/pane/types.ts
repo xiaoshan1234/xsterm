@@ -69,12 +69,12 @@ export interface PaneLeafNode {
 // `configId` at restore time and resolves it to a fresh session.
 
 /**
- * Frozen pane tree stored in `SavedWindowConfig`. Mirrors the runtime
+ * Frozen pane tree stored in `PersistedWindowConfig`. Mirrors the runtime
  * discriminated union but without the runtime `binding.sessionId` —
  * persisted configs only carry `configId` so the runtime can resolve
  * to a fresh session on reload.
  */
-export type SavedPaneNode = PaneSavedSplitNode | PaneSavedLeafNode;
+export type PersistedPaneNode = PaneSavedSplitNode | PaneSavedLeafNode;
 
 export interface PaneSavedSplitNode {
   id: string;

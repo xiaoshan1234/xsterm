@@ -9,8 +9,8 @@
  */
 import { useCallback } from "react";
 import type { PaneLeafNode } from "../../../../model/pane";
-import type { InitWindow, TerminalWindow, Window } from "../../../../model/window";
-import type { SavedSessionConfig, Session, Workspace } from "../../../../model";
+import type { InitialWindow, TerminalWindow, Window } from "../../../../model/window";
+import type { PersistedSessionConfig, Session, Workspace } from "../../../../model";
 import { createLeafPane, generateId, getDefaultWindowName } from "../../../../app/rules/paneTree";
 import {
   assertSessionNotUsedElsewhere,
@@ -31,8 +31,8 @@ import * as tmuxTauri from "../../../../infra/tauri/commands/tmux";
 import { useSessionStore } from "../../../../service/session/store";
 import { useWorkspaceStore } from "../../../../service/workspace/store";
 
-interface UseWindowActionsDeps {
-  savedConfigs: SavedSessionConfig[];
+interface WindowActionsHookDeps {
+  savedConfigs: PersistedSessionConfig[];
   sessionsRef: React.MutableRefObject<Session[]>;
   workspacesRef: React.MutableRefObject<Workspace[]>;
   activeWorkspaceId: string | null;
@@ -41,7 +41,7 @@ interface UseWindowActionsDeps {
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
 }
 
-export function useWindowActions(deps: UseWindowActionsDeps) {
+export function useWindowActions(deps: WindowActionsHookDeps) {
   const { activeWorkspaceId } = deps;
 
   // --- createWindowFromSavedConfig -------------------------------------
@@ -132,7 +132,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
         return window;
       }
       // Branch C: no sessionId — return an init window.
-      const init: InitWindow = {
+      const init: InitialWindow = {
         id: generateId(),
         name: "New Session",
         activePaneId: null,

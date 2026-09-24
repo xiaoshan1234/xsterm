@@ -1,5 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { type PaneNode, type SavedWorkspace } from "../../model";
+import { type PaneNode, type PersistedWorkspace } from "../../model";
 import { logger } from "../logger/logger";
 
 let storeInstance: Store | null = null;
@@ -11,15 +11,15 @@ async function getStore(): Promise<Store> {
   return storeInstance;
 }
 
-export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
+export async function loadSavedWorkspaces(): Promise<PersistedWorkspace[]> {
   logger.debug("sessionStorage", "loadSavedWorkspaces", undefined);
   try {
     const store = await getStore();
     const raw =
-      (await store.get<(SavedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) || [];
+      (await store.get<(PersistedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) || [];
     const workspaces = raw.map((w) => {
       if ("rootPane" in w && w.rootPane !== undefined) {
-        const legacy = w as SavedWorkspace & {
+        const legacy = w as PersistedWorkspace & {
           rootPane: { id: string; type: "leaf" | "split"; size: number };
         };
         return {
@@ -34,7 +34,7 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
           ],
         };
       }
-      return w as SavedWorkspace;
+      return w as PersistedWorkspace;
     });
     logger.debug("sessionStorage", "loadSavedWorkspaces:result", { count: workspaces.length });
     return workspaces;
@@ -44,7 +44,7 @@ export async function loadSavedWorkspaces(): Promise<SavedWorkspace[]> {
   }
 }
 
-export async function persistWorkspaces(workspaces: SavedWorkspace[]): Promise<void> {
+export async function persistWorkspaces(workspaces: PersistedWorkspace[]): Promise<void> {
   logger.debug("sessionStorage", "persistWorkspaces", { count: workspaces.length });
   try {
     const store = await getStore();
@@ -60,7 +60,7 @@ export async function deleteSavedWorkspace(id: string): Promise<void> {
   logger.debug("sessionStorage", "deleteSavedWorkspace", { id });
   try {
     const store = await getStore();
-    const workspaces = (await store.get<SavedWorkspace[]>("savedWorkspaces")) || [];
+    const workspaces = (await store.get<PersistedWorkspace[]>("savedWorkspaces")) || [];
     const updated = workspaces.filter((w) => w.id !== id);
     await store.set("savedWorkspaces", updated);
     await store.save();

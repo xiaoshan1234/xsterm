@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { LocalSessionConfig, SSHSessionConfig, SessionDisplayConfig } from "../../model";
 import { type SectionId } from "./sessionDialogItems";
 
-export interface UseSessionFormOptions {
+export interface SessionFormHookOptions {
   isOpen: boolean;
   /** When provided, the form resets when this value changes too — used by
    * the Edit dialog so swapping to a different saved config while the
@@ -32,7 +32,7 @@ export interface SessionFormState {
   setError: (v: string) => void;
 }
 
-export function useSessionForm(opts: UseSessionFormOptions): SessionFormState {
+export function useSessionForm(opts: SessionFormHookOptions): SessionFormState {
   const [name, setName] = useState(opts.initialName);
   const [selectedGroupId, setSelectedGroupId] = useState(opts.initialGroupId);
   const [localConfig, setLocalConfig] = useState(opts.initialLocalConfig);

@@ -2,9 +2,9 @@
  * Legacy re-export shim — types moved to `model/session/types.ts`.
  *
  * Historically this file also held the persisted
- * `SavedSessionConfig` / `SessionGroup` shapes. Those now live in
+ * `PersistedSessionConfig` / `SessionGroup` shapes. Those now live in
  * `model/persistence/types.ts` and are re-exported here for backward
- * compat with callers that imported `SavedSessionConfig` /
+ * compat with callers that imported `PersistedSessionConfig` /
  * `SessionGroup` from this path.
  *
  * The path uses the explicit `/index` suffix because TS would
@@ -13,7 +13,7 @@
  * here, and `./session` matches the sibling directory).
  */
 export type {
-  CreateSessionInput,
+  SessionInput,
   LocalSessionConfig,
   SessionDisplayConfig,
   SessionEnvConfig,
@@ -23,4 +23,4 @@ export type {
   TmuxCcConfig,
 } from "./session/index";
 
-export type { SavedSessionConfig, SessionGroup } from "./persistence/index";
+export type { PersistedSessionConfig, SessionGroup } from "./persistence/index";

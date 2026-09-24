@@ -7,21 +7,21 @@ import { usePersistenceStore } from "../../service/persistence/store";
 import { generateId } from "../../app/rules/paneTree";
 import type {
   LocalSessionConfig,
-  SavedSessionConfig,
+  PersistedSessionConfig,
   SessionDisplayConfig,
   SSHSessionConfig,
   TmuxCcConfig,
 } from "../../model";
 
 export function saveConfigOnly(
-  type: SavedSessionConfig["type"],
+  type: PersistedSessionConfig["type"],
   config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig,
   displayConfig?: SessionDisplayConfig,
-): SavedSessionConfig {
+): PersistedSessionConfig {
   const configId = generateId();
   const configName = config.name?.trim();
 
-  let saved: SavedSessionConfig;
+  let saved: PersistedSessionConfig;
   if (type === "local") {
     saved = {
       id: configId,

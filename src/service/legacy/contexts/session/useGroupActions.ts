@@ -6,12 +6,12 @@
  */
 import { useCallback } from "react";
 import { usePersistenceStore } from "../../../persistence/store";
-import type { SavedSessionConfig } from "../../../../model";
+import type { PersistedSessionConfig } from "../../../../model";
 import { createGroup as createGroupUseCase } from "../../../../app/useCases/createGroup";
 import { deleteGroup as deleteGroupUseCase } from "../../../../app/useCases/deleteGroup";
 import { moveConfigToGroup as moveConfigToGroupUseCase } from "../../../../app/useCases/moveConfigToGroup";
 
-interface UseGroupActionsDeps {
+interface GroupActionsHookDeps {
   /** Legacy hook took this so it could allocate ids; the persistence
    * store reads nextGroupId from itself, so callers no longer need to
    * pass it. Kept for type-compatibility with `SessionState` which still
@@ -22,7 +22,7 @@ interface UseGroupActionsDeps {
   updateGroups: (updater: (prev: never[]) => never[], nextId?: number) => void;
 }
 
-export function useGroupActions(_deps: UseGroupActionsDeps) {
+export function useGroupActions(_deps: GroupActionsHookDeps) {
   const persistence = usePersistenceStore;
 
   const createGroup = useCallback((name: string) => createGroupUseCase(name), []);
@@ -50,7 +50,7 @@ export function useGroupActions(_deps: UseGroupActionsDeps) {
     [persistence],
   );
   const updateConfig = useCallback(
-    (config: SavedSessionConfig) => persistence.getState().upsertSavedConfig(config),
+    (config: PersistedSessionConfig) => persistence.getState().upsertSavedConfig(config),
     [persistence],
   );
 

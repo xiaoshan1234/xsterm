@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { type SavedWindowConfig } from "../../model";
+import { type PersistedWindowConfig } from "../../model";
 import { WindowIcon } from "../icons/Icon";
 import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";
 import { ContextMenu } from "../primitives/ContextMenu";
 
 interface WindowManagerProps {
-  savedWindowConfigs: SavedWindowConfig[];
+  savedWindowConfigs: PersistedWindowConfig[];
   loadWindow: (id: string) => Promise<void>;
   deleteSavedWindow: (id: string) => void;
   renameSavedWindow: (id: string, name: string) => void;
@@ -18,19 +18,19 @@ export function WindowManager({
   deleteSavedWindow,
   renameSavedWindow,
 }: WindowManagerProps) {
-  const [renamingWindow, setRenamingWindow] = useState<SavedWindowConfig | null>(null);
+  const [renamingWindow, setRenamingWindow] = useState<PersistedWindowConfig | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
 
-  const handleLoad = (window: SavedWindowConfig) => {
+  const handleLoad = (window: PersistedWindowConfig) => {
     loadWindow(window.id).catch(console.error);
   };
 
-  const handleClick = (window: SavedWindowConfig) => {
+  const handleClick = (window: PersistedWindowConfig) => {
     setSelectedWindowId(window.id);
   };
 
-  const handleStartRename = (window: SavedWindowConfig) => {
+  const handleStartRename = (window: PersistedWindowConfig) => {
     setRenamingWindow(window);
     setRenameValue(window.name);
   };

@@ -29,7 +29,7 @@ const DEFAULT_LINE_HEIGHT = 1.0;
 /** xterm's own default when `fontSize` is not configured. */
 const DEFAULT_FONT_SIZE = 15;
 
-interface UseLineNumberOverlayOptions {
+interface LineNumberOverlayHookOptions {
   /** xterm instance owner (created by `useXterm`). */
   termRef: RefObject<XTerm | null>;
   /** Positioned ancestor that holds both the xterm mount node and the overlay. */
@@ -116,7 +116,7 @@ export function useLineNumberOverlay({
   overlayRef,
   sessionId,
   enabled = true,
-}: UseLineNumberOverlayOptions): void {
+}: LineNumberOverlayHookOptions): void {
   useEffect(() => {
     if (enabled === false) {
       const overlay = overlayRef.current;

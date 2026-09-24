@@ -6,7 +6,7 @@ import { usePersistenceStore } from "../../service/persistence/store";
 import { useWorkspaceStore } from "../../service/workspace/store";
 import { stripSessionIdFromPaneTree } from "../../app/rules/paneTree";
 import { generateId } from "../../app/rules/paneTree";
-import type { SavedWorkspace, SavedWindow } from "../../model";
+import type { PersistedWorkspace, PersistedWindow } from "../../model";
 
 export function saveWorkspace(workspaceId: string, name: string): void {
   const wsStore = useWorkspaceStore.getState();
@@ -19,10 +19,10 @@ export function saveWorkspace(workspaceId: string, name: string): void {
   const persistenceStore = usePersistenceStore.getState();
   const isDefault = workspace.name === "default";
 
-  const build = (id: string): SavedWorkspace => ({
+  const build = (id: string): PersistedWorkspace => ({
     id,
     name: finalName,
-    windows: workspace.windows.flatMap((window): SavedWindow[] => {
+    windows: workspace.windows.flatMap((window): PersistedWindow[] => {
       if (window.kind !== "terminal") return [];
       return [
         {

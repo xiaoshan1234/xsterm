@@ -27,7 +27,7 @@ import { SessionFormPanels } from "./SessionFormPanels";
 import "./CreateSessionDialog.css";
 import { DEFAULT_GROUP_ID } from "../../service/legacy/contexts/session/constants";
 
-interface CreateSessionDialogProps {
+interface SessionDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateLocal: (
@@ -59,7 +59,7 @@ export default function CreateSessionDialog({
   onCreateTmux,
   initialTab = "local",
   initialGroupId,
-}: CreateSessionDialogProps) {
+}: SessionDialogProps) {
   const { groups, addToGroup, saveConfigOnly, savedConfigs } = useSession();
 
   const [topTab, setTopTab] = useState<TopTab>(initialTab);

@@ -10,7 +10,7 @@ import { buildFrontendSession } from "../../app/rules/sessionRules";
 import { generateId } from "../../app/rules/paneTree";
 import type {
   LocalSessionConfig,
-  SavedSessionConfig,
+  PersistedSessionConfig,
   Session,
   SessionDisplayConfig,
 } from "../../model";
@@ -25,7 +25,7 @@ export async function createLocalSessionOnly(
   const session = buildFrontendSession(info, configId, "local", displayConfig);
 
   if (save) {
-    const saved: SavedSessionConfig = {
+    const saved: PersistedSessionConfig = {
       id: configId,
       name: info.name,
       version: 1,

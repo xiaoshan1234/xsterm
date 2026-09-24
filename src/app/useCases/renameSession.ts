@@ -1,6 +1,6 @@
 /**
  * renameSession — rename a runtime session and the matching
- * `SavedSessionConfig`. The backend session name is not changed; only
+ * `PersistedSessionConfig`. The backend session name is not changed; only
  * the frontend label and the saved-config label are updated.
  */
 import { useSessionStore } from "../../service/session/store";

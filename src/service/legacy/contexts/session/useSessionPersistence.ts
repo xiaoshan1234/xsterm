@@ -22,8 +22,8 @@
  * side-effects of this hook, not part of the public interface.
  */
 import { useCallback, useEffect } from "react";
-import type { SavedWindowConfig, SavedWorkspace, SessionGroup } from "../../../../model";
-import type { SavedSessionConfig } from "../../../../model";
+import type { PersistedWindowConfig, PersistedWorkspace, SessionGroup } from "../../../../model";
+import type { PersistedSessionConfig } from "../../../../model";
 import { loadSavedConfigs, persistConfigs } from "../../../../infra/store/savedConfigs";
 import { loadSavedGroups, persistGroups } from "../../../../infra/store/groups";
 import { loadSavedWorkspaces, persistWorkspaces } from "../../../../infra/store/savedWorkspaces";
@@ -34,17 +34,17 @@ import { useSessionStore } from "../../../../service/session/store";
 import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "../../../../app/rules/constants";
 import { type SessionPersistence } from "./types";
 
-interface UseSessionPersistenceOptions {
+interface SessionPersistenceHookOptions {
   /** Latest snapshot — used by the load effect for "should I re-load?" check. */
-  savedConfigs: SavedSessionConfig[];
-  savedWorkspaces: SavedWorkspace[];
-  savedWindowConfigs: SavedWindowConfig[];
+  savedConfigs: PersistedSessionConfig[];
+  savedWorkspaces: PersistedWorkspace[];
+  savedWindowConfigs: PersistedWindowConfig[];
   groups: SessionGroup[];
   nextGroupId: number;
   globalLocalEcho: boolean;
 }
 
-export function useSessionPersistence(options: UseSessionPersistenceOptions): SessionPersistence {
+export function useSessionPersistence(options: SessionPersistenceHookOptions): SessionPersistence {
   const {
     savedConfigs,
     savedWorkspaces,
@@ -180,7 +180,7 @@ export function useSessionPersistence(options: UseSessionPersistenceOptions): Se
 
   // --- public actions ----------------------------------------------------
   const updateConfigs = useCallback(
-    (updater: (prev: SavedSessionConfig[]) => SavedSessionConfig[]) => {
+    (updater: (prev: PersistedSessionConfig[]) => PersistedSessionConfig[]) => {
       persistenceStore.getState().setSavedConfigs((prev) => {
         const updated = updater(prev as never);
         void persistConfigs(updated as never);
@@ -201,11 +201,11 @@ export function useSessionPersistence(options: UseSessionPersistenceOptions): Se
     [persistenceStore, nextGroupId],
   );
 
-  const persistSavedWorkspaces = useCallback((data: SavedWorkspace[]) => {
+  const persistSavedWorkspaces = useCallback((data: PersistedWorkspace[]) => {
     void persistWorkspaces(data);
   }, []);
 
-  const persistSavedWindowConfigs = useCallback((data: SavedWindowConfig[]) => {
+  const persistSavedWindowConfigs = useCallback((data: PersistedWindowConfig[]) => {
     void persistWindowConfigs(data);
   }, []);
 

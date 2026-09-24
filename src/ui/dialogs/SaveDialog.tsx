@@ -3,7 +3,7 @@ import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";
 import "./SaveDialog.css";
 
-interface SaveDialogProps {
+interface PersistenceDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (name: string) => void;
@@ -21,7 +21,7 @@ export function SaveDialog({
   title = "Save",
   label = "Name",
   validateName,
-}: SaveDialogProps) {
+}: PersistenceDialogProps) {
   const [name, setName] = useState(() => defaultName);
   const [error, setError] = useState<string | null>(null);
 

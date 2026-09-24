@@ -6,7 +6,7 @@
  * `tauri-plugin-store` adapters because the migration matrix is tied
  * to the on-disk format that those adapters read and write.
  *
- * The `SavedSessionConfig` / `SessionGroup` data shapes themselves live
+ * The `PersistedSessionConfig` / `SessionGroup` data shapes themselves live
  * in `src/model/entities/persistence.ts`; this file only owns the
  * version-conversion logic.
  */
@@ -14,12 +14,12 @@ import type {
   LocalSessionConfig,
   SSHSessionConfig,
   TmuxCcConfig,
-  SavedSessionConfig,
+  PersistedSessionConfig,
 } from "../../model/session-config";
-export type { SavedSessionConfig };
+export type { PersistedSessionConfig };
 
 /**
- * Schema versions of the `SavedSessionConfig` on-disk format.
+ * Schema versions of the `PersistedSessionConfig` on-disk format.
  * - v0 (legacy, pre-T3): `{type, localConfig|sshConfig, id, name, displayConfig?}`
  * - v1 (current): `{type, config, version, id, name, displayConfig?}`
  */
@@ -27,7 +27,7 @@ export const SAVED_SESSION_CONFIG_VERSION = 1;
 
 /**
  * Migrate a raw entry read from the persisted JSON store into the current
- * `SavedSessionConfig` shape.
+ * `PersistedSessionConfig` shape.
  *
  * Behavior:
  * - v1 shape (`type` + `config` + `version`): return as-is after validating
@@ -45,7 +45,7 @@ export const SAVED_SESSION_CONFIG_VERSION = 1;
  *
  * Never throws; never mutates `raw`.
  */
-export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
+export function migrateSavedConfig(raw: unknown): PersistedSessionConfig | null {
   if (raw === null || typeof raw !== "object") {
     return null;
   }
@@ -62,7 +62,7 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
     const name = String(obj.name ?? "");
     const displayConfig =
       obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {};
     if (obj.type === "local") {
       return {
@@ -114,7 +114,7 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
       type: "local",
       config: localConfig as LocalSessionConfig,
       ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {}),
     };
   }
@@ -136,7 +136,7 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
       type: "ssh",
       config: sshConfig as SSHSessionConfig,
       ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedSessionConfig["displayConfig"] }
+        ? { displayConfig: obj.displayConfig as PersistedSessionConfig["displayConfig"] }
         : {}),
     };
   }
@@ -148,11 +148,11 @@ export function migrateSavedConfig(raw: unknown): SavedSessionConfig | null {
  * Run each element of `raw` through {@link migrateSavedConfig}, drop the nulls
  * with a single `console.warn` per skip, and return the survivors in order.
  */
-export function migrateSavedConfigList(raw: unknown): SavedSessionConfig[] {
+export function migrateSavedConfigList(raw: unknown): PersistedSessionConfig[] {
   if (!Array.isArray(raw)) {
     return [];
   }
-  const migrated: SavedSessionConfig[] = [];
+  const migrated: PersistedSessionConfig[] = [];
   for (const entry of raw) {
     const result = migrateSavedConfig(entry);
     if (result !== null) {

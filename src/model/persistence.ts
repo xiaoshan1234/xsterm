@@ -7,4 +7,4 @@
  * directory `./persistence/` and the file `./persistence.ts` both
  * exist here).
  */
-export type { SavedSessionConfig, SessionGroup } from "./persistence/index";
+export type { PersistedSessionConfig, SessionGroup } from "./persistence/index";

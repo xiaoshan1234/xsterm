@@ -5,7 +5,7 @@
  * Flow:
  * 1. Call `infra.createLocal` to spin up the backend PTY.
  * 2. Build the frontend `Session` view-model via `buildFrontendSession`.
- * 3. Persist a `SavedSessionConfig` (so the sidebar can re-open it).
+ * 3. Persist a `PersistedSessionConfig` (so the sidebar can re-open it).
  * 4. Add the session to the session store.
  * 5. Insert a new `Window` into the active workspace (creating one if
  *    none exists yet).
@@ -18,7 +18,7 @@ import { buildFrontendSession } from "../../app/rules/sessionRules";
 import { createLeafPane, generateId } from "../../app/rules/paneTree";
 import type {
   LocalSessionConfig,
-  SavedSessionConfig,
+  PersistedSessionConfig,
   Session,
   SessionDisplayConfig,
 } from "../../model";
@@ -33,7 +33,7 @@ export async function createLocalSession(
   const session = buildFrontendSession(info, configId, "local", displayConfig);
 
   if (save) {
-    const saved: SavedSessionConfig = {
+    const saved: PersistedSessionConfig = {
       id: configId,
       name: info.name,
       version: 1,

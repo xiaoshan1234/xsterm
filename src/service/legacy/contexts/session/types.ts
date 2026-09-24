@@ -3,9 +3,9 @@ import {
   type LocalSessionConfig,
   type PaneNode,
   type SSHSessionConfig,
-  type SavedSessionConfig,
-  type SavedWindowConfig,
-  type SavedWorkspace,
+  type PersistedSessionConfig,
+  type PersistedWindowConfig,
+  type PersistedWorkspace,
   type Session,
   type SessionDisplayConfig,
   type SessionGroup,
@@ -19,12 +19,12 @@ import {
 
 export interface SessionContextType {
   sessions: Session[];
-  setSessions: SetSessions;
-  savedConfigs: SavedSessionConfig[];
+  setSessions: SessionsSetter;
+  savedConfigs: PersistedSessionConfig[];
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
-  savedWorkspaces: SavedWorkspace[];
-  savedWindowConfigs: SavedWindowConfig[];
+  savedWorkspaces: PersistedWorkspace[];
+  savedWindowConfigs: PersistedWindowConfig[];
   groups: SessionGroup[];
   globalLocalEcho: boolean;
   setGlobalLocalEcho: (enabled: boolean) => void;
@@ -54,7 +54,7 @@ export interface SessionContextType {
     type: Session["type"],
     config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig,
     displayConfig?: SessionDisplayConfig,
-  ) => SavedSessionConfig;
+  ) => PersistedSessionConfig;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -67,7 +67,7 @@ export interface SessionContextType {
   createGroup: (name: string) => void;
   deleteGroup: (id: number) => void;
   renameGroup: (id: number, name: string) => void;
-  updateConfig: (config: SavedSessionConfig) => void;
+  updateConfig: (config: PersistedSessionConfig) => void;
   toggleGroup: (id: number) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;
@@ -123,28 +123,28 @@ export interface SessionContextType {
   reorderWindows: (workspaceId: string, fromIndex: number, toIndex: number) => void;
 }
 
-export type SetSavedConfigs = Dispatch<SetStateAction<SavedSessionConfig[]>>;
-export type SetSessions = Dispatch<SetStateAction<Session[]>>;
-export type SetWorkspaces = Dispatch<SetStateAction<Workspace[]>>;
-export type SetSavedWorkspaces = Dispatch<SetStateAction<SavedWorkspace[]>>;
-export type SetSavedWindowConfigs = Dispatch<SetStateAction<SavedWindowConfig[]>>;
-export type SetGroups = Dispatch<SetStateAction<SessionGroup[]>>;
+export type PersistedConfigsSetter = Dispatch<SetStateAction<PersistedSessionConfig[]>>;
+export type SessionsSetter = Dispatch<SetStateAction<Session[]>>;
+export type WorkspacesSetter = Dispatch<SetStateAction<Workspace[]>>;
+export type PersistedWorkspacesSetter = Dispatch<SetStateAction<PersistedWorkspace[]>>;
+export type PersistedWindowConfigsSetter = Dispatch<SetStateAction<PersistedWindowConfig[]>>;
+export type GroupsSetter = Dispatch<SetStateAction<SessionGroup[]>>;
 
 export interface SessionState {
-  savedConfigs: SavedSessionConfig[];
-  setSavedConfigs: SetSavedConfigs;
+  savedConfigs: PersistedSessionConfig[];
+  setSavedConfigs: PersistedConfigsSetter;
   sessions: Session[];
-  setSessions: SetSessions;
+  setSessions: SessionsSetter;
   workspaces: Workspace[];
-  setWorkspaces: SetWorkspaces;
+  setWorkspaces: WorkspacesSetter;
   activeWorkspaceId: string | null;
   setActiveWorkspaceId: Dispatch<SetStateAction<string | null>>;
-  savedWorkspaces: SavedWorkspace[];
-  setSavedWorkspaces: SetSavedWorkspaces;
-  savedWindowConfigs: SavedWindowConfig[];
-  setSavedWindowConfigs: SetSavedWindowConfigs;
+  savedWorkspaces: PersistedWorkspace[];
+  setSavedWorkspaces: PersistedWorkspacesSetter;
+  savedWindowConfigs: PersistedWindowConfig[];
+  setSavedWindowConfigs: PersistedWindowConfigsSetter;
   groups: SessionGroup[];
-  setGroups: SetGroups;
+  setGroups: GroupsSetter;
   nextGroupId: number;
   setNextGroupId: Dispatch<SetStateAction<number>>;
   globalLocalEcho: boolean;
@@ -181,10 +181,10 @@ export interface SessionState {
 }
 
 export interface SessionPersistence {
-  updateConfigs: (updater: (prev: SavedSessionConfig[]) => SavedSessionConfig[]) => void;
+  updateConfigs: (updater: (prev: PersistedSessionConfig[]) => PersistedSessionConfig[]) => void;
   updateGroups: (updater: (prev: SessionGroup[]) => SessionGroup[], nextId?: number) => void;
-  persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
-  persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
+  persistSavedWorkspaces: (workspacesData: PersistedWorkspace[]) => void;
+  persistSavedWindowConfigs: (windowConfigs: PersistedWindowConfig[]) => void;
 }
 
 export interface SessionActions {
@@ -198,7 +198,7 @@ export interface SessionActions {
     type: Session["type"],
     config: LocalSessionConfig | SSHSessionConfig | TmuxCcConfig,
     displayConfig?: SessionDisplayConfig,
-  ) => SavedSessionConfig;
+  ) => PersistedSessionConfig;
   openFromConfig: (configId: string) => Promise<Session>;
   removeConfig: (configId: string) => void;
   closeSession: (id: number) => Promise<void>;
@@ -211,7 +211,7 @@ export interface SessionActions {
   createGroup: (name: string) => void;
   deleteGroup: (id: number) => void;
   renameGroup: (id: number, name: string) => void;
-  updateConfig: (config: SavedSessionConfig) => void;
+  updateConfig: (config: PersistedSessionConfig) => void;
   toggleGroup: (id: number) => void;
   writeSession: (id: number, data: string) => Promise<void>;
   resizeSession: (id: number, rows: number, cols: number) => Promise<void>;

@@ -9,11 +9,11 @@
  *
  * **Out of scope** (sibling domains):
  * - `Window` / `WindowBase` / `TerminalWindow` / `TmuxControlWindow` /
- *   `InitWindow` — runtime window discriminated union, lives in
+ *   `InitialWindow` — runtime window discriminated union, lives in
  *   `../window`.
- * - `PaneNode` / `PaneBinding` / `SavedPaneNode` — pane tree shapes,
+ * - `PaneNode` / `PaneBinding` / `PersistedPaneNode` — pane tree shapes,
  *   live in `../pane`.
- * - `SavedWorkspace` / `SavedWindow` / `SavedSessionConfig` /
+ * - `PersistedWorkspace` / `PersistedWindow` / `PersistedSessionConfig` /
  *   `SessionGroup` — on-disk persisted shapes, live in `../persistence`.
  */
 import type { Window } from "../window";
@@ -33,7 +33,7 @@ export interface Workspace {
    */
   sessionIds?: number[];
   /**
-   * Id of the `SavedWorkspace` this workspace was loaded from, or
+   * Id of the `PersistedWorkspace` this workspace was loaded from, or
    * `undefined` for an unsaved workspace. Distinct from `id` — the
    * workspace `id` is per-session (changes every boot); the
    * `savedWorkspaceId` is per-record (stable across loads).

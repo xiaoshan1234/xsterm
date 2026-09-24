@@ -8,25 +8,25 @@
  * `loadWorkspace` use case. This hook is purely the surface adapter.
  */
 import { useCallback } from "react";
-import type { SavedWorkspace, Session, Workspace } from "../../../../model";
+import type { PersistedWorkspace, Session, Workspace } from "../../../../model";
 import { saveWorkspace as saveWorkspaceUseCase } from "../../../../app/useCases/saveWorkspace";
 import { loadWorkspace as loadWorkspaceUseCase } from "../../../../app/useCases/loadWorkspace";
 import { deleteSavedWorkspace as deleteSavedWorkspaceUseCase } from "../../../../app/useCases/deleteSavedWorkspace";
 import { renameSavedWorkspace as renameSavedWorkspaceUseCase } from "../../../../app/useCases/renameSavedWorkspace";
 
-interface UseSavedWorkspaceActionsDeps {
-  savedWorkspaces: SavedWorkspace[];
+interface PersistedWorkspaceActionsHookDeps {
+  savedWorkspaces: PersistedWorkspace[];
   workspacesRef: React.MutableRefObject<Workspace[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   setActiveWorkspaceId: React.Dispatch<React.SetStateAction<string | null>>;
-  setSavedWorkspaces: React.Dispatch<React.SetStateAction<SavedWorkspace[]>>;
+  setSavedWorkspaces: React.Dispatch<React.SetStateAction<PersistedWorkspace[]>>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
-  persistSavedWorkspaces: (data: SavedWorkspace[]) => void;
+  persistSavedWorkspaces: (data: PersistedWorkspace[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Session>;
 }
 
-export function useSavedWorkspaceActions(_deps: UseSavedWorkspaceActionsDeps) {
+export function useSavedWorkspaceActions(_deps: PersistedWorkspaceActionsHookDeps) {
   const saveWorkspace = useCallback(
     (workspaceId: string, name: string) => saveWorkspaceUseCase(workspaceId, name),
     [],

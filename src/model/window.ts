@@ -6,7 +6,7 @@
  * `./window/` and the file `./window.ts` both exist here).
  */
 export type {
-  InitWindow,
+  InitialWindow,
   TerminalWindow,
   TmuxControlWindow,
   Window,

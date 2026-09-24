@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type SplitMode = "line" | "character";
-type RunState = "idle" | "running" | "paused";
+type ExecutionState = "idle" | "running" | "paused";
 
 interface LineSendMeta {
   timestamp: string;
   number: number;
 }
 
-interface UseCommandExecutorDeps {
+interface CommandExecutorHookDeps {
   input: string;
   splitMode: SplitMode;
   count: number;
@@ -18,7 +18,7 @@ interface UseCommandExecutorDeps {
 }
 
 export interface CommandExecutor {
-  runState: RunState;
+  runState: ExecutionState;
   breakpoints: Set<number>;
   setBreakpoints: React.Dispatch<React.SetStateAction<Set<number>>>;
   lineMeta: Record<number, LineSendMeta>;
@@ -37,10 +37,10 @@ function formatTimestamp(date: Date): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-export function useCommandExecutor(deps: UseCommandExecutorDeps): CommandExecutor {
+export function useCommandExecutor(deps: CommandExecutorHookDeps): CommandExecutor {
   const { input, splitMode, count, intervalMs, writeSession, getTargetSessions } = deps;
 
-  const [runState, setRunState] = useState<RunState>("idle");
+  const [runState, setRunState] = useState<ExecutionState>("idle");
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
   const [lineMeta, setLineMeta] = useState<Record<number, LineSendMeta>>({});
   const [intervalUserSet, setIntervalUserSet] = useState(false);

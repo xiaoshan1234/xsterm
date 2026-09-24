@@ -9,7 +9,7 @@
  */
 export type {
   CapabilityFlags,
-  CreateSessionInput,
+  SessionInput,
   LocalSessionConfig,
   Session,
   SessionConnectionType,

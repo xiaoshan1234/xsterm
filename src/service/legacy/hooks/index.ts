@@ -2,7 +2,7 @@ export { useAppShortcuts } from "./useAppShortcuts";
 export { useClampedPanelHeight } from "./useClampedPanelHeight";
 export { useDragResize } from "./useDragResize";
 export type {
-  UseDragResizeOptions,
+  DragResizeHookOptions,
   DragResizeDeltaPayload,
   DragResizeStartPayload,
 } from "./useDragResize";
@@ -11,7 +11,7 @@ export { useShortcut, useShortcuts } from "./useShortcut";
 export type { ShortcutConfig } from "./useShortcut";
 export { useTerminalResize } from "./useTerminalResize";
 export { useXterm, themeToXtermTheme } from "./useXterm";
-export type { UseXtermResult } from "./useXterm";
+export type { XtermHookResult } from "./useXterm";
 export { useTmuxAutoAttach } from "./useTmuxAutoAttach";
 export { usePasteBatcher } from "./usePasteBatcher";
 export {

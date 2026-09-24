@@ -1,12 +1,12 @@
 import { type RefObject, useCallback, useEffect, useState } from "react";
 
-interface UseClampedPanelHeightArgs {
+interface ClampedPanelHeightHookArgs {
   containerRef: RefObject<HTMLElement | null>;
   initial?: number;
   min?: number;
 }
 
-interface UseClampedPanelHeightResult {
+interface ClampedPanelHeightHookResult {
   height: number;
   maxHeight: number;
   onHeightChange: (newHeight: number) => void;
@@ -20,7 +20,7 @@ export function useClampedPanelHeight({
   containerRef,
   initial = 160,
   min = 120,
-}: UseClampedPanelHeightArgs): UseClampedPanelHeightResult {
+}: ClampedPanelHeightHookArgs): ClampedPanelHeightHookResult {
   const [height, setHeight] = useState(initial);
   const [maxHeight, setMaxHeight] = useState(800);
 

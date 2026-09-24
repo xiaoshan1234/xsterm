@@ -4,26 +4,26 @@
  * `src/service/persistence/store.ts`; the use cases mutate it directly.
  */
 import { useCallback } from "react";
-import type { SavedWindowConfig, Session, Window, Workspace } from "../../../../model";
+import type { PersistedWindowConfig, Session, Window, Workspace } from "../../../../model";
 import { saveWindow as saveWindowUseCase } from "../../../../app/useCases/saveWindow";
 import { loadWindow as loadWindowUseCase } from "../../../../app/useCases/loadWindow";
 import { deleteSavedWindow as deleteSavedWindowUseCase } from "../../../../app/useCases/deleteSavedWindow";
 import { usePersistenceStore } from "../../../../service/persistence/store";
 import { useWorkspaceStore } from "../../../../service/workspace/store";
 
-interface UseSavedWindowActionsDeps {
-  savedWindowConfigs: SavedWindowConfig[];
+interface PersistedWindowActionsHookDeps {
+  savedWindowConfigs: PersistedWindowConfig[];
   workspacesRef: React.MutableRefObject<Workspace[]>;
   sessionsRef: React.MutableRefObject<Session[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  setSavedWindowConfigs: React.Dispatch<React.SetStateAction<SavedWindowConfig[]>>;
+  setSavedWindowConfigs: React.Dispatch<React.SetStateAction<PersistedWindowConfig[]>>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
-  persistSavedWindowConfigs: (data: SavedWindowConfig[]) => void;
+  persistSavedWindowConfigs: (data: PersistedWindowConfig[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Session>;
 }
 
-export function useSavedWindowActions(_deps: UseSavedWindowActionsDeps) {
+export function useSavedWindowActions(_deps: PersistedWindowActionsHookDeps) {
   const saveWindow = useCallback(
     (workspaceId: string, windowId: string, name: string) =>
       saveWindowUseCase(workspaceId, windowId, name),

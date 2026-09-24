@@ -16,7 +16,7 @@ import {
 import { getUniqueWindowName } from "../../app/rules/sessionRules";
 import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
 import { openSavedSession } from "./openSavedSession";
-import type { PaneLeafNode, PaneSplitNode, SavedPaneNode } from "../../model/pane";
+import type { PaneLeafNode, PaneSplitNode, PersistedPaneNode } from "../../model/pane";
 import type { Window } from "../../model/window";
 
 export async function loadWindow(savedWindowId: string, workspaceId?: string): Promise<Window> {
@@ -26,7 +26,7 @@ export async function loadWindow(savedWindowId: string, workspaceId?: string): P
 
   const configIdToSession = new Map<string, Awaited<ReturnType<typeof openSavedSession>>>();
 
-  const buildTree = async (node: SavedPaneNode): Promise<PaneLeafNode | PaneSplitNode> => {
+  const buildTree = async (node: PersistedPaneNode): Promise<PaneLeafNode | PaneSplitNode> => {
     if (node.kind === "leaf") {
       const configId = node.binding?.configId;
       if (configId) {

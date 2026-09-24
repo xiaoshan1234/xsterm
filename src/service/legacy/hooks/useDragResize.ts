@@ -15,14 +15,14 @@ export interface DragResizeDeltaPayload {
   initialValue: number;
 }
 
-export interface UseDragResizeOptions {
+export interface DragResizeHookOptions {
   direction: DragResizeDirection;
   onStart?: (payload: DragResizeStartPayload) => void;
   onDelta?: (payload: DragResizeDeltaPayload) => void;
   onEnd?: () => void;
 }
 
-export function useDragResize({ direction, onStart, onDelta, onEnd }: UseDragResizeOptions) {
+export function useDragResize({ direction, onStart, onDelta, onEnd }: DragResizeHookOptions) {
   const stateRef = useRef<{
     initialValue: number;
     startX: number;

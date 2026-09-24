@@ -13,24 +13,24 @@
  */
 import { create } from "zustand";
 import type {
-  SavedSessionConfig,
-  SavedWindowConfig,
-  SavedWorkspace,
+  PersistedSessionConfig,
+  PersistedWindowConfig,
+  PersistedWorkspace,
   SessionGroup,
 } from "../../model";
 
 export interface PersistenceStoreState {
-  savedConfigs: SavedSessionConfig[];
+  savedConfigs: PersistedSessionConfig[];
   setSavedConfigs: (
-    next: SavedSessionConfig[] | ((p: SavedSessionConfig[]) => SavedSessionConfig[]),
+    next: PersistedSessionConfig[] | ((p: PersistedSessionConfig[]) => PersistedSessionConfig[]),
   ) => void;
-  savedWorkspaces: SavedWorkspace[];
+  savedWorkspaces: PersistedWorkspace[];
   setSavedWorkspaces: (
-    next: SavedWorkspace[] | ((p: SavedWorkspace[]) => SavedWorkspace[]),
+    next: PersistedWorkspace[] | ((p: PersistedWorkspace[]) => PersistedWorkspace[]),
   ) => void;
-  savedWindowConfigs: SavedWindowConfig[];
+  savedWindowConfigs: PersistedWindowConfig[];
   setSavedWindowConfigs: (
-    next: SavedWindowConfig[] | ((p: SavedWindowConfig[]) => SavedWindowConfig[]),
+    next: PersistedWindowConfig[] | ((p: PersistedWindowConfig[]) => PersistedWindowConfig[]),
   ) => void;
   groups: SessionGroup[];
   setGroups: (next: SessionGroup[] | ((p: SessionGroup[]) => SessionGroup[])) => void;
@@ -38,12 +38,12 @@ export interface PersistenceStoreState {
   setNextGroupId: (next: number | ((p: number) => number)) => void;
 
   // ---- mutations ---------------------------------------------------
-  upsertSavedConfig: (config: SavedSessionConfig) => void;
+  upsertSavedConfig: (config: PersistedSessionConfig) => void;
   removeSavedConfig: (configId: string) => void;
-  upsertSavedWorkspace: (workspace: SavedWorkspace) => void;
+  upsertSavedWorkspace: (workspace: PersistedWorkspace) => void;
   removeSavedWorkspace: (id: string) => void;
   renameSavedWorkspace: (id: string, name: string) => void;
-  upsertSavedWindowConfig: (config: SavedWindowConfig) => void;
+  upsertSavedWindowConfig: (config: PersistedWindowConfig) => void;
   removeSavedWindowConfig: (id: string) => void;
   renameSavedWindowConfig: (id: string, name: string) => void;
   addGroup: (group: SessionGroup) => void;
@@ -61,7 +61,7 @@ export const usePersistenceStore = create<PersistenceStoreState>((set) => ({
     set((state) => ({
       savedConfigs:
         typeof next === "function"
-          ? (next as (p: SavedSessionConfig[]) => SavedSessionConfig[])(state.savedConfigs)
+          ? (next as (p: PersistedSessionConfig[]) => PersistedSessionConfig[])(state.savedConfigs)
           : next,
     }));
   },
@@ -70,7 +70,7 @@ export const usePersistenceStore = create<PersistenceStoreState>((set) => ({
     set((state) => ({
       savedWorkspaces:
         typeof next === "function"
-          ? (next as (p: SavedWorkspace[]) => SavedWorkspace[])(state.savedWorkspaces)
+          ? (next as (p: PersistedWorkspace[]) => PersistedWorkspace[])(state.savedWorkspaces)
           : next,
     }));
   },
@@ -79,7 +79,9 @@ export const usePersistenceStore = create<PersistenceStoreState>((set) => ({
     set((state) => ({
       savedWindowConfigs:
         typeof next === "function"
-          ? (next as (p: SavedWindowConfig[]) => SavedWindowConfig[])(state.savedWindowConfigs)
+          ? (next as (p: PersistedWindowConfig[]) => PersistedWindowConfig[])(
+              state.savedWindowConfigs,
+            )
           : next,
     }));
   },

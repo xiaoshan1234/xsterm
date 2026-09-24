@@ -18,16 +18,16 @@ import { useWorkspaceStore } from "../../service/workspace/store";
 import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "../../app/rules/sessionRules";
 import { createLeafPane, generateId, getDefaultWindowName } from "../../app/rules/paneTree";
 import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
-import type { InitWindow, TerminalWindow, Window } from "../../model/window";
+import type { InitialWindow, TerminalWindow, Window } from "../../model/window";
 import { openSavedSession } from "./openSavedSession";
 
-export interface CreateWindowFromSessionInput {
+export interface WindowFromSessionInput {
   sessionId: number;
   configId: string;
   name?: string;
   targetWorkspaceId?: string;
 }
-export interface CreateWindowOptions {
+export interface WindowOptions {
   variant: "fromSession" | "fromSavedConfig" | "init" | "replaceInit" | "tmux";
   workspaceId?: string;
   windowId?: string;
@@ -38,14 +38,12 @@ export interface CreateWindowOptions {
   tmuxControlWindowId?: number;
 }
 
-export async function createWindow(
-  opts: CreateWindowFromSessionInput | CreateWindowOptions,
-): Promise<Window> {
+export async function createWindow(opts: WindowFromSessionInput | WindowOptions): Promise<Window> {
   if ("sessionId" in opts && "configId" in opts && !("variant" in opts)) {
-    return createWindowFromSession(opts as CreateWindowFromSessionInput);
+    return createWindowFromSession(opts as WindowFromSessionInput);
   }
 
-  const o = opts as CreateWindowOptions;
+  const o = opts as WindowOptions;
   switch (o.variant) {
     case "fromSession":
       return createWindowFromSession({
@@ -71,7 +69,7 @@ export async function createWindow(
   }
 }
 
-function createWindowFromSession(input: CreateWindowFromSessionInput): Window {
+function createWindowFromSession(input: WindowFromSessionInput): Window {
   const wsStore = useWorkspaceStore.getState();
   const workspaces = wsStore.workspaces;
   const sessionStore = useSessionStore.getState();
@@ -123,7 +121,7 @@ async function createWindowFromSavedConfig(
 }
 
 export function createInitWindow(): Window {
-  const init: InitWindow = {
+  const init: InitialWindow = {
     id: generateId(),
     name: "New Session",
     activePaneId: null,

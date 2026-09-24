@@ -3,19 +3,19 @@
  * `tauri-plugin-store` (`sessions.json`).
  *
  * **Scope**
- * - `SavedSessionConfig` — `SavedSessionConfig` extends the runtime
- *   `CreateSessionInput` (from `../session`) with the persisted
+ * - `PersistedSessionConfig` — `PersistedSessionConfig` extends the runtime
+ *   `SessionInput` (from `../session`) with the persisted
  *   `id` / `name` / `version` envelope.
  * - `SessionGroup` — sidebar grouping of saved configs.
- * - `SavedWindow` / `SavedWindowConfig` — frozen window snapshot;
- *   legacy alias `SavedWindowConfig` is preserved.
- * - `SavedWorkspace` — frozen workspace snapshot (a `SavedWindow[]`).
+ * - `PersistedWindow` / `PersistedWindowConfig` — frozen window snapshot;
+ *   legacy alias `PersistedWindowConfig` is preserved.
+ * - `PersistedWorkspace` — frozen workspace snapshot (a `PersistedWindow[]`).
  *
  * **Out of scope** (sibling domains):
- * - `CreateSessionInput` / `LocalSessionConfig` / etc. — runtime input
+ * - `SessionInput` / `LocalSessionConfig` / etc. — runtime input
  *   shapes, live in `../session`.
- * - `SavedPaneNode` — frozen pane tree, lives in `../pane`.
- * - `AttachedTmuxServer` — per-controller tmux attach record, lives in
+ * - `PersistedPaneNode` — frozen pane tree, lives in `../pane`.
+ * - `TmuxAttachmentRecord` — per-controller tmux attach record, lives in
  *   `../tmux`.
  *
  * **Why persistence has its own domain (not the runtime domains)**
@@ -24,19 +24,19 @@
  * (`session-config.ts` did this historically) makes it easy for
  * migrations and runtime updates to drift out of sync.
  */
-import type { SavedPaneNode } from "../pane";
-import type { CreateSessionInput, SessionDisplayConfig, SessionType } from "../session";
+import type { PersistedPaneNode } from "../pane";
+import type { SessionInput, SessionDisplayConfig, SessionType } from "../session";
 
 /**
  * Persisted shape of a user-saved session config. Adds `id` / `name`
- * / `version` over `CreateSessionInput` (the version drives the
+ * / `version` over `SessionInput` (the version drives the
  * `migrateSavedConfig` matrix in `infra/store/migrations.ts`).
  */
-export type SavedSessionConfig = {
+export type PersistedSessionConfig = {
   id: string;
   name: string;
   version: number;
-} & CreateSessionInput & {
+} & SessionInput & {
     /**
      * Inlined SessionDisplayConfig (per-session visual config).
      * The field set is identical to the runtime one — see
@@ -50,35 +50,35 @@ export type SavedSessionConfig = {
 export interface SessionGroup {
   id: number;
   name: string;
-  /** Ids of `SavedSessionConfig`s in this group. */
+  /** Ids of `PersistedSessionConfig`s in this group. */
   configIds: string[];
   /** Whether the group is collapsed in the sidebar. */
   collapsed: boolean;
 }
 
 /**
- * Frozen window stored in `SavedWorkspace`. Mirrors `Window` but without
+ * Frozen window stored in `PersistedWorkspace`. Mirrors `Window` but without
  * runtime-only fields (`activePaneId`, tmux handles).
  */
-export interface SavedWindow {
+export interface PersistedWindow {
   id: string;
   name: string;
-  rootPane: SavedPaneNode;
+  rootPane: PersistedPaneNode;
 }
 
 /**
- * Legacy alias for `SavedWindow`. Older code paths (especially
+ * Legacy alias for `PersistedWindow`. Older code paths (especially
  * `service/legacy/contexts/session/types.ts` and the persistence
- * store) imported `SavedWindowConfig` from `./persistence` /
- * `./window-config`. The current canonical name is `SavedWindow`;
+ * store) imported `PersistedWindowConfig` from `./persistence` /
+ * `./window-config`. The current canonical name is `PersistedWindow`;
  * this alias preserves the old import surface.
  */
-export type SavedWindowConfig = SavedWindow;
+export type PersistedWindowConfig = PersistedWindow;
 
-export interface SavedWorkspace {
+export interface PersistedWorkspace {
   id: string;
   name: string;
-  windows: SavedWindow[];
+  windows: PersistedWindow[];
 }
 
 /** Convenience re-export so older callers can still `import { SessionType } from "../model/persistence"`. */

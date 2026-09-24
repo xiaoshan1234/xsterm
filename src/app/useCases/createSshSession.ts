@@ -11,7 +11,7 @@ import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession } from "../../app/rules/sessionRules";
 import { createLeafPane, generateId } from "../../app/rules/paneTree";
 import type {
-  SavedSessionConfig,
+  PersistedSessionConfig,
   Session,
   SessionDisplayConfig,
   SSHSessionConfig,
@@ -27,7 +27,7 @@ export async function createSshSession(
   const session = buildFrontendSession(info, configId, "ssh", displayConfig);
 
   if (save) {
-    const saved: SavedSessionConfig = {
+    const saved: PersistedSessionConfig = {
       id: configId,
       name: info.name,
       version: 1,

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useSession } from "../../service/legacy/contexts/SessionContext";
 import { DEFAULT_GROUP_ID } from "../../service/legacy/contexts/session/constants";
-import { type SavedSessionConfig, type SessionGroup } from "../../model";
+import { type PersistedSessionConfig, type SessionGroup } from "../../model";
 import { ShellIcon, SshIcon, FolderIcon, ChevronIcon, CloseIcon, PlusIcon } from "../icons/Icon";
 import { ContextMenu } from "../primitives/ContextMenu";
 import { EditGroupDialog } from "../dialogs/EditGroupDialog";
@@ -40,7 +40,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [editingGroup, setEditingGroup] = useState<SessionGroup | null>(null);
-  const [editingSession, setEditingSession] = useState<SavedSessionConfig | null>(null);
+  const [editingSession, setEditingSession] = useState<PersistedSessionConfig | null>(null);
   const [editingSessionGroupId, setEditingSessionGroupId] = useState<number | null>(null);
 
   const ungroupedConfigs = useMemo(() => {
@@ -53,18 +53,18 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     return savedConfigs.filter((c) => !grouped.has(c.id));
   }, [savedConfigs, groups]);
 
-  const isConnected = (config: SavedSessionConfig) =>
+  const isConnected = (config: PersistedSessionConfig) =>
     sessions.some((s) => s.configId === config.id);
 
-  const handleConfigClick = (config: SavedSessionConfig) => {
+  const handleConfigClick = (config: PersistedSessionConfig) => {
     setSelectedConfigId(config.id);
   };
 
-  const handleConfigDoubleClick = (config: SavedSessionConfig) => {
+  const handleConfigDoubleClick = (config: PersistedSessionConfig) => {
     createWindowFromSavedConfig(config.id).catch(console.error);
   };
 
-  const removeOrCloseConfig = (config: SavedSessionConfig) => {
+  const removeOrCloseConfig = (config: PersistedSessionConfig) => {
     if (isConnected(config)) {
       const session = sessions.find((s) => s.configId === config.id);
       if (session) closeSession(session.id);
@@ -73,7 +73,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     }
   };
 
-  const handleConfigClose = (config: SavedSessionConfig, e: React.MouseEvent) => {
+  const handleConfigClose = (config: PersistedSessionConfig, e: React.MouseEvent) => {
     e.stopPropagation();
     removeOrCloseConfig(config);
   };
@@ -83,12 +83,12 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
     return group ? group.id : null;
   };
 
-  const handleEditSession = (config: SavedSessionConfig) => {
+  const handleEditSession = (config: PersistedSessionConfig) => {
     setEditingSession(config);
     setEditingSessionGroupId(getConfigGroupId(config.id));
   };
 
-  const handleSessionSave = (config: SavedSessionConfig, groupId: number | null) => {
+  const handleSessionSave = (config: PersistedSessionConfig, groupId: number | null) => {
     updateConfig(config);
     moveConfigToGroup(config.id, groupId);
     // If this config corresponds to a currently-running session, push the
@@ -230,7 +230,7 @@ export function SessionManager({ onCreateSession, onCreateSessionWithGroup }: Se
 }
 
 interface SessionItemProps {
-  config: SavedSessionConfig;
+  config: PersistedSessionConfig;
   selected: boolean;
   connected: boolean;
   indented?: boolean;

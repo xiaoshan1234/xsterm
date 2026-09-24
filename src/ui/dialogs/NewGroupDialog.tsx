@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog } from "../primitives/Dialog";
 import { FormField } from "../primitives/FormField";
 
-interface NewGroupDialogProps {
+interface GroupCreationDialogProps {
   isOpen: boolean;
   onClose: () => void;
   existingGroupNames: string[];
@@ -18,7 +18,7 @@ export function NewGroupDialog({
   onClose,
   existingGroupNames,
   onCreate,
-}: NewGroupDialogProps) {
+}: GroupCreationDialogProps) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 

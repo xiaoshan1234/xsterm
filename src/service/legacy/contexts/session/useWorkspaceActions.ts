@@ -18,7 +18,7 @@ import {
 import { closeWorkspace as closeWorkspaceUseCase } from "../../../../app/useCases/closeWorkspace";
 import { useWorkspaceStore } from "../../../../service/workspace/store";
 
-interface UseWorkspaceActionsDeps {
+interface WorkspaceActionsHookDeps {
   workspacesRef: React.MutableRefObject<Workspace[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   setActiveWorkspaceId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -26,7 +26,7 @@ interface UseWorkspaceActionsDeps {
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
 }
 
-export function useWorkspaceActions(_deps: UseWorkspaceActionsDeps) {
+export function useWorkspaceActions(_deps: WorkspaceActionsHookDeps) {
   const createDefaultWorkspace = useCallback(() => createDefaultWorkspaceUseCase(), []);
   // Legacy alias for `createWorkspace({variant:"fromSession", sessionId, configId, name})`.
   const createWorkspaceFromSession = useCallback(

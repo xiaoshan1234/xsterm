@@ -20,7 +20,7 @@ import { resizeSession as resizeSessionFn } from "../../../../infra/tauri/comman
 import { killTmuxPane as killTmuxPaneFn } from "../../../../infra/tauri/commands/tmux";
 import { useWorkspaceStore } from "../../../../service/workspace/store";
 
-interface UsePaneActionsDeps {
+interface PaneActionsHookDeps {
   sessionsRef: React.MutableRefObject<Session[]>;
   workspacesRef: React.MutableRefObject<Workspace[]>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
@@ -28,7 +28,7 @@ interface UsePaneActionsDeps {
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
 }
 
-export function usePaneActions(_deps: UsePaneActionsDeps) {
+export function usePaneActions(_deps: PaneActionsHookDeps) {
   const splitPane = useCallback(
     (
       workspaceId: string,

@@ -10,7 +10,7 @@
  *   `TmuxWindowRenamedEvent` / `TmuxWindowListRawEvent` /
  *   `TmuxControllerExitEvent` — wire payloads emitted by the
  *   backend `TmuxController` dispatch task.
- * - `TmuxControllerError` / `AttachedTmuxServer` /
+ * - `TmuxControllerError` / `TmuxAttachmentRecord` /
  *   `TmuxWindowListEntry` — runtime metadata the frontend tracks
  *   alongside open tmux controllers.
  * - `TmuxSessionInit` / `TmuxWindowInit` / `TmuxPaneInit` /
@@ -169,7 +169,7 @@ export interface TmuxControllerError {
  * Persisted by the backend in `attached_tmux.json`; the frontend reads
  * it at startup to drive the auto-attach flow.
  */
-export interface AttachedTmuxServer {
+export interface TmuxAttachmentRecord {
   /** tmux session name (the `-s <name>` arg) — required to re-attach. */
   sessionName: string;
   /** Optional tmux socket name (the `-L <socket>` arg). */

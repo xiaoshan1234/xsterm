@@ -8,7 +8,12 @@ import { useSessionStore } from "../../service/session/store";
 import { usePersistenceStore } from "../../service/persistence/store";
 import { buildFrontendSession } from "../../app/rules/sessionRules";
 import { generateId } from "../../app/rules/paneTree";
-import type { SavedSessionConfig, Session, SessionDisplayConfig, TmuxCcConfig } from "../../model";
+import type {
+  PersistedSessionConfig,
+  Session,
+  SessionDisplayConfig,
+  TmuxCcConfig,
+} from "../../model";
 
 export async function createTmuxSessionOnly(
   config: TmuxCcConfig,
@@ -35,7 +40,7 @@ export async function createTmuxSessionOnly(
   const session = buildFrontendSession(init.session, configId, "tmux-cc", displayConfig);
 
   if (save) {
-    const saved: SavedSessionConfig = {
+    const saved: PersistedSessionConfig = {
       id: configId,
       name: init.session.name,
       version: 1,

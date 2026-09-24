@@ -14,9 +14,9 @@
  * cross-platform transport (x86 / ARM).
  */
 
-import type { ParsedSessionOutput } from "../../model/session-output";
+import type { SessionOutputFrame } from "../../model/session-output";
 
-export type { ParsedSessionOutput };
+export type { SessionOutputFrame };
 
 export const FRAME_MAGIC = 0xa1;
 export const FRAME_VERSION = 0x01;
@@ -28,7 +28,7 @@ export const HEADER_LEN = 10;
  * exceeding the actual buffer. The caller is expected to drop the chunk
  * in that case (a protocol violation should never be silently accepted).
  */
-export function parseSessionOutputFrame(frame: Uint8Array): ParsedSessionOutput | null {
+export function parseSessionOutputFrame(frame: Uint8Array): SessionOutputFrame | null {
   if (frame.byteLength < HEADER_LEN) return null;
   const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
   if (view.getUint8(0) !== FRAME_MAGIC || view.getUint8(1) !== FRAME_VERSION) {

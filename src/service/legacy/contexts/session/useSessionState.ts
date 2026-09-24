@@ -24,7 +24,7 @@
  *   SAME field names so consumers don't change.
  *
  * **Type shim**: the new `src/model/entities` types use a non-discriminated
- * `SavedSessionConfig` (single shape with a union `type` field) while the
+ * `PersistedSessionConfig` (single shape with a union `type` field) while the
  * legacy `src/types/session` types use a discriminated `SessionType`
  * union. The runtime shape is identical, so we cast at the boundary.
  *
@@ -48,9 +48,9 @@ import {
   type TmuxWindowListEntry,
 } from "../../../../model";
 import type {
-  SavedSessionConfig as LegacySavedSessionConfig,
-  SavedWindowConfig as LegacySavedWindowConfig,
-  SavedWorkspace as LegacySavedWorkspace,
+  PersistedSessionConfig as LegacySavedSessionConfig,
+  PersistedWindowConfig as LegacySavedWindowConfig,
+  PersistedWorkspace as LegacySavedWorkspace,
   TmuxControllerError,
 } from "../../../../model";
 import { type SessionState } from "./types";

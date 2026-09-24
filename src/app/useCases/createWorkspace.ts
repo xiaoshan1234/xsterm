@@ -12,7 +12,7 @@ import { createLeafPane, generateId } from "../../app/rules/paneTree";
 import { createInitWindow } from "./createInitWindow";
 import type { Workspace } from "../../model";
 
-export interface CreateWorkspaceInput {
+export interface WorkspaceInput {
   variant: "default" | "fromSession" | "replacement";
   name?: string;
   sessionId?: number;
@@ -21,7 +21,7 @@ export interface CreateWorkspaceInput {
   workspace?: Workspace;
 }
 
-export function createWorkspace(input: CreateWorkspaceInput): Workspace {
+export function createWorkspace(input: WorkspaceInput): Workspace {
   const wsStore = useWorkspaceStore.getState();
   if (input.variant === "default") return createDefaultWorkspace();
   if (input.variant === "fromSession") {

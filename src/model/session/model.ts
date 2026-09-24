@@ -119,7 +119,7 @@ export interface SessionModelDeps {
 }
 
 /** Options accepted by `SessionModel.create()`. */
-export interface CreateOptions {
+export interface SessionModelCreateOptions {
   /**
    * Saved-config id this session was opened from. Empty string for
    * ad-hoc sessions (matches the `Session.configId` convention in the
@@ -153,7 +153,7 @@ export interface SessionModel {
    * frontend `Session` to both internal state and the mirror store.
    * Returns the new `Session` so callers can wire it into a pane.
    */
-  create(input: SessionType, opts?: CreateOptions): Promise<Session>;
+  create(input: SessionType, opts?: SessionModelCreateOptions): Promise<Session>;
 
   /** Close a session via the repository, then remove it locally. */
   close(id: number): Promise<void>;

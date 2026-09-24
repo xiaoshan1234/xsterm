@@ -3,12 +3,12 @@ import { type Workspace } from "../model";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
 
-interface InitWindowViewProps {
+interface InitialWindowViewProps {
   workspace: Workspace;
   windowId: string;
 }
 
-export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
+export function InitWindowView({ workspace, windowId }: InitialWindowViewProps) {
   const { replaceInitWindowWithSession } = useSession();
 
   return (

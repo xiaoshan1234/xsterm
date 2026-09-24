@@ -4,8 +4,8 @@
  * **Scope**
  * Defines the surface the `PersistenceModel` (Phase 3) uses to read
  * and write the `tauri-plugin-store`-backed files. Concretely:
- * - `sessions.json` holds `SavedSessionConfig[]`, `SessionGroup[]`,
- *   `nextGroupId`, `SavedWorkspace[]`, `SavedWindowConfig[]`.
+ * - `sessions.json` holds `PersistedSessionConfig[]`, `SessionGroup[]`,
+ *   `nextGroupId`, `PersistedWorkspace[]`, `PersistedWindowConfig[]`.
  *
  * The migration matrix (`infra/store/migrations.ts`) is intentionally
  * **not** part of this surface — it sits between the repo and the
@@ -16,7 +16,12 @@
  * Same rationale as `SessionRepository` — keeps `model/*` free of
  * `@tauri-apps/api/*`, lets `service/` and tests inject a fake.
  */
-import type { SavedSessionConfig, SavedWindowConfig, SavedWorkspace, SessionGroup } from "./types";
+import type {
+  PersistedSessionConfig,
+  PersistedWindowConfig,
+  PersistedWorkspace,
+  SessionGroup,
+} from "./types";
 
 /** Bundled payload returned by the legacy `loadSavedGroups` call. */
 export interface GroupStore {
@@ -26,17 +31,17 @@ export interface GroupStore {
 
 export interface ConfigRepository {
   // --- saved session configs ---
-  loadConfigs(): Promise<SavedSessionConfig[]>;
-  saveConfigs(items: SavedSessionConfig[]): Promise<void>;
+  loadConfigs(): Promise<PersistedSessionConfig[]>;
+  saveConfigs(items: PersistedSessionConfig[]): Promise<void>;
 
   // --- saved workspaces ---
-  loadWorkspaces(): Promise<SavedWorkspace[]>;
-  saveWorkspaces(items: SavedWorkspace[]): Promise<void>;
+  loadWorkspaces(): Promise<PersistedWorkspace[]>;
+  saveWorkspaces(items: PersistedWorkspace[]): Promise<void>;
   deleteWorkspace(id: string): Promise<void>;
 
   // --- saved window configs ---
-  loadWindowConfigs(): Promise<SavedWindowConfig[]>;
-  saveWindowConfigs(items: SavedWindowConfig[]): Promise<void>;
+  loadWindowConfigs(): Promise<PersistedWindowConfig[]>;
+  saveWindowConfigs(items: PersistedWindowConfig[]): Promise<void>;
   deleteWindowConfig(id: string): Promise<void>;
 
   // --- sidebar groups ---

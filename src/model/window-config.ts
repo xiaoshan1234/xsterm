@@ -1,5 +1,5 @@
 /**
- * Legacy re-export shim — `SavedWindow` / `SavedWindowConfig` moved
+ * Legacy re-export shim — `PersistedWindow` / `PersistedWindowConfig` moved
  * to `model/persistence/types.ts`.
  */
-export type { SavedWindow, SavedWindowConfig } from "./persistence/index";
+export type { PersistedWindow, PersistedWindowConfig } from "./persistence/index";

@@ -14,7 +14,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { TmuxRepository } from "../../../model/tmux/repository";
 import type {
-  AttachedTmuxServer,
+  TmuxAttachmentRecord,
   AutoAttachOutcome,
   TmuxSessionInit,
 } from "../../../model/tmux/types";
@@ -64,8 +64,8 @@ export const tauriTmuxRepository: TmuxRepository = {
     return result;
   },
 
-  async listAttachedServers(): Promise<AttachedTmuxServer[]> {
-    return invoke<AttachedTmuxServer[]>("get_attached_tmux_servers");
+  async listAttachedServers(): Promise<TmuxAttachmentRecord[]> {
+    return invoke<TmuxAttachmentRecord[]>("get_attached_tmux_servers");
   },
 
   async autoAttachServers(): Promise<AutoAttachOutcome[]> {

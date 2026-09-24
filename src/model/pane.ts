@@ -13,7 +13,7 @@ export type {
   PaneSavedSplitNode,
   PaneSize,
   PaneSplitNode,
-  SavedPaneNode,
+  PersistedPaneNode,
   SplitDirection,
   SplitLayout,
 } from "./pane/index";

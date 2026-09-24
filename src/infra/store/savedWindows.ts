@@ -1,5 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { type SavedWindowConfig } from "../../model";
+import { type PersistedWindowConfig } from "../../model";
 import { logger } from "../logger/logger";
 
 let storeInstance: Store | null = null;
@@ -11,11 +11,11 @@ async function getStore(): Promise<Store> {
   return storeInstance;
 }
 
-export async function loadSavedWindowConfigs(): Promise<SavedWindowConfig[]> {
+export async function loadSavedWindowConfigs(): Promise<PersistedWindowConfig[]> {
   logger.debug("sessionStorage", "loadSavedWindowConfigs", undefined);
   try {
     const store = await getStore();
-    const configs = (await store.get<SavedWindowConfig[]>("savedWindowConfigs")) || [];
+    const configs = (await store.get<PersistedWindowConfig[]>("savedWindowConfigs")) || [];
     logger.debug("sessionStorage", "loadSavedWindowConfigs:result", { count: configs.length });
     return configs;
   } catch (e) {
@@ -24,7 +24,7 @@ export async function loadSavedWindowConfigs(): Promise<SavedWindowConfig[]> {
   }
 }
 
-export async function persistWindowConfigs(configs: SavedWindowConfig[]): Promise<void> {
+export async function persistWindowConfigs(configs: PersistedWindowConfig[]): Promise<void> {
   logger.debug("sessionStorage", "persistWindowConfigs", { count: configs.length });
   try {
     const store = await getStore();
@@ -40,7 +40,7 @@ export async function deleteSavedWindowConfig(id: string): Promise<void> {
   logger.debug("sessionStorage", "deleteSavedWindowConfig", { id });
   try {
     const store = await getStore();
-    const configs = (await store.get<SavedWindowConfig[]>("savedWindowConfigs")) || [];
+    const configs = (await store.get<PersistedWindowConfig[]>("savedWindowConfigs")) || [];
     const updated = configs.filter((c) => c.id !== id);
     await store.set("savedWindowConfigs", updated);
     await store.save();

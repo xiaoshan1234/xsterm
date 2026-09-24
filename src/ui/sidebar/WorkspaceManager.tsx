@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type SavedWorkspace, type Workspace } from "../../model";
+import { type PersistedWorkspace, type Workspace } from "../../model";
 import { useSession } from "../../service/legacy/contexts/SessionContext";
 import { LayoutIcon } from "../icons/Icon";
 import { Dialog } from "../primitives/Dialog";
@@ -7,7 +7,7 @@ import { FormField } from "../primitives/FormField";
 import { ContextMenu } from "../primitives/ContextMenu";
 
 interface WorkspaceManagerProps {
-  savedWorkspaces: SavedWorkspace[];
+  savedWorkspaces: PersistedWorkspace[];
   loadWorkspace: (id: string) => Promise<Workspace>;
   deleteSavedWorkspace: (id: string) => void;
   renameSavedWorkspace: (id: string, name: string) => void;
@@ -27,7 +27,7 @@ export function WorkspaceManager({
   renameSavedWorkspace,
 }: WorkspaceManagerProps) {
   const { workspaces, setActiveWorkspace, createDefaultWorkspace } = useSession();
-  const [renamingWorkspace, setRenamingWorkspace] = useState<SavedWorkspace | null>(null);
+  const [renamingWorkspace, setRenamingWorkspace] = useState<PersistedWorkspace | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
 
@@ -40,7 +40,7 @@ export function WorkspaceManager({
     }
   };
 
-  const handleOpen = (workspace: SavedWorkspace) => {
+  const handleOpen = (workspace: PersistedWorkspace) => {
     const existing = workspaces.find((w) => w.name === workspace.name);
     if (existing) {
       setActiveWorkspace(existing.id);
@@ -49,11 +49,11 @@ export function WorkspaceManager({
     }
   };
 
-  const handleWorkspaceClick = (workspace: SavedWorkspace) => {
+  const handleWorkspaceClick = (workspace: PersistedWorkspace) => {
     setSelectedWorkspaceId(workspace.id);
   };
 
-  const handleStartRename = (workspace: SavedWorkspace) => {
+  const handleStartRename = (workspace: PersistedWorkspace) => {
     setRenamingWorkspace(workspace);
     setRenameValue(workspace.name);
   };

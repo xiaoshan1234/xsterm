@@ -11,7 +11,7 @@
  * mirror the existing `infra/tauri/commands/tmux.ts` exports 1:1.
  */
 import type {
-  AttachedTmuxServer,
+  TmuxAttachmentRecord,
   AutoAttachOutcome,
   TmuxControlWindowInit,
   TmuxPaneInit,
@@ -34,7 +34,7 @@ export interface TmuxRepository {
   capturePane(controllerId: number, tmuxPaneId: string, lines: number): Promise<string>;
 
   /** Mirrors `getAttachedTmuxServers`. */
-  listAttachedServers(): Promise<AttachedTmuxServer[]>;
+  listAttachedServers(): Promise<TmuxAttachmentRecord[]>;
 
   /** Mirrors `autoAttachTmuxServers`. */
   autoAttachServers(): Promise<AutoAttachOutcome[]>;

@@ -41,7 +41,7 @@ beforeEach(async () => {
 });
 
 describe("loadSavedConfigs", () => {
-  it("reads the savedConfigs key, migrates v0 entries, and returns SavedSessionConfig[]", async () => {
+  it("reads the savedConfigs key, migrates v0 entries, and returns PersistedSessionConfig[]", async () => {
     const store = makeStore({
       savedConfigs: [
         { id: "1", name: "n1", type: "local", localConfig: { shell: "sh" } },
