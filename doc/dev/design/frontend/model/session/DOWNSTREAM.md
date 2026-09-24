@@ -16,17 +16,17 @@ model/session/
 
 **model/session 不依赖任何其他目录**——它是最底层。
 
-## 2. 唯一允许的依赖：common
+## 2. 唯一允许的依赖：cross-cutting
 
 ```typescript
 // model/session/rules.ts
-import { generateId } from "@/model/common/id";
+import { generateId } from "@/model/cross-cutting/id";
 // 仅当需要 id 生成时
 ```
 
 **但**：session model **不需要** generateId——sessionId 由 backend 分配，不是前端生成。
 
-所以 model/session **不依赖** common。
+所以 model/session **不依赖** cross-cutting。
 
 ## 3. 不允许的依赖
 
@@ -43,8 +43,8 @@ grep -rn 'from\s*"\.\./\(app\|ui\|service\|infra\)' src/model/session/ --include
 # 必须为空
 
 # session model 不能依赖其他 model domain
-grep -rn 'from\s*"\.\./\(workspace\|tmux\|settings\|common\)' src/model/session/ --include='*.ts'
-# 必须为空（session 不依赖 common，因为不需要 generateId）
+grep -rn 'from\s*"\.\./\(workspace\|tmux\|settings\|cross-cutting\)' src/model/session/ --include='*.ts'
+# 必须为空（session 不依赖 cross-cutting，因为不需要 generateId）
 
 # session model 不能 import React
 grep -rn 'from\s*"react"' src/model/session/ --include='*.ts'

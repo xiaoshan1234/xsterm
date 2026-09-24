@@ -33,18 +33,18 @@ settings model 内部包含 terminal 子域：
 
 这些都是 settings 的**内部依赖**，不是跨 domain 依赖。
 
-## 3. model/common
+## 3. model/cross-cutting
 
 ```typescript
 // model/settings/rules.ts
-import { MIN_FONT_SIZE, MAX_FONT_SIZE, DEFAULT_FONT_SIZE } from "@/model/common/constants";
+import { MIN_FONT_SIZE, MAX_FONT_SIZE, DEFAULT_FONT_SIZE } from "@/model/cross-cutting/constants";
 
 export function isValidFontSize(size: number): boolean {
   return size >= MIN_FONT_SIZE && size <= MAX_FONT_SIZE;
 }
 ```
 
-**settings 依赖 common 的常量**——常量是跨 domain 共享的。
+**settings 依赖 cross-cutting 的常量**——常量是跨 domain 共享的。
 
 ## 4. 不允许的依赖
 
@@ -61,8 +61,8 @@ grep -rn 'from\s*"\.\./\(app\|ui\|service\|infra\)' src/model/settings/ --includ
 grep -rn 'from\s*"\.\./\(session\|workspace\|tmux\)' src/model/settings/ --include='*.ts'
 # 必须为空
 
-# 但允许依赖 common
-grep -rn 'from\s*"\.\./common' src/model/settings/ --include='*.ts'
+# 但允许依赖 cross-cutting
+grep -rn 'from\s*"\.\./cross-cutting' src/model/settings/ --include='*.ts'
 # 应当出现
 ```
 

@@ -64,7 +64,7 @@ model/settings/
 
 | domain | 关系 |
 |---|---|
-| `model/common` | Settings 默认值用 `constants.ts`（DEFAULT_PORT 等） |
+| `model/cross-cutting` | Settings 默认值用 `constants.ts`（DEFAULT_PORT 等） |
 | `model/session` | Session 默认值（defaultShell / defaultSshUser）从 settings 读 |
 | `model/workspace` | sidebar 宽度等布局配置从 settings 读 |
 

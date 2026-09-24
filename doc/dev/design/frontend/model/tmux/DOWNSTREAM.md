@@ -14,7 +14,7 @@ model/tmux/
 └── *.test.ts
 ```
 
-**model/tmux 不依赖 common 也不依赖其他 model domain**——tmux 自己的数据结构完整。
+**model/tmux 不依赖 cross-cutting 也不依赖其他 model domain**——tmux 自己的数据结构完整。
 
 ## 2. 不允许的依赖
 
@@ -28,7 +28,7 @@ model/tmux/
 grep -rn 'from\s*"\.\./\(app\|ui\|service\|infra\)' src/model/tmux/ --include='*.ts'
 # 必须为空
 
-grep -rn 'from\s*"\.\./\(session\|workspace\|settings\|common\)' src/model/tmux/ --include='*.ts'
+grep -rn 'from\s*"\.\./\(session\|workspace\|settings\|cross-cutting\)' src/model/tmux/ --include='*.ts'
 # 必须为空
 
 grep -rn 'from\s*"@tauri-apps\|from\s*"react"' src/model/tmux/ --include='*.ts'

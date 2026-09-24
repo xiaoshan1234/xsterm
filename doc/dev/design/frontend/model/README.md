@@ -4,9 +4,9 @@
 > **关注点**：纯数据 + 算法（types / repository / events / accessor / rules）
 > **平级于**：app / ui / service / infra（5 个顶层目录之一）
 
-## 1. 5 + common = 5 个 model domain
+## 1. 5 + cross-cutting = 5 个 model domain
 
-从零设计后 model 应当有 **5 个 domain + 1 个 common**：
+从零设计后 model 应当有 **5 个 domain + 1 个 cross-cutting**：
 
 ```
 src/model/
@@ -14,7 +14,7 @@ src/model/
 ├── workspace/      Workspace / Window / Group / PaneNode（含 paneTree 算法）
 ├── tmux/           TmuxController / AttachedServer / TmuxPane / TmuxWindow
 ├── settings/       Settings / SettingsCategory / LogLevel（含 TerminalTheme / 5 个 ANSI 调色板）
-└── common/         textTransform / constants / generateId（跨域纯函数）
+└── cross-cutting/  textTransform / constants / generateId（跨域纯函数）
 ```
 
 ## 2. 为什么 5 而不是 8
@@ -35,7 +35,7 @@ v3 现状有 8 个 domain：`session / workspace / pane / window / tmux / output
 | `model/theme/` | **并入 settings** | theme 是 settings 的子集，不是独立概念 |
 | `model/terminal/` | **并入 settings**（**新增** v4） | TerminalTheme + 5 个 ANSI 调色板是 settings 的视觉子集 |
 
-**5 + common 是最合适的**：
+**5 + cross-cutting 是最合适的**：
 - 不追求最少（不是 3 个）
 - 不追求最全（不是 9 个）
 - 追求"职责清晰"——每个 domain 都有清晰的归属
@@ -53,7 +53,7 @@ model/<domain>/
 ```
 
 **例外**（不是每个 domain 都有全 5 文件）：
-- `common/` 只有 `textTransform.ts / constants.ts / id.ts`——无 types / repository / events / accessor / rules
+- `cross-cutting/` 只有 `textTransform.ts / constants.ts / id.ts`——无 types / repository / events / accessor / rules
 - `model/settings/` 的 TerminalTheme 相关可能在 `palettes/` 子目录
 
 ## 4. accessor vs rules 的区别
@@ -73,7 +73,7 @@ model/<domain>/
 | `model/workspace`（含 pane） | `service/workspace` |
 | `model/tmux` | `service/tmux` |
 | `model/settings`（含 terminal） | `service/settings` |
-| `model/common` | （无对应 service——被所有 domain 用） |
+| `model/cross-cutting` | （无对应 service——被所有 domain 用） |
 
 **关键观察**：
 - `service/persistence` **没有对应 model**——persistence 是 generic IO wrapper，不需要 model 类型
@@ -90,13 +90,13 @@ model/<domain>/
 | **workspace** | [RESPONSIBILITY](./workspace/RESPONSIBILITY.md) | [INTERFACE](./workspace/INTERFACE.md) | [DOWNSTREAM](./workspace/DOWNSTREAM.md) |
 | **tmux** | [RESPONSIBILITY](./tmux/RESPONSIBILITY.md) | [INTERFACE](./tmux/INTERFACE.md) | [DOWNSTREAM](./tmux/DOWNSTREAM.md) |
 | **settings** | [RESPONSIBILITY](./settings/RESPONSIBILITY.md) | [INTERFACE](./settings/INTERFACE.md) | [DOWNSTREAM](./settings/DOWNSTREAM.md) |
-| **common** | [RESPONSIBILITY](./common/RESPONSIBILITY.md) | [INTERFACE](./common/INTERFACE.md) | [DOWNSTREAM](./common/DOWNSTREAM.md) |
+| **cross-cutting** | [RESPONSIBILITY](./cross-cutting/RESPONSIBILITY.md) | [INTERFACE](./cross-cutting/INTERFACE.md) | [DOWNSTREAM](./cross-cutting/DOWNSTREAM.md) |
 
 ## 7. 跟 v3 的核心差异
 
 | 维度 | v3 | v4 |
 |---|---|---|
-| 顶层目录结构 | `src/model/` 平铺 8 个 domain | 5 + common |
+| 顶层目录结构 | `src/model/` 平铺 8 个 domain | 5 + cross-cutting |
 | pane / window | 独立 | 并入 workspace |
 | theme | 独立 | 并入 settings |
 | terminal | （不存在） | 并入 settings |
@@ -119,8 +119,8 @@ grep -rn 'from\s*"react"' src/model/ --include='*.ts'
 grep -rn 'from\s*"@tauri-apps' src/model/ --include='*.ts'
 # 必须为空
 
-# common 是最底层——不能 import 其他 domain
-grep -rn 'from\s*"\.\./\(session\|workspace\|tmux\|settings\)' src/model/common/ --include='*.ts'
+# cross-cutting 是最底层——不能 import 其他 domain
+grep -rn 'from\s*"\.\./\(session\|workspace\|tmux\|settings\)' src/model/cross-cutting/ --include='*.ts'
 # 必须为空
 ```
 
@@ -136,7 +136,7 @@ model 不涉及 UI 设计系统。但 TerminalTheme 类型影响 xterm 配色—
 model/session/accessor.test.ts
 model/session/rules.test.ts
 model/workspace/rules.test.ts        # paneTree 算法必须 100% 覆盖
-model/common/textTransform.test.ts
+model/cross-cutting/textTransform.test.ts
 ```
 
 **为什么 model 测试最重要**：

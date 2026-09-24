@@ -48,7 +48,7 @@ model/session/
 | `model/workspace` | Session 持有 `workspaceId / windowId / paneId` 反向引用——纯类型引用 |
 | `model/tmux` | tmux session 在 frontend 看是 `Session { kind: "tmux" }`——session kind 归 session model |
 | `model/settings` | Session 默认值（defaultShell / defaultSshUser）从 settings 读——纯类型引用 |
-| `model/common` | `getUniqueSessionName` 用 `generateId` 作为 fallback |
+| `model/cross-cutting` | `getUniqueSessionName` 用 `generateId` 作为 fallback |
 
 ## 6. 跟 service / app / ui 的关系
 

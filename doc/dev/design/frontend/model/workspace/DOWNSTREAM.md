@@ -6,25 +6,25 @@
 
 ```
 model/workspace/
-├── types.ts              ──►  ./common (SplitDirection 在 common?)
+├── types.ts              ──►  ./cross-cutting (SplitDirection 在 cross-cutting?)
 ├── repository.ts         ──►  ./types
 ├── events.ts             ──►  ./types
-├── accessor.ts           ──►  ./types + ./common/findPaneNode (内部)
+├── accessor.ts           ──►  ./types + ./cross-cutting/findPaneNode (内部)
 ├── rules/
 │   ├── workspace.ts      ──►  ./types
-│   ├── window.ts         ──►  ./types + ./common/generateId
-│   ├── group.ts          ──►  ./types + ./common/generateId
-│   └── paneTree.ts       ──►  ./types + ./common/generateId
+│   ├── window.ts         ──►  ./types + ./cross-cutting/generateId
+│   ├── group.ts          ──►  ./types + ./cross-cutting/generateId
+│   └── paneTree.ts       ──►  ./types + ./cross-cutting/generateId
 └── *.test.ts
 ```
 
-**关键依赖**：workspace model 依赖 `model/common` 的 `generateId`——pane / window / group 创建时需要 id。
+**关键依赖**：workspace model 依赖 `model/cross-cutting` 的 `generateId`——pane / window / group 创建时需要 id。
 
-## 2. model/common
+## 2. model/cross-cutting
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| `generateId()` | `model/common/id` | createLeafPane / createSplitNode / createWindow / createGroup |
+| `generateId()` | `model/cross-cutting/id` | createLeafPane / createSplitNode / createWindow / createGroup |
 
 ## 3. 不允许的依赖
 
@@ -39,12 +39,12 @@ model/workspace/
 grep -rn 'from\s*"\.\./\(app\|ui\|service\|infra\)' src/model/workspace/ --include='*.ts'
 # 必须为空
 
-# workspace model 不能依赖其他 model domain（除 common）
+# workspace model 不能依赖其他 model domain（除 cross-cutting）
 grep -rn 'from\s*"\.\./\(session\|tmux\|settings\)' src/model/workspace/ --include='*.ts'
 # 必须为空
 
-# workspace model 可以依赖 common
-grep -rn 'from\s*"\.\./common' src/model/workspace/ --include='*.ts'
+# workspace model 可以依赖 cross-cutting
+grep -rn 'from\s*"\.\./cross-cutting' src/model/workspace/ --include='*.ts'
 # 应当出现（generateId 等）
 ```
 
@@ -54,7 +54,7 @@ grep -rn 'from\s*"\.\./common' src/model/workspace/ --include='*.ts'
 
 ```typescript
 // model/workspace/rules/paneTree.ts
-import { generateId } from "../../common/id";
+import { generateId } from "../../cross-cutting/id";
 import type { PaneNode, SplitDirection } from "../types";
 
 // 纯函数：输入 → 输出，不修改输入

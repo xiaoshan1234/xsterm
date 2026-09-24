@@ -1,7 +1,7 @@
-# Model · Common — 对外接口
+# Model · Cross-cutting — 对外接口
 
-> **位置**：`src/model/common/`
-> **使用方式**：`import { ... } from "@/model/common/<file>"`
+> **位置**：`src/model/cross-cutting/`
+> **使用方式**：`import { ... } from "@/model/cross-cutting/<file>"`
 
 ## 1. textTransform.ts
 
@@ -70,7 +70,7 @@ export const RECONNECT_DELAY_MS = 1000;
 /**
  * 生成唯一 ID（uuid v4）。
  * 包装 crypto.randomUUID() 是为了：
- * 1. 业务代码不直接 import crypto——统一通过 common
+ * 1. 业务代码不直接 import crypto——统一通过 cross-cutting
  * 2. 未来可替换为 nanoid / ulid 而不影响业务
  * 3. 测试可以 mock generateId
  */
@@ -85,7 +85,7 @@ export function generateId(): string;
 
 ```typescript
 // model/workspace/rules/paneTree.ts
-import { generateId } from "@/model/common/id";
+import { generateId } from "@/model/cross-cutting/id";
 
 export function createLeafPane(...) {
   return { kind: "leaf", id: generateId(), ... };
@@ -94,7 +94,7 @@ export function createLeafPane(...) {
 
 ```typescript
 // model/session/rules.ts
-import { DEFAULT_SHELL_LINUX } from "@/model/common/constants";
+import { DEFAULT_SHELL_LINUX } from "@/model/cross-cutting/constants";
 // 注意：service 层根据 OS 选择具体默认值
 ```
 

@@ -57,7 +57,7 @@ model/workspace/
 | `model/session` | pane.binding 反向引用 session（sessionId + configId） |
 | `model/tmux` | tmux session 装在 xsterm pane 里——但 pane 不感知 tmux |
 | `model/settings` | workspace 的 sidebar 宽度等布局配置从 settings 读 |
-| `model/common` | generateId 用于创建 pane / window id |
+| `model/cross-cutting` | generateId 用于创建 pane / window id |
 
 ## 6. 跟 service / app / ui 的关系
 
