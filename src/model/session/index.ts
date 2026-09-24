@@ -15,3 +15,4 @@ export * from "./types";
 export * from "./accessor";
 export * from "./repository";
 export * from "./events";
+export * from "./model";
