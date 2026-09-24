@@ -34,3 +34,22 @@ test/sys-test/ssh-config.json
 
 # Local reference repos (oxideterm, etc.) — read-only dev aids
 ref/
+doc/.obsidian/app.json
+doc/.obsidian/appearance.json
+doc/.obsidian/community-plugins.json
+doc/.obsidian/core-plugins.json
+doc/.obsidian/workspace.json
+doc/.obsidian/plugins/calendar/data.json
+doc/.obsidian/plugins/calendar/main.js
+doc/.obsidian/plugins/calendar/manifest.json
+doc/.obsidian/plugins/obsidian-git/main.js
+doc/.obsidian/plugins/obsidian-git/manifest.json
+doc/.obsidian/plugins/obsidian-git/styles.css
+doc/.obsidian/plugins/table-editor-obsidian/data.json
+doc/.obsidian/plugins/table-editor-obsidian/main.js
+doc/.obsidian/plugins/table-editor-obsidian/manifest.json
+doc/.obsidian/plugins/table-editor-obsidian/styles.css
+doc/.obsidian/themes/Blue Topaz/manifest.json
+doc/.obsidian/themes/Blue Topaz/theme.css
+doc/.obsidian/themes/Minimal/manifest.json
+doc/.obsidian/themes/Minimal/theme.css
