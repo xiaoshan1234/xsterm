@@ -6,13 +6,13 @@
 
 ## 0. 为什么重写这一层
 
-v0 把 `commands/` 当作"翻译器层"，按**资源类型**（session / persistence / logging）切分。问题：
+v3 把 `commands/` 当作"翻译器层"，按**资源类型**（session / persistence / logging）切分。问题：
 
 - `commands/session.rs` 一个文件 24 个 `#[tauri::command]`——local / ssh / tmux / resize / write / close 全混在一起
 - 改一个产品功能（比如"tmux pane split"）要翻 5 个文件：commands/session、session_manager、tmux_session/controller/commands、commands/persistence 还要触发 attached_tmux.json 重写
 - 跟前端 `app/` 5 module 没有 1:1 对应——前端改了 `app/terminal` 加新接口，后端不知道该往哪个 `commands/` 子目录加
 
-v1（本文档）把 `commands/` 拆成 **5 个 module 按产品功能切分**，每个 module 强制 `api.rs` 唯一对外入口，与前端 `app/<module>/api.ts` 镜像。
+v4（本文档）把 `commands/` 拆成 **5 个 module 按产品功能切分**，每个 module 强制 `api.rs` 唯一对外入口，与前端 `app/<module>/api.ts` 镜像。
 
 ## 1. 5 个 module
 
@@ -112,9 +112,9 @@ service/* ──► infra/* ──► model/*
 
 ## 6. IPC 命令迁移对照表
 
-v0 → v1 的 25 + 6 + 4 = 35 个 command 的去向：
+v3 → v4 的 25 + 6 + 4 = 35 个 command 的去向：
 
-| v0 命令（src-tauri/src/commands/*.rs） | v1 落点 |
+| v3 命令（src-tauri/src/commands/*.rs） | v4 落点 |
 |---|---|
 | `create_local_session` | `app/session/commands/local/create.rs` |
 | `create_ssh_session` | `app/session/commands/ssh/create.rs` |
@@ -152,17 +152,17 @@ v0 → v1 的 25 + 6 + 4 = 35 个 command 的去向：
 | `set_log_config` | `app/settings/commands/logging/config.rs` |
 | `get_log_dir` | `app/settings/commands/logging/config.rs` |
 
-**实际总数**：10 (session) + 15 (terminal) + 10 (settings) = 35——与 v0 命令数 1:1 对齐。
+**实际总数**：10 (session) + 15 (terminal) + 10 (settings) = 35——与 v3 命令数 1:1 对齐。
 
 **关键**：
 
-- v0 的 `commands/persistence.rs` 整体迁入 `app/settings/commands/persistence/`（**不是**保留独立 persistence module —— 它本质是 settings 的子目录）
-- v0 的 `commands/logging.rs` 整体迁入 `app/settings/commands/logging/`（同上理由）
+- v3 的 `commands/persistence.rs` 整体迁入 `app/settings/commands/persistence/`（**不是**保留独立 persistence module —— 它本质是 settings 的子目录）
+- v3 的 `commands/logging.rs` 整体迁入 `app/settings/commands/logging/`（同上理由）
 - `app/shell/` 不暴露 `#[tauri::command]`——它是 `.setup()` 钩子内的编排代码（启动日志、binary output channel 注册等）
 
-## 7. 跟 v0 的核心差异
+## 7. 跟 v3 的核心差异
 
-| 维度 | v0 | v1（本文档） |
+| 维度 | v3 | v4（本文档） |
 |---|---|---|
 | 划分依据 | 资源类型（session / persistence / logging） | 5 module 按产品功能（与 frontend app/ 一一对应） |
 | 单文件最大规模 | `commands/session.rs` 24 个 command 660 行 | `app/terminal/commands/tmux/pane.rs` 单文件 ≤ 4 个 command |
@@ -172,9 +172,9 @@ v0 → v1 的 25 + 6 + 4 = 35 个 command 的去向：
 | setup 钩子代码 | 散在 `lib.rs` 内联块 | 抽到 `app/shell/api.rs::initialize()` 编排 |
 | settings/persistence 归属 | 平级 `commands/persistence.rs` + `commands/logging.rs` | **合并进** `app/settings/commands/` 子目录（一个产品功能 = 一个 module） |
 
-## 8. 入口链（与 v0 对照）
+## 8. 入口链（与 v3 对照）
 
-**v0**：
+**v3**：
 ```
 src-tauri/src/lib.rs::run()
   └─► tauri::Builder::default().invoke_handler(commands::mod::all_handlers())
@@ -183,7 +183,7 @@ src-tauri/src/lib.rs::run()
               └─► infrastructure::{pty,ssh,tmux}::*
 ```
 
-**v1**：
+**v4**：
 ```
 src-tauri/src/lib.rs::run()
   ├─► app::shell::api::initialize(app)            (启动钩子)
@@ -200,17 +200,17 @@ src-tauri/src/lib.rs::run()
 
 ### 9.1 语义名 `app/` vs 落地目录 `commands/`
 
-- v0 README 已经确定落地目录为 `commands/`（避免全量重写 import）
+- v3 README 已经确定落地目录为 `commands/`（避免全量重写 import）
 - 本文使用「app」作为语义名以与 frontend 镜像——**不需要**真的把目录改成 `app/`；将来若做 import 重写 PR，可以一并 `mv commands app`
-- 模块内部文件名同样：v1 文档写 `app/session/api.rs`，实际落地仍为 `commands/session.rs`（顶层），子目录 `commands/session/` 用作 sub-module 划分
+- 模块内部文件名同样：v4 文档写 `app/session/api.rs`，实际落地仍为 `commands/session.rs`（顶层），子目录 `commands/session/` 用作 sub-module 划分
 
 ### 9.2 persistence/logging 不单独成 module
 
-v0 把 persistence 和 logging 列为独立 module。v1 合并进 `app/settings/`：
+v3 把 persistence 和 logging 列为独立 module。v4 合并进 `app/settings/`：
 
 - **理由**：所有持久化调用都来自 settings 流程（保存 session config / 保存 group / 保存 attach 列表）——没有「独立于 settings 的 persistence 业务」
 - logging 同理：只有 settings tab 会读 / 写 log config，其他 module 调 `log_message` 是横切关注点（走 `infra/logger`，不经过 settings）
-- **避免** `app/persistence` / `app/logging` 这种"按技术层切"反模式——会变回 v0 的资源类型切分
+- **避免** `app/persistence` / `app/logging` 这种"按技术层切"反模式——会变回 v3 的资源类型切分
 
 ### 9.3 workspace module 暂时无 IPC
 
@@ -239,7 +239,7 @@ MVP 的 workspace 状态（pane 树 / window 列表）完全在 frontend store�
 
 ## 11. 文档地图
 
-- 顶层（本文）：设计契约 / 现状映射 / 依赖方向 / v0→v1 diff
+- 顶层（本文）：设计契约 / 现状映射 / 依赖方向 / v3→v4 diff
 - 5 module 子文档：每个 module 3 份（RESPONSIBILITY / INTERFACE / DOWNSTREAM）
 - 命令清单（§6）：与 `commands::mod::all_handlers()` 1:1 对应
 

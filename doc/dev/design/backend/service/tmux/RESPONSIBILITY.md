@@ -33,7 +33,7 @@ services/tmux/
 ├── mod.rs                 入口 + From<TmuxError> for String
 ├── errors.rs              ⭐ TmuxError 枚举（thiserror derive）
 ├── dispatch.rs            spawn_dispatch_task + dispatch_event
-├── bridge.rs              ⭐ TmuxBridge — ProtocolEvent → Tauri 事件（拆自 v0 tmux_session/bridge/）
+├── bridge.rs              ⭐ TmuxBridge — ProtocolEvent → Tauri 事件（拆自 v3 tmux_session/bridge/）
 ├── controller/
 │   ├── mod.rs             TmuxController struct + 共享 helper
 │   ├── spawn.rs           4 个构造函数（local / ssh / new-session / attach）
@@ -55,12 +55,12 @@ services/tmux/
     └── wire.rs            "send-keys" / "split-window" 文本构造
 ```
 
-**关键命名变化（v0 → v1）**：
+**关键命名变化（v3 → v4）**：
 
-- v0 的 `services/tmux_session/` 顶层目录 → v1 的 `services/tmux/`（去掉 `_session` 后缀——与 frontend service/tmux 镜像对齐）
-- v0 的 `services/tmux_session/bridge/mod.rs` → v1 的 `services/tmux/bridge.rs`（顶层，不再嵌目录）
-- v0 的 `services/tmux_session/protocol/` 不动
-- v0 的 `services/tmux_session/controller/` 不动
+- v3 的 `services/tmux_session/` 顶层目录 → v4 的 `services/tmux/`（去掉 `_session` 后缀——与 frontend service/tmux 镜像对齐）
+- v3 的 `services/tmux_session/bridge/mod.rs` → v4 的 `services/tmux/bridge.rs`（顶层，不再嵌目录）
+- v3 的 `services/tmux_session/protocol/` 不动
+- v3 的 `services/tmux_session/controller/` 不动
 
 ## 4. 跟其他 domain 的关系
 
@@ -103,7 +103,7 @@ services/tmux/
 
 ### 7.1 bug 0009 的硬性边界（防御性约束）
 
-v0 的 bug 0009 根因：`SessionManager::create_tmux` 直接读 `TmuxController.window_bindings` HashMap（未在 `record_pane_window` 时同步写入）。v1 通过以下约束避免复发：
+v3 的 bug 0009 根因：`SessionManager::create_tmux` 直接读 `TmuxController.window_bindings` HashMap（未在 `record_pane_window` 时同步写入）。v4 通过以下约束避免复发：
 
 - **字段可见性**：`pane_bindings` / `window_bindings` 设为 `pub(crate)` 或 `pub(super)`——只能被 `services/tmux/` 内部访问
 - **访问 API**：所有跨 domain 访问通过 `registry.rs` 提供的公开方法（`xsterm_window_id_for_pane()` 等）
@@ -139,7 +139,7 @@ pub struct SessionManager {
 
 ### 7.4 协议层是纯函数（无 I/O）
 
-`services/tmux/protocol/` 是**纯协议层**——没有 I/O、没有 tokio、没有 state。可以独立单测（v0 已有部分测试）。
+`services/tmux/protocol/` 是**纯协议层**——没有 I/O、没有 tokio、没有 state。可以独立单测（v3 已有部分测试）。
 
 **约束**：
 
@@ -147,9 +147,9 @@ pub struct SessionManager {
 - protocol 不 import `infrastructure::*`
 - protocol 只 import `models::*`
 
-## 8. v0 → v1 迁移说明
+## 8. v3 → v4 迁移说明
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `services/tmux_session/` 顶层目录 | `services/tmux/` | 去掉 `_session` 后缀，与 frontend service/tmux 镜像 |
 | `services/tmux_session/mod.rs` | `services/tmux/mod.rs` | 不动 |
@@ -161,9 +161,9 @@ pub struct SessionManager {
 | `services/session_manager.rs` 内嵌的 `TmuxPaneHandle` | `services/session/backends/tmux_pane.rs` | 抽出独立文件 |
 | `services/session_manager.rs` 内嵌的 `tmux_controllers: DashMap` 字段 | `services/session/manager.rs` 同名字段 | 不动（SessionManager 是 controller 的注册表持有者）|
 
-## 9. 跟 v0 的差异
+## 9. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | 顶层目录 | `services/tmux_session/` | `services/tmux/` |
 | bridge 位置 | `services/tmux_session/bridge/mod.rs` | `services/tmux/bridge.rs`（顶层）|

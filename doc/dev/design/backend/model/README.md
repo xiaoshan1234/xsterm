@@ -1,4 +1,4 @@
-# Backend · Model 层（v1：5 业务 domain + 1 cross-cutting）
+# Backend · Model 层（v4：5 业务 domain + 1 cross-cutting）
 
 > **位置**：`src-tauri/src/models/`（目录名沿用 Rust 习惯）
 > **关注点**：纯数据 + 不变量 + 纯函数算法
@@ -7,16 +7,16 @@
 
 ## 0. 为什么重写这一层
 
-v0 把 `models/` 当作**平铺的"几个文件"**：`session.rs / group.rs / capabilities.rs`。问题：
+v3 把 `models/` 当作**平铺的"几个文件"**：`session.rs / group.rs / capabilities.rs`。问题：
 
 - **tmux 相关类型散在 `session.rs` 里**——`TmuxCcConfig / AttachedTmuxServer / TmuxSessionInit / TmuxWindowInit / TmuxPaneInit / TmuxControlWindowInit` 全在 `session.rs`(一行 1670 行的单文件)
 - **group 单独占文件**——但 group 跟 workspace 紧耦合(workspace 内的 group),拆开是过度切分
-- **capabilities 是能力探测结果**——但 v0 没有 `workspace.rs` / `tmux.rs` / `settings.rs` / `cross-cutting.rs`
+- **capabilities 是能力探测结果**——但 v3 没有 `workspace.rs` / `tmux.rs` / `settings.rs` / `cross-cutting.rs`
 - **跨 service 共享的 binding 数据散落**——bug 0009 的根因(`SessionManager::create_tmux` 直读 `TmuxController` 的 `window_bindings`)
 
-v1(本文档)把 `models/` 重构为 **5 业务 domain + 1 cross-cutting**,与 frontend `model/` **1:1 镜像**:
+v4(本文档)把 `models/` 重构为 **5 业务 domain + 1 cross-cutting**,与 frontend `model/` **1:1 镜像**:
 
-| v0 (3 文件) | v1 (5 + 1) | 依据 |
+| v3 (3 文件) | v4 (5 + 1) | 依据 |
 |---|---|---|
 | `models/session.rs`(1670 行,内含 tmux 类型) | `models/session/` + `models/tmux/`(拆分)| tmux 是独立的派生 domain |
 | `models/group.rs` | `models/workspace/`(group 并入 workspace)| group 跟 workspace 紧耦合 |
@@ -216,9 +216,9 @@ grep -rn 'use crate::models::\(session\|workspace\|tmux\|settings\)::' src-tauri
 # 必须为空(types 文件允许引用其他 domain 的类型字段)
 ```
 
-## 8. 跟 v0 的核心差异
+## 8. 跟 v3 的核心差异
 
-| 维度 | v0 | v1(本文档) |
+| 维度 | v3 | v4(本文档) |
 |---|---|---|
 | 顶层目录结构 | `src-tauri/src/models/` 平铺 3 文件 | **5 业务 + 1 cross-cutting**(6 个子目录) |
 | `session.rs` 体积 | 1670 行单文件(含所有 tmux 类型 + SessionIdSource + helpers) | 拆为 `session/types.rs` + `tmux/types.rs` + `cross-cutting/ids.rs` + `cross-cutting/helpers.rs` |
@@ -247,7 +247,7 @@ src-tauri/src/lib.rs::run()
 
 ## 10. 文档地图
 
-- 顶层(本文):设计契约 / 现状映射 / 依赖方向 / v0→v1 diff
+- 顶层(本文):设计契约 / 现状映射 / 依赖方向 / v3→v4 diff
 - 6 domain 子文档:每个 domain 3 份(RESPONSIBILITY / INTERFACE / DOWNSTREAM)
 - 镜像验证:每份 domain README 的 §3 列 frontend 对应 domain 的同构说明
 

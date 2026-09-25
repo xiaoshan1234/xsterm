@@ -35,7 +35,7 @@ infrastructure/tmux/
 └── (未来) wire.rs      tmux wire 协议封装(占位)
 ```
 
-**v0 → v1 拆分映射**：v0 的 `infrastructure/tmux/{mod.rs, backend.rs}` 2 文件 → v1 拆为 3 文件（backend / errors / mock）。
+**v3 → v4 拆分映射**：v3 的 `infrastructure/tmux/{mod.rs, backend.rs}` 2 文件 → v4 拆为 3 文件（backend / errors / mock）。
 
 ## 4. 跟 frontend infra 的关系
 
@@ -177,9 +177,9 @@ pub enum TmuxInfraError {
 
 service 层通过 `?` 运算符 + `From<TmuxInfraError> for TmuxError` 自动转换。
 
-## 9. v0 → v1 拆分映射
+## 9. v3 → v4 拆分映射
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `infrastructure/tmux/mod.rs` | `infrastructure/tmux/mod.rs` | 不动 |
 | `infrastructure/tmux/backend.rs::TmuxBackend trait` | `infrastructure/tmux/backend.rs` | 不动（已存在） |
@@ -212,9 +212,9 @@ grep -rn 'use crate::infrastructure::ssh::' src-tauri/src/infrastructure/tmux/
 # 应当出现（SshTmuxBackend 需要）
 ```
 
-## 11. 跟 v0 的差异
+## 11. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | 文件数 | 2 文件（mod + backend）| 4 文件（mod + backend + errors + mock） |
 | 错误处理 | 隐式依赖（service 层用 String）| 独立 `TmuxInfraError`（thiserror derive） |

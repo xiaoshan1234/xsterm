@@ -112,11 +112,11 @@ session 模块**两个角色**：
    - create 后持久化 → 调 `app/settings/api`
    - create_session generic dispatcher 路由 tmux → 调 `app/terminal/api`
 
-**对比 v0**：v0 的 `commands/session.rs` 把所有跨 module 调用硬编码进 IPC handler（`create_tmux_session` 内部直接调 `commands::persistence::save_attached_tmux_servers_impl`），破坏了边界。v1 通过 api.rs 重定向，session 不再 import `commands::*`。
+**对比 v3**：v3 的 `commands/session.rs` 把所有跨 module 调用硬编码进 IPC handler（`create_tmux_session` 内部直接调 `commands::persistence::save_attached_tmux_servers_impl`），破坏了边界。v4 通过 api.rs 重定向，session 不再 import `commands::*`。
 
-## 11. v0 → v1 跨 module 调用的迁移
+## 11. v3 → v4 跨 module 调用的迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl` | `app/terminal/api.rs::create_tmux` 内部调 `app/settings/api::save_attached_tmux_servers` |
 | `commands/session.rs::create_session` 内部直接 `state.create_tmux(...)` | `commands/session/dispatch.rs` 内部调 `app/terminal/api::create_tmux(state, backend, &tmux)` |

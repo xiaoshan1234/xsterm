@@ -134,7 +134,7 @@ services/tmux/
 
 ## 9. 设计意图：tmux 是「最大的 service 子系统，独立演进」
 
-v1 保留 `services/tmux/` 顶层（即使 controller 内部组件很多）——理由：
+v4 保留 `services/tmux/` 顶层（即使 controller 内部组件很多）——理由：
 
 - tmux -CC 是 backend 中**最复杂的子系统**（11 个文件 / 1500+ 行 + 5 个 ADR + 1 篇专题文档）
 - 协议层（`protocol/*`）是纯函数，可独立单测
@@ -143,9 +143,9 @@ v1 保留 `services/tmux/` 顶层（即使 controller 内部组件很多）—�
 
 **对比 session 内部子模块化**：session 拆 `backends/{local,ssh,tmux_pane}` 是因为 3 种 backend 共享 `SessionManager` 中央状态机；tmux 不共享 state，所以保持顶层独立。
 
-## 10. v0 → v1 跨调用迁移
+## 10. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `services/session_manager.rs` 内嵌 `TmuxPaneHandle` + `tmux_controllers` 字段 | 字段保留在 `services/session/manager.rs`；`TmuxPaneHandle` 抽出到 `services/session/backends/tmux_pane.rs` |
 | `services/session_manager.rs::create_tmux` 直读 `controller.window_bindings` HashMap（bug 0009）| `services/session/manager.rs::create_tmux` 调 `controller.tmux_window_id_for_pane()` 公开方法 |

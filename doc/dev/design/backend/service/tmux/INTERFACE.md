@@ -26,7 +26,7 @@ use crate::models::session::{TmuxCcConfig, TmuxSessionInit};
 /// tmux -CC control mode controller。每个 controller 持 1 个 `tmux -CC` 子进程。
 ///
 /// 设计要点：
-/// - controller 由 `TmuxController::spawn_create` 创建（拆自 v0 controller/spawn.rs）
+/// - controller 由 `TmuxController::spawn_create` 创建（拆自 v3 controller/spawn.rs）
 /// - controller 由 `SessionManager::tmux_controllers` DashMap 持有
 /// - controller 内部 HashMap 通过 `pub(super)` 可见性限制外部访问
 /// - 跨 domain 调用必须走公开方法（bug 0009 防御）
@@ -155,7 +155,7 @@ impl From<TmuxError> for String {
 ### 3.2 TaggedCommand（协议层命令）
 
 ```rust
-// services/tmux/protocol/command.rs（v0 已有）
+// services/tmux/protocol/command.rs（v3 已有）
 pub struct TaggedCommand {
     pub id: CommandId,
     pub kind: CommandKind,
@@ -181,7 +181,7 @@ pub enum CommandKind {
 ### 3.3 ProtocolEvent（解析后事件）
 
 ```rust
-// services/tmux/protocol/events.rs（v0 已有 30+ 变体）
+// services/tmux/protocol/events.rs（v3 已有 30+ 变体）
 pub enum ProtocolEvent {
     WindowAdded { window_id: String, name: String },
     WindowClosed { window_id: String },
@@ -202,7 +202,7 @@ pub enum ProtocolEvent {
 ### 3.4 TmuxBridge（事件推送）
 
 ```rust
-// services/tmux/bridge.rs（v0 在 bridge/mod.rs）
+// services/tmux/bridge.rs（v3 在 bridge/mod.rs）
 pub struct TmuxBridge {
     app: AppHandle,
 }
@@ -294,10 +294,10 @@ impl SessionManager {
 }
 ```
 
-**关键对比 v0**：
+**关键对比 v3**：
 
 ```rust
-// v0（bug 0009）
+// v3（bug 0009）
 let tmux_window_id = self.tmux_controllers
     .get(&controller_id).unwrap()
     .window_bindings  // ← 字段直读
@@ -305,14 +305,14 @@ let tmux_window_id = self.tmux_controllers
     .find(|(pane_id, _)| pane_id == &tmux_pane_id)
     .map(|(_, window_id)| window_id.clone());
 
-// v1（修复）
+// v4（修复）
 let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);  // ← 公开方法
 ```
 
 ## 5. 接缝契约
 
 ```rust
-// services/session/manager.rs（v1）
+// services/session/manager.rs（v4）
 use crate::services::tmux::{TmuxController, TmuxError};
 
 // session manager 注入 controller Arc

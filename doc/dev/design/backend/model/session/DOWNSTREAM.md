@@ -127,9 +127,9 @@ xsterm backend 的 70% 数据形态都在 `models/session/`:
 
 **这是为什么 session model 的字段最多、最复杂**——其他 domain 都在 session 周围围绕。
 
-## 10. v0 → v1 跨调用迁移
+## 10. v3 → v4 跨调用迁移
 
-| v0 位置 | v1 改法 |
+| v3 位置 | v4 改法 |
 |---|---|
 | `models/session.rs::SessionIdSource`(line 21)| `models/session/types.rs::SessionIdSource`(domain 内部)|
 | `models/session.rs::SplitDirection`(line 222)| `models/cross_cutting/types.rs::SplitDirection` |

@@ -47,7 +47,7 @@ workspace **不直接依赖** tmux——由 `app/workspace/api.rs::split_pane` �
 
 ## 7. 设计意图：workspace 是「跨 domain 协调的 future host」
 
-MVP 的 workspace 业务完全在 frontend store。v1 设计预留 backend 位置，等"多窗口同步"或"server-side persistence"出现时激活。
+MVP 的 workspace 业务完全在 frontend store。v4 设计预留 backend 位置，等"多窗口同步"或"server-side persistence"出现时激活。
 
 **关键设计原则**：
 

@@ -1,4 +1,4 @@
-# Backend · Service 层（v1：按数据 domain 切分）
+# Backend · Service 层（v4：按数据 domain 切分）
 
 > **位置**：`src-tauri/src/services/`（目录名沿用 Rust 习惯）
 > **关注点**：跨 module 共享状态 + 业务编排 + 持有进程级生命周期
@@ -7,15 +7,15 @@
 
 ## 0. 为什么重写这一层
 
-v0 把 `services/` 按**资源类型**切：`session_manager / session_log / local_session / ssh_session / tmux_session`。问题是：
+v3 把 `services/` 按**资源类型**切：`session_manager / session_log / local_session / ssh_session / tmux_session`。问题是：
 
 - 改一个产品功能（如"split pane"）要跨 3 个子目录调：`local_session`（创建子 PTY）+ `session_manager`（注册 Session）+ `tmux_session`（如果是 tmux）
 - `session_manager.rs` 一个文件 3000+ 行——同时管 local/ssh/tmux 三种 session 的注册、回收、reconnect
 - bug 0009 的根因：`SessionManager::create_tmux` 直接读 `TmuxController.window_bindings` 内部 HashMap——跨子目录的字段直读
 
-v1（本文档）把 `services/` 重新切为 **5 个数据 domain**——与 frontend `service/` 的 5 domain **镜像**：
+v4（本文档）把 `services/` 重新切为 **5 个数据 domain**——与 frontend `service/` 的 5 domain **镜像**：
 
-| v0 (按资源类型) | v1 (按数据 domain) | 依据 |
+| v3 (按资源类型) | v4 (按数据 domain) | 依据 |
 |---|---|---|
 | `session_manager.rs` | `services/session/` | session 元数据 = 跨 module 共享的"核心 domain" |
 | `local_session/` | `services/session/local/`（子模块）| local 是 session 的一种 backend 实现 |
@@ -33,13 +33,13 @@ src-tauri/src/services/                          # 语义名（顶层 5 domain�
 ├── mod.rs                 5 domain re-export 集合
 ├── session/               ⭐ 核心 domain：所有 session 元数据 + lifecycle
 │   ├── api.rs             (pub SessionManager + AppSession + Trait)
-│   ├── manager.rs         SessionManager（中央状态机）—— 拆自 v0 session_manager.rs
+│   ├── manager.rs         SessionManager（中央状态机）—— 拆自 v3 session_manager.rs
 │   ├── registry.rs        DashMap<u32, ActiveSession>（按 id 索引）
 │   ├── backends/
-│   │   ├── local.rs       LocalSession + PtyPair 持有（拆自 v0 local_session/）
-│   │   ├── ssh.rs         SshSession + russh 连接（拆自 v0 ssh_session/）
-│   │   └── tmux_pane.rs   TmuxPaneHandle（拆自 v0 tmux_session/ 内嵌部分）
-│   ├── log.rs             start_session_logging（拆自 v0 session_log.rs）
+│   │   ├── local.rs       LocalSession + PtyPair 持有（拆自 v3 local_session/）
+│   │   ├── ssh.rs         SshSession + russh 连接（拆自 v3 ssh_session/）
+│   │   └── tmux_pane.rs   TmuxPaneHandle（拆自 v3 tmux_session/ 内嵌部分）
+│   ├── log.rs             start_session_logging（拆自 v3 session_log.rs）
 │   ├── id.rs              SessionIdSource（u32 分配器）
 │   ├── errors.rs          SessionError / TmuxError（thiserror）
 │   └── *.test.rs
@@ -168,9 +168,9 @@ services/<domain>/
 - 跨 domain 调用通过 `domain::api` trait 或显式 `domain::manager.method()`——**禁止**直接读字段
 - infra trait 是 stateless 抽象；service 持有所有可变状态
 
-## 6. 跟 v0 的核心差异
+## 6. 跟 v3 的核心差异
 
-| 维度 | v0 | v1（本文档）|
+| 维度 | v3 | v4（本文档）|
 |---|---|---|
 | 切分依据 | 资源类型（local/ssh/tmux backend 各 1 子目录）| 数据 domain（5 domain 与 frontend service 镜像）|
 | `session_manager.rs` 体积 | 3000+ 行单文件 | 拆为 `session/manager.rs`（中央状态机）+ `session/backends/{local,ssh,tmux_pane}.rs` |
@@ -186,13 +186,13 @@ services/<domain>/
 
 ### 7.1 为什么按数据 domain 切，不按 backend 类型切
 
-v0 的反模式："session_manager + local_session + ssh_session + tmux_session"看起来**很 Rust**（按 backend 类型封装），但有 3 个问题：
+v3 的反模式："session_manager + local_session + ssh_session + tmux_session"看起来**很 Rust**（按 backend 类型封装），但有 3 个问题：
 
 1. **跨 backend 协调成本高**：一个产品功能（如"split tmux pane"）要碰 `tmux_session/`（建 controller）+ `session_manager/`（注册）+ `local_session/`（如果 fallback 要 new PTY）
 2. **session 元数据被切碎**：`SessionManager` 同时管 3 种 session 的注册表——一个 3000 行文件
 3. **与 frontend 不镜像**：frontend service 切 5 domain，backend service 切 4 子目录——两边对照时找不到对应关系
 
-v1 按**数据 domain**切——切出来的"session domain"在 backend 和 frontend 都是同一个概念：
+v4 按**数据 domain**切——切出来的"session domain"在 backend 和 frontend 都是同一个概念：
 
 - **frontend** `service/session/`：Map<sessionId, Session> zustand store + IPC bridge
 - **backend** `services/session/`：DashMap<u32, ActiveSession> + SessionManager 中央状态机 + 3 种 backend 实现
@@ -204,7 +204,7 @@ v1 按**数据 domain**切——切出来的"session domain"在 backend 和 fron
 session 的 3 种 backend 实现（local PTY / SSH / tmux pane）作为 `services/session/backends/` 子模块——**不**作为顶层 domain：
 
 - 理由：3 种 backend 不是"独立的横切/核心/派生 domain"——它们都是 session 的具体实现
-- 与 v0 的差异：v0 把 `local_session/` `ssh_session/` `tmux_session/` 当作顶层——子模块化降低层级
+- 与 v3 的差异：v3 把 `local_session/` `ssh_session/` `tmux_session/` 当作顶层——子模块化降低层级
 - 唯一例外：`tmux_session` 太大（11+ 文件），且 tmux 协议是独立的子系统——保留 `services/tmux/` 顶层
 - tmux pane 句柄 (`TmuxPaneHandle`) 作为 `session/backends/tmux_pane.rs`——持有 controller Arc（"借" tmux domain 的 controller）
 
@@ -260,7 +260,7 @@ MVP 兼容：保留 `app.manage(Arc::new(SessionManager::new()))` 单点注入�
 
 ## 9. 文档地图
 
-- 顶层（本文）：设计契约 / 现状映射 / 依赖方向 / v0→v1 diff
+- 顶层（本文）：设计契约 / 现状映射 / 依赖方向 / v3→v4 diff
 - 5 domain 子文档：每个 domain 3 份（RESPONSIBILITY / INTERFACE / DOWNSTREAM）
 - 镜像验证：每份 domain README 的 §3 列 frontend 对应 domain 的同构说明
 

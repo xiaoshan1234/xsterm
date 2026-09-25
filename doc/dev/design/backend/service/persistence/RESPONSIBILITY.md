@@ -115,7 +115,7 @@ pub fn save_json_value(
 
 - 其他 service **禁止** import `tauri_plugin_store`——必须经过 `persistence_api::*`
 - MVP 例外：`services/settings/api.rs` 直调 store（log_config.json）；下个 PR 改
-- v0 的 `commands/persistence.rs` + `commands/logging.rs` 都直调 store——v1 集中到 `services/persistence/`（settings 直调是过渡）
+- v3 的 `commands/persistence.rs` + `commands/logging.rs` 都直调 store——v4 集中到 `services/persistence/`（settings 直调是过渡）
 
 ### 8.2 typed wrapper 跟 generic JSON value wrapper 共存
 
@@ -157,18 +157,18 @@ pub fn load_sessions_typed(app: &AppHandle) -> Result<Vec<SessionInfo>, String> 
 
 **关键**：文件路径 + store key 字面量集中在 typed wrapper 文件的 const——避免散落在 commands / app 模块。
 
-## 9. v0 → v1 迁移说明
+## 9. v3 → v4 迁移说明
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `commands/persistence.rs::save_sessions / load_sessions / save_groups / load_groups / save_attached_tmux_servers / load_attached_tmux_servers` | 拆分为：service `services/persistence/{sessions,groups,attached_tmux}.rs` + app `app/settings/commands/persistence/{sessions,groups,attached_tmux}.rs` |
 | `commands/persistence.rs::save_attached_tmux_servers_impl`（pub(crate) sync helper，被 commands/session 内联调）| 升级为 `services/persistence/attached_tmux.rs::save_attached_tmux_typed` 公开函数 |
 | `commands/logging.rs::set_log_config` 内联 `store.set / store.save` | 拆分为：service `services/settings/api.rs::save_log_config` + app `app/settings/commands/logging/config.rs::set_log_config`（IPC wrapper）|
 | `lib.rs::run()` 内联 `app.manage(Arc::new(reload_handle))` | 抽到 `app/shell/api.rs::initialize` |
 
-## 10. 跟 v0 的差异
+## 10. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | persistence domain | ❌ 不存在（store 调用散在 commands/session / commands/persistence / commands/logging） | ✅ 独立 domain `services/persistence/` |
 | store 调用集中度 | 散在 3+ 文件 | 集中在 `services/persistence/api.rs`（+ settings MVP 例外） |

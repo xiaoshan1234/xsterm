@@ -20,13 +20,13 @@ session module 编排 backend **session 全生命周期的 IPC 命令**——10 
 9. **upload_image_to_ssh_session** —— 通过 SCP 上传图片到 SSH 服务器
 10. **get_session_output_channel** —— 获取 binary output channel（Perf 001）
 
-**合计**：10 个 `#[tauri::command]`——v0 在 `commands/session.rs` 25 个，v1 拆走 15 个 tmux 相关到 `app/terminal/`。
+**合计**：10 个 `#[tauri::command]`——v3 在 `commands/session.rs` 25 个，v4 拆走 15 个 tmux 相关到 `app/terminal/`。
 
 ## 2. 这个 module **不**负责什么
 
 - **不渲染 UI** —— UI 由 frontend `ui/session/` 负责
-- **不管理 tmux pane/window 操作** —— 归 `app/terminal/`（v0 全部混在 `commands/session.rs`）
-- **不持久化 saved config** —— 归 `app/settings/api::save_sessions`（v0 在 `commands/persistence.rs`）
+- **不管理 tmux pane/window 操作** —— 归 `app/terminal/`（v3 全部混在 `commands/session.rs`）
+- **不持久化 saved config** —— 归 `app/settings/api::save_sessions`（v3 在 `commands/persistence.rs`）
 - **不持有状态** —— 状态归 `services/session_manager.rs`
 - **不直接 import `services/session_manager` 字段** —— 通过 `session_manager::SessionManager` 的 public 方法
 
@@ -91,16 +91,16 @@ modules/session/
 - **display config** —— 运行时可调的字体 / 字号 / theme（**MVP 没有 IPC**，完全在 frontend）
 - **session status** —— connecting / running / closed / error（**MVP 没有 IPC**，由前端读 `SessionInfo.is_connected`）
 
-## 7. v0 → v1 迁移说明
+## 7. v3 → v4 迁移说明
 
-v0 的 `commands/session.rs` 25 个 command 中：
+v3 的 `commands/session.rs` 25 个 command 中：
 
 - 10 个留在 `app/session/`（上文 §1）
 - 15 个 tmux 相关迁到 `app/terminal/`
 
 拆分边界（按"命令名 object 是否 tmux"判定）：
 
-| 命令 | v0 归属 | v1 归属 |
+| 命令 | v3 归属 | v4 归属 |
 |---|---|---|
 | `create_local_session` | session | session |
 | `create_ssh_session` | session | session |
@@ -130,9 +130,9 @@ v0 的 `commands/session.rs` 25 个 command 中：
 
 **拆分原则**：按"命令操作的资源类型"切分——如果命令名的 object 是 `tmux_*` 就归 terminal，否则归 session。`create_session` 是 generic dispatcher 留在 session。
 
-## 8. 跟 v0 的差异
+## 8. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | 单文件最大规模 | `commands/session.rs` 660 行 / 25 个 command | `commands/session.rs` ≤ 250 行 / 10 个 command |
 | tmux 操作归属 | session | terminal（按产品功能切） |

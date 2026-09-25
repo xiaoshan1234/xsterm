@@ -15,8 +15,8 @@ session domain 是 backend 的**中央 session 状态机**——所有 session�
 2. **session id 分配**——`Arc<SessionIdSource>` 单调递增 AtomicU32，3 种 backend 共享
 3. **3 种 backend 实现**——local（PTY）、ssh（russh）、tmux_pane（持 controller Arc）
 4. **session lifecycle 编排**——create / write / resize / close / list
-5. **session 日志**——session 创建时 `start_session_logging`（拆自 v0 `services/session_log.rs`）
-6. **tmux controller 注册表代理**——`tmux_controllers: DashMap<u32, Arc<TmuxController>>`（拆自 v0 内嵌于 `session_manager.rs`）
+5. **session 日志**——session 创建时 `start_session_logging`（拆自 v3 `services/session_log.rs`）
+6. **tmux controller 注册表代理**——`tmux_controllers: DashMap<u32, Arc<TmuxController>>`（拆自 v3 内嵌于 `session_manager.rs`）
 
 ## 2. 这个 domain **不**负责什么
 
@@ -35,21 +35,21 @@ services/session/
 │                      - SessionManager struct (新位置)
 │                      - SessionError enum (thiserror)
 │                      - public trait: SessionBackend, PtySystem, SshBackend
-├── manager.rs        SessionManager 主体（拆自 v0 session_manager.rs，按 backend 类型分组）
+├── manager.rs        SessionManager 主体（拆自 v3 session_manager.rs，按 backend 类型分组）
 ├── registry.rs       DashMap<u32, Arc<ActiveSession>> + tmux_controllers DashMap 访问器
 ├── id.rs             SessionIdSource（AtomicU32 分配器）
-├── log.rs            start_session_logging（拆自 v0 session_log.rs）
+├── log.rs            start_session_logging（拆自 v3 session_log.rs）
 ├── errors.rs         SessionError / SessionBackendError
 ├── backends/
-│   ├── local.rs      LocalSession + PtyPair（拆自 v0 services/local_session/*）
-│   ├── ssh.rs        SshSession + russh 连接（拆自 v0 services/ssh_session/*）
-│   └── tmux_pane.rs  TmuxPaneHandle（拆自 v0 tmux_session 内嵌部分）
-└── *.test.rs         mockall 单测（拆自 v0 tests.rs）
+│   ├── local.rs      LocalSession + PtyPair（拆自 v3 services/local_session/*）
+│   ├── ssh.rs        SshSession + russh 连接（拆自 v3 services/ssh_session/*）
+│   └── tmux_pane.rs  TmuxPaneHandle（拆自 v3 tmux_session 内嵌部分）
+└── *.test.rs         mockall 单测（拆自 v3 tests.rs）
 ```
 
-## 4. 跟 v0 的差异（关键迁移点）
+## 4. 跟 v3 的差异（关键迁移点）
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `services/session_manager.rs`（3000+ 行单文件） | `services/session/manager.rs` | 按 backend 类型分组，移除 tmux_controllers 内嵌逻辑 |
 | `services/local_session/*`（4 文件） | `services/session/backends/local.rs` | 子模块化 |
@@ -62,7 +62,7 @@ services/session/
 
 | domain | 关系 |
 |---|---|
-| `services/tmux` | session **不直接** import `tmux::*` 字段——通过 `TmuxController::controller_id()` 公开方法 + `Arc<TmuxController>` 引用持有。bug 0009 根因是字段直读，v1 严格走 trait / public method |
+| `services/tmux` | session **不直接** import `tmux::*` 字段——通过 `TmuxController::controller_id()` 公开方法 + `Arc<TmuxController>` 引用持有。bug 0009 根因是字段直读，v4 严格走 trait / public method |
 | `services/workspace` | MVP 不调——pane tree 在 frontend store |
 | `services/settings` | session 创建时**不直接**读 settings（settings 是横切，由 `app/` 编排注入 default 值）|
 | `services/persistence` | session **不直接** import `tauri_plugin_store`——持久化由 `app/settings/api` 触发 |
@@ -143,7 +143,7 @@ pub struct TmuxPaneHandle {
 
 3 种 backend 都从 `SessionIdSource::allocate()` 取 id——一个 AtomicU32 单调递增。所有 session（local / ssh / tmux）共享同一 id 空间。
 
-**关键**：tmux controller 内部 dispatch task 通过 `Arc<dyn Fn() -> u32>` 闭包注入 allocator——controller **不**有自己的 id allocator（v0 的 `next_xsterm_id` 已删除）。
+**关键**：tmux controller 内部 dispatch task 通过 `Arc<dyn Fn() -> u32>` 闭包注入 allocator——controller **不**有自己的 id allocator（v3 的 `next_xsterm_id` 已删除）。
 
 ### 8.5 日志创建失败不影响 session 创建
 

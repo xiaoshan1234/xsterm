@@ -71,13 +71,13 @@ services/workspace/
 - **group** —— workspace 内的 session 分组
 - **active workspace / window / pane** —— 当前聚焦
 
-## 8. v0 → v1 迁移说明
+## 8. v3 → v4 迁移说明
 
-v0 无 workspace domain。v1 引入空 domain 作为预留位——**不需要**任何代码改动，只在 `services/mod.rs` 加 `pub mod workspace;` 即可。
+v3 无 workspace domain。v4 引入空 domain 作为预留位——**不需要**任何代码改动，只在 `services/mod.rs` 加 `pub mod workspace;` 即可。
 
-## 9. 跟 v0 的差异
+## 9. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | domain 存在 | ❌ 无 | ✅ 空 domain 占位 |
 | 触发激活 | n/a | 多窗口同步 / server-side persistence 出现时 |

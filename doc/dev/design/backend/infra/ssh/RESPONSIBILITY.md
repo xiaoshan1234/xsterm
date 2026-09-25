@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/infrastructure/ssh/`
 > **类型**：⭐ 外部资源 — SSH 协议
 > **被使用方**：`services/session`、`services/session_log`
-> **外部依赖**：`russh` crate（v0 用 `0.50.0-beta.7`）
+> **外部依赖**：`russh` crate（v3 用 `0.50.0-beta.7`）
 
 ## 1. 这个子模块负责什么
 
@@ -39,7 +39,7 @@ infrastructure/ssh/
 └── errors.rs           SshError(thiserror derive,含 host-key 警告)
 ```
 
-**v0 → v1 拆分映射**：v0 的 `infrastructure/ssh.rs`（包含 SshBackend trait + SshBackendImpl + SshSession + upload_file + run_command + from 等所有逻辑）单文件 ~700+ 行 → v1 拆为 7 文件，按 trait / impl / struct / 上传 / 探测 / mock / errors 分类。
+**v3 → v4 拆分映射**：v3 的 `infrastructure/ssh.rs`（包含 SshBackend trait + SshBackendImpl + SshSession + upload_file + run_command + from 等所有逻辑）单文件 ~700+ 行 → v4 拆为 7 文件，按 trait / impl / struct / 上传 / 探测 / mock / errors 分类。
 
 ## 4. 跟 frontend infra 的关系
 
@@ -112,7 +112,7 @@ pub trait SshSessionTrait: Send + Sync {
 }
 ```
 
-**关键**：SshSessionTrait 是 `services/session/backends/ssh.rs::SshSession` 的**接口**——`SshSession` 实现该 trait。**这与 v0 不同**：v0 的 `SshSession` 是具体 struct，直接被 `SessionManager` 通过 `Box<SshSession>` 持有。
+**关键**：SshSessionTrait 是 `services/session/backends/ssh.rs::SshSession` 的**接口**——`SshSession` 实现该 trait。**这与 v3 不同**：v3 的 `SshSession` 是具体 struct，直接被 `SessionManager` 通过 `Box<SshSession>` 持有。
 
 ### 8.3 host key 校验**当前禁用**(已知安全债)
 
@@ -193,9 +193,9 @@ pub enum SshError {
 }
 ```
 
-## 9. v0 → v1 拆分映射
+## 9. v3 → v4 拆分映射
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `infrastructure/ssh.rs::SshBackend trait` | `infrastructure/ssh/traits.rs` | 抽到独立文件 |
 | `infrastructure/ssh.rs::SshBackendImpl` | `infrastructure/ssh/backend.rs` | 抽到独立文件 |
@@ -204,13 +204,13 @@ pub enum SshError {
 | `infrastructure/ssh.rs::run_command_capture_stdout` | `infrastructure/ssh/probe.rs` | 抽到独立文件 |
 | `infrastructure/ssh.rs` 内 inline enum error | `infrastructure/ssh/errors.rs::SshError` | 抽到独立文件 + thiserror derive |
 | 无 mock | `infrastructure/ssh/mock.rs::MockSshBackend` | 新增 `#[automock]` |
-| `services/session_manager.rs::Box<SshSession>` | `services/session/backends/ssh.rs::Box<dyn SshSessionTrait>` | v1 通过 trait object 持有 |
+| `services/session_manager.rs::Box<SshSession>` | `services/session/backends/ssh.rs::Box<dyn SshSessionTrait>` | v4 通过 trait object 持有 |
 
-## 10. ⚠️ 安全警告（继承 v0，重要）
+## 10. ⚠️ 安全警告（继承 v3，重要）
 
 ### 10.1 host key 校验**当前禁用**
 
-**AGENTS.md 已记录**：xsterm v0 禁用了 SSH host key 校验。这是已知安全债。
+**AGENTS.md 已记录**：xsterm v3 禁用了 SSH host key 校验。这是已知安全债。
 
 **禁止**：
 
@@ -227,11 +227,11 @@ pub enum SshError {
 - ❌ 持久化凭据到 disk（`attached_tmux.json` 不存 SSH 凭据）
 - ❌ logging SSH password / private key（必须 redact）
 
-**v1 改进**：在 `SSHSessionConfig` 加 `#[serde(skip_serializing_if = ...)]` 标记——避免凭据被意外持久化。
+**v4 改进**：在 `SSHSessionConfig` 加 `#[serde(skip_serializing_if = ...)]` 标记——避免凭据被意外持久化。
 
 ### 10.3 russh crate 版本
 
-v0 用 `russh = "0.50.0-beta.7"`——beta 版本可能不稳定。升级路径：
+v3 用 `russh = "0.50.0-beta.7"`——beta 版本可能不稳定。升级路径：
 
 - 升级前跑完整 SSH 集成测试
 - 检查 russh API breaking change 文档
@@ -265,15 +265,15 @@ grep -rn 'println.*password\|tracing.*password' src-tauri/src/infrastructure/ssh
 # 必须为空
 ```
 
-## 12. 跟 v0 的差异
+## 12. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | 文件数 | 1 文件 ~700 行 | 7 文件（traits / backend / session / upload / probe / mock / errors） |
 | 错误处理 | inline enum | 独立 `SshError`（thiserror derive） |
 | mock | 无 | `#[automock]` 自动 mock |
 | SshSession 抽象 | 具体 struct（直接持有）| `SshSessionTrait`（trait object 持有） |
-| build_remote_image_path 归属 | `models/session.rs` | `models/cross_cutting/helpers.rs`（v1 model 拆分）|
+| build_remote_image_path 归属 | `models/session.rs` | `models/cross_cutting/helpers.rs`（v4 model 拆分）|
 | 与 frontend 镜像 | ❌（frontend 无 SSH） | 文档明确标注 "backend 独有" |
 
 ## 13. 测试

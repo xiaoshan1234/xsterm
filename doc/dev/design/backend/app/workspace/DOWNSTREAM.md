@@ -53,13 +53,13 @@ modules/workspace/
 
 ## 7. 设计意图：workspace 是「跨 module 编排者」
 
-v1 设计的核心命题：workspace = 跨 session/terminal/settings 三个 module 的协调者。
+v4 设计的核心命题：workspace = 跨 session/terminal/settings 三个 module 的协调者。
 
 - **session/terminal 提供原子能力**（创建单个 session、调单个 tmux pane 操作）
 - **settings 提供持久化能力**（保存 / 读取）
 - **workspace 把它们串起来**（pane split 时：判断父 pane 类型 → 调对应 module → 更新 pane 树）
 
-这条边界避免了 v0 的"workspace 业务散在 session module 内部"反模式。
+这条边界避免了 v3 的"workspace 业务散在 session module 内部"反模式。
 
 ## 8. 不允许的依赖
 

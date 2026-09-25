@@ -39,11 +39,11 @@ models/session/
 └── errors.rs            SessionConfigError / SessionError(thiserror)
 ```
 
-**关键**:v0 的 `SessionIdSource` 在 `models/session.rs:21`,v1 移到本 domain 的 `types.rs`(或 `cross-cutting/ids.rs`——见 §4.2)。
+**关键**:v3 的 `SessionIdSource` 在 `models/session.rs:21`,v4 移到本 domain 的 `types.rs`(或 `cross-cutting/ids.rs`——见 §4.2)。
 
-## 4. v0 → v1 拆分映射
+## 4. v3 → v4 拆分映射
 
-| v0 位置(在 session.rs) | v1 位置 | 改动 |
+| v3 位置(在 session.rs) | v4 位置 | 改动 |
 |---|---|---|
 | `SessionIdSource` (line 21) | `models/session/types.rs` | 保留在 session domain(理由:id 是 session 生命周期的一部分) |
 | `SessionType` enum (line 48) | `models/session/types.rs` | 不动 |
@@ -174,9 +174,9 @@ impl SessionIdSource {
 
 **关键**:`SessionIdSource` 必须是 `Arc<SessionIdSource>`——3 种 backend + tmux controller 共享一个 allocator。
 
-### 8.6 现状 v0 有 typed error 缺失
+### 8.6 现状 v3 有 typed error 缺失
 
-v0 `models/session.rs` 没有 `SessionConfigError`——构造器是直接 `pub fn new(shell: String, cwd: String) -> Self` 没有校验。v1 引入 typed error:
+v3 `models/session.rs` 没有 `SessionConfigError`——构造器是直接 `pub fn new(shell: String, cwd: String) -> Self` 没有校验。v4 引入 typed error:
 
 ```rust
 #[derive(Debug, thiserror::Error)]
@@ -211,7 +211,7 @@ grep -rn 'use \(tokio\|tauri\)' src-tauri/src/models/session/
 
 ## 10. 测试
 
-每个子文件都有 `*.test.rs`(在 v0 基础上补充):
+每个子文件都有 `*.test.rs`(在 v3 基础上补充):
 
 - `types.rs` 的 try_new 构造器 100% 覆盖
 - `accessor.rs` 的查询函数(参数边界 + 边界 case)

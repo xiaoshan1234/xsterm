@@ -23,7 +23,7 @@ shell module 是 backend 的**启动 / 关闭编排入口**。它**不**对外�
 
 ## 3. 子结构
 
-落地到 `src-tauri/src/commands/shell.rs`（v0 在 `lib.rs::run()` 的内联块，v1 抽出来）：
+落地到 `src-tauri/src/commands/shell.rs`（v3 在 `lib.rs::run()` 的内联块，v4 抽出来）：
 
 ```rust
 // commands/shell.rs
@@ -47,7 +47,7 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), String>;
 ## 4. 用户故事（backend 视角）
 
 - **作为 Tauri runtime**，我希望 `.setup()` 完成时 logging 已就位、output channel 已注册 → `initialize()` 完成即可
-- **作为 dev**，我希望关闭 app 时 rolling log writer 被 flush → 当前靠 `std::mem::forget(_guard)` 保持 writer 存活（v0 已有的 hack）
+- **作为 dev**，我希望关闭 app 时 rolling log writer 被 flush → 当前靠 `std::mem::forget(_guard)` 保持 writer 存活（v3 已有的 hack）
 
 ## 5. 跟其他 module 的关系
 
@@ -64,22 +64,22 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), String>;
 ## 6. 这个 module 的"产品语言"术语
 
 - **initialize** —— backend 启动序列入口，绑定 `.setup()` 钩子
-- **shutdown** —— backend 关闭序列（v0 未实现，靠 Rust Drop 兜底）
+- **shutdown** —— backend 关闭序列（v3 未实现，靠 Rust Drop 兜底）
 - **panic hook** —— 进程级 panic 处理器
 - **output channel** —— binary `session-output` IPC channel（Perf 001）
 - **reload handle** —— `EnvFilter` reload handle，让 `set_log_config` 实时生效
 
-## 7. v0 → v1 迁移说明
+## 7. v3 → v4 迁移说明
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `lib.rs::run()` 内联 `.setup(\|app\| { ... 30 行 logging + binary frame ... })` | `app/shell/api.rs::initialize(app)` | 抽函数 + 加 doc comment |
 | `logging_setup::init_logging` 仍由 shell 直接调 | 不变 | logging_setup 仍为 infra-level 工具 |
 | `panic_hook` 仍在 `lib.rs` 顶层 | **保留**（不属于 shell） | panic hook 是进程级的，不应该挂在某个 module |
 
-## 8. 跟 v0 的差异
+## 8. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | setup 钩子位置 | `lib.rs` 内联 | `app/shell/api.rs::initialize` |
 | 模块归属 | 无 | 显式 `app/shell/`（语义名）/ `commands/shell.rs`（落地目录） |

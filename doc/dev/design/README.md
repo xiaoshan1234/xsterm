@@ -297,8 +297,8 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 | model | 16 | 5 + cross-cutting × 3 + 顶层 |
 | service | 16 | 5 domain × 3 + 顶层 |
 | infra | 13 | 4 子模块（pty / ssh / tmux / tauri）× 3 + 顶层 |
-| 顶层 README | 0 | backend 顶层 README 占位待建 |
-| **小计** | **61** | |
+| 顶层 README | 1 | [`backend/README.md`](backend/README.md) |
+| **小计** | **62** | |
 
 ### 顶层与合计
 
@@ -306,7 +306,7 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 |---|---|
 | 顶层 README | 1（本文件） |
 | frontend 全部 | 78 |
-| backend 全部 | 61 |
-| **合计** | **140 份** |
+| backend 全部 | 62 |
+| **合计** | **141 份** |
 
 每份子文档固定 3 节：**RESPONSIBILITY**（职责）/ **INTERFACE**（对外接口）/ **DOWNSTREAM**（对下依赖）。

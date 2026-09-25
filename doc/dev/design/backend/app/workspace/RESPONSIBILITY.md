@@ -19,7 +19,7 @@ workspace module 负责 workspace / window / pane / group 的**IPC 编排**—�
 
 - **frontend store 已经足够**：Zustand 持久化 + Tauri store 双写已经能 cover 当前产品形态
 - **没有跨进程共享需求**：只有一个窗口，frontend state 没有"被另一进程读"的场景
-- **避免过早优化**：v1 拆 5 module 是为了"接口对齐"，空 module 也是对齐的一部分（frontend app/workspace 的存在意味着 backend 也要预留）
+- **避免过早优化**：v4 拆 5 module 是为了"接口对齐"，空 module 也是对齐的一部分（frontend app/workspace 的存在意味着 backend 也要预留）
 
 ## 3. 子结构
 
@@ -72,13 +72,13 @@ modules/workspace/
 - **pane** —— pane 树节点，叶子是 terminal session
 - **group** —— sidebar 的 session 分类
 
-## 7. v0 → v1 迁移说明
+## 7. v3 → v4 迁移说明
 
-v0 没有 workspace module。v1 引入空 module 作为预留位——**不需要**任何代码改动，只在 `app/mod.rs` 加一行 `pub mod workspace;` 即可。
+v3 没有 workspace module。v4 引入空 module 作为预留位——**不需要**任何代码改动，只在 `app/mod.rs` 加一行 `pub mod workspace;` 即可。
 
-## 8. 跟 v0 的差异
+## 8. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | module 存在 | ❌ 无 | ✅ 空 module 占位 |
 | 触发激活 | n/a | 多窗口同步 / server-side persistence 出现时 |

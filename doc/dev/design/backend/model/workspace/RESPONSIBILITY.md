@@ -12,7 +12,7 @@ workspace model 定义 **主视图的所有数据形态**——workspace 树、w
 
 1. **workspace 树类型**——`Workspace / Window / WorkspaceStore`
 2. **pane tree 类型**——`PaneNode`(split / leaf)
-3. **group 类型**——`Group / GroupStore`(从 v0 `models/group.rs` 迁入)
+3. **group 类型**——`Group / GroupStore`(从 v3 `models/group.rs` 迁入)
 4. **paneTree 算法**——纯函数规则(`createLeafPane / splitPane / closePane / resizePane / movePane`)——**关键路径,100% 覆盖**
 
 ## 2. MVP 状态
@@ -34,15 +34,15 @@ models/workspace/
 └── rules.rs             createWindow / createLeafPane / splitPane / closePane / movePane / resizePane
 ```
 
-**关键**:MVP 阶段 `types.rs` 只实现 `Group / GroupStore`(从 v0 迁入);其他类型预留位等 workspace domain 激活。
+**关键**:MVP 阶段 `types.rs` 只实现 `Group / GroupStore`(从 v3 迁入);其他类型预留位等 workspace domain 激活。
 
-## 4. v0 → v1 拆分映射
+## 4. v3 → v4 拆分映射
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `models/group.rs::SessionGroup / GroupStore` | `models/workspace/types.rs` | 迁入——group 是 workspace 子集 |
 
-**v0 `models/group.rs` 的 18 行内容**全部迁到 `models/workspace/types.rs::Group / GroupStore`。
+**v3 `models/group.rs` 的 18 行内容**全部迁到 `models/workspace/types.rs::Group / GroupStore`。
 
 ## 5. 跟其他 model domain 的关系
 
@@ -65,7 +65,7 @@ models/workspace/
 | `app/workspace` (预留) | `Workspace` / `GroupStore` 作为 IPC 入参 / 返回类型 |
 | `commands/persistence.rs` (MVP) | `load_groups / save_groups` 接收 `GroupStore` 作为 IPC 类型 |
 
-**关键**:MVP 阶段 `commands/persistence.rs` 已经用 `GroupStore`——v1 把它迁到 `models/workspace/types.rs`。
+**关键**:MVP 阶段 `commands/persistence.rs` 已经用 `GroupStore`——v4 把它迁到 `models/workspace/types.rs`。
 
 ## 7. 这个 domain 的"产品语言"术语
 
@@ -143,9 +143,9 @@ grep -rn 'use \(tokio\|tauri\)' src-tauri/src/models/workspace/
 # 必须为空
 ```
 
-## 11. 跟 v0 的差异
+## 11. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | domain 存在 | ❌ 无(group 在 `models/group.rs` 平铺) | ✅ 子目录预留位 |
 | group 归属 | `models/group.rs` 平铺(18 行) | `models/workspace/types.rs` |

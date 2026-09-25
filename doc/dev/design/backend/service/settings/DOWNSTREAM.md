@@ -43,7 +43,7 @@ services/settings/
 
 - settings 是 backend 中**唯一**允许直接 import `tauri_plugin_store` 的 service（log_config.json 是 settings 唯一直接写的 store）
 - 其他 service（如 persistence）应该统一通过 `services/persistence/api.rs` 间接调 store
-- v0 的 `commands/persistence.rs` + `commands/logging.rs` 都直调 store——v1 把 store 调用集中到 `services/persistence/` + `services/settings/` 两处
+- v3 的 `commands/persistence.rs` + `commands/logging.rs` 都直调 store——v4 把 store 调用集中到 `services/persistence/` + `services/settings/` 两处
 
 ## 4. tracing-subscriber
 
@@ -91,20 +91,20 @@ pub fn save_log_config(app: &AppHandle, config: &LogConfig) -> Result<(), String
 
 ## 7. 设计意图：settings 是「log config 的 service 边界」
 
-v0 的反模式：
+v3 的反模式：
 
 - `commands/logging.rs::set_log_config` 直接 `tracing_subscriber::reload::Handle::reload(new_filter)`——app 层直接动 reload handle
 - `lib.rs::run().setup(|app| { ... cleanup_old_logs(...) ... init_logging(...) ... app.manage(Arc::new(reload_handle)) ... })`——30 行内联块混了 logging + binary output channel
 
-v1 的边界：
+v4 的边界：
 
 - settings api 提供 `apply_log_config(handle, &config)` 包装 reload——app 不直接动 handle
 - settings api 提供 `init_logging_reload_handle(&log_dir, &config)` 工厂——app/shell 不直接调 logging_setup
 - reload handle 的生命周期管理集中在 settings domain
 
-## 8. v0 → v1 跨调用迁移
+## 8. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `lib.rs::run().setup(\|app\| { ... init_logging + cleanup_old_logs ... })` | `app/shell/api.rs::initialize(app)` 调 `settings_api::load_log_config` + `crate::logging_setup::cleanup_old_logs` + `settings_api::init_logging_reload_handle` |
 | `commands/logging.rs::set_log_config` 内联 `handle.reload(new_filter)` | `app/settings/commands/logging/config.rs::set_log_config` 调 `settings_api::apply_log_config(state.inner(), &config)` |

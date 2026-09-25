@@ -131,18 +131,18 @@ infrastructure/ssh/
 
 ## 11. 设计意图:ssh 是「SSH 协议的物理封装」
 
-v0 反模式：`infrastructure/ssh.rs` 单文件 700+ 行，所有 SSH 相关逻辑混在一起——SshBackend trait + SshBackendImpl + SshSession + upload_file + run_command + from 转换。
+v3 反模式：`infrastructure/ssh.rs` 单文件 700+ 行，所有 SSH 相关逻辑混在一起——SshBackend trait + SshBackendImpl + SshSession + upload_file + run_command + from 转换。
 
-v1 边界：
+v4 边界：
 
 - ssh 子模块是**单一外部资源（SSH 协议）的物理封装**——`russh` crate 调用都集中在这里
 - service 层通过 `SshBackend` trait 抽象——可 mock 替换
-- SshSession 也通过 `SshSessionTrait` trait 抽象——v0 具体类型持有改为 v1 trait object
+- SshSession 也通过 `SshSessionTrait` trait 抽象——v3 具体类型持有改为 v4 trait object
 - error 集中在 `errors.rs`——typed error 模式
 
-## 12. v0 → v1 跨调用迁移
+## 12. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `infrastructure/ssh.rs::SshBackend trait` | `infrastructure/ssh/traits.rs` |
 | `infrastructure/ssh.rs::SshBackendImpl` | `infrastructure/ssh/backend.rs` |

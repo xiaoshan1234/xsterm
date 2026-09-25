@@ -85,16 +85,16 @@ models/cross_cutting/     ← 最底层(被所有 domain 引用)
 
 xsterm MVP 的 workspace 状态完全在 frontend store(用 `model/workspace/rules/paneTree.ts` 实现 split / close / resize 算法)。
 
-v1 backend `models/workspace/rules.rs` 是**预留位**——等"多窗口同步"或"server-side persistence"出现时,把 frontend 的 paneTree 算法**镜像**到 backend(Rust)。
+v4 backend `models/workspace/rules.rs` 是**预留位**——等"多窗口同步"或"server-side persistence"出现时,把 frontend 的 paneTree 算法**镜像**到 backend(Rust)。
 
 **为什么镜像**:
 - 前端 paneTree 是 frontend-only(被 ui/workspace 渲染)
 - 后端 paneTree 可能是 multi-window sync 的 source of truth
 - 两边算法必须**严格一致**——否则跨窗口同步会出 divergence
 
-## 9. v0 → v1 跨调用迁移
+## 9. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `models/group.rs::SessionGroup / GroupStore` | `models/workspace/types.rs::SessionGroup / GroupStore` |
 | 所有 `use crate::models::group::*` | `use crate::models::workspace::types::*` |

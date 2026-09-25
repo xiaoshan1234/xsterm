@@ -91,9 +91,9 @@ xsterm backend 的 `models/` 分为 5 业务 + 1 横切(共 6 domain)。
 - 3 种 backend(local / ssh / tmux)都用同一 struct
 - 是 backend session 跨 IPC 边界的元数据
 
-## 7. v0 → v1 跨调用迁移
+## 7. v3 → v4 跨调用迁移
 
-| v0 位置 | v1 改法 |
+| v3 位置 | v4 改法 |
 |---|---|
 | `models/capabilities.rs::CapabilityFlags`(整个文件) | `models/cross_cutting/types.rs::CapabilityFlags` |
 | `models/capabilities.rs::for_local() / for_ssh() / for_tmux()` | `models/cross_cutting/types.rs` 同名 |

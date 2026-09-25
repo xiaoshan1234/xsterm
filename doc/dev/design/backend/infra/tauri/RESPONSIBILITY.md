@@ -35,11 +35,11 @@ infrastructure/tauri/
 └── mock.rs             #[automock] MockAppBackend
 ```
 
-**v0 → v1 拆分映射**：
+**v3 → v4 拆分映射**：
 
-- v0 的 `infrastructure/app_backend.rs` → v1 的 `infrastructure/tauri/app_backend.rs`
-- v0 的 `infrastructure/binary_frame.rs` → v1 的 `infrastructure/tauri/binary_frame.rs`
-- v0 无 errors / mock 模块 → v1 新增
+- v3 的 `infrastructure/app_backend.rs` → v4 的 `infrastructure/tauri/app_backend.rs`
+- v3 的 `infrastructure/binary_frame.rs` → v4 的 `infrastructure/tauri/binary_frame.rs`
+- v3 无 errors / mock 模块 → v4 新增
 
 ## 4. 跟 frontend infra 的关系
 
@@ -107,7 +107,7 @@ pub trait AppBackend: Send + Sync {
 
 - `Clone` **不**是 super-trait bound——`dyn AppBackend` 才能 object-safe
 - 服务想"分享" backend 给后台 thread——用 `Arc<dyn AppBackend>` by value + `Arc::clone`
-- v0 注释明确警告了这一点（不可改）
+- v3 注释明确警告了这一点（不可改）
 
 ### 8.2 RealAppBackend 持有 session_output_channel
 
@@ -218,9 +218,9 @@ pub enum TauriError {
 }
 ```
 
-## 9. v0 → v1 拆分映射
+## 9. v3 → v4 拆分映射
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `infrastructure/app_backend.rs` | `infrastructure/tauri/app_backend.rs` | 移入 `infra/tauri/` 子模块 |
 | `infrastructure/binary_frame.rs` | `infrastructure/tauri/binary_frame.rs` | 移入 `infra/tauri/` 子模块 |
@@ -244,9 +244,9 @@ grep -rn 'use crate::infrastructure::\(pty\|ssh\|tmux\)' src-tauri/src/infrastru
 # 必须为空
 ```
 
-## 11. 跟 v0 的差异
+## 11. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | 文件位置 | `infrastructure/{app_backend,binary_frame}.rs` | `infrastructure/tauri/{app_backend,binary_frame,errors,mock}.rs` |
 | 错误处理 | inline / String | 独立 `TauriError`（thiserror derive） |

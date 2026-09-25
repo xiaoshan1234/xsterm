@@ -43,16 +43,16 @@ models/cross_cutting/
 └── constants.rs         (未来)文件大小上限 / 超时默认值
 ```
 
-## 5. v0 → v1 拆分映射
+## 5. v3 → v4 拆分映射
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `models/session.rs::SplitDirection` enum (line 222) | `models/cross_cutting/types.rs::SplitDirection` | 迁入 |
 | `models/session.rs::build_remote_image_path()` (line 1516) | `models/cross_cutting/helpers.rs::build_remote_image_path` | 迁入 |
 | `models/capabilities.rs::CapabilityFlags` | `models/cross_cutting/types.rs::CapabilityFlags` | 迁入(从独立文件迁入)|
 | `models/session.rs::SessionLoggingConfig` (line 564) | `models/cross_cutting/types.rs::SessionLoggingConfig` | 迁入 |
 
-**关键**:v0 的 `models/capabilities.rs` 整个文件迁入本 domain——capability flags 是横切关注点。
+**关键**:v3 的 `models/capabilities.rs` 整个文件迁入本 domain——capability flags 是横切关注点。
 
 ## 6. 跟其他 model domain 的关系
 
@@ -162,7 +162,7 @@ pub fn build_remote_image_path(filename: &str) -> Result<String, String> {
 }
 
 /// shell-quote 单一参数(用于 tmux probe 命令)
-/// (从 v0 services/tmux_session/controller/mod.rs::tmux_probe_quote 迁入)
+/// (从 v3 services/tmux_session/controller/mod.rs::tmux_probe_quote 迁入)
 pub fn tmux_probe_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
@@ -214,9 +214,9 @@ grep -rn 'use \(tokio\|tauri\)' src-tauri/src/models/cross_cutting/
 # 必须为空
 ```
 
-## 11. 跟 v0 的差异
+## 11. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | domain 存在 | ❌ 无(能力 / 工具散落) | ✅ 独立 `models/cross_cutting/` |
 | `CapabilityFlags` 位置 | `models/capabilities.rs`(独立文件) | `models/cross_cutting/types.rs` |

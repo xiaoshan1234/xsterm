@@ -37,7 +37,7 @@ services/persistence/
 
 - persistence 是 backend 中**唯一**允许直接 import `tauri_plugin_store` 的 service
 - MVP 例外：`services/settings/api.rs` 直调 store（log_config.json）——下个 PR 改
-- v0 的 `commands/persistence.rs` + `commands/logging.rs` + `commands/session.rs::create_tmux_session`（save_attached_tmux_servers_impl）都直调 store——v1 集中到 persistence
+- v3 的 `commands/persistence.rs` + `commands/logging.rs` + `commands/session.rs::create_tmux_session`（save_attached_tmux_servers_impl）都直调 store——v4 集中到 persistence
 
 ## 3. tauri
 
@@ -108,7 +108,7 @@ services/persistence/
 
 ## 9. 设计意图：persistence 是「backend 持久化的单一入口」
 
-v0 反模式：
+v3 反模式：
 
 - `commands/persistence.rs` 直调 store
 - `commands/logging.rs::set_log_config` 直调 store
@@ -116,23 +116,23 @@ v0 反模式：
 
 → **store 调用散在 4+ 文件**。任何持久化策略变更（如加 encryption）要改 4 处。
 
-v1 边界：
+v4 边界：
 
 - persistence api 是 backend 中**唯一**直接 import `tauri_plugin_store` 的地方
 - 其他 service / app 通过 `persistence_api::*` 调 store
 - typed wrapper 提供类型安全 + 集中序列化错误
 - generic JSON wrapper 提供灵活性（settings 等自定义 store）
 
-## 10. v0 → v1 跨调用迁移
+## 10. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `commands/persistence.rs::save_sessions` 直接 `app.store(...).set(...).save()` | `app/settings/commands/persistence/sessions.rs::save_sessions`（IPC handler）→ `services/persistence/sessions.rs::save_sessions_typed` → `services/persistence/api.rs::save_json_value` |
 | `commands/persistence.rs::save_attached_tmux_servers_impl`（pub(crate) helper）| 升级为 `services/persistence/attached_tmux.rs::save_attached_tmux_typed` 公开函数 |
 | `commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl` | `app/terminal/commands/tmux/session.rs::create_tmux_session` 调 `services/persistence/attached_tmux.rs::save_attached_tmux_typed` |
 | `commands/logging.rs::set_log_config` 直调 store | `app/settings/commands/logging/config.rs::set_log_config`（IPC handler）→ `services/settings/api.rs::save_log_config` → `services/persistence/api.rs::save_json_value`（下个 PR）|
 | `commands/logging.rs::get_log_config` 直调 store | 同上 |
-| v0 散在 4+ 文件的 store 调用 | 集中在 `services/persistence/api.rs` + typed wrapper |
+| v3 散在 4+ 文件的 store 调用 | 集中在 `services/persistence/api.rs` + typed wrapper |
 
 ## 11. 不允许的依赖
 

@@ -36,7 +36,7 @@ infrastructure/pty/
 └── errors.rs         PtyError（thiserror derive）
 ```
 
-**v0 → v1 拆分映射**：v0 的 `infrastructure/pty.rs`（PTY 全部逻辑）单文件 ~150 行 → v1 拆为 5 文件，按 trait / impl / struct / mock / errors 分类。
+**v3 → v4 拆分映射**：v3 的 `infrastructure/pty.rs`（PTY 全部逻辑）单文件 ~150 行 → v4 拆为 5 文件，按 trait / impl / struct / mock / errors 分类。
 
 ## 4. 跟 frontend infra 的关系
 
@@ -149,9 +149,9 @@ pub enum PtyError {
 
 **对比**：`SessionError` / `TmuxError` / `SshError` / `PtyError` 各自的错误变体——infra 层先按外部资源划分错误。service 层可以聚合多个 infra 错误到自己的 typed error。
 
-## 9. v0 → v1 拆分映射
+## 9. v3 → v4 拆分映射
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `infrastructure/pty.rs::PtySystem trait` | `infrastructure/pty/traits.rs` | 抽到独立文件 |
 | `infrastructure/pty.rs::NativePtySystem` | `infrastructure/pty/native.rs` | 抽到独立文件 |
@@ -179,9 +179,9 @@ grep -rn 'tokio::main' src-tauri/src/infrastructure/pty/
 # 必须为空（tokio::main 只在 lib.rs / main.rs）
 ```
 
-## 11. 跟 v0 的差异
+## 11. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | 文件数 | 1 文件 ~150 行 | 5 文件（traits / native / pair / mock / errors） |
 | 错误处理 | inline enum | 独立 `PtyError`（thiserror derive） |

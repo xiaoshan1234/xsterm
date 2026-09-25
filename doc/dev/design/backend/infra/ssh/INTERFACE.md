@@ -61,8 +61,8 @@ pub trait SshSessionTrait: Send + Sync {
 
 **关键**：
 
-- v1 通过 `Box<dyn SshSessionTrait>` 持有——service 层统一通过 trait 调度
-- v0 是具体 `Box<SshSession>` 直接持有——v1 抽象化
+- v4 通过 `Box<dyn SshSessionTrait>` 持有——service 层统一通过 trait 调度
+- v3 是具体 `Box<SshSession>` 直接持有——v4 抽象化
 - `read` 是非阻塞——service 层 wrap 异步循环（`tokio::select!`）
 
 ### 2.3 Public functions

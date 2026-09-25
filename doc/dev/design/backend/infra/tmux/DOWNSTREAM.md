@@ -115,18 +115,18 @@ infrastructure/tmux/
 
 ## 11. 设计意图:tmux 是「tmux -CC 子进程的物理封装」
 
-v0 反模式：`infrastructure/tmux/` 只有 2 文件，错误处理隐式。
+v3 反模式：`infrastructure/tmux/` 只有 2 文件，错误处理隐式。
 
-v1 边界：
+v4 边界：
 
 - tmux 子模块是**单一外部资源（tmux -CC 子进程）的物理封装**——`tokio::process::Command` + SSH exec channel 调用都集中在这里
 - service 层通过 `TmuxBackend` trait 抽象——可 mock 替换
 - error 集中在 `errors.rs`——`TmuxInfraError` 与 `services::tmux::TmuxError` 区分
 - 与 `infra/ssh` 的依赖边界清晰（trait only）
 
-## 12. v0 → v1 跨调用迁移
+## 12. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `infrastructure/tmux/mod.rs` | `infrastructure/tmux/mod.rs`（不动） |
 | `infrastructure/tmux/backend.rs::TmuxBackend trait` | `infrastructure/tmux/backend.rs`（不动） |

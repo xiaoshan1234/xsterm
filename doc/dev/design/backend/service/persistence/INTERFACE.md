@@ -116,7 +116,7 @@ impl From<PersistenceError> for String {
 ### 3.1 settings → persistence（log_config.json IO）
 
 ```rust
-// services/settings/api.rs（v1.1——下个 PR 改造）
+// services/settings/api.rs（v4.1——下个 PR 改造）
 use crate::services::persistence as persistence_api;
 
 pub fn load_log_config(app: &AppHandle) -> Result<LogConfig, String> {

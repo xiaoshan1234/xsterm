@@ -48,7 +48,7 @@ modules/shell/
 
 ## 6. 设计意图：shell 是「瘦编排者」
 
-v0 的 `lib.rs::run()` 内联块 30 行混了 logging + binary frame + panic hook 注释。v1 抽到 shell module 后的好处：
+v3 的 `lib.rs::run()` 内联块 30 行混了 logging + binary frame + panic hook 注释。v4 抽到 shell module 后的好处：
 
 - **可单测**：`initialize(mock_app)` 可以被未来的集成测试覆盖
 - **可演进**：加新的启动步骤（如：预热 SessionManager、emit `ready` 事件）只改 `initialize()` 一个函数

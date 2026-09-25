@@ -108,16 +108,16 @@ models/cross_cutting/     ← 最底层
 
 ## 10. 设计意图:settings model 是「settings 字段的纯数据镜像」
 
-v0 反模式:`models/session.rs` 内含 5 个 settings 字段类型——1670 行单文件。
+v3 反模式:`models/session.rs` 内含 5 个 settings 字段类型——1670 行单文件。
 
-v1 边界:
+v4 边界:
 - settings model 是**独立横切 domain**——与 frontend `model/settings/` 镜像
 - saved config 是**版本化的**(`SavedSessionConfigV1`)——支持未来 schema migration
 - `LogConfig` 暂留 `crate::logging_setup`(logging_setup 是核心依赖)——未来 settings 扩展时再迁
 
-## 11. v0 → v1 跨调用迁移
+## 11. v3 → v4 跨调用迁移
 
-| v0 位置 | v1 改法 |
+| v3 位置 | v4 改法 |
 |---|---|
 | `models/session.rs::SizingMode`(line 590)| `models/settings/types.rs::SizingMode` |
 | `models/session.rs::DisplayConfig`(line 600)| `models/settings/types.rs::DisplayConfig` |

@@ -62,7 +62,7 @@ pub fn apply_log_config(
 ### 3.1 app/shell → settings（启动序列）
 
 ```rust
-// app/shell/api.rs（v1）
+// app/shell/api.rs（v4）
 use crate::services::settings as settings_api;
 use crate::logging_setup::cleanup_old_logs;
 
@@ -161,7 +161,7 @@ pub fn apply_log_config(
 
 `log_message` 是 frontend → backend 的 fire-and-forget IPC——把前端日志转发到 `tracing::*!`。它**逻辑上**属于 logging 横切关注点，不是 settings tab 流程。
 
-**v1 决策**：保留在 `app/settings/commands/logging/message.rs`（因为 app/settings 已经有 logging 子目录）——但 **service 层不暴露**。
+**v4 决策**：保留在 `app/settings/commands/logging/message.rs`（因为 app/settings 已经有 logging 子目录）——但 **service 层不暴露**。
 
 未来如果需要"log_message 写入自己的 ring buffer 供 frontend 订阅"——再把 `log_message` 的处理逻辑下沉到 service。
 

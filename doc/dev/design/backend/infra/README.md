@@ -1,4 +1,4 @@
-# Backend · Infra 层（v1：按外部资源切分）
+# Backend · Infra 层（v4：按外部资源切分）
 
 > **位置**：`src-tauri/src/infrastructure/`（目录名沿用 Rust 习惯）
 > **关注点**：物理适配（PTY 子进程 / SSH 协议 / tmux 协议 / Tauri runtime）
@@ -7,16 +7,16 @@
 
 ## 0. 为什么重写这一层
 
-v0 把 `infrastructure/` 当作"几个 trait 文件"的混合包：`pty.rs / ssh.rs / app_backend.rs / session_backend.rs / binary_frame.rs / tmux/`。问题：
+v3 把 `infrastructure/` 当作"几个 trait 文件"的混合包：`pty.rs / ssh.rs / app_backend.rs / session_backend.rs / binary_frame.rs / tmux/`。问题：
 
 - **混了"外部资源"与"抽象 trait"**：`session_backend.rs` 是 3 种 backend 的**抽象接口**，不该放在 infra（它是 service 关注）
 - **`binary_frame.rs` 归属混乱**：服务于 Tauri event 推送的 binary payload，**不**独立成 infra 顶层模块
 - **`app_backend.rs` 是 Tauri 适配**：但放在 `infrastructure/` 顶层，命名上不清楚它属于 Tauri runtime
 - **tmux 子目录只有 1 文件**：`tmux/{mod.rs, backend.rs}` 与平铺的 `pty.rs` 不一致
 
-v1（本文档）把 `infrastructure/` 重构为 **4 子模块按外部资源切分**，与 frontend `infra/` 镜像：
+v4（本文档）把 `infrastructure/` 重构为 **4 子模块按外部资源切分**，与 frontend `infra/` 镜像：
 
-| v0 现状 | v1 落点 | 依据 |
+| v3 现状 | v4 落点 | 依据 |
 |---|---|---|
 | `infrastructure/pty.rs` | `infrastructure/pty/` | 外部资源：OS PTY 子进程 |
 | `infrastructure/ssh.rs` | `infrastructure/ssh/` | 外部资源：SSH 协议 |
@@ -92,13 +92,13 @@ src-tauri/src/infrastructure/
 
 ### 4.1 为什么按"外部资源"切,不按"trait 类型"切
 
-v0 反模式：`infrastructure/{pty,ssh,tmux,app_backend,session_backend,binary_frame}.rs` 6 个文件混在一起。问题是：
+v3 反模式：`infrastructure/{pty,ssh,tmux,app_backend,session_backend,binary_frame}.rs` 6 个文件混在一起。问题是：
 
 - **抽象 trait 与实现混在一起**：`app_backend.rs` / `session_backend.rs` 是抽象 trait，但和其他 trait 实现文件平铺
 - **找不到外部资源的对应模块**：`tmux/` 是子目录，`ssh.rs / pty.rs` 是顶层文件——视觉上不一致
 - **`session_backend.rs` 不属于 infra**——它是 3 种 backend 的抽象接口，是 service 关注
 
-v1 边界：
+v4 边界：
 
 - **4 子模块按"外部资源"切**：`pty / ssh / tmux / tauri`——每个对应一个外部系统
 - **每个子模块内**：`traits.rs / native.rs / mock.rs / errors.rs`——清晰的"trait + impl + mock + error"4 件套
@@ -153,7 +153,7 @@ backend 等价物是 `crate::logging_setup`（在 `src-tauri/src/logging_setup.r
 
 - `logging_setup` 是跨多个 service 的工具（services/settings + services/session_log 都用）
 - 它不是"对单一外部资源的接口"——而是跨层工具
-- v1 backend 设计保持现状：`logging_setup` 在 `src-tauri/src/` 顶层（与 `error.rs / main.rs` 同级）
+- v4 backend 设计保持现状：`logging_setup` 在 `src-tauri/src/` 顶层（与 `error.rs / main.rs` 同级）
 
 ## 5. 关键约束
 
@@ -164,7 +164,7 @@ backend 等价物是 `crate::logging_setup`（在 `src-tauri/src/logging_setup.r
 - `PtySystem`（在 `infra/pty/mock.rs`）
 - `SshBackend`（在 `infra/ssh/mock.rs`）
 - `TmuxBackend`（在 `infra/tmux/mock.rs`）
-- `AppBackend`（在 `infra/tauri/mock.rs`——v1 新增）
+- `AppBackend`（在 `infra/tauri/mock.rs`——v4 新增）
 
 ### 5.2 不做业务规则
 
@@ -221,9 +221,9 @@ grep -rn 'use crate::models::' src-tauri/src/infrastructure/ | grep -v '::types\
 # 必须为空（只允许读 types / accessor / helpers 的纯数据）
 ```
 
-## 8. 跟 v0 的核心差异
+## 8. 跟 v3 的核心差异
 
-| 维度 | v0 | v1（本文档）|
+| 维度 | v3 | v4（本文档）|
 |---|---|---|
 | 顶层结构 | 平铺 6 文件 + 1 子目录 | **4 子模块按外部资源切** |
 | `session_backend.rs` | 在 `infrastructure/` 顶层 | ❌ 迁出 → `services/session/backends/traits.rs` |
@@ -251,7 +251,7 @@ src-tauri/src/lib.rs::run()
                        └─► 外部 crate: portable-pty / russh / tokio / tauri
 ```
 
-## 10. 重要警告（继承 v0）
+## 10. 重要警告（继承 v3）
 
 - **`ssh.rs` 禁用了 host-key 校验**（AGENTS.md 已记录）。这是已知安全债，**禁止**在本层之外的位置重新打开或绕过
 - **`binary_frame.rs` 只服务于 Tauri Channel 推送 session-output 二进制帧**——非 SSH 专用。如果以后出现非 Tauri 场景的二进制 I/O，再讨论是否提到更通用的位置
@@ -259,7 +259,7 @@ src-tauri/src/lib.rs::run()
 
 ## 11. 文档地图
 
-- 顶层（本文）：设计契约 / 现状映射 / 依赖方向 / v0→v1 diff
+- 顶层（本文）：设计契约 / 现状映射 / 依赖方向 / v3→v4 diff
 - 4 子模块子文档：每个子模块 3 份（RESPONSIBILITY / INTERFACE / DOWNSTREAM）
 - 镜像验证：每份子模块 README 的 §3 列 frontend 对应子模块的同构说明
 

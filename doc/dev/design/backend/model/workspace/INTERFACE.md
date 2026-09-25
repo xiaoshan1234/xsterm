@@ -129,7 +129,7 @@ use crate::models::cross_cutting::types::SplitDirection;  // 预留——目标�
 ## 4. 接缝契约(MVP)
 
 ```rust
-// commands/persistence.rs(MVP 现状,v1 改为 app/settings/commands/persistence/groups.rs)
+// commands/persistence.rs(MVP 现状,v4 改为 app/settings/commands/persistence/groups.rs)
 use crate::models::workspace::GroupStore;
 
 #[tauri::command]
@@ -143,7 +143,7 @@ pub async fn load_groups(app: AppHandle) -> Result<GroupStore, String> {
 }
 ```
 
-**关键**:MVP 阶段 `commands/persistence.rs` 已经用 `GroupStore`——v1 把它迁到 `models/workspace/types.rs::GroupStore`。
+**关键**:MVP 阶段 `commands/persistence.rs` 已经用 `GroupStore`——v4 把它迁到 `models/workspace/types.rs::GroupStore`。
 
 ## 5. 强制约束(可机械校验)
 

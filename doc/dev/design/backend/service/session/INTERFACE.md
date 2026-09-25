@@ -290,7 +290,7 @@ impl SessionBackend for TmuxPaneHandle {
 }
 ```
 
-**关键**：bug 0009 的根因（`create_tmux` 直读 `window_bindings` HashMap）在 v1 通过 trait 边界彻底避免——session 只调 controller 的公开方法。
+**关键**：bug 0009 的根因（`create_tmux` 直读 `window_bindings` HashMap）在 v4 通过 trait 边界彻底避免——session 只调 controller 的公开方法。
 
 ### 5.2 session → infra（trait object）
 
@@ -323,7 +323,7 @@ impl SessionManager {
 ## 6. 接缝契约
 
 ```rust
-// app/session/api.rs（v1 backend app 设计）
+// app/session/api.rs（v4 backend app 设计）
 use crate::services::session::SessionManager;
 use tauri::State;
 
@@ -364,7 +364,7 @@ pub async fn create_local_session(
 
 `SessionManager` 的方法返回 `Result<T, String>`（不是 typed error）——理由：
 
-- v0 现状：`String` 错误简单直接，前端能显示
+- v3 现状：`String` 错误简单直接，前端能显示
 - 未来迁移：`SessionError`（thiserror derive）+ `From<SessionError> for String` 在 `service/session/mod.rs` 根级
 - 不引入 `tauri::Error`（避免 service 依赖 tauri）
 

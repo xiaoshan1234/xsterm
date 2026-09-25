@@ -105,18 +105,18 @@ infrastructure/tauri/
 
 ## 10. 设计意图:tauri 是「Tauri runtime 的物理封装」
 
-v0 反模式：`infrastructure/{app_backend,binary_frame}.rs` 2 文件混在顶层，命名上不归类。
+v3 反模式：`infrastructure/{app_backend,binary_frame}.rs` 2 文件混在顶层，命名上不归类。
 
-v1 边界：
+v4 边界：
 
 - tauri 子模块是**单一外部资源（Tauri runtime）的物理封装**——所有 `tauri` crate 调用集中
 - service 层通过 `AppBackend` trait 抽象——可 mock 替换
 - 与 frontend `infra/tauri` 镜像（backend 提供 emit / frontend 提供 invoke / listen）
 - BinaryFrame 是独立 wire format——不依赖其他文件
 
-## 11. v0 → v1 跨调用迁移
+## 11. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `infrastructure/app_backend.rs` | `infrastructure/tauri/app_backend.rs` |
 | `infrastructure/binary_frame.rs` | `infrastructure/tauri/binary_frame.rs` |

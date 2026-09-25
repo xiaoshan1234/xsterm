@@ -69,7 +69,7 @@ terminal api **唯一直接调用**的 service。调用面：
 
 ## 5. services/tmux_session（间接）
 
-terminal **不**直接调用 `TmuxController` / `TmuxBridge` / `TmuxProtocol`——通过 `SessionManager` 的 method 间接使用。这是 v1 的**核心边界规则**：
+terminal **不**直接调用 `TmuxController` / `TmuxBridge` / `TmuxProtocol`——通过 `SessionManager` 的 method 间接使用。这是 v4 的**核心边界规则**：
 
 | SessionManager method | 内部使用的 tmux_session 符号 |
 |---|---|
@@ -79,7 +79,7 @@ terminal **不**直接调用 `TmuxController` / `TmuxBridge` / `TmuxProtocol`—
 | `list_attached_tmux_servers` | `TmuxController::session_name` |
 | `detach_tmux_controller` | `TmuxController::detach` + unbind |
 
-**为什么**：v0 在 bug 0009 时 `SessionManager::create_tmux` 直接读 `TmuxController` 的 `window_bindings` HashMap，导致 stale data。v1 通过 SessionManager method 隔离 terminal 模块与 tmux controller 的耦合——terminal 只关心"业务事件"，不关心 controller 内部字段。
+**为什么**：v3 在 bug 0009 时 `SessionManager::create_tmux` 直接读 `TmuxController` 的 `window_bindings` HashMap，导致 stale data。v4 通过 SessionManager method 隔离 terminal 模块与 tmux controller 的耦合——terminal 只关心"业务事件"，不关心 controller 内部字段。
 
 ## 6. infrastructure
 
@@ -107,21 +107,21 @@ terminal 模块直接读以下 models 类型：
 
 ## 8. 设计意图：terminal 是「tmux -CC 系统的 IPC facade」
 
-v0 的反模式：`commands/session.rs::create_tmux_session` 直接调 `state.create_tmux(...)` 同时内联调 `commands::persistence::save_attached_tmux_servers_impl(&app, &servers)`——一个 IPC handler 跨越：
+v3 的反模式：`commands/session.rs::create_tmux_session` 直接调 `state.create_tmux(...)` 同时内联调 `commands::persistence::save_attached_tmux_servers_impl(&app, &servers)`——一个 IPC handler 跨越：
 
 1. service 层（state.create_tmux）
 2. 跨 module persistence（save_attached_tmux_servers_impl）
 3. 跨 module backend 类型（RealAppBackend）
 
-v1 的边界：
+v4 的边界：
 
 - terminal api 是**纯 function 集合**（pub fn）——可被同 module commands 调用，可被其他 module 通过 api 边界调用
 - `#[tauri::command]` wrapper 只做 3 件事：注入 State / 构造 backend / 调 api + 触发 settings 持久化
 - 跨 module 调用只通过 `app/<other>/api.rs`
 
-## 9. v0 → v1 跨 module 调用的迁移
+## 9. v3 → v4 跨 module 调用的迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl(&app, &servers)` | `app/terminal/commands/tmux/session.rs::create_tmux_session` 内调 `app/settings/api::save_attached_tmux_servers(&app, &servers)` |
 | `commands/session.rs::attach_tmux_session` 同样内联 | 同上 |

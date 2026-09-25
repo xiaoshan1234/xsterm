@@ -35,13 +35,13 @@ terminal module 编排 backend **tmux -CC 子系统的全部 IPC**——15 个 `
 5. **terminal preferences** (0)
    - 当前 MVP **没有 IPC**——preferences 完全在 frontend store
 
-**合计**：15 个 `#[tauri::command]`——v0 全部在 `commands/session.rs` 内的「tmux 系列」。
+**合计**：15 个 `#[tauri::command]`——v3 全部在 `commands/session.rs` 内的「tmux 系列」。
 
 ## 2. 这个 module **不**负责什么
 
 - **不渲染 xterm** —— UI 渲染归 frontend `ui/terminal/`
 - **不管理 pane 树结构** —— pane 树归 `app/workspace/`（未来激活）
-- **不实现 tmux 协议** —— tmux -CC 协议在 `services::tmux_session/`（已在 v0 完成）
+- **不实现 tmux 协议** —— tmux -CC 协议在 `services::tmux_session/`（已在 v3 完成）
 - **不管理普通 PTY/SSH session** —— 那是 `app/session/` 的事
 - **不持久化 settings** —— 持久化归 `app/settings/`（attached_tmux.json 走 settings）
 
@@ -114,16 +114,16 @@ backend 不需要：
 
 如果未来要加 "persisted terminal preferences reload on startup"——通过 `app/settings/api::load_terminal_preferences`（未来），不在本 module 加 IPC。
 
-## 8. v0 → v1 迁移说明
+## 8. v3 → v4 迁移说明
 
-v0 的 15 个 tmux 命令全部在 `commands/session.rs` 内。v1 全部迁到 `app/terminal/commands/tmux/`：
+v3 的 15 个 tmux 命令全部在 `commands/session.rs` 内。v4 全部迁到 `app/terminal/commands/tmux/`：
 
-| 命令 | v0 归属 | v1 归属 | 子目录 |
+| 命令 | v3 归属 | v4 归属 | 子目录 |
 |---|---|---|---|
 | `create_tmux_session` | `commands/session.rs:222` | `app/terminal/commands/tmux/session.rs` | session |
 | `attach_tmux_session` | `commands/session.rs:381` | `app/terminal/commands/tmux/session.rs` | session |
 | `probe_tmux_session_exists` | （在 SessionManager） | `app/terminal/commands/tmux/session.rs` | session |
-| `auto_attach_tmux_servers` | `commands/session.rs:476`（v0 单独 file） | `app/terminal/commands/tmux/session.rs` | session |
+| `auto_attach_tmux_servers` | `commands/session.rs:476`（v3 单独 file） | `app/terminal/commands/tmux/session.rs` | session |
 | `create_tmux_pane` | `commands/session.rs:323` | `app/terminal/commands/tmux/pane.rs` | pane |
 | `kill_tmux_pane` | `commands/session.rs:357` | `app/terminal/commands/tmux/pane.rs` | pane |
 | `resize_tmux_pane` | `commands/session.rs:145` | `app/terminal/commands/tmux/pane.rs` | pane |
@@ -136,11 +136,11 @@ v0 的 15 个 tmux 命令全部在 `commands/session.rs` 内。v1 全部迁到 `
 | `kill_server_via_controller` | `commands/session.rs:684` | `app/terminal/commands/tmux/server.rs` | server |
 | `unmark_attached_tmux` | `commands/session.rs:725` | `app/terminal/commands/tmux/server.rs` | server |
 
-**关键**：v0 把这 14 个 tmux 命令塞进 `commands/session.rs` 是反产品功能切分——session module 看起来"什么 session 都有"，实际只是因为 SessionManager 类名带"session"。v1 按"产品功能是 tmux -CC 子系统"切。
+**关键**：v3 把这 14 个 tmux 命令塞进 `commands/session.rs` 是反产品功能切分——session module 看起来"什么 session 都有"，实际只是因为 SessionManager 类名带"session"。v4 按"产品功能是 tmux -CC 子系统"切。
 
-## 9. 跟 v0 的差异
+## 9. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | tmux 命令数 | 15 个全在 `commands/session.rs` | 15 个全在 `app/terminal/commands/tmux/` |
 | 模块归属 | `commands/session` | `app/terminal` |

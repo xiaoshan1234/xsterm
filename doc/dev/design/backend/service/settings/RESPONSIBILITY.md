@@ -111,24 +111,24 @@ reload handle 通过 Tauri `State` 注入到 `set_log_config` 命令——settin
 - 理由：handle 的生命周期由 Tauri runtime 管理（跟 app 同生命周期）
 - settings 只提供 `init_logging_reload_handle` 工厂函数 + `apply_log_config` 应用函数
 
-## 8. v0 → v1 迁移说明
+## 8. v3 → v4 迁移说明
 
-| v0 位置 | v1 位置 | 改动 |
+| v3 位置 | v4 位置 | 改动 |
 |---|---|---|
 | `commands/logging.rs::log_message / get_log_config / set_log_config / get_log_dir`（IPC handler）| 拆分为：service `services/settings/log_config.rs`（data + apply）+ app `app/settings/commands/logging/config.rs`（IPC handler）+ `app/settings/commands/logging/message.rs`（log_message） |
 | `commands/logging.rs::set_log_config` 内联 reload handle 操作 | 抽到 `services/settings/api.rs::apply_log_config` |
 | `crate::logging_setup.rs`（平铺）| 内部不动，仍是 `crate::logging_setup`（infra-level 工具） |
-| `app.manage(Arc::new(reload_handle))` 注入（v0 在 lib.rs 内联） | 移到 `app/shell/api.rs::initialize` |
+| `app.manage(Arc::new(reload_handle))` 注入（v3 在 lib.rs 内联） | 移到 `app/shell/api.rs::initialize` |
 
 **关键变化**：
 
-- v0 的 `commands/logging.rs` IPC handler 拆为 service 层（数据/逻辑）+ app 层（IPC）
-- reload handle 的创建由 `app/shell/api.rs::initialize` 编排（v0 在 lib.rs 内联）
+- v3 的 `commands/logging.rs` IPC handler 拆为 service 层（数据/逻辑）+ app 层（IPC）
+- reload handle 的创建由 `app/shell/api.rs::initialize` 编排（v3 在 lib.rs 内联）
 - reload handle 的应用（`set_log_config`）由 `services/settings/api.rs::apply_log_config` 提供——app 层调用
 
-## 9. 跟 v0 的差异
+## 9. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | settings domain | ❌ 不存在（log 在 `commands/logging.rs`，reload handle 在 `lib.rs`）| ✅ 独立 domain `services/settings/` |
 | reload handle 位置 | `lib.rs` 内联 + `commands/logging.rs` 直 reload | `app/shell/api.rs::initialize` 创建 + `services/settings/api.rs::apply_log_config` 应用 |

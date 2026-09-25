@@ -34,9 +34,9 @@ models/tmux/
 └── errors.rs            TmuxConfigError(预留——MVP 不用)
 ```
 
-## 4. v0 → v1 拆分映射
+## 4. v3 → v4 拆分映射
 
-| v0 位置(在 models/session.rs) | v1 位置 | 改动 |
+| v3 位置(在 models/session.rs) | v4 位置 | 改动 |
 |---|---|---|
 | `AttachedTmuxServer` (line 258) | `models/tmux/types.rs` | 迁入 |
 | `TmuxCcConfig` (line 291) | `models/tmux/types.rs` | 迁入 |
@@ -46,7 +46,7 @@ models/tmux/
 | `TmuxPaneInit` (line 513) | `models/tmux/types.rs` | 迁入 |
 | `TmuxControlWindowInit` (line 532) | `models/tmux/types.rs` | 迁入 |
 
-**关键**:v0 的 `models/session.rs` 1670 行中,有 8 个 tmux 专属类型 + 1 个 helper 函数——v1 全部迁到 `models/tmux/`。
+**关键**:v3 的 `models/session.rs` 1670 行中,有 8 个 tmux 专属类型 + 1 个 helper 函数——v4 全部迁到 `models/tmux/`。
 
 ## 5. 跟其他 model domain 的关系
 
@@ -123,7 +123,7 @@ pub struct TmuxSessionInit {
 }
 ```
 
-**关键**:v1 的 IA(Initial-state Architecture)——等待 dispatch task 处理 BOTH `list-windows` AND `list-panes` 后,组装完整初始状态一次返回。前端不需要等异步事件即可渲染 workspace。
+**关键**:v4 的 IA(Initial-state Architecture)——等待 dispatch task 处理 BOTH `list-windows` AND `list-panes` 后,组装完整初始状态一次返回。前端不需要等异步事件即可渲染 workspace。
 
 ### 8.3 tmux_pane_info 是 pure helper
 
@@ -165,9 +165,9 @@ pub fn tmux_pane_info(
 
 ### 8.4 bug 0009 防御:binding 数据走 model,不走 controller 字段
 
-v0 的 bug 0009 根因:`SessionManager::create_tmux` 直接读 `TmuxController.window_bindings` HashMap 找 tmux window id。
+v3 的 bug 0009 根因:`SessionManager::create_tmux` 直接读 `TmuxController.window_bindings` HashMap 找 tmux window id。
 
-v1 的防御:
+v4 的防御:
 - `TmuxController::tmux_window_id_for_pane(&pane_id)` 是 controller 公开方法(见 `services/tmux/INTERFACE.md` §2.2)
 - 返回类型是 `Option<String>`(纯数据)
 - 调用方在 `services/session/manager.rs::create_tmux` 通过公开方法获取,不读字段
@@ -188,9 +188,9 @@ grep -rn 'use crate::models::session::' src-tauri/src/models/tmux/ | grep -v 'ty
 # 必须为空
 ```
 
-## 10. 跟 v0 的差异
+## 10. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | tmux 类型位置 | 内嵌在 `models/session.rs`(8 个类型 + 1 个 helper) | 独立 `models/tmux/` domain |
 | `tmux_pane_info()` 位置 | `models/session.rs::tmux_pane_info` | `models/tmux/accessor.rs::tmux_pane_info` |

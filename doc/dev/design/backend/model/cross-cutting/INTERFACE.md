@@ -144,7 +144,7 @@ pub fn tmux_probe_quote(s: &str) -> String {
 }
 
 /// (预留) 解析本地命令字符串(quote / escape / env var)
-/// 从 v0 services/local_session/resolution.rs 迁入(目标态)
+/// 从 v3 services/local_session/resolution.rs 迁入(目标态)
 pub fn parse_shell_command(command: &str) -> Vec<String> {
     // stub: 简化实现
     command.split_whitespace().map(String::from).collect()

@@ -240,4 +240,4 @@ export async function setLogConfig(config: LogConfig) {
 - 让前端 console.log 能落到 backend rolling log（用户报告 bug 时一并打包）
 - 让 frontend panic / error 能进入 tracing 流
 
-但它的**业务归属**是 logging 不是 settings tab——所以 v1 仍然把它放在 `app/settings/commands/logging/`，只是接受"logging 是 settings 的子关注点"这个设计折衷（更好的归类是 `infra/logger` 的 IPC facade，但 MVP 没有该 module）。
+但它的**业务归属**是 logging 不是 settings tab——所以 v4 仍然把它放在 `app/settings/commands/logging/`，只是接受"logging 是 settings 的子关注点"这个设计折衷（更好的归类是 `infra/logger` 的 IPC facade，但 MVP 没有该 module）。

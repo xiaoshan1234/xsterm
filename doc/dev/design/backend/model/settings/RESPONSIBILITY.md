@@ -14,7 +14,7 @@ settings model 定义 **backend 侧的所有 settings 字段的纯类型**。
 1. **LogConfig 类型**——`{ log_level, max_log_files, max_file_size }`(backend settings 唯一持有)
 2. **Session 配置字段**——`SizingMode / DisplayConfig / EnvConfig`(嵌入 LocalSessionConfig / SSHSessionConfig)
 3. **持久化 saved config 类型**——`SavedSessionConfigV1 / SavedSessionConfigKind`(持久化形态,跨 IPC 边界)
-4. **构建 helper**——`build_remote_image_path(filename) -> String`(MVP 在 session.rs 内,v1 迁到 cross_cutting)
+4. **构建 helper**——`build_remote_image_path(filename) -> String`(MVP 在 session.rs 内,v4 迁到 cross_cutting)
 
 **MVP 范围**:backend settings 只管 LogConfig + saved config 类型。其他 settings 字段(theme / font / sidebar width / defaultShell 等)只在前端 store 维护。
 
@@ -37,9 +37,9 @@ models/settings/
 └── errors.rs            SettingsError(thiserror)
 ```
 
-## 4. v0 → v1 拆分映射
+## 4. v3 → v4 拆分映射
 
-| v0 位置(在 session.rs) | v1 位置 | 改动 |
+| v3 位置(在 session.rs) | v4 位置 | 改动 |
 |---|---|---|
 | `SizingMode` enum (line 590) | `models/settings/types.rs::SizingMode` | 迁入 |
 | `DisplayConfig` (line 600) | `models/settings/types.rs::DisplayConfig` | 迁入 |
@@ -47,9 +47,9 @@ models/settings/
 | `SavedSessionConfigV1` (line 710) | `models/settings/types.rs::SavedSessionConfigV1` | 迁入 |
 | `SavedSessionConfigKind` (line 729) | `models/settings/types.rs::SavedSessionConfigKind` | 迁入 |
 
-**关键**:v0 的 `models/session.rs` 内含 5 个 settings 专属类型——v1 全部迁到 `models/settings/`。
+**关键**:v3 的 `models/session.rs` 内含 5 个 settings 专属类型——v4 全部迁到 `models/settings/`。
 
-**LogConfig 当前在 `crate::logging_setup.rs`**(infra-level 工具)——v1 决策:**保留在 `logging_setup.rs`**(理由:`LogConfig` 是 logging_setup 的核心数据结构;settings domain re-export 它)。
+**LogConfig 当前在 `crate::logging_setup.rs`**(infra-level 工具)——v4 决策:**保留在 `logging_setup.rs`**(理由:`LogConfig` 是 logging_setup 的核心数据结构;settings domain re-export 它)。
 
 ## 5. 跟其他 model domain 的关系
 
@@ -73,7 +73,7 @@ models/settings/
 | `services/tmux` | 通过 `TmuxCcConfig.env_config` 字段引用 |
 | `app/session` | `SavedSessionConfigV1` 是 saved_session_config IPC 返回类型(未来)|
 | `app/settings` | `LogConfig` 是 `set_log_config / get_log_config` IPC 类型 |
-| `commands/persistence.rs` (MVP) | `GroupStore` 已经迁出(v0 group.rs → models/workspace/types.rs) |
+| `commands/persistence.rs` (MVP) | `GroupStore` 已经迁出(v3 group.rs → models/workspace/types.rs) |
 | `commands/logging.rs` (MVP) | `LogConfig` 是 IPC 类型 |
 | `crate::logging_setup` | `LogConfig` 类型当前定义在此(settings re-export) |
 
@@ -83,7 +83,7 @@ models/settings/
 - **SizingMode** —— session 布局模式:`Fit`(fit terminal size) / `Fixed`(固定行列)
 - **DisplayConfig** —— runtime display patch:`{ font_family, font_size, theme_id, ... }`
 - **EnvConfig** —— 环境变量配置:`{ vars: HashMap<String, String> }`
-- **SavedSessionConfigV1** —— 持久化的 saved config(包含 v1 版本号,支持未来 schema migration)
+- **SavedSessionConfigV1** —— 持久化的 saved config(包含 v4 版本号,支持未来 schema migration)
 - **SavedSessionConfigKind** —— saved config 的类型:`Local` / `Ssh` / `TmuxCc`
 
 ## 8. 关键设计约束
@@ -108,7 +108,7 @@ pub struct EnvConfig {
 }
 ```
 
-### 8.2 LogConfig 当前在 logging_setup.rs(v1 暂不迁)
+### 8.2 LogConfig 当前在 logging_setup.rs(v4 暂不迁)
 
 ```rust
 // src-tauri/src/logging_setup.rs(现状)
@@ -121,14 +121,14 @@ pub struct LogConfig {
 }
 ```
 
-**v1 决策**:`LogConfig` 暂留 `crate::logging_setup`——因为它是 logging_setup 的核心数据结构(rolling writer 初始化参数)。settings model 通过 `pub use crate::logging_setup::LogConfig;` re-export。
+**v4 决策**:`LogConfig` 暂留 `crate::logging_setup`——因为它是 logging_setup 的核心数据结构(rolling writer 初始化参数)。settings model 通过 `pub use crate::logging_setup::LogConfig;` re-export。
 
 **未来迁移路径**(如果 settings domain 扩展到全字段):
 1. 把 `LogConfig` 移到 `models/settings/types.rs`
 2. `crate::logging_setup` 只保留 `init_logging / cleanup_old_logs` 函数
 3. service/settings 通过 `models/settings::types::LogConfig` 引用
 
-### 8.3 saved config 支持 schema migration(v1 命名约定)
+### 8.3 saved config 支持 schema migration(v4 命名约定)
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,9 +191,9 @@ grep -rn 'use \(tokio\|tauri\)' src-tauri/src/models/settings/
 # 必须为空
 ```
 
-## 10. 跟 v0 的差异
+## 10. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | settings 类型位置 | 内嵌在 `models/session.rs`(5 个类型)| 独立 `models/settings/` domain |
 | LogConfig 位置 | `crate::logging_setup.rs` | 保留(未来可迁) |

@@ -14,9 +14,9 @@ services/session/
 ├── api.rs        ────►  models/session::* (SessionConfig / SessionInfo / ActiveSession)
 ├── api.rs        ────►  models/capabilities::* (CapabilityFlags)
 ├── backends/local.rs  ────►  services/local_session_impl::* (PTY 实现的 helper)
-│                          （拆自 v0 services/local_session/* 的 spawn/bytes/resolution）
+│                          （拆自 v3 services/local_session/* 的 spawn/bytes/resolution）
 ├── backends/ssh.rs    ────►  services/ssh_session_impl::* (russh 连接 helper)
-│                          （拆自 v0 services/ssh_session/*）
+│                          （拆自 v3 services/ssh_session/*）
 └── log.rs            ────►  crate::logging_setup (tracing appender)
 ```
 
@@ -45,7 +45,7 @@ session 通过 `TmuxController` 公开方法访问 tmux 功能：
 - session **不** import `services::tmux::protocol::*`（纯协议层，controller 封装）
 - session 通过 `Arc<TmuxController>` 持有引用——可调用所有公开方法
 
-**关键（bug 0009 防御）**：v0 的 `SessionManager::create_tmux` 直读 `TmuxController.window_bindings` HashMap——v1 严格禁止字段直读。所有跨 domain 访问走 trait / public method。
+**关键（bug 0009 防御）**：v3 的 `SessionManager::create_tmux` 直读 `TmuxController.window_bindings` HashMap——v4 严格禁止字段直读。所有跨 domain 访问走 trait / public method。
 
 ## 3. services/session/backends（自身子模块）
 
@@ -95,7 +95,7 @@ session 模块直接读以下 models 类型：
 | `LocalSessionConfig` / `SSHSessionConfig` / `TmuxCcConfig` | `models/session.rs` |
 | `SessionInfo` / `TmuxSessionInit` / `AttachedTmuxServer` / `SessionLoggingConfig` / `tmux_pane_info()` | `models/session.rs` |
 | `CapabilityFlags` | `models/capabilities.rs` |
-| `ActiveSession` enum（v0 在 models/session.rs 内） | 迁移到 `services/session/api.rs`（不属 models）|
+| `ActiveSession` enum（v3 在 models/session.rs 内） | 迁移到 `services/session/api.rs`（不属 models）|
 
 **约束**：models 是纯数据类型——session 可自由 import。但 `ActiveSession` 等"持有 backend"的容器类型迁到 services（不属于纯模型）。
 
@@ -107,16 +107,16 @@ session 模块直接读以下 models 类型：
 
 ## 9. 设计意图：session 是「backend 的状态机中心」
 
-v1 把"session 是核心 domain"具象化：
+v4 把"session 是核心 domain"具象化：
 
 - **3 种 backend 都是 session 的实现** —— local/ssh/tmux_pane 是 `SessionBackend` trait 的 3 种 impl
 - **tmux controller 不在 session domain 内** —— controller 由 `services/tmux/` 创建，session 通过 `Arc<TmuxController>` 持有
 - **session id 全局共享** —— 3 种 backend 都从 `SessionIdSource::allocate()` 取 id
 - **bug 0009 防御** —— 严格禁止字段直读，强制走 trait / public method
 
-## 10. v0 → v1 跨调用迁移
+## 10. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `services/session_manager.rs::create_tmux` 直读 `TmuxController.window_bindings` HashMap | `services/session/manager.rs::create_tmux` 调 `TmuxController::tmux_window_id_for_pane(&pane_id)` 公开方法 |
 | `services/session_manager.rs::attach_tmux` 同样直读 window_bindings | 同上 |

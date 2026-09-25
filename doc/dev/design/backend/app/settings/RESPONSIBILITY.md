@@ -27,15 +27,15 @@ settings module 编排 backend **所有持久化 + log 配置 IPC**——8 个 `
    - `set_log_config` —— 写 log config + 实时 reload `EnvFilter`
    - `get_log_dir` —— 返回 log 目录路径
 
-**合计**：10 个 `#[tauri::command]`——v0 在 `commands/persistence.rs` 6 个 + `commands/logging.rs` 4 个，v1 全部合并到 `app/settings/`。
+**合计**：10 个 `#[tauri::command]`——v3 在 `commands/persistence.rs` 6 个 + `commands/logging.rs` 4 个，v4 全部合并到 `app/settings/`。
 
 ## 2. 为什么 persistence/logging 合并到 settings
 
-v0 把 `commands/persistence.rs` + `commands/logging.rs` 当作**独立的资源类型** module。v1 合并理由：
+v3 把 `commands/persistence.rs` + `commands/logging.rs` 当作**独立的资源类型** module。v4 合并理由：
 
 - **persistence 没有独立业务**：所有持久化调用都来自 settings 流程（保存 session config / 保存 group / 保存 attach 列表）—— 没有"独立于 settings 的 persistence 业务"
 - **logging 没有独立业务**：只有 settings tab 会读 / 写 log config，其他 module 调 `log_message` 是横切关注点（应走 `infra/logger`，不经过 settings module 的 IPC）
-- **避免"按技术层切"反模式**：v1 按产品功能切；如果 persistence / logging 单独成 module，会退化成 v0 的资源类型切分
+- **避免"按技术层切"反模式**：v4 按产品功能切；如果 persistence / logging 单独成 module，会退化成 v3 的资源类型切分
 
 **例外**：`log_message` 必须保留为 IPC（前端 `app/session/api.ts::logMessage` 调）——但它**逻辑上**属于 logging 横切关注点，不是 settings tab 流程。
 
@@ -100,11 +100,11 @@ modules/settings/
 - **log directory** —— `app.path().app_log_dir()` 解析的绝对路径
 - **frontend log message** —— `{ level, source, message, data? }` IPC 载荷，转发到 `tracing::{info,debug,warn,error}`
 
-## 8. v0 → v1 迁移说明
+## 8. v3 → v4 迁移说明
 
-v0 的 `commands/persistence.rs` 6 个命令 + `commands/logging.rs` 4 个命令，v1 全部合并到 `app/settings/commands/`：
+v3 的 `commands/persistence.rs` 6 个命令 + `commands/logging.rs` 4 个命令，v4 全部合并到 `app/settings/commands/`：
 
-| v0 命令（src-tauri/src/commands/*.rs） | v1 落点 |
+| v3 命令（src-tauri/src/commands/*.rs） | v4 落点 |
 |---|---|
 | `save_sessions` | `app/settings/commands/persistence/sessions.rs` |
 | `load_sessions` | 同上 |
@@ -119,13 +119,13 @@ v0 的 `commands/persistence.rs` 6 个命令 + `commands/logging.rs` 4 个命令
 
 **关键**：
 
-- v0 的 `commands/persistence.rs` 整体删除
-- v0 的 `commands/logging.rs` 整体删除
-- v0 的 `save_attached_tmux_servers_impl`（pub(crate) sync helper，被 session module 内联调用）→ v1 改为 `settings_api::save_attached_tmux_servers` 的 pub 纯函数入口
+- v3 的 `commands/persistence.rs` 整体删除
+- v3 的 `commands/logging.rs` 整体删除
+- v3 的 `save_attached_tmux_servers_impl`（pub(crate) sync helper，被 session module 内联调用）→ v4 改为 `settings_api::save_attached_tmux_servers` 的 pub 纯函数入口
 
-## 9. 跟 v0 的差异
+## 9. 跟 v3 的差异
 
-| 维度 | v0 | v1 |
+| 维度 | v3 | v4 |
 |---|---|---|
 | module 划分 | 独立 `commands/persistence.rs` + `commands/logging.rs` | 合并进 `app/settings/commands/` |
 | 单文件最大 | `commands/session.rs` 660 行 | `commands/settings.rs` ≤ 200 行 |

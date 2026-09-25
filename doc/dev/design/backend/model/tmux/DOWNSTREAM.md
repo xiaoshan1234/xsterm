@@ -98,16 +98,16 @@ models/cross_cutting/     ← 最底层
 
 ## 8. 设计意图:tmux model 是「tmux 协议层 + controller 的 data shape 投影」
 
-v0 反模式:`models/session.rs` 内含 8 个 tmux 专属类型 + `tmux_pane_info()` helper——1670 行单文件。
+v3 反模式:`models/session.rs` 内含 8 个 tmux 专属类型 + `tmux_pane_info()` helper——1670 行单文件。
 
-v1 边界:
+v4 边界:
 - tmux model 是**独立派生 domain**——与 frontend `model/tmux/` 镜像
 - `tmux_pane_info()` 是 tmux domain **唯一**允许构造 `SessionInfo` 的位置——bug 0009 防御
 - 跨 service / app / infra 调用通过公开类型(不是字段直读)
 
-## 9. v0 → v1 跨调用迁移
+## 9. v3 → v4 跨调用迁移
 
-| v0 位置 | v1 改法 |
+| v3 位置 | v4 改法 |
 |---|---|
 | `models/session.rs::TmuxCcConfig`(line 291)| `models/tmux/types.rs::TmuxCcConfig` |
 | `models/session.rs::AttachedTmuxServer`(line 258)| `models/tmux/types.rs::AttachedTmuxServer` |

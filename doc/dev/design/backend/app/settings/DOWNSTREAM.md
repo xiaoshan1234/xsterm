@@ -88,17 +88,17 @@ settings 模块直接读以下 models 类型：
 
 ## 7. 设计意图：settings 是「唯一 import infra 的 module」
 
-v0 反模式：`commands/persistence.rs` + `commands/logging.rs` + `commands/session.rs` 三处都 import `tauri_plugin_store::StoreExt`——任何持久化策略变更（如加 encryption）要改 3 处。
+v3 反模式：`commands/persistence.rs` + `commands/logging.rs` + `commands/session.rs` 三处都 import `tauri_plugin_store::StoreExt`——任何持久化策略变更（如加 encryption）要改 3 处。
 
-v1 边界：
+v4 边界：
 
 - settings module 是**唯一** import `tauri_plugin_store` 的地方
 - 其他 module 只调 `settings_api::*` —— 完全不知道持久化用的是 tauri-plugin-store
 - 未来如果换成 sqlite / sled，只改 settings module 一个地方
 
-## 8. v0 → v1 持久化入口迁移
+## 8. v3 → v4 持久化入口迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl(&app, &servers)` | `app/terminal/commands/tmux/session.rs::create_tmux_session` 内调 `app/settings/api::save_attached_tmux_servers_impl(&app, &servers)` |
 | `commands/session.rs::attach_tmux_session` 同样内联 | 同上 |

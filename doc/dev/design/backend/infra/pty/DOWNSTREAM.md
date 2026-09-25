@@ -102,17 +102,17 @@ infrastructure/pty/
 
 ## 9. 设计意图:pty 是「PTY 子进程的物理封装」
 
-v0 反模式：`infrastructure/pty.rs` 单文件 ~150 行，所有逻辑混在一起——trait + impl + error 难找到。
+v3 反模式：`infrastructure/pty.rs` 单文件 ~150 行，所有逻辑混在一起——trait + impl + error 难找到。
 
-v1 边界：
+v4 边界：
 
 - pty 子模块是**单一外部资源的物理封装**——`portable-pty` crate 调用都集中在这里
 - service 层通过 `PtySystem` trait 抽象——可 mock 替换
 - error 集中在 `errors.rs`——typed error 模式
 
-## 10. v0 → v1 跨调用迁移
+## 10. v3 → v4 跨调用迁移
 
-| v0 现状 | v1 改法 |
+| v3 现状 | v4 改法 |
 |---|---|
 | `infrastructure/pty.rs::PtySystem trait` | `infrastructure/pty/traits.rs` |
 | `infrastructure/pty.rs::NativePtySystem` | `infrastructure/pty/native.rs` |
