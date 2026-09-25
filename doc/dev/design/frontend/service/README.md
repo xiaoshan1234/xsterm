@@ -18,15 +18,15 @@ src/service/
 └── (已合并到其他位置 — 见下)
 ```
 
-## 2. v4 重构的 3 个变化
+## 2. 当前 6 domain 的设计选择
 
-从最初 9 domain 砍到 6 domain，关键调整：
+service 共有 6 个 domain。**4 个已删除的候选**和它们的去向：
 
-| 调整 | 旧 v3/v4 位置 | 新位置 | 理由 |
-|---|---|---|---|
-| 删除 `theme` | `service/theme/` | `service/settings/` 内部字段 | theme 是 settings 的子集，不是独立状态 |
-| 删除 `output` | `service/output/` | `ui/terminal/view/OutputBuffer.ts` | output 是 ui 渲染队列，不是跨 module 状态 |
-| 删除 `terminal` | `service/terminal/` | `ui/terminal/view/TerminalRegistry.ts` | xterm 实例是 ui 实现细节 |
+| 候选 | 去向 | 理由 |
+|---|---|---|
+| `theme` | 并入 `service/settings/` 内部字段 | theme 是 settings 的子集，不是独立状态 |
+| `output` | 归 `ui/terminal/view/OutputBuffer.ts` | output 是 ui 渲染队列，不是跨 module 状态 |
+| `terminal` | 归 `ui/terminal/view/TerminalRegistry.ts` | xterm 实例是 ui 实现细节 |
 | 删除 `logger` | `service/logger/` | `infra/logger/` | logger 是底层原语，不是业务状态 |
 
 详细归档说明见各目录的 `README.md`（已重写为归档格式）。
@@ -185,15 +185,14 @@ for d in src/service/*/; do test -f "$d/api.ts" || echo "missing: $d"; done
 
 service 层不直接涉及 UI，但要注意 design-system 的 CSS variables（theme 通过 settings 影响 CSS）。
 
-## 12. 跟 v3 的核心差异
+## 12. 当前 service 结构总结
 
-| 维度 | v3 | v4 |
-|---|---|---|
-| 顶层目录结构 | `src/service/` 平铺 | 不变，但**按 6 domain 重构** |
-| domain 数 | 9 个（包含过度切分）| 6 个（去掉 theme/output/terminal/logger）|
-| theme 处理 | 独立 service | 并入 settings |
-| output / xterm 注册表 | 独立 service | 归 ui/terminal 内部 |
-| logger 处理 | 独立 service | 归 infra（底层原语）|
-| 暴露接口 | `useXxxStore()` + `getState()` | 只 `useXxxService()` |
-| legacy hooks | `src/service/legacy/hooks/` | 删除（迁到对应 domain 或删除）|
-| bridges | `src/service/bridges/` | 散落到各 domain 的 bridge.ts |
+| 维度 | 结构 |
+|---|---|
+| 顶层目录结构 | `src/service/` 6 domain（session / workspace / tmux / settings / persistence）|
+| domain 数 | 6 个：session、workspace、tmux、settings、persistence、terminal（注：persistence 是横切 wrapper；其他 4 个是业务 domain）|
+| theme 处理 | 并入 settings（`Settings.theme` 字段）|
+| output / xterm 注册表 | 归 ui/terminal 内部 |
+| logger 处理 | 归 `infra/logger`（底层原语）|
+| 暴露接口 | `useXxxService()` 单一 API（每个 service domain 唯一入口）|
+| bridges | 散落到各 domain 的 `bridge.ts`（不集中）|

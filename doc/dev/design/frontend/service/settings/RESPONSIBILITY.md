@@ -17,8 +17,8 @@ settings service 持有**所有 settings 字段值**——xsterm 的应用配置
 
 ## 2. 这个 domain **不**负责什么
 
-- **不实现字段语义**——theme 应用归 `service/theme`，log level 应用归 `service/logger`
-- **不渲染 UI**——UI 是 ui/settings
+- **不实现字段语义**——theme 是 settings 的子集（`Settings.theme` 字段），log level 应用归 `infra/logger`
+- **不渲染 UI**——UI 是 `ui/settings`
 - **不存储实际值**——存储归 `service/persistence`，settings service 持有的是"运行时副本 + 同步逻辑"
 
 ## 3. 子结构
@@ -44,11 +44,11 @@ service/settings/
 | domain | 关系 |
 |---|---|
 | `service/persistence` | sync 调 persistence.set("settings", currentValue) |
-| `service/theme` | settings.theme 变化 → theme.applyTheme |
-| `service/logger` | settings.logLevel 变化 → logger.setLevel |
-| `service/terminal` | settings.terminalFontSize 变化 → terminal.applyPreferences |
+| `infra/logger` | settings.logLevel 变化 → `infra/logger.setLevel()`（v4 logger 归 infra） |
+| （已删除） `service/theme` | v4 已删除——theme 是 `Settings.theme` 字段，由 settings 自身广播 |
+| （已删除） `service/terminal` | v4 已删除——terminal preferences 是 `Settings.terminalPreferences` 字段 |
 
-**关键**：settings 是**横切 broadcast 入口**——其他横切 domain 通过订阅 settings 自动响应。
+**关键**：settings 是**横切 broadcast 入口**——其他横切关注点通过订阅 settings 自动响应；theme / terminal preferences 等"原 service domain"已删除并入 settings 字段。
 
 ## 6. 跟 app/ui 的关系
 

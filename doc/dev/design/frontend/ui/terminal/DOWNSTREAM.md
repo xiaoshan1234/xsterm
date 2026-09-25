@@ -64,17 +64,13 @@ modules/terminal/
 
 xterm 实例的生命周期归 terminal module 管理（不在 shared、不在 shell）。
 
-## 6. 当前架构债 → 设计意图说明
+## 6. 设计决策：terminal 的边界
 
-旧 v3 设计里这些是"债"；**新设计直接消除它们**：
-
-| 旧 v3 现状 | 新设计意图 |
-|---|---|
-| terminal 直跳 `service/output`（绕 useCase） | terminal 通过 `session/api.ts` 拿到事件订阅，session module 负责 useCase 编排 |
-| terminal 直跳 infra（`@tauri-apps/api`） | 全部走 `service/output`，terminal 模块**不**知道 Tauri 的存在 |
-| terminal 自己 useSettingsStore 读 font | settings 通过 props 注入；terminal 是被 settings 影响，不是 settings 的消费者 |
-| tmux 独立成簇 | tmux 是 terminal 内部的 view/ 子模块 |
-| `useTerminalResize` / `useSidebarResize` 抽到 hooks module | 每个 module 自己声明需要的 hook，不抽公共 hooks module |
+- terminal 通过 `session/api.ts` 拿到事件订阅，session module 负责 useCase 编排
+- 全部走 service 适配，terminal 模块**不**知道 Tauri 的存在
+- settings 通过 props 注入；terminal 是被 settings 影响，不是 settings 的消费者
+- tmux 是 terminal 内部的 view/ 子模块
+- 每个 module 自己声明需要的 hook，不抽公共 hooks module
 
 ## 7. 不允许的依赖
 
@@ -87,5 +83,5 @@ xterm 实例的生命周期归 terminal module 管理（不在 shared、不在 s
 
 1. **session module api.ts 变化**——同步更新 `INTERFACE.md` §2-§4 + `DOWNSTREAM.md` §2
 2. **shell module 新增 UI 原子**——同步更新 `DOWNSTREAM.md` §3
-3. **service/output 接口变化**——影响 `store.ts`，更新 §4
+3. **service session/tmux 接口变化**——影响 `store.ts`，更新 §4
 4. **第三方 xterm addon 升级**——更新 §5

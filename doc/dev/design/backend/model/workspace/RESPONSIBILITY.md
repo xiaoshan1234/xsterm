@@ -101,7 +101,7 @@ pub fn close_pane(pane_id: &PaneId, pane_tree: &PaneTree) -> PaneTree {
 
 ### 8.2 group 是 workspace 的子集(不是独立 domain)
 
-跟 frontend 一致——v3 把 group 当独立 model,v4 并入 workspace。
+跟 frontend 一致——group 并入 workspace。
 
 **理由**:group 的生命周期跟 workspace 绑定,跨 workspace 不共享 group。独立成 model 是过度切分。
 

@@ -67,7 +67,7 @@ modules/workspace/
 | `app/session` | workspace.openSession() 调 session.openInWorkspace() 把 session 装到 pane |
 | `app/terminal` | workspace.splitPane() 在 tmux session 时调 terminal 的 createTmuxPane |
 | `app/settings` | workspace 读 settings.sidebarWidth / showSidebar |
-| `shared/infra` | workspace 调 shared/infra 的 invoke('create_window', ...) |
+| `infra/tauri/commands/workspace` | workspace 调 `invoke('create_window', ...)` |
 
 ## 6. 这个 module 的"产品语言"术语
 

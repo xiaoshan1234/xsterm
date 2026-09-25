@@ -167,47 +167,29 @@ ui/shell: isReady() = true → 渲染主界面
 
 ## 9. 关键设计决策
 
-### 9.1 为什么 rules 并入 model 不在这里
+### 9.1 为什么 rules 归 model
 
-v3 设计里 rules 在 `app/rules/` 目录。v4 改成 `model/<domain>/rules.ts`，理由：
+rules 在 `model/<domain>/rules.ts`，**不**在 `app/rules/`：
 
 - **paneTree 操作 PaneNode**——跟 PaneNode 类型同目录更内聚
 - **sessionRules 操作 Session**——跟 Session 类型同目录更内聚
-- **跨 domain 的纯函数**（textTransform、constants）放 `model/common/`
-- **app 不再持有 rules 目录**——app 只负责编排业务，算法归 model
+- **跨 domain 的纯函数**（textTransform、constants）放 `model/cross-cutting/`
+- **app 只负责编排业务**，算法归 model
 
-### 9.2 为什么 app 不再依赖 `@/app/shared/*`
-
-v3 设计 app 通过 `@/app/shared/*` 依赖基础设施。v4 改成：
+### 9.2 为什么 model / service / infra 是顶层目录
 
 - model / service / infra 是**顶层目录**（跟 app / ui 平级）
 - app 直接 `import { X } from "@/model/..."` 或 `"@/service/..."` 或 `"@/infra/..."`
-- 不再有 `@/app/shared/` 概念
+- **没有** app 之下的基础设施子目录——基础设施层完全独立
 
-详见 [`app/shared/README.md`](./shared/README.md)（已废弃的归档说明）。
-
-### 9.3 为什么 app 跟 ui 平级而不是 ui 是 app 的子集
-
-v3 设计里 ui 组件放在 `app/ui/` 子目录（"app 包含 ui"）。v4 改成：
+### 9.3 为什么 app 跟 ui 平级
 
 - app / ui 是**两个并列的产品功能层**
 - 改一个产品功能 = 改 1 个 app module + 1 个 ui module
 - ui 通过 `useXxxApi()` 调 app 的业务能力——这种"反向依赖"由 hook 边界控制
+- app **不** import ui 内部组件；ui **不** import app 的 usecases/ipc/model 内部
 
-## 10. 跟 v3 的核心差异
-
-| 维度 | v3 | v4 |
-|---|---|---|
-| 划分依据 | 43 useCases 平铺 | 5 module 按产品功能 |
-| module 内部 | 自由 | 强制 api.ts 唯一入口 |
-| 跨 module 协调 | useCase 内部串 | `usecases/composition/` |
-| 跨 module 调用入口 | 自由 import useCases | 只 import api.ts |
-| shared 位置 | `src/app/shared/` | **废弃**——infra/service/model 提升为顶层 |
-| rules 位置 | `src/app/rules/` | `src/model/<domain>/rules.ts` |
-| 启动序列 | 散落在 main.tsx | app/shell 的 initialize() 编排 |
-| UI module 跟 app module 关系 | 隐式 | 一一对应 |
-
-## 11. 设计系统约束
+## 10. 设计系统约束
 
 所有 UI 改动必读 [`../../../design-system.md`](../../../design-system.md)。
 

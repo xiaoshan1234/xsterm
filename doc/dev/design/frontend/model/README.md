@@ -21,21 +21,19 @@ src/model/
 
 ## 2. 为什么是 5 + 1（不是 8 也不是 3）
 
-v3 现状有 8 个 domain：`session / workspace / pane / window / tmux / output / persistence / theme`。
+model 设计重审了 8 个候选 domain：
 
-从零设计重审后：
-
-| v3 现状 | v4 调整 | 理由 |
+| 候选 | 决定 | 理由 |
 |---|---|---|
-| `model/session/` | **保留** | 独立 |
-| `model/workspace/` | **保留**（pane / window 并入） | pane 算法跟 window 紧耦合，拆开是过度工程 |
-| `model/tmux/` | **保留** | 独立 |
-| `model/pane/` | **并入 workspace** | pane 算法跟 window 紧耦合 |
-| `model/window/` | **并入 workspace** | Window 类型跟 Workspace 紧耦合 |
-| `model/output/` | **删除** | Uint8Array 是 TS 内置类型，不需要 model 抽象 |
-| `model/persistence/` | **删除** | persistence 是 generic IO wrapper，Repository 接口分散到各 domain |
-| `model/theme/` | **并入 settings** | theme 是 settings 的子集，不是独立概念 |
-| `model/terminal/` | **并入 settings**（**新增** v4） | TerminalTheme + 5 个 ANSI 调色板是 settings 的视觉子集 |
+| `model/session` | ✅ 保留 | 独立 |
+| `model/workspace` | ✅ 保留（pane / window 并入） | pane 算法跟 window 紧耦合，拆开是过度工程 |
+| `model/tmux` | ✅ 保留 | 独立 |
+| `model/pane` | ❌ 并入 workspace | pane 算法跟 window 紧耦合 |
+| `model/window` | ❌ 并入 workspace | Window 类型跟 Workspace 紧耦合 |
+| `model/output` | ❌ 删除 | Uint8Array 是 TS 内置类型，不需要 model 抽象 |
+| `model/persistence` | ❌ 删除 | persistence 是 generic IO wrapper，Repository 接口分散到各 domain |
+| `model/theme` | ❌ 并入 settings | theme 是 settings 的子集，不是独立概念 |
+| `model/terminal` | ❌ 并入 settings | TerminalTheme + 5 个 ANSI 调色板是 settings 的视觉子集 |
 
 **5 + 1 是最合适的**：
 - 不追求最少（不是 3 个）——3 个会让 settings / workspace 等核心 domain 变臃肿
@@ -169,18 +167,17 @@ getUniqueSessionName   → model/session/accessor.ts                (纯函数)
 |---|---|---|---|
 | **cross-cutting** | [RESPONSIBILITY](./cross-cutting/RESPONSIBILITY.md) | [INTERFACE](./cross-cutting/INTERFACE.md) | [DOWNSTREAM](./cross-cutting/DOWNSTREAM.md) |
 
-## 7. 跟 v3 的核心差异
+## 7. 当前 model 结构总结
 
-| 维度 | v3 | v4 |
-|---|---|---|
-| 顶层目录结构 | `src/model/` 平铺 8 个 domain | **5 业务 + 1 cross-cutting** |
-| pane / window | 独立 | **并入 workspace** |
-| theme | 独立 | **并入 settings** |
-| terminal | （不存在） | **并入 settings**（作为子目录）|
-| output | 独立（types） | **删除**（TS 内置 Uint8Array）|
-| persistence | 独立（repository） | **删除**（分散到各 domain）|
-| cross-cutting 命名 | （不存在） | **`model/cross-cutting/`**（替代 common 命名陷阱）|
-| 暴露接口 | `import { X } from "@/model"` | 同上（不强制按 api.ts，因为 model 是无状态）|
+| 维度 | 结构 |
+|---|---|
+| 顶层目录 | `src/model/` 5 业务 + 1 cross-cutting |
+| pane / window | 并入 workspace |
+| theme / terminal | 并入 settings（terminal 作为 settings/terminal/ 子目录）|
+| output | 删除（TS 内置 Uint8Array）|
+| persistence | 删除（Repository 接口分散到各 domain）|
+| cross-cutting 命名 | `model/cross-cutting/`（替代 common 命名陷阱）|
+| 暴露接口 | `import { X } from "@/model"`（model 是无状态层，不强制 api.ts）|
 
 ### 7.1 为什么 cross-cutting 不叫 common
 

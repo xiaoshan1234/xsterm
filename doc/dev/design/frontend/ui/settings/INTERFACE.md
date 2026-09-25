@@ -151,7 +151,7 @@ function Layout() {
 
 ## 7. 设计意图：settings 通过 service/settings 广播
 
-v3 设计里 terminal 直跳 `useSettingsStore.getState()` 读 fontSize。新设计：
+settings 写入 `service/settings` store 后由订阅者消费：
 
 - settings module 写 `service/settings` store
 - terminal **不**订阅 settings store——它通过 props 接收 fontSize

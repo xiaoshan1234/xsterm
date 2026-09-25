@@ -14,7 +14,7 @@ modules/shell/
 ├── usecases/shutdown.ts   ──►  app/workspace/api.ts  (saveCurrentWorkspace)
 ├── usecases/shutdown.ts   ──►  app/settings/api.ts   (save)
 ├── usecases/shutdown.ts   ──►  app/session/api.ts    (closeAll)
-└── usecases/initialize.ts ──►  shared/service/persistence/api.ts
+└── usecases/initialize.ts ──►  service/persistence/api.ts
 ```
 
 ## 2. app/settings
@@ -50,25 +50,23 @@ modules/shell/
 |---|---|---|
 | `useSessionApi().closeAll()` | `app/session/api.ts` | 关闭步骤 4 |
 
-## 6. shared/service/
+## 6. service/
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| `usePersistenceApi().checkBackendReady()` | `shared/service/persistence/api.ts` | 启动序列最开始 |
-| `usePersistenceApi().notifyBackendShutdown()` | `shared/service/persistence/api.ts` | 关闭序列最后 |
+| `usePersistenceService().checkBackendReady()` | `service/persistence/api.ts` | 启动序列最开始 |
+| `usePersistenceService().notifyBackendShutdown()` | `service/persistence/api.ts` | 关闭序列最后 |
 
 ## 7. 设计意图：shell 是唯一能直接调多个 module 的地方
-
-v3 设计里任何 useCase 都可以调任意 service。v4 限制：
 
 - **只有 shell module 在启动/关闭时直接调多个 module**
 - **其他 module 不主动初始化**——等待 shell 编排
 
-这条规则让"启动顺序"成为**显式契约**——shell.initialize() 是唯一入口。
+这条规则让"启动顺序"成为**显式契约**——`shell.initialize()` 是唯一入口。
 
 ## 8. 不允许的依赖
 
-- ❌ `modules/shell/` → `infra/` 直接（通过 shared/service/persistence 间接）
+- ❌ `modules/shell/` → `infra/` 直接（通过 `service/persistence` 间接）
 - ❌ 其他 module 在启动时主动初始化（只能等 shell 编排）
 - ❌ shell 持有 settings / workspace 状态（只触发 load）
 

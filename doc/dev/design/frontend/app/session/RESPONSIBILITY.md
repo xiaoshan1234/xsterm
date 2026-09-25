@@ -64,8 +64,8 @@ modules/session/
 | `app/workspace` | session.openInWorkspace() 调 workspace 的 addSessionToPane() |
 | `app/terminal` | session 不直接调 terminal；tmux session 由 terminal module 编排 IPC |
 | `app/settings` | session 创建时从 settings 读 defaultShell / defaultSshUser |
-| `shared/infra` | session 调 shared/infra 的 invoke('create_local_session', ...) |
-| `shared/service` | session 读写 shared/service/session/store |
+| `infra/tauri/commands/session` | session 调 `invoke('create_local_session', ...)` |
+| `service/session` | session 读写 `service/session/store` |
 
 **关键**：session module **不**直接 import `app/workspace/usecases/*`——只调 `app/workspace/api.ts`。
 

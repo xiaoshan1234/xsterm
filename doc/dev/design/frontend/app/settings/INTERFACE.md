@@ -19,9 +19,9 @@ export interface SettingsApi {
   reset(): Promise<void>;
 
   // ============ 跨 module 应用 ============
-  /** 把 theme 应用到 UI（通过 shared/service/theme） */
+  /** 把 theme 应用到 UI（写入 service/settings.theme + 触发 ui 重渲染） */
   applyTheme(theme: "dark" | "light" | "auto"): void;
-  /** 把 log level 应用到 logger service */
+  /** 把 log level 应用到 infra/logger */
   applyLogLevel(level: LogLevel): void;
   /** 把 terminal 偏好应用到 app/terminal */
   applyTerminalPreferences(prefs: TerminalPreferences): void;

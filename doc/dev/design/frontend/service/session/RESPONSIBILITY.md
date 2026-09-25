@@ -11,15 +11,15 @@ session service 持有**所有 session 的元数据**——xsterm 是"session �
 承担 3 类职责：
 
 1. **session 元数据 store**——`Map<sessionId, Session>`，跨 6 个 module 共享
-2. **IPC 桥**——监听 backend 的 `session-output` / `session-closed` 事件 → 更新 store + 派发到 output bridge
+2. **IPC 桥**——监听 backend 的 `session-output` / `session-closed` 事件 → 更新 store + 转发到 `ui/terminal/view/OutputBuffer`
 3. **会话生命周期编排**——`createLocal / createSsh / createTmux / close / reconnect` 通过 invoke backend IPC
 
 ## 2. 这个 domain **不**负责什么
 
 - **不渲染 UI**——UI 订阅 useSessions() 渲染列表
 - **不编排跨 module 业务**——业务编排在 app/session（如"创建后装到 workspace"）
-- **不直接调 workspace / output / persistence service**——跨 service 协调由 app 编排
-- **不存 session 的输出数据**——输出数据归 `service/output`
+- **不直接调 workspace / persistence service**——跨 service 协调由 app 编排
+- **不存 session 的输出数据**——输出数据归 `ui/terminal/view/OutputBuffer`（v4 service/output 已删除）
 
 ## 3. 子结构
 
@@ -27,7 +27,7 @@ session service 持有**所有 session 的元数据**——xsterm 是"session �
 service/session/
 ├── api.ts            ⭐ 唯一对外入口（useSessionService hook）
 ├── store.ts          Map<sessionId, Session> + 派生 indexes（按 workspaceId / groupId）
-├── bridge.ts         listen('session-output' / 'session-closed') → store mutation + emit 到 output
+├── bridge.ts         listen('session-output' / 'session-closed') → store mutation + push 到 OutputBuffer
 ├── types.ts          SessionEvent / SessionOutputPayload / SessionClosedPayload
 └── *.test.ts
 ```
@@ -36,14 +36,14 @@ service/session/
 
 - **作为用户**，我希望打开 session 后立即在侧栏看见 → useSessions() 触发 re-render
 - **作为用户**，我希望 session 关掉后立即从列表消失 → bridge 收到 session-closed → store.remove(id) → re-render
-- **作为用户**，我希望 terminal 输出实时显示 → bridge 收到 session-output → 转发到 output service
+- **作为用户**，我希望 terminal 输出实时显示 → bridge 收到 session-output → push 到 `ui/terminal/view/OutputBuffer`
 - **作为用户**，我希望新 session 立即可点击 → createLocal 完成后 store.upsert(newSession)
 
 ## 5. 跟其他 domain 的关系
 
 | domain | 关系 |
 |---|---|
-| `service/output` | bridge 收到 session-output 后**emit** 到 output（不直接调 output api.ts——通过事件总线）|
+| `ui/terminal/view/OutputBuffer` | bridge 收到 session-output 后**push** 到 output buffer（service/output 在 v4 已删除——见 service/README §2 删表） |
 | `service/persistence` | saved configs CRUD 不归 session service，归 persistence service |
 | `service/workspace` | session service **不调** workspace service——业务协调在 app |
 

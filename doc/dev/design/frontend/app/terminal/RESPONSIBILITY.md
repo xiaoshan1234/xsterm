@@ -58,7 +58,7 @@ modules/terminal/
 | `app/session` | terminal 不直接调 session；通过 session store 订阅读取 session 元数据 |
 | `app/settings` | settings.applyTerminalPreferences() 调 terminal 的 apply |
 | `app/shell` | shell.initialize() 调 terminal.autoAttachTmuxServers() |
-| `shared/infra` | terminal 调 shared/infra 的 invoke('create_tmux_pane', ...) |
+| `infra/tauri/commands/tmux` | terminal 调 `invoke('create_tmux_pane', ...)` |
 
 ## 6. 这个 module 的"产品语言"术语
 

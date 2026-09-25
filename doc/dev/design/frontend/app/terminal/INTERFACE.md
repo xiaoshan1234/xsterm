@@ -48,14 +48,16 @@ export function useTerminalApi(): TerminalApi;
 
 terminal module **几乎不**调其他 module——它编排的是"调用 backend tmux IPC"。
 
-唯一一个跨 module 调用场景：applyTerminalPreferences 触发 UI 重新渲染——通过写 `shared/service/terminal/store`，UI 自动响应。
+唯一一个跨 module 应用场景：applyTerminalPreferences 触发 UI 重新渲染——通过 `service/settings` 的 `terminalPreferences` 字段广播，UI 订阅响应（settings 单向 broadcast 模式）。
 
 ```typescript
 // modules/terminal/usecases/preferences/apply.ts
-import { useTerminalStore } from "@/service/terminal/store";
+import { useSettingsService } from "@/service/settings/api";  // ✅ 写 settings 字段（terminalPreferences）
+// 注意：app/terminal 不直接调 useTerminalStore——v4 已删除 service/terminal domain
+// 终端偏好通过 service/settings.terminalPreferences 统一存储，ui 通过 useSettingsService().useSetting("terminalPreferences") 订阅
 
 export function applyTerminalPreferences(prefs: TerminalPreferences): void {
-  useTerminalStore.getState().applyPreferences(prefs);
+  useSettingsService().set({ terminalPreferences: prefs });
 }
 ```
 

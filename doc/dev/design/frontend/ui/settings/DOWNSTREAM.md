@@ -11,7 +11,7 @@ modules/settings/
 ├── view/    ────►  shell/api.ts            (<Dialog> <FormField> <Button>)
 ├── store.ts ────►  service/settings        (跨 module 持久化)
 ├── store.ts ────►  service/persistence     (tauri-plugin-store 包装)
-├── model.ts ────►  shared/types            (Settings 类型)
+├── model.ts ────►  model/settings/types    (Settings 类型)
 └── *.test.ts
 ```
 
@@ -33,20 +33,20 @@ modules/settings/
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| settings store 订阅 + mutation | `service/settings` | store.ts 核心 |
-| 持久化加载 | `service/persistence` | `useSettingsApi().load()` |
-| 持久化保存 | `service/persistence` | `useSettingsApi().save()` |
-| log level / log size 应用 | `service/logger` | log level 变化时 |
-| theme 应用 | `service/theme` | theme 变化时 |
+| settings store 订阅 + mutation | `service/settings/api` | store.ts 核心 |
+| 持久化加载 | `service/persistence/api` | `useSettingsApi().load()` |
+| 持久化保存 | `service/persistence/api` | `useSettingsApi().save()` |
+| log level / log size 应用 | `infra/logger`（v4 logger 归 infra） | log level 变化时 |
+| theme 应用 | `service/settings/api`（theme 是 Settings.theme 字段） | theme 变化时 |
 
-**关键**：settings module **不**直接调 `service/infra`——必须经过 `service/settings` 适配器。`service/settings` 负责把 settings 字段应用到具体的 service（theme/logger/...）。
+**关键**：settings module **不**直接调 `infra/tauri`——必须经过 `service/settings` 适配器。`service/settings` 负责把 settings 字段应用到具体的下游（`infra/logger` 等）。
 
 ## 4. 平级层（infra / service / model）
 
 | 调用 | 来源 |
 |---|---|
-| `Settings` 类型 | `shared/types/settings` |
-| `SettingsCategory` 枚举 | `shared/types/settings` |
+| `Settings` 类型 | `model/settings/types` |
+| `SettingsCategory` 枚举 | `model/settings/types` |
 
 ## 5. 设计意图：settings 独立 module 的代价和收益
 
@@ -63,25 +63,16 @@ modules/settings/
 
 权衡：值得，因为设置是"横切关注点"，需要 service 层抽象来避免 settings 模块变成"上帝 module"。
 
-## 6. 当前架构债 → 设计意图说明
-
-| 旧 v3 现状 | 新设计意图 |
-|---|---|
-| settings/ 独立 module，5 个 Tab 实际在 dialogs/ | settings 独立 module，5 个 Tab 在 settings/view/ |
-| terminal 直跳 useSettingsStore 读 fontSize | terminal 通过 props 接收 fontSize，不订阅 settings |
-| 改 font size 立即生效依赖 store 全局广播 | settings 改 → service/settings 广播 → 父组件重新渲染传 props |
-| settings 修改要散落到多个 module 实现 | settings 修改集中在 service/settings 适配器 |
-
-## 7. 不允许的依赖
+## 6. 不允许的依赖
 
 - ❌ `modules/settings/` → 任何其他 feature module
 - ❌ `modules/settings/` → `infra/` 任何路径
 - ❌ `modules/settings/` → `app/`
 - ❌ `modules/settings/view/*` 被其他 module 直接 import（必须走 `api.ts`）
 
-## 8. 依赖变更流程
+## 7. 依赖变更流程
 
 1. **service/settings 接口变化**——同步更新 §3 + INTERFACE.md §3 useSettingsApi
 2. **新增 Settings 字段**——同步更新 INTERFACE.md §4 + 新 Tab 或现有 Tab 增加字段
 3. **新增 SettingsCategory**——加 Tab 组件 + INTERFACE.md §4 union
-4. **service/logger 或 service/theme 接口变化**——影响 settings 副作用，更新 §3
+4. **infra/logger 接口变化**——影响 settings 副作用，更新 §3

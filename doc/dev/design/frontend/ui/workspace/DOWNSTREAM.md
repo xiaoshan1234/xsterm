@@ -80,7 +80,7 @@ shell 自动 closeDialog
 
 ## 6. 设计意图：workspace 为什么包含 sidebar
 
-v3 设计把 sidebar 当独立 module。新设计把 sidebar 归 workspace，理由：
+sidebar 归 workspace：
 
 - **sidebar 在认知上属于 workspace**——它是 workspace 的视觉组成（打开 app 主视图 = workspace + sidebar）
 - **sidebar 的所有操作（rename session / delete group）都是 workspace 业务**——抽出来要跨 module 协调
@@ -88,16 +88,7 @@ v3 设计把 sidebar 当独立 module。新设计把 sidebar 归 workspace，理
 
 如果未来 sidebar 演化成"独立导航栏"（比如多 workspace 切换器），再抽独立 module。
 
-## 7. 当前架构债 → 设计意图说明
-
-| 旧 v3 现状 | 新设计意图 |
-|---|---|
-| sidebar/ 独立 module，5 文件 | sidebar 归 workspace |
-| terminal/sidebar 互相 import | 单向 workspace → terminal，sidebar 在 workspace 内部 |
-| workspace 用 `useWorkspaceStore.getState().setX(...)` 直写 store | workspace 通过 `useWorkspaceApi()` 暴露 API；其他 module 调 hook 不直跳 store |
-| dialog 跨 module 散落 | dialog 由 shell 统一编排（activeDialog 状态），feature module 注册 dialog component 到 shell |
-
-## 8. 不允许的依赖
+## 7. 不允许的依赖
 
 - ❌ `modules/workspace/` → `modules/terminal/` 内部组件（必须走 `api.ts`）
 - ❌ `modules/workspace/` → `modules/session/` 内部 dialog（必须走 `api.ts` + shell dialog 编排）

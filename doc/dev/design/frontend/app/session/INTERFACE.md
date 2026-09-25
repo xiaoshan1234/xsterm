@@ -115,7 +115,7 @@ function CreateSessionDialog({ workspaceId, onCreated, onCancel }) {
 
 - `usecases/*` 内部文件——只能通过 api.ts
 - `ipc.ts` 的 invoke 封装——只能通过 usecases
-- `shared/service/session/store` 的 setter——只能通过 hook
+- `service/session/store` 的 setter——只能通过 hook
 
 ## 6. api.ts 变更流程
 

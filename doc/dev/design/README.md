@@ -1,7 +1,6 @@
 # 设计 (Design) — 目标态架构地图
 
-> 本目录描述 xsterm 的**目标态架构**——从零设计，**不照搬现状代码**。
-> 现状代码按各层 README 末尾的「v3 现状 → v4 设计」一节映射改造。
+| 本目录描述 xsterm 的**目标态架构**。现状代码按各层 README 末尾的「现状 → 目标」一节映射改造。|
 
 ## 1. 全景
 
@@ -123,7 +122,7 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 - [`frontend/app/terminal/`](frontend/app/terminal/) — 终端特有业务（tmux）
 - [`frontend/app/session/`](frontend/app/session/) — session CRUD
 - [`frontend/app/settings/`](frontend/app/settings/) — 设置持久化 + 应用
-- [`frontend/app/shared/README.md`](frontend/app/shared/README.md) — **已废弃**（v3 的 `app/shared/` 概念归档）
+- [`frontend/app/shared/README.md`](frontend/app/shared/README.md) — **废弃占位**
 
 #### ui（5 module × 3 文档 = 16 份）
 
@@ -191,7 +190,7 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 
 ### 5.1 为什么 frontend 是 5 个并列顶层目录而不是严格 4 层
 
-v3 是 `app → service → model → infra` 4 层。v4 改成 5 个并列顶层：
+frontend 是 5 个并列顶层目录：
 
 - **ui 跟 app 平级**——UI 也是产品功能（5 module），不是 app 的"渲染层"
 - **model / service / infra 都独立**——3 个关注点正交（数据 / 运行时 / 物理）
@@ -199,13 +198,13 @@ v3 是 `app → service → model → infra` 4 层。v4 改成 5 个并列顶层
 
 ### 5.2 为什么 rules 并入 model（不独立成 layer）
 
-v3 设计里 rules 是 `app/rules/` 独立目录。v4 改成 `model/<domain>/rules.ts`，理由：
+rules 在 `model/<domain>/rules.ts`：
 
 - **rules 是算法，算法是 model 的派生**——跟 accessor 同类
 - **paneTree 操作 PaneNode**——跟 PaneNode 类型同目录更内聚
 - **sessionRules 操作 Session**——跟 Session 类型同目录更内聚
 - **跨 domain 的纯函数**（textTransform、constants）放 `model/cross-cutting/`
-- **app 不再持有 rules 目录**——app 只负责编排业务
+- **app 不持有 rules 目录**——app 只负责编排业务
 
 ### 5.3 为什么 `model/cross-cutting/` 不叫 `common`
 

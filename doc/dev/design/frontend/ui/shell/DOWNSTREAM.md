@@ -76,7 +76,7 @@ shell 是**唯一**允许直接 `import { getCurrentWindow } from "@tauri-apps/a
 
 ## 7. 设计意图：为什么 shell 拥有 primitives
 
-v3 设计把 `<Icon>` `<Button>` `<Dialog>` 放在独立的 ui-kit / primitives module。新设计把它们放在 shell module 内，理由：
+`<Icon>` `<Button>` `<Dialog>` 等放在 shell module 内：
 
 - **primitives 是"app shell 的实现细节"**——它们跟 design system 绑定，跟 app 视觉一致性绑定
 - **抽到 ui-kit 增加协调成本**——加一个 `<Button>` 变体要 review 跨 module 影响
@@ -84,18 +84,7 @@ v3 设计把 `<Icon>` `<Button>` `<Dialog>` 放在独立的 ui-kit / primitives 
 
 如果未来 primitives 数量爆炸（>20 个），可以单独抽 `modules/ui-kit/`，那是**将来**的事。
 
-## 8. 当前架构债 → 设计意图说明
-
-| 旧 v3 现状 | 新设计意图 |
-|---|---|
-| dialogs/ 独立成 module，跨 4 个域 31 文件 | dialog 归各自 feature module；shell 只提供 `<Dialog>` 壳组件 |
-| settings/ 独立 module | settings 是产品功能，独立成 module（feature module） |
-| primitives/ 独立 module | primitives 归 shell（实现细节） |
-| hooks/ 独立 module | 每个 module 自己声明需要的 hook（不需要公共 hooks module） |
-| layout/ 独立 module | layout 归 shell（layout 是 shell 的实现细节） |
-| ui 各 module 直跳 `useXxxStore` | shell 持有全局 store 协调入口；feature module 通过 hook 订阅 |
-
-## 9. 不允许的依赖
+## 8. 不允许的依赖
 
 - ❌ `modules/shell/` → `infra/` 除 `getCurrentWindow` 以外的 API
 - ❌ `modules/shell/view/*` 被 feature module 直接 import

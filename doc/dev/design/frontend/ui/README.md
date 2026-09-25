@@ -1,10 +1,10 @@
-# Frontend · UI 层（v4 从零设计）
+# Frontend · UI 层（产品功能切分）
 
-> **v4 设计**（2026-09）：5 个 feature module + 1 个内部约定。
-> **位置**：`src/ui/`（与 `src/app/` `src/model/` `src/service/` `src/infra/` 平级——5 个顶层目录之一）。
-> **跟 v3 的根本区别**：从"按 React 角色分层"改成"按产品功能切分"。
->
-> 本文档是设计文档，不是现状整理。代码改造按 v4 描述的目标态执行。
+|> **设计日期**：2026-09。5 个 feature module + 1 个内部约定。
+|> **位置**：`src/ui/`（与 `src/app/` `src/model/` `src/service/` `src/infra/` 平级——5 个顶层目录之一）。
+|> **切分原则**：按"产品功能"切（shell / workspace / terminal / session / settings）。
+
+> 本文档是设计文档，描述目标态架构。代码改造按本文档执行。
 
 ## 1. 一句话架构
 
@@ -87,21 +87,17 @@ modules/<name>/
 - 其他 module `import { X } from "@/ui/modules/<name>/api"`，**禁止**直接 import `view/*` 或 `store.ts` 或 `model.ts`
 - 这条规则让 module 内部重构（文件挪动 / 拆分）不影响其他 module
 
-## 5. 为什么是 5 个 module（v4 决策记录）
+## 5. 为什么是 5 个 module（按"产品功能"切）
 
-v3 是 5 个 module（layout / terminal / sidebar / ui-kit / hooks），按"React 角色分层"。v4 重构成 5 个 module（shell / workspace / terminal / session / settings），按"产品功能"。
+5 个 module 按产品功能切分：
 
-**关键变化**：
-
-| v3 | v4 | 理由 |
+| module | 范围 | 备注 |
 |---|---|---|
-| `layout/`（app shell） | `shell/` | 同名，扩了职责（包含 UI 原子） |
-| `sidebar/`（独立） | 归入 `workspace` | sidebar 在认知上属于 workspace |
-| `ui-kit/`（dialogs + primitives + settings） | 拆成 3 块 | dialog 归各自 feature module，primitives 归 shell，settings 独立 |
-| `hooks/`（独立） | 不存在 | 每个 module 自己声明需要的 hook |
-| `terminal/` | `terminal/` | 同名，但内部组织变化（tmux 并入） |
-| `tmux/`（独立） | 归入 `terminal` | tmux 是 terminal 的子功能 |
-| （无） | `session/` | **新增独立 module**——session 是核心数据实体，比 workspace 更基础 |
+| `shell` | app 物理壳 | 包含 UI 原子（原 ui-kit/ 的 primitives 部分） |
+| `workspace` | 主视图（工作区 + tab + 侧栏） | sidebar 归入（不再独立） |
+| `terminal` | 终端渲染（xterm + pane + tmux control） | tmux 并入（不再独立） |
+| `session` | session 全生命周期 | **独立 module**——session 是核心数据实体 |
+| `settings` | 应用设置 | 5 tab 抽屉（不再嵌套在 dialogs/ 下） |
 
 **v4 设计的 4 个核心决策**：
 
@@ -180,20 +176,19 @@ shell 渲染 <EditSessionDialog>（session module 提供）
 shell.closeDialog()
 ```
 
-## 7. 跟 v3 的核心差异（详细对比）
+## 7. UI 5 module 决策
 
-| 维度 | v3 | v4 |
-|---|---|---|
-| 划分依据 | React 角色（shell / 业务视图 / 风格 / 原子 / hooks） | 产品功能（shell / workspace / terminal / session / settings） |
-| dialog 归属 | 独立 `dialogs/` module | 归各自 feature module |
-| primitives 归属 | 独立 `ui-kit/` module | 归 `shell` module |
-| hooks 归属 | 独立 `hooks/` module | 每个 module 自己声明 |
-| tmux 归属 | 独立 `tmux/` | 归 `terminal` module |
-| sidebar 归属 | 独立 `sidebar/` | 归 `workspace` module |
-| session 归属 | 散落在 useCases | 独立 `session` module |
-| settings 归属 | dialogs/ 内 5 个 Tab | 独立 `settings` module |
-| UI module 总数 | 5 | 5 |
-| 每个 module 内部 | 自由 | 强制 api.ts 唯一入口 |
+| 维度 | 决策 |
+|---|---|
+| 划分依据 | 产品功能（shell / workspace / terminal / session / settings） |
+| dialog 归属 | 归各自 feature module |
+| primitives 归属 | 归 `shell` module |
+| hooks 归属 | 每个 module 自己声明 |
+| tmux 归属 | 归 `terminal` module |
+| sidebar 归属 | 归 `workspace` module |
+| session 归属 | 独立 `session` module |
+| settings 归属 | 独立 `settings` module |
+| 每个 module 内部 | 强制 api.ts 唯一入口 |
 
 ## 8. 设计系统约束
 

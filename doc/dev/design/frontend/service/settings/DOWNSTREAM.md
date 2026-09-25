@@ -6,16 +6,20 @@
 
 ```
 service/settings/
-├── api.ts        ────►  @/model/settings/types      (Settings 类型)
-├── api.ts        ────►  @/service/persistence/api   (持久化)
-├── api.ts        ────►  @/service/theme/api         (theme 应用)
-├── api.ts        ────►  @/service/logger/api        (log level 应用)
-├── api.ts        ────►  @/service/terminal/api      (terminal 偏好应用)
+├── api.ts        ────►  @/model/settings/types         (Settings 类型)
+├── api.ts        ────►  @/service/persistence/api      (持久化)
+├── api.ts        ────►  @/infra/logger                 (log level 应用，logger 在 v4 归 infra)
 ├── store.ts      ────►  @/model/settings/types
-├── sync.ts       ────►  @/service/persistence/api   (debounced 写盘)
-├── sync.ts       ────►  ./store.ts                  (写 store)
+├── sync.ts       ────►  @/service/persistence/api      (debounced 写盘)
+├── sync.ts       ────►  ./store.ts                     (写 store)
 └── defaults.ts   ────►  @/model/settings/types
 ```
+
+**关键**：v4 已删除 `service/theme` / `service/terminal` / `service/output` / `service/logger` 四个 domain（见 service/README §2 删表）。
+
+- **theme 应用**：通过 `service/settings.theme` 字段 + ui 订阅响应——settings 单向 broadcast
+- **log level 应用**：通过 `infra/logger.setLevel()`（logger 是横切原语，归 infra）
+- **terminal 偏好应用**：通过 `service/settings.terminalPreferences` 字段——同上 broadcast 模式
 
 ## 2. model
 
@@ -39,37 +43,36 @@ settings **不调**其他 service 的 api——其他 service **自己订阅** s
 
 **正确模式**：
 
-```
-// app/settings/usecases/apply/theme.ts
+```typescript
+// app/settings/usecases/apply/terminalPrefs.ts
 import { useSettingsService } from "@/service/settings/api";
-import { useThemeService } from "@/service/theme/api";
+import { useTerminalApi } from "@/app/modules/terminal/api";
 
 const settings = useSettingsService();
-const theme = useThemeService();
+const terminal = useTerminalApi();
 
-// app 编排：settings 改 → 调 theme
-const current = settings.get("theme");
-theme.setUiTheme(current);
+// app 编排：settings 改 → 调 terminal apply
+settings.subscribe("terminalPreferences", (prefs) => {
+  terminal.applyTerminalPreferences(prefs);
+});
 ```
 
-**错误模式**（settings 反向调 theme）：
+**错误模式**（settings 反向调其他 service）：
 
 ```typescript
 // service/settings/sync.ts
-import { themeSvc } from "@/service/theme/api";  // ❌ 反向依赖
+import { sessionSvc } from "@/service/session/api";    // ❌ 跨 service 调用 session（业务 domain）
+import { workspaceSvc } from "@/service/workspace/api"; // ❌ 跨 service 调用 workspace（业务 domain）
 
-function syncTheme(patch: Partial<Settings>) {
-  if (patch.theme) {
-    themeSvc.apply(patch.theme);  // ❌ settings 不应该知道 theme service
-  }
-}
+// ❌ settings 不应该反向调用其他业务 service——跨 service 协调由 app 编排
 ```
 
 ## 5. 不允许的依赖
 
 - ❌ `service/settings/` → `app/`、`ui/`、`@tauri-apps/api` 直接
-- ❌ `service/settings/` → 其他 service 的 `api.ts`（theme/logger/terminal 等）
-- ❌ `service/settings/` → `infra/store` 直接（必须经过 service/persistence）
+- ❌ `service/settings/` → 其他 service 的 `api.ts`（除 `service/persistence`——同层横向依赖）
+- ❌ `service/settings/` → `infra/store` 直接（必须经过 `service/persistence`）
+- ✅ `service/settings/` → `infra/logger` 允许（logger 是横切原语，settings 写 log level 是合法用例）
 
 ## 6. 强制约束（可机械校验）
 
@@ -77,9 +80,9 @@ function syncTheme(patch: Partial<Settings>) {
 grep -rn 'from\s*"@tauri-apps' src/service/settings/ --include='*.ts'
 # 必须为空
 
-grep -rn 'from\s*"\.\./\(app\|ui\)' src/service/settings/ --include='*.ts'
+grep -rn 'from\s*"\.\/\(app\|ui\)' src/service/settings/ --include='*.ts'
 # 必须为空
 
-grep -rn 'from\s*"\.\./\(theme\|logger\|terminal\|output\|session\|workspace\)/api' src/service/settings/ --include='*.ts'
-# 必须为空（只能 import persistence）
+grep -rn 'from\s*"\.\/\(output\|session\|workspace\|terminal\)/api' src/service/settings/ --include='*.ts'
+# 必须为空（output/terminal service 已删除；session/workspace 是同级业务 domain，跨 service 协调由 app 编排）
 ```

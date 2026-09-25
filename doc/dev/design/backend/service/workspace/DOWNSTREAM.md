@@ -53,7 +53,7 @@ MVP 的 workspace 业务完全在 frontend store。v1 设计预留 backend 位�
 
 - workspace **不**调 `SessionManager::create_*`（session 创建归 app 编排）
 - workspace **不**调 `tmux::*` 直接操作（tmux 操作归 app/terminal 编排）
-- workspace **不**实现 pane tree 算法（算法归 `model/workspace/rules.rs` —— v3 设计预留）
+- workspace **不**实现 pane tree 算法（算法归 `model/workspace/rules.rs`）
 
 ## 8. 不允许的依赖
 

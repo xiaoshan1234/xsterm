@@ -13,7 +13,7 @@ service/tmux/
 ├── store.ts      ────►  @/model/tmux/types          (持有 controller 实例)
 ├── bridge.ts     ────►  @/infra/tauri/events/tmuxEvents (listen → mutation)
 ├── autoAttach.ts ────►  @/service/persistence/api   (加载 attached servers)
-├── autoAttach.ts ────►  @/service/logger/api        (失败 log)
+├── autoAttach.ts ────►  @/infra/logger              (失败 log)
 └── *.test.ts
 ```
 
@@ -59,11 +59,13 @@ service/tmux/
 
 **关键**：tmux service 只在 `autoAttach` 路径上调 persistence。其他路径不调持久化——attached server 列表由 app/shell 负责持久化（shutdown 时）。
 
-## 6. service/logger（**仅 autoAttach 失败 log**）
+## 6. infra/logger（**仅 autoAttach 失败 log**）
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| `logger.warn(...)` | `service/logger/api` | autoAttach 失败时 |
+| `logger.warn(...)` | `infra/logger` | autoAttach 失败时 |
+
+**v4 注意**：`service/logger` 已删除（v4 归 `infra/logger`），tmux service 通过 `infra/logger` 单例直接 log。
 
 ## 7. 不允许的依赖
 

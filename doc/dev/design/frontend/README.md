@@ -139,12 +139,12 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app)
 
 ### 5.1 rules 并入 model
 
-v3 设计里 rules 是 `app/rules/` 独立目录。v4 改成 `model/<domain>/rules.ts`，理由：
+rules 在 `model/<domain>/rules.ts`：
 
 - **paneTree 操作 PaneNode**——跟 PaneNode 类型同目录更内聚
 - **sessionRules 操作 Session**——跟 Session 类型同目录更内聚
-- **跨 domain 的纯函数**（textTransform、constants）放 `model/common/`
-- **app 不再持有 rules 目录**——app 只负责编排业务
+- **跨 domain 的纯函数**（textTransform、constants）放 `model/cross-cutting/`
+- **app 不持有 rules 目录**——app 只负责编排业务
 
 ### 5.2 app 和 ui 各有 5 个 module
 

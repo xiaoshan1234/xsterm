@@ -32,11 +32,11 @@ src/infra/
 | xterm.js / xterm-addons | 归 `ui/terminal`（UI 第三方） |
 | 5 个 ANSI 调色板 | `model/settings/terminal`（数据而非物理） |
 
-调整后：
+调整后（4 个候选 → 4 个子模块）：
 
-| v3 候选 | v4 调整 | 理由 |
+| 候选 | 决定 | 理由 |
 |---|---|---|
-| `infra/tauri/` | **保留** | 核心 IPC 适配，跨 service |
+| `infra/tauri` | ✅ 保留 | 核心 IPC 适配，跨 service |
 | `infra/store/` | **保留** | 持久化底层，service/persistence 编排 |
 | `infra/clipboard/` | **保留** | 全局工具，ui/dialogs 用 |
 | `infra/logger/` | **保留**（已设计） | 全局命令式 API |
@@ -133,17 +133,13 @@ src/
 └── infra/       物理适配（4 子模块 × 3 文档 = 12 份）
 ```
 
-## 9. 跟 v3 的核心差异
+## 9. 当前 infra 4 子模块
 
-| 维度 | v3 | v4 |
-|---|---|---|
-| 顶层目录结构 | `src/infra/` 平铺 | 不变，但**按 4 子模块重构** |
-| 子模块数 | 多个（tauri/buffers/window/themes/...） | 4 个（tauri/store/clipboard/logger） |
-| buffers | infra/buffers | 归 `ui/terminal` |
-| window | infra/window | 归 `ui/shell` |
-| themes | infra/themes | 归 `model/settings/terminal` |
-| static | infra/static | 归 `ui` |
-| logger 位置 | service/logger | 归 `infra/logger` |
+| 维度 | 当前结构 |
+|---|---|
+| 顶层目录结构 | `src/infra/` 4 个子模块 |
+| 子模块 | 4 个：tauri / store / clipboard / logger |
+| 调整摘要 | 不设 buffers 子模块（归 ui/terminal）；不设 window 子模块（归 ui/shell）；不设 themes 子模块（归 model/settings/terminal）；不设 static 子模块（归 ui）；logger 来自原 service/logger |
 
 ## 10. 设计系统约束
 

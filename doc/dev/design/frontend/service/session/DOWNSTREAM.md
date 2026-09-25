@@ -14,7 +14,7 @@ service/session/
 ├── store.ts      ────►  @/model/session/accessor        (派生计算)
 ├── bridge.ts     ────►  @/infra/tauri/events/...        (listen → mutation)
 ├── bridge.ts     ────►  ./store.ts                      (写 store)
-└── bridge.ts     ────►  @/service/output/api            (output push)
+└── bridge.ts     ────►  @/ui/terminal/view/OutputBuffer      (output push)
 ```
 
 ## 2. model/session
@@ -38,13 +38,13 @@ service/session/
 | `listen('session-output', ...)` | `infra/tauri/events/sessionOutput` | bridge 订阅 |
 | `listen('session-closed', ...)` | `infra/tauri/events/sessionClosed` | bridge 订阅 |
 
-## 4. service/output（**唯一允许的 service 内部调用**）
+## 4. ui/terminal/view/OutputBuffer（**唯一允许的跨 service 边界 → ui**）
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| `outputSvc.push(sessionId, data)` | `service/output/api` | bridge 收到 session-output 时 |
+| `outputBuffer.push(sessionId, data)` | `ui/terminal/view/OutputBuffer` | bridge 收到 session-output 时 |
 
-**这是 service 之间**唯一**允许的调用**——其他 service 之间不互相调。理由：session-output 必须路由到 output buffer，不通过 app 编排（避免时延）。
+**理由**：session-output 必须路由到 output buffer，不通过 app 编排（避免时延）。`service/output` 在 v4 已删除——output buffer 是 `ui/terminal/` 的渲染队列（见 service/README §2 删表），由 ui 持有，service bridge 直接 emit 到 ui 单例。这是唯一允许的「service → ui」单向数据流。
 
 ## 5. 不允许的依赖
 

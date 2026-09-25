@@ -7,11 +7,11 @@
 ```
 modules/session/
 ├── api.ts    ────►  app/workspace/api.ts          (openInWorkspace 跨 module)
-├── usecases/ ────►  shared/infra/api.ts           (invoke create_local_session 等)
-├── usecases/ ────►  shared/service/session/store (读写 session store)
-├── usecases/ ────►  shared/service/persistence   (saved configs)
-├── usecases/ ────►  shared/service/settings      (default shell / default ssh user)
-└── model.ts  ────►  shared/model/session
+├── usecases/ ────►  infra/tauri/commands/session  (invoke create_local_session 等)
+├── usecases/ ────►  service/session/store         (读写 session store)
+├── usecases/ ────►  service/persistence           (saved configs)
+├── usecases/ ────►  service/settings              (default shell / default ssh user)
+└── model.ts  ────►  model/session/types
 ```
 
 ## 2. app/workspace
@@ -22,46 +22,46 @@ modules/session/
 
 **关键**：session 不直接 import `app/workspace/usecases/*`——只调 api.ts。
 
-## 3. shared/infra
+## 3. infra/tauri/commands/session
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| `infra.invoke('create_local_session', config)` | `shared/infra/api.ts` | createLocal.ts |
-| `infra.invoke('create_ssh_session', config)` | `shared/infra/api.ts` | createSsh.ts |
-| `infra.invoke('create_tmux_session', config)` | `shared/infra/api.ts` | createTmux.ts |
-| `infra.invoke('close_session', { sessionId })` | `shared/infra/api.ts` | close.ts |
-| `infra.invoke('write_session', { sessionId, data })` | `shared/infra/api.ts` | write.ts (输入数据) |
-| `infra.invoke('resize_pty_session', ...)` | `shared/infra/api.ts` | resize.ts |
+| `invoke('create_local_session', config)` | `infra/tauri/commands/session/local` | createLocal.ts |
+| `invoke('create_ssh_session', config)` | `infra/tauri/commands/session/ssh` | createSsh.ts |
+| `invoke('create_tmux_session', config)` | `infra/tauri/commands/session/tmux` | createTmux.ts |
+| `invoke('close_session', { sessionId })` | `infra/tauri/commands/session/close` | close.ts |
+| `invoke('write_session', { sessionId, data })` | `infra/tauri/commands/session/write` | write.ts (输入数据) |
+| `invoke('resize_pty_session', ...)` | `infra/tauri/commands/session/resize` | resize.ts |
 
-**约束**：session **不**直接 import `@tauri-apps/api`——必须经过 `shared/infra/api.ts`。
+**约束**：session **不**直接 import `@tauri-apps/api`——必须经过 `infra/tauri/commands/session`。
 
-## 4. shared/service/
+## 4. service/
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| `useSessionStore()` 订阅 + mutation | `shared/service/session/store` | usecases/store |
-| saved configs CRUD | `shared/service/persistence` | saveConfig.ts / removeConfig.ts |
-| 读 default shell / default ssh user | `shared/service/settings` | createLocal / createSsh 初始化时 |
+| `useSessionService()` 订阅 + mutation | `service/session/api` | usecases/store |
+| saved configs CRUD | `service/persistence/api` | saveConfig.ts / removeConfig.ts |
+| 读 default shell / default ssh user | `service/settings/api` | createLocal / createSsh 初始化时 |
 
-## 5. shared/model/
+## 5. model/session
 
 | 调用 | 来源 |
 |---|---|
-| `Session` / `SessionConfig` / `LocalSessionConfig` / `SshSessionConfig` / `TmuxCcConfig` | `shared/model/session` |
-| `PersistedSessionConfig` | `shared/model/persistence` |
-| `SessionDisplayConfig` | `shared/model/session` |
-| `SessionKind` / `SessionStatus` | `shared/model/session` |
+| `Session` / `SessionConfig` / `LocalSessionConfig` / `SshSessionConfig` / `TmuxCcConfig` | `model/session/types` |
+| `PersistedSessionConfig` | `model/persistence/types`（v4 内嵌到 session） |
+| `SessionDisplayConfig` | `model/session/types` |
+| `SessionKind` / `SessionStatus` | `model/session/types` |
 
 ## 6. 设计意图：session 通过 settings 拿默认值
 
-v3 设计里 createLocalSession 直接 hardcode 默认值。新设计：
+session 不直接调 `app/settings/api.ts`（避免循环：settings 调 session 创建默认值，session 调 settings 读默认值）。session 通过 `service/settings/api` 读默认值——单向：settings 写，session 读。
 
 ```typescript
 // modules/session/usecases/createLocal.ts
-import { useSettingsStore } from "@/service/settings/store";  // ✅ 通过 service
+import { useSettingsService } from "@/service/settings/api";  // ✅ 通过 service
 
 export async function createLocal(config: LocalSessionConfig, workspaceId: string): Promise<...> {
-  const settings = useSettingsStore.getState();
+  const settings = useSettingsService().get();
   const finalConfig = {
     ...config,
     shell: config.shell ?? settings.defaultShell,
@@ -71,30 +71,16 @@ export async function createLocal(config: LocalSessionConfig, workspaceId: strin
 }
 ```
 
-**好处**：
-
-- session 不直接调 `app/settings/api.ts`（避免循环：settings 调 session 创建默认值，session 调 settings 读默认值）
-- session 通过 `shared/service/settings/store` 读默认值——单向：settings 写，session 读
-
-## 7. 当前架构债 → 设计意图说明
-
-| 旧 v3 现状 | 新设计意图 |
-|---|---|
-| 43 个 useCase 平铺在 `app/useCases/` | 5 个 module 按产品功能 + 每个 module 强制 api.ts |
-| `createLocalSession` / `createLocalSessionOnly` 两个文件 | `createLocal.ts` 一个文件，2 个 export 函数 |
-| session 操作直接 import service | session 通过 api.ts 间接调 |
-| 跨 module 协调（session → workspace）混杂在 useCase 内部 | `openInWorkspace.ts` 单独 usecase，调 api.ts |
-
-## 8. 不允许的依赖
+## 7. 不允许的依赖
 
 - ❌ `modules/session/` → `app/workspace/usecases/*`（必须走 api.ts）
-- ❌ `modules/session/` → `infra/` 直接（必须经过 shared/infra）
-- ❌ `modules/session/` → `app/settings/api.ts`（避免循环依赖，通过 shared/service 间接）
+- ❌ `modules/session/` → `infra/` 直接（必须经过 `infra/tauri/commands/session`）
+- ❌ `modules/session/` → `app/settings/api.ts`（避免循环依赖，通过 service 间接）
 
-## 9. 依赖变更流程
+## 8. 依赖变更流程
 
 1. **新增 useCase** → 加 usecases + api.ts + 更新 §3
-2. **backend 新增 IPC 命令** → 加 shared/infra/commands + 加 usecases 调用
+2. **backend 新增 IPC 命令** → 加 `infra/tauri/commands/session/<子域>` + 加 usecases 调用
 3. **backend 修改 IPC 命令签名** → 同步更新 §3 + usecases
-4. **settings 新增默认字段** → 加 shared/service/settings + 更新 §4
+4. **settings 新增默认字段** → 加 `service/settings` + 更新 §4
 5. **session store schema 变化** → 加 migration + 更新 model.ts

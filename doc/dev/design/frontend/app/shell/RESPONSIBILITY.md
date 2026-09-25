@@ -16,7 +16,7 @@ shell module 编排"app 启动 + 关闭"的业务：
 ## 2. 这个 module **不**负责什么
 
 - **不渲染任何 UI**——UI shell 已处理窗口控制和布局
-- **不直接调 IPC**——通过 `shared/infra` 间接调
+- **不直接调 IPC**——通过 `infra/tauri/commands/shell` 间接调
 - **不持有 settings / workspace 状态**——只触发 load 动作
 
 ## 3. 子结构
@@ -38,7 +38,7 @@ modules/shell/
 ```
 shell.initialize()
     ↓
-1. shared/infra.invoke('app_ready_check', ...)  // 检查后端可用
+1. infra/tauri/commands/shell.invoke('app_ready_check', ...)  // 检查后端可用
     ↓
 2. app/settings.load()                              // 加载 settings
     ↓
@@ -72,7 +72,7 @@ shell.shutdown()
     ↓
 4. app/session.closeAll()                           // 关闭所有 session
     ↓
-5. shared/infra.invoke('app_shutdown', ...)          // 通知后端
+5. infra/tauri/commands/shell.invoke('app_shutdown', ...)          // 通知后端
 ```
 
 ## 6. 跟其他 module 的关系
@@ -83,7 +83,7 @@ shell.shutdown()
 | `app/workspace` | shell.initialize() 调 workspace.loadLastWorkspace() |
 | `app/terminal` | shell.initialize() 调 terminal.autoAttachTmuxServers() |
 | `app/session` | shell.shutdown() 调 session.closeAll() |
-| `shared/infra` | shell 调 shared/infra 通知后端 |
+| `infra/tauri/commands/shell` | shell 调 infra 通知后端 |
 
 **关键**：shell 是**唯一允许在 startup/shutdown 直接调多个 module 的 module**——这是它的职责。其他 module 启动时**不**主动初始化（等待 shell 编排）。
 
