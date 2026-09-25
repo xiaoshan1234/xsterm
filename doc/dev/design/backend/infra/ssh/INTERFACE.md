@@ -8,7 +8,7 @@
 ssh 子模块暴露 4 类符号：
 
 1. **`SshBackend` trait** —— SSH 连接 + 命令执行 + 文件上传的抽象接口
-2. **`SshSessionTrait` trait** —— 单个 SSH session 的接口（read / write / resize / close）
+2. **`SshSessionHandle` trait** —— 单个 SSH session 的接口（read / write / resize / close）
 3. **Public 函数** —— `upload_file_via_ssh / upload_image / run_command_capture_stdout`
 4. **`SshError` enum** —— thiserror 派生错误
 
@@ -23,7 +23,7 @@ use std::process::ExitStatus;
 
 pub trait SshBackend: Send + Sync {
     /// 建立 SSH 连接（connect + authenticate + open channel）
-    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionTrait>, SshError>;
+    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionHandle>, SshError>;
 
     /// 一次性执行远程命令（用于 tmux probe）
     /// 返回 (stdout, exit_status) — exit_status 用于判断命令成功
@@ -40,11 +40,11 @@ pub trait SshBackend: Send + Sync {
 - `Send + Sync` 让 `Arc<dyn SshBackend>` 在 `SessionManager` 中使用
 - `run_command_capture_stdout` 是**同步阻塞**——service 层 wrap `tokio::task::spawn_blocking` 避免阻塞 async reactor
 
-### 2.2 SshSessionTrait trait
+### 2.2 SshSessionHandle trait
 
 ```rust
 // infrastructure/ssh/session.rs
-pub trait SshSessionTrait: Send + Sync {
+pub trait SshSessionHandle: Send + Sync {
     /// 写入字节到 SSH channel stdin
     fn write(&self, bytes: &[u8]) -> Result<(), SshError>;
 
@@ -61,9 +61,10 @@ pub trait SshSessionTrait: Send + Sync {
 
 **关键**：
 
-- v4 通过 `Box<dyn SshSessionTrait>` 持有——service 层统一通过 trait 调度
+- v4 通过 `Box<dyn SshSessionHandle>` 持有——service 层统一通过 trait 调度
 - v3 是具体 `Box<SshSession>` 直接持有——v4 抽象化
 - `read` 是非阻塞——service 层 wrap 异步循环（`tokio::select!`）
+- 命名理由：`Handle` 后缀精确描述其角色（持有 russh channel 的句柄），跟 backend 现有的 `TmuxPaneHandle` / `ReloadHandle` 一致
 
 ### 2.3 Public functions
 
@@ -135,7 +136,7 @@ impl From<SshError> for String {
 }
 ```
 
-### 2.5 SshBackendImpl + SshSession impl
+### 2.5 SshBackendImpl + SshSessionHandle impl
 
 ```rust
 // infrastructure/ssh/backend.rs
@@ -149,7 +150,7 @@ impl SshBackendImpl {
 }
 
 impl SshBackend for SshBackendImpl {
-    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionTrait>, SshError> {
+    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionHandle>, SshError> {
         // russh::client::connect(config.host, config.port)
         //   .awaited_authenticate(config.user, auth_method)
         //   .open_shell_channel()
@@ -174,7 +175,7 @@ pub struct SshSession {
     channel: Channel,
 }
 
-impl SshSessionTrait for SshSession {
+impl SshSessionHandle for SshSession {
     fn write(&self, bytes: &[u8]) -> Result<(), SshError> { ... }
     fn read(&self) -> Result<Vec<u8>, SshError> { ... }
     fn resize(&self, rows: u16, cols: u16) -> Result<(), SshError> { ... }
@@ -188,7 +189,7 @@ impl SshSessionTrait for SshSession {
 // infrastructure/ssh/mock.rs
 #[automock]
 impl SshBackend for MockSshBackend {
-    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionTrait>, SshError> { ... }
+    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionHandle>, SshError> { ... }
     fn run_command_capture_stdout(...) -> Result<..., SshError> { ... }
 }
 ```
@@ -199,7 +200,7 @@ impl SshBackend for MockSshBackend {
 
 ```rust
 // services/session/manager.rs
-use crate::infrastructure::ssh::{SshBackend, SshBackendImpl, SshSessionTrait};
+use crate::infrastructure::ssh::{SshBackend, SshBackendImpl, SshSession};
 
 pub struct SessionManager {
     ssh_backend: Arc<dyn SshBackend>,
@@ -220,7 +221,7 @@ impl SessionManager {
         backend: Arc<dyn AppBackend>,
     ) -> Result<SessionInfo, String> {
         let ssh_session = self.ssh_backend.connect(&config).map_err(|e| e.to_string())?;
-        // 包装为 services/session/backends/ssh.rs::SshSession(Box<dyn SshSessionTrait>)
+        // 包装为 services/session/backends/ssh.rs::SshSession(Box<dyn SshSessionHandle>)
         // ...
     }
 }
@@ -236,7 +237,7 @@ use crate::infrastructure::ssh::MockSshBackend;
 fn create_ssh_session() {
     let mut mock_ssh = MockSshBackend::new();
     mock_ssh.expect_connect()
-        .returning(|_config| Ok(Box::new(MockSshSessionTrait::new())));
+        .returning(|_config| Ok(Box::new(MockSshSessionHandle::new())));
 
     let manager = SessionManager::with_ssh_backend(Arc::new(mock_ssh));
     // 测试 SessionManager::create_ssh 流程
@@ -279,7 +280,7 @@ pub async fn upload_image_to_ssh_session(
 
 - service 持有 `Arc<dyn SshBackend>`（不是具体类型）——支持 mock 替换
 - service 不直接 import `russh`——通过 `SshBackend` trait 间接
-- service 调 `ssh_backend.connect(config)` 返回 `Result<Box<dyn SshSessionTrait>, SshError>`
+- service 调 `ssh_backend.connect(config)` 返回 `Result<Box<dyn SshSessionHandle>, SshError>`
 - service 通过 `?` 运算符 + `From<SshError> for String` 自动转换为 IPC 错误
 
 ## 5. 不对外暴露
@@ -292,7 +293,7 @@ pub async fn upload_image_to_ssh_session(
 ## 6. api.rs 变更流程
 
 1. **新增 SshBackend trait method** → 加 `traits.rs` + 更新 mock + 更新 `backend.rs` impl + INTERFACE.md §2.1
-2. **新增 SshSessionTrait method** → 加 `session.rs` + INTERFACE.md §2.2
+2. **新增 SshSessionHandle method** → 加 `session.rs` + INTERFACE.md §2.2
 3. **新增 SshError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
 4. **修改 upload_file_via_ssh 签名** → ⚠️ breaking——同步更新 `app/session/api.rs::upload_image_to_ssh_session`
 5. **修改 russh API** → 升级 Cargo.toml + 更新 `backend.rs / session.rs` 调用 + 跑集成测试

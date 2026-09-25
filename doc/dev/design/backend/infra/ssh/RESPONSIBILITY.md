@@ -94,17 +94,17 @@ frontend **没有** `infra/ssh` —— frontend 不直接调 SSH（通过 IPC �
 
 ```rust
 pub trait SshBackend: Send + Sync {
-    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionTrait>, SshError>;
+    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionHandle>, SshError>;
     fn run_command_capture_stdout(&self, config: &SSHSessionConfig, command: &str) -> Result<(String, ExitStatus), SshError>;
 }
 ```
 
 **关键**：`Send + Sync` 让 `Arc<dyn SshBackend>` 在 `SessionManager` 中使用。
 
-### 8.2 SshSessionTrait 抽象化单个 SSH session
+### 8.2 SshSessionHandle 抽象化单个 SSH session
 
 ```rust
-pub trait SshSessionTrait: Send + Sync {
+pub trait SshSessionHandle: Send + Sync {
     fn write(&self, bytes: &[u8]) -> Result<(), SshError>;
     fn read(&self) -> Result<Vec<u8>, SshError>;  // 非阻塞
     fn resize(&self, rows: u16, cols: u16) -> Result<(), SshError>;  // window-change
@@ -112,14 +112,14 @@ pub trait SshSessionTrait: Send + Sync {
 }
 ```
 
-**关键**：SshSessionTrait 是 `services/session/backends/ssh.rs::SshSession` 的**接口**——`SshSession` 实现该 trait。**这与 v3 不同**：v3 的 `SshSession` 是具体 struct，直接被 `SessionManager` 通过 `Box<SshSession>` 持有。
+**关键**：`SshSessionHandle` 是 `services/session/backends/ssh.rs::SshSession` 的**接口**——`SshSession` 实现该 trait。**这与 v3 不同**：v3 的 `SshSession` 是具体 struct，直接被 `SessionManager` 通过 `Box<SshSession>` 持有。
 
 ### 8.3 host key 校验**当前禁用**(已知安全债)
 
 ```rust
 // infrastructure/ssh/backend.rs
 impl SshBackendImpl {
-    async fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionTrait>, SshError> {
+    async fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionHandle>, SshError> {
         let russh_config = russh::Config {
             // ↓↓↓ 禁用 host key 校验（KNOWN SECURITY DEBT）↓↓↓
             preferred: Preferred::COMPRESSED,
@@ -157,7 +157,7 @@ pub fn upload_image(
 // infrastructure/ssh/mock.rs
 #[automock]
 impl SshBackend for MockSshBackend {
-    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionTrait>, SshError> { ... }
+    fn connect(&self, config: &SSHSessionConfig) -> Result<Box<dyn SshSessionHandle>, SshError> { ... }
     fn run_command_capture_stdout(&self, config: &SSHSessionConfig, command: &str) -> Result<(String, ExitStatus), SshError> { ... }
 }
 ```
@@ -204,7 +204,7 @@ pub enum SshError {
 | `infrastructure/ssh.rs::run_command_capture_stdout` | `infrastructure/ssh/probe.rs` | 抽到独立文件 |
 | `infrastructure/ssh.rs` 内 inline enum error | `infrastructure/ssh/errors.rs::SshError` | 抽到独立文件 + thiserror derive |
 | 无 mock | `infrastructure/ssh/mock.rs::MockSshBackend` | 新增 `#[automock]` |
-| `services/session_manager.rs::Box<SshSession>` | `services/session/backends/ssh.rs::Box<dyn SshSessionTrait>` | v4 通过 trait object 持有 |
+| `services/session_manager.rs::Box<SshSession>` | `services/session/backends/ssh.rs::Box<dyn SshSessionHandle>` | v4 通过 trait object 持有 |
 
 ## 10. ⚠️ 安全警告（继承 v3，重要）
 
@@ -272,7 +272,7 @@ grep -rn 'println.*password\|tracing.*password' src-tauri/src/infrastructure/ssh
 | 文件数 | 1 文件 ~700 行 | 7 文件（traits / backend / session / upload / probe / mock / errors） |
 | 错误处理 | inline enum | 独立 `SshError`（thiserror derive） |
 | mock | 无 | `#[automock]` 自动 mock |
-| SshSession 抽象 | 具体 struct（直接持有）| `SshSessionTrait`（trait object 持有） |
+| SshSession 抽象 | 具体 struct（直接持有）| `SshSession`（trait object 持有） |
 | build_remote_image_path 归属 | `models/session.rs` | `models/cross_cutting/helpers.rs`（v4 model 拆分）|
 | 与 frontend 镜像 | ❌（frontend 无 SSH） | 文档明确标注 "backend 独有" |
 

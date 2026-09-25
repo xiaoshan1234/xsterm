@@ -96,7 +96,7 @@ infrastructure/ssh/
 infrastructure/ssh/
 ├── traits.rs           ← 被 backend.rs / mock.rs 实现 + 被 service/session 实现
 ├── backend.rs          ← 实现 traits.rs + 使用 session.rs + errors.rs
-├── session.rs          ← 实现 SshSessionTrait + 使用 errors.rs
+├── session.rs          ← 实现 SshSessionHandle + 使用 errors.rs
 ├── upload.rs           ← 调用 traits.rs(SshBackend) + models/cross_cutting/helpers
 ├── probe.rs            ← 调用 traits.rs(SshBackend)
 ├── errors.rs           ← 被 traits.rs + backend.rs + session.rs 使用
@@ -137,7 +137,7 @@ v4 边界：
 
 - ssh 子模块是**单一外部资源（SSH 协议）的物理封装**——`russh` crate 调用都集中在这里
 - service 层通过 `SshBackend` trait 抽象——可 mock 替换
-- SshSession 也通过 `SshSessionTrait` trait 抽象——v3 具体类型持有改为 v4 trait object
+- SshSession 也通过 `SshSessionHandle` trait 抽象——v3 具体类型持有改为 v4 trait object
 - error 集中在 `errors.rs`——typed error 模式
 
 ## 12. v3 → v4 跨调用迁移
@@ -146,12 +146,12 @@ v4 边界：
 |---|---|
 | `infrastructure/ssh.rs::SshBackend trait` | `infrastructure/ssh/traits.rs` |
 | `infrastructure/ssh.rs::SshBackendImpl` | `infrastructure/ssh/backend.rs` |
-| `infrastructure/ssh.rs::SshSession` | `infrastructure/ssh/session.rs` + `SshSessionTrait` trait |
+| `infrastructure/ssh.rs::SshSession` | `infrastructure/ssh/session.rs::SshSession` struct + `SshSessionHandle` trait |
 | `infrastructure/ssh.rs::upload_file_via_ssh` | `infrastructure/ssh/upload.rs` |
 | `infrastructure/ssh.rs::run_command_capture_stdout` | `infrastructure/ssh/probe.rs` |
 | `infrastructure/ssh.rs` 内 inline error | `infrastructure/ssh/errors.rs::SshError`(thiserror derive) |
 | 无 mock | `infrastructure/ssh/mock.rs::MockSshBackend`(`#[automock]`) |
-| `services/session_manager.rs::Box<SshSession>` | `services/session/backends/ssh.rs::Box<dyn SshSessionTrait>` |
+| `services/session_manager.rs::Box<SshSession>` | `services/session/backends/ssh.rs::Box<dyn SshSessionHandle>` |
 | 所有 `use crate::infrastructure::ssh::X` | `use crate::infrastructure::ssh::{traits, backend, session, upload, probe, mock, errors}::X` |
 
 ## 13. 不允许的依赖
@@ -169,7 +169,7 @@ v4 边界：
 ## 14. 依赖变更流程
 
 1. **新增 SshBackend trait method** → 加 `traits.rs` + 更新 mock + 更新 `backend.rs` impl + INTERFACE.md §2.1
-2. **新增 SshSessionTrait method** → 加 `session.rs` + INTERFACE.md §2.2
+2. **新增 SshSessionHandle method** → 加 `session.rs` + INTERFACE.md §2.2
 3. **新增 SshError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
 4. **修改 russh API** → 升级 Cargo.toml + 更新 `backend.rs / session.rs` 调用 + 跑集成测试
 5. **修改 upload_file_via_ssh 签名** → ⚠️ breaking——同步更新 `app/session/api.rs::upload_image_to_ssh_session`
