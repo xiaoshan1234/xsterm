@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/app/modules/workspace/`（落地 `src-tauri/src/commands/workspace.rs`）
 > **用户认知里的位置**：「workspace 主视图 IPC 编排」
 > **MVP 状态**：⚠️ **本 module 当前无 IPC 命令** —— 仅作预留位
-> **Frontend 对应**：[`../../../../frontend/app/workspace/RESPONSIBILITY.md`](../../../../frontend/app/workspace/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/app/workspace/RESPONSIBILITY.md`](../../../frontend/app/workspace/RESPONSIBILITY.md)
 
 ## 1. 这个 module 负责什么（目标态）
 

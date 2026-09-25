@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/app/modules/session/`（落地 `src-tauri/src/commands/session.rs`）
 > **用户认知里的位置**：「session 生命周期的所有 IPC 命令」
 > **核心地位**：app 层最核心的 module；其他 4 个 module 都会调 session 的 api
-> **Frontend 对应**：[`../../../../frontend/app/session/RESPONSIBILITY.md`](../../../../frontend/app/session/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/app/session/RESPONSIBILITY.md`](../../../frontend/app/session/RESPONSIBILITY.md)
 
 ## 1. 这个 module 负责什么
 

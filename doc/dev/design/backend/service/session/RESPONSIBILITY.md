@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/services/session/`
 > **类型**：⭐ 核心 domain（session 元数据 = 跨多个 app module 共享的 source of truth）
 > **被调用方**：`app/session`、`app/terminal`、`app/workspace`（未来）、`app/shell`
-> **Frontend 对应**：[`../../../../frontend/service/session/RESPONSIBILITY.md`](../../../../frontend/service/session/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/service/session/RESPONSIBILITY.md`](../../../frontend/service/session/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 

@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/services/workspace/`
 > **类型**：预留位（核心 domain 但 MVP 无 backend 实现）
 > **被调用方**：`app/workspace`（未来）、`app/shell`（未来）
-> **Frontend 对应**：[`../../../../frontend/service/workspace/RESPONSIBILITY.md`](../../../../frontend/service/workspace/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/service/workspace/RESPONSIBILITY.md`](../../../frontend/service/workspace/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么（目标态）
 

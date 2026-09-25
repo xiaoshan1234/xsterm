@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/models/workspace/`
 > **类型**：⭐ 核心 domain — 但 MVP 预留位(backend 无 workspace 状态)
-> **Frontend 对应**：[`../../../../frontend/model/workspace/RESPONSIBILITY.md`](../../../../frontend/model/workspace/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/model/workspace/RESPONSIBILITY.md`](../../../frontend/model/workspace/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么(目标态)
 

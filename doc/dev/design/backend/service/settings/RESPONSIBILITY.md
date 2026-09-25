@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/services/settings/`
 > **类型**：⭐ 横切 domain（应用配置 + log 配置，被所有 domain 用）
 > **被调用方**：`app/shell`、`app/settings`、`app/terminal`、`app/session`（间接通过 app/settings）
-> **Frontend 对应**：[`../../../../frontend/service/settings/RESPONSIBILITY.md`](../../../../frontend/service/settings/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/service/settings/RESPONSIBILITY.md`](../../../frontend/service/settings/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 

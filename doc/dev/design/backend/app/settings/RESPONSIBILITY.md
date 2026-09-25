@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/app/modules/settings/`（落地 `src-tauri/src/commands/settings.rs` + `commands/persistence.rs` 迁入）
 > **用户认知里的位置**：「设置持久化 + log 配置 + 跨 module 应用」
 > **核心地位**：app 层的"横切" module——其他 4 个 module 都会调 settings 触发持久化
-> **Frontend 对应**：[`../../../../frontend/app/settings/RESPONSIBILITY.md`](../../../../frontend/app/settings/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/app/settings/RESPONSIBILITY.md`](../../../frontend/app/settings/RESPONSIBILITY.md)
 
 ## 1. 这个 module 负责什么
 

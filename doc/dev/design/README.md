@@ -277,14 +277,36 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 
 5 层架构的**全部设计文档**已就位：
 
+### Frontend（5 顶层目录 + 78 份）
+
 | 层 | 文档数 | 详情 |
 |---|---|---|
-| app | 16 | 5 module × 3 + 顶层 + 废弃归档 |
+| app | 16 | 5 module × 3 + 顶层 |
 | ui | 16 | 5 module × 3 + 顶层 |
 | model | 16 | 5 + cross-cutting × 3 + 顶层 |
-| service | 19 | 6 domain × 3 + 顶层 |
+| service | 16 | **5** domain × 3 + 顶层（session / workspace / tmux / settings / persistence） |
 | infra | 13 | 4 子模块 × 3 + 顶层 |
-| 顶层 README | 1 | 本文件 |
-| **合计** | **81 份** | 完整 5 层架构设计 |
+| 顶层 README | 1 | `frontend/README.md` |
+| **小计** | **78** | |
+
+### Backend（4 层架构 + 61 份，无 ui 层）
+
+| 层 | 文档数 | 详情 |
+|---|---|---|
+| app | 16 | 5 module × 3 + 顶层 |
+| model | 16 | 5 + cross-cutting × 3 + 顶层 |
+| service | 16 | 5 domain × 3 + 顶层 |
+| infra | 13 | 4 子模块（pty / ssh / tmux / tauri）× 3 + 顶层 |
+| 顶层 README | 0 | backend 顶层 README 占位待建 |
+| **小计** | **61** | |
+
+### 顶层与合计
+
+| 来源 | 文档数 |
+|---|---|
+| 顶层 README | 1（本文件） |
+| frontend 全部 | 78 |
+| backend 全部 | 61 |
+| **合计** | **140 份** |
 
 每份子文档固定 3 节：**RESPONSIBILITY**（职责）/ **INTERFACE**（对外接口）/ **DOWNSTREAM**（对下依赖）。

@@ -192,7 +192,7 @@ shell.closeDialog()
 
 ## 8. 设计系统约束
 
-所有 UI 改动必读 [`../../../design-system.md`](../../../design-system.md)。
+所有 UI 改动必读 [`../../../../design-system.md`](../../../../design-system.md)。
 
 三层校验 grep（pre-commit 必跑）：
 

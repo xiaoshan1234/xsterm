@@ -85,12 +85,14 @@ persistence  ←  app/settings、app/workspace、app/session 调用
 
 ## 6. 已删除的 4 个 domain（归档）
 
-| 原 domain | 归档说明 | 当前位置 |
-|---|---|---|
-| theme | [README](./theme/README.md) | 并入 `service/settings/` |
-| output | [README](./output/README.md) | 归 `ui/terminal/view/OutputBuffer.ts` |
-| terminal | [README](./terminal/README.md) | 归 `ui/terminal/view/TerminalRegistry.ts` |
-| logger | [README](./logger/README.md) | 归 `infra/logger/` |
+| 原 domain | 当前位置 |
+|---|---|
+| theme | 并入 `service/settings/`（Settings.theme 字段） |
+| output | 归 `ui/terminal/view/OutputBuffer.ts` |
+| terminal | 归 `ui/terminal/view/TerminalRegistry.ts` |
+| logger | 归 `infra/logger/` |
+
+注：原 4 个 domain 的 README 已删除（目录已被清理），不再保留链接。
 
 ## 7. 每个 domain 的内部约定
 
@@ -181,7 +183,7 @@ for d in src/service/*/; do test -f "$d/api.ts" || echo "missing: $d"; done
 
 ## 11. 设计系统约束
 
-所有 UI 改动必读 [`../../design-system.md`](../../design-system.md)。
+所有 UI 改动必读 [`../../../../design-system.md`](../../../../design-system.md)。
 
 service 层不直接涉及 UI，但要注意 design-system 的 CSS variables（theme 通过 settings 影响 CSS）。
 

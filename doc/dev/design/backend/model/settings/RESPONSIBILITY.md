@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/models/settings/`
 > **类型**：⭐ 横切 domain — settings 字段的纯类型
 > **被使用方**：`services/settings`(只管 log_config)、`app/session`(saved config 序列化)、`commands/persistence.rs`(MVP)
-> **Frontend 对应**：[`../../../../frontend/model/settings/RESPONSIBILITY.md`](../../../../frontend/model/settings/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/model/settings/RESPONSIBILITY.md`](../../../frontend/model/settings/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 

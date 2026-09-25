@@ -52,10 +52,10 @@ modules/shell/
 
 | 调用 | 来源 | 何时调 |
 |---|---|---|
-| 持久化加载 | `service/persistence` | init.ts 启动序列 |
-| 主题加载 | `service/theme` | init.ts |
-| `@tauri-apps/api/window` 的 `getCurrentWindow()` | `infra/window` | WindowControls（**唯一允许直跳 infra 的 module**） |
-| 全局 CSS / design-system tokens | `infra/styles` | main.tsx 引入 |
+| 持久化加载 | `service/persistence/api` | init.ts 启动序列 |
+| 主题加载 | `service/settings/api`（theme 是 Settings.theme 字段）| init.ts |
+| `@tauri-apps/api/window` 的 `getCurrentWindow()` | `ui/shell` 内部（窗口控制是 shell 自身职责）| WindowControls |
+| 全局 CSS / design-system tokens | `ui/styles/global.css`（main.tsx 引入）| main.tsx |
 
 ## 6. shell 的"特权"：直跳 infra
 

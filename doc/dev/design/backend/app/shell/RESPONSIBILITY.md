@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/app/modules/shell/`（落地 `src-tauri/src/commands/shell.rs`）
 > **用户认知里的位置**：「app 启动序列 + 关闭序列编排」
 > **核心地位**：app 层的入口编排者；其他 4 个 module 的 `initialize` 路径都从这里发起
-> **Frontend 对应**：[`../../../../frontend/app/shell/RESPONSIBILITY.md`](../../../../frontend/app/shell/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/app/shell/RESPONSIBILITY.md`](../../../frontend/app/shell/RESPONSIBILITY.md)
 
 ## 1. 这个 module 负责什么
 

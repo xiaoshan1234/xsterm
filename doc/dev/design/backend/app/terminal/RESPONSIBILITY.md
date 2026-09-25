@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/app/modules/terminal/`（落地 `src-tauri/src/commands/terminal.rs`）
 > **用户认知里的位置**：「终端特有业务」——tmux -CC 协议的所有 IPC + terminal preferences 应用
 > **依赖**：`app/session`（generic dispatcher 路由 tmux）、`app/settings`（attached_tmux.json 持久化）
-> **Frontend 对应**：[`../../../../frontend/app/terminal/RESPONSIBILITY.md`](../../../../frontend/app/terminal/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/app/terminal/RESPONSIBILITY.md`](../../../frontend/app/terminal/RESPONSIBILITY.md)
 
 ## 1. 这个 module 负责什么
 

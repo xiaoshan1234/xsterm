@@ -199,7 +199,7 @@ ui/shell: isReady() = true → 渲染主界面
 
 ## 7. 设计系统约束
 
-所有 UI 改动必读 [`../../design-system.md`](../../design-system.md)。
+所有 UI 改动必读 [`../../../design-system.md`](../../../design-system.md)。
 
 三层校验 grep（pre-commit 必跑）：
 

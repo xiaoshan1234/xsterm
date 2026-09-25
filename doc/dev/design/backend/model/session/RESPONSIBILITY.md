@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/models/session/`
 > **类型**：⭐ 核心 domain — session 全生命周期的纯类型 + 算法
 > **被使用方**：`services/session`、`services/tmux`(通过 `models/tmux/` 间接)、`app/session`、`app/terminal`、`app/workspace`(未来)、`infrastructure/*`
-> **Frontend 对应**：[`../../../../frontend/model/session/RESPONSIBILITY.md`](../../../../frontend/model/session/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/model/session/RESPONSIBILITY.md`](../../../frontend/model/session/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 

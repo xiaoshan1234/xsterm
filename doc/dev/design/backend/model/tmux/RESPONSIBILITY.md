@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/models/tmux/`
 > **类型**：⭐ 派生 domain — tmux 协议层的纯数据投影
 > **被使用方**：`services/tmux`、`services/session`(代理 tmux 操作)、`app/terminal`、`infrastructure/tmux`
-> **Frontend 对应**：[`../../../../frontend/model/tmux/RESPONSIBILITY.md`](../../../../frontend/model/tmux/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/model/tmux/RESPONSIBILITY.md`](../../../frontend/model/tmux/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 

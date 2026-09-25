@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/models/cross_cutting/`
 > **类型**：⭐ 横切 domain — 跨域纯类型 + 算法 + 常量
 > **被使用方**：`models/session`、`models/workspace`、`models/tmux`、`models/settings`、`services/*`、`app/*`
-> **Frontend 对应**：[`../../../../frontend/model/cross-cutting/RESPONSIBILITY.md`](../../../../frontend/model/cross-cutting/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/model/cross-cutting/RESPONSIBILITY.md`](../../../frontend/model/cross-cutting/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 

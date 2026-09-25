@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/services/tmux/`
 > **类型**：⭐ 派生 domain（独立的 tmux -CC control mode 子系统）
 > **被调用方**：`services/session/`（代理给 `TmuxController` 公开方法）、`app/terminal`（直接通过 `SessionManager` 调用）
-> **Frontend 对应**：[`../../../../frontend/service/tmux/RESPONSIBILITY.md`](../../../../frontend/service/tmux/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/service/tmux/RESPONSIBILITY.md`](../../../frontend/service/tmux/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 

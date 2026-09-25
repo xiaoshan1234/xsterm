@@ -3,7 +3,7 @@
 > **位置**：`src-tauri/src/services/persistence/`
 > **类型**：⭐ 横切 domain（tauri-plugin-store 业务 wrapper，被所有 domain 用）
 > **被调用方**：`app/session`、`app/terminal`、`app/settings`、`app/workspace`（未来）
-> **Frontend 对应**：[`../../../../frontend/service/persistence/RESPONSIBILITY.md`](../../../../frontend/service/persistence/RESPONSIBILITY.md)
+> **Frontend 对应**：[`../../../frontend/service/persistence/RESPONSIBILITY.md`](../../../frontend/service/persistence/RESPONSIBILITY.md)
 
 ## 1. 这个 domain 负责什么
 
