@@ -20,7 +20,7 @@
 import { useEffect, useRef } from "react";
 import { useWorkspaceStore } from "../workspace/store";
 import { findPaneNode, getLeafPaneIds, removeSessionAndCollapse } from "../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "../../service/legacy/contexts/session/paneUtils";
+import { withRecomputedSessionIds } from "../../service/pane/paneUtils";
 import type { SessionModel } from "../../model/session/model";
 import type { Session } from "../../model/session/types";
 

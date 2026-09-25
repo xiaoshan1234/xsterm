@@ -1,7 +1,7 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { type PaneNode } from "../model/pane";
 import { type Workspace } from "../model/workspace";
-import { useDragResize } from "../service/legacy/hooks/useDragResize";
+import { useDragResize } from "../service/hooks/panels/useDragResize";
 import { Pane } from "./Pane";
 
 interface PaneTreeProps {

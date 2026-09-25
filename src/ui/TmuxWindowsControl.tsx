@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import * as sessionService from "../service/legacy/services/sessionService";
+import * as sessionService from "../service/session/tauriIpc";
 import type { TmuxWindowListEntry } from "../model";
 import "./TmuxControlWindowView.css";
 

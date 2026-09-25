@@ -6,7 +6,7 @@ import {
   type Session,
   type SplitDirection,
   type Workspace,
-} from "../../../../model";
+} from "../../model";
 
 export type { PaneLeafNode, PaneSplitNode, PaneNode };
 

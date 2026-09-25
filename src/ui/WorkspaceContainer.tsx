@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { type PaneNode } from "../model/pane";
 import { type Workspace } from "../model";
 import { useSession } from "../service/legacy/contexts/SessionContext";
-import { useClampedPanelHeight } from "../service/legacy/hooks/useClampedPanelHeight";
+import { useClampedPanelHeight } from "../service/hooks/panels/useClampedPanelHeight";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
 import { WindowTabBar } from "./WindowTabBar";

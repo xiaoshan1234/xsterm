@@ -502,7 +502,8 @@ pub struct TmuxWindowInit {
     /// Tab-bar label.
     pub name: String,
     /// Currently-active window.
-    pub active: bool,
+    #[serde(rename = "active")]
+    pub is_active: bool,
     /// `tmux list-windows` layout string (informational; not parsed).
     pub layout: String,
 }
@@ -518,7 +519,8 @@ pub struct TmuxPaneInit {
     /// Owning tmux window id (matches `TmuxWindowInit::tmux_window_id`).
     pub tmux_window_id: String,
     /// Currently-active pane.
-    pub active: bool,
+    #[serde(rename = "active")]
+    pub is_active: bool,
     pub width: u16,
     pub height: u16,
     pub title: String,
@@ -599,31 +601,37 @@ pub struct DisplayConfig {
     pub font_size: Option<u32>,
     pub font_family: Option<String>,
     pub cursor_style: Option<String>,
-    pub cursor_blink: Option<bool>,
+    #[serde(rename = "cursorBlink")]
+    pub should_cursor_blink: Option<bool>,
     pub scrollback: Option<u32>,
     pub line_height: Option<f64>,
     pub letter_spacing: Option<f64>,
     pub cursor_width: Option<u32>,
     #[serde(default)]
-    pub line_timestamp: Option<bool>,
+    #[serde(rename = "lineTimestamp")]
+    pub should_show_line_timestamp: Option<bool>,
     #[serde(default)]
     pub time_format: Option<String>,
     #[serde(default)]
     pub date_time_format: Option<String>,
     #[serde(default)]
-    pub auto_wrap: Option<bool>,
+    #[serde(rename = "autoWrap")]
+    pub should_auto_wrap: Option<bool>,
     #[serde(default)]
-    pub reverse_video: Option<bool>,
+    #[serde(rename = "reverseVideo")]
+    pub is_reverse_video: Option<bool>,
     #[serde(default)]
     pub mouse_wheel_scroll_lines: Option<u32>,
     #[serde(default)]
-    pub sync_remote_title: Option<bool>,
+    #[serde(rename = "syncRemoteTitle")]
+    pub should_sync_remote_title: Option<bool>,
     #[serde(default)]
     pub backspace_sends: Option<String>,
     #[serde(default)]
     pub delete_sends: Option<String>,
     #[serde(default)]
-    pub line_feed_mode: Option<bool>,
+    #[serde(rename = "lineFeedMode")]
+    pub should_enable_line_feed: Option<bool>,
     #[serde(default)]
     pub cursor_key_mode: Option<String>,
     #[serde(default)]
@@ -631,7 +639,8 @@ pub struct DisplayConfig {
     #[serde(default)]
     pub modify_other_keys_format: Option<String>,
     #[serde(default)]
-    pub alt_sends_escape: Option<bool>,
+    #[serde(rename = "altSendsEscape")]
+    pub should_alt_send_escape: Option<bool>,
     #[serde(default)]
     pub word_separator_chars: Option<String>,
     #[serde(default)]
@@ -1113,25 +1122,25 @@ mod tests {
             font_size: Some(14),
             font_family: Some("Cascadia Code".to_string()),
             cursor_style: Some("block".to_string()),
-            cursor_blink: Some(true),
+            should_cursor_blink: Some(true),
             scrollback: Some(10000),
             line_height: Some(1.2),
             letter_spacing: Some(0.5),
             cursor_width: Some(8),
-            line_timestamp: Some(true),
+            should_show_line_timestamp: Some(true),
             time_format: Some("%H:%M:%S".to_string()),
             date_time_format: Some("%Y-%m-%d %H:%M:%S".to_string()),
-            auto_wrap: Some(true),
-            reverse_video: Some(false),
+            should_auto_wrap: Some(true),
+            is_reverse_video: Some(false),
             mouse_wheel_scroll_lines: Some(3),
-            sync_remote_title: Some(false),
+            should_sync_remote_title: Some(false),
             backspace_sends: Some("backspace".to_string()),
             delete_sends: Some("delete".to_string()),
-            line_feed_mode: Some(false),
+            should_enable_line_feed: Some(false),
             cursor_key_mode: Some("application".to_string()),
             keypad_mode: Some("application".to_string()),
             modify_other_keys_format: Some("1;3".to_string()),
-            alt_sends_escape: Some(true),
+            should_alt_send_escape: Some(true),
             word_separator_chars: Some(" ".to_string()),
             alt_screen_word_separator_chars: Some("/".to_string()),
             clipboard_read: Some("auto".to_string()),
@@ -1167,26 +1176,26 @@ mod tests {
         let roundtrip: DisplayConfig =
             serde_json::from_str(&json).expect("deserialize DisplayConfig");
 
-        assert_eq!(roundtrip.line_timestamp, Some(true));
+        assert_eq!(roundtrip.should_show_line_timestamp, Some(true));
         assert_eq!(roundtrip.time_format.as_deref(), Some("%H:%M:%S"));
         assert_eq!(
             roundtrip.date_time_format.as_deref(),
             Some("%Y-%m-%d %H:%M:%S")
         );
-        assert_eq!(roundtrip.auto_wrap, Some(true));
-        assert_eq!(roundtrip.reverse_video, Some(false));
+        assert_eq!(roundtrip.should_auto_wrap, Some(true));
+        assert_eq!(roundtrip.is_reverse_video, Some(false));
         assert_eq!(roundtrip.mouse_wheel_scroll_lines, Some(3));
         assert_eq!(roundtrip.sizing_mode, Some(SizingMode::Fixed));
         assert_eq!(roundtrip.cols, Some(120));
         assert_eq!(roundtrip.rows, Some(40));
-        assert_eq!(roundtrip.sync_remote_title, Some(false));
+        assert_eq!(roundtrip.should_sync_remote_title, Some(false));
         assert_eq!(roundtrip.backspace_sends.as_deref(), Some("backspace"));
         assert_eq!(roundtrip.delete_sends.as_deref(), Some("delete"));
-        assert_eq!(roundtrip.line_feed_mode, Some(false));
+        assert_eq!(roundtrip.should_enable_line_feed, Some(false));
         assert_eq!(roundtrip.cursor_key_mode.as_deref(), Some("application"));
         assert_eq!(roundtrip.keypad_mode.as_deref(), Some("application"));
         assert_eq!(roundtrip.modify_other_keys_format.as_deref(), Some("1;3"));
-        assert_eq!(roundtrip.alt_sends_escape, Some(true));
+        assert_eq!(roundtrip.should_alt_send_escape, Some(true));
         assert_eq!(roundtrip.word_separator_chars.as_deref(), Some(" "));
         assert_eq!(
             roundtrip.alt_screen_word_separator_chars.as_deref(),
@@ -1203,8 +1212,8 @@ mod tests {
         let json_with_snake = r#"{"line_timestamp": true, "auto_wrap": false}"#;
         let from_snake: DisplayConfig =
             serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
-        assert!(from_snake.line_timestamp.is_none());
-        assert!(from_snake.auto_wrap.is_none());
+        assert!(from_snake.should_show_line_timestamp.is_none());
+        assert!(from_snake.should_auto_wrap.is_none());
     }
 
     #[test]
@@ -1382,7 +1391,7 @@ mod tests {
         assert_eq!(info.id, 42);
         assert_eq!(info.name, "editor pane");
         assert!(info.is_connected);
-        assert!(info.capabilities.supports_multiplex);
+        assert!(info.capabilities.can_multiplex);
         assert_eq!(info.tmux_pane_id.as_deref(), Some("%13"));
         assert_eq!(info.tmux_controller_id, Some(7));
         assert_eq!(info.tmux_window_id.as_deref(), Some("@3"));

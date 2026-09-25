@@ -112,7 +112,12 @@ pub async fn create_session(
 /// (DashMap-backed registry) this no longer takes any global lock: the
 /// payload size guard runs first, then `state.write` looks up the session
 /// by id via `DashMap::get` and dispatches to the backend's
-/// `write(&self, data)`.
+/// `write(&self, bytes)`.
+///
+/// Tauri IPC contract: the parameter name `data` is part of the JS→Rust
+/// invoke contract (`sessionService.writeSession`). Renaming it would
+/// break the frontend payload key. Do not rename without coordinating
+/// with `src/services/sessionService.ts`.
 #[tauri::command]
 pub async fn write_session(
     session_id: u32,
@@ -192,6 +197,11 @@ pub fn list_sessions(state: State<'_, Arc<SessionManager>>) -> Result<Vec<Sessio
 
 /// Upload an image file to the SSH server for the given session and return the
 /// remote path where it was stored.
+///
+/// Tauri IPC contract: the parameter name `data` is part of the JS→Rust
+/// invoke contract (`sessionService.uploadImageToSshSession`). Renaming
+/// it would break the frontend payload key. Do not rename without
+/// coordinating with `src/services/sessionService.ts`.
 #[tauri::command]
 pub fn upload_image_to_ssh_session(
     session_id: u32,

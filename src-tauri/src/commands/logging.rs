@@ -8,6 +8,13 @@ use crate::error::StringError;
 use crate::logging_setup::LogConfig;
 
 /// Log a message from the frontend at the requested level.
+///
+/// Tauri IPC contract: parameter names (`level`, `source`, `message`, `data`)
+/// are part of the JS→Rust invoke contract (`sessionService.logMessage`).
+/// The Rust parameter `data` would normally violate the project naming
+/// rules (`data` is in the blacklist), but renaming would break the
+/// frontend payload key. Do not rename without coordinating with
+/// `src/services/sessionService.ts`.
 #[tauri::command]
 pub async fn log_message(
     level: String,

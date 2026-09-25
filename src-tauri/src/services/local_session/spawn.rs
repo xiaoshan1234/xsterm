@@ -104,20 +104,20 @@ pub(super) fn spawn_output_forwarder(
 
     let backend_clone = backend.clone();
     backend.spawn(Box::new(move || {
-        let mut seen_data = false;
+        let mut has_seen_data = false;
         let mut remainder: Vec<u8> = Vec::new();
 
         'outer: loop {
             let mut accumulated: Vec<u8> = Vec::with_capacity(DRAIN_SIZE_BYTES);
             let mut burst_start: Option<Instant> = None;
-            let mut eof_seen = false;
+            let mut has_seen_eof = false;
 
             loop {
                 let now = Instant::now();
                 match data_rx.recv_timeout(DRAIN_INTERVAL) {
                     Ok(chunk) => {
                         if chunk.is_empty() {
-                            eof_seen = true;
+has_seen_eof = true;
                             break;
                         }
 
@@ -142,7 +142,7 @@ pub(super) fn spawn_output_forwarder(
                         break;
                     }
                     Err(RecvTimeoutError::Disconnected) => {
-                        eof_seen = true;
+                        has_seen_eof = true;
                         break;
                     }
                 }
@@ -163,11 +163,11 @@ pub(super) fn spawn_output_forwarder(
                     tracing::error!("Failed to emit session output: {}", e);
                     break 'outer;
                 }
-                seen_data = true;
+                has_seen_data = true;
             }
 
-            if eof_seen {
-                if seen_data {
+            if has_seen_eof {
+                if has_seen_data {
                     tracing::info!(
                         "PTY EOF for session {} after data — shell exited",
                         session_id

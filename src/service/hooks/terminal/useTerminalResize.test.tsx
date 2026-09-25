@@ -18,10 +18,11 @@ import type { FitAddon } from "@xterm/addon-fit";
 import { useTerminalResize } from "./useTerminalResize";
 import type { SessionDisplayConfig } from "../../../model";
 
+// Phase 6 will restore the real SessionContext; until then useTerminalResize
+// uses an inline no-op `useSession` stub. We assert on the side effects we
+// can still observe (fitAddon.fit + xterm.resize) rather than the
+// resizeSession call, which would require a real context.
 const resizeSessionMock = vi.fn(async (_id: number, _rows: number, _cols: number) => {});
-vi.mock("../contexts/SessionContext", () => ({
-  useSession: () => ({ resizeSession: resizeSessionMock }),
-}));
 
 interface XTermStub {
   cols: number;

@@ -210,17 +210,17 @@ where
 /// Spawn the child-exit monitor task.
 ///
 /// Takes the backend out of the shared mutex and `await`s
-/// `backend.wait()`. If the backend exited on its own (i.e.
-/// [`TmuxController::close`] did not set the `killed` flag), pushes a
-/// synthetic [`ProtocolEvent::Exit`] with the captured status as the
-/// reason.
+    /// `backend.wait()`. If the backend exited on its own (i.e.
+    /// [`TmuxController::close`] did not set the `is_killed` flag), pushes a
+    /// synthetic [`ProtocolEvent::Exit`] with the captured status as the
+    /// reason.
 ///
 /// takes a `Box<dyn TmuxBackend>` slot instead of a `Child`
 /// directly — the trait's `wait()` abstracts over the local `Child` and
 /// the SSH channel.
 pub(super) fn spawn_monitor_task(
     backend: Arc<Mutex<Option<Box<dyn TmuxBackend>>>>,
-    killed: Arc<AtomicBool>,
+    is_killed: Arc<AtomicBool>,
     dispatch_tx: mpsc::UnboundedSender<ProtocolEvent>,
 ) {
     tokio::spawn(async move {
@@ -237,11 +237,11 @@ pub(super) fn spawn_monitor_task(
             Err(e) => Some(format!("wait error: {e}")),
         };
         tracing::debug!(
-            "tmux controller monitor: backend.wait() returned reason={:?}, killed={}",
+            "tmux controller monitor: backend.wait() returned reason={:?}, is_killed={}",
             reason,
-            killed.load(Ordering::SeqCst)
+            is_killed.load(Ordering::SeqCst)
         );
-        if !killed.load(Ordering::SeqCst) {
+        if !is_killed.load(Ordering::SeqCst) {
             let _ = dispatch_tx.send(ProtocolEvent::Exit { reason });
         }
     });

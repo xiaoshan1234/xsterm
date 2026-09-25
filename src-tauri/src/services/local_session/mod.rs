@@ -171,8 +171,8 @@ pub fn create_local_session(
     cmd.cwd(&cwd);
 
     let child = pair.spawn(cmd).map_err_string()?;
-    let writer = pair.master_writer().map_err_string()?;
-    let reader = pair.master_reader().map_err_string()?;
+    let writer = pair.take_master_writer().map_err_string()?;
+    let reader = pair.take_master_reader().map_err_string()?;
 
     let (writer_tx, writer_thread) = spawn_writer_thread(writer);
 
@@ -211,7 +211,7 @@ pub fn create_local_session(
         capabilities: CapabilityFlags::for_local(),
         handles: LocalSessionHandles {
             child: Some(child),
-            _pair: pair,
+            pair: pair,
             writer_thread: Some(writer_thread),
         },
     };

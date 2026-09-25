@@ -181,19 +181,19 @@ impl TmuxController {
         let (pane_tx_init, pane_rx_init) = oneshot::channel::<(u32, String)>();
         let (initial_state_tx_init, initial_state_rx_init) = oneshot::channel::<()>();
 
-        let killed = Arc::new(AtomicBool::new(false));
+        let is_killed = Arc::new(AtomicBool::new(false));
         let backend_slot: Arc<tokio::sync::Mutex<Option<Box<dyn TmuxBackend>>>> =
             Arc::new(tokio::sync::Mutex::new(Some(backend)));
 
         spawn_reader_task(stdout, dispatch_tx.clone());
         spawn_writer_task(stdin, stdin_rx);
         spawn_stderr_drain_task(stderr);
-        spawn_monitor_task(Arc::clone(&backend_slot), killed.clone(), dispatch_tx);
+        spawn_monitor_task(Arc::clone(&backend_slot), is_killed.clone(), dispatch_tx);
 
         let controller = Arc::new(Self {
             controller_id,
             backend: backend_slot,
-            killed,
+            is_killed,
             stdin_tx,
             app_backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),

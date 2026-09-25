@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { autoAttachTmuxServers } from "../services/sessionService";
+import { autoAttachTmuxServers } from "../session/tauriIpc";
 
 /**
  * re-attach every persisted `attachedTmuxServers` entry on

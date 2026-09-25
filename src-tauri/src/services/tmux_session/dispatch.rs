@@ -88,12 +88,12 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
             // 1. Re-sighting of an already-bound pane → ignore (tmux
             //    re-emits `%window-pane-changed` whenever the active pane
             //    of a window changes, including panes we already own).
-            let already_bound = controller
+            let is_bound = controller
                 .pane_bindings
                 .lock()
                 .map(|m| m.contains_key(&pane_id))
                 .unwrap_or(false);
-            if already_bound {
+            if is_bound {
                 return;
             }
 
@@ -256,12 +256,12 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
             // to look anything up — the frontend uses `tmux_window_id`
             // directly as the Window.id, so the bridge event only
             // carries the tmux-side id.
-            let was_bound = controller
+            let is_bound = controller
                 .window_bindings
                 .lock()
                 .map(|mut m| m.remove(&window_id))
                 .unwrap_or(false);
-            if was_bound {
+            if is_bound {
                 // Defensive cleanup: also drop any pane bindings that
                 // belonged to this window so a subsequent `send_keys` /
                 // `resize_pane` for one of them fails fast instead of
@@ -294,12 +294,12 @@ fn dispatch_event(controller: &Arc<TmuxController>, bridge: &TmuxBridge, event: 
             }
         }
         ProtocolEvent::WindowRenamed { window_id, name } => {
-            let was_bound = controller
+            let is_bound = controller
                 .window_bindings
                 .lock()
                 .map(|m| m.contains(&window_id))
                 .unwrap_or(false);
-            if was_bound {
+            if is_bound {
                 bridge.emit_tmux_window_renamed(&window_id, &name);
             } else {
                 tracing::debug!(
@@ -465,7 +465,7 @@ fn handle_classified_response(
 struct WindowListRow {
     window_id: String,
     name: String,
-    active: bool,
+    is_active: bool,
     layout: String,
 }
 
@@ -475,7 +475,7 @@ struct WindowListRow {
 struct PaneListRow {
     pane_id: String,
     window_id: String,
-    active: bool,
+    is_active: bool,
     width: u16,
     height: u16,
     cwd: String,
@@ -490,7 +490,7 @@ fn parse_window_list_row(line: &str) -> Option<WindowListRow> {
     Some(WindowListRow {
         window_id: parts[0].to_string(),
         name: parts[2].to_string(),
-        active: parts[3] == "1",
+        is_active: parts[3] == "1",
         layout: parts[4].to_string(),
     })
 }
@@ -503,7 +503,7 @@ fn parse_pane_list_row(line: &str) -> Option<PaneListRow> {
     Some(PaneListRow {
         pane_id: parts[0].to_string(),
         window_id: parts[1].to_string(),
-        active: parts[3] == "1",
+        is_active: parts[3] == "1",
         width: parts[4].parse().unwrap_or(0),
         height: parts[5].parse().unwrap_or(0),
         cwd: parts[6].to_string(),
@@ -575,7 +575,7 @@ fn emit_window_list(
         .map(|entry| crate::models::session::TmuxWindowInit {
             tmux_window_id: entry.window_id.clone(),
             name: entry.name.clone(),
-            active: entry.active,
+            active: entry.is_active,
             layout: entry.layout.clone(),
         })
         .collect();
@@ -610,7 +610,7 @@ fn emit_pane_list(
     // `controller.initial_panes` (with each pane's Session.id
     // pre-allocated by `allocate_session_id`) and signal
     // `initial_state_ready` once both lists are processed.
-    let mut first_registered = false;
+    let mut is_first_registered = false;
     let mut inits: Vec<crate::models::session::TmuxPaneInit> = Vec::with_capacity(entries.len());
     for entry in &entries {
         let pane_session_id = controller.allocate_session_id();
@@ -623,15 +623,15 @@ fn emit_pane_list(
             session_id: pane_session_id,
             tmux_pane_id: entry.pane_id.clone(),
             tmux_window_id: entry.window_id.clone(),
-            active: entry.active,
+            active: entry.is_active,
             width: entry.width,
             height: entry.height,
             title: entry.title.clone(),
             cwd: entry.cwd.clone(),
         });
-        if !first_registered {
+        if !is_first_registered {
             controller.record_first_pane(pane_session_id, entry.pane_id.clone());
-            first_registered = true;
+            is_first_registered = true;
             tracing::info!(
                 "bootstrap first pane registered from list-panes: window={} pane={} session_id={}",
                 entry.window_id,

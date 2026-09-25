@@ -1,5 +1,28 @@
 import { useShortcuts } from "./useShortcut";
-import { useSession } from "../contexts/SessionContext";
+// TODO(legacy-migration): replace with service/session/context once contexts split is complete
+function useSession() {
+  // Phase 6 will replace this stub with the real context. The shape below
+  // matches the current SessionContext so call sites type-check until then.
+  return {
+    workspaces: [],
+    activeWorkspaceId: null,
+    setActivePane: () => undefined,
+    closeSession: () => undefined,
+    splitPane: () => undefined,
+  } as {
+    workspaces: ReadonlyArray<import("../../../model").Workspace>;
+    activeWorkspaceId: string | null;
+    setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
+    closeSession: (sessionId: number) => void;
+    splitPane: (
+      workspaceId: string,
+      windowId: string,
+      paneId: string,
+      direction: import("../../../model").SplitDirection,
+      sessionId: number,
+    ) => void;
+  };
+}
 import type { PaneNode, SplitDirection } from "../../../model";
 import type { Window } from "../../../model/window";
 

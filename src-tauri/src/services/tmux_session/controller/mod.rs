@@ -175,7 +175,7 @@ pub struct TmuxController {
     pub(crate) backend: Arc<tokio::sync::Mutex<Option<Box<dyn TmuxBackend>>>>,
     /// Set to `true` by [`TmuxController::close`] so the monitor task
     /// knows not to emit an `Exit` event for a teardown we initiated.
-    pub(crate) killed: Arc<AtomicBool>,
+    pub(crate) is_killed: Arc<AtomicBool>,
     /// Clone of the writer task's command sender. Held by `self` so that
     /// dropping `self` (via `close`) signals the writer task to drain and
     /// exit.
@@ -324,7 +324,7 @@ impl TmuxController {
         Arc::new(Self {
             controller_id,
             backend: Arc::new(Mutex::new(None)),
-            killed: Arc::new(AtomicBool::new(false)),
+            is_killed: Arc::new(AtomicBool::new(false)),
             stdin_tx,
             app_backend,
             pane_bindings: std::sync::Mutex::new(HashMap::new()),

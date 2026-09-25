@@ -7,7 +7,7 @@ import {
 } from "./useSessionActions.helpers";
 import type { SessionDisplayConfig } from "../../../../model/session-config";
 import type { Session, TerminalWindow, Window, Workspace } from "../../../../model";
-import { isSessionUsedInOtherWindow } from "./paneUtils";
+import { isSessionUsedInOtherWindow } from "../../../pane/paneUtils";
 
 // ---------- Fixtures --------------------------------------------------------
 

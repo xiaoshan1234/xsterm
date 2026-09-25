@@ -37,7 +37,7 @@ import {
   getLeafPaneIds,
   removeSessionAndCollapse,
 } from "../../../../app/rules/paneTree";
-import { withRecomputedSessionIds } from "./paneUtils";
+import { withRecomputedSessionIds } from "../../../pane/paneUtils";
 import {
   subscribeTmuxPaused,
   subscribeTmuxContinued,

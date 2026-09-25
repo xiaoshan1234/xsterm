@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::thread;
 
 use crate::infrastructure::app_backend::AppBackend;
-use crate::infrastructure::ssh::{SshBackend, SshConnectResult, SshSessionWrapper};
+use crate::infrastructure::ssh::{SshBackend, SshConnectResult, SshSession};
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{SSHSessionConfig, SessionInfo, SessionType};
 
@@ -13,7 +13,7 @@ pub fn create_ssh_session(
     config: SSHSessionConfig,
     backend: Arc<dyn AppBackend>,
     session_id: u32,
-) -> Result<SshSessionWrapper, String> {
+) -> Result<SshSession, String> {
     let SshConnectResult {
         channel: _channel,
         write_tx,
@@ -48,7 +48,7 @@ pub fn create_ssh_session(
         is_hidden: false,
     };
 
-    let wrapper = SshSessionWrapper {
+    let wrapper = SshSession {
         info,
         write_tx,
         resize_tx,
@@ -58,11 +58,11 @@ pub fn create_ssh_session(
 
     let backend_clone = Arc::clone(&backend);
     thread::spawn(move || {
-        let mut seen_data = false;
+        let mut has_seen_data = false;
         loop {
             match read_rx.recv() {
                 Ok(Some(data)) => {
-                    seen_data = true;
+                    has_seen_data = true;
                     if let Err(e) = backend_clone.emit(
                         "session-output",
                         &serde_json::json!([session_id, &data[..]]),
@@ -77,9 +77,9 @@ pub fn create_ssh_session(
                 }
                 Ok(None) | Err(_) => {
                     tracing::info!(
-                        "SSH read channel closed for session {} (seen_data={}); notifying frontend",
+                        "SSH read channel closed for session {} (has_seen_data={}); notifying frontend",
                         session_id,
-                        seen_data
+                        has_seen_data
                     );
                     let _ =
                         backend_clone.emit("session-disconnected", &serde_json::json!(session_id));

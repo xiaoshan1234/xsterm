@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PaneNode } from "../model/pane";
 import type { Window, Workspace } from "../model";
-import {
-  findFirstLeafWithSession,
-  findPaneNode,
-  forEachPane,
-} from "../service/legacy/contexts/session/paneUtils";
+import { findFirstLeafWithSession, findPaneNode, forEachPane } from "../service/pane/paneUtils";
 
 function getLeafPanesWithSession(root: PaneNode): PaneNode[] {
   const panes: PaneNode[] = [];

@@ -3,10 +3,7 @@ import { type PaneLeafNode, type SplitDirection } from "../model/pane";
 import { type Workspace } from "../model";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import * as paneTree from "../app/rules/paneTree";
-import {
-  isSessionUsedInOtherWindow,
-  getPaneNumber,
-} from "../service/legacy/contexts/session/paneUtils";
+import { isSessionUsedInOtherWindow, getPaneNumber } from "../service/pane/paneUtils";
 import { useTheme } from "../service/legacy/contexts/ThemeContext";
 import Terminal, { type TerminalRef } from "./Terminal";
 import { ContextMenu, type ContextMenuRef } from "./primitives/ContextMenu";
@@ -14,7 +11,7 @@ import { SelectSessionDialog } from "./dialogs/SelectSessionDialog";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./dialogs/paneContextMenu";
 import { TmuxControllerErrorBanner } from "./TmuxControllerErrorBanner";
-import * as sessionService from "../service/legacy/services/sessionService";
+import * as sessionService from "../service/session/tauriIpc";
 import "./Pane.css";
 
 interface PaneProps {

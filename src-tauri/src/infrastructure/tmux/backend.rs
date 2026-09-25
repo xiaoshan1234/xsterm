@@ -210,7 +210,7 @@ pub struct SshTmuxBackend {
     /// unused sender. Dropping this sends EOF on the russh channel
     /// (through the data loop's `write_rx.recv() == None` path) and
     /// ends the bridge thread.
-    _lifetime: SshBackendLifetime,
+    lifetime: SshBackendLifetime,
     /// Remote command's exit code (captured from
     /// `SSH_MSG_CHANNEL_EXIT_STATUS` and stored by the SSH data loop).
     /// `None` until the server sends the status; the [`wait`] impl
@@ -234,7 +234,7 @@ pub struct SshTmuxBackend {
 /// doesn't see it close prematurely. Dropping this struct triggers
 /// EOF on the russh channel via the `write_rx` closure path.
 struct SshBackendLifetime {
-    _channel: Box<dyn crate::infrastructure::ssh::SshChannel + Send>,
+    channel: Box<dyn crate::infrastructure::ssh::SshChannel + Send>,
     _keepalive_unused_tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
@@ -291,8 +291,8 @@ impl SshTmuxBackend {
             stderr_rx: Some(stderr_rx),
             exit_code,
             exit_code_tx,
-            _lifetime: SshBackendLifetime {
-                _channel: channel,
+            lifetime: SshBackendLifetime {
+                channel: channel,
                 _keepalive_unused_tx: keepalive_tx,
             },
         }

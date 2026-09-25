@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import * as sessionService from "../service/legacy/services/sessionService";
+import * as sessionService from "../service/session/tauriIpc";
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import "./TmuxControlWindowView.css";
 

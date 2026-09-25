@@ -206,8 +206,8 @@ async fn writer_task_writes_commands_in_order_and_exits_on_drop() {
 async fn write_command_on_closed_channel_returns_err() {
     let (tx, rx) = mpsc::unbounded_channel::<String>();
     drop(rx);
-    let res = tx.send("cmd\n".to_string());
-    assert!(res.is_err());
+    let send_result = tx.send("cmd\n".to_string());
+    assert!(send_result.is_err());
 }
 
 #[tokio::test]
@@ -282,7 +282,7 @@ fn register_pane_idempotent_and_lookup_round_trip() {
     let controller = Arc::new(TmuxController {
         controller_id: 1,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -338,7 +338,7 @@ fn unbind_pane_removes_entry_and_errors_for_unknown() {
     let controller = Arc::new(TmuxController {
         controller_id: 2,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -379,7 +379,7 @@ async fn dispatch_emits_session_output_for_registered_pane() {
     let controller = Arc::new(TmuxController {
         controller_id: 3,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -439,13 +439,13 @@ async fn dispatch_emits_session_output_for_registered_pane() {
         .as_array()
         .expect("payload is [xsterm_id, data]");
     assert_eq!(arr[0].as_u64().unwrap(), 7777);
-    let data_bytes: Vec<u8> = arr[1]
+    let decoded_bytes: Vec<u8> = arr[1]
         .as_array()
         .unwrap()
         .iter()
         .map(|v| v.as_u64().unwrap() as u8)
         .collect();
-    assert_eq!(data_bytes, b"hi\n");
+    assert_eq!(decoded_bytes, b"hi\n");
 }
 
 #[tokio::test]
@@ -455,7 +455,7 @@ async fn dispatch_emits_pane_added_and_records_first_pane() {
     let controller = Arc::new(TmuxController {
         controller_id: 4,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -588,7 +588,7 @@ async fn dispatch_forwards_pause_continue_and_exit() {
     let controller = Arc::new(TmuxController {
         controller_id: 5,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -678,7 +678,7 @@ async fn await_first_pane_resolves_when_record_first_pane_runs_before_caller() {
     let controller = Arc::new(TmuxController {
         controller_id: 6,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -719,7 +719,7 @@ async fn await_first_pane_resolves_after_record_first_pane() {
     let controller = Arc::new(TmuxController {
         controller_id: 6,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -763,7 +763,7 @@ fn pane_bindings_snapshot_contains_all_registered_panes() {
     let controller = Arc::new(TmuxController {
         controller_id: 7,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -814,7 +814,7 @@ async fn dispatch_routes_pane_exited_to_tmux_pane_removed() {
     let controller = Arc::new(TmuxController {
         controller_id: 8,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -884,7 +884,7 @@ async fn dispatch_routes_pane_died_to_tmux_pane_removed() {
     let controller = Arc::new(TmuxController {
         controller_id: 9,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -949,7 +949,7 @@ async fn dispatch_does_not_emit_removed_for_unbound_pane() {
     let controller = Arc::new(TmuxController {
         controller_id: 10,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1015,7 +1015,7 @@ async fn split_pane_resolves_when_dispatch_sees_window_pane_changed() {
     let controller = Arc::new(TmuxController {
         controller_id: 11,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1123,7 +1123,7 @@ async fn split_pane_times_out_when_no_response() {
     let mut controller = TmuxController {
         controller_id: 12,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1178,7 +1178,7 @@ async fn kill_pane_writes_correct_command_to_stdin() {
     let controller = TmuxController {
         controller_id: 13,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1234,7 +1234,7 @@ async fn close_drains_event_waiters_with_error() {
     let controller = Arc::new(TmuxController {
         controller_id: 14,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1310,7 +1310,7 @@ async fn dispatch_resolves_new_window_via_window_add_then_pane_changed() {
     let controller = Arc::new(TmuxController {
         controller_id: 15,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1443,7 +1443,7 @@ async fn dispatch_handles_bootstrap_window_without_pending_sender() {
     let controller = Arc::new(TmuxController {
         controller_id: 16,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1545,7 +1545,7 @@ async fn dispatch_routes_window_close_to_tmux_window_closed() {
     let controller = Arc::new(TmuxController {
         controller_id: 17,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1651,7 +1651,7 @@ async fn dispatch_routes_window_renamed_to_tmux_window_renamed() {
     let controller = Arc::new(TmuxController {
         controller_id: 18,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1728,7 +1728,7 @@ async fn kill_window_and_rename_window_write_correct_commands_to_stdin() {
     let controller = TmuxController {
         controller_id: 19,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1799,7 +1799,7 @@ async fn capture_pane_resolves_on_command_end_after_command_output() {
     let controller = Arc::new(TmuxController {
         controller_id: 100,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1898,7 +1898,7 @@ async fn capture_pane_resolves_with_err_on_command_error() {
     let controller = Arc::new(TmuxController {
         controller_id: 101,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx,
         app_backend: backend.clone(),
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -1971,7 +1971,7 @@ async fn capture_pane_errors_on_unbound_pane() {
     let controller = TmuxController {
         controller_id: 102,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),
@@ -2023,7 +2023,7 @@ async fn close_drains_pending_capture_with_error() {
     let controller = Arc::new(TmuxController {
         controller_id: 103,
         backend: Arc::new(Mutex::new(None)),
-        killed: Arc::new(AtomicBool::new(false)),
+        is_killed: Arc::new(AtomicBool::new(false)),
         stdin_tx: mpsc::unbounded_channel::<String>().0,
         app_backend: backend,
         pane_bindings: std::sync::Mutex::new(HashMap::new()),

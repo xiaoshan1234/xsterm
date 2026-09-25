@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "../service/legacy/contexts/SessionContext";
+// TODO(legacy-migration): move constants to app/rules/constants.ts in Phase 6
 import { DEFAULT_GROUP_ID } from "../service/legacy/contexts/session/constants";
-import { useAppShortcuts } from "../service/legacy/hooks/useAppShortcuts";
-import { useTmuxAutoAttach } from "../service/legacy/hooks/useTmuxAutoAttach";
+import { useAppShortcuts } from "../service/hooks/shortcuts/useAppShortcuts";
+import { useTmuxAutoAttach } from "../service/tmux/useTmuxAutoAttach";
 import NavBar from "./NavBar";
 import Sidebar from "./sidebar/Sidebar";
 import { WorkspaceContainer } from "./WorkspaceContainer";

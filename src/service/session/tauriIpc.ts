@@ -1,15 +1,21 @@
 // eslint-disable-next-line boundaries/dependencies -- legacy shim: tauri-apps bridge before infra layer existed
 import { invoke } from "@tauri-apps/api/core";
-import { logger } from "../contexts/LoggerContext";
+// TODO(legacy-migration): replace with service/logger/context once contexts split is complete
+const logger = {
+  debug: (...args: unknown[]) => console.debug("[xsterm][tauriIpc]", ...args),
+  info: (...args: unknown[]) => console.info("[xsterm][tauriIpc]", ...args),
+  warn: (...args: unknown[]) => console.warn("[xsterm][tauriIpc]", ...args),
+  error: (...args: unknown[]) => console.error("[xsterm][tauriIpc]", ...args),
+};
 import {
   type TmuxAttachmentRecord,
   type LocalSessionConfig,
   type SSHSessionConfig,
   type SessionType,
   type TmuxCcConfig,
-} from "../../../model";
-import type { SessionInfo } from "../../../infra/tauri/commands/sessions";
-import type { AutoAttachOutcome } from "../../../infra/tauri/commands/tmux";
+} from "../../model";
+import type { SessionInfo } from "../../infra/tauri/commands/sessions";
+import type { AutoAttachOutcome } from "../../infra/tauri/commands/tmux";
 
 export type { SessionInfo, AutoAttachOutcome };
 

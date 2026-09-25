@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { writeSessionBytes } from "../services/sessionService";
+import { writeSessionBytes } from "../../session/tauriIpc";
 import { convertLineEndings } from "../../../app/rules/textTransform";
 
 /**

@@ -179,14 +179,14 @@ impl AppBackend for RecordingBackend {
 /// loop enters `recv_timeout`, eliminating the race where the 8 ms timeout
 /// fires before any data has been sent (causing an empty burst and no emit).
 struct SlowReader {
-    first_call: AtomicBool,
+    is_first_call: AtomicBool,
     barrier: Arc<Barrier>,
 }
 
 impl SlowReader {
     fn new(barrier: Arc<Barrier>) -> Self {
         Self {
-            first_call: AtomicBool::new(true),
+            is_first_call: AtomicBool::new(true),
             barrier,
         }
     }
@@ -195,7 +195,7 @@ impl SlowReader {
 impl Read for SlowReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self
-            .first_call
+            .is_first_call
             .swap(false, std::sync::atomic::Ordering::SeqCst)
         {
             buf[0] = b'a';

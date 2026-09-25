@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { type PersistedWindowConfig, type PersistedWorkspace, type Workspace } from "../../model";
-import { useDragResize } from "../../service/legacy/hooks/useDragResize";
+import { useDragResize } from "../../service/hooks/panels/useDragResize";
 import { SidebarToolbar, type SidebarMenu } from "./SidebarToolbar";
 import { SessionManager } from "./SessionManager";
 import { WorkspaceManager } from "./WorkspaceManager";

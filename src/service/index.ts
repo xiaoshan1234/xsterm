@@ -8,4 +8,3 @@ export * as themeService from "./theme";
 export * as loggerService from "./logger";
 export * as serviceBridges from "./bridges";
 export * as serviceHooks from "./hooks";
-export * as legacyHooks from "./legacy/hooks";

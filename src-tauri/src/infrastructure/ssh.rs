@@ -110,7 +110,7 @@ pub struct SshConnectResult {
 }
 
 /// Holds the metadata and write channel for an established SSH session.
-pub struct SshSessionWrapper {
+pub struct SshSession {
     pub info: SessionInfo,
     pub write_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub resize_tx: Option<mpsc::UnboundedSender<(u16, u16)>>,
@@ -118,18 +118,18 @@ pub struct SshSessionWrapper {
     pub capabilities: CapabilityFlags,
 }
 
-impl SessionBackend for SshSessionWrapper {
-    fn info(&self) -> &SessionInfo {
+impl SessionBackend for SshSession {
+    fn get_session_info(&self) -> &SessionInfo {
         &self.info
     }
 
-    fn capabilities(&self) -> &CapabilityFlags {
+    fn get_capabilities(&self) -> &CapabilityFlags {
         &self.capabilities
     }
 
-    fn write(&self, data: &[u8]) -> Result<(), String> {
+    fn write(&self, bytes: &[u8]) -> Result<(), String> {
         self.write_tx
-            .send(data.to_vec())
+            .send(bytes.to_vec())
             .map_err(|_| format!("SSH channel closed for session {}", self.info.id))
     }
 
@@ -971,9 +971,9 @@ async fn handle_channel_msg(
 async fn forward_write_data(
     handle: &mut russh::client::Handle<ClientHandler>,
     channel_id: russh::ChannelId,
-    data: Option<Vec<u8>>,
+    bytes: Option<Vec<u8>>,
 ) -> bool {
-    match data {
+    match bytes {
         Some(d) => {
             if handle
                 .data(channel_id, CryptoVec::from_slice(&d))
@@ -1012,7 +1012,7 @@ async fn run_data_loop(
     // ready branch that immediately exits the loop. The shell path
     // keeps `keepalive_tx` alive in scope so this branch never closes
     // while `null_packet_keepalive == Some(true)`.
-    let mut keepalive_alive = true;
+    let mut is_keepalive_active = true;
     loop {
         // The resize future is constructed via an `async` block so that
         // the `resize_rx.as_mut().unwrap()` expression is evaluated lazily,
@@ -1039,10 +1039,10 @@ async fn run_data_loop(
                     break;
                 }
             }
-            data = keepalive_rx.recv(), if keepalive_alive => {
+            data = keepalive_rx.recv(), if is_keepalive_active => {
                 if data.is_none() {
                     tracing::debug!("SSH keepalive channel closed; disabling branch");
-                    keepalive_alive = false;
+                    is_keepalive_active = false;
                     continue;
                 }
                 if forward_write_data(handle, channel_id, data).await {

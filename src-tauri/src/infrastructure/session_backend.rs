@@ -24,13 +24,13 @@ use crate::models::session::SessionInfo;
 /// registry can be shared across Tauri IPC worker threads.
 pub trait SessionBackend: Send + Sync {
     /// Returns the metadata for this session.
-    fn info(&self) -> &SessionInfo;
+    fn get_session_info(&self) -> &SessionInfo;
 
     /// Returns the capability flags for this session transport.
-    fn capabilities(&self) -> &CapabilityFlags;
+    fn get_capabilities(&self) -> &CapabilityFlags;
 
     /// Write raw bytes to the session's input channel.
-    fn write(&self, data: &[u8]) -> Result<(), String>;
+    fn write(&self, bytes: &[u8]) -> Result<(), String>;
 
     /// Resize the terminal to the given dimensions.
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;

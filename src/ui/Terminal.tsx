@@ -2,17 +2,18 @@ import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHand
 import { useSession } from "../service/legacy/contexts/SessionContext";
 import { useTheme } from "../service/legacy/contexts/ThemeContext";
 import { type SessionDisplayConfig } from "../model";
-import { uploadImageToSshSession } from "../service/legacy/services/sessionService";
+import { uploadImageToSshSession } from "../service/session/tauriIpc";
 // depcruise-disable-next-line no-ui-to-infra
 import { readClipboardText } from "../infra/clipboard/read";
 // depcruise-disable-next-line no-ui-to-infra
 import { writeClipboardText } from "../infra/clipboard/write";
-import { getClipboardImages } from "../service/legacy/utils/clipboard";
-import { useXterm } from "../service/legacy/hooks/useXterm";
+// depcruise-disable-next-line no-ui-to-infra
+import { getClipboardImages } from "../infra/clipboard/read";
+import { useXterm } from "../service/hooks/terminal/useXterm";
 import { useTauriTerminalOutput } from "../service/hooks/useTauriTerminalOutput";
-import { useTerminalResize } from "../service/legacy/hooks/useTerminalResize";
-import { useLineNumberOverlay } from "../service/legacy/hooks/useLineNumberOverlay";
-import { usePasteBatcher } from "../service/legacy/hooks/usePasteBatcher";
+import { useTerminalResize } from "../service/hooks/terminal/useTerminalResize";
+import { useLineNumberOverlay } from "../service/hooks/terminal/useLineNumberOverlay";
+import { usePasteBatcher } from "../service/hooks/terminal/usePasteBatcher";
 import { countLines } from "../app/rules/textTransform";
 import { PasteConfirmDialog } from "./dialogs/PasteConfirmDialog";
 import "@xterm/xterm/css/xterm.css";

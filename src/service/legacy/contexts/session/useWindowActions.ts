@@ -16,7 +16,7 @@ import {
   assertSessionNotUsedElsewhere,
   getUniqueWindowName,
 } from "../../../../app/rules/sessionRules";
-import { withRecomputedSessionIds } from "../../../../service/legacy/contexts/session/paneUtils";
+import { withRecomputedSessionIds } from "../../../../service/pane/paneUtils";
 import { createWindow as createWindowUseCase } from "../../../../app/useCases/createWindow";
 import { createInitWindow as createInitWindowUseCase } from "../../../../app/useCases/createInitWindow";
 import { replaceInitWindowWithSession as replaceInitWindowWithSessionUseCase } from "../../../../app/useCases/replaceInitWindowWithSession";

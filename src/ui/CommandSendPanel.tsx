@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { type Session, type Workspace } from "../model";
-import { useDragResize } from "../service/legacy/hooks/useDragResize";
+import { useDragResize } from "../service/hooks/panels/useDragResize";
 import { getDefaultPaneId, useCommandTargets } from "./useCommandTargets";
 import { useCommandExecutor } from "./useCommandExecutor";
 import "./CommandSendPanel.css";

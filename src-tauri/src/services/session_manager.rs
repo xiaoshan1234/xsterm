@@ -9,7 +9,7 @@ use crate::infrastructure::app_backend::AppBackend;
 use crate::infrastructure::pty::{NativePtySystem, PtySystem};
 use crate::infrastructure::session_backend::SessionBackend;
 use crate::infrastructure::ssh::{
-    upload_file_via_ssh, SshBackend, SshBackendImpl, SshSessionWrapper,
+    upload_file_via_ssh, SshBackend, SshBackendImpl, SshSession,
 };
 use crate::models::capabilities::CapabilityFlags;
 use crate::models::session::{
@@ -62,17 +62,17 @@ pub struct TmuxPaneHandle {
 }
 
 impl SessionBackend for TmuxPaneHandle {
-    fn info(&self) -> &SessionInfo {
+    fn get_session_info(&self) -> &SessionInfo {
         &self.info
     }
 
-    fn capabilities(&self) -> &CapabilityFlags {
+    fn get_capabilities(&self) -> &CapabilityFlags {
         &self.capabilities
     }
 
-    fn write(&self, data: &[u8]) -> Result<(), String> {
+    fn write(&self, bytes: &[u8]) -> Result<(), String> {
         self.controller
-            .send_keys(&self.tmux_pane_id, data)
+            .send_keys(&self.tmux_pane_id, bytes)
             .map_err(|e| e.to_string())
     }
 
@@ -96,19 +96,19 @@ impl SessionBackend for TmuxPaneHandle {
 /// Active session handle held by [`SessionManager`].
 ///
 /// `Pty` holds a type-erased `Box<dyn SessionBackend>`; `Ssh` holds a
-/// concrete `Box<SshSessionWrapper>` so `get_ssh_config` can read the
+/// concrete `Box<SshSession>` so `get_ssh_config` can read the
 /// original `SSHSessionConfig` (which the trait does not expose). Both still
-/// dispatch via `SessionBackend` (the concrete box derefs to `SshSessionWrapper`,
+/// dispatch via `SessionBackend` (the concrete box derefs to `SshSession`,
 /// which implements the trait).
 pub(crate) enum ActiveSession {
     Pty(Box<dyn SessionBackend + Send>),
-    Ssh(Box<SshSessionWrapper>),
+    Ssh(Box<SshSession>),
     Tmux(Box<TmuxPaneHandle>),
 }
 
 impl ActiveSession {
     /// Borrow the underlying backend as a trait object.
-    fn backend(&self) -> &(dyn SessionBackend + '_) {
+    fn get_backend(&self) -> &(dyn SessionBackend + '_) {
         match self {
             ActiveSession::Pty(b) => &**b,
             ActiveSession::Ssh(b) => &**b,
@@ -129,14 +129,14 @@ impl ActiveSession {
     /// Build a complete [`SessionInfo`] (including `capabilities`) from this
     /// session's metadata.
     fn to_session_info(&self) -> SessionInfo {
-        let mut info = self.backend().info().clone();
-        info.capabilities = self.backend().capabilities().clone();
+        let mut info = self.get_backend().get_session_info().clone();
+        info.capabilities = self.get_backend().get_capabilities().clone();
         info
     }
 
     /// If this session is a tmux pane, return its `tmux_controller_id`;
     /// otherwise return `None`.
-    fn tmux_controller_id(&self) -> Option<u32> {
+    fn get_tmux_controller_id(&self) -> Option<u32> {
         match self {
             ActiveSession::Tmux(b) => Some(b.controller.controller_id()),
             _ => None,
@@ -660,7 +660,7 @@ impl SessionManager {
             .sessions
             .iter()
             .filter_map(|entry| {
-                if entry.value().tmux_controller_id() == Some(controller_id) {
+                if entry.value().get_tmux_controller_id() == Some(controller_id) {
                     Some(*entry.key())
                 } else {
                     None
@@ -726,7 +726,7 @@ impl SessionManager {
             .sessions
             .iter()
             .filter_map(|entry| {
-                if entry.value().tmux_controller_id() == Some(controller_id) {
+                if entry.value().get_tmux_controller_id() == Some(controller_id) {
                     Some(*entry.key())
                 } else {
                     None
@@ -772,7 +772,7 @@ impl SessionManager {
             .sessions
             .iter()
             .filter_map(|entry| {
-                if entry.value().tmux_controller_id() == Some(controller_id) {
+                if entry.value().get_tmux_controller_id() == Some(controller_id) {
                     Some(*entry.key())
                 } else {
                     None
@@ -1107,7 +1107,7 @@ impl SessionManager {
     /// to the backend's shared `write(&self, ...)` impl.
     pub fn write(&self, id: u32, data: &[u8]) -> Result<(), String> {
         let session = self.get(id)?;
-        session.backend().write(data)
+        session.get_backend().write(data)
     }
 
     /// Resize a tmux pane via `resize-pane -t %<pane> -x <cols> -y <rows>`.
@@ -1137,14 +1137,14 @@ impl SessionManager {
     /// `SessionBackend::resize`. Returns `Err` if the session is not
     /// a local PTY (the only backend that takes the ioctl).
     pub fn resize_pty_session(&self, session_id: u32, rows: u16, cols: u16) -> Result<(), String> {
-        self.get(session_id)?.backend().resize(rows, cols)
+        self.get(session_id)?.get_backend().resize(rows, cols)
     }
 
     /// Resize an SSH session's russh channel via `window-change`.
     /// Same `Session.id` lookup as `resize_pty_session`. Returns
     /// `Err` if the session is not an SSH session.
     pub fn resize_ssh_session(&self, session_id: u32, rows: u16, cols: u16) -> Result<(), String> {
-        self.get(session_id)?.backend().resize(rows, cols)
+        self.get(session_id)?.get_backend().resize(rows, cols)
     }
 
     /// Upload an image file to the SSH server for the given session and return
@@ -1248,8 +1248,8 @@ mod tests {
     mock! {
         pub PtyPairM {
             fn spawn(&mut self, cmd: portable_pty::CommandBuilder) -> Result<Box<dyn Child>, String>;
-            fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String>;
-            fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String>;
+            fn take_master_writer(&mut self) -> Result<Box<dyn Write + Send>, String>;
+            fn take_master_reader(&mut self) -> Result<Box<dyn Read + Send>, String>;
             fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
         }
     }
@@ -1258,11 +1258,11 @@ mod tests {
         fn spawn(&mut self, cmd: portable_pty::CommandBuilder) -> Result<Box<dyn Child>, String> {
             self.spawn(cmd)
         }
-        fn master_writer(&mut self) -> Result<Box<dyn Write + Send>, String> {
-            self.master_writer()
+        fn take_master_writer(&mut self) -> Result<Box<dyn Write + Send>, String> {
+            self.take_master_writer()
         }
-        fn master_reader(&mut self) -> Result<Box<dyn Read + Send>, String> {
-            self.master_reader()
+        fn take_master_reader(&mut self) -> Result<Box<dyn Read + Send>, String> {
+            self.take_master_reader()
         }
         fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
             self.resize(rows, cols)
@@ -1373,19 +1373,19 @@ mod tests {
         pub write_data: Arc<Mutex<Vec<u8>>>,
         pub resize_called: Arc<AtomicUsize>,
         pub resize_dims: Arc<Mutex<Vec<(u16, u16)>>>,
-        pub close_called: Arc<AtomicBool>,
+        pub is_close_called: Arc<AtomicBool>,
     }
 
     impl SessionBackend for MockBackend {
-        fn info(&self) -> &SessionInfo {
+        fn get_session_info(&self) -> &SessionInfo {
             &self.info
         }
-        fn capabilities(&self) -> &CapabilityFlags {
+        fn get_capabilities(&self) -> &CapabilityFlags {
             &self.capabilities
         }
-        fn write(&self, data: &[u8]) -> Result<(), String> {
+        fn write(&self, bytes: &[u8]) -> Result<(), String> {
             self.write_called.fetch_add(1, Ordering::SeqCst);
-            self.write_data.lock().unwrap().extend_from_slice(data);
+            self.write_data.lock().unwrap().extend_from_slice(bytes);
             Ok(())
         }
         fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
@@ -1394,7 +1394,7 @@ mod tests {
             Ok(())
         }
         fn close(self: Box<Self>) -> Result<(), String> {
-            self.close_called.store(true, Ordering::SeqCst);
+            self.is_close_called.store(true, Ordering::SeqCst);
             Ok(())
         }
     }
@@ -1420,7 +1420,7 @@ mod tests {
             write_data: Arc::new(Mutex::new(Vec::new())),
             resize_called: Arc::new(AtomicUsize::new(0)),
             resize_dims: Arc::new(Mutex::new(Vec::new())),
-            close_called: Arc::new(AtomicBool::new(false)),
+            is_close_called: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -1443,9 +1443,9 @@ mod tests {
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer()
+            pair.expect_take_master_writer()
                 .returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader()
+            pair.expect_take_master_reader()
                 .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
@@ -2213,7 +2213,7 @@ mod tests {
         let write_data = Arc::clone(&backend.write_data);
         let resize_called = Arc::clone(&backend.resize_called);
         let resize_dims = Arc::clone(&backend.resize_dims);
-        let close_called = Arc::clone(&backend.close_called);
+        let is_close_called = Arc::clone(&backend.is_close_called);
 
         let manager = build_mock_manager(MockPtySystemM::new());
         manager
@@ -2229,7 +2229,7 @@ mod tests {
         assert_eq!(*resize_dims.lock().unwrap(), vec![(24, 80)]);
 
         manager.close(999).unwrap();
-        assert!(close_called.load(Ordering::SeqCst));
+        assert!(is_close_called.load(Ordering::SeqCst));
     }
 
     #[test]
@@ -2239,7 +2239,7 @@ mod tests {
         let write_data = Arc::clone(&backend.write_data);
         let resize_called = Arc::clone(&backend.resize_called);
         let resize_dims = Arc::clone(&backend.resize_dims);
-        let close_called = Arc::clone(&backend.close_called);
+        let is_close_called = Arc::clone(&backend.is_close_called);
 
         let manager = build_mock_manager(MockPtySystemM::new());
         manager
@@ -2268,7 +2268,7 @@ mod tests {
         assert_eq!(*resize_dims.lock().unwrap(), vec![(30, 100)]);
 
         manager.close(999).unwrap();
-        assert!(close_called.load(Ordering::SeqCst));
+        assert!(is_close_called.load(Ordering::SeqCst));
     }
 
     #[test]
@@ -2292,9 +2292,9 @@ mod tests {
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer()
+            pair.expect_take_master_writer()
                 .returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader()
+            pair.expect_take_master_reader()
                 .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
@@ -2347,9 +2347,9 @@ mod tests {
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer()
+            pair.expect_take_master_writer()
                 .returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader()
+            pair.expect_take_master_reader()
                 .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
@@ -2384,16 +2384,16 @@ mod tests {
         let wslenv = cmd
             .get_env("WSLENV")
             .expect("WSLENV should be set when spawning wsl.exe with user env vars");
-        let wslenv_str = wslenv.to_str().expect("WSLENV should be UTF-8");
+        let wslenv_text = wslenv.to_str().expect("WSLENV should be UTF-8");
         assert!(
-            wslenv_str.contains("MY_VAR/u"),
+            wslenv_text.contains("MY_VAR/u"),
             "WSLENV should contain MY_VAR/u, got: {}",
-            wslenv_str
+            wslenv_text
         );
         assert!(
-            wslenv_str.contains("OTHER_VAR/u"),
+            wslenv_text.contains("OTHER_VAR/u"),
             "WSLENV should contain OTHER_VAR/u, got: {}",
-            wslenv_str
+            wslenv_text
         );
 
         // User vars themselves still set on cmd.
@@ -2422,9 +2422,9 @@ mod tests {
                 child.expect_kill().times(0..).returning(|| Ok(()));
                 Ok(Box::new(child))
             });
-            pair.expect_master_writer()
+            pair.expect_take_master_writer()
                 .returning(|| Ok(Box::new(MockWrite)));
-            pair.expect_master_reader()
+            pair.expect_take_master_reader()
                 .returning(|| Ok(Box::new(MockReadReturningZero)));
             pair.expect_resize().returning(|_, _| Ok(()));
             Ok(Box::new(pair))
@@ -2456,11 +2456,11 @@ mod tests {
         // `WSLENV` value from `std::env` — we only assert that we did not
         // add anything to it for this non-wsl shell.
         let wslenv = cmd.get_env("WSLENV");
-        let wslenv_str = wslenv.and_then(|s| s.to_str()).unwrap_or("");
+        let wslenv_text = wslenv.and_then(|s| s.to_str()).unwrap_or("");
         assert!(
-            !wslenv_str.contains("MY_VAR/u"),
+            !wslenv_text.contains("MY_VAR/u"),
             "WSL handling must not fire on cmd.exe; got WSLENV = {:?}",
-            wslenv_str
+            wslenv_text
         );
     }
 

@@ -351,15 +351,15 @@ fn parse_output_event(line: &str) -> Option<ProtocolEvent> {
     let pane_id_end = after_prefix.find(' ').unwrap_or(after_prefix.len());
     let pane_id = &after_prefix[..pane_id_end];
     let data_start = pane_id_end + 1; // skip the separator space
-    let data_str = if data_start <= after_prefix.len() {
+    let unescaped_payload = if data_start <= after_prefix.len() {
         &after_prefix[data_start..]
     } else {
         ""
     };
-    let data = unescape_output(data_str);
+    let output_bytes = unescape_output(unescaped_payload);
     Some(ProtocolEvent::Output {
         pane_id: pane_id.to_string(),
-        data,
+        data: output_bytes,
     })
 }
 
@@ -382,7 +382,7 @@ fn parse_extended_output_event(line: &str, rest: &[&str]) -> Option<ProtocolEven
     // last field; flags never contain colons in practice but if they do,
     // we still want the trailing data to win).
     let tail = rest[2..].join(" ");
-    let data_str = match tail.rsplit_once(':') {
+    let unescaped_payload = match tail.rsplit_once(':') {
         Some((_flags, data)) => data,
         None => {
             return Some(ProtocolEvent::Unknown {
@@ -390,11 +390,11 @@ fn parse_extended_output_event(line: &str, rest: &[&str]) -> Option<ProtocolEven
             });
         }
     };
-    let data = unescape_output(data_str.trim_start());
+    let output_bytes = unescape_output(unescaped_payload.trim_start());
     Some(ProtocolEvent::ExtendedOutput {
         pane_id,
         age_ms,
-        data,
+        data: output_bytes,
     })
 }
 

@@ -38,7 +38,7 @@ impl TmuxController {
 
     /// Tear the controller down.
     ///
-    /// - Sets the `killed` flag so the monitor task does not emit a
+    /// - Sets the `is_killed` flag so the monitor task does not emit a
     ///   spurious `Exit` event.
     /// - Kills the backend (idempotent — best-effort via the
     ///   [`TmuxBackend::kill`] trait method).
@@ -48,7 +48,7 @@ impl TmuxController {
     /// Background tasks unwind asynchronously; this call does **not**
     /// wait for them to finish.
     pub fn close(&self) -> Result<(), TmuxError> {
-        self.killed.store(true, Ordering::SeqCst);
+        self.is_killed.store(true, Ordering::SeqCst);
         if let Ok(mut guard) = self.backend.try_lock() {
             if let Some(mut backend) = guard.take() {
                 if let Err(e) = backend.kill() {

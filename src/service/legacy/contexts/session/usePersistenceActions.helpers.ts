@@ -1,4 +1,4 @@
-import * as sessionService from "../../services/sessionService";
+import * as sessionService from "../../../session/tauriIpc";
 import type { Session } from "../../../../model";
 import { clearSessionOutput } from "../../../../infra/buffers/sessionOutputBuffer";
 

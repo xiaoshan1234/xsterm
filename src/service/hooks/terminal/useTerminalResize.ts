@@ -1,7 +1,16 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { type FitAddon } from "@xterm/addon-fit";
-import { useSession } from "../contexts/SessionContext";
+// TODO(legacy-migration): replace with service/session/context once contexts split is complete
+function useSession() {
+  // Phase 6 will replace this stub with the real context. Shape mirrors
+  // SessionContext so call sites type-check until then.
+  return {
+    resizeSession: (_sessionId: number, _rows: number, _cols: number) => undefined,
+  } as {
+    resizeSession: (sessionId: number, rows: number, cols: number) => void;
+  };
+}
 import { type SessionDisplayConfig } from "../../../model";
 
 export function useTerminalResize(

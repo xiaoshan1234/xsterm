@@ -1,6 +1,6 @@
 import type * as sessionService from "../../services/sessionService";
 import type { Session, SessionDisplayConfig, SessionType, Workspace } from "../../../../model";
-import { isSessionUsedInOtherWindow } from "./paneUtils";
+import { isSessionUsedInOtherWindow } from "../../../pane/paneUtils";
 
 /**
  * Dispatches to the appropriate backend session creator based on session type.
