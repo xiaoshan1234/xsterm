@@ -26,13 +26,13 @@ infrastructure/tauri/
 ## 2. tauri（核心外部依赖）
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `tauri::AppHandle` | `tauri` crate | `RealAppBackend.app` 字段 |
 | `tauri::Emitter` (trait) | 同上 | `app.emit(event, payload)` 方法 |
 | `tauri::ipc::Channel<T>` | 同上 | `Channel<Vec<u8>>` binary output channel |
 | `Channel::new(handler)` | 同上 | 创建 channel（no-op handler for Rust → JS） |
 | `Channel::send(payload)` | 同上 | `emit_binary` 推 binary payload |
-| `tauri::Manager` (trait) | 同上 | (在 lib.rs / app/shell 使用) |
+| `tauri::Manager` (trait) | 同上 | (在 lib.rs / commands/shell 使用) |
 
 **约束**：
 
@@ -43,14 +43,14 @@ infrastructure/tauri/
 ## 3. serde_json
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `serde_json::Value` | `serde_json` crate | `AppBackend::emit` payload 参数 |
 | `serde_json::to_value` | 同上 | (在 service 层使用，emit 构造 payload) |
 
 ## 4. std
 
 | 使用 | 何时 |
-|---|---|
+|—|—|
 | `std::sync::Arc` | `RealAppBackend.app` 字段（共享 AppHandle） |
 | `std::thread::spawn` | `RealAppBackend::spawn` 后台 thread |
 | `std::io::{Read, Write}` | (BinaryFrame 函数不需要——纯 byte 操作) |
@@ -58,7 +58,7 @@ infrastructure/tauri/
 ## 5. mockall
 
 | 使用 | 何时 |
-|---|---|
+|—|—|
 | `#[automock]` | 自动 mock `AppBackend` trait |
 | `MockAppBackend::new()` | 测试代码构造 mock 实例 |
 | `.expect_emit().withf(...)` | 配置 mock 行为 + 参数匹配 |
@@ -66,7 +66,7 @@ infrastructure/tauri/
 ## 6. thiserror
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `#[derive(thiserror::Error)]` | `thiserror` crate | `TauriError` enum derive |
 
 ## 7. 内部依赖关系
@@ -87,7 +87,7 @@ infrastructure/tauri/
 ## 8. 跨子模块依赖（infra 平级）
 
 | 依赖 | 何时 |
-|---|---|
+|—|—|
 | `infra/pty::*` | ❌ 不依赖 |
 | `infra/ssh::*` | ❌ 不依赖 |
 | `infra/tmux::*` | ❌ 不依赖 |
@@ -97,7 +97,7 @@ infrastructure/tauri/
 ## 9. 跨层依赖（infra → service/app）
 
 | 依赖 | 何时 |
-|---|---|
+|—|—|
 | `crate::services::*` | ❌ 不依赖 |
 | `crate::app::*` | ❌ 不依赖 |
 | `crate::commands::*` | ❌ 不依赖 |
@@ -105,25 +105,14 @@ infrastructure/tauri/
 
 ## 10. 设计意图:tauri 是「Tauri runtime 的物理封装」
 
-v3 反模式：`infrastructure/{app_backend,binary_frame}.rs` 2 文件混在顶层，命名上不归类。
+反模式：`infrastructure/{app_backend,binary_frame}.rs` 2 文件混在顶层，命名上不归类。
 
-v4 边界：
+边界：
 
 - tauri 子模块是**单一外部资源（Tauri runtime）的物理封装**——所有 `tauri` crate 调用集中
 - service 层通过 `AppBackend` trait 抽象——可 mock 替换
 - 与 frontend `infra/tauri` 镜像（backend 提供 emit / frontend 提供 invoke / listen）
 - BinaryFrame 是独立 wire format——不依赖其他文件
-
-## 11. v3 → v4 跨调用迁移
-
-| v3 现状 | v4 改法 |
-|---|---|
-| `infrastructure/app_backend.rs` | `infrastructure/tauri/app_backend.rs` |
-| `infrastructure/binary_frame.rs` | `infrastructure/tauri/binary_frame.rs` |
-| 无 errors 模块 | `infrastructure/tauri/errors.rs::TauriError`(thiserror derive) |
-| 无 mock | `infrastructure/tauri/mock.rs::MockAppBackend`(`#[automock]`) |
-| `RealAppBackend::session_output_channel` 直接 `pub` 字段访问 | `RealAppBackend::session_output_channel(&self) -> &Channel<Vec<u8>>` getter |
-| `lib.rs::run()` 内联 `app.emit("session-output-channel", channel)` | `app/shell/api.rs::initialize(app)` 调 `infra/tauri::RealAppBackend::new` |
 
 ## 12. 不允许的依赖
 
@@ -142,5 +131,5 @@ v4 边界：
 2. **新增 BinaryFrame 字段** → 加 `binary_frame.rs` + 同步更新前端解析 + INTERFACE.md §2.3
 3. **新增 TauriError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
 4. **修改 session_output_channel 行为** → ⚠️ breaking——同步更新前端 listener + INTERFACE.md §2.2
-5. **迁移 RealAppBackend 构造** → 加 `services/settings/api.rs::init_real_app_backend` + 在 `app/shell/api.rs::initialize` 调
+5. **迁移 RealAppBackend 构造** → 加 `domain/persistence/api.rs::init_real_app_backend` + 在 `commands/shell/api.rs::initialize` 调
 6. **升级 tauri crate 版本** → 跑 `cargo check` + 跑集成测试 + INTERFACE.md 同步

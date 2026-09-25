@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/infrastructure/pty/`
 > **类型**：⭐ 外部资源 — OS PTY 子进程
-> **被使用方**：`services/session`、`services/session_log`
+> **被使用方**：`domain/session`、`domain/session/log`
 > **外部依赖**：`portable-pty` crate
 
 ## 1. 这个子模块负责什么
@@ -19,9 +19,9 @@ pty 子模块是 backend 与 **OS PTY 子进程**交互的物理适配层——�
 ## 2. 这个子模块 **不**负责什么
 
 - **不持有 session 元数据**——session 元数据归 `models/session/types.rs::SessionInfo`
-- **不实现 PTY read/write 循环**——read/write 循环归 `services/session/backends/local.rs`
-- **不实现 shell command 解析**——command 解析归 `services/session/backends/local.rs::resolution`
-- **不处理 session lifecycle**——lifecycle 归 `services/session/manager.rs::SessionManager`
+- **不实现 PTY read/write 循环**——read/write 循环归 `domain/session/backends/local.rs`
+- **不实现 shell command 解析**——command 解析归 `domain/session/backends/local.rs::resolution`
+- **不处理 session lifecycle**——lifecycle 归 `domain/session/state.rs::SessionManager`
 - **不渲染 xterm**——UI 渲染归 frontend
 
 ## 3. 子结构
@@ -36,14 +36,14 @@ infrastructure/pty/
 └── errors.rs         PtyError（thiserror derive）
 ```
 
-**v3 → v4 拆分映射**：v3 的 `infrastructure/pty.rs`（PTY 全部逻辑）单文件 ~150 行 → v4 拆为 5 文件，按 trait / impl / struct / mock / errors 分类。
+**拆分映射**： `infrastructure/pty.rs`（PTY 全部逻辑）单文件 ~150 行 →拆为 5 文件，按 trait / impl / struct / mock / errors 分类。
 
 ## 4. 跟 frontend infra 的关系
 
 frontend **没有** `infra/pty` —— frontend 不直接调 PTY（通过 IPC 调 backend 的 `create_local_session` / `write_session` / `resize_pty_session`）。
 
 | backend infra/pty | frontend 等价 |
-|---|---|
+|—|—|
 | `PtySystem::openpty(config)` | ❌（frontend 不可见）|
 | `PtyPair::write / read / resize` | ❌（frontend 通过 IPC 间接）|
 | `NativePtySystem::default()` | ❌ |
@@ -53,7 +53,7 @@ frontend **没有** `infra/pty` —— frontend 不直接调 PTY（通过 IPC �
 ## 5. 跟其他 backend infra 子模块的关系
 
 | 子模块 | 关系 |
-|---|---|
+|—|—|
 | `infra/ssh` | 平级（同样"外部资源"切分）；不互相依赖 |
 | `infra/tmux` | 平级；tmux 通过 `tokio::process` 直接 spawn `tmux -CC` 子进程，不通过 PtySystem |
 | `infra/tauri` | 平级；infra/tauri 提供 Tauri runtime 适配（AppHandle / Channel），不与 PtySystem 直接交互 |
@@ -67,10 +67,10 @@ frontend **没有** `infra/pty` —— frontend 不直接调 PTY（通过 IPC �
 ## 6. 跟 service / app 的关系
 
 | 层 | 怎么用 infra/pty |
-|---|---|
-| `services/session` | `SessionManager::pty_system: Box<dyn PtySystem>` 字段持有；`create_local` 调用 `pty_system.openpty(config)` |
-| `services/session_log` | 不直接调 PtySystem——log message 通过 tracing |
-| `app/session` | 不直接调 PtySystem——通过 `services/session::create_local_session` 间接 |
+|—|—|
+| `domain/session` | `SessionManager::pty_system: Box<dyn PtySystem>` 字段持有；`create_local` 调用 `pty_system.openpty(config)` |
+| `domain/session/log` | 不直接调 PtySystem——log message 通过 tracing |
+| `commands/session` | 不直接调 PtySystem——通过 `domain/session::create_local_session` 间接 |
 
 **关键**：service 持有 `Box<dyn PtySystem>`（不是 `NativePtySystem`）——让 mock 可以替换实现。
 
@@ -123,7 +123,7 @@ impl PtySystem for MockPtySystem {
 }
 ```
 
-**vs service 层**：`services/tmux_session/controller/tests.rs` 用手写 `RecordingBackend`——更可控。两种风格保持。
+**vs service 层**：`domain/terminal/controller/tests.rs` 用手写 `RecordingBackend`——更可控。两种风格保持。
 
 ### 8.4 错误统一用 thiserror derive
 
@@ -149,16 +149,6 @@ pub enum PtyError {
 
 **对比**：`SessionError` / `TmuxError` / `SshError` / `PtyError` 各自的错误变体——infra 层先按外部资源划分错误。service 层可以聚合多个 infra 错误到自己的 typed error。
 
-## 9. v3 → v4 拆分映射
-
-| v3 位置 | v4 位置 | 改动 |
-|---|---|---|
-| `infrastructure/pty.rs::PtySystem trait` | `infrastructure/pty/traits.rs` | 抽到独立文件 |
-| `infrastructure/pty.rs::NativePtySystem` | `infrastructure/pty/native.rs` | 抽到独立文件 |
-| `infrastructure/pty.rs::PtyPair` | `infrastructure/pty/pair.rs` | 抽到独立文件 |
-| `infrastructure/pty.rs` 内 error inline | `infrastructure/pty/errors.rs::PtyError` | 抽到独立文件 + thiserror derive |
-| 无 mock | `infrastructure/pty/mock.rs::MockPtySystem` | 新增 `#[automock]` |
-
 ## 10. 强制约束（可机械校验）
 
 ```bash
@@ -178,16 +168,6 @@ grep -rn 'use crate::models::' src-tauri/src/infrastructure/pty/ | grep -v '::ty
 grep -rn 'tokio::main' src-tauri/src/infrastructure/pty/
 # 必须为空（tokio::main 只在 lib.rs / main.rs）
 ```
-
-## 11. 跟 v3 的差异
-
-| 维度 | v3 | v4 |
-|---|---|---|
-| 文件数 | 1 文件 ~150 行 | 5 文件（traits / native / pair / mock / errors） |
-| 错误处理 | inline enum | 独立 `PtyError`（thiserror derive） |
-| mock | 无 | `#[automock]` 自动 mock |
-| Trait 定义与 impl 分离 | ❌ 同文件 | ✅ traits.rs + native.rs 分文件 |
-| 与 frontend 镜像 | ❌（frontend 无 PTY） | 文档明确标注 "backend 独有" |
 
 ## 12. 测试
 

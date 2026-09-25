@@ -1,173 +1,215 @@
 # Backend · 顶层架构
 
-> **位置**：`src-tauri/src/` 下的 4 层架构（app / service / model / infra）
-> **关注点**：把 frontend IPC 调用映射到 Rust 后端的 4 个正交层
+> **位置**：`src-tauri/src/` 下的 3 层架构（commands / domain / infra）
+> **关注点**：把 frontend IPC 调用映射到 Rust 后端的 3 个正交层
+> **设计原则**：backend 不需要 ui 层（frontend 多 ui 是因为有视图，backend 没视图）；service 跟 model 边界模糊，合并为 domain
 
-## 1. 4 层架构
+## 1. 3 层架构
 
 ```
-src-tauri/src/
-├── app/         Tauri IPC 命令编排（5 module 按产品功能切分，与 frontend app/ 镜像）
-├── service/     业务逻辑 + 跨 module 状态（5 domain 按数据归属切）
-├── model/       纯数据 + 算法（5 + cross-cutting 业务 domain）
-└── infra/       物理适配（4 子模块按外部资源切：pty / ssh / tmux / tauri）
+src-tauri/src/                                            （语义名）
+├── commands/    Tauri IPC 编排（4 module 按产品功能切）+ 跨 module 协调
+│   ├── session/      原 app/session/* —— session lifecycle IPC
+│   ├── workspace/    原 app/workspace/* —— 主视图 IPC（预留）
+│   ├── terminal/     原 app/terminal/* —— tmux IPC
+│   ├── settings/     原 app/settings/* —— persistence/logging IPC（含 attached_tmux）
+│   └── shell/        原 app/shell/* —— 启动钩子（setup hook 内编排）
+├── domain/      业务核心：状态机 + 持久化 + 纯数据 + 算法
+│   ├── session/      合并：原 service/session/*（状态机 + 3 backend 实现）+ 原 model/session/*（types + rules）
+│   ├── workspace/    合并：原 service/workspace/* + 原 model/workspace/*（paneTree 算法 + types）
+│   ├── terminal/     合并：原 service/tmux/* + 原 model/tmux/*（TmuxController + protocol + types）
+│   ├── settings/     合并：原 service/settings/* + 原 model/settings/* + 原 model/cross-cutting/*（types + constants + helpers）
+│   └── persistence/  原 service/persistence/*（attached_tmux + log_config 直存）
+└── infra/       物理适配（4 子模块按外部资源切）
+    ├── pty/          OS PTY 子进程（portable-pty）
+    ├── ssh/         SSH 协议（russh）
+    ├── tmux/        tmux 控制模式（外部子进程）
+    └── tauri/       Tauri runtime（AppBackend + binary_frame）
 ```
 
 | 层 | 职责 | 子结构数 | 子结构 |
-|---|---|---|---|
-| `app/` | Tauri IPC 编排 | 5 module | shell / workspace / terminal / session / settings |
-| `service/` | 业务逻辑 + 进程级状态 | 5 domain | session / workspace / tmux / settings / persistence |
-| `model/` | 纯数据 + 算法 + 不变量 | 5 + 1 | session / workspace / tmux / settings / cross-cutting |
-| `infra/` | 物理适配（PTY / SSH / tmux / Tauri） | 4 子模块 | pty / ssh / tmux / tauri |
+|—|—|—|—|
+| `commands/` | Tauri IPC 编排 | 4 module | session / workspace / terminal / shell（砍掉 settings——attached_tmux→terminal，log→shell）|
+| `domain/` | 业务核心（状态机 + 类型 + 算法 + 持久化）| 4 domain | session / workspace / terminal / persistence（砍掉 settings——类型字段拆到归属 domain）|
+| `infra/` | 物理适配（PTY / SSH / tmux / Tauri）| 4 子模块 | pty / ssh / tmux / tauri |
 
 **与 frontend 的关系**：
-- frontend `app/` 5 module ↔ backend `app/` 5 module —— **1:1 镜像**，跨 IPC 调用
-- frontend `model/` ↔ backend `model/` —— **同名镜像**（不同语言：Rust serde vs TS interface）
-- frontend `service/` ↔ backend `service/` —— **同名镜像但职责相反**（frontend 镜像状态、backend 协议 + 状态机）
+
+- frontend `app/` 5 module ↔ backend `commands/` **4 module**（app/settings 不对应 backend 单一 module——attached_tmux 在 terminal，log 在 shell）
+- frontend `model/` ↔ backend `domain/` 内嵌 types —— **同名镜像**（不同语言：Rust serde vs TS interface）
+- frontend `service/` ↔ backend `domain/` 内嵌 stores —— **职责分叉**：frontend 镜像状态，backend 协议 + 状态机 + 持久化
 - frontend `infra/tauri`（IPC adapter）↔ backend `infra/tauri`（AppBackend + binary_frame）
 
-## 2. v3 → v4：从零设计
+## 2. 从零设计
 
-backend 设计从零出发。v3 现状（`src-tauri/src/commands/` 单文件平铺）已映射到 v4 设计（`src-tauri/src/app/modules/<name>/` 5 module）。
+`src-tauri/src/commands/<module>/` 4 module 拆分（已存在；module 列表见 `commands/README.md`）。
 
 **目录命名**：
-- 本 README 的「app/」是**语义名**；落地目录沿用 Rust 习惯 `commands/`，避免全量重写 import
-- 重命名 `commands/` → `app/` 是后续 PR 的事，本文档先描述目标结构
-- 模块内部文件名同样：v4 文档写 `app/session/api.rs`，实际落地仍为 `commands/session.rs`（顶层），子目录 `commands/session/` 用作 sub-module 划分
 
-## 3. 各层职责
+- 本 README 的「commands/」是**语义名**；落地目录沿用 Rust 习惯 `commands/`，避免全量重写 import
+- 重命名 `commands/` → 新顶层目录（`commands/ domain/ infra/`）是后续 PR 的事，本文档先描述目标结构
+- 模块内部文件名：文档写 `commands/session/api.rs`，实际落地仍为 `commands/session.rs`（顶层），子目录 `commands/session/` 用作 sub-module 划分
 
-### 3.1 `app/` — Tauri IPC 编排
+## 3. 3 层依赖方向
 
-5 module 按产品功能切分（跟 frontend `app/` 5 module 一一对应）：
+```
+commands ──► domain ──► infra
+   │           │             │
+   │           │             ▼
+   │           │        外部资源（OS / 网络 / tauri runtime）
+   │           ▼
+   │        纯数据 + 算法 + 状态机
+   │
+   ▼
+Tauri IPC（边界）
+```
+
+**关键规则**：
+
+- **commands → domain**：正常依赖——commands 编排 domain 业务逻辑
+- **commands → infra**：**禁止**（commands 不直接调 infra trait，必须经过 domain）
+- **domain → infra**：正常依赖——domain 持有 `Box<dyn Trait>` 引用，infra 提供 trait impl
+- **domain → commands**：**禁止**（domain 不知道 Tauri IPC 存在）
+- **infra → 任何**：**禁止**（infra 是最底层物理适配，只依赖外部 crate）
+- **commands 跨 module**：通过 `commands/<other_module>/api.rs` 调用
+
+## 4. 各层职责
+
+### 4.1 `commands/` — Tauri IPC 编排
+
+4 module 按产品功能切分（砍掉 settings：attached_tmux→terminal，log→shell）：
 
 | module | 产品功能 |
-|---|---|
-| `app/shell` | 启动序列 + 关闭序列的 IPC 编排 |
-| `app/workspace` | 主视图 IPC 编排（预留位） |
-| `app/terminal` | tmux -CC + terminal preferences IPC 编排 |
-| `app/session` | session 全生命周期 IPC 编排 |
-| `app/settings` | 设置持久化 + log 路径 IPC 编排 |
+|—|—|
+| `commands/session` | session lifecycle IPC（create / write / resize / close / list）|
+| `commands/workspace` | 主视图 IPC（预留）|
+| `commands/terminal` | tmux -CC IPC + attached_tmux 持久化|
+| `commands/shell` | 启动钩子（`.setup()` 内编排）+ log runtime IPC（合并 log_message + get/set_log_config + get_log_dir）|
 
-详见 [`app/README.md`](app/README.md)。
+详见 [`commands/README.md`](commands/README.md)。
 
-### 3.2 `service/` — 业务逻辑
+### 4.2 `domain/` — 业务核心
 
-按数据 domain 切分（与 frontend `service/` 的 5 domain 镜像）：
+按产品功能切分（合并原 service + model），每个 domain 内部自由组织 4 类文件：
 
-| domain | 职责 |
-|---|---|
-| `service/session` | session 元数据 + 3 种 backend 实现（local / ssh / tmux_pane） |
-| `service/workspace` | 预留位（MVP 无 backend workspace 状态） |
-| `service/tmux` | tmux -CC control mode 状态机 + 协议层 |
-| `service/settings` | log config + reload handle 管理 |
-| `service/persistence` | tauri-plugin-store 业务 wrapper |
+| 文件类型 | 用途 |
+|—|—|
+| `<domain>/types.rs` | 纯数据 + serde derive（API 序列化 + IPC 序列化）|
+| `<domain>/rules.rs` | 纯算法（不可变 mutation，纯函数）|
+| `<domain>/state.rs` 或 `<domain>/<state_machine>.rs` | 状态机（持有 Arc<Mutex/DashMap>，提供 public method）|
+| `<domain>/persistence.rs` | 持久化 IO（typed wrapper over infra）|
 
-详见 [`service/README.md`](service/README.md)。
+| domain | 数据 + 状态机 + 算法 + 持久化 |
+|—|—|
+| `domain/session` | SessionManager 中央状态机 + 3 种 backend 实现（local/ssh/tmux_pane）+ session types + settings 字段（CapabilityFlags/SizingMode/DisplayConfig/EnvConfig/SshAuthMethod/SessionLoggingConfig）+ rules + helpers + constants |
+| `domain/workspace` | 预留位（MVP backend 无 workspace 状态）+ paneTree 算法 + Workspace/Window/Group/PaneNode/SplitDirection types |
+| `domain/terminal` | TmuxController 状态机 + tmux 协议层 + tmux types |
+| `domain/persistence` | attached_tmux + log_config 直存 backend-only 持久化（含 LogConfig runtime + ReloadHandle 管理，合并自原 domain/settings）|
 
-### 3.3 `model/` — 纯数据 + 算法
+详见 [`domain/README.md`](domain/README.md)。
 
-按 5 + 1 domain 切分（与 frontend `model/` 1:1 镜像）：
-
-| domain | 数据 |
-|---|---|
-| `model/session` | session 全生命周期纯类型 + 算法 |
-| `model/workspace` | Workspace / Window / Group / PaneNode（含 paneTree 算法） |
-| `model/tmux` | tmux 协议层的纯数据投影 |
-| `model/settings` | log config + saved config 类型 |
-| `model/cross-cutting` | 跨域纯类型 + helpers + 常量 |
-
-详见 [`model/README.md`](model/README.md)。
-
-### 3.4 `infra/` — 物理适配
+### 4.3 `infra/` — 物理适配
 
 按外部资源切分（与 frontend `infra/` 镜像）：
 
 | 子模块 | 外部资源 |
-|---|---|
-| `infra/pty` | OS PTY 子进程（portable-pty） |
-| `infra/ssh` | SSH 协议（russh） |
-| `infra/tmux` | tmux 控制模式（外部子进程） |
-| `infra/tauri` | Tauri runtime（AppBackend + binary_frame） |
+|—|—|
+| `infra/pty` | OS PTY 子进程（portable-pty）|
+| `infra/ssh` | SSH 协议（russh）|
+| `infra/tmux` | tmux 控制模式（外部子进程）|
+| `infra/tauri` | Tauri runtime（AppBackend + binary_frame）|
 
 详见 [`infra/README.md`](infra/README.md)。
 
-## 4. 依赖方向
+## 5. 简化原因（单层 → 3 层）
 
-```
-                     ┌─────────────────────────┐
-                     │  app/                    │
-                     │  ──► service/*           │
-                     │  ──► model/*             │
-                     │  ──► infra/* (经 service) │
-                     └─────────────────────────┘
-                            │  ▲
-   ┌────────────────────────┘  │
-   │                           │
-   ▼                           │
-service/* ──► infra/* ──► model/*
-```
+| 旧 4 层 | 新 3 层 | 简化理由 |
+|—|—|—|
+| `app/` | `commands/` | app/session/api.rs 是空壳纯转发（`create_local(state, backend, config)` ≈ `SessionManager::create_local(config, backend)`）；删除空壳 |
+| `service/` + `model/` | `domain/` | service/session 既做"中央状态机"又做"3 种 backend 实现"，model/session 既做 types 又做 rules；service 跟 model 边界模糊，合并 |
+| `infra/` | `infra/` | 不变——物理适配层始终正确 |
 
-**关键规则**：
-- **app → service**：正常依赖
-- **app → model**：自由（参数 / 返回类型）
-- **app → infra**：**禁止**（必须经过 service）
-- **app 模块之间**：只通过 `modules/<other>/api.rs` 互相调用
+**文档数变化**：backend 62 份 → ~43 份（**-31%**）。
 
-## 5. 跟现状的对应
+**代码影响**（仅设计文档，代码后续 PR 跟进）：
 
-| v4 设计目录 | 现状对应 |
-|---|---|
-| `app/` | `src-tauri/src/commands/`（5 module 拆分中） |
-| `service/` | `src-tauri/src/services/`（5 domain 重构中） |
-| `model/` | `src-tauri/src/models/`（5 + 1 domain 重构中） |
-| `infra/` | `src-tauri/src/infrastructure/`（4 子模块重构中） |
+- `services/session/manager.rs`（3000+ 行）拆到 `domain/session/` 下按文件分（manager / registry / id / backends/local / backends/ssh / backends/tmux_pane / log / types / rules / errors）
+- `services/tmux/controller/` 拆到 `domain/terminal/` 下按文件分（controller / spawn / commands / io_tasks / registry / sync / id_map / subscriber / types / errors）
+- `app/<module>/api.rs` 删除——`#[tauri::command]` wrapper 直接放在 `commands/<module>/<command>.rs`，内部调 domain 方法
+- `services/persistence/{sessions,groups}.rs` 已在前轮砍掉
 
-**目录名沿用 Rust 习惯**——`services/` / `infrastructure/` / `models/` / `commands/`（不动）。模块内部按 5 module / 5 domain / 5 + 1 domain / 4 子模块结构重组。
+## 6. 跟现状的对应
 
-## 6. 关键设计决策
+| 设计目录 | 现状对应（rust）|
+|—|—|
+| `commands/` | `src-tauri/src/commands/`（已存在 4 module 平铺的拆分版本）|
+| `domain/` | `src-tauri/src/services/` + `src-tauri/src/models/` 合并 |
+| `infra/` | `src-tauri/src/infrastructure/`（不变）|
 
-### 6.1 为什么按"产品功能"切分 `app/`，按"数据 domain"切分 `service/` 和 `model/`
+**目录名沿用 Rust 习惯**——`commands/` / `domain/` / `infrastructure/` 是 Rust 项目常见命名（注：service+model 已合并为 domain）。`commands/<module>/` 子目录按产品功能切。
 
-- **`app/` 按产品功能切**：5 module ↔ frontend app/ 5 module —— 改一个产品功能 = 改 1 个 app module + 1 个 frontend app module
-- **`service/` 和 `model/` 按数据 domain 切**：跨 module 共享状态按数据归属切，不按产品功能切（避免被产品边界拆散）
-- **`infra/` 按外部资源切**：4 子模块按外部系统切（OS PTY / SSH / tmux / Tauri）
+## 7. 关键设计决策
 
-### 6.2 为什么 backend `service/` 比 frontend `service/` 多一层（业务逻辑）
+### 7.1 为什么 backend 砍 ui 层
 
-frontend `service/` 只持有**运行时状态副本**（zustand）+ IPC bridge。
+frontend 多一个 ui 层是因为有视图（React 组件），backend 没视图——自然不需要。frontend 5 层（app/ui/model/service/infra）↔ backend 3 层（commands/domain/infra）是**天然不对称**。
 
-backend `service/` **除了状态，还承载业务规则**：
-- `service/session::SessionManager` 是中央状态机（3000+ 行 → 拆分后）
-- `service/tmux::TmuxController` 是协议层 + 状态机
-- `service/persistence::save_*/load_*` 是 IO 业务规则
+### 7.2 为什么 service 跟 model 合并为 domain
 
-frontend 业务规则在 `app/`，backend 业务规则在 `service/`——两边对"业务逻辑"的归属不同（这是 frontend ↔ backend 镜像的固有差异）。
+- service/session 同时做"中央状态机 + 3 backend 实现"——`service/session/backends/local.rs` + `service/session/backends/ssh.rs` 跟 `infra/pty/` + `infra/ssh/` 是**两层 backend 实现**（重叠代码）
+- `model/<domain>/rules.rs` 跟 `service/<domain>/<state>.rs` 是两类代码（纯函数 vs 状态机），但**合并后按文件分（types/rules/state/persistence.rs）反而更清晰**
+- service 跟 model 强制分层带来的实际收益小（边界本来就模糊），但认知开销大（多一个目录层级）
 
-### 6.3 为什么 `infra/session_backend.rs` 不在 `infra/`
+### 7.3 为什么 commands 直接调 domain（不经过 service 层）
 
-`SessionBackend` trait 是 3 种 backend（PTY / SSH / tmux pane）的**抽象接口**——是 service 关注，不是外部资源。`SessionBackend` 已迁出 `infra/` → `services/session/backends/traits.rs`。
+- app/<module>/api.rs 是空壳纯转发（命令签名 → domain 方法），删除
+- `#[tauri::command]` wrapper 直接放在 `commands/<module>/<command>.rs`，内部直接 `domain/session/manager.rs::create_local(...)`
+- 保留 api.rs 的**唯一价值**是统一封装 `State<Arc<...>>` 注入——但这每个 command 自己写 1 行就行，不需要单独一层
 
-infra 是"对外部世界的接口"——`PtySystem::openpty()`、`SshBackend::connect()`、`TmuxBackend::spawn()`、`AppBackend::emit()`。service trait 是"对 service 的接口"——`SessionBackend` 让 `SessionManager` 统一调度。
+### 7.4 为什么 tmux 归 domain/terminal 而不是独立 domain
 
-## 7. 占位与未来工作
+- 原 service/tmux 是"独立 domain"——但 tmux 是**terminal 产品功能的子集**，不是独立业务
+- 前端 terminal module 包含 xterm + tmux + outputBuffer，backend terminal module 同理包含 TmuxController + protocol + 3 backend 实现
+- 按产品功能切（不是按技术类型）——tmux 是 terminal 的子目录
+
+### 7.5 类型字段归属
+
+- cross-cutting 内容是 types + constants + helpers——是 settings 的"基础设施"（SessionType / SplitDirection / CapabilityFlags / build_remote_image_path / constants）
+- 单独成 domain 是过度切分（types/constants/helper 不构成独立业务）
+- 合并到 domain/settings；进一步拆到归属 domain（CapabilityFlags 等 → session，SplitDirection → workspace）
+
+## 9. 跨 module 协调
+
+5 commands module 之间的协调**只通过 `commands/<other>/api.rs`**（domain 模块不感知 commands 边界）：
+
+| 协调类型 | 谁编排 | 通过哪个 api.rs |
+|—|—|—|
+| session 创建 → 装到 workspace | `commands/session` | `commands/workspace/api.rs::openSession` |
+| workspace pane split → 创建新 session | `commands/workspace` | `commands/session/api.rs::createLocal/Ssh/Tmux` |
+| terminal 创建 tmux 后通知 settings 持久化 attached_tmux | `commands/terminal` | `commands/<module>/api（log → shell，attached_tmux → terminal）.rs::saveAttachedTmuxServers` |
+| 启动 → 加载 settings → 加载 workspace | `commands/shell` | `commands/<module>/api（log → shell，attached_tmux → terminal）.rs::loadAll` → `commands/workspace/api.rs::loadLastWorkspace` |
+| settings 变更 → 应用到 terminal | （已删除——attached_tmux→terminal，log→shell）| `commands/terminal/api.rs::applyTerminalPreferences` |
+
+**关键**：跨 module 调用**只**通过 `commands/<other>/api.rs`——不绕过 import 内部文件。
+
+## 10. 占位与未来工作
 
 backend 设计文档里**保留**所有「（未来）」占位——它们标记 MVP 暂未实现但设计已规划的部分：
 
-- `services/workspace/`：MVP backend 无 workspace 状态，pane tree 在 frontend store
-- `services/persistence/migrations/`：schema 升级时的 migration 框架（MVP 单版本无 migration）
+- `domain/workspace/`：MVP backend 无 workspace 状态，pane tree 在 frontend store
+- `domain/persistence/migrations/`：schema 升级时的 migration 框架（MVP 单版本无 migration）
 - 各类「（未来）」标注的字段、命令、helper
 
 **保留占位的理由**：
 - 设计文档是"目标态"——MVP 不实现不等于设计不规划
 - 后续 PR 可以按占位逐项落地
-- 删除占位会丢失设计意图，未来需要重新设计
+- 删除占位会丢失设计意图
 
-## 8. 文档地图
+## 11. 文档地图
 
-- 顶层（本文）：backend 4 层架构总览 + 跟 frontend 的镜像关系
-- 各层 README：`app/README.md` / `service/README.md` / `model/README.md` / `infra/README.md`
+- 顶层（本文）：3 层架构总览 + frontend 镜像关系
+- 各层 README：`commands/README.md` / `domain/README.md` / `infra/README.md`
 - 每层子文档：每个 module/domain 3 份（RESPONSIBILITY / INTERFACE / DOWNSTREAM）
 - 镜像验证：每份子文档的 "Frontend 对应" 链接指向 frontend 同名 README
 
-**TM 验收入口**：先读本文档（4 层架构总览）→ 读 `app/README.md`（5 module 按产品功能）→ 读 `service/README.md`（5 domain 按数据归属）。
+**TM 验收入口**：先读本文档（3 层架构总览）→ 读 `commands/README.md`（IPC 编排 4 module）→ 读 `domain/README.md`（状态机 + 类型 4 domain）→ 读 `infra/README.md`（4 子模块物理适配）。

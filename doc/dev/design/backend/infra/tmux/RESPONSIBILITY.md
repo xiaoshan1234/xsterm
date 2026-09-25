@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/infrastructure/tmux/`
 > **类型**：⭐ 外部资源 — tmux 控制模式（外部子进程 + wire 协议）
-> **被使用方**：`services/tmux/controller/`
+> **被使用方**：`domain/terminal/controller/`
 > **外部依赖**：`tokio::process`（spawn tmux -CC 子进程）+ tmux wire protocol
 
 ## 1. 这个子模块负责什么
@@ -18,10 +18,10 @@ tmux 子模块是 backend 与 **tmux -CC 控制模式**交互的物理适配层�
 
 ## 2. 这个子模块 **不**负责什么
 
-- **不实现 tmux wire 协议**——协议层在 `services/tmux/protocol/`（octal codec / CommandKind / ProtocolEvent）
-- **不持有 tmux controller 状态**——controller 在 `services/tmux/controller/`（pane_bindings / window_bindings / dispatch_task）
-- **不解析 tmux 命令输出**——parser 在 `services/tmux/protocol/parser.rs`
-- **不推 Tauri 事件**——bridge 在 `services/tmux/bridge.rs`
+- **不实现 tmux wire 协议**——协议层在 `domain/terminal/protocol/`（octal codec / CommandKind / ProtocolEvent）
+- **不持有 tmux controller 状态**——controller 在 `domain/terminal/controller/`（pane_bindings / window_bindings / dispatch_task）
+- **不解析 tmux 命令输出**——parser 在 `domain/terminal/protocol/parser.rs`
+- **不推 Tauri 事件**——bridge 在 `domain/terminal/bridge.rs`
 - **不处理 session lifecycle**——lifecycle 由 `SessionManager` 编排
 
 ## 3. 子结构
@@ -35,14 +35,14 @@ infrastructure/tmux/
 └── (未来) wire.rs      tmux wire 协议封装(占位)
 ```
 
-**v3 → v4 拆分映射**：v3 的 `infrastructure/tmux/{mod.rs, backend.rs}` 2 文件 → v4 拆为 3 文件（backend / errors / mock）。
+**拆分映射**： `infrastructure/tmux/{mod.rs, backend.rs}` 2 文件 →拆为 3 文件（backend / errors / mock）。
 
 ## 4. 跟 frontend infra 的关系
 
 frontend **没有** `infra/tmux` —— frontend 不直接调 tmux（通过 IPC 接收 backend 推送的 `tmux-pane-added` / `tmux-window-added` 等事件 + 调 `invoke('create_tmux_session', ...)`）。
 
 | backend infra/tmux | frontend 等价 |
-|---|---|
+|—|—|
 | `TmuxBackend::spawn(config)` | ❌（frontend 不可见） |
 | `LocalTmuxBackend` / `SshTmuxBackend` | ❌ |
 | tmux wire protocol | ❌（frontend 通过 IPC 接收 `TmuxEvent`）|
@@ -52,7 +52,7 @@ frontend **没有** `infra/tmux` —— frontend 不直接调 tmux（通过 IPC 
 ## 5. 跟其他 backend infra 子模块的关系
 
 | 子模块 | 关系 |
-|---|---|
+|—|—|
 | `infra/pty` | 平级；不互相依赖 |
 | `infra/ssh` | ⚠️ `SshTmuxBackend` **依赖** `infra/ssh::SshBackend`(用于在远程 SSH 上 spawn tmux -CC) |
 | `infra/tauri` | 平级；tmux 子进程不直接调 Tauri |
@@ -66,10 +66,10 @@ frontend **没有** `infra/tmux` —— frontend 不直接调 tmux（通过 IPC 
 ## 6. 跟 service / app 的关系
 
 | 层 | 怎么用 infra/tmux |
-|---|---|
-| `services/tmux/controller/spawn.rs` | `TmuxController::spawn_create(config, backend, ssh_backend, ...)` 内部根据 `config.ssh.is_some()` 选择 `LocalTmuxBackend` 或 `SshTmuxBackend` |
-| `app/terminal` | 不直接调 infra/tmux——通过 `services/tmux::TmuxController` 间接 |
-| `services/session` | `SessionManager::probe_tmux_session_exists` 间接通过 `SshBackend::run_command_capture_stdout` 调 tmux list-sessions |
+|—|—|
+| `domain/terminal/controller/spawn.rs` | `TmuxController::spawn_create(config, backend, ssh_backend, ...)` 内部根据 `config.ssh.is_some()` 选择 `LocalTmuxBackend` 或 `SshTmuxBackend` |
+| `commands/terminal` | 不直接调 infra/tmux——通过 `domain/terminal::TmuxController` 间接 |
+| `domain/session` | `SessionManager::probe_tmux_session_exists` 间接通过 `SshBackend::run_command_capture_stdout` 调 tmux list-sessions |
 
 ## 7. 这个子模块的"产品语言"术语
 
@@ -99,7 +99,7 @@ pub trait TmuxBackend: Send + Sync {
 ### 8.2 LocalTmuxBackend vs SshTmuxBackend 选择
 
 ```rust
-// services/tmux/controller/spawn.rs
+// domain/terminal/controller/spawn.rs
 use crate::infrastructure::tmux::{LocalTmuxBackend, SshTmuxBackend};
 
 pub fn spawn_create(
@@ -147,9 +147,9 @@ impl TmuxBackend for MockTmuxBackend {
 }
 ```
 
-**vs service 测试**：`services/tmux_session/controller/tests.rs` 用**手写** `RecordingBackend`——更可控。两种风格保持。
+**vs service 测试**：`domain/terminal/controller/tests.rs` 用**手写** `RecordingBackend`——更可控。两种风格保持。
 
-### 8.5 错误统一用 thiserror derive（与 services/tmux/errors.rs 区分）
+### 8.5 错误统一用 thiserror derive（与 domain/terminal/errors.rs 区分）
 
 ```rust
 // infrastructure/tmux/errors.rs
@@ -171,22 +171,11 @@ pub enum TmuxInfraError {
 }
 ```
 
-**与 services/tmux/errors.rs::TmuxError 区分**：
+**与 domain/terminal/errors.rs::TmuxError 区分**：
 - `TmuxInfraError` —— infra 层（spawn / process 错误）
 - `TmuxError` —— service 层（controller 内部错误，如 ControllerNotFound / PaneNotBound / Timeout）
 
 service 层通过 `?` 运算符 + `From<TmuxInfraError> for TmuxError` 自动转换。
-
-## 9. v3 → v4 拆分映射
-
-| v3 位置 | v4 位置 | 改动 |
-|---|---|---|
-| `infrastructure/tmux/mod.rs` | `infrastructure/tmux/mod.rs` | 不动 |
-| `infrastructure/tmux/backend.rs::TmuxBackend trait` | `infrastructure/tmux/backend.rs` | 不动（已存在） |
-| `infrastructure/tmux/backend.rs::LocalTmuxBackend` | `infrastructure/tmux/backend.rs` | 不动 |
-| `infrastructure/tmux/backend.rs::SshTmuxBackend` | `infrastructure/tmux/backend.rs` | 不动 |
-| 内嵌 error 隐式依赖 | `infrastructure/tmux/errors.rs::TmuxInfraError` | 新增 + thiserror derive |
-| 无 mock | `infrastructure/tmux/mock.rs::MockTmuxBackend` | 新增 `#[automock]` |
 
 ## 10. 强制约束（可机械校验）
 
@@ -212,16 +201,6 @@ grep -rn 'use crate::infrastructure::ssh::' src-tauri/src/infrastructure/tmux/
 # 应当出现（SshTmuxBackend 需要）
 ```
 
-## 11. 跟 v3 的差异
-
-| 维度 | v3 | v4 |
-|---|---|---|
-| 文件数 | 2 文件（mod + backend）| 4 文件（mod + backend + errors + mock） |
-| 错误处理 | 隐式依赖（service 层用 String）| 独立 `TmuxInfraError`（thiserror derive） |
-| mock | 无 | `#[automock]` 自动 mock |
-| 与 frontend 镜像 | ❌（frontend 无 tmux） | 文档明确标注 "backend 独有" |
-| 与 infra/ssh 依赖 | ❌ | ✅ SshTmuxBackend 依赖 SshBackend trait |
-
 ## 12. 测试
 
 每个文件都有 `*.test.rs`：
@@ -235,5 +214,5 @@ grep -rn 'use crate::infrastructure::ssh::' src-tauri/src/infrastructure/tmux/
 
 1. **新增 TmuxBackend trait method** → 加 `backend.rs` + 更新 mock + 更新 impl + INTERFACE.md §2.1
 2. **新增 TmuxInfraError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.3 + 检查所有 `?` 调用方
-3. **修改 LocalTmuxBackend / SshTmuxBackend 签名** → ⚠️ breaking——同步更新 `services/tmux/controller/spawn.rs`
-4. **修改 tmux wire protocol**（未来）→ ⚠️ breaking——同步更新 `services/tmux/protocol/` + INTERFACE.md §2.2
+3. **修改 LocalTmuxBackend / SshTmuxBackend 签名** → ⚠️ breaking——同步更新 `domain/terminal/controller/spawn.rs`
+4. **修改 tmux wire protocol**（未来）→ ⚠️ breaking——同步更新 `domain/terminal/protocol/` + INTERFACE.md §2.2

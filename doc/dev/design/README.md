@@ -24,7 +24,7 @@ frontend 是 **5 个并列的顶层目录**，没有"上层下层"——它们�
        ║        └─────────────┴────────────┴─────────────┴─────────────┘        ║
        ║                       都被 app 和 ui 调用                            ║
        ╠════════════════════════════════╪════════════════════════════════╣
-       ║              Backend (src-tauri/src/) — 4 层架构                    ║
+       ║              Backend (src-tauri/src/) — 3 层架构                    ║
        ║                                                                   ║
        ║   app ───► service ───► infra ───► model                          ║
        ║  (命令)   (业务逻辑)    (外部资源) (纯数据)                        ║
@@ -122,7 +122,7 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 - [`frontend/app/terminal/`](frontend/app/terminal/) — 终端特有业务（tmux）
 - [`frontend/app/session/`](frontend/app/session/) — session CRUD
 - [`frontend/app/settings/`](frontend/app/settings/) — 设置持久化 + 应用
-- [`frontend/app/shared/README.md`](frontend/app/shared/README.md) — **废弃占位**
+- ~~`frontend/app/shared/`~~ — **废弃占位**（v4 已删除，跨 module 共享逻辑归 model）
 
 #### ui（5 module × 3 文档 = 16 份）
 
@@ -167,13 +167,12 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 
 每个子模块三份文档：RESPONSIBILITY / INTERFACE / DOWNSTREAM。
 
-### Backend（4 层架构，独立）
+### Backend（3 层架构，独立）
 
 - [`backend/README.md`](backend/README.md) — backend 顶层
-- [`backend/app/README.md`](backend/app/README.md) — commands 层
-- [`backend/service/README.md`](backend/service/README.md) — 业务编排
-- [`backend/infra/README.md`](backend/infra/README.md) — 外部资源
-- [`backend/model/README.md`](backend/model/README.md) — 纯数据
+- [`backend/commands/README.md`](backend/commands/README.md) — Tauri IPC 命令编排（4 module，v5 砍掉 settings）
+- [`backend/domain/README.md`](backend/domain/README.md) — 业务核心（合并 service + model 为 domain，4 domain，v5 砍掉 settings——类型字段拆到归属 domain）
+- [`backend/infra/README.md`](backend/infra/README.md) — 外部资源（4 子模块）
 
 ## 4. 阅读顺序建议
 
@@ -289,16 +288,15 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 | 顶层 README | 1 | `frontend/README.md` |
 | **小计** | **78** | |
 
-### Backend（4 层架构 + 61 份，无 ui 层）
+### Backend（3 层架构 + 41 份，无 ui 层，无 service/model 分层，无 settings module）
 
 | 层 | 文档数 | 详情 |
 |---|---|---|
-| app | 16 | 5 module × 3 + 顶层 |
-| model | 16 | 5 + cross-cutting × 3 + 顶层 |
-| service | 16 | 5 domain × 3 + 顶层 |
+| commands | 13 | 4 module（session / workspace / terminal / shell）× 3 + 顶层（v5 砍掉 settings——attached_tmux→terminal，log→shell）|
+| domain | 13 | 4 domain（session / workspace / terminal / persistence）× 3 + 顶层（v5 砍掉 settings——类型字段拆到归属 domain）|
 | infra | 13 | 4 子模块（pty / ssh / tmux / tauri）× 3 + 顶层 |
 | 顶层 README | 1 | [`backend/README.md`](backend/README.md) |
-| **小计** | **62** | |
+| **小计** | **40** | |
 
 ### 顶层与合计
 
@@ -306,7 +304,7 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 |---|---|
 | 顶层 README | 1（本文件） |
 | frontend 全部 | 78 |
-| backend 全部 | 62 |
-| **合计** | **141 份** |
+| backend 全部 | 40 |
+| **合计** | **119 份** |
 
 每份子文档固定 3 节：**RESPONSIBILITY**（职责）/ **INTERFACE**（对外接口）/ **DOWNSTREAM**（对下依赖）。

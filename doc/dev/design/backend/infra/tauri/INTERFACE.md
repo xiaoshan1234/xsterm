@@ -121,7 +121,7 @@ impl AppBackend for MockAppBackend {
 ### 3.1 service → infra/tauri
 
 ```rust
-// services/session/manager.rs
+// domain/session/state.rs
 use crate::infrastructure::tauri::AppBackend;
 
 pub struct SessionManager {
@@ -142,10 +142,10 @@ impl SessionManager {
 }
 ```
 
-### 3.2 services/tmux/bridge → infra/tauri
+### 3.2 domain/terminal/bridge → infra/tauri
 
 ```rust
-// services/tmux/bridge.rs
+// domain/terminal/bridge.rs
 use crate::infrastructure::tauri::AppBackend;
 
 pub struct TmuxBridge {
@@ -162,10 +162,10 @@ impl TmuxBridge {
 }
 ```
 
-### 3.3 app/shell → infra/tauri（启动序列）
+### 3.3 commands/shell → infra/tauri（启动序列）
 
 ```rust
-// app/shell/api.rs::initialize
+// commands/shell/api.rs::initialize
 use crate::infrastructure::tauri::{AppBackend, RealAppBackend};
 
 pub fn initialize(app: &mut tauri::App) -> Result<(), String> {
@@ -185,7 +185,7 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), String> {
 ### 3.4 service 测试 → MockAppBackend
 
 ```rust
-// services/session/manager.rs::tests
+// domain/session/state.rs::tests
 use crate::infrastructure::tauri::MockAppBackend;
 
 #[test]
@@ -219,7 +219,7 @@ fn create_local_emits_session_event() {
 2. **新增 BinaryFrame 字段** → 加 `binary_frame.rs` + 同步更新前端解析 + INTERFACE.md §2.3
 3. **新增 TauriError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
 4. **修改 session_output_channel 行为** → ⚠️ breaking——同步更新前端 listener + INTERFACE.md §2.2
-5. **迁移 RealAppBackend 构造** → 加 `services/settings/api.rs::init_real_app_backend` + 在 `app/shell/api.rs::initialize` 调
+5. **迁移 RealAppBackend 构造** → 加 `domain/persistence/api.rs::init_real_app_backend` + 在 `commands/shell/api.rs::initialize` 调
 
 ## 7. 错误传播约定
 

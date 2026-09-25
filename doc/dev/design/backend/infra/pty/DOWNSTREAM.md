@@ -24,7 +24,7 @@ infrastructure/pty/
 ## 2. portable-pty（核心外部依赖）
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `portable_pty::native_pty_system()` | `portable-pty` crate | `NativePtySystem::new()` |
 | `portable_pty::NativePtySystem::openpty(PtySize)` | 同上 | `NativePtySystem::openpty()` |
 | `portable_pty::PtySize { rows, cols, ... }` | 同上 | 传给 `openpty()` |
@@ -39,7 +39,7 @@ infrastructure/pty/
 ## 3. std
 
 | 使用 | 何时 |
-|---|---|
+|—|—|
 | `std::io::{Read, Write}` | `MasterPty / SlavePty` trait 继承 |
 | `std::io::Error` | `PtyError::Io` 自动 From |
 | `std::process::Stdio` | (在 service 层使用 `portable_pty::slave` 作为 `Stdio`) |
@@ -48,7 +48,7 @@ infrastructure/pty/
 ## 4. mockall
 
 | 使用 | 何时 |
-|---|---|
+|—|—|
 | `#[automock]` | 自动 mock `PtySystem` trait |
 | `MockPtySystem::new()` | 测试代码构造 mock 实例 |
 | `.expect_openpty().returning(...)` | 配置 mock 行为 |
@@ -59,7 +59,7 @@ infrastructure/pty/
 ## 5. thiserror
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `#[derive(thiserror::Error)]` | `thiserror` crate | `PtyError` enum derive |
 | `#[from] std::io::Error` | std | `PtyError::Io` 自动 From |
 | `#[error("...")]` | thiserror | Display impl |
@@ -84,7 +84,7 @@ infrastructure/pty/
 ## 7. 跨子模块依赖（infra 平级）
 
 | 依赖 | 何时 |
-|---|---|
+|—|—|
 | `infra/ssh::*` | ❌ 不依赖 |
 | `infra/tmux::*` | ❌ 不依赖 |
 | `infra/tauri::*` | ❌ 不依赖 |
@@ -94,7 +94,7 @@ infrastructure/pty/
 ## 8. 跨层依赖（infra → service/app）
 
 | 依赖 | 何时 |
-|---|---|
+|—|—|
 | `crate::services::*` | ❌ 不依赖 |
 | `crate::app::*` | ❌ 不依赖 |
 | `crate::commands::*` | ❌ 不依赖 |
@@ -102,24 +102,13 @@ infrastructure/pty/
 
 ## 9. 设计意图:pty 是「PTY 子进程的物理封装」
 
-v3 反模式：`infrastructure/pty.rs` 单文件 ~150 行，所有逻辑混在一起——trait + impl + error 难找到。
+反模式：`infrastructure/pty.rs` 单文件 ~150 行，所有逻辑混在一起——trait + impl + error 难找到。
 
-v4 边界：
+边界：
 
 - pty 子模块是**单一外部资源的物理封装**——`portable-pty` crate 调用都集中在这里
 - service 层通过 `PtySystem` trait 抽象——可 mock 替换
 - error 集中在 `errors.rs`——typed error 模式
-
-## 10. v3 → v4 跨调用迁移
-
-| v3 现状 | v4 改法 |
-|---|---|
-| `infrastructure/pty.rs::PtySystem trait` | `infrastructure/pty/traits.rs` |
-| `infrastructure/pty.rs::NativePtySystem` | `infrastructure/pty/native.rs` |
-| `infrastructure/pty.rs::PtyPair` | `infrastructure/pty/pair.rs` |
-| `infrastructure/pty.rs` 内 inline enum error | `infrastructure/pty/errors.rs::PtyError`(thiserror derive) |
-| 无 mock | `infrastructure/pty/mock.rs::MockPtySystem`(`#[automock]`) |
-| 所有 `use crate::infrastructure::pty::X` | `use crate::infrastructure::pty::{traits, native, pair, mock, errors}::X` |
 
 ## 11. 不允许的依赖
 

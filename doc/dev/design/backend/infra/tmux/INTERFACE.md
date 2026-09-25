@@ -141,7 +141,7 @@ impl TmuxBackend for MockTmuxBackend {
 ### 3.1 service → infra/tmux
 
 ```rust
-// services/tmux/controller/spawn.rs
+// domain/terminal/controller/spawn.rs
 use crate::infrastructure::tmux::{TmuxBackend, LocalTmuxBackend, SshTmuxBackend, TmuxInfraError};
 use crate::infrastructure::ssh::SshBackend;
 
@@ -169,7 +169,7 @@ pub fn spawn_create(
 ### 3.2 service 测试 → MockTmuxBackend
 
 ```rust
-// services/tmux/controller/spawn.rs::tests
+// domain/terminal/controller/spawn.rs::tests
 use crate::infrastructure::tmux::MockTmuxBackend;
 
 #[test]
@@ -199,11 +199,11 @@ fn spawn_create_local() {
 
 1. **新增 TmuxBackend trait method** → 加 `backend.rs` + 更新 mock + 更新 impl + INTERFACE.md §2.1
 2. **新增 TmuxInfraError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.5 + 检查所有 `?` 调用方
-3. **修改 LocalTmuxBackend / SshTmuxBackend 签名** → ⚠️ breaking——同步更新 `services/tmux/controller/spawn.rs`
-4. **修改 tmux wire protocol**（未来）→ ⚠️ breaking——同步更新 `services/tmux/protocol/`
+3. **修改 LocalTmuxBackend / SshTmuxBackend 签名** → ⚠️ breaking——同步更新 `domain/terminal/controller/spawn.rs`
+4. **修改 tmux wire protocol**（未来）→ ⚠️ breaking——同步更新 `domain/terminal/protocol/`
 
 ## 7. 错误传播约定
 
 - infra 层：`Result<T, TmuxInfraError>`（typed error）
-- infra → service：`From<TmuxInfraError> for TmuxError` 在 `services/tmux/errors.rs` 实现
+- infra → service：`From<TmuxInfraError> for TmuxError` 在 `domain/terminal/errors.rs` 实现
 - service → app：`Result<T, String>`（IPC 序列化）

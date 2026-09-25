@@ -154,7 +154,7 @@ impl PtySystem for MockPtySystem {
 ### 3.1 service → infra/pty
 
 ```rust
-// services/session/manager.rs
+// domain/session/state.rs
 use crate::infrastructure::pty::{PtySystem, PtyConfig, NativePtySystem};
 
 pub struct SessionManager {
@@ -175,7 +175,7 @@ impl SessionManager {
 ### 3.2 service 测试 → MockPtySystem
 
 ```rust
-// services/session/manager.rs::tests
+// domain/session/state.rs::tests
 use crate::infrastructure::pty::MockPtySystem;
 
 #[test]

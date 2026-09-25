@@ -61,8 +61,8 @@ pub trait SshSessionHandle: Send + Sync {
 
 **关键**：
 
-- v4 通过 `Box<dyn SshSessionHandle>` 持有——service 层统一通过 trait 调度
-- v3 是具体 `Box<SshSession>` 直接持有——v4 抽象化
+- 通过 `Box<dyn SshSessionHandle>` 持有——service 层统一通过 trait 调度
+- 具体 `Box<SshSession>` 直接持有 → 抽象为 trait
 - `read` 是非阻塞——service 层 wrap 异步循环（`tokio::select!`）
 - 命名理由：`Handle` 后缀精确描述其角色（持有 russh channel 的句柄），跟 backend 现有的 `TmuxPaneHandle` / `ReloadHandle` 一致
 
@@ -199,7 +199,7 @@ impl SshBackend for MockSshBackend {
 ### 3.1 service → infra/ssh
 
 ```rust
-// services/session/manager.rs
+// domain/session/state.rs
 use crate::infrastructure::ssh::{SshBackend, SshBackendImpl, SshSession};
 
 pub struct SessionManager {
@@ -221,7 +221,7 @@ impl SessionManager {
         backend: Arc<dyn AppBackend>,
     ) -> Result<SessionInfo, String> {
         let ssh_session = self.ssh_backend.connect(&config).map_err(|e| e.to_string())?;
-        // 包装为 services/session/backends/ssh.rs::SshSession(Box<dyn SshSessionHandle>)
+        // 包装为 domain/session/backends/ssh.rs::SshSession(Box<dyn SshSessionHandle>)
         // ...
     }
 }
@@ -230,7 +230,7 @@ impl SessionManager {
 ### 3.2 service 测试 → MockSshBackend
 
 ```rust
-// services/session/manager.rs::tests
+// domain/session/state.rs::tests
 use crate::infrastructure::ssh::MockSshBackend;
 
 #[test]
@@ -247,7 +247,7 @@ fn create_ssh_session() {
 ### 3.3 app → infra/ssh（upload_image 流程）
 
 ```rust
-// app/session/commands/ssh/upload.rs
+// commands/session/commands/ssh/upload.rs
 use crate::infrastructure::ssh::{upload_image, SshBackend};
 
 #[tauri::command]
@@ -295,7 +295,7 @@ pub async fn upload_image_to_ssh_session(
 1. **新增 SshBackend trait method** → 加 `traits.rs` + 更新 mock + 更新 `backend.rs` impl + INTERFACE.md §2.1
 2. **新增 SshSessionHandle method** → 加 `session.rs` + INTERFACE.md §2.2
 3. **新增 SshError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
-4. **修改 upload_file_via_ssh 签名** → ⚠️ breaking——同步更新 `app/session/api.rs::upload_image_to_ssh_session`
+4. **修改 upload_file_via_ssh 签名** → ⚠️ breaking——同步更新 `commands/session/api.rs::upload_image_to_ssh_session`
 5. **修改 russh API** → 升级 Cargo.toml + 更新 `backend.rs / session.rs` 调用 + 跑集成测试
 
 ## 7. 错误传播约定

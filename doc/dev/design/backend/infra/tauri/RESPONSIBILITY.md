@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/infrastructure/tauri/`
 > **类型**：⭐ Tauri runtime 适配（AppHandle / Channel / Emitter）
-> **被使用方**：`services/session`（AppBackend 注入）、`app/shell`（app backend 初始化）、`services/tmux/bridge.rs`（emit Tauri 事件）
+> **被使用方**：`domain/session`（AppBackend 注入）、`commands/shell`（app backend 初始化）、`domain/terminal/bridge.rs`（emit Tauri 事件）
 > **外部依赖**：`tauri` crate
 
 ## 1. 这个子模块负责什么
@@ -19,10 +19,10 @@ tauri 子模块是 backend 与 **Tauri runtime** 交互的物理适配层——�
 ## 2. 这个子模块 **不**负责什么
 
 - **不渲染 UI**——UI 在 frontend `ui/`
-- **不持有 session 状态**——session 状态归 `services/session/manager.rs`
+- **不持有 session 状态**——session 状态归 `domain/session/state.rs`
 - **不监听 Tauri 事件**——前端 → backend 事件通过 `app/<module>::commands::*` 处理
 - **不实现命令处理**——Tauri 命令归 `app/<module>/commands/*.rs`
-- **不实现持久化**——持久化归 `services/persistence/` + `services/settings/`
+- **不实现持久化**——持久化归 `domain/persistence/`
 
 ## 3. 子结构
 
@@ -35,16 +35,16 @@ infrastructure/tauri/
 └── mock.rs             #[automock] MockAppBackend
 ```
 
-**v3 → v4 拆分映射**：
+**拆分映射**：
 
-- v3 的 `infrastructure/app_backend.rs` → v4 的 `infrastructure/tauri/app_backend.rs`
-- v3 的 `infrastructure/binary_frame.rs` → v4 的 `infrastructure/tauri/binary_frame.rs`
-- v3 无 errors / mock 模块 → v4 新增
+-  `infrastructure/app_backend.rs` →  `infrastructure/tauri/app_backend.rs`
+-  `infrastructure/binary_frame.rs` →  `infrastructure/tauri/binary_frame.rs`
+- 无 errors / mock 模块 → 新增
 
 ## 4. 跟 frontend infra 的关系
 
 | backend infra/tauri | frontend infra/tauri |
-|---|---|
+|—|—|
 | `AppBackend::emit(event, payload)` | `infra/tauri/commands/*::invoke(cmd)` |
 | `AppBackend::emit_binary(bytes)` | `infra/tauri/events/*::listen(event, cb)` |
 | `RealAppBackend::new(AppHandle)` | (frontend 无 AppHandle 等价) |
@@ -59,10 +59,10 @@ infrastructure/tauri/
 ## 5. 跟其他 backend infra 子模块的关系
 
 | 子模块 | 关系 |
-|---|---|
+|—|—|
 | `infra/pty` | 平级；不互相依赖 |
 | `infra/ssh` | 平级；不互相依赖 |
-| `infra/tmux` | 平级；tmux 子模块不调 Tauri（事件推送由 services/tmux/bridge.rs 间接通过 AppBackend） |
+| `infra/tmux` | 平级；tmux 子模块不调 Tauri（事件推送由 domain/terminal/bridge.rs 间接通过 AppBackend） |
 
 **关键约束**：
 
@@ -73,11 +73,11 @@ infrastructure/tauri/
 ## 6. 跟 service / app 的关系
 
 | 层 | 怎么用 infra/tauri |
-|---|---|
-| `services/session` | `create_local` / `create_ssh` / `create_tmux` 都接收 `Arc<dyn AppBackend>` 参数——emit Tauri 事件 |
-| `services/tmux/bridge.rs` | `TmuxBridge::dispatch_event` 调 `AppBackend::emit` 推送 `tmux-pane-added` 等事件 |
-| `app/shell/api.rs::initialize` | 构造 `RealAppBackend::new(app)` + emit `session-output-channel` |
-| `app/session/commands/output.rs::get_session_output_channel` | 返回 `RealAppBackend::session_output_channel` 给前端 |
+|—|—|
+| `domain/session` | `create_local` / `create_ssh` / `create_tmux` 都接收 `Arc<dyn AppBackend>` 参数——emit Tauri 事件 |
+| `domain/terminal/bridge.rs` | `TmuxBridge::dispatch_event` 调 `AppBackend::emit` 推送 `tmux-pane-added` 等事件 |
+| `commands/shell/api.rs::initialize` | 构造 `RealAppBackend::new(app)` + emit `session-output-channel` |
+| `commands/session/commands/output.rs::get_session_output_channel` | 返回 `RealAppBackend::session_output_channel` 给前端 |
 
 ## 7. 这个子模块的"产品语言"术语
 
@@ -107,7 +107,7 @@ pub trait AppBackend: Send + Sync {
 
 - `Clone` **不**是 super-trait bound——`dyn AppBackend` 才能 object-safe
 - 服务想"分享" backend 给后台 thread——用 `Arc<dyn AppBackend>` by value + `Arc::clone`
-- v3 注释明确警告了这一点（不可改）
+- 注释明确警告了这一点（不可改）
 
 ### 8.2 RealAppBackend 持有 session_output_channel
 
@@ -218,16 +218,6 @@ pub enum TauriError {
 }
 ```
 
-## 9. v3 → v4 拆分映射
-
-| v3 位置 | v4 位置 | 改动 |
-|---|---|---|
-| `infrastructure/app_backend.rs` | `infrastructure/tauri/app_backend.rs` | 移入 `infra/tauri/` 子模块 |
-| `infrastructure/binary_frame.rs` | `infrastructure/tauri/binary_frame.rs` | 移入 `infra/tauri/` 子模块 |
-| 无 errors 模块 | `infrastructure/tauri/errors.rs::TauriError` | 新增 + thiserror derive |
-| 无 mock | `infrastructure/tauri/mock.rs::MockAppBackend` | 新增 `#[automock]` |
-| `lib.rs::run()::setup` 内联块 | `app/shell/api.rs::initialize` | (这是 service 层改动,见 `services/settings/RESPONSIBILITY.md`) |
-
 ## 10. 强制约束（可机械校验）
 
 ```bash
@@ -243,15 +233,6 @@ grep -rn 'use crate::\(services\|app\|commands\)' src-tauri/src/infrastructure/t
 grep -rn 'use crate::infrastructure::\(pty\|ssh\|tmux\)' src-tauri/src/infrastructure/tauri/
 # 必须为空
 ```
-
-## 11. 跟 v3 的差异
-
-| 维度 | v3 | v4 |
-|---|---|---|
-| 文件位置 | `infrastructure/{app_backend,binary_frame}.rs` | `infrastructure/tauri/{app_backend,binary_frame,errors,mock}.rs` |
-| 错误处理 | inline / String | 独立 `TauriError`（thiserror derive） |
-| mock | 无 | `#[automock]` 自动 mock |
-| 与 frontend 镜像 | ❌（frontend infra/tauri 已有，backend 不一致） | ✅ 镜像命名（backend infra/tauri ↔ frontend infra/tauri） |
 
 ## 12. 测试
 
@@ -269,4 +250,4 @@ grep -rn 'use crate::infrastructure::\(pty\|ssh\|tmux\)' src-tauri/src/infrastru
 2. **新增 BinaryFrame 字段** → 加 `binary_frame.rs` + 同步更新前端解析（`sessionOutputChannel.ts`）+ INTERFACE.md §2.3
 3. **新增 TauriError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.5 + 检查所有 `?` 调用方
 4. **修改 session_output_channel 行为** → ⚠️ breaking——同步更新前端 listener + INTERFACE.md §2.2
-5. **迁移 RealAppBackend 构造到 service/settings** → 加 `services/settings/api.rs::init_real_app_backend` + 在 §6 + 在 `app/shell/api.rs::initialize` 调
+5. **迁移 RealAppBackend 构造到 domain/persistence** → 加 `domain/persistence/api.rs::init_real_app_backend` + 在 `commands/shell/api.rs::initialize` 调

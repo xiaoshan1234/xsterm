@@ -28,7 +28,7 @@ infrastructure/ssh/
 ## 2. russh（核心外部依赖）
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `russh::client::connect(host, port)` | `russh` crate | `SshBackendImpl::connect()` |
 | `russh::client::Config::default()` | 同上 | 配置 ssh client |
 | `russh::Preferred::COMPRESSED` | 同上 | 压缩偏好 |
@@ -46,7 +46,7 @@ infrastructure/ssh/
 ## 3. russh_keys
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `russh_keys::key::KeyPair::from_pkcs8(...)` | `russh-keys` crate | 解析 PKCS8 格式私钥 |
 | `russh_keys::decode_pkcs8_private_key(...)` | 同上 | SSH 私钥解析 |
 
@@ -55,7 +55,7 @@ infrastructure/ssh/
 ## 4. tokio
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `tokio::task::spawn_blocking` | `tokio` crate | `run_command_capture_stdout` 包装同步阻塞 |
 | `tokio::time::timeout` | 同上 | SSH 连接超时控制 |
 | `tokio::sync::mpsc` | 同上 | SshSession 内部读循环（russh 异步 API）|
@@ -68,7 +68,7 @@ infrastructure/ssh/
 ## 5. models
 
 | 读取 | 来源 |
-|---|---|
+|—|—|
 | `SSHSessionConfig` | `models/session/types.rs` |
 
 **约束**：models 是纯数据类型——ssh 可自由 import。
@@ -76,7 +76,7 @@ infrastructure/ssh/
 ## 6. mockall
 
 | 使用 | 何时 |
-|---|---|
+|—|—|
 | `#[automock]` | 自动 mock `SshBackend` trait |
 | `MockSshBackend::new()` | 测试代码构造 mock 实例 |
 | `.expect_connect().returning(...)` | 配置 mock 行为 |
@@ -86,7 +86,7 @@ infrastructure/ssh/
 ## 7. thiserror
 
 | 调用 | 来源 | 何时 |
-|---|---|---|
+|—|—|—|
 | `#[derive(thiserror::Error)]` | `thiserror` crate | `SshError` enum derive |
 | `#[from] std::io::Error` | std | `SshError::Io` 自动 From |
 
@@ -112,7 +112,7 @@ infrastructure/ssh/
 ## 9. 跨子模块依赖（infra 平级）
 
 | 依赖 | 何时 |
-|---|---|
+|—|—|
 | `infra/pty::*` | ❌ 不依赖 |
 | `infra/tmux::*` | ❌ 不依赖 |
 | `infra/tauri::*` | ❌ 不依赖 |
@@ -122,7 +122,7 @@ infrastructure/ssh/
 ## 10. 跨层依赖（infra → service/app）
 
 | 依赖 | 何时 |
-|---|---|
+|—|—|
 | `crate::services::*` | ❌ 不依赖 |
 | `crate::app::*` | ❌ 不依赖 |
 | `crate::commands::*` | ❌ 不依赖 |
@@ -131,28 +131,14 @@ infrastructure/ssh/
 
 ## 11. 设计意图:ssh 是「SSH 协议的物理封装」
 
-v3 反模式：`infrastructure/ssh.rs` 单文件 700+ 行，所有 SSH 相关逻辑混在一起——SshBackend trait + SshBackendImpl + SshSession + upload_file + run_command + from 转换。
+反模式：`infrastructure/ssh.rs` 单文件 700+ 行，所有 SSH 相关逻辑混在一起——SshBackend trait + SshBackendImpl + SshSession + upload_file + run_command + from 转换。
 
-v4 边界：
+边界：
 
 - ssh 子模块是**单一外部资源（SSH 协议）的物理封装**——`russh` crate 调用都集中在这里
 - service 层通过 `SshBackend` trait 抽象——可 mock 替换
-- SshSession 也通过 `SshSessionHandle` trait 抽象——v3 具体类型持有改为 v4 trait object
+- SshSession 也通过 `SshSessionHandle` trait 抽象——具体类型持有 → trait object
 - error 集中在 `errors.rs`——typed error 模式
-
-## 12. v3 → v4 跨调用迁移
-
-| v3 现状 | v4 改法 |
-|---|---|
-| `infrastructure/ssh.rs::SshBackend trait` | `infrastructure/ssh/traits.rs` |
-| `infrastructure/ssh.rs::SshBackendImpl` | `infrastructure/ssh/backend.rs` |
-| `infrastructure/ssh.rs::SshSession` | `infrastructure/ssh/session.rs::SshSession` struct + `SshSessionHandle` trait |
-| `infrastructure/ssh.rs::upload_file_via_ssh` | `infrastructure/ssh/upload.rs` |
-| `infrastructure/ssh.rs::run_command_capture_stdout` | `infrastructure/ssh/probe.rs` |
-| `infrastructure/ssh.rs` 内 inline error | `infrastructure/ssh/errors.rs::SshError`(thiserror derive) |
-| 无 mock | `infrastructure/ssh/mock.rs::MockSshBackend`(`#[automock]`) |
-| `services/session_manager.rs::Box<SshSession>` | `services/session/backends/ssh.rs::Box<dyn SshSessionHandle>` |
-| 所有 `use crate::infrastructure::ssh::X` | `use crate::infrastructure::ssh::{traits, backend, session, upload, probe, mock, errors}::X` |
 
 ## 13. 不允许的依赖
 
@@ -172,5 +158,5 @@ v4 边界：
 2. **新增 SshSessionHandle method** → 加 `session.rs` + INTERFACE.md §2.2
 3. **新增 SshError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
 4. **修改 russh API** → 升级 Cargo.toml + 更新 `backend.rs / session.rs` 调用 + 跑集成测试
-5. **修改 upload_file_via_ssh 签名** → ⚠️ breaking——同步更新 `app/session/api.rs::upload_image_to_ssh_session`
+5. **修改 upload_file_via_ssh 签名** → ⚠️ breaking——同步更新 `commands/session/api.rs::upload_image_to_ssh_session`
 6. **启用 host key 校验**（未来）→ ⚠️ 安全评审 + 加 host 持久化存储 + UX 改动 + 在 `RESPONSIBILITY.md` §10 更新文档

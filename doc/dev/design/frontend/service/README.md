@@ -14,7 +14,7 @@ src/service/
 ├── workspace/       跨 module 树状态（5 个 module 用）
 ├── tmux/            backend tmux control mode 镜像（3 个 module 用）
 ├── settings/        应用配置（8 个 module 用）
-├── persistence/     tauri-plugin-store 业务 wrapper（3 个 app module 用）
+├── persistence/     ⭐ frontend-only 持久化（v4：sessions/groups 直存主入口；backend 只持 attached_tmux + log_config）
 └── (已合并到其他位置 — 见下)
 ```
 
@@ -38,12 +38,12 @@ session  ←  跨 7 个 module 订阅
 workspace  ←  跨 5 个 module 订阅
 tmux  ←  跨 3 个 module 订阅
 settings  ←  跨 8 个 module 订阅（最广）
-persistence  ←  app/settings、app/workspace、app/session 调用
+persistence  ←  app/settings、app/session、app/workspace 调用（v4：frontend 直存 sessions/groups/settings）
 ```
 
 **service 之间**：
 
-- 唯一允许的 service 内部调用：`session → output`（在 ui/terminal 内部，不是 service）
+- 唯一允许的 service 内部调用：`session → ui/terminal/view/OutputBuffer`（v4 重命名：output buffer 归 ui）
 - 其他 service 之间**不互相调**——通过 app 编排
 
 ## 4. service 的判断标准
@@ -65,7 +65,7 @@ persistence  ←  app/settings、app/workspace、app/session 调用
 | workspace | ✅ 5 | ✅ bridge | ✅ zustand | **service** |
 | tmux | ✅ 3 | ✅ bridge | ✅ zustand | **service** |
 | settings | ✅ 8 | ⚠️ 树内够用 | ✅ zustand | **service**（用 React Context 也行，但 service 更清晰） |
-| persistence | ✅ 3 | ❌ 树内 | ❌ wrapper | **service**（业务 schema migration） |
+| persistence | ✅ 4 | ❌ 树内 | ❌ wrapper | **service**（v4：sessions/groups 直存主入口；backend 不再转发） |
 | logger | ✅ 所有 | ❌ 树内 | ❌ ring buffer | **infra**（底层原语） |
 | theme | ✅ 4 | ❌ 树内 | ❌ 镜像 | **删除**（并入 settings） |
 | output | ❌ 1 | ❌ 树内 | ❌ buffer | **删除**（归 ui/terminal） |
