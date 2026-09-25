@@ -27,7 +27,7 @@ domain/session/
 session 通过 `TmuxController` 公开方法访问 tmux 功能：
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `TmuxController::spawn_create(config, backend, ssh_backend, controller_id, allocator)` | `domain/terminal/controller/spawn.rs` | `SessionManager::create_tmux` / `attach_tmux` |
 | `TmuxController::await_first_pane()` | `domain/terminal/controller/sync.rs` | create / attach 后等待 bootstrap pane |
 | `TmuxController::take_initial_state()` | `domain/terminal/controller/sync.rs` | create / attach 后等待 windows + panes |
@@ -111,7 +111,7 @@ impl TmuxPaneHandle {
 ## 4. infra/*（外部资源依赖）
 
 | infra 子模块 | session 调什么 | session 持有 |
-|—|—|—|
+|--|--|--|
 | `infra/pty` | `PtySystem::openpty()` | `Box<dyn PtySystem>`（注入到 SessionManager） |
 | `infra/pty` | `PtyPair` (write/read) | `PtyPair`（在 `backends/local.rs::LocalSession`） |
 | `infra/ssh` | `SshBackend::connect(&config)` | `Arc<dyn SshBackend>`（注入到 SessionManager） |
@@ -130,7 +130,7 @@ impl TmuxPaneHandle {
 session types 引用 settings 的纯类型：
 
 | 类型 | 用途 |
-|—|—|
+|--|--|
 | `SizingMode` | `SessionInfo::sizing` 字段 |
 | `DisplayConfig` | `SessionInfo::display` 字段 |
 | `EnvConfig` | `LocalSessionConfig::env` 字段 |
@@ -146,7 +146,7 @@ session types 引用 settings 的纯类型：
 session types 引用以下 cross-cutting 类型：
 
 | 类型 | 用途 |
-|—|—|
+|--|--|
 | `CapabilityFlags` | `SessionInfo::capabilities` 字段 |
 | `SplitDirection` | session split 方向（local / ssh / tmux-cc 都用） |
 
@@ -157,7 +157,7 @@ cross-cutting 在 是 `domain/settings/cross_cutting/`（不再是独立 model d
 session types 引用以下 terminal 类型：
 
 | 类型 | 用途 |
-|—|—|
+|--|--|
 | `TmuxCcConfig` | `SessionConfig::TmuxCc(TmuxCcConfig)` 变体 |
 | `AttachedTmuxServer` | `auto_attach_on_startup` 的入参 |
 
@@ -203,12 +203,12 @@ domain/session/
 ## 10. 跨域依赖
 
 | domain | session 对其依赖 |
-|—|—|
+|--|--|
 | `domain/terminal` | ✅ 强依赖（Arc<TmuxController> 引用 + 类型字段） |
 | （已删除——见各归属 domain）| ✅ 弱依赖（仅类型字段） |
 | `domain/cross_cutting`（在 settings 下） | ✅ 弱依赖（仅 CapabilityFlags / SplitDirection） |
 | `domain/persistence` | ❌ 不依赖（持久化由 commands/<target>/api（log → shell，attached_tmux → terminal）触发） |
-| `domain/workspace` | ❌ 不依赖（MVP 不调） |
+| （已删除——workspace 状态完全 frontend 持有）| ❌ 不依赖 |
 | `infra/pty` | ✅ 依赖（PtySystem trait + PtyPair） |
 | `infra/ssh` | ✅ 依赖（SshBackend trait + SshSessionHandle） |
 | `infra/tauri` | ✅ 依赖（AppBackend trait，emit 事件用） |
@@ -227,7 +227,7 @@ domain/session/
 
 ## 13. 不允许的依赖
 
-- ❌ `domain/session/` → `domain/workspace/*`（session 不持有 workspace 状态）
+- ❌ （已删除——workspace 状态完全 frontend 持有，session 不需要跨域引用）
 - ❌ `domain/session/` → `domain/persistence/*`（持久化由 commands 触发）
 - ❌ `domain/session/` → `tauri`（session 不感知 IPC 边界）
 - ❌ `domain/session/` → `tokio::main` / `actix` / `async-std`（session 允许 tokio::process / tokio::io 等具体 API）

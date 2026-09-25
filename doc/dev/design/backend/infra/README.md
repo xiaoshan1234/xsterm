@@ -17,7 +17,7 @@
 本文档把 `infrastructure/` 重构为 **4 子模块按外部资源切分**，与 frontend `infra/` 镜像：
 
 | 当前结构 | 落点 | 依据 |
-|—|—|—|
+|--|--|--|
 | `infrastructure/pty.rs` | `infrastructure/pty/` | 外部资源：OS PTY 子进程 |
 | `infrastructure/ssh.rs` | `infrastructure/ssh/` | 外部资源：SSH 协议 |
 | `infrastructure/tmux/` | `infrastructure/tmux/` | 外部资源：tmux 控制模式（保留） |
@@ -67,7 +67,7 @@ src-tauri/src/infrastructure/
 每个子模块有 3 份文档：**职责 / 对外接口 / 对下依赖**
 
 | 子模块 | 职责 | 对外接口 | 对下依赖 | 外部资源 |
-|—|—|—|—|—|
+|--|--|--|--|--|
 | **pty** | [RESPONSIBILITY](./pty/RESPONSIBILITY.md) | [INTERFACE](./pty/INTERFACE.md) | [DOWNSTREAM](./pty/DOWNSTREAM.md) | OS PTY 子进程 |
 | **ssh** | [RESPONSIBILITY](./ssh/RESPONSIBILITY.md) | [INTERFACE](./ssh/INTERFACE.md) | [DOWNSTREAM](./ssh/DOWNSTREAM.md) | SSH 协议（russh） |
 | **tmux** | [RESPONSIBILITY](./tmux/RESPONSIBILITY.md) | [INTERFACE](./tmux/INTERFACE.md) | [DOWNSTREAM](./tmux/DOWNSTREAM.md) | tmux 控制模式（外部子进程） |
@@ -76,7 +76,7 @@ src-tauri/src/infrastructure/
 ## 3. 4 子模块 ↔ 4 frontend infra 子模块镜像表
 
 | backend 子模块 | frontend 子模块 | 对应关系 |
-|—|—|—|
+|--|--|--|
 | `infra/pty/` | `infra/tauri/commands/*`（前端无 PTY）| backend 用 `portable-pty` crate；frontend 不需要 |
 | `infra/ssh/` | （前端无 SSH）| backend 用 `russh` crate；frontend 不需要 |
 | `infra/tmux/` | （前端无 tmux）| backend 用 `tmux -CC` 子进程；frontend 通过 IPC 镜像 |
@@ -230,7 +230,7 @@ src-tauri/src/lib.rs::run()
   │              └─► tauri::AppHandle / Channel::new
   └─► tauri::Builder::default()
          .invoke_handler(commands::mod::all_handlers())
-         └─► commands::{session,workspace,terminal,settings}::api::*
+         └─► commands::{session,terminal,shell}::api::*
               └─► domain::{session,terminal,settings,persistence}::api::*
                    └─► infra::{pty,ssh,tmux,tauri}::*            ← infra 在最底
                        └─► domain::<domain>/types.rs (纯数据) + infra/* (外部 crate)

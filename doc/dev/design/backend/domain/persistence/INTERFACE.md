@@ -165,7 +165,7 @@ pub async fn create_tmux_session(...) -> Result<TmuxSessionInit, String> {
 
 ## 6. api.rs 变更流程
 
-1. **新增 typed wrapper**（如未来加 `workspace.json`）→ 加 `domain/persistence/<file>.rs` + 在 §2.2 同步 + 加 store file / key const
+1. **新增 typed wrapper**（如未来加新 store file）→ 加 `domain/persistence/<file>.rs` + 在 §2.2 同步 + 加 store file / key const
 2. **修改 typed wrapper 签名** → ⚠️ breaking——检查所有 app 调用方 + frontend `service/persistence` 类型
 3. **修改 store file name** → ⚠️ breaking——老 store 文件丢失，需要 migration
 4. **删除 typed wrapper** → 从 persistence 文件 + app 调用方同步删除

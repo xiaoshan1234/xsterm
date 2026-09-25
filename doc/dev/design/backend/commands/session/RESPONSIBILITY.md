@@ -64,11 +64,11 @@ modules/session/
 ## 5. 跟其他 module 的关系
 
 | module | 关系 |
-|—|—|
+|--|--|
 | `commands/terminal` | session **不**直接调 terminal；tmux session 创建由 `commands/terminal/api::create_tmux_session` 暴露 |
 | （已删除——attached_tmux→terminal，log→shell）| session 创建成功后**内部**调 `save_session_config`（已删除，frontend 直存） |
 | `commands/shell` | shell 不直接调 session；session 完全由前端 `invoke()` 触发 |
-| `commands/workspace` | workspace 未来激活时调 session.create_local_only()（详见 `commands/workspace/INTERFACE.md`） |
+| （已删除）| workspace 状态完全 frontend 持有，session 不调 backend |
 | `domain/session_manager` | session api **唯一**直接调用的 service —— 通过 `state.method()` 调用 |
 | `domain/session_log` | session create 时调 `start_session_logging(id, &config)` 启动日志 |
 | `domain/session/backends/local` | session.create_local 委托给 `domain/session/backends/local::create_local_session()` |

@@ -46,7 +46,7 @@ infrastructure/ssh/
 frontend **没有** `infra/ssh` —— frontend 不直接调 SSH（通过 IPC 调 backend 的 `create_ssh_session` / `write_session` / `resize_ssh_session` / `upload_image_to_ssh_session`）。
 
 | backend infra/ssh | frontend 等价 |
-|—|—|
+|--|--|
 | `SshBackend::connect(config)` | ❌（frontend 不可见）|
 | `SshBackend::run_command_capture_stdout(cmd)` | ❌（frontend 通过 tmux probe 间接）|
 | `upload_file_via_ssh(local, remote)` | ❌（frontend 通过 upload_image_to_ssh_session 间接）|
@@ -56,7 +56,7 @@ frontend **没有** `infra/ssh` —— frontend 不直接调 SSH（通过 IPC �
 ## 5. 跟其他 backend infra 子模块的关系
 
 | 子模块 | 关系 |
-|—|—|
+|--|--|
 | `infra/pty` | 平级；不互相依赖 |
 | `infra/tmux` | 平级；tmux 通过 SSH backend 间接（`SshBackend::run_command_capture_stdout` 用于 SSH 上的 tmux probe）|
 | `infra/tauri` | 平级；ssh 不调 Tauri runtime |
@@ -70,7 +70,7 @@ frontend **没有** `infra/ssh` —— frontend 不直接调 SSH（通过 IPC �
 ## 6. 跟 service / app 的关系
 
 | 层 | 怎么用 infra/ssh |
-|—|—|
+|--|--|
 | `domain/session` | `SessionManager::ssh_backend: Arc<dyn SshBackend>` 字段持有；`create_ssh` 调用 `ssh_backend.connect(config)` |
 | `domain/session/log` | 不直接调 ssh——log message 通过 tracing |
 | `commands/session` | `upload_image_to_ssh_session` IPC handler 内部调 `infra/ssh::upload_file_via_ssh` |

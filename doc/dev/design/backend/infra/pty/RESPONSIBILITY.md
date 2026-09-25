@@ -43,7 +43,7 @@ infrastructure/pty/
 frontend **没有** `infra/pty` —— frontend 不直接调 PTY（通过 IPC 调 backend 的 `create_local_session` / `write_session` / `resize_pty_session`）。
 
 | backend infra/pty | frontend 等价 |
-|—|—|
+|--|--|
 | `PtySystem::openpty(config)` | ❌（frontend 不可见）|
 | `PtyPair::write / read / resize` | ❌（frontend 通过 IPC 间接）|
 | `NativePtySystem::default()` | ❌ |
@@ -53,7 +53,7 @@ frontend **没有** `infra/pty` —— frontend 不直接调 PTY（通过 IPC �
 ## 5. 跟其他 backend infra 子模块的关系
 
 | 子模块 | 关系 |
-|—|—|
+|--|--|
 | `infra/ssh` | 平级（同样"外部资源"切分）；不互相依赖 |
 | `infra/tmux` | 平级；tmux 通过 `tokio::process` 直接 spawn `tmux -CC` 子进程，不通过 PtySystem |
 | `infra/tauri` | 平级；infra/tauri 提供 Tauri runtime 适配（AppHandle / Channel），不与 PtySystem 直接交互 |
@@ -67,7 +67,7 @@ frontend **没有** `infra/pty` —— frontend 不直接调 PTY（通过 IPC �
 ## 6. 跟 service / app 的关系
 
 | 层 | 怎么用 infra/pty |
-|—|—|
+|--|--|
 | `domain/session` | `SessionManager::pty_system: Box<dyn PtySystem>` 字段持有；`create_local` 调用 `pty_system.openpty(config)` |
 | `domain/session/log` | 不直接调 PtySystem——log message 通过 tracing |
 | `commands/session` | 不直接调 PtySystem——通过 `domain/session::create_local_session` 间接 |

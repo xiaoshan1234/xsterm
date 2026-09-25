@@ -40,7 +40,7 @@ terminal module 编排 backend **tmux -CC 子系统的全部 IPC**——15 个 `
 ## 2. 这个 module **不**负责什么
 
 - **不渲染 xterm** —— UI 渲染归 frontend `ui/terminal/`
-- **不管理 pane 树结构** —— pane 树归 `commands/workspace/`（未来激活）
+- **不管理 pane 树结构** —— pane 树完全 frontend 持有
 - **不实现 tmux 协议** —— tmux -CC 协议在 `services::tmux_session/`（已实现）
 - **不管理普通 PTY/SSH session** —— 那是 `commands/session/` 的事
 - **不持久化 settings** —— 持久化归各归属 module（attached_tmux → terminal，log → shell）（attached_tmux.json 走 settings）
@@ -81,7 +81,7 @@ modules/terminal/
 | `commands/session` | session.create_session (generic) 收到 `TmuxCcConfig` 时调 `terminal_api::create_tmux` |
 | （已删除——attached_tmux→terminal，log→shell）| terminal 在 create/attach 成功后调 `terminal_api::save_attached_tmux_servers` 持久化 |
 | `commands/shell` | shell **不**自动 attach tmux——由前端显式调 `terminal_api::auto_attach_tmux_servers` |
-| `commands/workspace` | workspace 未来激活时调 `terminal_api::create_tmux_pane`（pane split 时检测 parent 是 tmux） |
+| （已删除）| workspace 状态完全 frontend 持有，terminal 不被调 |
 | `domain/session_manager` | terminal api **唯一**直接调用的 service（create / attach / detach / kill 通过 SessionManager） |
 | `domain/terminal_session` | terminal api 委托 `SessionManager::create_tmux` —— 它内部用 `TmuxController` |
 | `domain/session/backends/ssh` | terminal 通过 `SessionManager::probe_tmux_session_exists` 间接使用（local probe 不需要 SSH；SSH probe 走 SshBackend） |

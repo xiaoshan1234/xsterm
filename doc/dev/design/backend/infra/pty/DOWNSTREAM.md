@@ -24,7 +24,7 @@ infrastructure/pty/
 ## 2. portable-pty（核心外部依赖）
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `portable_pty::native_pty_system()` | `portable-pty` crate | `NativePtySystem::new()` |
 | `portable_pty::NativePtySystem::openpty(PtySize)` | 同上 | `NativePtySystem::openpty()` |
 | `portable_pty::PtySize { rows, cols, ... }` | 同上 | 传给 `openpty()` |
@@ -39,7 +39,7 @@ infrastructure/pty/
 ## 3. std
 
 | 使用 | 何时 |
-|—|—|
+|--|--|
 | `std::io::{Read, Write}` | `MasterPty / SlavePty` trait 继承 |
 | `std::io::Error` | `PtyError::Io` 自动 From |
 | `std::process::Stdio` | (在 service 层使用 `portable_pty::slave` 作为 `Stdio`) |
@@ -48,7 +48,7 @@ infrastructure/pty/
 ## 4. mockall
 
 | 使用 | 何时 |
-|—|—|
+|--|--|
 | `#[automock]` | 自动 mock `PtySystem` trait |
 | `MockPtySystem::new()` | 测试代码构造 mock 实例 |
 | `.expect_openpty().returning(...)` | 配置 mock 行为 |
@@ -59,7 +59,7 @@ infrastructure/pty/
 ## 5. thiserror
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `#[derive(thiserror::Error)]` | `thiserror` crate | `PtyError` enum derive |
 | `#[from] std::io::Error` | std | `PtyError::Io` 自动 From |
 | `#[error("...")]` | thiserror | Display impl |
@@ -84,7 +84,7 @@ infrastructure/pty/
 ## 7. 跨子模块依赖（infra 平级）
 
 | 依赖 | 何时 |
-|—|—|
+|--|--|
 | `infra/ssh::*` | ❌ 不依赖 |
 | `infra/tmux::*` | ❌ 不依赖 |
 | `infra/tauri::*` | ❌ 不依赖 |
@@ -94,7 +94,7 @@ infrastructure/pty/
 ## 8. 跨层依赖（infra → service/app）
 
 | 依赖 | 何时 |
-|—|—|
+|--|--|
 | `crate::services::*` | ❌ 不依赖 |
 | `crate::app::*` | ❌ 不依赖 |
 | `crate::commands::*` | ❌ 不依赖 |

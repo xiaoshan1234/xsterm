@@ -28,7 +28,7 @@ infrastructure/ssh/
 ## 2. russh（核心外部依赖）
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `russh::client::connect(host, port)` | `russh` crate | `SshBackendImpl::connect()` |
 | `russh::client::Config::default()` | 同上 | 配置 ssh client |
 | `russh::Preferred::COMPRESSED` | 同上 | 压缩偏好 |
@@ -46,7 +46,7 @@ infrastructure/ssh/
 ## 3. russh_keys
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `russh_keys::key::KeyPair::from_pkcs8(...)` | `russh-keys` crate | 解析 PKCS8 格式私钥 |
 | `russh_keys::decode_pkcs8_private_key(...)` | 同上 | SSH 私钥解析 |
 
@@ -55,7 +55,7 @@ infrastructure/ssh/
 ## 4. tokio
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `tokio::task::spawn_blocking` | `tokio` crate | `run_command_capture_stdout` 包装同步阻塞 |
 | `tokio::time::timeout` | 同上 | SSH 连接超时控制 |
 | `tokio::sync::mpsc` | 同上 | SshSession 内部读循环（russh 异步 API）|
@@ -68,7 +68,7 @@ infrastructure/ssh/
 ## 5. models
 
 | 读取 | 来源 |
-|—|—|
+|--|--|
 | `SSHSessionConfig` | `models/session/types.rs` |
 
 **约束**：models 是纯数据类型——ssh 可自由 import。
@@ -76,7 +76,7 @@ infrastructure/ssh/
 ## 6. mockall
 
 | 使用 | 何时 |
-|—|—|
+|--|--|
 | `#[automock]` | 自动 mock `SshBackend` trait |
 | `MockSshBackend::new()` | 测试代码构造 mock 实例 |
 | `.expect_connect().returning(...)` | 配置 mock 行为 |
@@ -86,7 +86,7 @@ infrastructure/ssh/
 ## 7. thiserror
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `#[derive(thiserror::Error)]` | `thiserror` crate | `SshError` enum derive |
 | `#[from] std::io::Error` | std | `SshError::Io` 自动 From |
 
@@ -112,7 +112,7 @@ infrastructure/ssh/
 ## 9. 跨子模块依赖（infra 平级）
 
 | 依赖 | 何时 |
-|—|—|
+|--|--|
 | `infra/pty::*` | ❌ 不依赖 |
 | `infra/tmux::*` | ❌ 不依赖 |
 | `infra/tauri::*` | ❌ 不依赖 |
@@ -122,7 +122,7 @@ infrastructure/ssh/
 ## 10. 跨层依赖（infra → service/app）
 
 | 依赖 | 何时 |
-|—|—|
+|--|--|
 | `crate::services::*` | ❌ 不依赖 |
 | `crate::app::*` | ❌ 不依赖 |
 | `crate::commands::*` | ❌ 不依赖 |

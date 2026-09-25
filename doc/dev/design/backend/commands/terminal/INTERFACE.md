@@ -282,7 +282,7 @@ export async function createTmuxPane(
 2. **修改命令签名** → 同步更新 `api.rs` + INTERFACE.md §2 + 前端 `commands/terminal/api.ts` 类型
 3. **删除 tmux IPC 命令** → 三处一起删除（命令 / api.rs / `all_handlers()` 注册）
 4. **新增持久化触发点** → 在 §3.1 同步 + 在 `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） 加对应 save 方法
-5. **新增跨 module 调用**（如未来 workspace 调 create_tmux_pane）→ 在 §2 加 + 在 §3.2 同步
+5. **新增跨 module 调用**（未来如新增其他 module 调 create_tmux_pane）→ 在 §2 加 + 在 §3.2 同步
 
 ## 7. 关键设计约束
 

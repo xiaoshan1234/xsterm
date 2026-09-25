@@ -10,28 +10,28 @@
 Backend 当前 3 层：commands / domain / infra。原 4 层的问题：
 
 | 旧问题 | 实证 |
-|—|—|
+|--|--|
 | **service 跟 model 边界模糊** | `services/session/` 既做"中央状态机"又做"3 种 backend 实现"——`backends/local.rs` 跟 `infra/pty/` 是**两层 SSH/PTY 后端实现**（重叠代码） |
 | **app/session/api.rs 是空壳** | `create_local(state, backend, config)` ≈ `SessionManager::create_local(config, backend)`——纯转发，业务价值 0 |
 | **model 是"半状态机"** | `models/session/types.rs` 是纯数据，但 `services/session/manager.rs` 是状态机——混在两个目录反而需要双层映射 |
 | **settings 杂货箱（已删除）** | LogConfig runtime + ReloadHandle + CapabilityFlags + SplitDirection + SizingMode + DisplayConfig + EnvConfig + SshAuthMethod + SavedSessionConfigV1 + SessionLoggingConfig + build_remote_image_path + 8 个 constants 全部拆到归属 domain |
 
-当前结构：service 跟 model 合并为 domain（4 个 domain，按产品功能切），settings 类型字段全部拆到归属 domain。
+当前结构：service 跟 model 合并为 domain（3 个 domain，按产品功能切），settings 类型字段全部拆到归属 domain，workspace 状态完全 frontend 持有 backend 无对应 domain。
 
 **理由**：
 
 1. **service 跟 model 在 Rust 里都是 `pub fn` + `pub struct`**——强制分层带来的实际收益小
 2. **backend 不需要 ui 层**——frontend 5 层多 ui 是因为有视图，backend 没视图
-3. **合并后按"产品功能"切**（domain/session/ terminal/ persistence/ workspace），每个 domain 内部按文件分（types / rules / state / persistence）反而更清晰
-4. **settings 杂货箱拆解**——按字段归属（CapabilityFlags 等归 session，SplitDirection 归 workspace，LogConfig runtime 归 persistence）
+1. **合并后按"产品功能"切**（domain/session/ terminal/ persistence），每个 domain 内部按文件分（types / rules / state / persistence）反而更清晰
+2. **settings 杂货箱拆解**——按字段归属（CapabilityFlags 等归 session，LogConfig runtime 归 persistence）
 
-## 2. 4 个 domain
+## 2. 3 个 domain
 
 ```
-src-tauri/src/domain/                          # 语义名（顶层 4 domain）
-├── mod.rs                4 domain re-export 集合
-├── session/              ⭐ 核心 domain：SessionManager 中央状态机 + 3 backend 实现 + settings 字段（CapabilityFlags/SizingMode/DisplayConfig/EnvConfig/SshAuthMethod/SessionLoggingConfig）+ types + rules + helpers + constants
-│   ├── types.rs          SessionType / SessionInfo / SessionConfig / LocalSessionConfig / SSHSessionConfig / SessionLoggingConfig / SessionIdSource / SizingMode / DisplayConfig / EnvConfig / SshAuthMethod / CapabilityFlags
+src-tauri/src/domain/                          # 语义名（顶层 3 domain）
+├── mod.rs                3 domain re-export 集合
+├── session/              ⭐ 核心 domain：SessionManager 中央状态机 + 3 backend 实现 + settings 字段（CapabilityFlags/SizingMode/DisplayConfig/EnvConfig/SshAuthMethod/SessionLoggingConfig/SplitDirection）+ types + rules + helpers + constants
+│   ├── types.rs          SessionType / SessionInfo / SessionConfig / LocalSessionConfig / SSHSessionConfig / SessionLoggingConfig / SessionIdSource / SizingMode / DisplayConfig / EnvConfig / SshAuthMethod / CapabilityFlags / SplitDirection
 │   ├── rules.rs          withStatus / applyDisplayConfig / apply_session_settings / mergeDefaults / validateConfig / withCapability
 │   ├── state.rs          SessionManager + 注册表 + id 分配
 │   ├── helpers.rs        build_remote_image_path (SSH image upload helper)
@@ -46,28 +46,20 @@ src-tauri/src/domain/                          # 语义名（顶层 4 domain）
 │   ├── errors.rs         SessionError（thiserror）
 │   └── *.test.rs
 │
-├── workspace/            ⭐ 主视图 domain：paneTree 算法 + SplitDirection 类型 + types
-│   ├── types.rs          Workspace / Window / Group / GroupStore / PaneNode / SplitDirection / PaneBinding
-│   ├── rules.rs          paneTree 算法（createLeafPane / createSplitNode / splitPane / closePane / resizePane / movePane）
-│   ├── state.rs          预留（WorkspaceManager 预留位，MVP 无 backend 状态）
-│   ├── api.rs            ⭐ 唯一对外入口
-│   ├── errors.rs         WorkspaceError（thiserror，MVP 预留）
-│   └── *.test.rs
-│
 ├── terminal/             ⭐ 派生 domain：TmuxController + tmux 协议层 + types
 │   ├── types.rs          TmuxCcConfig / TmuxSessionInit / TmuxWindowInit / TmuxPaneInit / TmuxControlWindowInit / AttachedTmuxServer
 │   ├── controller/       TmuxController struct + 共享 helper
 │   ├── dispatch.rs       spawn_dispatch_task + dispatch_event
 │   ├── bridge.rs         TmuxBridge — ProtocolEvent → Tauri 事件
 │   ├── protocol/         纯协议层（无 I/O）—— 不动
-│   ├── api.rs            ⭐ 唯一对外入口（强制）
+│   ├── api.rs            ⭐ 唯一对外入口（v3 不存在，v4 强制）
 │   ├── errors.rs         TmuxError
 │   └── *.test.rs
 │
 └── persistence/          ⭐ 横切 domain：attached_tmux + log_config 直存 + ReloadHandle 管理
     ├── api.rs            ⭐ 唯一对外入口（save_json_value / load_json_value / delete_json_value + LogConfig 运行时）
     ├── attached_tmux.rs  attached_tmux.json 的 typed wrapper
-    ├── log_config.rs     LogConfig 类型 + LogConfigState + ReloadHandle 管理
+    ├── log_config.rs     LogConfig 类型 + LogConfigState + ReloadHandle 管理（v5 合并自原 domain/settings）
     ├── constants.rs      LOG_FILE_MAX_BYTES / LOG_FILE_DEFAULT_KEEP
     ├── errors.rs         PersistenceError（thiserror）
     └── *.test.rs
@@ -76,26 +68,26 @@ src-tauri/src/domain/                          # 语义名（顶层 4 domain）
 **类型分类依据**（与 frontend service README §1 一致）：
 
 | 类型 | 判定标准 | backend 例子 |
-|—|—|—|
-| **核心** | 跨多个 commands module 共享的状态机 | `domain/session`（被 commands/session、commands/terminal、commands/workspace、commands/shell 用）|
+|--|--|--|
+| **核心** | 跨多个 commands module 共享的状态机 | `domain/session`（被 commands/session、commands/terminal、commands/shell 用）|
 | **派生** | 不存原数据，存"原数据的视图"或独立子系统 | `domain/terminal`（独立 tmux -CC 子系统）|
 | **横切** | 独立子系统，被所有 commands 用 | `domain/persistence`（attached_tmux + log_config runtime 持久化）|
 
-## 3. 4 个 domain ↔ 5 个 frontend service domain 镜像表
+## 3. 3 个 domain ↔ 5 个 frontend service domain 镜像表
 
 | backend domain | frontend service domain | 对应关系 |
-|—|—|—|
-| `domain/session` | `service/session` | 都是 session 元数据状态机 + IPC 桥的 source of truth；backend 持有 3 种 backend 实现 + 多种 settings 字段 |
-| `domain/workspace` | `service/workspace` | MVP backend 预留位；frontend 持有 workspace store |
+|---|---|---|
+| `domain/session` | `service/session` | 都是 session 元数据状态机 + IPC 桥的 source of truth；backend 持有 3 种 backend 实现 + 多种 settings 字段（v5 合并） |
 | `domain/terminal` | `service/tmux` | backend 是 tmux 协议的 source；frontend 镜像 backend 推过来的状态 |
-| `domain/persistence` | `service/persistence` | backend 持 attached_tmux + log_config；frontend 持 sessions/groups/settings 直存 |
+| `domain/persistence` | `service/persistence` | backend 持 attached_tmux + log_config（v5 合并）；frontend 持 sessions/groups/settings 直存 |
 
-**砍掉 backend `domain/settings`**：前端 settings service 镜像的是 frontend 自己的 store——backend 不需要同名 domain。backend 的"settings 概念"被拆到：
-- `domain/persistence`（log_config runtime + ReloadHandle）
-- `domain/session`（CapabilityFlags / SizingMode / DisplayConfig / EnvConfig / SshAuthMethod / SessionLoggingConfig / build_remote_image_path / 部分 constants）
-- `domain/workspace`（SplitDirection）
+**砍掉 backend `domain/workspace`（无 module）**：
 
-## 4. 4 个 domain 之间的依赖
+- frontend `app/workspace` + `service/workspace` + `model/workspace` 全保留——frontend 是 workspace 的唯一持有者
+- backend MVP 没有任何 workspace 状态、paneTree 算法、WorkspaceManager——**`SplitDirection` 类型归 `domain/session/types.rs`**（session split pane 用），不是独立 workspace domain
+- 未来如果 backend 持有 workspace 状态（多窗口同步 / pane tree 跨设备），再恢复 `domain/workspace`
+
+## 4. 3 个 domain 之间的依赖
 
 ```
                   ┌──────────────────────────┐
@@ -115,21 +107,13 @@ src-tauri/src/domain/                          # 语义名（顶层 4 domain）
                   │      persistence         │
                   │ （横切：tauri-plugin-store）│
                   └──────────────────────────┘
-                            ▲
-                            │
-                  ┌─────────┴────────────────┐
-                  │       workspace          │
-                  │ （预留位：MVP 无 backend）│
-                  └──────────────────────────┘
 ```
 
 **依赖规则**（与 frontend `service/` 镜像 + 适配 Rust 习惯）：
 
 - **session** → terminal（注册 controller 时通过 controller 公开接口）
 - **session** → persistence（save attached_tmux——但走 `commands/` 触发，domain 只提供能力）
-- **session** → workspace（预留：MVP 不调）
 - **terminal** → persistence（auto_attach 读 attached_tmux.json——走 `commands/` 触发）
-- **workspace** → 任何（预留位，未来激活）
 - **persistence** → 任何（**禁止**——persistence 是最底层）
 
 **砍掉 settings 后的 settings 依赖被吸收到归属 domain**：
@@ -159,7 +143,7 @@ domain/<name>/
 
 **例外**：
 
-- 简单 domain（如 `domain/workspace` MVP 预留位）只有 types + rules + 占位
+- 简单 domain（如 `domain/terminal`）按状态机子目录拆（controller/mod.rs + commands.rs + io_tasks.rs 等多个文件）
 - 复杂 domain（如 `domain/terminal/TmuxController`）按状态机子目录拆（controller/、dispatch.rs、bridge.rs、protocol/）
 
 ## 6. domain → commands 边界
@@ -201,7 +185,7 @@ domain/session/backends/local.rs      infra/pty/
 
 backend 设计文档里**保留**所有「（未来）」占位——它们标记 MVP 暂未实现但设计已规划的部分：
 
-- `domain/workspace/state.rs`：MVP backend 无 workspace 状态，pane tree 在 frontend store
+- `domain/terminal/state.rs`：TmuxController 顶层结构（v3 在 controller/mod.rs）
 - `domain/persistence/migrations/`：schema 升级时的 migration 框架（MVP 单版本无 migration）
 - 各类「（未来）」标注的字段、命令、helper
 
@@ -229,7 +213,7 @@ backend 设计文档里**保留**所有「（未来）」占位——它们标�
 
 - cross-cutting 内容是 types + constants + helpers——是 settings 的"基础设施"（SessionType / SplitDirection / CapabilityFlags / build_remote_image_path / constants）
 - 单独成 domain 是过度切分（types/constants/helper 不构成独立业务）
-- 合并到 domain/settings；进一步拆到归属 domain（CapabilityFlags 等 → session，SplitDirection → workspace）
+- 合并到 domain/settings；进一步拆到归属 domain（CapabilityFlags 等 → session）
 
 ### 9.4 为什么 domain/persistence 保留为独立 domain
 
@@ -250,7 +234,7 @@ backend 设计文档里**保留**所有「（未来）」占位——它们标�
 ## 10. 跟 frontend service 的职责分叉
 
 | 维度 | frontend service | backend domain |
-|—|—|—|
+|--|--|--|
 | 类型定义 | TS interface | Rust serde struct |
 | 状态机 | zustand store + reducer | `Arc<Mutex/DashMap>` + method |
 | 算法 | pure function（accessor / rules）| pure function（rules）|
@@ -262,7 +246,7 @@ backend 设计文档里**保留**所有「（未来）」占位——它们标�
 
 ## 11. 文档地图
 
-- 顶层（本文）：domain 4 domain 总览 + 与 commands/infra 边界 + 与 frontend service 镜像关系
+- 顶层（本文）：domain 3 domain 总览 + 与 commands/infra 边界 + 与 frontend service 镜像关系
 - 各 domain 子文档：每个 domain 3 份（RESPONSIBILITY / INTERFACE / DOWNSTREAM）
 - 镜像验证：每份 domain README 顶部 "Frontend 对应" 链接
 

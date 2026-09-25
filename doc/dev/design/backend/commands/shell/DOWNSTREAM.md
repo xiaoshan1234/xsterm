@@ -16,7 +16,7 @@ modules/shell/
 ## 2. commands/shell（log runtime）
 
 | 调用 | 来源 | 何时调 |
-|—|—|—|
+|--|--|--|
 | `shell_api::load_log_config(app_handle)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | `initialize()` 步骤 3，启动 rolling writer 之前 |
 
 **关键**：shell 不直接 import `domain/session_log` 或 `models::session::LoggingConfig`——统一走 settings_api 入口。
@@ -24,7 +24,7 @@ modules/shell/
 ## 3. logging_setup
 
 | 调用 | 来源 | 何时调 |
-|—|—|—|
+|--|--|--|
 | `cleanup_old_logs(&log_dir, max_bytes)` | `crate::logging_setup` | `initialize()` 步骤 4 |
 | `init_logging(&log_dir, &config) -> reload::Handle` | `crate::logging_setup` | `initialize()` 步骤 5 |
 
@@ -33,7 +33,7 @@ modules/shell/
 ## 4. infrastructure
 
 | 调用 | 来源 | 何时调 |
-|—|—|—|
+|--|--|--|
 | `RealAppBackend::new(app_handle)` | `crate::infrastructure::app_backend` | `initialize()` 步骤 7 |
 
 **约束**：shell 是**唯一允许**直接 import infrastructure::app_backend 的 module——其他 module 必须经过 service。理由：app_backend 是 Tauri-level handle 的 wrapper，没有业务规则。
@@ -41,7 +41,7 @@ modules/shell/
 ## 5. models
 
 | 读取 | 来源 |
-|—|—|
+|--|--|
 | `PathBuf` | `std::path` |
 | `tauri::App` / `tauri::AppHandle` | `tauri` |
 | `Arc<...>` / `tracing::*` | std / tracing |

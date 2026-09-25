@@ -3,13 +3,13 @@
 > **位置**：`src-tauri/src/commands/`（语义名；落地目录沿用 Rust 习惯）
 > **关注点**：把 frontend IPC 调用映射到 backend domain 业务逻辑
 > **平级于**：domain / infra（3 层架构的最上层）
-> **Frontend 对应**：[`../../frontend/app/`](../../frontend/app/README.md)（frontend 5 module ↔ backend **4 module**，app/settings 跨多 backend）
+> **Frontend 对应**：[`../../frontend/app/`](../../frontend/app/README.md)（frontend 5 module ↔ backend **3 module**，app/settings 跨多 backend，app/workspace 状态完全 frontend 持有 backend 无对应 module）
 
-## 1. 4 module 划分
+## 1. 3 module 划分
 
 ```
-src-tauri/src/commands/                           # 语义名（顶层 4 module）
-├── mod.rs                 4 module re-export 集合
+src-tauri/src/commands/                           # 语义名（顶层 3 module）
+├── mod.rs                 3 module re-export 集合
 ├── session/               ⭐ 核心 IPC module
 │   ├── api.rs             (pub session api——纯 Rust 函数 + State 注入)
 │   ├── commands/          #[tauri::command] 集合（每个 IPC 一个文件）
@@ -21,8 +21,6 @@ src-tauri/src/commands/                           # 语义名（顶层 4 module�
 │   │   └── output.rs      get_session_output_channel (binary frame 起点归 session)
 │   └── *.test.rs
 │
-├── workspace/             预留位：MVP 无 backend IPC
-│
 ├── terminal/              ⭐ tmux IPC + attached_tmux 持久化 module
 │   ├── api.rs             (pub terminal api)
 │   ├── commands/
@@ -32,7 +30,7 @@ src-tauri/src/commands/                           # 语义名（顶层 4 module�
 │   │   │   ├── window.rs      create_tmux_window / kill_tmux_window / rename_tmux_window
 │   │   │   ├── server.rs      get_attached_tmux_servers / detach_tmux_controller / kill_server_via_controller / unmark_attached_tmux
 │   │   │   └── auto_attach.rs auto_attach_tmux_servers
-│   │   └── attached_tmux.rs    save_attached_tmux_servers / load_attached_tmux_servers
+│   │   └── attached_tmux.rs    save_attached_tmux_servers / load_attached_tmux_servers（v5 合并）
 │   └── *.test.rs
 │
 └── shell/                 ⭐ 启动钩子 + log runtime IPC module
@@ -46,26 +44,27 @@ src-tauri/src/commands/                           # 语义名（顶层 4 module�
 ```
 
 | module | 产品功能 | IPC 数量 |
-|—|—|—|
+|---|---|---|
 | `commands/session` | session lifecycle | 10 个 |
-| `commands/workspace` | （预留）| 0 |
 | `commands/terminal` | tmux -CC + attached_tmux 持久化 | **13 个**（tmux 11 + attached_tmux 2） |
 | `commands/shell` | 启动 / 关闭 + log runtime | **4 个**（log_message + get/set_log_config + get_log_dir） |
 | **合计** | — | **27 个** |
 
-**砍掉 commands/settings**：attached_tmux 持久化归 terminal（tmux 业务），log runtime 归 shell（启动时调）。backend IPC 从 31 → 27。
+**砍掉的原因**：
+- `commands/settings`（砍）：attached_tmux 持久化归 terminal（tmux 业务），log runtime 归 shell（启动时调）。backend IPC 从 31 → 27。
+- `commands/workspace`（砍）：workspace 状态完全 frontend 持有（Zustand store + paneTree 算法），backend 无对应 module。
 
-## 2. 4 module ↔ 5 个 frontend app module 对应表
+**改一个产品功能 = 改 1 个 backend commands module + 1 个 frontend app module**（但 workspace / settings 跨多 backend）。
+
+## 2. 3 module ↔ 5 个 frontend app module 对应表
 
 | backend commands module | frontend app module | 对应关系 |
-|—|—|—|
+|---|---|---|
 | `commands/shell` | `app/shell` | 启动 / 关闭序列 + log runtime IPC（log_message / get/set_log_config / get_log_dir）；frontend shell.initialize() 通过 `listen("ready", ...)` 等待 |
-| `commands/workspace` | `commands/workspace` | MVP 无 IPC；未来 split-window / pane 树变更若搬到 backend 时填充 |
-| `commands/terminal` | `app/terminal` | frontend 调 `invoke('create_tmux_pane', ...)` → backend `commands/terminal/commands/tmux/pane.rs::create_tmux_pane`<br>**新增**：`invoke('save_attached_tmux_servers')` → `commands/terminal/commands/attached_tmux.rs`（attached_tmux 归 terminal） |
+| `commands/terminal` | `app/terminal` | frontend 调 `invoke('create_tmux_pane', ...)` → backend `commands/terminal/commands/tmux/pane.rs::create_tmux_pane`<br>`invoke('save_attached_tmux_servers')` → `commands/terminal/commands/attached_tmux.rs`（attached_tmux 归 terminal）|
 | `commands/session` | `app/session` | frontend 调 `invoke('create_local_session', ...)` → backend `commands/session/commands/local/create.rs::create_local_session` |
-| （backend 不对应） | `app/settings` | **砍掉**：`save_sessions` / `load_sessions` / `save_groups` / `load_groups` —— frontend `infra/store` 直存<br>**砍掉**：`save_attached_tmux_servers` 等 backend-only 持久化归 `commands/terminal` |
-
-**改一个产品功能 = 改 1 个 backend commands module + 1 个 frontend app module**。
+| （backend 无对应 module）| `app/settings` | `save_sessions` / `load_sessions` / `save_groups` / `load_groups` —— frontend `infra/store` 直存<br>`save_attached_tmux_servers` 等 backend-only 持久化归 `commands/terminal` |
+| （backend 无对应 module）| `app/workspace` | workspace 状态完全 frontend 持有（Zustand store + paneTree 算法），backend 无对应 module——所有 workspace 操作前端自行处理 |
 
 ## 3. 每个 module 的内部约定
 
@@ -126,15 +125,13 @@ pub async fn create_local_session(
 
 ## 4. 跨 module 协调
 
-5 commands module 之间的协调**只通过 `commands/<other_module>/api.rs`**（domain 模块不感知 commands 边界）：
+3 commands module 之间的协调**只通过 `commands/<other_module>/api.rs`**（domain 模块不感知 commands 边界）：
 
 | 协调类型 | 谁编排 | 通过哪个 api.rs |
-|—|—|—|
-| session 创建 → 装到 workspace | `commands/session` | `commands/workspace/api.rs::openSession` |
-| workspace pane split → 创建新 session | `commands/workspace` | `commands/session/api.rs::createLocal/Ssh/Tmux` |
-| terminal 创建 tmux 后通知 settings 持久化 attached_tmux | `commands/terminal` | `commands/<module>/api（log → shell，attached_tmux → terminal）.rs::saveAttachedTmuxServers` |
-| 启动 → 加载 settings → 加载 workspace | `commands/shell` | `commands/<module>/api（log → shell，attached_tmux → terminal）.rs::loadAll` → `commands/workspace/api.rs::loadLastWorkspace` |
-| settings 变更 → 应用到 terminal | （已删除——attached_tmux→terminal，log→shell）| `commands/terminal/api.rs::applyTerminalPreferences` |
+|---|---|---|
+| terminal 创建 tmux 后持久化 attached_tmux | `commands/terminal` | `commands/terminal/api.rs::saveAttachedTmuxServers` |
+| 启动 → 加载 log_config + binary frame | `commands/shell` | `commands/shell/api.rs::initialize` |
+| settings 变更 → 应用到 terminal | （已删除）| `commands/terminal/api.rs::applyTerminalPreferences` |
 
 **关键**：跨 module 调用**只**通过 `commands/<other>/api.rs`——不绕过 import 内部文件。
 

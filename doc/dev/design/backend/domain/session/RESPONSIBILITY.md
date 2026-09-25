@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/domain/session/`
 > **类型**：⭐ 核心 domain（session 元数据 = 跨多个 commands module 共享的 source of truth）
-> **被调用方**：`commands/session`、`commands/terminal`、`commands/workspace`（未来）、`commands/shell`
+> **被调用方**：`commands/session`、`commands/terminal`、`commands/shell`
 > **Frontend 对应**：[`../../../frontend/service/session/RESPONSIBILITY.md`](../../../frontend/service/session/RESPONSIBILITY.md)（frontend 镜像状态、backend 协议 + 状态机）
 
 ## 1. 这个 domain 负责什么
@@ -35,8 +35,8 @@ session domain 是 backend 的**中央 session 状态机**——所有 session�
 
 ## 2. 这个 domain **不**负责什么
 
-- **不持有 pane tree / workspace 状态** —— 归 `domain/workspace/`（MVP 预留）
-- **不持有 settings** —— 归各归属 module（CapabilityFlags/SizingMode 等 → session，SplitDirection → workspace，LogConfig → persistence）
+- **不持有 pane tree / workspace 状态** —— workspace 状态完全 frontend 持有
+- **不持有 settings** —— 归各归属 module（CapabilityFlags / SizingMode / DisplayConfig / EnvConfig / SshAuthMethod / SessionLoggingConfig 等 → session，LogConfig runtime → persistence）
 - **不直接持久化** —— 持久化能力归 `domain/persistence/`；session 不 import `tauri_plugin_store`
 - **不实现 tmux 协议** —— tmux 协议归 `domain/terminal/`（3 层架构下归 terminal，不是独立 tmux domain）
 - **不监听 Tauri 事件** —— 事件推送由 controller / bridge 内部完成，session 不直接订阅
@@ -65,7 +65,7 @@ types + rules + state 三个文件按"数据 vs 算法 vs 状态机"分——同
 ** 文件迁移**：
 
 | 位置 | 位置 |
-|—|—|
+|--|--|
 | `services/session/manager.rs`（3000+ 行） | `domain/session/state.rs` + `backends/{traits,local,ssh,tmux_pane}.rs` |
 | `services/session/registry.rs` | `domain/session/state.rs`（合并到 SessionManager） |
 | `services/session/id.rs` | `domain/session/types.rs`（SessionIdSource 是类型） |
@@ -83,9 +83,9 @@ types + rules + state 三个文件按"数据 vs 算法 vs 状态机"分——同
 ## 4. 跟其他 domain 的关系
 
 | domain | 关系 |
-|—|—|
+|--|--|
 | `domain/terminal` | session **不直接** import `terminal::controller::*` 字段——通过 `TmuxController::controller_id()` 公开方法 + `Arc<TmuxController>` 引用持有。bug 0009 根因是字段直读，v4 严格走 trait / public method |
-| `domain/workspace` | MVP 不调——pane tree 在 frontend store |
+| （已删除——workspace 状态完全 frontend 持有）| 不依赖 |
 | （已删除——见各归属 domain）| session 创建时**不直接**读 settings（settings 是横切，由 `commands/` 编排注入 default 值）|
 | `domain/persistence` | session **不直接** import `tauri_plugin_store`——持久化由 `commands/<module>/api（log → shell，attached_tmux → terminal）` 触发 |
 | `infra/*` | session 通过 `infra::pty::PtySystem` / `infra::ssh::SshBackend` trait 调底层——session 持有 trait object，不持有静态方法 |
@@ -93,10 +93,10 @@ types + rules + state 三个文件按"数据 vs 算法 vs 状态机"分——同
 ## 5. 跟 commands 的关系
 
 | commands module | 怎么用 domain/session |
-|—|—|
+|--|--|
 | `commands/session` | `SessionManager::create_local` / `create_ssh` / `write` / `close` / `list` / `resize_*` —— 通过 `State<Arc<SessionManager>>` 注入 |
 | `commands/terminal` | `SessionManager::create_tmux` / `attach_tmux` / `create_tmux_pane` / `kill_tmux_pane` / `resize_tmux_pane` / `capture_tmux_pane` / `create_tmux_window` / `kill_tmux_window` / `rename_tmux_window` / `list_attached_tmux_servers` / `detach_tmux_controller` / `close_tmux_controller`（kill server）—— session manager **代理** tmux controller 操作 |
-| `commands/workspace`（未来）| session_manager 提供 session 元数据读取 + 创建 |
+| （已删除）| session_manager 提供 session 元数据读取 + 创建 |
 | `commands/shell` | session **不**被 shell 直接调——所有 session 创建由 frontend invoke 触发 |
 
 **关键**：commands 通过 `commands/<module>/api.rs` 的 pure function 调用 domain/session；session manager 不感知 IPC。
@@ -181,7 +181,7 @@ if let Err(e) = start_session_logging(id, &logging_config) {
 ## 10. 跟 frontend service 的职责分叉
 
 | 维度 | frontend service/session | backend domain/session |
-|—|—|—|
+|--|--|--|
 | 类型定义 | TS interface | Rust serde struct |
 | 状态机 | zustand store + reducer | `Arc<DashMap>` + method |
 | 算法 | pure function（accessor / rules）| pure function（rules）|

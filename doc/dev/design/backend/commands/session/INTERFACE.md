@@ -241,7 +241,7 @@ export async function createLocal(config: LocalSessionConfig) {
 下列 payload key 是 frontend ↔ backend 契约的一部分，**禁止重命名**：
 
 | 命令 | 参数名 | 原因 |
-|—|—|—|
+|--|--|--|
 | `write_session` | `data` | `sessionService.writeSession({ sessionId, data })` |
 | `upload_image_to_ssh_session` | `data` | `sessionService.uploadImageToSshSession(...)` |
 | `create_local_session` | `config` | generic param name |

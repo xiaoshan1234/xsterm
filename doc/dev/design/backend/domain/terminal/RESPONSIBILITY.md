@@ -41,7 +41,7 @@ terminal domain 持有**tmux -CC control mode 子系统的全部逻辑**——ba
 
 - **不持有 tmux pane handle** —— `TmuxPaneHandle` 在 `domain/session/backends/tmux_pane.rs`（session 的 backend impl）
 - **不持有 session 元数据** —— 归 `domain/session/`
-- **不持有 workspace 状态** —— 归 `domain/workspace/`
+- **不持有 workspace 状态** —— workspace 状态完全 frontend 持有
 - **不渲染 UI** —— backend 无 UI
 - **不直接被 commands/terminal 调** —— commands/terminal 调 `domain/session::SessionManager::create_tmux`（session 代理），不直接调 terminal 内部
 
@@ -77,7 +77,7 @@ domain/terminal/
 ** 文件迁移**：
 
 | 位置 | 位置 |
-|—|—|
+|--|--|
 | `services/tmux/controller/mod.rs`（TmuxController struct） | `domain/terminal/state.rs`（独立成文件）+ `controller/mod.rs`（impl） |
 | `services/tmux/controller/{spawn,commands,io_tasks,registry,sync,id_map,subscriber}.rs` | `domain/terminal/controller/{...}.rs`（不变） |
 | `services/tmux/dispatch.rs` | `domain/terminal/dispatch.rs`（不变） |
@@ -92,9 +92,9 @@ domain/terminal/
 ## 4. 跟其他 domain 的关系
 
 | domain | 关系 |
-|—|—|
+|--|--|
 | `domain/session` | session 持有 `Arc<TmuxController>` 引用 + 调公开方法（`send_keys / resize_pane / capture_pane / detach`）——**禁止**字段直读（bug 0009 防御） |
-| `domain/workspace` | workspace pane 可指向 tmux pane（`tmux_pane_id: Option<String>` 字段）——workspace 不调 terminal |
+| （已删除——workspace 状态完全 frontend 持有）| workspace pane 可指向 tmux pane（`tmux_pane_id: Option<String>` 字段）——workspace 不调 terminal |
 | （已删除——见各归属 domain）| MVP 不调；目标态下 terminal 可能读 settings（如终端默认 preference） |
 | `domain/persistence` | terminal **不直接** import `tauri_plugin_store`——`attached_tmux.json` 由 `（已删除——见各归属 module）` 触发持久化 |
 | `infra/tmux` | terminal 通过 `infra::tmux::TmuxBackend` trait 调外部 tmux -CC 子进程——terminal 持有 trait object |
@@ -102,7 +102,7 @@ domain/terminal/
 ## 5. 跟 commands 的关系
 
 | commands module | 怎么用 domain/terminal |
-|—|—|
+|--|--|
 | `commands/terminal` | frontend 调 `invoke('create_tmux_pane', ...)` → commands/terminal/commands/tmux/pane.rs 调 `domain/session::SessionManager::create_tmux_pane`（session 代理） |
 | `commands/session` | `create_tmux_session` / `attach_tmux_session` 调 `domain/session::SessionManager::create_tmux`（session 内部转给 `TmuxController`） |
 | `commands/shell` | 启动时 `auto_attach_on_startup` —— 通过 `domain/session::SessionManager::auto_attach_on_startup`（session 调 `TmuxController::attach`） |
@@ -165,7 +165,7 @@ dispatch task 通过 `Bridge` 模块 emit 到 Tauri（推给 frontend listener�
 ## 10. 跟 frontend service 的职责分叉
 
 | 维度 | frontend service/tmux | backend domain/terminal |
-|—|—|—|
+|--|--|--|
 | 类型定义 | TS interface | Rust serde struct |
 | 状态机 | zustand store（pane bindings / window bindings 镜像） | `Arc<DashMap>` + `TmuxController` 状态机 |
 | tmux 协议层 | 不存在（frontend 只接收 backend 推的事件） | `domain/terminal/protocol/`（octal codec / parser） |

@@ -1,4 +1,4 @@
-# Module · Commands Terminal — 对下依赖
+# Module · Commands Terminal -- 对下依赖
 
 > **位置**：`src-tauri/src/commands/terminal/`
 
@@ -18,7 +18,7 @@ modules/terminal/
 ## 2. commands/session
 
 | 调用 | 来源 | 何时调 |
-|—|—|—|
+|--|--|--|
 | `session_api::create_session(...)` 内部路由到 `terminal_api::create_tmux` | `commands/session/api.rs` | 前端调 `create_session(SessionConfig::TmuxCc)` 时 |
 
 **关键**：这是 session → terminal 的跨 module 调用，由 session dispatcher 发起。terminal 自身**不** call session_api。
@@ -28,7 +28,7 @@ modules/terminal/
 terminal 在以下触发点调 settings_api：
 
 | 触发点 | 调用 | 来源 | 时机 |
-|—|—|—|—|
+|--|--|--|--|
 | `create_tmux_session` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | controller 创建后立即 |
 | `attach_tmux_session` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | attach 成功后立即 |
 | `detach_tmux_controller` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | detach 后立即 |
@@ -46,7 +46,7 @@ terminal 在以下触发点调 settings_api：
 terminal api **唯一直接调用**的 service。调用面：
 
 | 调用 | 何时 |
-|—|—|
+|--|--|
 | `state.create_tmux(&config, backend)` | `create_tmux_session` / session dispatcher |
 | `state.attach_tmux(&config, backend)` | `attach_tmux_session` |
 | `state.probe_tmux_session_exists(&config)` | `probe_tmux_session_exists` |
@@ -72,7 +72,7 @@ terminal api **唯一直接调用**的 service。调用面：
 terminal **不**直接调用 `TmuxController` / `TmuxBridge` / `TmuxProtocol`——通过 `SessionManager` 的 method 间接使用。这是 **核心边界规则**：
 
 | SessionManager method | 内部使用的 tmux_session 符号 |
-|—|—|
+|--|--|
 | `create_tmux` / `attach_tmux` | `TmuxController::spawn_create` |
 | `create_tmux_pane` / `kill_tmux_pane` | `TmuxController::send_keys` / `send_command` |
 | `capture_tmux_pane` | `TmuxController::capture_pane` |
@@ -84,7 +84,7 @@ terminal **不**直接调用 `TmuxController` / `TmuxBridge` / `TmuxProtocol`—
 ## 6. infrastructure
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `RealAppBackend::new(app_handle)` | `infrastructure/app_backend.rs` | 每个 create_xxx / attach_xxx command 入口处 |
 
 **约束**：terminal 是**唯一允许**直接 import `infrastructure::app_backend` 的 module（与 session module 共享此权限）—— 因为这是 Tauri-level handle wrapper，没有业务规则。
@@ -96,7 +96,7 @@ terminal **不**直接 import `infrastructure::tmux::*` 或 `infrastructure::ssh
 terminal 模块直接读以下 models 类型：
 
 | 类型 | 来源 |
-|—|—|
+|--|--|
 | `TmuxCcConfig` | `domain/session/types.rs` |
 | `TmuxSessionInit` | `domain/session/types.rs` |
 | `TmuxControlWindowInit` | `domain/session/types.rs` |
@@ -122,7 +122,7 @@ terminal 模块直接读以下 models 类型：
 ## 9. 跨 module 调用约定
 
 | 位置 | 说明 |
-|—|—|
+|--|--|
 | `commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl(&app, &servers)` | `commands/terminal/commands/tmux/session.rs::create_tmux_session` 内调 `commands/terminal/api::save_attached_tmux_servers(&app, &servers)` |
 | `commands/session.rs::attach_tmux_session` 同样内联 | 同上 |
 | `commands/session.rs::detach_tmux_controller` 同样内联 | 同上 |

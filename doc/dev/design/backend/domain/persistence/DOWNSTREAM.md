@@ -22,12 +22,12 @@ domain/persistence/
 **砍掉的依赖**：
 
 - ~~`sessions.rs` → `domain/session::SessionInfo`~~ —— sessions.json 走 frontend 直存
-- ~~`groups.rs` → `domain/workspace::GroupStore`~~ —— groups.json 走 frontend 直存
+- ~~`groups.rs` → `domain/workspace::GroupStore`~~ —— groups.json 走 frontend 直存（domain/workspace 已删除，GroupStore 也不存在——frontend 直存 groups.json 时自行定义 TS 类型）
 
 ## 2. tauri-plugin-store
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `tauri_plugin_store::StoreExt` | `tauri_plugin_store` crate | persistence **唯一**允许直接 import |
 | `app.store(file)` | 同上 | `save_json_value` / `load_json_value` / `delete_json_value` 内部 |
 | `store.set(key, value)` | 同上 | 写 |
@@ -45,7 +45,7 @@ domain/persistence/
 ## 3. tauri
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `tauri::AppHandle` | `tauri` crate | `save_json_value(&app, ...)` / `load_json_value(&app, ...)` 签名 |
 
 **约束**：`tauri_plugin_store::StoreExt` 是 `AppHandle` 的 extension trait——必须 import `tauri::AppHandle`。
@@ -53,7 +53,7 @@ domain/persistence/
 ## 4. serde_json
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `serde_json::Value` | `serde_json` crate | generic JSON wrapper 的 value 类型 |
 | `serde_json::to_value` | 同上 | typed wrapper 序列化 |
 | `serde_json::from_value` | 同上 | typed wrapper 反序列化 |
@@ -61,7 +61,7 @@ domain/persistence/
 ## 5. models
 
 | 读取 | 来源 |
-|—|—|
+|--|--|
 | `AttachedTmuxServer` | `domain/terminal/types.rs` |
 
 **约束**：models 是纯数据类型——persistence 可自由 import。typed wrapper 持有这些类型做 JSON 序列化 / 反序列化。
@@ -74,7 +74,7 @@ domain/persistence/
 ## 6. thiserror
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `#[derive(thiserror::Error)]` | `thiserror` crate | `PersistenceError` enum |
 | `#[from] std::io::Error` | std | 自动 From impl |
 | `#[from] serde_json::Error` | serde_json | 自动 From impl |
@@ -99,11 +99,11 @@ domain/persistence/
 ## 8. 跨域依赖
 
 | domain | persistence 对其依赖 |
-|—|—|
+|--|--|
 | `domain/session` | ❌ 不依赖 |
 | `domain/terminal` | ❌ 不依赖（settings 调用 persistence；persistence 不知道 terminal 存在） |
 | （已删除——见各归属 domain）| ❌ 不依赖（settings 调用 persistence；persistence 不知道 settings 存在） |
-| `domain/workspace` | ❌ 不依赖 |
+| （已删除——workspace 状态完全 frontend 持有）| ❌ 不依赖 |
 | `domain/persistence` | （自身）|
 | `tauri-plugin-store` | ✅ 依赖 |
 | `serde_json` | ✅ 依赖 |
@@ -131,7 +131,7 @@ domain/persistence/
 ## 10. 砍掉的迁移路径
 
 | 旧位置 | 新位置（frontend 直存）|
-|—|—|
+|--|--|
 | `services/persistence/sessions.rs::save_sessions_typed` | frontend `service/persistence/sessions.ts::save`（调 `infra/store`） |
 | `services/persistence/sessions.rs::load_sessions_typed` | frontend `service/persistence/sessions.ts::load` |
 | `services/persistence/groups.rs::save_groups_typed` | frontend `service/persistence/groups.ts::save` |
@@ -155,7 +155,7 @@ domain/persistence/
 
 ## 12. 依赖变更流程
 
-1. **新增 typed wrapper**（如未来加 `workspace.json`）→ 加 `domain/persistence/workspace.rs` + 在 §2.2 同步 + store file / key const + app 调用方
+1. **新增 typed wrapper**（如未来加新 store file）→ 加 `domain/persistence/<file>.rs` + 在 §2.2 同步 + store file / key const + app 调用方
 2. **修改 typed wrapper 签名** → ⚠️ breaking——检查所有 app 调用方
 3. **修改 store file name** → ⚠️ breaking——老 store 文件丢失，需要 migration
 4. **迁移 store key** → ⚠️ breaking——migration 处理

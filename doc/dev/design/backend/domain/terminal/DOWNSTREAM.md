@@ -33,7 +33,7 @@ domain/terminal/
 ## 2. domain/session（核心依赖）
 
 | 依赖 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `SessionIdSource` (Arc) | `domain/session/id.rs` | `spawn_create` / `spawn_attach` 注入——controller 用 `allocate()` 分配 xsterm pane session id |
 | `SessionManager::TmuxPaneHandle::controller` | `domain/session/backends/tmux_pane.rs` | session manager 持有 `Arc<TmuxController>` 引用 + 调公开方法 |
 
@@ -45,7 +45,7 @@ domain/terminal/
 ## 3. infra/tmux（外部资源）
 
 | 依赖 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `TmuxBackend` trait | `infra/tmux/backend.rs` | terminal 持有 `Box<dyn TmuxBackend>`——local / ssh 两种实现 |
 | `NativeTmuxBackend` | `infra/tmux/backend.rs` (impl) | local tmux 调 portable-pty 子进程 |
 | `SshTmuxBackend` | `infra/tmux/backend.rs` (impl) | remote tmux 通过 SSH channel 调 |
@@ -60,7 +60,7 @@ domain/terminal/
 ## 4. infra/tauri（emit 事件依赖）
 
 | 依赖 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `AppBackend` trait | `infra/tauri/app_backend.rs` | terminal 持有 `Arc<dyn AppBackend>`——emit tmux 事件到 Tauri |
 | `AppBackend::emit(event, payload)` | 同上 | `bridge.rs::TmuxBridge` 调——把 `ProtocolEvent` 转 Tauri event |
 
@@ -69,7 +69,7 @@ domain/terminal/
 ## 5. infra/ssh（remote tmux backend）
 
 | 依赖 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `SshBackend` trait | `infra/ssh/backend.rs` | terminal 通过 `SshTmuxBackend` 持 `Arc<dyn SshBackend>`——建立 SSH 连接 |
 
 **约束**：terminal 通过 `SshBackend` trait 调 SSH——**不直接** import `russh` crate。
@@ -106,11 +106,11 @@ domain/terminal/
 ## 7. 跨域依赖
 
 | domain | terminal 对其依赖 |
-|—|—|
+|--|--|
 | `domain/session` | ✅ 弱依赖（SessionIdSource 类型 + Arc 引用） |
 | （已删除——见各归属 domain）| ✅ 弱依赖（SshAuthMethod 类型字段） |
 | `domain/persistence` | ❌ 不依赖（attached_tmux.json 由 commands/terminal/api 触发） |
-| `domain/workspace` | ❌ 不依赖（workspace pane 通过 tmux_pane_id 字段关联） |
+| （已删除——workspace 状态完全 frontend 持有）| ❌ 不依赖 |
 | `infra/tmux` | ✅ 依赖（TmuxBackend trait） |
 | `infra/ssh` | ✅ 依赖（SshBackend trait，remote tmux 用） |
 | `infra/tauri` | ✅ 依赖（AppBackend emit） |
@@ -133,7 +133,7 @@ domain/terminal/
 ## 10. 不允许的依赖
 
 - ❌ `domain/terminal/` → `domain/persistence/*`（持久化由 commands 触发）
-- ❌ `domain/terminal/` → `domain/workspace/*`（workspace 不在 terminal 链路）
+- ❌ （已删除——workspace 状态完全 frontend 持有，terminal 不需要跨域引用）
 - ❌ `domain/terminal/` → `tauri`（terminal 通过 `AppBackend` trait 调 emit）
 - ❌ `domain/terminal/protocol/` → `tokio` / `std::process` / `std::net`（纯协议层，不依赖 IO）
 - ❌ `domain/terminal/` → `russh` / `portable-pty`（这些 import 在 `infra/tmux/` 内部）

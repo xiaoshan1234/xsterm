@@ -52,7 +52,7 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), String>;
 ## 5. 跟其他 module 的关系
 
 | module | 关系 |
-|—|—|
+|--|--|
 | `commands/session` | shell **不**调 session；session 通过自己的 `#[tauri::command]` 被前端触发 |
 | `commands/terminal` | shell **不**调 terminal；terminal 通过自己的 `#[tauri::command]` 被前端触发 |
 | （已删除——attached_tmux→terminal，log→shell）| shell.initialize() 内调 `commands/shell/api::load_log_config()`（在 logging 初始化之前） |

@@ -20,7 +20,7 @@ modules/session/
 ## 2. commands/terminal
 
 | 调用 | 来源 | 何时调 |
-|—|—|—|
+|--|--|--|
 | `terminal_api::create_tmux(state, backend, &tmux)` | `commands/terminal/api.rs` | `create_session` 收到 `SessionConfig::TmuxCc` 时 |
 
 **关键**：session **不**直接 import `services::tmux_session::TmuxController` —— 跨 module 必须走 `commands/terminal/api.rs`。
@@ -28,7 +28,7 @@ modules/session/
 ## 3. commands/terminal（attached_tmux 持久化）
 
 | 调用 | 来源 | 何时调 |
-|—|—|—|
+|--|--|--|
 | `save_session_config`（已删除，frontend 直存） | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | `create_local_session` / `create_ssh_session` 创建后，config.should_save 为 true 时 |
 
 **关键**：
@@ -41,7 +41,7 @@ modules/session/
 session api **唯一直接调用**的 service。调用面：
 
 | 调用 | 何时 |
-|—|—|
+|--|--|
 | `state.create_local(config, backend)` | `commands/local/create.rs` |
 | `state.create_ssh(config, backend)` | `commands/ssh/create.rs` |
 | `state.write(session_id, &data)` | `commands/write.rs` |
@@ -59,7 +59,7 @@ session api **唯一直接调用**的 service。调用面：
 ## 5. domain/session/backends/local
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `services::local_session::create_local_session(pty_system, config, backend, id)` | `domain/session/backends/local/mod.rs` | `commands/local/create.rs` |
 
 **约束**：仅用于构造 `LocalSession` 对象；session 模块**不**直接 import `infrastructure::pty::*`。
@@ -67,13 +67,13 @@ session api **唯一直接调用**的 service。调用面：
 ## 6. domain/session/backends/ssh
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `services::ssh_session::create_ssh_session(ssh_backend, config, backend, id)` | `domain/session/backends/ssh/mod.rs` | `commands/ssh/create.rs` |
 
 ## 7. domain/session_log
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `services::session_log::start_session_logging(id, &config)` | `domain/session_log.rs` | create_local / create_ssh 之后 |
 
 **约束**：调用失败**不**传播（仅 tracing::warn）—— 日志缺失不应阻断 session 创建。
@@ -81,7 +81,7 @@ session api **唯一直接调用**的 service。调用面：
 ## 8. infrastructure
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `RealAppBackend::new(app_handle)` | `infrastructure/app_backend.rs` | 每个 create_xxx_session command 入口处 |
 | `upload_file_via_ssh(&ssh_cfg, &local_path, &remote_path)` | `infrastructure/ssh.rs` | `upload_image_to_ssh_session` 内部 |
 
@@ -92,7 +92,7 @@ session api **唯一直接调用**的 service。调用面：
 session 模块直接读以下 models 类型（参数 / 返回值）：
 
 | 类型 | 来源 |
-|—|—|
+|--|--|
 | `LocalSessionConfig` | `domain/session/types.rs` |
 | `SSHSessionConfig` | `domain/session/types.rs` |
 | `SessionConfig` (enum) | `domain/session/types.rs` |
@@ -117,7 +117,7 @@ session 模块**两个角色**：
 ## 11. 跨 module 调用约定
 
 | 位置 | 说明 |
-|—|—|
+|--|--|
 | `commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl` | `commands/terminal/api.rs::create_tmux` 内部调 `commands/terminal/api::save_attached_tmux_servers` |
 | `commands/session.rs::create_session` 内部直接 `state.create_tmux(...)` | `commands/session/dispatch.rs` 内部调 `commands/terminal/api::create_tmux(state, backend, &tmux)` |
 | `commands/session.rs::upload_image_to_ssh_session` 内部调 `state.upload_image(...)` | 不变（同一 service 调用，无需 api 边界） |

@@ -42,7 +42,7 @@ infrastructure/tmux/
 frontend **没有** `infra/tmux` —— frontend 不直接调 tmux（通过 IPC 接收 backend 推送的 `tmux-pane-added` / `tmux-window-added` 等事件 + 调 `invoke('create_tmux_session', ...)`）。
 
 | backend infra/tmux | frontend 等价 |
-|—|—|
+|--|--|
 | `TmuxBackend::spawn(config)` | ❌（frontend 不可见） |
 | `LocalTmuxBackend` / `SshTmuxBackend` | ❌ |
 | tmux wire protocol | ❌（frontend 通过 IPC 接收 `TmuxEvent`）|
@@ -52,7 +52,7 @@ frontend **没有** `infra/tmux` —— frontend 不直接调 tmux（通过 IPC 
 ## 5. 跟其他 backend infra 子模块的关系
 
 | 子模块 | 关系 |
-|—|—|
+|--|--|
 | `infra/pty` | 平级；不互相依赖 |
 | `infra/ssh` | ⚠️ `SshTmuxBackend` **依赖** `infra/ssh::SshBackend`(用于在远程 SSH 上 spawn tmux -CC) |
 | `infra/tauri` | 平级；tmux 子进程不直接调 Tauri |
@@ -66,7 +66,7 @@ frontend **没有** `infra/tmux` —— frontend 不直接调 tmux（通过 IPC 
 ## 6. 跟 service / app 的关系
 
 | 层 | 怎么用 infra/tmux |
-|—|—|
+|--|--|
 | `domain/terminal/controller/spawn.rs` | `TmuxController::spawn_create(config, backend, ssh_backend, ...)` 内部根据 `config.ssh.is_some()` 选择 `LocalTmuxBackend` 或 `SshTmuxBackend` |
 | `commands/terminal` | 不直接调 infra/tmux——通过 `domain/terminal::TmuxController` 间接 |
 | `domain/session` | `SessionManager::probe_tmux_session_exists` 间接通过 `SshBackend::run_command_capture_stdout` 调 tmux list-sessions |

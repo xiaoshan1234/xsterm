@@ -26,7 +26,7 @@ infrastructure/tauri/
 ## 2. tauri（核心外部依赖）
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `tauri::AppHandle` | `tauri` crate | `RealAppBackend.app` 字段 |
 | `tauri::Emitter` (trait) | 同上 | `app.emit(event, payload)` 方法 |
 | `tauri::ipc::Channel<T>` | 同上 | `Channel<Vec<u8>>` binary output channel |
@@ -43,14 +43,14 @@ infrastructure/tauri/
 ## 3. serde_json
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `serde_json::Value` | `serde_json` crate | `AppBackend::emit` payload 参数 |
 | `serde_json::to_value` | 同上 | (在 service 层使用，emit 构造 payload) |
 
 ## 4. std
 
 | 使用 | 何时 |
-|—|—|
+|--|--|
 | `std::sync::Arc` | `RealAppBackend.app` 字段（共享 AppHandle） |
 | `std::thread::spawn` | `RealAppBackend::spawn` 后台 thread |
 | `std::io::{Read, Write}` | (BinaryFrame 函数不需要——纯 byte 操作) |
@@ -58,7 +58,7 @@ infrastructure/tauri/
 ## 5. mockall
 
 | 使用 | 何时 |
-|—|—|
+|--|--|
 | `#[automock]` | 自动 mock `AppBackend` trait |
 | `MockAppBackend::new()` | 测试代码构造 mock 实例 |
 | `.expect_emit().withf(...)` | 配置 mock 行为 + 参数匹配 |
@@ -66,7 +66,7 @@ infrastructure/tauri/
 ## 6. thiserror
 
 | 调用 | 来源 | 何时 |
-|—|—|—|
+|--|--|--|
 | `#[derive(thiserror::Error)]` | `thiserror` crate | `TauriError` enum derive |
 
 ## 7. 内部依赖关系
@@ -87,7 +87,7 @@ infrastructure/tauri/
 ## 8. 跨子模块依赖（infra 平级）
 
 | 依赖 | 何时 |
-|—|—|
+|--|--|
 | `infra/pty::*` | ❌ 不依赖 |
 | `infra/ssh::*` | ❌ 不依赖 |
 | `infra/tmux::*` | ❌ 不依赖 |
@@ -97,7 +97,7 @@ infrastructure/tauri/
 ## 9. 跨层依赖（infra → service/app）
 
 | 依赖 | 何时 |
-|—|—|
+|--|--|
 | `crate::services::*` | ❌ 不依赖 |
 | `crate::app::*` | ❌ 不依赖 |
 | `crate::commands::*` | ❌ 不依赖 |

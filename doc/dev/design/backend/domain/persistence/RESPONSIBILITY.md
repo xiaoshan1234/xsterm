@@ -19,7 +19,7 @@ persistence domain 持有 **backend 必须自己持久化**的状态——只覆
 ## 2. 为什么只持久化这 2 类
 
 | store 文件 | 内容 | 触发方 | 为什么 backend 持久化 |
-|—|—|—|—|
+|--|--|--|--|
 | `attached_tmux.json` | 已 attach 的 tmux server list（controller Arc 注册表） | shutdown 时 backend 写、启动时 backend 读 | **进程级状态**：tmux controller Arc + SSH channel 都在 backend 进程里，frontend 只有镜像 |
 | `log_config.json` | log 配置 + ReloadHandle | backend `domain/persistence::log_config` 写、`commands/shell::initialize` 读 | **runtime reload**：改完要 reload `tracing` subscriber，ReloadHandle 是 backend 的 `tracing` runtime 句柄，frontend 没法 reload |
 | ~~`sessions.json`~~ | ~~saved session configs~~ | ~~frontend UI 改~~ | **frontend-only**：纯配置数据，无 backend 状态关联；走 `infra/store` 直存 |
@@ -58,7 +58,7 @@ domain/persistence/
 ## 5. 跟其他 domain 的关系
 
 | domain | 关系 |
-|—|—|
+|--|--|
 | `domain/terminal` | terminal **不直接**调 persistence——由 `commands/terminal/api.rs` 触发（避免 terminal 持有 IO 依赖） |
 | （已删除——见各归属 domain）| settings **直接**调 persistence 读 / 写 `log_config.json`（settings 是 log_config 唯一持有者） |
 | `infra/tauri::tauri-plugin-store` | persistence 是 backend 中**唯一**允许直接 import `tauri_plugin_store` 的 service |
@@ -72,7 +72,7 @@ domain/persistence/
 ## 6. 跟 commands 的关系
 
 | commands module | 怎么用 domain/persistence |
-|—|—|
+|--|--|
 | `commands/terminal` | `commands/terminal/api.rs::save_attached_tmux_servers` 调 `persistence_api::save_attached_tmux_typed(&app, &servers)`（shutdown 时） |
 | `commands/terminal` | `commands/terminal/api.rs::auto_attach_tmux_servers` 调 `persistence_api::load_attached_tmux_typed(&app)`（启动时） |
 | （已删除——attached_tmux→terminal，log→shell）| `commands/shell/commands/logging/config.rs::set_log_config` 调 `services/settings/api.rs::save_log_config` → `persistence_api::save_json_value(&app, "log_config.json", "config", &value)` |
@@ -158,7 +158,7 @@ pub fn load_attached_tmux_typed(app: &AppHandle) -> Result<Vec<AttachedTmuxServe
 ## 9. 砍掉的 backend 持久化职责
 
 | 旧职责 | 新位置 | 改动理由 |
-|—|—|—|
+|--|--|--|
 | `services/persistence/sessions.rs` | frontend `service/persistence/sessions.ts`（TS 直存 `tauri-plugin-store`）| sessions.json 是 frontend-only 配置，无 backend 状态关联，backend 转发是冗余 |
 | `services/persistence/groups.rs` | frontend `service/persistence/groups.ts` | groups.json 同上 |
 | `app/settings/commands/persistence/sessions.rs::save_sessions` `load_sessions` | ❌ 删除 | frontend 不调 backend IPC 存 saved sessions |
@@ -173,17 +173,17 @@ pub fn load_attached_tmux_typed(app: &AppHandle) -> Result<Vec<AttachedTmuxServe
 ## 11. MVP 范围之外（未来扩展）
 
 | 功能 | 触发条件 |
-|—|—|
+|--|--|
 | Schema migration 注册表 | store 字段类型变化（如 `AttachedTmuxServer` 加字段） |
 | Store 损坏自动 fallback + 备份 | store 文件 corrupt 但不能丢数据 |
 | 加密 store | 用户的 saved tmux config 含 SSH key 等敏感信息 |
 | Store 缓存 + 失效策略 | 频繁读 store 导致 IO 性能问题 |
-| `domain/persistence/workspace.rs` | 未来 backend 持有 workspace 状态时（多窗口同步）|
+（已删除——workspace 状态完全 frontend 持有）
 
 ## 12. 跟 frontend service 的职责分叉
 
 | 维度 | frontend service/persistence | backend domain/persistence |
-|—|—|—|
+|--|--|--|
 | 类型定义 | TS interface + TS 类型 | Rust struct + serde derive |
 | 状态机 | zustand store（前端持有镜像） | **MVP 无**；目标态仅持有 attached_tmux 持久化引用 |
 | 持久化 store | frontend `infra/store` 直存 sessions/groups/settings | backend `infra/tauri::tauri-plugin-store` 直存 attached_tmux/log_config |

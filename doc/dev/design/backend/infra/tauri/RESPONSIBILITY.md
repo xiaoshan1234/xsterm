@@ -44,7 +44,7 @@ infrastructure/tauri/
 ## 4. 跟 frontend infra 的关系
 
 | backend infra/tauri | frontend infra/tauri |
-|—|—|
+|--|--|
 | `AppBackend::emit(event, payload)` | `infra/tauri/commands/*::invoke(cmd)` |
 | `AppBackend::emit_binary(bytes)` | `infra/tauri/events/*::listen(event, cb)` |
 | `RealAppBackend::new(AppHandle)` | (frontend 无 AppHandle 等价) |
@@ -59,7 +59,7 @@ infrastructure/tauri/
 ## 5. 跟其他 backend infra 子模块的关系
 
 | 子模块 | 关系 |
-|—|—|
+|--|--|
 | `infra/pty` | 平级；不互相依赖 |
 | `infra/ssh` | 平级；不互相依赖 |
 | `infra/tmux` | 平级；tmux 子模块不调 Tauri（事件推送由 domain/terminal/bridge.rs 间接通过 AppBackend） |
@@ -73,7 +73,7 @@ infrastructure/tauri/
 ## 6. 跟 service / app 的关系
 
 | 层 | 怎么用 infra/tauri |
-|—|—|
+|--|--|
 | `domain/session` | `create_local` / `create_ssh` / `create_tmux` 都接收 `Arc<dyn AppBackend>` 参数——emit Tauri 事件 |
 | `domain/terminal/bridge.rs` | `TmuxBridge::dispatch_event` 调 `AppBackend::emit` 推送 `tmux-pane-added` 等事件 |
 | `commands/shell/api.rs::initialize` | 构造 `RealAppBackend::new(app)` + emit `session-output-channel` |
