@@ -116,9 +116,7 @@ infrastructure/tauri/
 
 ## 12. 不允许的依赖
 
-- ❌ `infrastructure/tauri/` → `crate::services::*`
-- ❌ `infrastructure/tauri/` → `crate::app::*`
-- ❌ `infrastructure/tauri/` → `crate::commands::*`
+- ❌ `infrastructure/tauri/` → `crate::domain::*`（domain 持有 `Box<dyn>` trait object 间接调，不直 import）
 - ❌ `infrastructure/tauri/` → 其他 infra 子模块（平级）
 - ❌ `infrastructure/tauri/` → `crate::models::*`（BinaryFrame 不涉及 models）
 - ❌ `infrastructure/tauri/app_backend.rs` → `infrastructure/tauri/mock.rs`（具体实现 vs mock 平行）

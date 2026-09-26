@@ -20,8 +20,8 @@ tauri 子模块是 backend 与 **Tauri runtime** 交互的物理适配层——�
 
 - **不渲染 UI**——UI 在 frontend `ui/`
 - **不持有 session 状态**——session 状态归 `domain/session/state.rs`
-- **不监听 Tauri 事件**——前端 → backend 事件通过 `app/<module>::commands::*` 处理
-- **不实现命令处理**——Tauri 命令归 `app/<module>/commands/*.rs`
+- **不监听 Tauri 事件**——前端 → backend 事件通过 `commands/<module>/<command>.rs` 的 `#[tauri::command]` handler 处理
+- **不实现命令处理**——Tauri 命令归 `commands/<module>/<command>.rs`
 - **不实现持久化**——持久化归 `domain/terminal::attached_tmux`（typed wrapper）+ `commands/shell::log_config`
 
 ## 3. 子结构
@@ -70,12 +70,10 @@ infrastructure/tauri/
 - tauri 子模块**是 backend 唯一允许直接 import `tauri` 的地方**
 - service 层通过 `AppBackend` trait 间接调用
 
-## 6. 跟 service / app 的关系
+## 6. 跟 commands / domain 的关系
 
 | 层 | 怎么用 infra/tauri |
-|--|--|
-| `domain/session` | `create_local` / `create_ssh` / `create_tmux` 都接收 `Arc<dyn AppBackend>` 参数——emit Tauri 事件 |
-| `domain/terminal/bridge.rs` | `TmuxBridge::dispatch_event` 调 `AppBackend::emit` 推送 `tmux-pane-added` 等事件 |
+|---|---|
 | `commands/shell/api.rs::initialize` | 构造 `RealAppBackend::new(app)` + emit `session-output-channel` |
 | `commands/session/commands/output.rs::get_session_output_channel` | 返回 `RealAppBackend::session_output_channel` 给前端 |
 
@@ -222,7 +220,7 @@ pub enum TauriError {
 
 ```bash
 # infra/tauri 是 backend 唯一允许直接 import tauri 的地方
-grep -rn 'use tauri::' src-tauri/src/ | grep -v 'src-tauri/src/infrastructure/tauri/' | grep -v 'src-tauri/src/lib.rs' | grep -v 'src-tauri/src/main.rs' | grep -v 'src-tauri/src/commands/' | grep -v 'src-tauri/src/app/'
+grep -rn 'use tauri::' src-tauri/src/ | grep -v 'src-tauri/src/infrastructure/tauri/' | grep -v 'src-tauri/src/lib.rs' | grep -v 'src-tauri/src/main.rs' | grep -v 'src-tauri/src/commands/'
 # 必须为空（lib.rs / main.rs / commands / app 是 Tauri command 层,允许用 tauri）
 
 # infra/tauri 不依赖 service / app / commands

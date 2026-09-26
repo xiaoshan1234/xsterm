@@ -51,13 +51,13 @@ service/tmux/
 | `invoke('rename_tmux_window', ...)` | `infra/tauri/commands/tmux` | api.ts renameWindow |
 | `listen('tmux-events', ...)` | `infra/tauri/events/tmuxEvents` | bridge 订阅 |
 
-## 5. service/persistence（**仅 autoAttach 用**）
+## 5. service/persistence（**不调**）
 
-| 调用 | 来源 | 何时调 |
-|---|---|---|
-| `persistence.get<AttachedServer[]>("attachedTmuxServers")` | `service/persistence/api` | autoAttach 加载 |
+P1-1 决策：attached_tmux.json 由 backend `domain/terminal/attached_tmux` 持有（source of truth），frontend 不直存。
 
-**关键**：tmux service 只在 `autoAttach` 路径上调 persistence。其他路径不调持久化——attached server 列表由 app/shell 负责持久化（shutdown 时）。
+autoAttach 路径：frontend `app/shell` 启动时调 `invoke('auto_attach_tmux_servers')` IPC，由 backend `domain::session::SessionManager::auto_attach_on_startup` 触发（从 attached_tmux.json 读 + 调 `TmuxController::spawn_attach`）。frontend **不**经过 `service/persistence` 直写/直读 attachedTmuxServers store key。
+
+**关键**：tmux service **不**直接调 `service/persistence`——所有 backend 持久化由 backend domain 承担，frontend 只做镜像。
 
 ## 6. infra/logger（**仅 autoAttach 失败 log**）
 

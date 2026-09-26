@@ -18,7 +18,7 @@ session module 暴露**两类符号**：
 
 ```rust
 use crate::infrastructure::app_backend::AppBackend;
-use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo, TmuxCcConfig};
+use crate::domain::session::types::{LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo, TmuxCcConfig};
 use crate::domain::session::SessionManager;
 
 /// 纯函数入口：创建 local session（被 commands/local/create.rs 调用）

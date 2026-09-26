@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/infrastructure/ssh/reverse_tunnel.rs`
 > **类型**：⭐ M8 关键功能（PRD §2 M8 + §7.4）—— 远端 AI agent 通过反向 SSH 隧道连本地 MCP server
-> **被使用方**：`integration/mcp::server`（TCP transport 接受外部连接）+ `app/shell`（启动时建立 / 重连）
+> **被使用方**：`frontend/app/mcp/server.ts`（TCP transport 接受外部连接；MCP server 整体归 frontend TS 层，v6 后）+ `app/shell`（启动时建立 / 重连）
 > **外部依赖**：`russh` crate（已有）+ `tokio::process`（生成 ssh client 子进程）
 
 ## 1. 这个子模块负责什么

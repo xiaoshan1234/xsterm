@@ -20,7 +20,7 @@ terminal module 暴露 **15 个 `#[tauri::command]`**，按 tmux 子系统分 4 
 
 ```rust
 use crate::infrastructure::app_backend::AppBackend;
-use crate::models::session::{TmuxCcConfig, TmuxSessionInit};
+use crate::domain::session::types::{TmuxCcConfig, TmuxSessionInit};
 use crate::domain::session::SessionManager;
 
 // ============ pure functions（被 commands/tmux/session.rs 调用）============
