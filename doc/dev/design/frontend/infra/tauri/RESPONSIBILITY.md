@@ -104,7 +104,25 @@ export const sessionEventBus = {
 - 上层（typed wrapper）——domain-specific，类型安全
 - bridge 监听用底层 + listen 转上层，service 订阅用上层
 
-## 8. Repository 实现的契约
+## 8. 跨语言 wire format 契约（BinaryFrame）
+
+`sessionOutput.ts` 解析的 binary payload 由 backend `infra::tauri::binary_frame.rs` 编码。**wire format 必须前后端完全一致**：
+
+```
+[magic: u32 LE = 0xDEADBEEF] [version: u8 = 1] [session_id_len: u8] [session_id: bytes UTF-8] [data_len: u32 LE] [data: bytes]
+```
+
+**Frontend 解析职责**：
+- 检查 magic 必须为 `0xDEADBEEF`
+- 检查 version 必须为 `1`（不匹配抛错，停止解析）
+- session_id_len ≤ 255
+- data_len ≤ 16 MiB
+
+**Backend 实现位置**：`src-tauri/src/infrastructure/tauri/binary_frame.rs` 的 `encode_binary_frame` / `decode_binary_frame`。
+
+**修改流程**：任何字段变化（magic / version / session_id 编码 / data 编码）必须 frontend + backend 同步更新，否则 binary frame 解析失败导致 silent data loss。
+
+## 9. Repository 实现的契约
 
 每个 repository.ts 严格实现 model/<domain>/repository.ts 的接口：
 

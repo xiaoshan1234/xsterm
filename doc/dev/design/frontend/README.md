@@ -18,7 +18,7 @@ src/
 
 ### 2.1 `app/` — 业务编排
 
-5 个 module 按产品功能切分（跟 ui 5 module 一一对应）：
+6 个 module 按产品功能切分（跟 ui 6 module 一一对应）：
 
 | module | 产品功能 |
 |---|---|
@@ -27,12 +27,13 @@ src/
 | `app/terminal` | tmux + terminal preferences |
 | `app/session` | session CRUD + display config |
 | `app/settings` | 设置持久化 + 跨 module 应用 |
+| `app/mcp` | ⭐ AI agent 接入（MCP server，9 个 tool + attach 状态机 + 安全边界；复杂业务放 TS 层） |
 
 详见 [`app/README.md`](app/README.md)
 
 ### 2.2 `ui/` — 视图渲染
 
-5 个 module 按产品功能切分（跟 app 5 module 一一对应）：
+6 个 module 按产品功能切分（跟 app 6 module 一一对应）：
 
 | module | 产品功能 |
 |---|---|
@@ -41,6 +42,7 @@ src/
 | `ui/terminal` | 终端渲染（xterm + pane + tmux） |
 | `ui/session` | session CRUD UI（dialog + list） |
 | `ui/settings` | 设置 UI（5 tab 抽屉） |
+| `ui/mcp` | MCP server 状态面板（attached sessions + tool log） |
 
 详见 [`ui/README.md`](ui/README.md)
 

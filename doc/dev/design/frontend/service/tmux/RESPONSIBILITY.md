@@ -85,15 +85,17 @@ service/tmux/
 ```typescript
 // service/tmux/autoAttach.ts
 export async function autoAttachOnStartup(): Promise<void> {
-  const persistence = usePersistenceService();
   const tmux = useTmuxService();
 
-  const attachedServers = await persistence.get<AttachedServer[]>("attachedTmuxServers") ?? [];
-  for (const server of attachedServers) {
-    try {
-      await tmux.attach(server.serverName);
-    } catch (err) {
-      logger.warn(`Failed to auto-attach tmux server ${server.serverName}`, err);
+  // 不再从 frontend persistence 读 attachedServers —— backend 是 source of truth
+  // 调 backend `auto_attach_tmux_servers` IPC 触发 backend `domain::session::SessionManager::auto_attach_on_startup`
+  // backend 内部读 `attached_tmux.json`（由 `domain::terminal::attached_tmux::load_attached_tmux_typed` 加载）
+  const outcomes = await invoke<AutoAttachOutcome[]>("auto_attach_tmux_servers");
+  for (const outcome of outcomes) {
+    if (outcome.success) {
+      tmux.attach(outcome.server_name);  // 镜像 backend 推过来的 controller 状态
+    } else {
+      logger.warn(`Failed to auto-attach tmux server ${outcome.server_name}: ${outcome.error}`);
     }
   }
 }
@@ -101,5 +103,11 @@ export async function autoAttachOnStartup(): Promise<void> {
 
 **关键**：
 
-- auto-attach 是**幂等**——重复 attach 同一个 server 是安全的
-- 失败不抛出——只 log，下次启动再试
+- **attached_tmux 是 backend 进程级状态**——只有 backend 持有 `Arc<TmuxController>`，所以 source of truth 必须 backend
+- frontend **不直写** attachedTmuxServers store key——frontend persistence 只存 frontend-only 配置（sessions/groups/settings）
+- auto-attach 触发由 frontend 调 backend IPC 发起，backend 加载 attached_tmux.json 并 attach 所有 server
+- 启动顺序: shell.initialize() → 注册 backend state → 启动 MCP server；frontend app/shell.initialize() 调 `auto_attach_tmux_servers` IPC
+
+**为什么不是 frontend 主导**：v3 时期 frontend 直接读写 attachedTmuxServers，但 frontend 不持有 TmuxController（backend 才有），写 store 只是"标记"，没有实际触发 attach。v4 改为 backend 主导。
+
+**冲突解决**：frontend 不能直写 attachedTmuxServers store key——frontend 直写会被 backend 启动时 attach 覆盖。文档明确禁止。

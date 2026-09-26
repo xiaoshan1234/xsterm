@@ -18,7 +18,6 @@ ssh 子模块暴露 4 类符号：
 
 ```rust
 // infrastructure/ssh/traits.rs
-use crate::models::session::SSHSessionConfig;
 use std::process::ExitStatus;
 
 pub trait SshBackend: Send + Sync {

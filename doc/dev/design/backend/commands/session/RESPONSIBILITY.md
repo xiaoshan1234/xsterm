@@ -66,19 +66,19 @@ modules/session/
 | module | 关系 |
 |--|--|
 | `commands/terminal` | session **不**直接调 terminal；tmux session 创建由 `commands/terminal/api::create_tmux_session` 暴露 |
-| （已删除——attached_tmux→terminal，log→shell）| session 创建成功后**内部**调 `save_session_config`（已删除，frontend 直存） |
+| **（无）** | session 创建成功后不触发 backend 持久化（v6 砍 save_session_config）；saved config 由 frontend `service/persistence/sessions.ts` 直存 `sessions.json` |
 | `commands/shell` | shell 不直接调 session；session 完全由前端 `invoke()` 触发 |
-| （已删除）| workspace 状态完全 frontend 持有，session 不调 backend |
-| `domain/session_manager` | session api **唯一**直接调用的 service —— 通过 `state.method()` 调用 |
-| `domain/session_log` | session create 时调 `start_session_logging(id, &config)` 启动日志 |
-| `domain/session/backends/local` | session.create_local 委托给 `domain/session/backends/local::create_local_session()` |
-| `domain/session/backends/ssh` | session.create_ssh 委托给 `domain/session/backends/ssh::create_ssh_session()` |
-| `infrastructure/app_backend` | 每个 session create 都构造 `RealAppBackend::new(app)`（注入 Tauri AppHandle） |
+| **（无 backend module）** | workspace 状态完全 frontend 持有，session 不调 backend |
+| `domain::session::SessionManager` | session api **唯一**直接调用的 domain —— 通过 `state.method()` 调用 |
+| `domain::session::log` | session create 时调 `start_session_logging(id, &config)` 启动日志 |
+| `domain::session::backends::local` | session.create_local 委托给 `domain/session/backends/local/mod.rs::create_local_session` |
+| `domain::session::backends::ssh` | session.create_ssh 委托给 `domain/session/backends/ssh/mod.rs::create_ssh_session` |
+| `infrastructure::tauri::RealAppBackend` | 每个 session create 都构造 `RealAppBackend::new(app)`（注入 Tauri AppHandle） |
 
 **关键**：
 
 - session **不** import `domain/terminal_session::*`——tmux 操作归 `commands/terminal/`
-- session **不** import `commands/persistence::*`——持久化归各归属 module（attached_tmux → terminal，log → shell）
+- session **不**触发 backend 持久化（v6 砍 save_session_config）；saved config 由 frontend `service/persistence/sessions.ts` 直存
 - session **不** 跨过 service 直接调 `infrastructure/pty::*`——必须经 service
 
 ## 6. 这个 module 的"产品语言"术语
@@ -87,6 +87,6 @@ modules/session/
 - **local session** —— 本地 PTY（local shell）
 - **ssh session** —— 远程 SSH（russh）
 - **tmux session** —— tmux -CC controller 下的 pane（归 `commands/terminal/`）
-- **persisted config** —— 持久化的 session 配置（归各归属 module（attached_tmux → terminal，log → shell））
+| `persisted config` —— 持久化的 session 配置（frontend 直存 sessions.json，归 service/persistence） |
 - **display config** —— 运行时可调的字体 / 字号 / theme（**MVP 没有 IPC**，完全在 frontend）
 - **session status** —— connecting / running / closed / error（**MVP 没有 IPC**，由前端读 `SessionInfo.is_connected`）

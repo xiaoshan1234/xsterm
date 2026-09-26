@@ -46,16 +46,18 @@ src-tauri/src/commands/                           # 语义名（顶层 3 module�
 | module | 产品功能 | IPC 数量 |
 |---|---|---|
 | `commands/session` | session lifecycle | 10 个 |
-| `commands/terminal` | tmux -CC + attached_tmux 持久化 | **13 个**（tmux 11 + attached_tmux 2） |
+| `commands/terminal` | tmux -CC IPC + attached_tmux 持久化 | **13 个**（tmux 11 + attached_tmux 2） |
 | `commands/shell` | 启动 / 关闭 + log runtime | **4 个**（log_message + get/set_log_config + get_log_dir） |
-| **合计** | — | **27 个** |
+| **commands 合计** | — | **27 个** |
 
 **砍掉的原因**：
+
 - `commands/settings`（砍）：attached_tmux 持久化归 terminal（tmux 业务），log runtime 归 shell（启动时调）。backend IPC 从 31 → 27。
 - `commands/workspace`（砍）：workspace 状态完全 frontend 持有（Zustand store + paneTree 算法），backend 无对应 module。
 
 **改一个产品功能 = 改 1 个 backend commands module + 1 个 frontend app module**（但 workspace / settings 跨多 backend）。
 
+**MCP server 不属于 backend commands 层** —— MCP server 整体归 frontend `app/mcp/` (复杂业务放 TS 层原则)。backend 只为 MCP 提供 stdio transport helper（如果需要）：`infra/tauri/mcp_transport.rs` 提供 stdio/TCP listener + JSON-RPC 序列化，frontend `app/mcp/` 持有 9 个 tool 实现 + attach 状态机 + 白名单。详见 `doc/dev/design/frontend/app/mcp/RESPONSIBILITY.md` + `doc/dev/design/backend/README.md` §1.1。
 ## 2. 3 module ↔ 5 个 frontend app module 对应表
 
 | backend commands module | frontend app module | 对应关系 |

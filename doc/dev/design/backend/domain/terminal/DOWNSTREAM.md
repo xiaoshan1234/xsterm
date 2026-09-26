@@ -35,12 +35,12 @@ domain/terminal/
 | 依赖 | 来源 | 何时 |
 |--|--|--|
 | `SessionIdSource` (Arc) | `domain/session/id.rs` | `spawn_create` / `spawn_attach` 注入——controller 用 `allocate()` 分配 xsterm pane session id |
-| `SessionManager::TmuxPaneHandle::controller` | `domain/session/backends/tmux_pane.rs` | session manager 持有 `Arc<TmuxController>` 引用 + 调公开方法 |
+| `domain::session::SessionManager::TmuxPaneHandle::controller` | `domain::session::backends::tmux_pane.rs` | session manager 持有 `Arc<TmuxController>` 引用 + 调公开方法 |
 
 **约束**：
 
-- terminal **不** import `domain/session::SessionManager` ——session manager 主动调 terminal
-- terminal **不** import `domain/session::backends/tmux_pane` ——TmuxPaneHandle 是 session 的 backend impl，session 自己持有
+- terminal **不** import `domain::session::SessionManager` ——session manager 主动调 terminal
+- terminal **不** import `domain::session::backends::tmux_pane` ——TmuxPaneHandle 是 session 的 backend impl，session 自己持有
 
 ## 3. infra/tmux（外部资源）
 
@@ -49,7 +49,7 @@ domain/terminal/
 | `TmuxBackend` trait | `infra/tmux/backend.rs` | terminal 持有 `Box<dyn TmuxBackend>`——local / ssh 两种实现 |
 | `NativeTmuxBackend` | `infra/tmux/backend.rs` (impl) | local tmux 调 portable-pty 子进程 |
 | `SshTmuxBackend` | `infra/tmux/backend.rs` (impl) | remote tmux 通过 SSH channel 调 |
-| `TmuxInfraError` | `infra/tmux/errors.rs` | terminal **不**直接 import（统一用 `TmuxError`） |
+| `TmuxInfraError` | `infrastructure/tmux/errors.rs` | terminal **不**直接 import（统一用 `TmuxError`） |
 
 **约束**：
 
@@ -107,13 +107,12 @@ domain/terminal/
 
 | domain | terminal 对其依赖 |
 |--|--|
-| `domain/session` | ✅ 弱依赖（SessionIdSource 类型 + Arc 引用） |
-| （已删除——见各归属 domain）| ✅ 弱依赖（SshAuthMethod 类型字段） |
-| （已删除——v6 砍） | ❌ 不依赖（attached_tmux.json 由 `domain/terminal::api` 内部触发） |
-| （已删除——workspace 状态完全 frontend 持有）| ❌ 不依赖 |
-| `infra/tmux` | ✅ 依赖（TmuxBackend trait） |
-| `infra/ssh` | ✅ 依赖（SshBackend trait，remote tmux 用） |
-| `infra/tauri` | ✅ 依赖（AppBackend emit） |
+| `domain::session` | ✅ 弱依赖（`SessionIdSource` 类型 + Arc 引用） |
+| `infra::tmux` | ✅ 依赖（`TmuxBackend` trait） |
+| `infra::ssh` | ✅ 依赖（`SshBackend` trait，remote tmux 用） |
+| `infra::tauri` | ✅ 依赖（`AppBackend` emit） |
+
+**说明**：v6 砍 persistence 域，attached_tmux.json 由 `domain/terminal::attached_tmux` 内部触发；terminal 不依赖独立 persistence domain。
 
 ## 8. 设计意图：terminal 是"tmux 协议层 + 状态机 + Bridge"
 

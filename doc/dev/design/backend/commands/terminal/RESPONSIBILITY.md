@@ -1,8 +1,8 @@
 # Module · Commands Terminal — 职责
 
 > **位置**：`src-tauri/src/commands/terminal/`（落地 `src-tauri/src/commands/terminal.rs`）
-> **用户认知里的位置**：「终端特有业务」——tmux -CC 协议的所有 IPC + terminal preferences 应用
-> **依赖**：`commands/session`（generic dispatcher 路由 tmux）、`（已删除——见各归属 module）`（attached_tmux.json 持久化）
+> **用户认知里的位置**：「终端特有业务」——tmux -CC 协议的所有 IPC + attached_tmux 持久化（v6 合并）
+> **依赖**：`commands/session`（generic dispatcher 路由 tmux）；attached_tmux.json 由 `domain/terminal::attached_tmux` 承担（v6 合并自原 domain/persistence）
 > **Frontend 对应**：[`../../../frontend/app/terminal/RESPONSIBILITY.md`](../../../frontend/app/terminal/RESPONSIBILITY.md)
 
 ## 1. 这个 module 负责什么
@@ -41,7 +41,7 @@ terminal module 编排 backend **tmux -CC 子系统的全部 IPC**——15 个 `
 
 - **不渲染 xterm** —— UI 渲染归 frontend `ui/terminal/`
 - **不管理 pane 树结构** —— pane 树完全 frontend 持有
-- **不实现 tmux 协议** —— tmux -CC 协议在 `services::tmux_session/`（已实现）
+- **不实现 tmux 协议** —— tmux -CC 协议在 `domain::terminal::protocol/`（v6 合并自原 `services/tmux_session/`）
 - **不管理普通 PTY/SSH session** —— 那是 `commands/session/` 的事
 - **不持久化 settings** —— 持久化归各归属 module（attached_tmux → terminal，log → shell）（attached_tmux.json 走 settings）
 
@@ -78,19 +78,18 @@ modules/terminal/
 
 | module | 关系 |
 |--|--|
-| `commands/session` | session.create_session (generic) 收到 `TmuxCcConfig` 时调 `terminal_api::create_tmux` |
-| （已删除——attached_tmux→terminal，log→shell）| terminal 在 create/attach 成功后调 `terminal_api::save_attached_tmux_servers` 持久化 |
+| `commands/terminal` | terminal 自身通过 `domain/terminal::attached_tmux::save_attached_tmux_typed` 持久化（v6 合并） |
 | `commands/shell` | shell **不**自动 attach tmux——由前端显式调 `terminal_api::auto_attach_tmux_servers` |
-| （已删除）| workspace 状态完全 frontend 持有，terminal 不被调 |
-| `domain/session_manager` | terminal api **唯一**直接调用的 service（create / attach / detach / kill 通过 SessionManager） |
-| `domain/terminal_session` | terminal api 委托 `SessionManager::create_tmux` —— 它内部用 `TmuxController` |
-| `domain/session/backends/ssh` | terminal 通过 `SessionManager::probe_tmux_session_exists` 间接使用（local probe 不需要 SSH；SSH probe 走 SshBackend） |
-| `infrastructure/tmux` | terminal api **不**直接 import——必须经过 service |
+| （backend 无对应 module） | workspace 状态完全 frontend 持有，terminal 不被调 |
+| `domain::session::SessionManager` | terminal api **唯一**直接调用的 domain（create / attach / detach / kill 通过 SessionManager） |
+| `domain::terminal::TmuxController` | terminal api 委托 `SessionManager::create_tmux` —— 它内部用 `TmuxController` |
+| `domain::session::backends::ssh` | terminal 通过 `SessionManager::probe_tmux_session_exists` 间接使用（local probe 不需要 SSH；SSH probe 走 SshBackend） |
+| `infrastructure::tmux` | terminal api **不**直接 import——必须经过 domain::terminal::api |
 
 **关键**：
 
 - terminal **不** import `TmuxController` 字段 —— 只通过 `SessionManager` 的 method 访问
-- terminal **不** import `services::tmux_session::controller::*` 字段 —— 通过 SessionManager 间接
+- terminal **不** import `domain::terminal::controller::*` 字段 —— 通过 SessionManager 间接
 
 ## 6. 这个 module 的"产品语言"术语
 
@@ -112,4 +111,4 @@ backend 不需要：
 - theme —— xterm 内容主题，由 frontend 维护 `src/types/theme.ts`
 - cursor blink —— xterm option，纯前端
 
-如果未来要加 "persisted terminal preferences reload on startup"——通过 `commands/<module>/api（log → shell，attached_tmux → terminal）::load_terminal_preferences`（未来），不在本 module 加 IPC。
+如果未来要加 "persisted terminal preferences reload on startup"——通过归属 module 的 typed wrapper（如 `commands/terminal/api::load_terminal_preferences` 或未来 `commands/settings/api::load_terminal_preferences`），不在本 module 加 IPC。

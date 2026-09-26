@@ -6,10 +6,10 @@
 
 ```
 modules/shell/
-├── api.rs        ────►  commands/<module>/api（log → shell，attached_tmux → terminal）.rs           (load_log_config)
+├── api.rs        ────►  commands/shell/log_config::load_log_config (本 module 子模块，v6 合并自原 commands/settings)
 ├── api.rs        ────►  logging_setup::*              (init_logging / cleanup_old_logs)
-├── api.rs        ────►  infrastructure/app_backend    (RealAppBackend::new)
-├── api.rs        ────►  domain/*                      (LogConfig /types/ AppHandle 等)
+├── api.rs        ────►  infrastructure/tauri::RealAppBackend    (RealAppBackend::new)
+├── api.rs        ────►  domain/session/types::*                (LogConfig 等纯数据类型)
 └── commands/     ────►  (不调任何其他 module——shell 不暴露 #[tauri::command])
 ```
 
@@ -17,9 +17,9 @@ modules/shell/
 
 | 调用 | 来源 | 何时调 |
 |--|--|--|
-| `shell_api::load_log_config(app_handle)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | `initialize()` 步骤 3，启动 rolling writer 之前 |
+| `commands/shell/log_config::load_log_config(app_handle)` | 本 module 子模块（v6 合并） | `initialize()` 步骤 3，启动 rolling writer 之前 |
 
-**关键**：shell 不直接 import `domain/session_log` 或 `models::session::LoggingConfig`——统一走 settings_api 入口。
+**关键**：shell 不直接 import `domain::session::log` 或 `models::session::LoggingConfig`——统一走 `shell::log_config` 入口。
 
 ## 3. logging_setup
 
@@ -34,9 +34,9 @@ modules/shell/
 
 | 调用 | 来源 | 何时调 |
 |--|--|--|
-| `RealAppBackend::new(app_handle)` | `crate::infrastructure::app_backend` | `initialize()` 步骤 7 |
+| `RealAppBackend::new(app_handle)` | `crate::infrastructure::tauri::app_backend` | `initialize()` 步骤 7 |
 
-**约束**：shell 是**唯一允许**直接 import infrastructure::app_backend 的 module——其他 module 必须经过 service。理由：app_backend 是 Tauri-level handle 的 wrapper，没有业务规则。
+**约束**：shell 是**唯一允许**直接 import `infrastructure::tauri::RealAppBackend` 的 module——其他 module 必须经过 domain/app_backend trait。理由：app_backend 是 Tauri-level handle 的 wrapper，没有业务规则。
 
 ## 5. models
 
@@ -56,10 +56,10 @@ modules/shell/
 
 ## 7. 不允许的依赖
 
-- ❌ `modules/shell/` → `domain/session_manager::*`（必须经过 `commands/session/api.rs`）
-- ❌ `modules/shell/` → `domain/terminal_session::*`（同）
-- ❌ `modules/shell/` → 任何 `#[tauri::command]` 内部逻辑（shell 不暴露 IPC）
-- ❌ `modules/shell/` → `commands/terminal/api.rs::auto_attach_*`（auto-attach 由前端触发，不在启动钩子里）
+| ❌ `commands/shell/` → `infrastructure::pty::*`（PTY 由 session/terminal 间接使用）
+| ❌ `commands/shell/` → `infrastructure::ssh::*`（同）
+| ❌ `commands/shell/` → 任何 `#[tauri::command]` 内部逻辑（shell 不暴露 IPC）
+| ❌ `commands/shell/` → `commands/terminal/api.rs::auto_attach_*`（auto-attach 由前端触发，不在启动钩子里）
 
 ## 8. 依赖变更流程
 

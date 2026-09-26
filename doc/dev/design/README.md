@@ -35,10 +35,10 @@ frontend 是 **5 个并列的顶层目录**，没有"上层下层"——它们�
 
 | 目录 | 关注点 | 子结构数 | 子结构 |
 |---|---|---|---|
-| `app/` | 业务编排 | 5 module | shell / workspace / terminal / session / settings |
-| `ui/` | 视图渲染 | 5 module | shell / workspace / terminal / session / settings |
+| `app/` | 业务编排 | **6 module** | shell / workspace / terminal / session / settings / **mcp** |
+| `ui/` | 视图渲染 | **6 module** | shell / workspace / terminal / session / settings / **mcp** |
 | `model/` | 纯数据 + 算法 | 5 + cross-cutting | session / workspace / tmux / settings / cross-cutting |
-| `service/` | 跨 module 状态 + IPC 桥 | 6 domain | session / workspace / tmux / settings / persistence |
+| `service/` | 跨 module 状态 + IPC 桥 | **5 domain** | session / workspace / tmux / settings / persistence |
 | `infra/` | 物理适配 | 4 子模块 | tauri / store / clipboard / logger |
 
 **依赖关系**：
@@ -66,13 +66,13 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 
 | 层 | 目录 | 职责一句话 | 子结构 |
 |---|---|---|---|
-| **app** | `app/modules/` | 业务编排：5 module 按产品功能切分 | shell / workspace / terminal / session / settings |
-| **ui** | `ui/modules/` | 视图渲染：5 module 按产品功能切分 | shell / workspace / terminal / session / settings |
+| **app** | `app/modules/` | 业务编排：6 module 按产品功能切分 | shell / workspace / terminal / session / settings / mcp |
+| **ui** | `ui/modules/` | 视图渲染：6 module 按产品功能切分 | shell / workspace / terminal / session / settings / mcp |
 | **model** | `model/` | 纯数据 + 派生 + 算法（含 rules） | session / workspace / tmux / settings / cross-cutting |
 | **service** | `service/` | 跨 module 状态 + IPC 桥 | session / workspace / tmux / settings / persistence |
 | **infra** | `infra/` | 物理适配（唯一允许 `@tauri-apps/api`） | tauri / store / clipboard / logger |
 
-### app ↔ ui 5 ↔ 5 对应表
+### app ↔ ui 6 ↔ 6 对应表
 
 | app module | ui module | 产品功能 |
 |---|---|---|
@@ -81,6 +81,7 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 | `app/terminal` | `ui/terminal` | 终端渲染 + tmux |
 | `app/session` | `ui/session` | session CRUD |
 | `app/settings` | `ui/settings` | 设置 |
+| `app/mcp` | `ui/mcp` | AI agent 接入 + 状态面板 |
 
 **改一个产品功能 = 改 1 个 app module + 1 个 ui module**。
 
@@ -113,18 +114,18 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 ### Frontend（5 个顶层目录 + 5 + cross-cutting model + 6 service + 4 infra = 27 份 README）
 
 #### app（5 module × 3 文档 = 16 份）
+#### app（6 module × 3 文档 + 顶层 = 19 份）
 
 - [`frontend/README.md`](frontend/README.md) — frontend 顶层架构图
-- [`frontend/app/README.md`](frontend/app/README.md) — 业务编排层
 - [`frontend/app/shell/`](frontend/app/shell/) — 启动序列 + 关闭序列
   - [RESPONSIBILITY](frontend/app/shell/RESPONSIBILITY.md) / [INTERFACE](frontend/app/shell/INTERFACE.md) / [DOWNSTREAM](frontend/app/shell/DOWNSTREAM.md)
 - [`frontend/app/workspace/`](frontend/app/workspace/) — 主视图业务
 - [`frontend/app/terminal/`](frontend/app/terminal/) — 终端特有业务（tmux）
-- [`frontend/app/session/`](frontend/app/session/) — session CRUD
+- [`frontend/app/session/`](frontend/app/session/) — session CRUD + AI 接管
 - [`frontend/app/settings/`](frontend/app/settings/) — 设置持久化 + 应用
-- ~~`frontend/app/shared/`~~ — **废弃占位**（v4 已删除，跨 module 共享逻辑归 model）
+- [`frontend/app/mcp/`](frontend/app/mcp/) — ⭐ MCP server 9 个 tool + attach 状态机（PRD §2 M6 + M7）
 
-#### ui（5 module × 3 文档 = 16 份）
+#### ui（6 module × 3 文档 + 顶层 = 19 份）
 
 - [`frontend/ui/README.md`](frontend/ui/README.md) — 视图层
 - [`frontend/ui/shell/`](frontend/ui/shell/) — app 物理壳
@@ -132,8 +133,9 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 - [`frontend/ui/terminal/`](frontend/ui/terminal/) — 终端渲染
 - [`frontend/ui/session/`](frontend/ui/session/) — session UI（dialog + list）
 - [`frontend/ui/settings/`](frontend/ui/settings/) — 设置 UI
+- [`frontend/ui/mcp/`](frontend/ui/mcp/) — MCP server 状态面板
 
-每个 module 三份文档：RESPONSIBILITY / INTERFACE / DOWNSTREAM（详细链接见各 module README 内的"5 module 索引"表）。
+每个 module 三份文档：RESPONSIBILITY / INTERFACE / DOWNSTREAM（详细链接见各 module README 内的"6 module 索引"表）。
 
 #### model（5 + cross-cutting × 3 文档 = 16 份）
 
@@ -182,8 +184,8 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 2. [`frontend/model/README.md`](frontend/model/README.md) — 纯数据 + 算法，最容易看懂
 3. [`frontend/service/README.md`](frontend/service/README.md) — 运行时状态
 4. [`frontend/infra/README.md`](frontend/infra/README.md) — 物理适配
-5. [`frontend/app/README.md`](frontend/app/README.md) — 业务编排（5 module）
-6. [`frontend/ui/README.md`](frontend/ui/README.md) — 视图渲染（5 module）
+5. [`frontend/app/README.md`](frontend/app/README.md) — 业务编排（6 module）
+6. [`frontend/ui/README.md`](frontend/ui/README.md) — 视图渲染（6 module）
 
 ## 5. 关键设计决策
 
@@ -280,13 +282,13 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 
 | 层 | 文档数 | 详情 |
 |---|---|---|
-| app | 16 | 5 module × 3 + 顶层 |
-| ui | 16 | 5 module × 3 + 顶层 |
+| app | 19 | 6 module × 3 + 顶层（shell / workspace / terminal / session / settings / mcp） |
+| ui | 19 | 6 module × 3 + 顶层 |
 | model | 16 | 5 + cross-cutting × 3 + 顶层 |
 | service | 16 | **5** domain × 3 + 顶层（session / workspace / tmux / settings / persistence） |
 | infra | 13 | 4 子模块 × 3 + 顶层 |
 | 顶层 README | 1 | `frontend/README.md` |
-| **小计** | **78** | |
+| **小计** | **84** | |
 
 ### Backend（3 层架构 + 32 份，无 ui 层，无 service/model 分层，砍 settings / workspace / persistence）
 

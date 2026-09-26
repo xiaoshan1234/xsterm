@@ -1,7 +1,7 @@
 # Module · Commands Session — 对外接口
 
 > **位置**：`src-tauri/src/commands/session/api.rs`（落地 `src-tauri/src/commands/session.rs`）
-> **唯一进口**：`use crate::app::modules::session::api::*;` 或直接 `use crate::commands::session::*`
+> **唯一进口**：`use crate::commands::session::api::*;` 或直接 `use crate::commands::session::*`
 
 ## 1. 对外暴露什么
 
@@ -19,7 +19,7 @@ session module 暴露**两类符号**：
 ```rust
 use crate::infrastructure::app_backend::AppBackend;
 use crate::models::session::{LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo, TmuxCcConfig};
-use crate::services::session_manager::SessionManager;
+use crate::domain::session::SessionManager;
 
 /// 纯函数入口：创建 local session（被 commands/local/create.rs 调用）
 pub fn create_local(
@@ -39,7 +39,7 @@ pub fn create_ssh(
 /// 内部按 SessionConfig variant 分流：
 ///   - Local → create_local
 ///   - Ssh   → create_ssh
-///   - TmuxCc → app::modules::terminal::api::create_tmux
+///   - TmuxCc → commands::terminal::api::create_tmux
 pub async fn create_session(
     state: &SessionManager,
     backend: Arc<dyn AppBackend>,
@@ -142,7 +142,9 @@ pub fn get_session_output_channel(
 
 ```rust
 // commands/local/create.rs
-use crate::app::modules::settings::api as settings_api;
+// 注意：saved session config 由 frontend `service/persistence/sessions.ts`
+// 直存 `sessions.json`——session 创建后不触发 backend 持久化（v6 砍）
+// config.should_save 字段由 frontend 读，决定是否调 service/persistence
 
 #[tauri::command]
 pub async fn create_local_session(
@@ -151,30 +153,24 @@ pub async fn create_local_session(
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     let backend: Arc<dyn AppBackend> = Arc::new(RealAppBackend::new(app.clone()));
-    let info = session_api::create_local(state.inner(), backend, config.clone())?;
-
-    // 触发持久化（如果 should_save）
-    if config.should_save.unwrap_or(false) {
-        // 注：save_session_config 已删除，frontend 直存 sessions.json
-        if let Err(e) = save_session_config(&app, &info, &config) {
-            tracing::warn!("create_local_session: persistence failed: {e}");
-        }
-    }
-
+    let info = session_api::create_local(state.inner(), backend, config).await?;
     Ok(info)
 }
 ```
 
 **关键**：
 
-- session **不**直接 import `commands::persistence::*`
-- session 通过 `app::modules::settings::api::save_session_config` 间接调
+- session **不**触发任何 backend 持久化（v6 砍 save_session_config）
+- session **不**触发任何 backend 持久化（v6 砍 save_session_config）
+- session **不**直接 import `commands::persistence::*`（v6 已砍：commands/persistence 整个 module 删除了）
+- saved config 由 frontend `service/persistence/sessions.ts` 直存 `sessions.json`
+- saved config 由 frontend `service/persistence/sessions.ts` 直存 `sessions.json`
 
 ### 3.2 session → terminal（generic dispatcher 内部路由 tmux）
 
 ```rust
 // commands/dispatch.rs
-use crate::app::modules::terminal::api as terminal_api;
+use crate::commands::terminal::api as terminal_api;
 
 #[tauri::command]
 pub async fn create_session(
@@ -204,7 +200,7 @@ pub async fn create_session(
 **关键**：
 
 - dispatcher 内部调 `terminal_api::create_tmux`（不是直接 `state.create_tmux`）
-- session **不** import `services::tmux_session::*` 字段
+- session **不** import `domain::terminal::*` 字段（bug 0009 防御）
 
 ## 4. 接缝契约
 

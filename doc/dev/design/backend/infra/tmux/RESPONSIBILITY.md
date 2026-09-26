@@ -171,11 +171,11 @@ pub enum TmuxInfraError {
 }
 ```
 
-**与 domain/terminal/errors.rs::TmuxError 区分**：
+**与 `domain/terminal/errors.rs::TmuxError` 区分**：
 - `TmuxInfraError` —— infra 层（spawn / process 错误）
-- `TmuxError` —— service 层（controller 内部错误，如 ControllerNotFound / PaneNotBound / Timeout）
+- `TmuxError` —— domain 层（controller 内部错误，如 `ControllerNotFound` / `PaneNotBound` / `Timeout`）
 
-service 层通过 `?` 运算符 + `From<TmuxInfraError> for TmuxError` 自动转换。
+domain 层通过 `?` 运算符 + `From<TmuxInfraError> for TmuxError` 自动转换。
 
 ## 10. 强制约束（可机械校验）
 

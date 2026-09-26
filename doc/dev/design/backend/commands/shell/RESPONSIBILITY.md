@@ -1,8 +1,8 @@
 # Module · Commands Shell — 职责
 
 > **位置**：`src-tauri/src/commands/shell/`（落地 `src-tauri/src/commands/shell.rs`）
-> **用户认知里的位置**：「app 启动序列 + 关闭序列编排」
-> **核心地位**：app 层的入口编排者；其他 4 个 module 的 `initialize` 路径都从这里发起
+> **用户认知里的位置**：「app 启动序列 + 关闭序列编排 + log runtime」
+> **核心地位**：app 层的入口编排者；其他 2 个 module（session / terminal）的启动期依赖都从这里发起
 > **Frontend 对应**：[`../../../frontend/app/shell/RESPONSIBILITY.md`](../../../frontend/app/shell/RESPONSIBILITY.md)
 
 ## 1. 这个 module 负责什么
@@ -55,11 +55,11 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), String>;
 |--|--|
 | `commands/session` | shell **不**调 session；session 通过自己的 `#[tauri::command]` 被前端触发 |
 | `commands/terminal` | shell **不**调 terminal；terminal 通过自己的 `#[tauri::command]` 被前端触发 |
-| （已删除——attached_tmux→terminal，log→shell）| shell.initialize() 内调 `commands/shell/api::load_log_config()`（在 logging 初始化之前） |
-| `service/session_log` | shell 直接调（属于基础设施） |
-| `service/infrastructure/app_backend` | shell 直接 new `RealAppBackend` |
+| `commands/shell/log_config`（自模块，v6 合并）| shell.initialize() 内调 `shell_api::load_log_config()`（在 logging 初始化之前） |
+| `domain::session::log` | shell 直接调（属于基础设施） |
+| `infrastructure::tauri::RealAppBackend` | shell 直接 new `RealAppBackend` |
 
-**关键**：shell 不直接 import `domain/session_manager::*`——session_manager 完全由 session/terminal module 通过自己的 api.rs 触发。
+**关键**：shell 不直接 import `domain::session::SessionManager::*`——session_manager 完全由 session/terminal module 通过自己的 api.rs 触发。
 
 ## 6. 这个 module 的"产品语言"术语
 

@@ -46,7 +46,7 @@ pub fn load_attached_tmux_typed(app: &AppHandle) -> Result<Vec<AttachedTmuxServe
     serde_json::from_value(value).map_err(|e| e.to_string())
 }
 
-// Generic JSON IO helper（v6 之前归 tauri_plugin_store::save_json_value（直接下沉到归属域），现在下沉到 domain/terminal/attached_tmux.rs 内部）
+// Generic JSON IO helper（v6 前归 `infra::tauri::tauri_plugin_store` 抽出的 generic 层，v6 后下沉到本文件内部）
 fn save_json_value(app: &AppHandle, file: &str, key: &str, value: &serde_json::Value) -> Result<(), String> {
     let store = app.store(file).map_err(|e| e.to_string())?;
     store.set(key, value.clone());
@@ -63,7 +63,7 @@ fn load_json_value(app: &AppHandle, file: &str, key: &str) -> Result<Option<serd
 **关键**：
 
 - typed wrapper 集中 `serde_json::from_value` 错误处理 + 隐藏 store key 字面量
-- generic JSON IO helper **只在本文件内**——不再有独立的 `tauri_plugin_store::save_json_value（直接下沉到归属域）`
+- generic JSON IO helper **只在本文件内**——不再有独立的 `infra::tauri::tauri_plugin_store` generic 抽象
 - 直接 import `tauri_plugin_store::StoreExt` —— terminal 现在是 backend 中**唯一**允许直接 import tauri-plugin-store 的 domain
 
 ## 4. 跟其他 domain 的关系

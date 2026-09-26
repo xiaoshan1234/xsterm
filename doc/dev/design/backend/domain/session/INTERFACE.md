@@ -386,21 +386,21 @@ pub async fn create_local(
 
 ```rust
 // commands/session/api.rs
-use crate::domain::settings::SettingsService;
-use crate::domain::session::LocalSessionConfig;
+// 注意：settings 是横切关注点，但 MVP v6 砍掉 domain/settings。
+// default 值注入改由 frontend 在调 IPC 前 apply（app/settings 加载后写入 form）。
+// 这里只展示 future 形态：如有 `domain::session::defaults::apply_to_local_config` helper，
+// 则在 create_local 前调；目前直接由前端调 invoke 时传完整 config。
 
 pub async fn create_local_with_defaults(
     state: &Arc<SessionManager>,
     backend: Arc<dyn AppBackend>,
-    mut config: LocalSessionConfig,
+    config: LocalSessionConfig,
 ) -> Result<SessionInfo, String> {
-    // settings 是横切，由 commands 层注入 default 值
-    let settings = SettingsService::get().await;
-    config.shell = config.shell.or(Some(settings.default_shell));
-    config.cwd = config.cwd.or(settings.default_cwd);
     state.create_local(config, backend).await
 }
 ```
+
+**说明**：v6 砍 `domain/settings` 后，default 值注入逻辑由 frontend `app/settings` 编排，backend 只接完整 config。如未来需要 backend 端 default（e.g. 服务端命令注入），新建 `domain/session/defaults.rs`。
 
 ### 8.2 terminal → session（tmux controller 注册）
 
@@ -424,7 +424,7 @@ pub async fn create_tmux(
 // commands/shell/api.rs
 use crate::domain::session::SessionManager;
 use crate::domain::terminal::attached_tmux::load_attached_tmux_typed;
-use crate::infrastructure::app_backend::AppBackend;
+use crate::infrastructure::tauri::AppBackend;
 
 pub async fn initialize(app: &AppHandle, services: &Services) -> Result<(), String> {
     let backend: Arc<dyn AppBackend> = Arc::new(RealAppBackend::new(app.clone()));
@@ -440,7 +440,7 @@ pub async fn initialize(app: &AppHandle, services: &Services) -> Result<(), Stri
 - `SessionManager` 字段（`sessions / session_id_source / pty_system / ssh_backend / tmux_controllers`）——只能通过 public method 访问
 - `ActiveSession` 内部 3 种 variant —— 只能通过 `SessionBackend` trait 调度
 - `SessionIdSource::next_id`（AtomicU32）—— 只能通过 `allocate()` 访问
-- `tauri_plugin_store` —— session **不**直接持久化（由 commands/<module>/api 触发：attached_tmux→terminal，log→shell）
+- `tauri_plugin_store` —— session **不**直接持久化（v6 砍 persistence domain；持久化由归属 module 的 typed wrapper 触发：attached_tmux → `domain/terminal/attached_tmux`，log → `commands/shell/log_config`）
 
 ## 10. api.rs 变更流程
 

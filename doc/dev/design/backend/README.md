@@ -15,25 +15,40 @@ src-tauri/src/                                            （语义名）
 ├── domain/      业务核心：状态机 + 持久化 + 纯数据 + 算法（合并 service + model，砍掉 settings / workspace / persistence）
 │   ├── session/      SessionManager + 3 backend 实现 + settings 字段 + SplitDirection
 │   └── terminal/     TmuxController + tmux 协议层 + attached_tmux 持久化
-└── infra/       物理适配（4 子模块按外部资源切）
-    ├── pty/          OS PTY 子进程（portable-pty）
-    ├── ssh/         SSH 协议（russh）
-    ├── tmux/        tmux 控制模式（外部子进程）
-    └── tauri/       Tauri runtime（AppBackend + binary_frame）
+├── infra/       物理适配（4 子模块按外部资源切）
+│   ├── pty/          OS PTY 子进程（portable-pty）
+│   ├── ssh/         SSH 协议（russh）
+│   ├── tmux/        tmux 控制模式（外部子进程）
+│   └── tauri/       Tauri runtime（AppBackend + binary_frame）
+└── integration/ ⭐ 第 4 类（集成层——AI agent 接入，独立于 3 层架构）
+    └── mcp/         MCP server（PRD §2 M6 + M7 差异化组件；rmcp SDK；stdio 默认 + 可选 TCP）
 ```
 
 | 层 | 职责 | 子结构数 | 子结构 |
 |--|--|--|--|
-| `commands/` | Tauri IPC 编排 | 3 module | session / terminal / shell（砍掉 settings——attached_tmux→terminal，log→shell）|
-| `domain/` | 业务核心（状态机 + 类型 + 算法 + 持久化）| **2 domain** | session / terminal（v6 砍掉 persistence——attached_tmux 归 terminal，log_config 归 commands/shell runtime）|
+| `commands/` | Tauri IPC 编排 | 3 module | session / terminal / shell |
+| `domain/` | 业务核心（状态机 + 类型 + 算法 + 持久化）| **2 domain** | session / terminal |
 | `infra/` | 物理适配（PTY / SSH / tmux / Tauri）| 4 子模块 | pty / ssh / tmux / tauri |
 
 **与 frontend 的关系**：
 
-- frontend `app/` 5 module ↔ backend `commands/` **3 module**（v5：app/settings 不对应 backend 单一 module——attached_tmux 在 terminal，log 在 shell；**workspace 状态完全 frontend 持有，backend 不预留 module**）
+- frontend `app/` **6 module** ↔ backend `commands/` **3 module**（workspace 完全 frontend 持有；settings 跨多 backend：attached_tmux → terminal，log_config → shell；**MCP server 归 frontend `app/mcp/`** —— 复杂业务放 TS 层，backend 只暴露 IPC 桥 + stdio transport helper）
 - frontend `model/` ↔ backend `domain/` 内嵌 types —— **同名镜像**（不同语言：Rust serde vs TS interface）
 - frontend `service/` ↔ backend `domain/` 内嵌 stores —— **职责分叉**：frontend 镜像状态，backend 协议 + 状态机 + 持久化
 - frontend `infra/tauri`（IPC adapter）↔ backend `infra/tauri`（AppBackend + binary_frame）
+
+### 1.1 为什么 backend 没有 `integration/` 层（架构原则）
+
+xsterm 架构原则（2026-09 确立）：**rust backend 只做核心数据处理 + 简单业务**；**复杂业务（MCP server、AI 编排、tool 注册表、外部协议驱动的状态机）放 frontend TS 层**。
+
+**理由**：
+1. TS 迭代速度 > Rust —— MVP 设计阶段频繁变更时,TS 编译/重启代价远低
+2. frontend 已经持有 session/workspace/tmux/settings 状态 —— MCP server 自然延伸这些状态,放 TS 减少跨边界
+3. backend 角色是**原始能力面**（PTY/SSH/tmux 进程控制 + 二进制 I/O 通道）,由 frontend 编排成业务
+
+**判据**：问"这事是否需要 serde 状态机 + trait mock **且**不涉及核心数据流?" —— 答是则 push 到 TS。
+
+**例外**：如果复杂业务需要 OS 级资源（stdio/TCP listener、子进程 spawn）且必须在 main process —— 用 `infra/` 子模块承担 OS adapter 边界，业务本身仍放 TS。MCP 即此类：stdio transport / TCP listener 在 `infra/tauri/mcp_transport.rs` 提供 adapter，9 个 tool 实现 + attach 状态机 + 白名单等业务逻辑在 frontend `app/mcp/`。
 
 ## 2. 从零设计
 
@@ -114,6 +129,10 @@ Tauri IPC（边界）
 
 详见 [`infra/README.md`](infra/README.md)。
 
+### 4.4 P0-5 占位: config watcher（待 tm/pdm 对齐）
+
+PRD §2 M9 写明 `%APPDATA%\xsterm\config.toml` + `notify` 文件监听 + JSON schema，但 frontend 设计改成 settings.json 直存。这是**架构与 PRD 偏离**，待 tm 拍板。详见 [`../_meta/prd-deviation-P0-5-config.md`](../_meta/prd-deviation-P0-5-config.md)。本轮 audit **未动**这部分设计。
+
 ## 5. 简化原因（单层 → 3 层）
 
 | 旧 4 层 | 新 3 层 | 简化理由 |
@@ -180,26 +199,83 @@ frontend 多一个 ui 层是因为有视图（React 组件），backend 没视�
 | 启动 → 加载 log_config + binary frame | `commands/shell` | `commands/shell/api.rs::initialize` |
 | settings 变更 → 应用到 terminal | （已删除）| `commands/terminal/api.rs::applyTerminalPreferences` |
 
-**关键**：跨 module 调用**只**通过 `commands/<other>/api.rs`——不绕过 import 内部文件。
-
 ## 10. 占位与未来工作
 
 backend 设计文档里**保留**所有「（未来）」占位——它们标记 MVP 暂未实现但设计已规划的部分：
 
-- （无）workspace 状态完全 frontend 持有，backend 无对应 domain
-- `tauri-plugin-store` schema migration 框架（MVP 单版本无 migration；attached_tmux/log_config 各域内自行定义）
 - 各类「（未来）」标注的字段、命令、helper
+- `domain/terminal/attached_tmux.rs`：MVP 已有 attached_tmux.json 持久化（save/load on startup + shutdown）
+- schema migration 框架（MVP 单版本无 migration）
 
 **保留占位的理由**：
+
 - 设计文档是"目标态"——MVP 不实现不等于设计不规划
 - 后续 PR 可以按占位逐项落地
 - 删除占位会丢失设计意图
 
-## 11. 文档地图
+
+## 11. Known bugs & defenses（单一事实源）
+
+下面汇总 backend 历史 bug 的防御措施——子文档**不**重复抄写，只引用本节。
+
+### 11.1 bug 0009：TmuxController 字段直读导致 stale data
+
+**根因**（见 `doc/dev/changelog/bugs.md` 0009）：`SessionManager::create_tmux` 直读 `TmuxController.window_bindings` HashMap，导致 stale data。
+
+**防御措施**（必须遵守）：
+
+- ❌ `commands/session/`、`commands/terminal/` → `domain::terminal::*` 内部字段（pane_bindings / window_bindings / initial_state / dispatch_task）
+- ✅ 所有跨 domain 访问走 `domain::session::SessionManager` public method 代理
+- ✅ session manager 持 `Arc<TmuxController>` 引用但不暴露字段
+
+**应用位置**：
+
+- `commands/terminal/RESPONSIBILITY.md` §5
+- `commands/terminal/DOWNSTREAM.md` §4 + §5
+- `domain/session/DOWNSTREAM.md` §2
+- `domain/terminal/INTERFACE.md` §7 + §8
+- `frontend/app/mcp/DOWNSTREAM.md` §4（MCP tool 不直读 TmuxController 字段）
+
+**变更流程**：新加 `TmuxController` 字段必须先在 `TmuxController` impl 加公开方法，子文档引用本节，禁止字段直读。
+
+### 11.2 bug 0009 类：SessionManager 字段直读
+
+**防御措施**：
+
+- ❌ commands / integration / 子 domain → `SessionManager` 字段直读（DashMap / AtomicU32 / tmux_controllers）
+- ✅ 只通过 `SessionManager::method()` 公开方法访问
+
+**应用位置**：所有调 `SessionManager` 的 module（commands/session / commands/terminal / commands/shell / `frontend/app/mcp/`）。
+
+### 11.3 SSH host-key 校验禁用（已知安全债）
+
+**事实**：`src-tauri/src/infrastructure/ssh/` 当前不校验 host key。
+
+**防御措施**（由 AGENTS.md §"Important Gotchas" 强约束）：
+
+- ❌ 在 `infra/ssh/` 之外的位置重新打开 host-key 校验
+- ❌ service / app / commands / integration 层 bypass 该限制
+- ❌ 关闭 `SshError::HostKeyUnchecked` 警告
+
+**未来启用**：必须经过完整安全评审 + 用户配对 UX + known_hosts 持久化策略。
+
+**应用位置**：`infra/ssh/RESPONSIBILITY.md` §10 + §11、`infra/ssh/INTERFACE.md` §5.3。
+
+### 11.4 新 bug 模板
+
+未来新 bug 记录流程：
+1. 创建 issue → 修复 → PR
+2. 在 `doc/dev/changelog/bugs.md` 加条目
+3. 在本节加对应防御段落
+4. 子文档只引用本节，不重复抄
+
+## 12. 文档地图
 
 - 顶层（本文）：3 层架构总览 + frontend 镜像关系
 - 各层 README：`commands/README.md` / `domain/README.md` / `infra/README.md`
 - 每层子文档：每个 module/domain 3 份（RESPONSIBILITY / INTERFACE / DOWNSTREAM）
 - 镜像验证：每份子文档的 "Frontend 对应" 链接指向 frontend 同名 README
+- bug 防御：本文 §11（单一事实源）
+- **MCP server**（PRD §2 M6 + M7）：归 frontend `app/mcp/` —— 详见 `doc/dev/design/frontend/app/mcp/RESPONSIBILITY.md` + 本文 §1.1 架构原则
 
-**TM 验收入口**：先读本文档（3 层架构总览）→ 读 `commands/README.md`（IPC 编排 3 module）→ 读 `domain/README.md`（状态机 + 类型 3 domain）→ 读 `infra/README.md`（4 子模块物理适配）。
+**TM 验收入口**：先读本文档（3 层架构总览 + §11 bug 防御 + §1.1 架构原则）→ 读 `commands/README.md`（IPC 编排 3 module）→ 读 `domain/README.md`（状态机 + 类型 2 domain）→ 读 `infra/README.md`（4 子模块物理适配）→ 跳到 frontend `app/mcp/RESPONSIBILITY.md` 看 MCP server 9 tools + AI 接管。

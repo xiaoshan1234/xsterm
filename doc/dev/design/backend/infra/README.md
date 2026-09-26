@@ -135,7 +135,7 @@ src-tauri/src/infrastructure/
 
 frontend `infra/store` 是 `tauri-plugin-store` 的 wrapper——通过 IPC 调 backend 持久化。
 
-backend **没有** `infra/store` 子模块——`tauri-plugin-store` 由 `tauri_plugin_store::save_json_value（直接下沉到归属域）` 直接持有（**唯一**允许直接 import `tauri_plugin_store` 的 service）。
+backend **没有** `infra/store` 子模块——`tauri-plugin-store` 由各归属 module 的 typed wrapper 直接持有（attached_tmux → `domain/terminal/attached_tmux.rs`，log_config → `commands/shell/log_config.rs`）。
 
 frontend `infra/store` 直存 sessions/groups/settings（frontend-only 配置）；backend **无独立 persistence 域**——attached_tmux 归 `domain/terminal::attached_tmux`，log_config 归 `commands/shell::log_config`。
 
@@ -224,9 +224,9 @@ grep -rn 'use crate::models::' src-tauri/src/infrastructure/ | grep -v '::types\
 
 ```
 src-tauri/src/lib.rs::run()
-  ├─► app::shell::api::initialize(app)
-  │    └─► services::settings::api::load_log_config
-  │         └─► infra::tauri::RealAppBackend::new(app)   ← infra 在最底
+  ├─► commands::shell::api::initialize(app)
+  │    ├─► commands::shell::log_config::load_log_config  ← log 归 commands/shell，v6 合并
+  │    └─► infra::tauri::RealAppBackend::new(app)   ← infra 在最底
   │              └─► tauri::AppHandle / Channel::new
   └─► tauri::Builder::default()
          .invoke_handler(commands::mod::all_handlers())

@@ -1,7 +1,7 @@
 # Module · Commands Terminal — 对外接口
 
 > **位置**：`src-tauri/src/commands/terminal/api.rs`（落地 `src-tauri/src/commands/terminal.rs`）
-> **唯一进口**：`use crate::app::modules::terminal::api::*;`
+> **唯一进口**：`use crate::commands::terminal::api::*;`
 
 ## 1. 对外暴露什么
 
@@ -21,7 +21,7 @@ terminal module 暴露 **15 个 `#[tauri::command]`**，按 tmux 子系统分 4 
 ```rust
 use crate::infrastructure::app_backend::AppBackend;
 use crate::models::session::{TmuxCcConfig, TmuxSessionInit};
-use crate::services::session_manager::{SessionManager, AutoAttachOutcome};
+use crate::domain::session::SessionManager;
 
 // ============ pure functions（被 commands/tmux/session.rs 调用）============
 
@@ -198,7 +198,7 @@ pub async fn unmark_attached_tmux(
 
 ```rust
 // commands/tmux/session.rs
-use crate::app::modules::settings::api as settings_api;
+use crate::commands::terminal::api as terminal_api;
 
 #[tauri::command]
 pub async fn create_tmux_session(
@@ -230,7 +230,7 @@ pub async fn create_tmux_session(
 
 ```rust
 // commands/session/commands/dispatch.rs
-use crate::app::modules::terminal::api as terminal_api;
+use crate::commands::terminal::api as terminal_api;
 
 match config {
     SessionConfig::TmuxCc(tmux) => {
@@ -268,20 +268,21 @@ export async function createTmuxPane(
 
 - 前端只通过 `invoke()` 调 backend terminal api
 - 前端解析 xsterm session id ↔ (controller_id, tmux_pane_id) 在本地完成
-- tmux 协议层（`services::tmux_session::*`）由 terminal module 通过 SessionManager 间接访问，前端**不感知**
+- tmux 协议层（`domain::terminal::*`）由 terminal module 通过 `domain::session::SessionManager` 间接访问，前端**不感知**
+- `domain::terminal::protocol::ProtocolEvent` —— 已被 `infrastructure::tmux::backend` 包装，不暴露给 app
 
 ## 5. 不对外暴露
 
 - `TmuxController` 字段（pane_bindings / window_bindings / etc.）—— 必须通过 SessionManager 访问
 - `SessionManager::tmux_controllers` DashMap —— 必须通过 public method
-- `services::tmux_session::protocol::ProtocolEvent` —— 已被 `infrastructure::tmux::backend` 包装，不暴露给 app
+- `domain::terminal::protocol::ProtocolEvent` —— 已被 `infrastructure::tmux::backend` 包装，不暴露给 app
 
 ## 6. api.rs 变更流程
 
 1. **新增 tmux IPC 命令** → 加 `commands/tmux/<sub>.rs` + 加 `#[tauri::command]` wrapper
 2. **修改命令签名** → 同步更新 `api.rs` + INTERFACE.md §2 + 前端 `commands/terminal/api.ts` 类型
 3. **删除 tmux IPC 命令** → 三处一起删除（命令 / api.rs / `all_handlers()` 注册）
-4. **新增持久化触发点** → 在 §3.1 同步 + 在 `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） 加对应 save 方法
+4. **新增持久化触发点** → 在 §3.1 同步 + 在归属 module 的 `api.rs`（attached_tmux → terminal/api，log → shell/api）加对应 save 方法
 5. **新增跨 module 调用**（未来如新增其他 module 调 create_tmux_pane）→ 在 §2 加 + 在 §3.2 同步
 
 ## 7. 关键设计约束

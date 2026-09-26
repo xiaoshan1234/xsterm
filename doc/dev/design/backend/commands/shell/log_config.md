@@ -281,14 +281,17 @@ mod tests {
 | 维度 | frontend service/settings (logging) | backend commands/shell/log_config |
 |---|---|---|
 | 类型定义 | TS interface | Rust struct |
-| 状态机 | zustand store（前端持镜像） | `Arc<LogConfigState>`（backend 持 ReloadHandle） |
-| 持久化 | frontend `infra/store` 直存 log_config.json | backend `infra/tauri::tauri-plugin-store` 直存 log_config.json（**同一文件**——backend reload handle 需要） |
-| 修改后行为 | frontend 写 store + UI 更新 | backend 写 store + reload `tracing` subscriber |
-| 字段源 | `SettingsTab` 持久化 | `commands/shell::initialize()` 启动时读 |
+| 状态机 | zustand store（frontend 持镜像） | `Arc<LogConfigState>`（backend 持 ReloadHandle） |
+| 持久化 | **frontend 不直写 log_config.json**（v4 改：统一通道） | backend `infra::tauri::tauri-plugin-store` 直存 log_config.json |
+| 修改后行为 | frontend 调 `invoke('set_log_config', config)` → backend 写 store + reload `tracing` subscriber | backend 写 store + reload（被 frontend 触发） |
+| 字段源 | `SettingsTab` UI 编辑 | `commands/shell::initialize()` 启动时读 |
 
-**关键**：frontend 和 backend **共享** `log_config.json` 文件——但行为不同：
-- frontend 写是为了**用户修改**（UI 改动）
-- backend 写是为了**启动时初始化**（ReloadHandle 创建后 sync 到 store）
-- 两者都读是为了 reload 后立即生效
+**关键（v4 改）**：frontend 和 backend **不**共享 `log_config.json` 写入路径——frontend **不**直写，统一通过 IPC 触发。
 
-**冲突解决**：last-write-wins——frontend 改动后调 `set_log_config` IPC → backend 写 store + reload。frontend 启动时读 `get_log_config` 显示当前值。
+- frontend 改 settings.logConfig → 调 `invoke('set_log_config')` → backend 写 store + reload
+- frontend 启动时读 `get_log_config` 显示当前值
+- backend 启动时读 log_config.json 初始化 ReloadHandle（不写回——启动顺序保证一致性）
+
+**禁止**：
+- ❌ frontend `service/persistence` 直写 `log_config.json`（只有 backend `infra::tauri` 能写）
+- ❌ backend ReloadHandle 创建时 sync 写回 store（启动顺序保证一致性，无需事务）

@@ -7,13 +7,13 @@
 ```
 modules/terminal/
 ├── api.rs        ────►  commands/session/api.rs           (create_tmux 被 session dispatcher 调用)
-├── api.rs        ────►  commands/<module>/api（log → shell，attached_tmux → terminal）.rs          (save_attached_tmux_servers after create/attach/detach/kill)
+├── api.rs        ────►  commands/terminal/api::save_attached_tmux_servers (attached_tmux 归 terminal，v6 合并) (save_attached_tmux_servers after create/attach/detach/kill)
 ├── api.rs        ────►  domain/session_manager     (唯一直接调用的 service)
 ├── api.rs        ────►  domain/session/types::*            (TmuxCcConfig / TmuxSessionInit / AttachedTmuxServer)
 └── api.rs        ────►  infrastructure/app_backend   (RealAppBackend::new 构造 AppHandle wrapper)
 ```
 
-**关键约束**：terminal module **不** import `services::tmux_session::*` 字段——通过 `SessionManager::create_tmux` / `attach_tmux` / 等 public methods 间接访问 `TmuxController`。
+**关键约束**：terminal module **不** import `domain::terminal::*` 字段——通过 `domain::session::SessionManager::create_tmux` / `attach_tmux` / 等 public methods 间接访问 `TmuxController`。
 
 ## 2. commands/session
 
@@ -23,21 +23,21 @@ modules/terminal/
 
 **关键**：这是 session → terminal 的跨 module 调用，由 session dispatcher 发起。terminal 自身**不** call session_api。
 
-## 3. commands/terminal（attached_tmux 持久化）
+## 3. terminal 内部 attached_tmux 持久化（v6 合并）
 
-terminal 在以下触发点调 settings_api：
+terminal 在以下触发点调 `terminal_api::save_attached_tmux_servers`（v6 前归 settings_api，v6 后由 terminal 自身 api.rs 编排）：
 
-| 触发点 | 调用 | 来源 | 时机 |
-|--|--|--|--|
-| `create_tmux_session` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | controller 创建后立即 |
-| `attach_tmux_session` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | attach 成功后立即 |
-| `detach_tmux_controller` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | detach 后立即 |
-| `kill_server_via_controller` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | kill 后立即 |
-| `unmark_attached_tmux` | `terminal_api::save_attached_tmux_servers(&app, &servers)` | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | 强制清除 stale entry |
+| 触发点 | 调用 | 时机 |
+|--|--|--|
+| `create_tmux_session` 成功 | `terminal_api::save_attached_tmux_servers(&app, &servers)` | controller 创建后立即 |
+| `attach_tmux_session` 成功 | 同上 | attach 成功后立即 |
+| `detach_tmux_controller` 成功 | 同上 | detach 后立即 |
+| `kill_server_via_controller` 成功 | 同上 | kill 后立即 |
+| `unmark_attached_tmux` | 同上 | 强制清除 stale entry |
 
 **关键**：
 
-- terminal **不**直接 import `tauri_plugin_store` —— 必须经过 `settings_api`
+- terminal **不**直接 import `tauri_plugin_store` —— 由 `domain::terminal::attached_tmux` 内部封装
 - 持久化失败**不**向上传播（tracing::warn 即可）
 - 每次 controller 集合变更都同步一次——`save_attached_tmux_servers` 接受全量 `Vec<AttachedTmuxServer>`，由 SessionManager 投影
 
@@ -64,8 +64,8 @@ terminal api **唯一直接调用**的 service。调用面：
 
 **约束**：
 
-- terminal **不** import `services::session_manager` 的字段（tmux_controllers / sessions DashMap）—— 只通过 public methods
-- terminal **不** import `services::tmux_session::*`（包括 controller / bridge / protocol）
+| `domain::session::SessionManager` 的字段直读（tmux_controllers / sessions DashMap）—— 只通过 public methods
+- terminal **不** import `domain::terminal::*`（包括 controller / bridge / protocol）
 
 ## 5. domain/terminal_session（间接）
 
@@ -101,13 +101,13 @@ terminal 模块直接读以下 models 类型：
 | `TmuxSessionInit` | `domain/session/types.rs` |
 | `TmuxControlWindowInit` | `domain/session/types.rs` |
 | `AttachedTmuxServer` | `domain/session/types.rs` |
-| `AutoAttachOutcome` | `services::session_manager.rs`（输出类型） |
+| `AutoAttachOutcome` | `domain::session::SessionManager`（输出类型，v6 合并自原 services::session_manager.rs） |
 
 **约束**：models 是纯数据类型，terminal 可自由 import。
 
 ## 8. 设计意图：terminal 是「tmux -CC 系统的 IPC facade」
 
-反模式：`commands/session.rs::create_tmux_session` 直接调 `state.create_tmux(...)` 同时内联调 `commands::persistence::save_attached_tmux_servers_impl(&app, &servers)`——一个 IPC handler 跨越：
+反模式：`commands/session.rs::create_tmux_session` 直接调 `state.create_tmux(...)` 同时内联调 `crate::commands::persistence::save_attached_tmux_servers_impl(&app, &servers)`——一个 IPC handler 跨越 service 层 + 跨 module persistence + 跨 module backend 类型（RealAppBackend）。v6 砍 persistence 域后这条反模式不复存在——attached_tmux 归 terminal 内部编排，跨 module 只走 `commands/terminal/api.rs::save_attached_tmux_servers`。
 
 1. service 层（state.create_tmux）
 2. 跨 module persistence（save_attached_tmux_servers_impl）
@@ -130,17 +130,17 @@ terminal 模块直接读以下 models 类型：
 
 ## 10. 不允许的依赖
 
-- ❌ `modules/terminal/` → `services::tmux_session::*`（必须经过 `SessionManager` public method）
-- ❌ `modules/terminal/` → `services::tmux_session::controller::TmuxController` 字段
-- ❌ `modules/terminal/` → `infrastructure::tmux::*`（必须经过 service）
-- ❌ `modules/terminal/` → `infrastructure::ssh::*`（probe SSH 走 SessionManager）
-- ❌ `modules/terminal/` → `commands::session::*`（必须经过 `commands/session/api.rs`）
-- ❌ `modules/terminal/` → `commands::persistence::*`（必须经过 `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal））
+| ❌ `commands/terminal/` → `domain::terminal::*`（必须经过 `domain::session::SessionManager` public method，bug 0009 防御）
+| ❌ `commands/terminal/` → `domain::terminal::TmuxController` 字段直读
+| ❌ `commands/terminal/` → `infrastructure::tmux::*`（必须经过 service）
+| ❌ `commands/terminal/` → `infrastructure::ssh::*`（probe SSH 走 SessionManager）
+| ❌ `commands/terminal/` → `commands::session::*`（必须经过 `commands/session/api.rs`）
+| ❌ `commands/terminal/` → `commands::persistence::*`（v6 已砍；attached_tmux 归 terminal 内部）
 
 ## 11. 依赖变更流程
 
-1. **新增 tmux IPC 命令** → 加 `commands/tmux/<sub>.rs` + 加 `services::session_manager::method()` + 在 §4 同步
-2. **新增 tmux controller 操作**（如未来加 `swap_tmux_pane`）→ 加 `TmuxController::swap_pane` + 加 `SessionManager::swap_tmux_pane` wrapper + 加 `commands/tmux/pane.rs` 的 wrapper + 在 §5 同步
+1. **新增 tmux IPC 命令** → 加 `commands/tmux/<sub>.rs` + 加 `domain::session::SessionManager::method()` + 在 §4 同步
+2. **新增 tmux controller 操作**（如未来加 `swap_tmux_pane`）→ 加 `domain::terminal::TmuxController::swap_pane` + 加 `domain::session::SessionManager::swap_tmux_pane` wrapper + 加 `commands/tmux/pane.rs` 的 wrapper + 在 §5 同步
 3. **新增持久化触发点** → 加 `settings_api::save_*` 调用 + 在 §3 同步
 4. **修改 IPC payload key** → 禁止；如不可避免需 frontend + backend 同步改
-5. **新增 terminal preferences IPC**（如未来）→ 加 `commands/preferences.rs` + 加 `commands/<module>/api（log → shell，attached_tmux → terminal）::save_terminal_preferences`（preferences 持久化属于 settings）
+5. **新增 terminal preferences IPC**（如未来）→ 加 `commands/preferences.rs` + 在该 module 内调 `attached_tmux_servers` 同形态的 typed wrapper（preferences 持久化归 settings module）

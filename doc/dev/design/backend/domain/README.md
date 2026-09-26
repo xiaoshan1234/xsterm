@@ -128,7 +128,7 @@ domain/<name>/
 - `api.rs` 是**唯一对外入口**——其他 module 只 import 这个
 - `state.rs` / `controller.rs` 等持有可变状态——只能通过 `api.rs` 暴露
 - types / rules 是**纯函数 + 纯数据**——可自由 import
-- persistence.rs 只在自己 domain 内（不再有 generic `tauri_plugin_store::save_json_value（直接下沉到归属域）::save_json_value`）——**attached_tmux 在 `domain/terminal`**，**log_config 在 `commands/shell`**
+| persistence.rs 只在自己 domain 内（不再有 generic `infra::tauri::tauri_plugin_store` 抽出的 `save_json_value` 公共层）——**attached_tmux 在 `domain/terminal`**，**log_config 在 `commands/shell`** |
 
 ## 6. domain → commands 边界
 

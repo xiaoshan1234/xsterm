@@ -7,7 +7,7 @@
 ```
 modules/session/
 ├── api.rs        ────►  commands/terminal/api.rs          (create_session dispatcher 路由 tmux)
-├── api.rs        ────►  commands/<module>/api（log → shell，attached_tmux → terminal）.rs          (save_session_config after create)
+├── api.rs        ────►  commands/<target_module>/api (按函数归属：log → shell，attached_tmux → terminal) (save_session_config after create)
 ├── api.rs        ────►  domain/session_manager     (唯一直接调用的 service)
 ├── commands/     ────►  domain/session/backends/local       (LocalSession 构造)
 ├── commands/     ────►  domain/session/backends/ssh         (SshSession 构造)
@@ -23,18 +23,18 @@ modules/session/
 |--|--|--|
 | `terminal_api::create_tmux(state, backend, &tmux)` | `commands/terminal/api.rs` | `create_session` 收到 `SessionConfig::TmuxCc` 时 |
 
-**关键**：session **不**直接 import `services::tmux_session::TmuxController` —— 跨 module 必须走 `commands/terminal/api.rs`。
+**关键**：session **不**直接 import `domain::terminal::TmuxController` —— 跨 module 必须走 `commands/terminal/api.rs`。
 
 ## 3. commands/terminal（attached_tmux 持久化）
 
 | 调用 | 来源 | 何时调 |
 |--|--|--|
-| `save_session_config`（已删除，frontend 直存） | `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal） | `create_local_session` / `create_ssh_session` 创建后，config.should_save 为 true 时 |
+| **（无）** | saved config 由 frontend 直存 sessions.json，不经 backend | session 创建后不触发 backend 持久化；`config.should_save` 由 frontend 读 |
 
 **关键**：
 
-- session **不**直接调用 `tauri_plugin_store` —— 必须经过 settings_api
-- 持久化失败**不**向上传播（best-effort，tracing::warn 即可）
+- session **不**调用 `tauri_plugin_store` —— session config 由 frontend 直存
+- session **不**触发任何 backend 持久化（v6 砍）
 
 ## 4. domain/session_manager
 
@@ -53,8 +53,8 @@ session api **唯一直接调用**的 service。调用面：
 
 **约束**：
 
-- session **不**直接 import `services::session_manager` 的字段（DashMap / AtomicU32 / tmux_controllers）—— 只通过 public methods
-- session **不** import `services::tmux_session::*` —— tmux 操作归 `commands/terminal/`
+| `domain::session::SessionManager` 的字段直读（DashMap / AtomicU32 / tmux_controllers）—— 只通过 public methods
+- session **不** import `domain::terminal::*` —— tmux 操作归 `commands/terminal/`
 
 ## 5. domain/session/backends/local
 
@@ -74,7 +74,7 @@ session api **唯一直接调用**的 service。调用面：
 
 | 调用 | 来源 | 何时 |
 |--|--|--|
-| `services::session_log::start_session_logging(id, &config)` | `domain/session_log.rs` | create_local / create_ssh 之后 |
+| `domain::session::log::start_session_logging(id, &config)` | `domain/session/log.rs` | create_local / create_ssh 之后 |
 
 **约束**：调用失败**不**传播（仅 tracing::warn）—— 日志缺失不应阻断 session 创建。
 
@@ -109,7 +109,7 @@ session 模块**两个角色**：
 
 1. **原子能力提供者**：create_local / create_ssh / write / close / resize 都是单一原子操作 —— 这些**不**调其他 backend app module
 2. **跨 module 协调者**：
-   - create 后持久化 → 调 `commands/<module>/api（log → shell，attached_tmux → terminal）`
+   - create 后**不**触发 backend 持久化（v6 砍 save_session_config）→ saved config 由 frontend `service/persistence/sessions.ts` 直存
    - create_session generic dispatcher 路由 tmux → 调 `commands/terminal/api`
 
 **当前设计要点**：
@@ -118,22 +118,22 @@ session 模块**两个角色**：
 
 | 位置 | 说明 |
 |--|--|
-| `commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl` | `commands/terminal/api.rs::create_tmux` 内部调 `commands/terminal/api::save_attached_tmux_servers` |
-| `commands/session.rs::create_session` 内部直接 `state.create_tmux(...)` | `commands/session/dispatch.rs` 内部调 `commands/terminal/api::create_tmux(state, backend, &tmux)` |
-| `commands/session.rs::upload_image_to_ssh_session` 内部调 `state.upload_image(...)` | 不变（同一 service 调用，无需 api 边界） |
+| ~~`commands/session.rs::create_tmux_session` 内联调 `crate::commands::persistence::save_attached_tmux_servers_impl`~~（v6 已砍：commands::persistence 不存在） | `commands/terminal/api.rs::create_tmux` 内部调 `commands/terminal/api::save_attached_tmux_servers`（attached_tmux 归 terminal） |
+| ~~`commands/session.rs::create_session` 内部直接 `state.create_tmux(...)`~~ | `commands/session/dispatch.rs` 内部调 `commands/terminal/api::create_tmux(state, backend, &tmux)`（跨 module 走 api.rs） |
+| `commands/session.rs::upload_image_to_ssh_session` 内部调 `state.upload_image(...)` | 不变（同一 domain 调用，无需 api 边界） |
 
 ## 12. 不允许的依赖
 
-- ❌ `modules/session/` → `services::tmux_session::*`（必须经过 `commands/terminal/api.rs`）
-- ❌ `modules/session/` → `infrastructure::pty::*`（必须经过 `services::local_session::*`）
-- ❌ `modules/session/` → `commands::persistence::*`（必须经过 `commands/<module>/api.rs`（按函数归属：log × 4 → shell，attached_tmux × 2 → terminal））
-- ❌ `modules/session/` → `services::session_manager` 的字段直读（必须通过 public methods）
-- ❌ `modules/session/` → `commands/shell/api.rs::initialize`（shell 不调 session，session 完全由前端触发）
+| ❌ `commands/session/` → `domain::terminal::*`（必须经过 `commands/terminal/api.rs`）
+| ❌ `commands/session/` → `infrastructure::pty::*`（必须经过 `domain::session::backends::local::*`）
+| ❌ `commands/session/` → `commands::persistence::*`（v6 已砍；持久化归各归属 module：log → shell，attached_tmux → terminal）
+| ❌ `commands/session/` → `domain::session::SessionManager` 的字段直读（必须通过 public methods）
+| ❌ `commands/session/` → `commands/shell/api.rs::initialize`（shell 不调 session，session 完全由前端触发）
 
 ## 13. 依赖变更流程
 
-1. **新增 IPC 命令** → 加 `commands/<domain>.rs` + 加 `services::session_manager::method()` + 在 §4 同步
-2. **新增 service 方法** → 在 `services::session_manager` 加 + 在 §4 同步
+1. **新增 IPC 命令** → 加 `commands/<domain>.rs` + 加 `domain::session::SessionManager::method()` + 在 §4 同步
+2. **新增 service 方法** → 在 `domain::session::SessionManager` 加 + 在 §4 同步
 3. **新增跨 module 调用** → 加 `app/<other>/api::method()` + 在 §2 / §3 同步
 4. **修改 service 字段**（如 SessionManager 新增 DashMap）→ 在 §4 加新 method 文档，**禁止**让 session module 直读字段
 5. **修改 IPC payload key**（如 `data` → `bytes`）→ 禁止；如不可避免，需 frontend + backend 同步改

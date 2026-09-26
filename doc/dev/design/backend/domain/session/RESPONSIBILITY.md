@@ -84,10 +84,10 @@ types + rules + state 三个文件按"数据 vs 算法 vs 状态机"分——同
 
 | domain | 关系 |
 |--|--|
-| `domain/terminal` | session **不直接** import `terminal::controller::*` 字段——通过 `TmuxController::controller_id()` 公开方法 + `Arc<TmuxController>` 引用持有。bug 0009 根因是字段直读，v4 严格走 trait / public method |
-| （已删除——workspace 状态完全 frontend 持有）| 不依赖 |
-| （已删除——见各归属 domain）| session 创建时**不直接**读 settings（settings 是横切，由 `commands/` 编排注入 default 值）|
-| （已删除——v6 砍） | session 不直接 import `tauri_plugin_store`——持久化由 `commands/terminal/api（attached_tmux）` + `commands/shell/api（log_config）` 触发 |
+| `domain::terminal` | session **不直接** import `terminal::controller::*` 字段——通过 `TmuxController::controller_id()` 公开方法 + `Arc<TmuxController>` 引用持有。bug 0009 根因是字段直读，严格走 trait / public method |
+| **（无）** | workspace 状态完全 frontend 持有，session 不依赖 workspace domain |
+| **（无）** | session 创建时**不直接**读 settings（v6 砍 domain/settings；default 值由 frontend `app/settings` 编排后通过 IPC 传入） |
+| **（无）** | session 不直接 import `tauri_plugin_store`——持久化由 `commands/terminal/api::save_attached_tmux_servers`（attached_tmux）+ `commands/shell/api::load_log_config`（log_config）触发 |
 | `infra/*` | session 通过 `infra::pty::PtySystem` / `infra::ssh::SshBackend` trait 调底层——session 持有 trait object，不持有静态方法 |
 
 ## 5. 跟 commands 的关系
@@ -96,10 +96,10 @@ types + rules + state 三个文件按"数据 vs 算法 vs 状态机"分——同
 |--|--|
 | `commands/session` | `SessionManager::create_local` / `create_ssh` / `write` / `close` / `list` / `resize_*` —— 通过 `State<Arc<SessionManager>>` 注入 |
 | `commands/terminal` | `SessionManager::create_tmux` / `attach_tmux` / `create_tmux_pane` / `kill_tmux_pane` / `resize_tmux_pane` / `capture_tmux_pane` / `create_tmux_window` / `kill_tmux_window` / `rename_tmux_window` / `list_attached_tmux_servers` / `detach_tmux_controller` / `close_tmux_controller`（kill server）—— session manager **代理** tmux controller 操作 |
-| （已删除）| session_manager 提供 session 元数据读取 + 创建 |
+| **（无）** | session_manager 提供 session 元数据读取 + 创建 |
 | `commands/shell` | session **不**被 shell 直接调——所有 session 创建由 frontend invoke 触发 |
 
-**关键**：commands 通过 `commands/<module>/api.rs` 的 pure function 调用 domain/session；session manager 不感知 IPC。
+**关键**：commands 通过归属 module 的 `api.rs` pure function 调用 `domain/session`；session manager 不感知 IPC。具体：同 module 内部直接 `commands/<module>/api::*`；跨 module 走 `commands/<target>/api::*`（按函数归属：log → shell，attached_tmux → terminal）。
 
 ## 7. 这个 domain 的"产品语言"术语
 

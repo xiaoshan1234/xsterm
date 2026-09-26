@@ -1,7 +1,7 @@
 # Module · Commands Shell — 对外接口
 
 > **位置**：`src-tauri/src/commands/shell/api.rs`（落地 `src-tauri/src/commands/shell.rs`）
-> **唯一进口**：`use crate::app::modules::shell::api::*;`
+> **唯一进口**：`use crate::commands::shell::api::*;`
 
 ## 1. 对外暴露什么
 
@@ -35,7 +35,7 @@ shell 只调一个其他 module 的 api：
 
 ```rust
 // commands/shell.rs
-use crate::app::modules::settings::api as settings_api;
+use crate::commands::shell::log_config;
 
 pub fn initialize(app: &mut tauri::App) -> Result<(), String> {
     // 1. logging
@@ -67,7 +67,7 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), String> {
 
 ```rust
 // src-tauri/src/lib.rs::run()
-.setup(|app| app::modules::shell::api::initialize(app))
+.setup(|app| commands::shell::api::initialize(app))
 ```
 
 **接缝约束**：

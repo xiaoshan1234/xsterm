@@ -95,7 +95,7 @@ domain/terminal/
 |--|--|
 | `domain/session` | session 持有 `Arc<TmuxController>` 引用 + 调公开方法（`send_keys / resize_pane / capture_pane / detach`）——**禁止**字段直读（bug 0009 防御） |
 | （已删除——workspace 状态完全 frontend 持有）| workspace pane 可指向 tmux pane（`tmux_pane_id: Option<String>` 字段）——workspace 不调 terminal |
-| （已删除——见各归属 domain）| MVP 不调；目标态下 terminal 可能读 settings（如终端默认 preference） |
+| `domain::session::backends::ssh` | terminal 通过 `SessionManager::probe_tmux_session_exists` 间接使用（local probe 不需要 SSH；SSH probe 走 SshBackend） |
 | （已删除——v6 砍） | terminal **直接** import `tauri_plugin_store`——`attached_tmux.json` 由 `domain/terminal::attached_tmux` 内部触发持久化（typed wrapper） |
 | `infra/tmux` | terminal 通过 `infra::tmux::TmuxBackend` trait 调外部 tmux -CC 子进程——terminal 持有 trait object |
 
@@ -103,12 +103,12 @@ domain/terminal/
 
 | commands module | 怎么用 domain/terminal |
 |--|--|
-| `commands/terminal` | frontend 调 `invoke('create_tmux_pane', ...)` → commands/terminal/commands/tmux/pane.rs 调 `domain/session::SessionManager::create_tmux_pane`（session 代理） |
-| `commands/session` | `create_tmux_session` / `attach_tmux_session` 调 `domain/session::SessionManager::create_tmux`（session 内部转给 `TmuxController`） |
-| `commands/shell` | 启动时 `auto_attach_on_startup` —— 通过 `domain/session::SessionManager::auto_attach_on_startup`（session 调 `TmuxController::attach`） |
-| `commands/terminal` | 调 `domain/terminal::api::save_attached_tmux` 持久化 attached tmux 列表 |
+| `commands/terminal` | frontend 调 `invoke('create_tmux_pane', ...)` → commands/terminal/commands/tmux/pane.rs 调 `domain::session::SessionManager::create_tmux_pane`（session 代理） |
+| `commands/session` | `create_tmux_session` / `attach_tmux_session` 调 `domain::session::SessionManager::create_tmux`（session 内部转给 `TmuxController`） |
+| `commands/shell` | 启动时 `auto_attach_on_startup` —— 通过 `domain::session::SessionManager::auto_attach_on_startup`（session 调 `TmuxController::attach`） |
+| `commands/terminal` | 调 `domain::terminal::api::save_attached_tmux` 持久化 attached tmux 列表（attached_tmux 归 terminal 内部子模块） |
 
-**关键**：commands **不直接** import `domain/terminal::*` —— 全部通过 `domain/session::SessionManager` 代理。这是 bug 0009 防御的关键。
+**关键**：commands **不直接** import `domain::terminal::*` —— 全部通过 `domain::session::SessionManager` 代理。这是 bug 0009 防御的关键。
 
 ## 7. 这个 domain 的"产品语言"术语
 

@@ -82,6 +82,14 @@ pub fn encode_binary_frame(session_id: &str, data: &[u8]) -> Vec<u8>;
 pub fn decode_binary_frame(buf: &[u8]) -> Result<(String, Vec<u8>), TauriError>;
 ```
 
+**Wire format**（必须前后端一致）：
+
+```
+[magic: u32 LE = 0xDEADBEEF] [version: u8 = 1] [session_id_len: u8] [session_id: bytes UTF-8] [data_len: u32 LE] [data: bytes]
+```
+
+**关键**：wire format 由 frontend `infra/tauri/events/sessionOutput.ts` 解析——详见 frontend 对应文档的"BinaryFrame wire format 反向引用"一节。任何字段变化必须 frontend + backend 同步改。
+
 ### 2.4 TauriError enum
 
 ```rust
@@ -219,7 +227,7 @@ fn create_local_emits_session_event() {
 2. **新增 BinaryFrame 字段** → 加 `binary_frame.rs` + 同步更新前端解析 + INTERFACE.md §2.3
 3. **新增 TauriError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
 4. **修改 session_output_channel 行为** → ⚠️ breaking——同步更新前端 listener + INTERFACE.md §2.2
-5. **迁移 RealAppBackend 构造** → 加 `tauri_plugin_store::save_json_value（直接下沉到归属域）::init_real_app_backend` + 在 `commands/shell/api.rs::initialize` 调
+5. **迁移 RealAppBackend 构造** → 在 `commands/shell/api.rs::initialize` 内部构造 RealAppBackend（不通过 persistence layer）
 
 ## 7. 错误传播约定
 
