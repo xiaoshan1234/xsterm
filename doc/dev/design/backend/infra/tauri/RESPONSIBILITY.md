@@ -22,7 +22,7 @@ tauri 子模块是 backend 与 **Tauri runtime** 交互的物理适配层——�
 - **不持有 session 状态**——session 状态归 `domain/session/state.rs`
 - **不监听 Tauri 事件**——前端 → backend 事件通过 `app/<module>::commands::*` 处理
 - **不实现命令处理**——Tauri 命令归 `app/<module>/commands/*.rs`
-- **不实现持久化**——持久化归 `domain/persistence/`
+- **不实现持久化**——持久化归 `domain/terminal::attached_tmux`（typed wrapper）+ `commands/shell::log_config`
 
 ## 3. 子结构
 
@@ -250,4 +250,4 @@ grep -rn 'use crate::infrastructure::\(pty\|ssh\|tmux\)' src-tauri/src/infrastru
 2. **新增 BinaryFrame 字段** → 加 `binary_frame.rs` + 同步更新前端解析（`sessionOutputChannel.ts`）+ INTERFACE.md §2.3
 3. **新增 TauriError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.5 + 检查所有 `?` 调用方
 4. **修改 session_output_channel 行为** → ⚠️ breaking——同步更新前端 listener + INTERFACE.md §2.2
-5. **迁移 RealAppBackend 构造到 domain/persistence** → 加 `domain/persistence/api.rs::init_real_app_backend` + 在 `commands/shell/api.rs::initialize` 调
+5. **迁移 RealAppBackend 构造** → 加 `commands/shell/api.rs::initialize` 内部构造 RealAppBackend（不通过 persistence layer）

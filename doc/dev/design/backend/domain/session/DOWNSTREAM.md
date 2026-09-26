@@ -207,7 +207,7 @@ domain/session/
 | `domain/terminal` | ✅ 强依赖（Arc<TmuxController> 引用 + 类型字段） |
 | （已删除——见各归属 domain）| ✅ 弱依赖（仅类型字段） |
 | `domain/cross_cutting`（在 settings 下） | ✅ 弱依赖（仅 CapabilityFlags / SplitDirection） |
-| `domain/persistence` | ❌ 不依赖（持久化由 commands/<target>/api（log → shell，attached_tmux → terminal）触发） |
+| （已删除——v6 砍） | ❌ 不依赖（持久化由 `commands/<target>/api` 触发） |
 | （已删除——workspace 状态完全 frontend 持有）| ❌ 不依赖 |
 | `infra/pty` | ✅ 依赖（PtySystem trait + PtyPair） |
 | `infra/ssh` | ✅ 依赖（SshBackend trait + SshSessionHandle） |
@@ -228,7 +228,7 @@ domain/session/
 ## 13. 不允许的依赖
 
 - ❌ （已删除——workspace 状态完全 frontend 持有，session 不需要跨域引用）
-- ❌ `domain/session/` → `domain/persistence/*`（持久化由 commands 触发）
+- ❌ （已删除——v6 砍）
 - ❌ `domain/session/` → `tauri`（session 不感知 IPC 边界）
 - ❌ `domain/session/` → `tokio::main` / `actix` / `async-std`（session 允许 tokio::process / tokio::io 等具体 API）
 - ❌ `domain/session/backends/*` 之间互相 import（每个 backend 独立）

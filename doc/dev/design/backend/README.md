@@ -12,10 +12,9 @@ src-tauri/src/                                            （语义名）
 │   ├── session/      session lifecycle IPC
 │   ├── terminal/     tmux IPC + attached_tmux 持久化
 │   └── shell/        启动钩子 + log runtime IPC
-├── domain/      业务核心：状态机 + 持久化 + 纯数据 + 算法（合并 service + model，砍掉 settings / workspace）
+├── domain/      业务核心：状态机 + 持久化 + 纯数据 + 算法（合并 service + model，砍掉 settings / workspace / persistence）
 │   ├── session/      SessionManager + 3 backend 实现 + settings 字段 + SplitDirection
-│   ├── terminal/     TmuxController + tmux 协议层
-│   └── persistence/  attached_tmux + log_config 直存 + ReloadHandle 管理
+│   └── terminal/     TmuxController + tmux 协议层 + attached_tmux 持久化
 └── infra/       物理适配（4 子模块按外部资源切）
     ├── pty/          OS PTY 子进程（portable-pty）
     ├── ssh/         SSH 协议（russh）
@@ -25,8 +24,8 @@ src-tauri/src/                                            （语义名）
 
 | 层 | 职责 | 子结构数 | 子结构 |
 |--|--|--|--|
-| `commands/` | Tauri IPC 编排 | 3 module | session / terminal / shell（v5 砍掉 settings——attached_tmux→terminal，log→shell）|
-| `domain/` | 业务核心（状态机 + 类型 + 算法 + 持久化）| 3 domain | session / terminal / persistence（v5 砍掉 settings——类型字段拆到归属 domain）|
+| `commands/` | Tauri IPC 编排 | 3 module | session / terminal / shell（砍掉 settings——attached_tmux→terminal，log→shell）|
+| `domain/` | 业务核心（状态机 + 类型 + 算法 + 持久化）| **2 domain** | session / terminal（v6 砍掉 persistence——attached_tmux 归 terminal，log_config 归 commands/shell runtime）|
 | `infra/` | 物理适配（PTY / SSH / tmux / Tauri）| 4 子模块 | pty / ssh / tmux / tauri |
 
 **与 frontend 的关系**：
@@ -97,8 +96,8 @@ Tauri IPC（边界）
 | domain | 数据 + 状态机 + 算法 + 持久化 |
 |--|--|
 | `domain/session` | SessionManager 中央状态机 + 3 种 backend 实现（local/ssh/tmux_pane）+ session types + settings 字段（CapabilityFlags/SizingMode/DisplayConfig/EnvConfig/SshAuthMethod/SessionLoggingConfig/SplitDirection）+ rules + helpers + constants |
-| `domain/terminal` | TmuxController 状态机 + tmux 协议层 + tmux types |
-| `domain/persistence` | attached_tmux + log_config 直存 backend-only 持久化（含 LogConfig runtime + ReloadHandle 管理，合并自原 domain/settings）|
+| `domain/terminal` | TmuxController 状态机 + tmux 协议层 + tmux types + **attached_tmux 持久化**（v6 合并自原 domain/persistence） |
+| （已删除——v6 砍） | attached_tmux 归 `domain/terminal`、log_config 归 `commands/shell` |
 
 详见 [`domain/README.md`](domain/README.md)。
 
@@ -137,7 +136,6 @@ Tauri IPC（边界）
 | 设计目录 | 现状对应（rust）|
 |--|--|
 | `commands/` | `src-tauri/src/commands/`（已存在 3 module 平铺的拆分版本）|
-| `domain/` | `src-tauri/src/services/` + `src-tauri/src/models/` 合并 |
 | `infra/` | `src-tauri/src/infrastructure/`（不变）|
 
 **目录名沿用 Rust 习惯**——`commands/` / `domain/` / `infrastructure/` 是 Rust 项目常见命名（注：service+model 已合并为 domain）。`commands/<module>/` 子目录按产品功能切。
@@ -189,7 +187,7 @@ frontend 多一个 ui 层是因为有视图（React 组件），backend 没视�
 backend 设计文档里**保留**所有「（未来）」占位——它们标记 MVP 暂未实现但设计已规划的部分：
 
 - （无）workspace 状态完全 frontend 持有，backend 无对应 domain
-- `domain/persistence/migrations/`：schema 升级时的 migration 框架（MVP 单版本无 migration）
+- `tauri-plugin-store` schema migration 框架（MVP 单版本无 migration；attached_tmux/log_config 各域内自行定义）
 - 各类「（未来）」标注的字段、命令、helper
 
 **保留占位的理由**：

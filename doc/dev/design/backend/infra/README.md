@@ -135,9 +135,9 @@ src-tauri/src/infrastructure/
 
 frontend `infra/store` 是 `tauri-plugin-store` 的 wrapper——通过 IPC 调 backend 持久化。
 
-backend **没有** `infra/store` 子模块——`tauri-plugin-store` 由 `domain/persistence/api.rs` 直接持有（**唯一**允许直接 import `tauri_plugin_store` 的 service）。
+backend **没有** `infra/store` 子模块——`tauri-plugin-store` 由 `tauri_plugin_store::save_json_value（直接下沉到归属域）` 直接持有（**唯一**允许直接 import `tauri_plugin_store` 的 service）。
 
-frontend `infra/store` ↔ backend `domain/persistence/` 镜像——两端职责互补：前端 wrapper、后端物理 IO。
+frontend `infra/store` 直存 sessions/groups/settings（frontend-only 配置）；backend **无独立 persistence 域**——attached_tmux 归 `domain/terminal::attached_tmux`，log_config 归 `commands/shell::log_config`。
 
 ### 4.6 frontend `infra/clipboard` 在 backend 不存在
 
@@ -151,7 +151,7 @@ frontend `infra/logger` 是 console forwarder（前端 console → 后端 tracin
 
 backend 等价物是 `crate::logging_setup`（在 `src-tauri/src/logging_setup.rs`）——但它是 **infra-level 工具模块**，**不**在 `src-tauri/src/infrastructure/` 顶层下。理由：
 
-- `logging_setup` 是跨多个 service 的工具（domain/persistence::log_config + domain/session/log 都用）
+- `logging_setup` 是跨多个 module 的工具（`commands/shell::log_config` + `domain/session::log` 都用）
 - 它不是"对单一外部资源的接口"——而是跨层工具
 - backend 设计保持现状：`logging_setup` 在 `src-tauri/src/` 顶层（与 `error.rs / main.rs` 同级）
 

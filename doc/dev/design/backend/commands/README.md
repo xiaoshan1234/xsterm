@@ -141,7 +141,7 @@ pub async fn create_local_session(
                      │  commands/               │
                      │  ──► domain/*           │
                      │  ──► domain/types       │
-                     │  ──► domain/persistence │
+                     │  ──► (无 persistence layer；IO 下沉到归属域) │
                      └─────────────────────────┘
                             │  ▲
    ┌────────────────────────┘  │

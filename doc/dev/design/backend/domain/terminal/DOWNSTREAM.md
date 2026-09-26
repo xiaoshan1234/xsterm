@@ -109,7 +109,7 @@ domain/terminal/
 |--|--|
 | `domain/session` | ✅ 弱依赖（SessionIdSource 类型 + Arc 引用） |
 | （已删除——见各归属 domain）| ✅ 弱依赖（SshAuthMethod 类型字段） |
-| `domain/persistence` | ❌ 不依赖（attached_tmux.json 由 commands/terminal/api 触发） |
+| （已删除——v6 砍） | ❌ 不依赖（attached_tmux.json 由 `domain/terminal::api` 内部触发） |
 | （已删除——workspace 状态完全 frontend 持有）| ❌ 不依赖 |
 | `infra/tmux` | ✅ 依赖（TmuxBackend trait） |
 | `infra/ssh` | ✅ 依赖（SshBackend trait，remote tmux 用） |
@@ -132,7 +132,7 @@ domain/terminal/
 
 ## 10. 不允许的依赖
 
-- ❌ `domain/terminal/` → `domain/persistence/*`（持久化由 commands 触发）
+- ❌ （已删除——v6 砍）
 - ❌ （已删除——workspace 状态完全 frontend 持有，terminal 不需要跨域引用）
 - ❌ `domain/terminal/` → `tauri`（terminal 通过 `AppBackend` trait 调 emit）
 - ❌ `domain/terminal/protocol/` → `tokio` / `std::process` / `std::net`（纯协议层，不依赖 IO）

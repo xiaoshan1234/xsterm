@@ -37,7 +37,7 @@ session domain 是 backend 的**中央 session 状态机**——所有 session�
 
 - **不持有 pane tree / workspace 状态** —— workspace 状态完全 frontend 持有
 - **不持有 settings** —— 归各归属 module（CapabilityFlags / SizingMode / DisplayConfig / EnvConfig / SshAuthMethod / SessionLoggingConfig 等 → session，LogConfig runtime → persistence）
-- **不直接持久化** —— 持久化能力归 `domain/persistence/`；session 不 import `tauri_plugin_store`
+- **不直接持久化** —— 持久化能力由 `domain/terminal::attached_tmux` + `commands/shell::log_config` 提供；session 不 import `tauri_plugin_store`
 - **不实现 tmux 协议** —— tmux 协议归 `domain/terminal/`（3 层架构下归 terminal，不是独立 tmux domain）
 - **不监听 Tauri 事件** —— 事件推送由 controller / bridge 内部完成，session 不直接订阅
 - **不渲染 UI** —— backend 无 UI
@@ -87,7 +87,7 @@ types + rules + state 三个文件按"数据 vs 算法 vs 状态机"分——同
 | `domain/terminal` | session **不直接** import `terminal::controller::*` 字段——通过 `TmuxController::controller_id()` 公开方法 + `Arc<TmuxController>` 引用持有。bug 0009 根因是字段直读，v4 严格走 trait / public method |
 | （已删除——workspace 状态完全 frontend 持有）| 不依赖 |
 | （已删除——见各归属 domain）| session 创建时**不直接**读 settings（settings 是横切，由 `commands/` 编排注入 default 值）|
-| `domain/persistence` | session **不直接** import `tauri_plugin_store`——持久化由 `commands/<module>/api（log → shell，attached_tmux → terminal）` 触发 |
+| （已删除——v6 砍） | session 不直接 import `tauri_plugin_store`——持久化由 `commands/terminal/api（attached_tmux）` + `commands/shell/api（log_config）` 触发 |
 | `infra/*` | session 通过 `infra::pty::PtySystem` / `infra::ssh::SshBackend` trait 调底层——session 持有 trait object，不持有静态方法 |
 
 ## 5. 跟 commands 的关系

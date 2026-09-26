@@ -170,8 +170,8 @@ app  ──►  ui     (UI 通过 useXxxApi() hook 调 app 的业务能力)
 ### Backend（3 层架构，独立）
 
 - [`backend/README.md`](backend/README.md) — backend 顶层
-- [`backend/commands/README.md`](backend/commands/README.md) — Tauri IPC 命令编排（3 module：session / terminal / shell；workspace 状态完全 frontend 持有 backend 无对应 module）
-- [`backend/domain/README.md`](backend/domain/README.md) — 业务核心（3 domain：session / terminal / persistence；workspace 状态完全 frontend 持有 backend 无对应 domain）
+- [`backend/commands/README.md`](backend/commands/README.md) — Tauri IPC 命令编排（3 module：session / terminal / shell；workspace 状态完全 frontend 持有 backend 无对应 module；log_config runtime 归 shell）
+- [`backend/domain/README.md`](backend/domain/README.md) — 业务核心（2 domain：session / terminal；attached_tmux 归 terminal，log_config 归 commands/shell runtime）
 - [`backend/infra/README.md`](backend/infra/README.md) — 外部资源（4 子模块）
 
 ## 4. 阅读顺序建议
@@ -288,15 +288,15 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 | 顶层 README | 1 | `frontend/README.md` |
 | **小计** | **78** | |
 
-### Backend（3 层架构 + 34 份，无 ui 层，无 service/model 分层，无 settings module，无 workspace module）
+### Backend（3 层架构 + 32 份，无 ui 层，无 service/model 分层，砍 settings / workspace / persistence）
 
 | 层 | 文档数 | 详情 |
 |---|---|---|
-| commands | 10 | 3 module（session / terminal / shell）× 3 + 顶层（workspace 状态完全 frontend 持有，backend 无对应 module）|
-| domain | 10 | 3 domain（session / terminal / persistence）× 3 + 顶层（workspace 状态完全 frontend 持有，backend 无对应 domain）|
+| commands | 11 | 3 module（session / terminal / shell）× 3 + 顶层 + 1 子模块（shell/log_config.md）|
+| domain | 8 | 2 domain（session / terminal）× 3 + 顶层 + 1 子模块（terminal/attached_tmux.md）|
 | infra | 13 | 4 子模块（pty / ssh / tmux / tauri）× 3 + 顶层 |
 | 顶层 README | 1 | [`backend/README.md`](backend/README.md) |
-| **小计** | **34** | |
+| **小计** | **32** | |
 
 ### 顶层与合计
 
@@ -304,7 +304,7 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 |---|---|
 | 顶层 README | 1（本文件） |
 | frontend 全部 | 78 |
-| backend 全部 | 34 |
-| **合计** | **113 份** |
+| backend 全部 | 32 |
+| **合计** | **111 份** |
 
 每份子文档固定 3 节：**RESPONSIBILITY**（职责）/ **INTERFACE**（对外接口）/ **DOWNSTREAM**（对下依赖）。

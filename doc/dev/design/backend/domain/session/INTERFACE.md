@@ -423,7 +423,7 @@ pub async fn create_tmux(
 ```rust
 // commands/shell/api.rs
 use crate::domain::session::SessionManager;
-use crate::domain::persistence::load_attached_tmux_typed;
+use crate::domain::terminal::attached_tmux::load_attached_tmux_typed;
 use crate::infrastructure::app_backend::AppBackend;
 
 pub async fn initialize(app: &AppHandle, services: &Services) -> Result<(), String> {

@@ -219,7 +219,7 @@ fn create_local_emits_session_event() {
 2. **新增 BinaryFrame 字段** → 加 `binary_frame.rs` + 同步更新前端解析 + INTERFACE.md §2.3
 3. **新增 TauriError 变体** → 加 `errors.rs` 变体 + INTERFACE.md §2.4 + 检查所有 `?` 调用方
 4. **修改 session_output_channel 行为** → ⚠️ breaking——同步更新前端 listener + INTERFACE.md §2.2
-5. **迁移 RealAppBackend 构造** → 加 `domain/persistence/api.rs::init_real_app_backend` + 在 `commands/shell/api.rs::initialize` 调
+5. **迁移 RealAppBackend 构造** → 加 `tauri_plugin_store::save_json_value（直接下沉到归属域）::init_real_app_backend` + 在 `commands/shell/api.rs::initialize` 调
 
 ## 7. 错误传播约定
 
