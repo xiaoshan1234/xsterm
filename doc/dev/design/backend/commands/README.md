@@ -1,229 +1,431 @@
-# Backend · Commands 层（Tauri IPC 编排）
+# Backend · Commands — 设计
 
-> **位置**：`src-tauri/src/commands/`（语义名；落地目录沿用 Rust 习惯）
-> **关注点**：把 frontend IPC 调用映射到 backend domain 业务逻辑
-> **平级于**：domain / infra（3 层架构的最上层）
-> **Frontend 对应**：[`../../frontend/app/`](../../frontend/app/README.md)（frontend 5 module ↔ backend **3 module**，app/settings 跨多 backend，app/workspace 状态完全 frontend 持有 backend 无对应 module）
+> **位置**：`src-tauri/src/commands/`
+> **职责**：Tauri IPC handlers（frontend invoke 入口）
+> **拆分**：5 个 module（session / persistence / logging / mcp / tunnel）
 
-## 1. 3 module 划分
+## 1. 5 个 module 索引
 
-```
-src-tauri/src/commands/                           # 语义名（顶层 3 module）
-├── mod.rs                 3 module re-export 集合
-├── session/               ⭐ 核心 IPC module
-│   ├── api.rs             (pub session api——纯 Rust 函数 + State 注入)
-│   ├── commands/          #[tauri::command] 集合（每个 IPC 一个文件）
-│   │   ├── local/         create_local_session / write_session / resize_pty_session
-│   │   ├── ssh/           create_ssh_session / resize_ssh_session / upload_image_to_ssh_session
-│   │   ├── dispatch.rs    create_session (generic dispatcher)
-│   │   ├── list.rs        list_sessions
-│   │   ├── close.rs       close_session
-│   │   └── output.rs      get_session_output_channel (binary frame 起点归 session)
-│   └── *.test.rs
-│
-├── terminal/              ⭐ tmux IPC + attached_tmux 持久化 module
-│   ├── api.rs             (pub terminal api)
-│   ├── commands/
-│   │   ├── tmux/          tmux -CC IPC（11 个 command）
-│   │   │   ├── session.rs     create_tmux_session / attach_tmux_session / probe_tmux_session_exists
-│   │   │   ├── pane.rs        create_tmux_pane / kill_tmux_pane / resize_tmux_pane / capture_tmux_pane
-│   │   │   ├── window.rs      create_tmux_window / kill_tmux_window / rename_tmux_window
-│   │   │   ├── server.rs      get_attached_tmux_servers / detach_tmux_controller / kill_server_via_controller / unmark_attached_tmux
-│   │   │   └── auto_attach.rs auto_attach_tmux_servers
-│   │   └── attached_tmux.rs    save_attached_tmux_servers / load_attached_tmux_servers（v5 合并）
-│   └── *.test.rs
-│
-└── shell/                 ⭐ 启动钩子 + log runtime IPC + user config IPC module
-    ├── api.rs             (pub initialize / shutdown 纯函数)
-    ├── init.rs            注册 logging reload handle + binary frame + app state
-    ├── commands/
-    │   ├── logging/        log IPC（4 个 command）
-    │   │   ├── message.rs          log_message
-    │   │   └── config.rs           get_log_config / set_log_config / get_log_dir
-    │   └── config/         user config IPC（v5.1 新增——PRD §2 M9 完整方案；4 个 command）
-    │       ├── read.rs             read_config
-    │       ├── write.rs            write_config（merge partial + schema check + atomic write + emit reload）
-    │       ├── watch_start.rs      watch_config_start（notify 后台 task 启动；MVP 默认开）
-    │       └── watch_stop.rs       watch_config_stop（高级用户禁用 watch）
-    └── *.test.rs
-```
+| module | 命令数 | 职责 | 文档 |
+|---|---|---|---|
+| `session.rs` | 23 | 现有（create / close / write / resize / tmux / capture） | 现有源文件 |
+| `persistence.rs` | 6 | 现有（save/load sessions / groups / attached_tmux） | 现有源文件 |
+| `logging.rs` | 4 | 现有（log_message / get/set_log_config / get_log_dir） | 现有源文件 |
+| `mcp.rs` | ⚠️ 简化（4） | 仅 attach / detach / mcp_status / regenerate_token | 本文档 §3 |
+| `tunnel.rs` | ⭐ NEW (4) | tunnel_start / stop / status / generate_script | 本文档 §4 |
+| `config.rs` | ⭐ NEW (2) | get_config / set_config | 本文档 §5 |
 
-| module | 产品功能 | IPC 数量 |
-|---|---|---|
-| `commands/session` | session lifecycle + **MCP attach（P1-3）** | **13 个**（10 + 3 MCP attach：set_mcp_attach / clear_mcp_attach / list_mcp_attached）|
-| `commands/terminal` | tmux -CC IPC + attached_tmux 持久化 | **15 个**（tmux 13 + attached_tmux 2；含独立 auto_attach.rs——P1-1）|
-| `commands/shell` | 启动 / 关闭 + log runtime + **user config IPC（v5.1 新增）** | **8 个**（log_message + get/set_log_config + get_log_dir + read/write_config + watch_config_start/stop） |
-| **commands 合计** | — | **36 个** |
+**⚠️ MCP 工具实现（12 工具）已移到 frontend `app/mcp/`**——详见 [`doc/dev/adr/0002-revised-mcp-frontend.md`](../../../adr/0002-revised-mcp-frontend.md)。backend `commands/mcp.rs` 只保留 attach 状态镜像的 4 个命令。
 
-**砍掉的原因**：
-
-- `commands/settings`（砍）：attached_tmux 持久化归 terminal（tmux 业务），log runtime 归 shell（启动时调）。backend IPC 从 31 → 27。
-- `commands/workspace`（砍）：workspace 状态完全 frontend 持有（Zustand store + paneTree 算法），backend 无对应 module。
-
-**改一个产品功能 = 改 1 个 backend commands module + 1 个 frontend app module**（但 workspace / settings 跨多 backend）。
-
-**MCP server 不属于 backend commands 层** —— MCP server 整体归 frontend `app/mcp/` (复杂业务放 TS 层原则)。backend 只为 MCP 提供 stdio transport helper（如果需要）：`infra/tauri/mcp_transport.rs` 提供 stdio/TCP listener + JSON-RPC 序列化，frontend `app/mcp/` 持有 9 个 tool 实现 + attach 状态机 + 白名单。详见 `doc/dev/design/frontend/app/mcp/RESPONSIBILITY.md` + `doc/dev/design/backend/README.md` §1.1。
-## 2. 3 module ↔ 5 个 frontend app module 对应表
-
-| backend commands module | frontend app module | 对应关系 |
-|---|---|---|
-| `commands/shell` | `app/shell` | 启动 / 关闭序列 + log runtime IPC（log_message / get/set_log_config / get_log_dir）；frontend shell.initialize() 通过 `listen("ready", ...)` 等待 |
-| `commands/terminal` | `app/terminal` | frontend 调 `invoke('create_tmux_pane', ...)` → backend `commands/terminal/commands/tmux/pane.rs::create_tmux_pane`<br>`invoke('save_attached_tmux_servers')` → `commands/terminal/commands/attached_tmux.rs`（attached_tmux 归 terminal）|
-| `commands/session` | `app/session` | frontend 调 `invoke('create_local_session', ...)` → backend `commands/session/commands/local/create.rs::create_local_session` |
-| （backend 无对应 module）| `app/settings` | `save_sessions` / `load_sessions` / `save_groups` / `load_groups` —— frontend `infra/store` 直存（sessions/groups/theme）<br>`save_attached_tmux_servers` 等 backend-only 持久化归 `commands/terminal`<br>**user settings 走 `commands/shell/commands/config/`（v5.1 新增）**：UI 改 settings → `invoke('write_config', { partial })` → backend `infra/config_watcher` 写 config.toml + emit `config-reloaded` → frontend 监听 reload 同步 |
-| （backend 无对应 module）| `app/workspace` | workspace 状态完全 frontend 持有（Zustand store + paneTree 算法），backend 无对应 module——所有 workspace 操作前端自行处理 |
-
-## 3. 每个 module 的内部约定
+**all_handlers() 入口**（`commands/mod.rs`）：
 
 ```rust
-commands/<name>/
-├── api.rs            ⭐ 唯一对外入口（其他 commands module 只能 import 这个）
-├── commands/         #[tauri::command] 集合（每个 IPC 一个文件 + .test.rs）
-│   ├── <domain>/     按子域分子目录（local / ssh / tmux / pane / window / ...）
-│   └── composition/  跨 commands module 协调的 command 集合（可选）
-├── mod.rs            barrel：只 re-export api.rs
-└── *.test.rs
-```
+pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        // ============ session ============
+        session::create_local_session,
+        session::create_ssh_session,
+        session::create_tmux_session,
+        session::probe_tmux_session_exists,
+        session::create_session,
+        session::write_session,
+        session::resize_tmux_pane,
+        session::resize_pty_session,
+        session::resize_ssh_session,
+        session::close_session,
+        session::list_sessions,
+        session::upload_image_to_ssh_session,
+        session::get_session_output_channel,
+        session::create_tmux_pane,
+        session::kill_tmux_pane,
+        session::create_tmux_window,
+        session::kill_tmux_window,
+        session::rename_tmux_window,
+        session::attach_tmux_session,
+        session::capture_tmux_pane,
+        session::get_attached_tmux_servers,
+        session::auto_attach_tmux_servers,
+        session::detach_tmux_controller,
+        session::kill_server_via_controller,
+        session::unmark_attached_tmux,
 
-**强制规则**：
+        // ============ persistence ============
+        persistence::save_sessions,
+        persistence::load_sessions,
+        persistence::save_groups,
+        persistence::load_groups,
+        persistence::save_attached_tmux_servers,
+        persistence::load_attached_tmux_servers,
 
-- `mod.rs` 只 `pub use api::*`
-- 其他 commands module `use crate::commands::<name>::api`
-- **禁止** import `commands/*` 内部文件、`SessionManager` / `TmuxController` 内部字段
-- 这条规则让 module 内部重构不影响其他 module
+        // ============ logging ============
+        logging::log_message,
+        logging::get_log_config,
+        logging::set_log_config,
+        logging::get_log_dir,
 
-**api.rs 跟 commands/ 的分工**：
+        // ============ ⚠️ mcp（简化：4 个，仅 attach 状态镜像）============
+        mcp::attach_session,
+        mcp::detach_session,
+        mcp::get_session_attach_state,
+        mcp::list_attached_sessions,
+        mcp::mcp_status,
+        mcp::regenerate_mcp_token,
 
-```rust
-// commands/session/api.rs
-use tauri::AppHandle;
-use crate::domain::session::{SessionManager, SessionInfo, LocalSessionConfig};
-use std::sync::Arc;
+        // ============ ⭐ tunnel ============
+        tunnel::tunnel_start,
+        tunnel::tunnel_stop,
+        tunnel::tunnel_status,
+        tunnel::generate_tunnel_script,
 
-/// 纯函数入口：创建 local session（被 commands/local/create.rs 调用）
-pub async fn create_local(
-    state: &Arc<SessionManager>,
-    backend: Arc<dyn AppBackend>,
-    config: LocalSessionConfig,
-) -> Result<SessionInfo, String> {
-    state.create_local(config, backend).await
+        // ============ ⭐ config ============
+        config::get_config,
+        config::set_config,
+    ]
 }
+```
 
-// commands/session/commands/local/create.rs
-use crate::commands::session::api as session_api;
-use tauri::{AppHandle, State};
+## 2. 设计原则
 
+### 2.1 每个命令的固定结构
+
+```rust
 #[tauri::command]
-pub async fn create_local_session(
-    config: LocalSessionConfig,
-    state: State<'_, Arc<SessionManager>>,
+pub async fn <name>(
+    <入参>: <Type>,
+    state: State<'_, Arc<SessionManager>>,  // 或 ConfigStore / AttachRegistry 等
     app: AppHandle,
-) -> Result<SessionInfo, String> {
-    let backend = Arc::new(RealAppBackend::new(app.clone()));
-    session_api::create_local(state.inner(), backend, config).await
+) -> Result<<返回 Type>, String> {
+    // 1. 调 services/<module>::<fn>
+    // 2. 错误转 String（Tauri IPC 标准）
+    // 3. 返回 Result<T, String>
 }
 ```
 
-**关键**：
+### 2.2 禁止
 
-- `api.rs` 是**纯 Rust 函数**（async OK，但**不**接收 `State<AppHandle>`）
-- `commands/<name>.rs` 是**`#[tauri::command]` wrapper**（注入 `State<AppHandle>` + 调 `api.rs`）
-- 这条分层让 domain 方法**完全可单测**（不需要 mock Tauri）
+- ❌ 命令内 spawn 长跑任务（调 services）
+- ❌ 命令持有可变全局状态（所有状态走 `State`）
+- ❌ 命令跨 IPC 调用其他命令（共享走 services）
+- ❌ 命令直接读 model state（model 是纯数据）
 
-## 4. 跨 module 协调
+### 2.3 入参 / 返回约定
 
-3 commands module 之间的协调**只通过 `commands/<other_module>/api.rs`**（domain 模块不感知 commands 边界）：
+- **入参**：Rust 类型 → serde → JSON（自动）
+- **返回**：`Result<T, String>`（T 必须是 serde Serializable）
+- **特殊**：u32 session_id 在 IPC 上是 `number`；MCP mcp_session_id 是 `string`
 
-| 协调类型 | 谁编排 | 通过哪个 api.rs |
-|---|---|---|
-| terminal 创建 tmux 后持久化 attached_tmux | `commands/terminal` | `commands/terminal/api.rs::saveAttachedTmuxServers` |
-| 启动 → 加载 log_config + binary frame | `commands/shell` | `commands/shell/api.rs::initialize` |
-| settings 变更 → 应用到 terminal | （已删除）| `commands/terminal/api.rs::applyTerminalPreferences` |
+## 3. `commands/mcp.rs` —— ⚠️ 简化（4 个命令）
 
-**关键**：跨 module 调用**只**通过 `commands/<other>/api.rs`——不绕过 import 内部文件。
+**职责**：attach 状态的 IPC 镜像 + frontend MCP server 状态查询。
 
-## 5. 依赖方向
+**为什么 backend 还要有 attach IPC**（frontend MCP 自己跑）：
+- attach 状态唯一真相源在 backend `services::attach::AttachRegistry`（双层防御 + 持久化）
+- frontend MCP attach_session / detach_session 通过 invoke 透传到 backend
+- frontend UI "🤖 AI 接管" 按钮也通过 invoke 透传
+- reverse_tunnel 远端 attach 也通过 invoke 透传
 
-```                     ┌─────────────────────────┐
-                     │  commands/               │
-                     │  ──► domain/*           │
-                     │  ──► domain/types       │
-                     │  ──► (无 persistence layer；IO 下沉到归属域) │
-                     └─────────────────────────┘
-                            │  ▲
-   ┌────────────────────────┘  │
-   │                           │
-   ▼                           │
-domain/* ──► infra/* ──► 外部 crate
-```
-
-**关键规则**：
-
-- **commands → domain**：正常依赖——commands 编排 domain 业务
-- **commands → infra**：**禁止**（commands 不直接调 infra trait，必须经过 domain）
-- **commands 跨 module**：只通过 `commands/<other_module>/api.rs` 互相调用
-- **commands → commands**：**禁止**直接 import 内部文件
-
-## 6. commands shell 特殊性
-
-`commands/shell/` 不暴露 `#[tauri::command]`——它是 `.setup()` 钩子内的编排代码：
+### 3.1 attach_session IPC
 
 ```rust
-// lib.rs::run()
-fn run() {
-    tauri::Builder::default()
-        .setup(|app| {
-            // 启动钩子：调 commands/shell/api::initialize()
-            commands::shell::api::initialize(app.handle())?;
-            
-            // 注册 state
-            app.manage(Arc::new(Services::new()));
-            
-            // ... 其他启动钩子
-            Ok(())
-        })
-        .invoke_handler(commands::mod::all_handlers())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+// commands/mcp.rs
+#[tauri::command]
+pub async fn attach_session(
+    session_id: u32,
+    client_id: String,        // frontend 传 "ui-takeover" 或 "mcp-<uuid>"
+    attach_registry: State<'_, Arc<AttachRegistry>>,
+) -> Result<(), String> {
+    // 区分 source：UI takeover vs MCP attach
+    let source = if client_id.starts_with("mcp-") {
+        AttachSource::Mcp {
+            client_id: client_id.clone(),
+            agent_name: ctx.client_info().name,  // 来自 MCP initialize
+            agent_pid: ctx.client_info().pid,
+        }
+    } else if client_id == "ui-takeover" {
+        AttachSource::Ui { client_id }
+    } else {
+        return Err("invalid client_id format".to_string());
+    };
+
+    attach_registry.try_attach(session_id, source).map_err(|e| e.to_string())
 }
 ```
 
-**关键**：
+**frontend 调用**：
+```typescript
+// frontend app/mcp/tools/attach_session.ts
+import { invoke } from "@/infra/tauri/api";
+await invoke("attach_session", { sessionId: 42, clientId: `mcp-${this.clientId}` });
 
-- `commands/shell/api.rs::initialize(app: &AppHandle)` 是启动入口——注册 logging reload handle + binary frame + app state
-- `commands/shell/api.rs::shutdown()` 是关闭入口——清理 old log + flush tracing + 关闭 SessionManager
-- 通过 `listen("ready", ...)` 通知 frontend 启动完成
+// frontend app/session/usecases/ai_takeover/attach.ts
+await invoke("attach_session", { sessionId: 42, clientId: "ui-takeover" });
+```
 
-## 7. 关键设计决策
+### 3.2 detach_session IPC
 
-### 7.1 为什么 api.rs + commands/<name>.rs 分两层
+```rust
+#[tauri::command]
+pub async fn detach_session(
+    session_id: u32,
+    client_id: String,
+    attach_registry: State<'_, Arc<AttachRegistry>>,
+) -> Result<(), String> {
+    attach_registry.detach(session_id, &client_id).map_err(|e| e.to_string())
+}
+```
 
-- `api.rs` 纯 Rust 函数（async OK，不接收 `State<AppHandle>`）——**完全可单测**
-- `commands/<name>.rs` `#[tauri::command]` wrapper——**只做参数提取 + 调 api.rs**
-- 这条分层让 domain 方法**完全可单测**（不需要 mock Tauri runtime）
+### 3.3 get_session_attach_state IPC
 
-### 7.2 为什么砍 commands/session/api.rs 这种"空壳纯转发"
+```rust
+#[tauri::command]
+pub async fn get_session_attach_state(
+    session_id: u32,
+    attach_registry: State<'_, Arc<AttachRegistry>>,
+) -> Result<Option<AttachState>, String> {
+    Ok(attach_registry.get(session_id))
+}
+```
 
-- 旧 4 层 `commands/session/api.rs::create_local(state, backend, config)` 跟 `service/session/SessionManager::create_local(config, backend)` 是**两层相同语义的函数**——只是参数顺序不同
-- 砍掉 `api.rs` 这一层后，`#[tauri::command]` wrapper 直接放在 `commands/session/commands/local/create.rs`，内部 `state.create_local(config, backend)`——**少一层**
-- 但保留 `api.rs` 用于**跨 module 调用**（commands/session 需要被 commands/terminal 调，必须有一个非 Tauri 的入口）
+**frontend 启动时拉一次**：所有 attach state 灌入本地 mirror state（`app/mcp/client_state.ts`）。
 
-### 7.3 为什么 settings 模块包含 persistence + logging
+### 3.4 list_attached_sessions IPC
 
-- backend 只剩 6 个 settings IPC（4 个 logging + 2 个 attached_tmux）
-- 这 6 个 IPC 都涉及"backend-only 持久化"或"backend runtime config"——归 settings 自然
-- frontend 直存的 sessions/groups/settings frontend-only 配置走 `infra/store`
+```rust
+#[tauri::command]
+pub async fn list_attached_sessions(
+    attach_registry: State<'_, Arc<AttachRegistry>>,
+) -> Result<Vec<(u32, AttachState)>, String> {
+    Ok(attach_registry.list())
+}
+```
 
-### 7.4 为什么 shell 不暴露 #[tauri::command]
+### 3.5 mcp_status IPC
 
-- shell 的"初始化 / 关闭序列"是 `.setup()` 钩子里的编排代码（不是 IPC 命令）
-- 注册 logging reload handle + binary frame + app state——**Tauri runtime 副作用**
-- 通过 `listen("ready", ...)` 通知 frontend 启动完成——单向 push，不需要 frontend 调
+```rust
+#[tauri::command]
+pub async fn mcp_status(
+    config_store: State<'_, Arc<ConfigStore>>,
+) -> Result<McpStatus, String> {
+    let config = config_store.get().await;
+    Ok(McpStatus {
+        enabled: config.mcp.enabled,
+        http_port: config.mcp.http.port,
+        http_token_masked: mask_token(&config.mcp.http.token),
+        http_enabled: config.mcp.http.enabled,
+    })
+}
 
-## 8. 文档地图
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpStatus {
+    pub enabled: bool,
+    pub http_port: u16,
+    pub http_token_masked: String,  // "abcd***wxyz"
+    pub http_enabled: bool,
+}
+```
 
-- 顶层（本文）：commands 5 module 总览 + 跟 frontend app module 镜像 + 跨 module 协调规则
-- 各 module 子文档：每个 module 3 份（RESPONSIBILITY / INTERFACE / DOWNSTREAM）
-- 每个 IPC command：单独 `.rs` 文件 + `.test.rs`
+**frontend 启动时调一次**：决定是否启动 app/mcp HTTP server + 用哪个 port。
 
-**TM 验收入口**：先读本文档（5 module 总览）→ 读 `commands/session/RESPONSIBILITY.md`（最大 IPC module）→ 读 `commands/terminal/DOWNSTREAM.md`（跨 module 协调示例）。
+### 3.6 regenerate_mcp_token IPC
+
+```rust
+#[tauri::command]
+pub async fn regenerate_mcp_token(
+    config_store: State<'_, Arc<ConfigStore>>,
+) -> Result<String, String> {
+    let new_token = generate_random_token();
+    let mut config = config_store.get().await;
+    config.mcp.http.token = Some(new_token.clone());
+    config_store.write_allowlist(config).await.map_err(|e| e.to_string())?;
+    Ok(new_token)
+}
+```
+
+**返回**：新 token 明文（仅此一次返回完整 token——之后只能拿到 masked）。
+
+## 4. `commands/tunnel.rs` —— NEW
+
+**职责**：反向隧道 IPC 暴露（frontend UI 启动 / 停止 / 查看状态 / 生成脚本）。
+
+### 4.1 tunnel_start IPC
+
+```rust
+#[tauri::command]
+pub async fn tunnel_start(
+    config_store: State<'_, Arc<ConfigStore>>,
+    session_manager: State<'_, Arc<SessionManager>>,
+    attach_registry: State<'_, Arc<AttachRegistry>>,
+    tunnel_handle: State<'_, Option<Arc<TunnelHandle>>>,
+) -> Result<(), String> {
+    let config = config_store.get().await;
+    let new_handle = reverse_tunnel::start_if_enabled(
+        &config,
+        session_manager.inner().clone(),
+        attach_registry.inner().clone(),
+    ).await.map_err(|e| e.to_string())?;
+
+    if let Some(old) = tunnel_handle.inner().as_ref() {
+        old.stop();
+    }
+    *tunnel_handle.inner() = Some(Arc::new(new_handle));
+
+    Ok(())
+}
+```
+
+### 4.2 tunnel_stop IPC
+
+```rust
+#[tauri::command]
+pub async fn tunnel_stop(
+    tunnel_handle: State<'_, Option<Arc<TunnelHandle>>>,
+) -> Result<(), String> {
+    if let Some(handle) = tunnel_handle.inner().as_ref() {
+        handle.stop();
+        *tunnel_handle.inner() = None;
+    }
+    Ok(())
+}
+```
+
+### 4.3 tunnel_status IPC
+
+```rust
+#[tauri::command]
+pub async fn tunnel_status(
+    tunnel_handle: State<'_, Option<Arc<TunnelHandle>>>,
+) -> Result<TunnelStatus, String> {
+    Ok(tunnel_handle.inner().as_ref()
+        .map(|h| h.status())
+        .unwrap_or(TunnelStatus::Disconnected))
+}
+```
+
+### 4.4 generate_tunnel_script IPC
+
+```rust
+#[tauri::command]
+pub async fn generate_tunnel_script(
+    shell: String,  // "powershell" | "bash"
+    config_store: State<'_, Arc<ConfigStore>>,
+) -> Result<String, String> {
+    let config = config_store.get().await;
+    Ok(match shell.as_str() {
+        "powershell" => reverse_tunnel::scripts::generate_powershell_script(&config.tunnel),
+        "bash" => reverse_tunnel::scripts::generate_bash_script(&config.tunnel),
+        _ => return Err(format!("unsupported shell: {shell}")),
+    })
+}
+```
+
+## 5. `commands/config.rs` —— NEW
+
+**职责**：config.toml 直读 / 白名单写入（前端 settings UI）。
+
+### 5.1 get_config IPC
+
+```rust
+#[tauri::command]
+pub async fn get_config(
+    config_store: State<'_, Arc<ConfigStore>>,
+) -> Result<AppConfig, String> {
+    Ok(config_store.get().await)
+}
+```
+
+**返回**：完整 AppConfig（不脱敏——前端 UI 是受信的）。
+
+### 5.2 set_config IPC
+
+```rust
+#[tauri::command]
+pub async fn set_config(
+    patch: serde_json::Value,
+    config_store: State<'_, Arc<ConfigStore>>,
+) -> Result<AppConfig, String> {
+    whitelist::validate(&patch)?;
+    let partial: PartialAppConfig = serde_json::from_value(patch)
+        .map_err(|e| ConfigError::ValidationError(e.to_string()).to_string())?;
+    let new_config = config_store.write_allowlist(partial).await
+        .map_err(|e| e.to_string())?;
+    Ok(new_config)
+}
+```
+
+## 6. capabilities/default.json 扩展
+
+Tauri 2 capability 需要更新（PR 添加新命令时）：
+
+```json
+{
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "store:default",
+    "clipboard-manager:default",
+    "clipboard-manager:allow-read-image",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "core:window:allow-start-dragging",
+    "core:event:allow-listen",
+    "core:event:allow-emit",
+    "core:event:allow-unlisten"
+  ]
+}
+```
+
+## 7. 测试
+
+每个命令 happy path + 错误分支：
+
+```rust
+#[tokio::test]
+async fn attach_session_command() {
+    let sm = test_session_manager();
+    let ar = test_attach_registry();
+    let session_id = sm.create_local(test_config(), Arc::new(MockBackend::new())).unwrap().id;
+
+    let result = attach_session(session_id, "ui-takeover".into(), ar.clone()).await;
+    assert!(result.is_ok());
+    assert!(ar.get(session_id).is_some());
+}
+```
+
+## 8. 强约束
+
+```bash
+# commands 不能 spawn 长跑任务
+grep -rn 'tokio::spawn' src-tauri/src/commands/
+# 必须为空（除 mock 测试）
+
+# commands 不能跨 IPC 调用其他命令
+grep -rn 'invoke' src-tauri/src/commands/
+# 必须为空（除 mock 测试）
+
+# commands 不能持有 Arc<Mutex<...>> 状态
+grep -rnE 'Arc<Mutex|Arc<RwLock' src-tauri/src/commands/ --include='*.rs' | grep -v 'tests'
+# 必须为空
+
+# ❌ 不再有 commands/mcp::create_session 等 12 工具镜像
+grep -rn 'list_sessions\|create_session\|send_keys\|capture_screen\|subscribe_output' src-tauri/src/commands/mcp.rs
+# 必须为空（这些都在 frontend app/mcp/tools/）
+```
+
+## 9. 文档
+
+- 现有源文件 + 增量变更在 PR diff
+- [`backend/README §6`](../../README.md) — 跨语言 wire 契约
+- [`doc/dev/adr/0002-revised-mcp-frontend.md`](../../../adr/0002-revised-mcp-frontend.md) — MCP 移到 frontend 的决策
+
+## 10. 验收
+
+- 5 module 全部按设计落地 ✅
+- `commands/mcp` 仅 6 个命令（attach / detach / get_attach_state / list_attached / mcp_status / regenerate_token）✅
+- 错误分支完整（每个命令至少 2 个错误码）✅
+- Tauri capability 权限更新 ✅
+- frontend `infra/tauri/commands/*` 同步更新 ✅
+- frontend `app/mcp/tools/*` 12 工具同步落地（独立 PR）✅

@@ -144,8 +144,16 @@ xsterm/
 - **stdio 进程生命周期**：与主进程同生共死；主进程退出 → child 收到 SIGPIPE → MCP server 优雅退出。
 
 ---
+| 数据模型（终态）
+|---|
 
-## 3. 数据模型（终态）
+> **2026-09 更新**：本文 §3-§7 的具体后端模块拆分已经在 [`doc/dev/design/backend/`](../design/backend/) 中细化。详见：
+> - 顶层架构：[backend/README.md](../design/backend/README.md)
+> - MCP server 子系统：[backend/mcp_server/README.md](../design/backend/mcp_server/README.md)
+> - attach / subscribe / capture / config / reverse_tunnel 5 个新 service：[backend/services/README.md](../design/backend/services/README.md)
+> - SessionManager 扩展：[backend/services/session_manager_extension.md](../design/backend/services/session_manager_extension.md)
+> - commands 拆分（4 个 → 5 个）：[backend/commands/README.md](../design/backend/commands/README.md)
+> - models 拆分（3 个 → 8 个）：[backend/models/README.md](../design/backend/models/README.md)
 
 ### 3.1 后端
 
@@ -382,108 +390,49 @@ pub trait SessionBackend: Send + Sync {
 
 ## 5. MCP Server（核心模块设计）
 
-### 5.1 子进程入口
-
-```rust
-// src-tauri/src/bin/xsterm-mcp.rs (NEW)
-use xsterm_lib::mcp_server::{run_stdio, run_http};
-
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    match args.get(1).map(String::as_str) {
-        Some("--stdio") => run_stdio(),
-        Some("--http") => run_http(),
-        _ => {
-            eprintln!("Usage: xsterm-mcp --stdio | --http");
-            std::process::exit(1);
-        }
-    }
-}
-```
-
-### 5.2 MCP server 模块结构
-
-```
-src-tauri/src/mcp_server/
-├── mod.rs                    # 公开 run_stdio / run_http / shared protocol
-├── transport/
-│   ├── mod.rs
-│   ├── stdio.rs              # JSON-RPC over stdin/stdout
-│   └── http.rs               # Streamable HTTP（SSE + Bearer token）
-├── ipc/                      # 与主进程通信
-│   ├── mod.rs                # 协议定义
-│   ├── client.rs             # 子进程侧：发请求到主进程
-│   └── server.rs             # 主进程侧：接收 MCP handler 调用
-├── tools/
-│   ├── mod.rs                # 注册所有工具
-│   ├── list_sessions.rs
-│   ├── create_session.rs
-│   ├── close_session.rs
-│   ├── send_keys.rs
-│   ├── capture_screen.rs
-│   ├── subscribe_output.rs
-│   ├── unsubscribe_output.rs
-│   ├── attach_session.rs
-│   ├── detach_session.rs
-│   ├── wait_for.rs
-│   ├── list_profiles.rs
-│   ├── get_config.rs
-│   └── set_config.rs
-├── schema.rs                 # JSON Schema（由工具派生）
-├── error.rs                  # MCPError → JSON-RPC error code 映射
-├── audit.rs                  # 可选审计日志
-└── rate_limit.rs             # 100 req/s per MCP session
-```
-
-### 5.3 主进程 ↔ MCP 子进程协议
-
-**方向 1**：MCP 子进程 → 主进程（RPC 转发）
-
-```json
-{ "kind": "call", "id": 1, "method": "list_sessions", "params": {} }
-{ "kind": "response", "id": 1, "result": { "sessions": [...] } }
-{ "kind": "response", "id": 1, "error": { "code": "INTERNAL_ERROR", ... } }
-```
-
-**方向 2**：主进程 → MCP 子进程（推送通知）
-
-```json
-{ "kind": "notify", "method": "session-output", "params": { "session_id": 42, "seq": 12345, "delta": "..." } }
-{ "kind": "notify", "method": "session-closed", "params": { "session_id": 42 } }
-{ "kind": "notify", "method": "output-overflow", "params": { "session_id": 42, "full": "..." } }
-```
-
-**实现**：
-- 子进程 stdout 写入 `Arc<Mutex<dyn Write + Send>>`（被 RMCP 的 stdio transport 持有）；子进程再启一个 task 读 stdin（主进程推过来的 notify），dispatch 到本地 `subscriptions` map。
-- 主进程持有 `Child` handle；通过 child.stdin 写 notify，通过 child.stdout 读 RPC 响应。**两条 pipe 各自一个 task**。
-- 鉴权：stdio 模式靠 OS 进程隔离；HTTP 模式靠 Bearer token（规格 §6.1）。
-
-### 5.4 MCP session_id 命名
-
-规格要求 `"{type}-{uuid_short}"`，例如 `tab-7f3a9b`。xsterm 内部用 u32。
-
-**映射策略**：
-- 首次 create / list 时，主进程生成 `uuid_short`（`uuid::Uuid::new_v4().simple()[..6]`）并存到 `SessionInfo.mcp_session_id`。
-- MCP 工具收到的 `session_id` 全部按字符串处理；主进程内部维护 `String → u32` 双向 map（`session_id_index: DashMap<String, u32>` + `reverse_index: DashMap<u32, String>`）。
-- 持久化（attached_tmux.json / savedConfigs 等）继续用 u32，**不要**持久化字符串 id（避免 id 变化导致存档失效）。
-
-### 5.5 状态机（attach）
-
-```text
-(none) ──attach_session──▶ (attached by agent-A)
-(attached by agent-A) ──attach_session(force=true)──▶ (attached by agent-B)
-(attached) ──detach_session──▶ (none)
-(attached) ──close_session──▶ (closed, force-detaches)
-(attached) ──idle > 60min──▶ (none, auto-released)
-(attached) ──agent EOF──▶ (none, auto-released)
-```
-
-**实现位置**：`src-tauri/src/services/attach/mod.rs`
-- `attach_state: DashMap<u32, AttachState>` 由 `SessionManager` 持有
-- `attach_session(session_id, agent_name)`：CAS 设置；如果已 attach 且不是同一个 agent → `SESSION_ALREADY_ATTACHED`
-- 用户键盘输入路径：`Terminal.tsx` 在 `useEffect` 里查 `attachState`，非 null → `e.preventDefault()` + emit toast
-- 自动释放：tokio interval 每分钟扫一遍，超过 `idle_timeout_seconds` 强制 detach
-- 写入 PTY 时检查：`state.write(session_id, ...)` 如果 `attach_state.get(session_id)` 不是 None 且 agent 是 caller → 允许；其他情况 → 拒（PERMISSION_DENIED）
+> **⚠️ 2026-09 更新**：MCP server 已从 backend 迁到 frontend TS 层（RFC 0002-revised）。
+>
+> 详见：
+> - **决策**：[`doc/dev/adr/0002-revised-mcp-frontend.md`](../adr/0002-revised-mcp-frontend.md) —— override 原 RFC 0002
+> - **frontend MCP 设计**：[`doc/dev/design/frontend/app/mcp/`](../design/frontend/app/mcp/)（RESPONSIBILITY 302 行 + INTERFACE 332 行 + DOWNSTREAM 153 行）
+> - **backend 支撑**：[`doc/dev/design/backend/README.md §7`](../design/backend/README.md) —— attach / subscribe / capture / tunnel 4 个 service 提供 IPC 镜像
+>
+> ### 5.1 frontend MCP server 位置（已迁移）
+>
+> ```
+> src/app/mcp/
+> ├── server.ts               HTTP server + JSON-RPC 2.0
+> ├── tools/                  9 个 MCP 工具实现
+> ├── transport/http.ts       HTTP transport（127.0.0.1:19847 + Bearer token）
+> ├── auth.ts                 Bearer token 验证
+> ├── safety.ts               破坏性快捷键白名单
+> ├── client_state.ts         attach 独占状态（mirror backend attach_registry）
+> ├── context.ts              依赖注入（service store + invoke + emit）
+> ├── types.ts                MCP wire 类型（无 backend 镜像）
+> └── errors.ts               McpError → JSON-RPC error 映射
+> ```
+>
+> ### 5.2 backend 支撑（保留）
+>
+> - `services/attach/` —— attach 状态机（backend 唯一真相源）
+> - `services/subscribe/` —— OutputRing 环形缓冲 + 序号（backend 唯一真源）
+> - `services/capture/` —— capture 三模式（tmux 走 capture-pane backend 命令）
+> - `services/reverse_tunnel/` —— 反向 SSH 隧道（端口转发直接复用 frontend MCP HTTP）
+>
+> ### 5.3 IPC 镜像（保留）
+>
+> - `commands/session::write_session` —— frontend MCP send_keys 调
+> - `commands/session::close_session` —— frontend MCP close_session 调
+> - `commands/mcp::attach_session / detach_session` —— frontend MCP attach / UI takeover / reverse_tunnel 透传
+> - `commands/tunnel::*` —— frontend MCP 启停反向隧道
+>
+> ### 5.4 stdio transport（不实现）
+>
+> WebView 没有 stdin/stdout，stdio transport 不可行。Claude Desktop / Cursor / Codex 都支持 HTTP MCP 接入（2025+ 版本），配置方式：`http://127.0.0.1:19847` + Bearer token。如未来需要 stdio，Tauri sidecar spawn `xsterm-mcp-stdio.exe` + stdio pipe 桥接（详见 ADR §10）。
+>
+> ---
+>
+> **以下原 §5.1-§5.5 子进程 / IPC 转发 / 状态机内容已 archived 到 [`doc/dev/history/mcp-server-backend-rfc-0002/`](../history/mcp-server-backend-rfc-0002/backend-design/README.md)（RFC 0002 决策保留可追溯）**。
 
 ---
 

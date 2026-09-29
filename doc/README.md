@@ -20,6 +20,21 @@ doc/
 │   │   ├── 03-development-view.md         源码组织/构建/wire/bridge
 │   │   ├── 04-physical-view.md            部署/capabilities/跨主机路径
 │   │   └── 05-scenarios.md                关键场景把 4 视图串起来
+│   ├── design/                            目标态架构设计（frontend + backend 各 5 层）
+│   │   ├── frontend/                     frontend 5 层架构（app/ui/model/service/infra）
+│   │   │   ├── README.md
+│   │   │   ├── app/                       6 module RESPONSIBILITY/INTERFACE/DOWNSTREAM
+│   │   │   ├── ui/                        5 module 3 docs
+│   │   │   ├── model/                     5+1 domain 3 docs
+│   │   │   ├── service/                   6 domain 3 docs
+│   │   │   └── infra/                     4 submodule 3 docs
+│   │   └── backend/                      backend 4 层 + 1 子系统（mcp_server）
+│   │       ├── README.md                 顶层架构
+│   │       ├── commands/                  5 module 设计（session/persistence/logging/mcp/tunnel）
+│   │       ├── services/                  业务编排（含 attach/subscribe/capture/config/reverse_tunnel 5 个新 module）
+│   │       ├── infrastructure/            平台抽象
+│   │       ├── models/                    8 个 module 类型契约
+│   │       └── mcp_server/                MCP server 子系统（12 工具 + stdio/HTTP transport）
 │   ├── flows/                             代码流程（端到端 path:line + ASCII 流程图）
 │   │   ├── README.md                      命名约定 + 模板
 │   │   └── 01-open-tmux-session.md        打开 tmux session 端到端

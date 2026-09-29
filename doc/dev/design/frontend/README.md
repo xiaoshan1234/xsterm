@@ -212,3 +212,41 @@ grep -rn "box-shadow:" src/components/ --include="*.css"
 ```
 
 违反任何一条不允许 merge。
+
+## 8. 跟 backend 设计的对应
+
+本文档是 frontend 视角。Backend 对应的设计文档在 [`../../backend/README.md`](../../backend/README.md)：
+
+| frontend (本文档) | backend 对应 | 关系 |
+|---|---|---|
+| `app/session` + `service/session` | `commands/session` + `services/session_manager` | 一一映射（IPC 契约） |
+| **`app/mcp` (MCP 协议层)** | **无 mcp_server module** + `services/{attach,subscribe,capture,tunnel}` + `commands/mcp` (仅 4 个 attach 状态镜像) | **MCP server 在 frontend TS 层**——backend 不感知 MCP 协议存在，仅提供 IPC 镜像（RFC 0002-revised） |
+| `app/settings` | `services/config` + `commands/config` | toml 配置 |
+| `app/workspace` (frontend 持有) | `services/session_manager` (backend 不感知) | workspace 是 frontend 状态 |
+| `infra/tauri/commands/*` | `commands/*` (rust `#[tauri::command]`) | IPC 入参 / 返回类型必须一致 |
+| `infra/tauri/events/*` | backend `app.emit("...")` | 事件名 + payload 类型一致 |
+| `model/session/types.ts` | `models/session.rs` | TS interface = Rust struct（serde 派生） |
+| `model/mcp/types.ts` | ~~`models/mcp.rs`~~（删除） | MCP 工具类型**只**在 frontend——backend 无镜像 |
+
+### 8.1 ⚠️ MCP server 位置（RFC 0002-revised）
+
+| 维度 | 旧 RFC 0002 | 新 RFC 0002-revised（当前） |
+|---|---|---|
+| **协议层位置** | backend Rust (`mcp_server/`) | **frontend TS (`app/mcp/`)** |
+| **stdio transport** | 直接（main = MCP server） | ❌ 不实现（WebView 无 stdin/stdout） |
+| **HTTP transport** | 直接 | **直接**（Web API fetch） |
+| **12 工具实现位置** | `mcp_server/tools/*.rs` | `app/mcp/tools/*.ts` |
+| **业务状态** | backend | 不变（backend）——attach / OutputRing / capture / tunnel 仍 backend |
+| **backend ↔ frontend 桥** | mcp_server in-process | IPC：`invoke('write_session')` / `invoke('attach_session')` |
+| **rmcp 依赖** | 加 | 不加（frontend 自研 ~200 行 TS） |
+| **协议升级** | backend rebuild | frontend hot reload |
+
+**backend 必须保留的 4 个 service**（frontend MCP 间接依赖）：
+- `services/attach/` —— attach 状态机（frontend MCP `attach_session` / UI takeover / reverse_tunnel 共享 IPC）
+- `services/subscribe/` —— OutputRing（PTY/SSH/tmux 后端读循环是真源，frontend MCP `subscribe_output` 通过 `listen('session-output')` + 序号管理）
+- `services/capture/` —— capture 三模式（tmux capture-pane 是 backend 命令；text/ansi fallback 走 OutputRing tail）
+- `services/reverse_tunnel/` —— 反向 SSH 隧道（端口转发直接复用 frontend MCP HTTP server）
+
+详见 [`doc/dev/adr/0002-revised-mcp-frontend.md`](../../../adr/0002-revised-mcp-frontend.md)。
+
+**关键约束**：frontend model 类型 ↔ backend model 类型镜像。变更任一边必须同步另一边。
