@@ -68,7 +68,7 @@ use crate::mcp_server::error::McpError;
 pub struct AttachRegistry {
     /// session_id → AttachState（None = 未 attach）
     inner: DashMap<u32, AttachState>,
-    /// idle_timeout 配置（来自 config.toml）
+    /// idle_timeout 配置（来自 settings.json）
     idle_timeout_seconds: Arc<tokio::sync::RwLock<u64>>,
     /// ⭐ emit mcp-attach-changed 事件（前端 banner 监听）
     app: AppHandle,
@@ -554,7 +554,7 @@ grep -rnE 'portable_pty|russh::|TmuxController' src-tauri/src/services/attach/ -
 grep -rn 'rmcp::\|McpServerImpl' src-tauri/src/services/attach/ --include='*.rs'
 # 必须为空（attach 是 backend 内部状态机，不依赖 MCP 协议层）
 
-# attach 不感知 config.toml（除 idle_timeout_seconds 配置）
+# attach 不感知 settings.json（除 idle_timeout_seconds 配置）
 grep -rn 'config_store\|config\.toml' src-tauri/src/services/attach/ --include='*.rs'
 # 必须只出现在 idle_timeout.rs 的 set_idle_timeout_seconds 方法
 ```
@@ -573,4 +573,4 @@ grep -rn 'config_store\|config\.toml' src-tauri/src/services/attach/ --include='
 - 双层防御（前端 + 后端）均独立测试 ✅
 - force_detach 在 close_session 时正确触发 ✅
 - emit mcp-attach-changed 事件被前端 service/session/bridge 正确接收 ✅
-- idle_timeout 默认 3600s（来自 config.toml）；tokio task 60s 扫一次 ✅
+- idle_timeout 默认 3600s（来自 settings.json）；tokio task 60s 扫一次 ✅

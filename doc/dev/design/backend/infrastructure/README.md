@@ -108,7 +108,7 @@ pub trait AppBackend: Send + Sync {
 | 事件名 | emit 时机 | payload |
 |---|---|---|
 | `mcp-attach-changed` | attach / detach | `{ sessionId, clientId, action }` |
-| `config-reloaded` | config.toml reload | `AppConfig` |
+| `config-reloaded` | settings.json reload | `Settings` |
 | `output-overflow` | OutputRing 满 | `{ sessionId, message }` |
 | `tunnel-status-changed` | 反向隧道状态变化 | `TunnelStatus` |
 
@@ -146,7 +146,7 @@ async fn verify_host_key(&self, host: &str, key: &PublicKey) -> Result<(), SshEr
 }
 ```
 
-**联动**：`config.toml [ssh.host_key_verify] = "ask"`（默认）。
+**联动**：`settings.json` (ssh.hostKeyVerify = "ask")（默认）。
 
 ## 6. binary_frame.rs 保留 + 验证
 

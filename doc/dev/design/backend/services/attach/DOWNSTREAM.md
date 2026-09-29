@@ -57,9 +57,9 @@ services/attach/idle_timeout.rs
 | `tokio::time::interval::tick` | `tokio` crate | `idle_timeout` 后台 sweeper |
 | **无** | — | attach 不调任何 `services::*` 或 `commands::*` |
 
-## 6. 跟 config.toml 的关系
+## 6. 跟 settings.json 的关系
 
-attach 的 idle_timeout_seconds 来自 config.toml `[mcp.idle_timeout] seconds`：
+attach 的 idle_timeout_seconds 来自 settings.json `mcp.idleTimeoutSeconds` 字段：
 
 ```rust
 // services/config/mod.rs
@@ -93,7 +93,7 @@ fn on_config_reloaded(new_config: AppConfig) {
 |---|---|---|
 | 创建 | `lib.rs::run()` setup 钩子创建 `Arc<AttachRegistry>` | spawn `idle_timeout` task |
 | 运行 | 状态变化由 `try_attach / detach / force_detach` 触发 | emit `mcp-attach-changed` |
-| 配置更新 | config.toml reload | 调 `set_idle_timeout(new_seconds)` |
+| 配置更新 | settings.json reload | 调 `set_idle_timeout(new_seconds)` |
 | 销毁 | `Drop for AttachRegistry` | idle_timeout task 持 Arc，进程退出时自动清理 |
 
 ## 9. 强制约束（可机械校验）

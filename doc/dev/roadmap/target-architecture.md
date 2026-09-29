@@ -475,8 +475,8 @@ export interface Session {
 
 ### 6.3 主题与快捷键可配
 
-- **主题**：现有 `ThemeContext` + 5 个 ANSI 预设，**新增 shell chrome 主题**（按 design-system.md）；通过 `config.toml [general.theme]` 切换。
-- **快捷键可配**：引入 `src/config/keymap.ts`，把硬编码的快捷键提到 `keymap.toml`，运行时读取。详见 03 §P1-3。
+- **主题**：现有 `ThemeContext` + 5 个 ANSI 预设，**新增 shell chrome 主题**（按 design-system.md）；通过 `settings.json` (theme 字段) 切换。
+- **快捷键可配**：引入 `src/config/keymap.ts`，把硬编码的快捷键提到 `settings.json`（keybindings 字段），运行时读取。详见 03 §P1-3。
 
 ---
 
@@ -599,12 +599,12 @@ pub async fn send_keys(
 
 **终态**：默认 `ask`（首次连接 prompt，accept 后写入 `%APPDATA%\xsterm\ssh\known_hosts`；变更时警告）。规格 §6.1 C2 要求。
 
-**实现**：复用 russh-keys 的 `parse_known_hosts` + 写回。`config.toml [ssh]` 控制行为。
+- **实现**：复用 russh-keys 的 `parse_known_hosts` + 写回。`settings.json` (ssh 字段) 控制行为。
 
 ### 8.4 反向 SSH tunnel
 
 - 默认关闭；UI 明示"暴露 19847 端口到远端"。
-- 远端用户 / 端口白名单（`config.toml [ssh.tunnel.allowed_remote_users]`）。
+- 远端用户 / 端口白名单（`settings.json` 中 tunnel.allowedRemoteUsers 字段）。
 - 文档警告（`docs/security.md`）：暴露给不受信用户的风险。
 
 ---

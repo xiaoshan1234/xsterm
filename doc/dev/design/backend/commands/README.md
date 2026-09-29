@@ -13,7 +13,6 @@
 | `logging.rs` | 4 | 现有（log_message / get/set_log_config / get_log_dir） | 现有源文件 |
 | `mcp.rs` | ⚠️ 简化（4） | 仅 attach / detach / mcp_status / regenerate_token | 本文档 §3 |
 | `tunnel.rs` | ⭐ NEW (4) | tunnel_start / stop / status / generate_script | 本文档 §4 |
-| `config.rs` | ⭐ NEW (2) | get_config / set_config | 本文档 §5 |
 
 **⚠️ MCP 工具实现（12 工具）已移到 frontend `app/mcp/`**——详见 [`doc/dev/adr/0002-revised-mcp-frontend.md`](../../../adr/0002-revised-mcp-frontend.md)。backend `commands/mcp.rs` 只保留 attach 状态镜像的 4 个命令。
 
@@ -77,9 +76,10 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         tunnel::tunnel_status,
         tunnel::generate_tunnel_script,
 
-        // ============ ⭐ config ============
-        config::get_config,
-        config::set_config,
+        // ============ ⭐ persistence 扩展（settings 读写）============
+        persistence::load_settings,
+        persistence::save_settings,
+        persistence::patch_settings,
     ]
 }
 ```
@@ -319,39 +319,13 @@ pub async fn generate_tunnel_script(
 }
 ```
 
-## 5. `commands/config.rs` —— NEW
+## 5. ~~`commands/config.rs`~~ —— ❌ 删除（RFC 0003-revised）
 
-**职责**：config.toml 直读 / 白名单写入（前端 settings UI）。
+JSON 直存不需要独立 `commands/config.rs`——settings 读写由 `commands/persistence.rs` 扩展承载（`load_settings / save_settings / patch_settings`），详见 [`services/config/INTERFACE.md §3.2`](../services/config/INTERFACE.md)。
 
-### 5.1 get_config IPC
-
-```rust
-#[tauri::command]
-pub async fn get_config(
-    config_store: State<'_, Arc<ConfigStore>>,
-) -> Result<AppConfig, String> {
-    Ok(config_store.get().await)
-}
-```
-
-**返回**：完整 AppConfig（不脱敏——前端 UI 是受信的）。
-
-### 5.2 set_config IPC
-
-```rust
-#[tauri::command]
-pub async fn set_config(
-    patch: serde_json::Value,
-    config_store: State<'_, Arc<ConfigStore>>,
-) -> Result<AppConfig, String> {
-    whitelist::validate(&patch)?;
-    let partial: PartialAppConfig = serde_json::from_value(patch)
-        .map_err(|e| ConfigError::ValidationError(e.to_string()).to_string())?;
-    let new_config = config_store.write_allowlist(partial).await
-        .map_err(|e| e.to_string())?;
-    Ok(new_config)
-}
-```
+**删除内容**：
+- ❌ `get_config` IPC（白名单读）—— frontend 直读 store 不需要 IPC 镜像
+- ❌ `set_config` IPC（白名单写）—— JSON 直存不需要白名单
 
 ## 6. capabilities/default.json 扩展
 

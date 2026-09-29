@@ -157,7 +157,7 @@ impl SessionQuota {
 
 详见 [`services/audit.rs`](../audit.md)（未来文档）。
 
-**作用**：可选审计日志（config.toml `[mcp.audit.enabled]`）。记录所有 attach / send_keys / capture_screen 调用，敏感字段 redact（密码 / 私钥路径）。
+**作用**：可选审计日志（settings.json `mcp.audit.enabled` 字段）。记录所有 attach / send_keys / capture_screen 调用，敏感字段 redact（密码 / 私钥路径）。
 
 ```rust
 pub struct AuditLog {

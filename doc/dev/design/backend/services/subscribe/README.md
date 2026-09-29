@@ -367,7 +367,7 @@ services::local_session::create(config, ring, ...)?;
 
 **实际预算**：100 sessions × 10000 行 × 100 字节 = 100MB ✅
 
-**调整**：MVP 默认 `OutputRing::with_capacity(10_000)`；用户可在 config.toml `[terminal.scrollback]` 调。
+**调整**：MVP 默认 `OutputRing::with_capacity(10_000)`；用户可在 settings.json (terminal.scrollback 字段) 调。
 
 ### 8.4 为什么 50ms 批处理而不是 push 即发
 
@@ -376,7 +376,7 @@ services::local_session::create(config, ring, ...)?;
 - 50ms 批处理把零散 entry 打包发送，降低 subscriber 处理压力
 - 延迟 50ms 在 MCP use case 下可接受（人类感知阈值）
 
-**可调**：config.toml `[mcp.subscribe.batch_interval_ms] = 50`
+**可调**：settings.json (mcp.subscribe.batchIntervalMs = 50)
 
 ## 9. 测试策略
 

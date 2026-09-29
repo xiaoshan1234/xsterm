@@ -25,7 +25,7 @@ reverse_tunnel service 是 **PRD §2 M8 远程 AI agent 通过反向 SSH tunnel 
 1. **russh client** — 连用户配置的远端 ssh server
 2. **-R 转发** — 在 SSH session 上 open forward channel，把远端 port 转到 local MCP HTTP port
 3. **指数退避重连** — 隧道断开后 1/2/4/8/16s 重试，最多 5 次
-4. **白名单校验** — 远端用户 / 端口必须在 `config.toml [tunnel.allowed_remote_users]`
+4. **白名单校验** — 远端用户 / 端口必须在 `settings.json` (tunnel.allowedRemoteUsers 字段)
 5. **状态机** — Disconnected / Connecting / Connected / Reconnecting / Failed
 6. **脚本生成** — 给用户生成可手动运行的 ssh -R 命令（PowerShell + bash 双版本）
 
@@ -271,7 +271,7 @@ pub fn generate_bash_script(config: &TunnelConfig) -> String {
 | `mcp_server::transport::http` | 隧道另一端是 local HTTP MCP server |
 | `services/attach` | 远端 agent 通过 tunnel attach 时调 `try_attach(AttachSource::Tunnel)` |
 | `commands/tunnel` | frontend UI 触发 start / stop + 生成脚本 |
-| `services/config` | tunnel.enabled / remote_port / ssh 配置来自 config.toml |
+| `services/config` | tunnel.enabled / remote_port / ssh 配置来自 settings.json |
 
 ## 8. IPC 契约（commands/tunnel.rs）
 
@@ -338,7 +338,7 @@ self.app.emit("tunnel-status-changed", TunnelStatusEvent { ... });
 
 ### 10.1 远端用户白名单
 
-`config.toml [tunnel.allowed_remote_users]` 限制哪些远端用户可以连：
+`settings.json` (tunnel.allowedRemoteUsers 字段) 限制哪些远端用户可以连：
 
 ```rust
 fn validate_remote_users(config: &TunnelConfig) -> Result<(), TunnelError> {
