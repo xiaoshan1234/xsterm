@@ -15,7 +15,8 @@ src-tauri/src/                                            （语义名）
 ├── domain/      业务核心：状态机 + 持久化 + 纯数据 + 算法（合并 service + model，砍掉 settings / workspace / persistence）
 │   ├── session/      SessionManager + 3 backend 实现 + settings 字段 + SplitDirection
 │   └── terminal/     TmuxController + tmux 协议层 + attached_tmux 持久化
-├── infra/       物理适配（4 子模块按外部资源切）
+├── infra/       物理适配（5 子模块按外部资源切）
+│   ├── config_watcher/ 用户配置文件（PRD §2 M9 — TOML + notify watch + schema；v5.1 新增）
 │   ├── pty/          OS PTY 子进程（portable-pty）
 │   ├── ssh/         SSH 协议（russh）
 │   ├── tmux/        tmux 控制模式（外部子进程）
@@ -28,11 +29,11 @@ src-tauri/src/                                            （语义名）
 |--|--|--|--|
 | `commands/` | Tauri IPC 编排 | 3 module | session / terminal / shell |
 | `domain/` | 业务核心（状态机 + 类型 + 算法 + 持久化）| **2 domain** | session / terminal |
-| `infra/` | 物理适配（PTY / SSH / tmux / Tauri）| 4 子模块 | pty / ssh / tmux / tauri |
+| `infra/` | 物理适配（PTY / SSH / tmux / Tauri / config_watcher v5.1）| 5 子模块 | pty / ssh / tmux / tauri / config_watcher |
 
-**与 frontend 的关系**：
+| **与 frontend 的关系**：
 
-- frontend `app/` **6 module** ↔ backend `commands/` **3 module**（workspace 完全 frontend 持有；settings 跨多 backend：attached_tmux → terminal，log_config → shell；**MCP server 归 frontend `app/mcp/`** —— 复杂业务放 TS 层，backend 只暴露 IPC 桥 + stdio transport helper）
+- frontend `app/` **6 module** ↔ backend `commands/` **3 module**（workspace 完全 frontend 持有；settings 跨多 backend：attached_tmux → terminal，log_config → shell + **v5.1 新增 user config.toml 走 infra/config_watcher**；**MCP server 归 frontend `app/mcp/`** —— 复杂业务放 TS 层，backend 只暴露 IPC 桥 + stdio transport helper）
 - frontend `model/` ↔ backend `domain/` 内嵌 types —— **同名镜像**（不同语言：Rust serde vs TS interface）
 - frontend `service/` ↔ backend `domain/` 内嵌 stores —— **职责分叉**：frontend 镜像状态，backend 协议 + 状态机 + 持久化
 - frontend `infra/tauri`（IPC adapter）↔ backend `infra/tauri`（AppBackend + binary_frame）
@@ -83,11 +84,10 @@ Tauri IPC（边界）
 - **infra → 任何**：**禁止**（infra 是最底层物理适配，只依赖外部 crate）
 - **commands 跨 module**：通过 `commands/<other_module>/api.rs` 调用
 
-## 4. ['', '### 4.1 `commands/` — Tauri IPC 编排', '', '3 module 按产品功能切分（v5 砍掉 settings：attached_tmux→terminal，log→shell；**workspace 状态完全 frontend 持有，backend 无对应 module**）：', '', '| module | 产品功能 |', '|---|---|', '| `commands/session` | session lifecycle IPC（create / write / resize / close / list）|', '| `commands/terminal` | tmux -CC IPC + attached_tmux 持久化（v5 合并）|', '| `commands/shell` | 启动钩子（`.setup()` 内编排）+ log runtime IPC（v5 合并 log_message + get/set_log_config + get_log_dir）|', '', '详见 [`commands/README.md`](commands/README.md)。', '', '### 4.2 `domain/` — 业务核心', '', '按产品功能切分（合并原 service + model），每个 domain 内部自由组织 4 类文件：', '', '| 文件类型 | 用途 |', '|--|--|', '| `<domain>/types.rs` | 纯数据 + serde derive（API 序列化 + IPC 序列化）|', '| `<domain>/rules.rs` | 纯算法（不可变 mutation，纯函数）|', '| `<domain>/state.rs` 或 `<domain>/<state_machine>.rs` | 状态机（持有 Arc<Mutex/DashMap>，提供 public method）|', '| `<domain>/persistence.rs` | 持久化 IO（typed wrapper over infra）|', '', '| domain | 数据 + 状态机 + 算法 + 持久化 |', '|--|--|', '| `domain/session` | SessionManager 中央状态机 + 3 种 backend 实现（local/ssh/tmux_pane）+ session types + settings 字段（CapabilityFlags/SizingMode/DisplayConfig/EnvConfig/SshAuthMethod/SessionLoggingConfig/SplitDirection）+ rules + helpers + constants |', '| `domain/terminal` | TmuxController 状态机 + tmux 协议层 + tmux types + **attached_tmux 持久化**（v6 合并自原 domain/persistence） |', '| （已删除——v6 砍） | attached_tmux 归 `domain/terminal`、log_config 归 `commands/shell` |', '', '详见 [`domain/README.md`](domain/README.md)。', '', '### 4.3 `infra/` — 物理适配', '', '按外部资源切分（与 frontend `infra/` 镜像）：', '', '| 子模块 | 外部资源 |', '|--|--|', '| `infra/pty` | OS PTY 子进程（portable-pty）|', '| `infra/ssh` | SSH 协议（russh）|', '| `infra/tmux` | tmux 控制模式（外部子进程）|', '| `infra/tauri` | Tauri runtime（AppBackend + binary_frame）|', '', '详见 [`infra/README.md`](infra/README.md)。', '', '### 4.4 P0-5 占位: config watcher（待 tm/pdm 对齐）', '', 'PRD §2 M9 写明 `%APPDATA%\\xsterm\\config.toml` + `notify` 文件监听 + JSON schema，但 frontend 设计改成 settings.json 直存。这是**架构与 PRD 偏离**，待 tm 拍板。详见 [`../_meta/prd-deviation-P0-5-config.md`](../_meta/prd-deviation-P0-5-config.md)。本轮 audit **未动**这部分设计。', '']
 
 ### 4.1 `commands/` — Tauri IPC 编排
 
-3 module 按产品功能切分（v5 砍掉 settings：attached_tmux→terminal，log→shell；**workspace 状态完全 frontend 持有，backend 无对应 module**）：
+3 module 按产品功能切分（**workspace 状态完全 frontend 持有**，backend 无对应 module；v5 合并 attached_tmux→terminal、log→shell + v5.1 新增 user config IPC → shell/commands/config）：
 
 | module | 产品功能 |
 |---|---|
@@ -122,16 +122,25 @@ Tauri IPC（边界）
 
 | 子模块 | 外部资源 |
 |--|--|
-| `infra/pty` | OS PTY 子进程（portable-pty）|
+| `infra/config_watcher` | 用户配置文件（TOML + notify watch + schema；PRD §2 M9） |
+| `infra/pty` | OS PTY 子进程（portable-pty） |
 | `infra/ssh` | SSH 协议（russh）|
 | `infra/tmux` | tmux 控制模式（外部子进程）|
 | `infra/tauri` | Tauri runtime（AppBackend + binary_frame）|
 
 详见 [`infra/README.md`](infra/README.md)。
 
-### 4.4 P0-5 占位: config watcher（待 tm/pdm 对齐）
+### 4.4 P0-5 已采纳: config.toml + watch + schema 方案
 
-PRD §2 M9 写明 `%APPDATA%\xsterm\config.toml` + `notify` 文件监听 + JSON schema，但 frontend 设计改成 settings.json 直存。这是**架构与 PRD 偏离**，待 tm 拍板。详见 [`../_meta/prd-deviation-P0-5-config.md`](../_meta/prd-deviation-P0-5-config.md)。本轮 audit **未动**这部分设计。
+PRD §2 M9 完整方案已落地为 backend `infra/config_watcher/` 子模块（5 个文件 + RESPONSIBILITY/INTERFACE/DOWNSTREAM 3 份 doc）：
+
+- **config.toml** —— 用户配置文件（TOML 格式），路径 `%APPDATA%\xsterm\config.toml`
+- **watch notify** —— `notify` crate 后台 task 监听 config.toml 改动 → debounce 200ms → 重新 read + schema check → emit `config-reloaded` 事件给 frontend
+- **schema.json** —— 启动期从 `AppConfig` struct（`schemars` derive）自动生成，写到 `%APPDATA%\xsterm\xsterm-schema.json`，供 VS Code 关联智能提示
+
+frontend 不再直存 `settings.json`（之前 v4 设计）——所有 settings 由 backend config.toml 持有，frontend UI 改 settings → 调 `invoke('write_config', { partial })` → backend merge + validate + atomic write + emit reload → frontend 监听 reload → 本地 store 同步。
+
+详见 [`infra/config_watcher/RESPONSIBILITY.md`](infra/config_watcher/RESPONSIBILITY.md)。
 
 ## 5. ['', '| 旧 4 层 | 新 3 层 | 简化理由 |', '|--|--|--|', '| `app/` | `commands/` | app/session/api.rs 是空壳纯转发（`create_local(state, backend, config)` ≈ `SessionManager::create_local(config, backend)`）；删除空壳 |', '| `service/` + `model/` | `domain/` | service/session 既做"中央状态机"又做"3 种 backend 实现"，model/session 既做 types 又做 rules；service 跟 model 边界模糊，合并 |', '| `infra/` | `infra/` | 不变——物理适配层始终正确 |', '', '**文档数变化**：backend 62 份 → ~43 份（**-31%**）。', '', '**代码影响**（仅设计文档，代码后续 PR 跟进）：', '', '- `services/session/manager.rs`（3000+ 行）拆到 `domain/session/` 下按文件分（manager / registry / id / backends/local / backends/ssh / backends/tmux_pane / log / types / rules / errors）', '- `services/tmux/controller/` 拆到 `domain/terminal/` 下按文件分（controller / spawn / commands / io_tasks / registry / sync / id_map / subscriber / types / errors）', '- `services/persistence/{sessions,groups}.rs` 已在前轮砍掉', '- v4 → v5 过渡期曾在 `commands/<module>/api.rs` 抽 IPC handler；v5 后该层已合并入 `commands/<module>.rs` 顶层文件（子目录拆分子 IPC handler 是目标态）', '']
 

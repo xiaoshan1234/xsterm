@@ -25,11 +25,22 @@
 | `infrastructure/binary_frame.rs` | `infrastructure/tauri/binary_frame.rs` | Tauri event binary payload 编解码 |
 | `infrastructure/session_backend.rs` | ❌ **迁出** `infrastructure/` → `domain/session/backends/traits.rs` | domain 抽象，**不是**外部资源 |
 
-## 1. 4 子模块
+## 1. 5 子模块
 
 ```
 src-tauri/src/infrastructure/
-├── mod.rs                re-export 4 子模块
+├── mod.rs                re-export 5 子模块
+│
+├── config_watcher/      ⭐ 外部资源 0:用户配置文件（PRD §2 M9 — TOML + watch + schema）
+│   ├── mod.rs            re-export 6 文件
+│   ├── config.rs         AppConfig struct (serde + schemars derive)
+│   ├── path.rs           %APPDATA% 路径解析
+│   ├── load.rs           启动期 read + schema 校验（拒绝错配置启动）
+│   ├── write.rs          atomic write (tmp + rename)
+│   ├── schema.rs         从 AppConfig 生成 JSON Schema (写给 VS Code)
+│   ├── watch.rs          notify Watcher + debounce 200ms + emit config-reloaded
+│   ├── migration.rs      RFC 0003: store.json → config.toml 迁移
+│   └── errors.rs         ConfigError (thiserror)
 │
 ├── pty/                  ⭐ 外部资源 1:OS PTY 子进程
 │   ├── mod.rs            PtySystem trait + PtyPair + NativePtySystem impl
@@ -62,12 +73,13 @@ src-tauri/src/infrastructure/
     └── errors.rs         TauriError(thiserror)
 ```
 
-## 2. 4 子模块索引
+## 2. 5 子模块索引
 
 每个子模块有 3 份文档：**职责 / 对外接口 / 对下依赖**
 
 | 子模块 | 职责 | 对外接口 | 对下依赖 | 外部资源 |
 |--|--|--|--|--|
+| **config_watcher** | [RESPONSIBILITY](./config_watcher/RESPONSIBILITY.md) | [INTERFACE](./config_watcher/INTERFACE.md) | [DOWNSTREAM](./config_watcher/DOWNSTREAM.md) | 用户配置文件（TOML + watch + schema；PRD §2 M9） |
 | **pty** | [RESPONSIBILITY](./pty/RESPONSIBILITY.md) | [INTERFACE](./pty/INTERFACE.md) | [DOWNSTREAM](./pty/DOWNSTREAM.md) | OS PTY 子进程 |
 | **ssh** | [RESPONSIBILITY](./ssh/RESPONSIBILITY.md) | [INTERFACE](./ssh/INTERFACE.md) | [DOWNSTREAM](./ssh/DOWNSTREAM.md) | SSH 协议（russh） |
 | **tmux** | [RESPONSIBILITY](./tmux/RESPONSIBILITY.md) | [INTERFACE](./tmux/INTERFACE.md) | [DOWNSTREAM](./tmux/DOWNSTREAM.md) | tmux 控制模式（外部子进程） |

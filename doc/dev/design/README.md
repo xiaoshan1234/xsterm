@@ -278,35 +278,35 @@ pane 算法（createLeafPane / createSplitNode / splitPane / closePane / resizeP
 
 5 层架构的**全部设计文档**已就位：
 
-### Frontend（5 顶层目录 + 78 份）
+### Frontend（5 顶层目录 + 81 份）
 
 | 层 | 文档数 | 详情 |
 |---|---|---|
-| app | 19 | 6 module × 3 + 顶层（shell / workspace / terminal / session / settings / mcp） |
-| ui | 19 | 6 module × 3 + 顶层 |
+| app | 20 | 6 module × 3 + 顶层 + ai_takeover.md（shell / workspace / terminal / session / settings / mcp） |
+| ui | 16 | 5 module × 3 + 顶层（shell / workspace / terminal / session / settings；ui/mcp v5 待补） |
 | model | 16 | 5 + cross-cutting × 3 + 顶层 |
 | service | 16 | **5** domain × 3 + 顶层（session / workspace / tmux / settings / persistence） |
 | infra | 13 | 4 子模块 × 3 + 顶层 |
 | 顶层 README | 1 | `frontend/README.md` |
-| **小计** | **84** | |
+| **小计** | **82** | |
 
-### Backend（3 层架构 + 32 份，无 ui 层，无 service/model 分层，砍 settings / workspace / persistence）
+### Backend（3 层架构 + 37 份）
 
 | 层 | 文档数 | 详情 |
 |---|---|---|
-| commands | 11 | 3 module（session / terminal / shell）× 3 + 顶层 + 1 子模块（shell/log_config.md）|
-| domain | 8 | 2 domain（session / terminal）× 3 + 顶层 + 1 子模块（terminal/attached_tmux.md）|
-| infra | 13 | 4 子模块（pty / ssh / tmux / tauri）× 3 + 顶层 |
+| commands | 12 | 3 module（session / terminal / shell）× 3 + 顶层 + 2 子模块（shell/log_config.md, shell/commands/config/RESPONSIBILITY.md v5.1 新增） |
+| domain | 8 | 2 domain（session / terminal）× 3 + 顶层 + 1 子模块（terminal/attached_tmux.md） |
+| infra | 17 | 5 子模块（pty / ssh / tmux / tauri / **config_watcher v5.1 新增**）× 3 + 顶层（config_watcher 3 份 + 旧 4 子 3 份各 12 = 15） |
 | 顶层 README | 1 | [`backend/README.md`](backend/README.md) |
-| **小计** | **32** | |
+| **小计** | **38** | |
 
 ### 顶层与合计
 
 | 来源 | 文档数 |
 |---|---|
 | 顶层 README | 1（本文件） |
-| frontend 全部 | 78 |
-| backend 全部 | 32 |
-| **合计** | **111 份** |
+| frontend 全部 | 82 |
+| backend 全部 | 38 |
+| **合计** | **121 份** |
 
 每份子文档固定 3 节：**RESPONSIBILITY**（职责）/ **INTERFACE**（对外接口）/ **DOWNSTREAM**（对下依赖）。

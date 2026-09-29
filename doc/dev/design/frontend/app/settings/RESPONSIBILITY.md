@@ -1,24 +1,26 @@
 # Module · App Settings — 职责
 
 > **位置**：`src/app/modules/settings/`
-> **用户认知里的位置**：「设置业务」——持久化 + 跨 module 应用
+> **用户认知里的位置**：「设置业务」——UI 编排 + 跨 module 应用
 > **依赖**：所有 module（settings 是横切关注点）
 > **UI 对应**：[`ui/modules/settings/`](../../ui/settings/RESPONSIBILITY.md)
+> **v5.1 改写**：所有 settings 持久化从 `service/persistence/settings.json` 直存改为 `invoke('write_config')` → backend `infra/config_watcher` 持 `config.toml`。详见 [`../../../backend/infra/config_watcher/RESPONSIBILITY.md`](../../../backend/infra/config_watcher/RESPONSIBILITY.md) + [`../service/persistence/RESPONSIBILITY.md §3`](../service/persistence/RESPONSIBILITY.md)。
 
 ## 1. 这个 module 负责什么
 
 settings module 编排"应用配置"的业务：
 
-1. **持久化**——load / save / reset settings 到 `service/persistence`
-2. **跨 module 应用**——settings 字段变更后应用到具体的服务（theme / logger / terminal 等）
-3. **跨 module 广播**——settings 变更通知所有订阅者
-4. **schema 迁移**——settings store 版本升级时迁移老数据
+1. **持久化（v5.1 改写）** —— UI 改 settings → 调 `usePersistenceService().config.write(partial)` → `invoke('write_config', ...)` → backend 写 `config.toml`；不再 frontend 直存 settings.json
+2. **跨 module 应用** —— settings 字段变更后应用到具体的服务（theme / logger / terminal 等）
+3. **跨 module 广播** —— 监听 backend `config-reloaded` 事件 → 通知所有订阅者
+4. **schema 迁移（v5.1 改写）** —— backend `infra/config_watcher/migration.rs` 处理 RFC 0003；frontend 不参与
 
 ## 2. 这个 module **不**负责什么
 
 - **不渲染 UI**——UI 由 `ui/settings/` 负责
 - **不管理 session/workspace 状态**——settings 只影响默认值
-- **不实现 IPC 序列化**——settings 通过 `service/persistence` 间接调 IPC
+- **不直存 settings.json** —— v4 设计已砍；所有 settings 走 backend IPC
+- **不实现 schema migration** —— backend `infra/config_watcher/migration.rs` 处理；frontend 只读 backend 推送的 config
 
 ## 3. 子结构
 
@@ -26,20 +28,25 @@ settings module 编排"应用配置"的业务：
 modules/settings/
 ├── api.ts                            ⭐ 唯一对外入口
 ├── usecases/
-│   ├── load.ts                       loadSettings
-│   ├── save.ts                       saveSettings
-│   ├── reset.ts                      resetSettings
+│   ├── load.ts                       loadSettings（调 usePersistenceService().config.read）
+│   ├── save.ts                       saveSettings（调 usePersistenceService().config.write）
+│   ├── reset.ts                      resetSettings（write 一个空 partial 触发 backend 写默认 AppConfig）
 │   ├── apply/
-│   │   ├── theme.ts                  applyTheme (写入 service/settings 的 theme 字段 + 触发 ui 重渲染)
+│   │   ├── theme.ts                  applyTheme (监听 config-reloaded → 触发 ui 重渲染)
 │   │   ├── logLevel.ts               applyLogLevel → infra/logger
 │   │   ├── terminalPrefs.ts          applyTerminalPreferences → app/terminal
 │   │   └── sidebar.ts                applySidebarConfig → app/workspace
-│   └── migration.ts                  settings schema migration
-├── ipc.ts                            invoke('get_log_config', ...) 等
-├── model.ts                          module 专属类型（如果有）
+│   └── broadcast.ts                  config-reloaded 事件 → 通知订阅者
+├── ipc.ts                            invoke('read_config' / 'write_config') + listen('config-reloaded')
+├── model.ts                          module 专属类型（PartialAppConfig 等，如果有）
 ├── index.ts                          barrel：只 re-export api.ts
 └── *.test.ts
 ```
+
+**v5.1 改写对比**：
+- ❌ ~~`migration.ts`（settings schema migration）~~ → 移到 backend `infra/config_watcher/migration.rs`
+- ❌ ~~`ipc.ts` 调 `invoke('get_log_config', ...)`~~ → log_config 仍然归 backend `commands/shell/log_config` IPC；settings 不直调，settings.apply/logLevel.ts 调 `infra/logger`
+- ➕ `broadcast.ts` 监听 backend `config-reloaded` 事件 → 通知订阅者
 
 ## 4. 用户故事
 

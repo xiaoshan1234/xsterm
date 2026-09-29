@@ -33,13 +33,18 @@ src-tauri/src/commands/                           # 语义名（顶层 3 module�
 │   │   └── attached_tmux.rs    save_attached_tmux_servers / load_attached_tmux_servers（v5 合并）
 │   └── *.test.rs
 │
-└── shell/                 ⭐ 启动钩子 + log runtime IPC module
+└── shell/                 ⭐ 启动钩子 + log runtime IPC + user config IPC module
     ├── api.rs             (pub initialize / shutdown 纯函数)
     ├── init.rs            注册 logging reload handle + binary frame + app state
     ├── commands/
-    │   └── logging/        log IPC（4 个 command）
-    │       ├── message.rs          log_message
-    │       └── config.rs           get_log_config / set_log_config / get_log_dir
+    │   ├── logging/        log IPC（4 个 command）
+    │   │   ├── message.rs          log_message
+    │   │   └── config.rs           get_log_config / set_log_config / get_log_dir
+    │   └── config/         user config IPC（v5.1 新增——PRD §2 M9 完整方案；4 个 command）
+    │       ├── read.rs             read_config
+    │       ├── write.rs            write_config（merge partial + schema check + atomic write + emit reload）
+    │       ├── watch_start.rs      watch_config_start（notify 后台 task 启动；MVP 默认开）
+    │       └── watch_stop.rs       watch_config_stop（高级用户禁用 watch）
     └── *.test.rs
 ```
 
@@ -47,8 +52,8 @@ src-tauri/src/commands/                           # 语义名（顶层 3 module�
 |---|---|---|
 | `commands/session` | session lifecycle | 10 个 |
 | `commands/terminal` | tmux -CC IPC + attached_tmux 持久化 | **13 个**（tmux 11 + attached_tmux 2） |
-| `commands/shell` | 启动 / 关闭 + log runtime | **4 个**（log_message + get/set_log_config + get_log_dir） |
-| **commands 合计** | — | **27 个** |
+| `commands/shell` | 启动 / 关闭 + log runtime + **user config IPC（v5.1 新增）** | **8 个**（log_message + get/set_log_config + get_log_dir + read/write_config + watch_config_start/stop） |
+| **commands 合计** | — | **31 个** |
 
 **砍掉的原因**：
 
@@ -65,7 +70,7 @@ src-tauri/src/commands/                           # 语义名（顶层 3 module�
 | `commands/shell` | `app/shell` | 启动 / 关闭序列 + log runtime IPC（log_message / get/set_log_config / get_log_dir）；frontend shell.initialize() 通过 `listen("ready", ...)` 等待 |
 | `commands/terminal` | `app/terminal` | frontend 调 `invoke('create_tmux_pane', ...)` → backend `commands/terminal/commands/tmux/pane.rs::create_tmux_pane`<br>`invoke('save_attached_tmux_servers')` → `commands/terminal/commands/attached_tmux.rs`（attached_tmux 归 terminal）|
 | `commands/session` | `app/session` | frontend 调 `invoke('create_local_session', ...)` → backend `commands/session/commands/local/create.rs::create_local_session` |
-| （backend 无对应 module）| `app/settings` | `save_sessions` / `load_sessions` / `save_groups` / `load_groups` —— frontend `infra/store` 直存<br>`save_attached_tmux_servers` 等 backend-only 持久化归 `commands/terminal` |
+| （backend 无对应 module）| `app/settings` | `save_sessions` / `load_sessions` / `save_groups` / `load_groups` —— frontend `infra/store` 直存（sessions/groups/theme）<br>`save_attached_tmux_servers` 等 backend-only 持久化归 `commands/terminal`<br>**user settings 走 `commands/shell/commands/config/`（v5.1 新增）**：UI 改 settings → `invoke('write_config', { partial })` → backend `infra/config_watcher` 写 config.toml + emit `config-reloaded` → frontend 监听 reload 同步 |
 | （backend 无对应 module）| `app/workspace` | workspace 状态完全 frontend 持有（Zustand store + paneTree 算法），backend 无对应 module——所有 workspace 操作前端自行处理 |
 
 ## 3. 每个 module 的内部约定
