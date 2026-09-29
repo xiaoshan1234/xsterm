@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/infrastructure/ssh/`
 > **类型**：⭐ 外部资源 — SSH 协议
-> **被使用方**：`domain/session`、`domain/session/log`
+> **被使用方**：`domain/session`（session 生命周期事件点——具体编排归 `commands/session/log.rs`，**P1-5**）
 > **外部依赖**：`russh` crate（ `0.50.0-beta.7`）
 
 ## 1. 这个子模块负责什么
@@ -72,7 +72,7 @@ frontend **没有** `infra/ssh` —— frontend 不直接调 SSH（通过 IPC �
 | 层 | 怎么用 infra/ssh |
 |--|--|
 | `domain/session` | `SessionManager::ssh_backend: Arc<dyn SshBackend>` 字段持有；`create_ssh` 调用 `ssh_backend.connect(config)` |
-| `domain/session/log` | 不直接调 ssh——log message 通过 tracing |
+| `commands/session/log.rs`（**P1-5 上移**） | 不直接调 ssh——session 日志 message 通过 tracing；infra 与 session log 解耦 |
 | `commands/session` | `upload_image_to_ssh_session` IPC handler 内部调 `infra/ssh::upload_file_via_ssh` |
 | `commands/terminal` | `SessionManager::probe_tmux_session_exists`（SSH 路径）间接调 `SshBackend::run_command_capture_stdout` |
 

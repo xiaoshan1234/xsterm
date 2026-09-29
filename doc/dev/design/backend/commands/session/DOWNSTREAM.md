@@ -7,11 +7,11 @@
 ```
 modules/session/
 ├── api.rs        ────►  commands/terminal/api.rs          (create_session dispatcher 路由 tmux)
-├── api.rs        ────►  commands/<target_module>/api (按函数归属：log → shell，attached_tmux → terminal) (save_session_config after create)
+├── api.rs        ────►  commands/<target_module>/api (按函数归属：attached_tmux → terminal；session create 后由本 module commands/log.rs 编排日志——P1-5 上移)
 ├── api.rs        ────►  domain/session_manager     (唯一直接调用的 service)
 ├── commands/     ────►  domain/session/backends/local       (LocalSession 构造)
 ├── commands/     ────►  domain/session/backends/ssh         (SshSession 构造)
-├── commands/     ────►  domain/session_log         (start_session_logging)
+├── commands/log.rs ──► commands/log_config::start_session_logging_session（**P1-5**：本 module 自闭环——不再跨到 commands/shell）
 ├── commands/     ────►  infrastructure/app_backend   (RealAppBackend::new 构造 AppHandle wrapper)
 ├── commands/     ────►  infrastructure/ssh           (upload_file_via_ssh)
 └── api.rs        ────►  domain/session/types::*            (SessionConfig / SessionInfo / 等纯数据类型)
@@ -70,13 +70,16 @@ session api **唯一直接调用**的 service。调用面：
 |--|--|--|
 | `services::ssh_session::create_ssh_session(ssh_backend, config, backend, id)` | `domain/session/backends/ssh/mod.rs` | `commands/ssh/create.rs` |
 
-## 7. domain/session_log
+## 7. commands/session/log.rs（P1-5 上移）
 
-| 调用 | 来源 | 何时 |
+| 调用 | 来源 | 何时调 |
 |--|--|--|
-| `domain::session::log::start_session_logging(id, &config)` | `domain/session/log.rs` | create_local / create_ssh 之后 |
+| `start_session_logging_session(id, &config)` | `commands/session/log.rs`（**P1-5 上移到 commands 层**） | create_local / create_ssh / create_session(tmux) 之后 |
 
-**约束**：调用失败**不**传播（仅 tracing::warn）—— 日志缺失不应阻断 session 创建。
+**约束**：
+- 调用失败**不**传播（仅 tracing::warn）—— 日志缺失不应阻断 session 创建
+- **本 module 自闭环**——不再跨到 `commands/shell` 或 `domain/session::log`（P1-5 归属迁移）
+- domain/session 仅声明 session 生命周期事件点；具体日志文件路径 / format / rolling 策略归 commands/session/log.rs 编排
 
 ## 8. infrastructure
 

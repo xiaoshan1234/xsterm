@@ -56,7 +56,7 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), String>;
 | `commands/session` | shell **不**调 session；session 通过自己的 `#[tauri::command]` 被前端触发 |
 | `commands/terminal` | shell **不**调 terminal；terminal 通过自己的 `#[tauri::command]` 被前端触发 |
 | `commands/shell/log_config`（自模块，v6 合并）| shell.initialize() 内调 `shell_api::load_log_config()`（在 logging 初始化之前） |
-| `domain::session::log` | shell 直接调（属于基础设施） |
+| `commands/session/api.rs::start_session_logging_session` | shell **不直接调**——session create 时由 `commands/session/commands/local/create.rs` / `commands/session/commands/ssh/create.rs` / `commands/session/commands/dispatch.rs` 调（**P1-5**：session 日志编排归 commands/session；domain/session 仅声明事件点） |
 | `infrastructure::tauri::RealAppBackend` | shell 直接 new `RealAppBackend` |
 
 **关键**：shell 不直接 import `domain::session::SessionManager::*`——session_manager 完全由 session/terminal module 通过自己的 api.rs 触发。

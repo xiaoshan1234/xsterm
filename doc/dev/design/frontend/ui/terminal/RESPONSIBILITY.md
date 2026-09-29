@@ -35,7 +35,8 @@ modules/terminal/
 │   ├── TmuxControl.tsx               # tmux session 的 control window 视图
 │   └── TmuxWindowsList.tsx           # tmux session 的 window 列表
 ├── store.ts                          # xterm 实例管理（key 是 sessionId）
-├── model.ts                          # PaneNode / SplitDirection 类型 + 派生
+│                                        # 注:PaneNode / SplitDirection 类型不在本 module 重复定义,
+│                                        # 通过 `import { PaneNode, SplitDirection } from '@/model/workspace/types'` 拿
 ├── index.ts                          # barrel：只 re-export from api.ts
 └── *.test.ts
 ```
@@ -55,6 +56,7 @@ modules/terminal/
 | `workspace` | workspace 通过 `terminal/api.ts` 拿到 `<TerminalPane>` 组件，渲染在自己的 window tab 区域。**terminal 不感知 workspace** |
 | `session` | terminal 订阅 session store 拿到 session 元数据（kind / display config）。**terminal 强依赖 session** |
 | `settings` | terminal 通过 props 接收 `terminalFont`、`terminalFontSize`、`terminalTheme` 等设置。terminal 自己不读 settings store |
+| `model/workspace` | terminal 通过 `import { PaneNode, SplitDirection } from '@/model/workspace/types'` 拿 pane 类型；不重复定义（**P1-4 清理**——本 module 不再独立持有 pane 类型文件） |
 
 ## 6. 这个 module 的"产品语言"术语
 

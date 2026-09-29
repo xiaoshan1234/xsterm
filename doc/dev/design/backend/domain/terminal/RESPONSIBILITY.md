@@ -51,8 +51,8 @@ terminal domain 持有**tmux -CC control mode 子系统的全部逻辑**——ba
 domain/terminal/
 ├── types.rs              # 纯数据 + serde derive：TmuxCcConfig / TmuxSessionInit / TmuxWindowInit / TmuxPaneInit / TmuxControlWindowInit / AttachedTmuxServer
 ├── rules.rs              # 纯 helper：tmux_pane_info() (构造 SessionInfo)
-├── controller/           # TmuxController struct + 共享 helper（`services/tmux/controller/`）
-│   ├── mod.rs            TmuxController struct（状态机主体）
+├── controller/           # TmuxController struct 定义 + impl + 共享 helper（单一文件,无独立状态机文件）
+│   ├── mod.rs            TmuxController struct + 公开方法 impl（状态机主体；字段全部 private —— bug 0009 防御）
 │   ├── spawn.rs          4 个构造函数（spawn_create / spawn_attach / spawn_local / spawn_ssh）
 │   ├── commands.rs       11 个用户面向的 tmux command（send-keys / split-window / kill-pane / ...）
 │   ├── io_tasks.rs       spawn_*_task（reader/writer/stderr/monitor）
@@ -68,17 +68,18 @@ domain/terminal/
 │   ├── events.rs         ProtocolEvent 枚举
 │   ├── parser.rs         parser
 │   └── version.rs        handshake
-├── state.rs              ⭐ 新增：TmuxController 顶层结构（ controller/mod.rs）
-├── api.rs                ⭐ 新增：唯一对外入口（，commands 直接调 controller 内部）
+├── api.rs                ⭐ 唯一对外入口——facade re-export controller 公开方法,供 tests 用 + 跨 module 通过 SessionManager 代理（不直接被 commands 调）
 ├── errors.rs             TmuxError（thiserror）
 └── *.test.rs             29 个 #[tokio::test]
 ```
+
+**关键**：**不引入独立状态机文件** —— `TmuxController` 结构定义 + impl + 共享 helper 全在 `controller/mod.rs`（单一文件）；`api.rs` 只做 facade 转发。避免历史 v5 过度切分的回潮。
 
 ** 文件迁移**：
 
 | 位置 | 位置 |
 |--|--|
-| `services/tmux/controller/mod.rs`（TmuxController struct） | `domain/terminal/state.rs`（独立成文件）+ `controller/mod.rs`（impl） |
+| `services/tmux/controller/mod.rs`（TmuxController struct + impl） | `domain/terminal/controller/mod.rs`（**单一文件,不拆状态机**） |
 | `services/tmux/controller/{spawn,commands,io_tasks,registry,sync,id_map,subscriber}.rs` | `domain/terminal/controller/{...}.rs`（不变） |
 | `services/tmux/dispatch.rs` | `domain/terminal/dispatch.rs`（不变） |
 | `services/tmux/bridge.rs` | `domain/terminal/bridge.rs`（不变） |
@@ -134,13 +135,23 @@ impl TmuxController {
     pub fn detach(&self) -> Result<(), TmuxError>;
     pub fn close(&mut self, kill_server: bool) -> Result<(), TmuxError>;
 
+    // === 字段只读访问器（返回引用，禁止外部 mutation）===
+    /// 按 tmux_pane_id 查 xsterm session_id（frontend pane → backend session 桥）
+    pub fn pane_binding_for(&self, tmux_pane_id: &str) -> Option<u32>;
+    /// 按 tmux_window_id 查 xsterm window_id（frontend window → backend window 桥）
+    pub fn window_binding_for(&self, tmux_window_id: &str) -> Option<u32>;
+    /// 取 attach 初始状态快照（frontend listener 同步 handshake 后 bootstrap 用）
+    pub fn initial_state(&self) -> Option<&TmuxInitialState>;
+
     // 内部字段（bug 0009 直读这些字段——严格禁止）
-    // pane_bindings: HashMap<...> (pub(crate))
-    // window_bindings: HashMap<...> (pub(crate))
-    // initial_state: Option<TmuxInitialState> (pub(crate))
-    // dispatch_task: JoinHandle<()> (pub(crate))
+    // pane_bindings: HashMap<...>  (private)
+    // window_bindings: HashMap<...>  (private)
+    // initial_state: Option<TmuxInitialState>  (private)
+    // dispatch_task: JoinHandle<()>  (private)
 }
 ```
+
+**字段可见性约束（bug 0009 防御，backend/README §10.1 单一事实源）**：`TmuxController` 字段全部 private，外部访问走 `impl TmuxController` 公开方法（`pane_binding_for` / `window_binding_for` / `initial_state` 返回引用，禁止 caller 持有引用期间 mutation）。
 
 **bug 0009 根因**：`SessionManager::create_tmux` 直读 `TmuxController.window_bindings` HashMap。**严格禁止字段直读**——所有跨 domain 访问走公开方法。
 
@@ -161,6 +172,8 @@ dispatch task 通过 `Bridge` 模块 emit 到 Tauri（推给 frontend listener�
 启动时 `auto_attach_on_startup` 读 `attached_tmux.json`，遍历每个 server 调 `attach`——dispatch task 同步握手 + bootstrap pane 读取，然后返回 attach outcome。
 
 **当前路径**：`commands/shell/api.rs::initialize` → `domain/session::SessionManager::auto_attach_on_startup` → `domain/terminal::TmuxController::spawn_attach` → bridge emit events。
+
+**严格遵守 [`../README.md §10.1`](../README.md) 字段直读防御**，本 §8 字段表为内部可见性（private），跨 module 访问必须走 `impl TmuxController` 公开方法（`pane_binding_for` / `window_binding_for` / `initial_state`）。新加字段必须先在 `impl TmuxController` 加公开方法，子文档引用 backend/README §10，不重复抄。
 
 ## 10. 跟 frontend service 的职责分叉
 

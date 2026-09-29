@@ -6,7 +6,7 @@
 
 ```typescript
 app/mcp/
-├── server.ts               ────►  node:child_process (stdio transport); net (TCP listener)
+├── server.ts               ────►  MCP server 跑在 Tauri WebView 内(单二进制,D-β = ADR 0002);stdio transport 通过 `MessageChannel` / postMessage 与 MCP client 通信;TCP transport 必须用浏览器原生 `WebSocket`
 ├── server.ts               ────►  @tauri-apps/api/event (emit Tauri events)
 ├── tools/list_sessions.ts  ────►  service/session/store (读 session metadata)
 ├── tools/create_session.ts ────►  invoke('create_session') → commands/session/api
@@ -33,8 +33,7 @@ app/mcp/
 | `@tauri-apps/api/core` | `invoke()` 调 backend IPC（write_session / create_session / close_session / capture_tmux_pane 等） |
 | `@tauri-apps/api/event` | `listen()` 接收 backend 推过来的 session-output 事件 |
 | `@tauri-apps/api/event` | `emit()` 通知 frontend UI（attach-changed 触发 banner） |
-| `node:child_process` | stdio transport 启动子进程（如果选 MCP SDK 子进程模式） |
-| `node:net` | TCP transport 监听 127.0.0.1 |
+| `WebSocket` (浏览器原生) | TCP transport 通过浏览器原生 WebSocket 通信（无 Node API） |
 
 ## 3. 跟 backend module 的依赖
 
@@ -50,7 +49,7 @@ app/mcp/
 **关键**：
 - MCP **不**直接 import backend domain——所有 backend 调用都通过 `invoke()`
 - MCP **不**绕过 `service/session` store 直读 session state
-- MCP server panic isolation 由 frontend try/catch + 重连机制承担（Node EventEmitter）
+- MCP server panic isolation 由 frontend try/catch + `window.addEventListener('error')` + 重连机制承担
 
 ## 4. 跨层依赖规则
 
@@ -142,7 +141,7 @@ grep -rn 'saveAttachedTmux\|attached_tmux\.json' src/app/modules/mcp/
 - **TCP 鉴权必须 127.0.0.1 + token**——禁止监听 `0.0.0.0` 或省略 token
 - **send_keys 破坏性快捷键默认拒绝**——白名单之外都拒
 - **AI attach 独占**——MCP 工具 set `attached_by_mcp` 后，user 键盘被屏蔽——detach_session / 释放口令 / UI 按钮三选一才能解除
-- **panic isolation**——MCP server panic 不影响 UI,但 panic 信息要 redact（不能泄露 ssh password 等敏感字段）
+- **panic isolation**——MCP server panic 不影响 UI,通过 `window.addEventListener('error')` + try/catch + 重连机制承载,panic 信息要 redact（不能泄露 ssh password 等敏感字段）
 
 ## 11. 不允许的依赖
 

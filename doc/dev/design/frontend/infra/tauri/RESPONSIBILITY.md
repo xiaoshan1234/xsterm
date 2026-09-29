@@ -78,6 +78,7 @@ infra/tauri/
 |---|---|
 | `service/session` | import `infra/tauri/repositories/sessions.ts` 实现 SessionRepository |
 | `service/workspace` | import `infra/tauri/repositories/workspace.ts` |
+| `service/persistence.config` | **P2-5 例外**——`config` 子模块直接调 `invoke('read_config' / 'write_config')`，不走 Repository 抽象（backend 直连 IPC；与 `infra/tauri/commands/persistence.ts` 中的 sessions/groups 直存分支并列） |
 | `app/*` | **禁止**——app 通过 service 间接调 |
 | `ui/*` | **禁止**——ui 通过 service 间接调 |
 
@@ -122,7 +123,11 @@ export const sessionEventBus = {
 
 **修改流程**：任何字段变化（magic / version / session_id 编码 / data 编码）必须 frontend + backend 同步更新，否则 binary frame 解析失败导致 silent data loss。
 
-## 9. Repository 实现的契约
+## 9. 设计契约（Repository + commands vs events 分离）
+
+> **P2-1 重排**——本节合并原 §9 "Repository 契约" + §9 "commands vs events 分离" 两个子标题，统一为 §9 的子节。
+
+### 9.1 Repository 实现的契约
 
 每个 repository.ts 严格实现 model/<domain>/repository.ts 的接口：
 
@@ -149,12 +154,14 @@ export const sessionRepository: SessionRepository = {
 
 **这条契约保证 service 拿到的是 model 类型**——不会暴露 backend IPC 细节。
 
-## 9. 关键设计：commands vs events 分离
+### 9.2 commands vs events 分离
 
 - `commands/` — **出站**（frontend → backend）—— `invoke()`
 - `events/` — **入站**（backend → frontend）—— `listen()`
 
 这条分离让 frontend 代码读起来"出口走 commands、入口走 events"——清楚区分请求方向。
+
+**`service/persistence.config` 例外（P2-5）**：config 子模块直接调 `invoke('read_config' / 'write_config')` 不走 Repository 抽象——因为 settings 走 backend config.toml 直连 IPC，不在 generic Repository 接口设计范围内；详见 §6 关系表。
 
 ## 10. 子模块的"产品语言"术语
 

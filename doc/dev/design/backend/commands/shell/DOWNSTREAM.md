@@ -19,7 +19,7 @@ modules/shell/
 |--|--|--|
 | `commands/shell/log_config::load_log_config(app_handle)` | 本 module 子模块（v6 合并） | `initialize()` 步骤 3，启动 rolling writer 之前 |
 
-**关键**：shell 不直接 import `domain::session::log` 或 `domain::session::types::LoggingConfig`——统一走 `shell::log_config` 入口。
+**关键**：shell 不直接 import `commands/session/log::*`（**P1-5 之后**）——session 日志编排已归 `commands/session/log.rs`，shell 仅管全局 runtime logging；session 创建后的日志走 session module 自闭环。
 
 ## 3. logging_setup
 

@@ -7,7 +7,7 @@
 
 ## 1. 这个 module 负责什么
 
-session module 编排 backend **session 全生命周期的 IPC 命令**——10 个 `#[tauri::command]`：
+session module 编排 backend **session 全生命周期的 IPC 命令**——**13 个 `#[tauri::command]`**（10 + 3 MCP attach 系列）：
 
 1. **create_local_session** —— 创建本地 PTY session
 2. **create_ssh_session** —— 创建 SSH session
@@ -19,8 +19,11 @@ session module 编排 backend **session 全生命周期的 IPC 命令**——10 
 8. **resize_ssh_session** —— resize SSH channel
 9. **upload_image_to_ssh_session** —— 通过 SCP 上传图片到 SSH 服务器
 10. **get_session_output_channel** —— 获取 binary output channel（Perf 001）
+11. **`set_mcp_attach`** —— MCP attach 状态登记（session_id + client_id）
+12. **`clear_mcp_attach`** —— MCP attach 释放
+13. **`list_mcp_attached`** —— 列当前被 MCP attach 的 session（给 `list_sessions` 拼 `attached_by_mcp` 字段）
 
-**合计**：10 个 `#[tauri::command]`——15 个 tmux 相关命令在 `commands/terminal/`。
+**合计**：10 + 3 = **13 个 `#[tauri::command]`**——15 个 tmux 相关命令在 `commands/terminal/`。
 
 ## 2. 这个 module **不**负责什么
 
@@ -49,7 +52,9 @@ modules/session/
 │   ├── write.rs                    write_session (含 paste 管线)
 │   ├── close.rs                    close_session
 │   ├── list.rs                     list_sessions
-│   └── output.rs                   get_session_output_channel
+│   ├── output.rs                   get_session_output_channel
+│   ├── attach.rs                   set_mcp_attach / clear_mcp_attach / list_mcp_attached（MCP AI attach 注册表 IPC）
+│   └── log.rs                      start_session_logging_session（**P1-5 上移到 commands 层**——具体编排归 commands；领域层只声明事件点）
 ├── model.rs                        module 专属类型（MAX_WRITE_PAYLOAD_BYTES 常量等）
 └── mod.rs                          re-export api.rs
 ```
@@ -70,7 +75,8 @@ modules/session/
 | `commands/shell` | shell 不直接调 session；session 完全由前端 `invoke()` 触发 |
 | **（无 backend module）** | workspace 状态完全 frontend 持有，session 不调 backend |
 | `domain::session::SessionManager` | session api **唯一**直接调用的 domain —— 通过 `state.method()` 调用 |
-| `domain::session::log` | session create 时调 `start_session_logging(id, &config)` 启动日志 |
+| `domain::session::mcp_attachments` | **新增字段**——`DashMap<u32, String>` 注册表（session_id → mcp client_id），由 `commands/session/commands/attach.rs` 的 3 个 IPC 维护 |
+| `commands/session/log.rs::start_session_logging_session` | **P1-5 上移**——session create 时由本 module 的 `commands/log.rs` 调（具体日志编排归 commands/session；domain/session 仅声明事件点） |
 | `domain::session::backends::local` | session.create_local 委托给 `domain/session/backends/local/mod.rs::create_local_session` |
 | `domain::session::backends::ssh` | session.create_ssh 委托给 `domain/session/backends/ssh/mod.rs::create_ssh_session` |
 | `infrastructure::tauri::RealAppBackend` | 每个 session create 都构造 `RealAppBackend::new(app)`（注入 Tauri AppHandle） |

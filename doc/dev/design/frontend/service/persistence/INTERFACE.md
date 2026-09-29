@@ -7,25 +7,35 @@
 
 ```typescript
 export interface PersistenceService {
-  // ============ 单 key 读写 ============
+  // ============ 单 key 读写（用于 sessions/groups/theme 直存） ============
   get<T>(key: string): Promise<T | null>;
   set<T>(key: string, value: T): Promise<void>;
   delete(key: string): Promise<void>;
   has(key: string): Promise<boolean>;
-
-  // ============ 批量 ============
   getMany<T>(keys: ReadonlyArray<string>): Promise<Record<string, T | null>>;
   setMany(entries: Record<string, unknown>): Promise<void>;
 
-  // ============ 同步（不常用） ============
   /** 阻塞等待当前所有写完成 */
   flush(): Promise<void>;
 
-  // ============ Migration ============
   /** 注册 schema migration（启动时调） */
   registerMigration(migration: Migration): void;
   /** 执行所有 migration（启动时调一次） */
   runMigrations(): Promise<void>;
+
+  // ============ v5.1 新增:config 子模块（settings 走 backend config.toml）============
+  /**
+   * settings 改写的唯一通道 —— backend config.toml 直连 IPC，不走 Repository 抽象
+   * 详见 doc/dev/design/backend/infra/config_watcher/RESPONSIBILITY.md
+   */
+  config: {
+    /** 读当前 AppConfig（backend state 持有；启动期 + 任意时刻调用） */
+    read(): Promise<AppConfig>;
+    /** 部分改写 AppConfig —— backend merge + validate + atomic write + emit config-reloaded */
+    write(partial: PartialAppConfig): Promise<AppConfig>;
+    /** 监听 config-reloaded 事件；返回 unsubscribe */
+    onReloaded(cb: (config: AppConfig) => void): () => void;
+  };
 }
 
 export interface Migration {
@@ -34,6 +44,17 @@ export interface Migration {
   storeKey: string;
   migrate: (oldValue: unknown) => unknown;
 }
+
+export interface AppConfig {
+  keybindings: KeybindingsConfig;
+  theme: ThemeConfig;
+  log: LogConfig;
+  terminal: TerminalPreferences;
+  sidebar: SidebarConfig;
+  // ... 详见 doc/pdm/prd.md §2 M9
+}
+
+export type PartialAppConfig = Partial<AppConfig>;
 ```
 
 ## 2. 关键设计
@@ -62,22 +83,49 @@ export interface Migration {
 ## 4. 接缝契约
 
 ```
-// app/settings/usecases/load.ts
+// app/settings/usecases/load.ts —— v5.1:settings 走 config 子模块
 import { usePersistenceService } from "@/service/persistence/api";
 
 const persistence = usePersistenceService();
-const settingsJson = await persistence.get<Settings>("settings");
+const config = await persistence.config.read();
+// ↑ 不再调 persistence.get<Settings>("settings"); 旧 settings.json 已砍
 ```
 
 ```
-// app/shell/usecases/initialize.ts（启动时）
+// app/settings/usecases/updateSetting.ts —— v5.1:唯一改 settings 通道
+import { usePersistenceService } from "@/service/persistence/api";
+
+const persistence = usePersistenceService();
+const newConfig = await persistence.config.write({
+  keybindings: { ...current.keybindings, newKey: "ctrl+x" },
+});
+// ↑ backend merge + validate + atomic write + emit config-reloaded
+//   不再调 persistence.set("settings", {...});旧 settings.json 直存已删
+```
+
+```
+// app/settings/usecases/watchConfig.ts —— v5.1:监听 reload
+import { usePersistenceService } from "@/service/persistence/api";
+
+const persistence = usePersistenceService();
+const off = persistence.config.onReloaded((newConfig) => {
+  // 本地 store 同步
+  settingsStore.setState(newConfig);
+});
+
+// 卸载时 off()
+```
+
+```
+// app/shell/usecases/initialize.ts —— migration 现在只针对 sessions/groups/theme 直存文件
+// settings migration 已砍 —— 改由 backend config_watcher/migration 承担 (RFC 0003)
 const persistence = usePersistenceService();
 
 persistence.registerMigration({
   fromVersion: 1,
   toVersion: 2,
-  storeKey: "settings",
-  migrate: (v1) => ({ ...v1, terminalFontSize: 14 }),  // 加默认字段
+  storeKey: "sessions",
+  migrate: (v1) => ({ ...v1, sshAuthMethod: "key" }),  // sessions schema 升级
 });
 
 await persistence.runMigrations();

@@ -13,7 +13,7 @@ terminal module 编排 backend **tmux -CC 子系统的全部 IPC**——15 个 `
    - `create_tmux_session` —— 创建 tmux -CC controller
    - `attach_tmux_session` —— attach 到已存在 tmux server
    - `probe_tmux_session_exists` —— 探测 server 是否存在
-   - `auto_attach_tmux_servers` —— 启动时自动 attach 持久化列表
+   - `auto_attach_tmux_servers` —— 启动时自动 attach 持久化列表（**独立成 `commands/tmux/auto_attach.rs`**——不在 `session.rs` 内）
 
 2. **tmux pane 操作** (4)
    - `create_tmux_pane` —— `split-window`
@@ -47,17 +47,18 @@ terminal module 编排 backend **tmux -CC 子系统的全部 IPC**——15 个 `
 
 ## 3. 子结构
 
-落地到 `src-tauri/src/commands/terminal.rs`（顶层） + `src-tauri/src/commands/terminal/` 子目录：
+**合计:15 个 IPC,4 个子文件(session / pane / window / server) + 1 个独立 auto_attach**——落地到 `src-tauri/src/commands/terminal.rs`（顶层） + `src-tauri/src/commands/terminal/` 子目录：
 
 ```
 modules/terminal/
 ├── api.rs                          ⭐ 唯一对外入口
 ├── commands/
 │   └── tmux/
-│       ├── session.rs              create_tmux_session / attach_tmux_session / probe / auto_attach
+│       ├── session.rs              create_tmux_session / attach_tmux_session / probe_tmux_session_exists
 │       ├── pane.rs                 create_tmux_pane / kill_tmux_pane / resize_tmux_pane / capture_tmux_pane
 │       ├── window.rs               create_tmux_window / kill_tmux_window / rename_tmux_window
-│       └── server.rs               get_attached / detach / kill / unmark
+│       ├── server.rs               get_attached / detach / kill / unmark
+│       └── auto_attach.rs          auto_attach_tmux_servers（独立成文件——启动时单独入口；不在 session.rs）
 ├── model.rs                        module 专属类型（如 MAX_TMUX_PROBE_LINES）
 └── mod.rs                          re-export api.rs
 ```
@@ -65,6 +66,7 @@ modules/terminal/
 **关键**：
 
 - 所有命令都在 `commands/tmux/` 子目录——没有 `commands/local/` 或 `commands/ssh/`，因为 terminal module 100% 是 tmux 业务
+- `auto_attach.rs` 单独成文件——它是启动序列入口（`commands/shell/api.rs::initialize` 不直接调，由 frontend 显式触发），跟 session/pane/window/server 业务无关，独立更清晰
 - preferences 不暴露 IPC（README §7 解释）
 
 ## 4. 用户故事（backend 视角）

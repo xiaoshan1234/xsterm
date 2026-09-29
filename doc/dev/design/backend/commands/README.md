@@ -51,9 +51,9 @@ src-tauri/src/commands/                           # 语义名（顶层 3 module�
 | module | 产品功能 | IPC 数量 |
 |---|---|---|
 | `commands/session` | session lifecycle | 10 个 |
-| `commands/terminal` | tmux -CC IPC + attached_tmux 持久化 | **13 个**（tmux 11 + attached_tmux 2） |
+| `commands/terminal` | tmux -CC IPC + attached_tmux 持久化 | **15 个**（tmux 13 + attached_tmux 2；含独立 auto_attach.rs） |
 | `commands/shell` | 启动 / 关闭 + log runtime + **user config IPC（v5.1 新增）** | **8 个**（log_message + get/set_log_config + get_log_dir + read/write_config + watch_config_start/stop） |
-| **commands 合计** | — | **31 个** |
+| **commands 合计** | — | **33 个** |
 
 **砍掉的原因**：
 

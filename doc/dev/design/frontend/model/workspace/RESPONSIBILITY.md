@@ -8,14 +8,13 @@
 
 workspace model 定义 frontend 看到的"主视图数据"——workspace 树、window 列表、pane 树、group。它跟 pane 紧耦合（pane 树是 window 的核心），所以 pane 类型 + 算法并入 workspace。
 
-承担 6 类职责：
+承担 **5 类**职责：
 
 1. **数据形状**——Workspace / Window / Group / PaneNode
 2. **Repository 接口**——WorkspaceRepository
 3. **事件契约**——WorkspaceSwitchedEvent / WindowClosedEvent / PaneSplitEvent / PaneClosedEvent
 4. **派生计算**（accessor）——getActiveWorkspace / getWindowsByWorkspace / getGroupsByWorkspace / getUniqueWindowName / findPaneNode
-5. **算法**（rules）——workspace CRUD、window CRUD、group CRUD、**paneTree 算法**（createLeafPane / createSplitNode / splitPane / closePane / resizePane）
-6. **paneTree 算法**——跨域使用的核心算法（虽然 pane 状态在 service/workspace，但算法归 model）
+5. **算法**（rules）——workspace CRUD、window CRUD、group CRUD、**paneTree 算法**（createLeafPane / createSplitNode / splitPane / closePane / resizePane，跨域使用的核心算法——虽然 pane 状态在 service/workspace，但算法归 model）
 
 ## 2. 这个 domain **不**负责什么
 

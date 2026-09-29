@@ -73,6 +73,8 @@ listen<ConfigReloadedEvent>("config-reloaded", (event) => {
 });
 ```
 
+**本 module INTERFACE 接口契约见 [`INTERFACE.md §1`](./INTERFACE.md)**；v5.1 后 `config` 子模块为 settings 改写唯一通道——所有 `write_config` / `read_config` IPC 都通过 `persistence.config.read() / .write() / .onReloaded()`，旧 `persistence.set<Settings>("settings")` 与 `registerMigration({ storeKey: "settings" })` 已砍（迁移由 backend `infra/config_watcher/migration` 承担，RFC 0003）。
+
 ## 4. 子结构
 
 ```

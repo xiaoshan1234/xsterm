@@ -2,7 +2,7 @@
 
 > **位置**：`src-tauri/src/infrastructure/pty/`
 > **类型**：⭐ 外部资源 — OS PTY 子进程
-> **被使用方**：`domain/session`、`domain/session/log`
+> **被使用方**：`domain/session`（session 生命周期事件点——具体编排归 `commands/session/log.rs`，**P1-5**）
 > **外部依赖**：`portable-pty` crate
 
 ## 1. 这个子模块负责什么
@@ -69,7 +69,7 @@ frontend **没有** `infra/pty` —— frontend 不直接调 PTY（通过 IPC �
 | 层 | 怎么用 infra/pty |
 |--|--|
 | `domain/session` | `SessionManager::pty_system: Box<dyn PtySystem>` 字段持有；`create_local` 调用 `pty_system.openpty(config)` |
-| `domain/session/log` | 不直接调 PtySystem——log message 通过 tracing |
+| `commands/session/log.rs`（**P1-5 上移**） | 不直接调 PtySystem——session 日志 message 通过 tracing；infra 与 session log 解耦 |
 | `commands/session` | 不直接调 PtySystem——通过 `domain/session::create_local_session` 间接 |
 
 **关键**：service 持有 `Box<dyn PtySystem>`（不是 `NativePtySystem`）——让 mock 可以替换实现。

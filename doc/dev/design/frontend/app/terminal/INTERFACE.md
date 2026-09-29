@@ -39,6 +39,8 @@ export interface TerminalApi {
 
   // ============ terminal preferences ============
   applyTerminalPreferences(prefs: TerminalPreferences): void;
+  /** P2-4 新增——部分 patch 增量应用（只改传入字段，未传入字段保留当前值） */
+  applyPreferences(patch: Partial<TerminalPreferences>): void;
 }
 
 export function useTerminalApi(): TerminalApi;

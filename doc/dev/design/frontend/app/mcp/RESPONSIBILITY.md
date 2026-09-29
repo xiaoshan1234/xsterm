@@ -32,17 +32,14 @@ MCP module 是 **xsterm 的 AI agent 入口**——按 Anthropic MCP 协议暴�
 | `wait_for` | `session_id`, `pattern: str`, `timeout: int` | 等待输出匹配正则 |
 
 ### 1.3 业务编排
-- `create_session` 内部调 `invoke('create_session', { config })`（走 Tauri IPC 路径；frontend app/mcp 不直接调 backend domain）
-- `send_keys` 内部调 `invoke('write_session', { sessionId, data: bytes })`
-- `capture_screen` 内部调 `invoke('capture_tmux_pane', ...)` 或读 `service/session/output_buffer`
-- `subscribe_output` 内部订阅 `service/session/output_channel` 推送
-- `attach_session` 设置 `app/mcp/client_state` 状态（详见 P0-3 AI 接管设计）
+
+> **P2-2 精简**——具体编排链详见 §4 数据流图；本节仅列职责范畴。
+
+MCP 工具集通过 `invoke()` 走 Tauri IPC（不直接调 backend domain）——`create_session` 调 `invoke('create_session')` / `send_keys` 调 `invoke('write_session')` / `capture_screen` 调 `invoke('capture_tmux_pane')` / `subscribe_output` 订阅 `service/session/output_channel` / `attach_session` 设置 `app/mcp/client_state` 状态。
 
 ### 1.4 安全边界（PRD §4 + §5）
-1. **stdio 默认** —— 不监听任何端口
-2. **TCP 鉴权** —— 启用 TCP 时必须 127.0.0.1 + token
-3. **session 作用域** —— MCP 工具只能操作 AI attach 的 session，不能关闭其它标签页或修改全局配置
-4. **send_keys 白名单** —— 禁止 `Ctrl+C` / `Ctrl+D` / `Ctrl+Z` 之外的"破坏性快捷键"白名单（PRD §4 AI 权限边界；用户可在 settings 开启全部）
+
+> **P2-2 精简**——4 条边界合并为一段：stdio 默认不监听端口；TCP 启用时强制 127.0.0.1 + token 鉴权；MCP 工具只能操作 AI attach 的 session；send_keys 走破坏性快捷键白名单（默认仅 `Ctrl+C` / `Ctrl+D` / `Ctrl+Z` / `Ctrl+Break`，其余组合键拒绝；用户可在 settings 显式开启全部）。
 
 ## 2. 这个 module **不**负责什么
 
