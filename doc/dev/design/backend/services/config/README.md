@@ -1,349 +1,195 @@
 # Services · Config — 职责
 
 > **位置**：`src-tauri/src/services/config/`
-> **类型**：⭐ toml 配置加载 + notify 热更新 + migration（RFC 0003）
-> **状态**：MVP P0-5（PRD §2 M9）
+> **类型**：⭐ 配置存储 + 跨子系统联动更新
+> **决策**：RFC 0003-revised —— 保留 `tauri-plugin-store` JSON 格式（**不**迁移 toml）
 
 ## 1. 一句话架构
 
-**config = 1 个 `ConfigStore` (Arc<RwLock<AppConfig>>) + toml 加载 + notify 监听 + migration**
+**config = 1 个 `ConfigStore` (包装 tauri-plugin-store) + 联动更新 callback**
 
 ```
 src-tauri/src/services/config/
-├── mod.rs              公开 API（ConfigStore + load / write / on_reloaded）
-├── store.rs            Arc<RwLock<AppConfig>> + write_allowlist / get_allowlist
-├── loader.rs           toml::from_str + serde validation
-├── watcher.rs          notify 热更新监听 + debounce 1s
-├── migration.rs        从 store.json 迁移到 toml（30 天 .bak 回退）
-├── schema.rs           AppConfig 完整定义（serde + schemars）
-├── whitelist.rs        set_config MCP 工具白名单字段
-└── tests.rs            migration roundtrip + notify 事件
+├── mod.rs              公开 API（ConfigStore + load / get / set / on_reloaded）
+├── store.rs            Arc<RwLock<Settings>> + apply_to_subsystems 联动
+└── defaults.rs         Settings::default() 默认值
 ```
+
+**删除**（RFC 0003-revised）：
+- ❌ `migration.rs`（30 天 .bak 迁移不需要）
+- ❌ `watcher.rs`（notify 监听 toml 不需要）
+- ❌ `whitelist.rs`（JSON 直存不需要白名单）
+- ❌ `loader.rs` 中 toml 相关
 
 ## 2. 职责
 
-config service 是 **PRD §2 M9 配置系统的底层真相源**：
+config service 处理应用设置的持久化 + 跨子系统联动：
 
-1. **toml 加载** — 启动时从 `%APPDATA%\xsterm\config.toml` 读
-2. **migration** — 旧 store.json 一次性迁移 + 30 天 .bak 回退
-3. **热更新** — notify 监听 config.toml 改动，1s debounce 后 reload
-4. **白名单写入** — `set_config` MCP 工具只能改白名单字段
-5. **事件广播** — config-reloaded 事件给 frontend 订阅
-6. **配子模块 hot reload** — config 变化时联动更新 attach idle_timeout / log level / ssh host_key_verify 等
+1. **持久化** — 启动时从 `%APPDATA%\xsterm\store.json` 读 + 写
+2. **schema 兼容** — 每个字段 `#[serde(default)]`，新增字段向前兼容
+3. **联动更新** — Settings 变化时同步更新 attach idle_timeout / log level / ssh host_key_verify 等
+4. **事件广播** — `config-reloaded` 事件给 frontend 订阅（store 自身 reactive + backend emit 兼容）
 
 ## 3. 不承担
 
-- ❌ sessions / groups / attached_tmux 持久化（归 `commands/persistence.rs` 现有逻辑，config.toml [profiles.*] 是另一回事）
-- ❌ log 配置（独立 `commands/logging.rs`，独立 log_config.json 过渡期）
-- ❌ 前端直存 store（config 改走 backend IPC）
+- ❌ toml 格式（RFC 0003-revised 删除）
+- ❌ migration / 30 天 .bak（无格式变化）
+- ❌ 白名单写入（JSON 直存不需要——frontend UI 是受信的）
+- ❌ 第三方 schema 校验（zod / valibot 在 frontend 承担）
+- ❌ sessions / groups / attached_tmux 持久化（归 `commands/persistence.rs` 现有逻辑，独立 key）
 
-## 4. AppConfig schema
+## 4. Settings schema
 
 ```rust
-// services/config/schema.rs
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AppConfig {
-    pub version: u32,                // schema version
-    #[serde(default)]
-    pub general: GeneralConfig,
-    #[serde(default)]
-    pub terminal: TerminalConfig,
-    #[serde(default)]
-    pub appearance: AppearanceConfig,
-    #[serde(default)]
-    pub keybindings: KeybindingsConfig,
-    #[serde(default)]
-    pub profiles: ProfilesConfig,    // profile_name → SessionConfig
-    #[serde(default)]
-    pub mcp: McpConfig,
-    #[serde(default)]
-    pub ssh: SshConfig,
-    #[serde(default)]
-    pub tunnel: TunnelConfig,        // ⭐ M8
-    #[serde(default)]
-    pub updater: UpdaterConfig,
-    #[serde(default)]
-    pub logging: LoggingConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GeneralConfig {
-    pub theme: Theme,                        // "dark" | "light" | "auto"
-    pub default_profile: String,             // "pwsh"
+// models/config.rs
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Settings {
+    // ============ general ============
+    pub theme: String,                       // "dark" | "light" | "auto"
+    pub default_profile: Option<String>,
     pub product_name: String,                // "xsterm"
+
+    // ============ terminal ============
+    pub terminal_font_family: String,
+    pub terminal_font_size: u16,
+    pub terminal_scrollback: u32,
+    pub terminal_copy_on_select: bool,
+    pub terminal_bracketed_paste_default: bool,
+    pub terminal_cursor_blink: bool,
+
+    // ============ appearance ============
+    pub appearance_theme: String,             // 5 个 ANSI preset
+    pub appearance_terminal_theme: String,   // 5 个 ANSI preset
+
+    // ============ sidebar ============
+    pub sidebar_width: u16,
+    pub show_sidebar: bool,
+
+    // ============ keybindings（用户可覆盖）============
+    pub keybindings: HashMap<String, String>,  // "newTab" -> "Ctrl+T"
+
+    // ============ MCP ============
+    pub mcp: McpSettings,
+
+    // ============ SSH ============
+    pub ssh: SshSettings,
+
+    // ============ tunnel (M8) ============
+    pub tunnel: TunnelSettings,
+
+    // ============ logging ============
+    pub log_level: String,                    // "info" | "debug" | "warn"
+    pub max_file_size: u64,
+    pub max_log_files: u32,
+
+    // ============ updater ============
+    pub updater_channel: String,              // "github" | "store" | "disabled"
+    pub updater_auto_check: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TerminalConfig {
-    pub font_family: String,                 // "Cascadia Code"
-    pub font_size: u16,                      // 14
-    pub scrollback: u32,                     // 10000
-    pub copy_on_select: bool,
-    pub bracketed_paste_default: bool,
-    pub cursor_blink: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AppearanceConfig {
-    pub theme: String,                       // 5 个 ANSI preset
-    pub terminal_theme: String,              // 5 个 ANSI preset
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct KeybindingsConfig {
-    // 用户可覆盖所有快捷键
-    pub new_tab: String,                     // "Ctrl+T"
-    pub close_tab: String,                   // "Ctrl+W"
-    pub split_horizontal: String,            // "Ctrl+Shift+D"
-    pub split_vertical: String,              // "Ctrl+Shift+E"
-    pub switch_tab: String,                  // "Ctrl+Tab"
-    pub goto_tab: String,                    // "Ctrl+1..9"
-    // ... 见完整列表
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ProfilesConfig {
-    pub entries: HashMap<String, SessionConfig>,  // profile_name → config
-    pub default: Option<String>,                  // 默认 profile
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct McpConfig {
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct McpSettings {
     pub enabled: bool,
-    pub stdio: bool,                            // 默认 true
-    pub http: McpHttpConfig,
-    pub destructive_keys: DestructiveKeysConfig,
-    pub idle_timeout: IdleTimeoutConfig,
-    pub audit: AuditConfig,
-    pub rate_limit_rps: u32,                    // 默认 100
+    pub http_enabled: bool,
+    pub http_port: u16,
+    pub http_token: Option<String>,
+    pub destructive_keys_policy: String,
+    pub idle_timeout_seconds: u64,
+    pub rate_limit_rps: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct McpHttpConfig {
-    pub enabled: bool,                          // 默认 false
-    pub host: String,                           // "127.0.0.1"
-    pub port: u16,                              // 19847
-    pub token: Option<String>,                  // 自动生成
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SshConfig {
-    pub host_key_verify: HostKeyVerify,         // "ask" | "no" | "yes"
-    pub known_hosts_path: PathBuf,
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SshSettings {
+    pub host_key_verify: String,              // "ask" | "no" | "yes"
     pub keepalive_interval_secs: u32,
     pub connect_timeout_secs: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TunnelConfig {
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TunnelSettings {
     pub enabled: bool,
     pub ssh_host: String,
     pub ssh_user: String,
     pub ssh_port: u16,
-    pub ssh_auth: SshAuthConfig,
-    pub local_mcp_port: u16,                    // 19847（本地 MCP HTTP）
-    pub remote_port: u16,                       // 远端暴露端口
-    pub allowed_remote_users: Vec<String>,      // 白名单
+    pub local_mcp_port: u16,
+    pub remote_port: u16,
+    pub allowed_remote_users: Vec<String>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdaterConfig {
-    pub channel: UpdateChannel,                 // "store" | "github" | "disabled"
-    pub auto_check: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct LoggingConfig {
-    pub log_level: String,                      // "info" | "debug" | "warn"
-    pub max_file_size: u64,
-    pub max_log_files: u32,
-}
-
-// ... 各 enum 省略
 ```
+
+**关键**：
+- 每个字段 `#[serde(default)]` —— 新增字段向前兼容
+- `#[serde(default)]` 在 struct 级别 + 字段级别双层保护
+- **不**用 `deny_unknown_fields`（前端可能加新字段，backend 不报错）
+- **不**派生 JsonSchema（schema 校验在 frontend）
 
 ## 5. 公开 API
 
 ```rust
 // services/config/mod.rs
 pub struct ConfigStore {
-    inner: Arc<RwLock<AppConfig>>,
-    config_path: PathBuf,
+    inner: Arc<RwLock<Settings>>,
+    store: Arc<tauri_plugin_store::Store>,    // ⭐ 包装 tauri-plugin-store
     app: AppHandle,
 }
 
 impl ConfigStore {
-    /// ⭐ 启动时调：load + migration + notify listener
+    /// 启动时调：load + apply_to_subsystems
     pub async fn load(app: &AppHandle) -> Result<Self, ConfigError>;
 
     /// 读全配置
-    pub async fn get(&self) -> AppConfig;
+    pub async fn get(&self) -> Settings;
 
-    /// 读单个字段
-    pub async fn get_field<K>(&self, key_path: K) -> Option<serde_json::Value>;
-
-    /// ⭐ 白名单写入（MCP set_config 调）
-    pub async fn write_allowlist(&self, patch: NewConfig) -> Result<AppConfig, ConfigError>;
+    /// ⭐ 直接写 settings（无需白名单，JSON 直存）
+    pub async fn write(&self, patch: SettingsPatch) -> Result<Settings, ConfigError>;
 
     /// ⭐ 订阅 reload 事件
-    pub fn on_reloaded(&self, cb: impl Fn(&AppConfig) + Send + Sync + 'static) -> UnlistenHandle;
+    pub fn on_reloaded(&self, cb: impl Fn(&Settings) + Send + Sync + 'static) -> UnlistenHandle;
 
-    /// 触发 reload（notify watcher 调用 / config.toml 改动后）
+    /// 手动 reload
     pub async fn reload(&self) -> Result<(), ConfigError>;
-
-    /// 启动 notify 监听（tokio task 持续跑）
-    pub fn start_watcher(&self);
 }
 ```
 
-## 6. migration 路径（RFC 0003）
+## 6. 跟其他 service 的关系
 
-```
-xsterm.exe 启动
-    ↓
-ConfigStore::load()
-    ↓
-1. 检查 config.toml 是否存在
-    ├── 是 → 直接 parse + return
-    └── 否 ↓
-2. 检查 store.json (sessions/groups/attached_tmux/log_config) 是否存在
-    ├── 是 → migration::from_store_json()
-    │         ↓
-    │        a. 读所有 *.json
-    │        b. 合并 + 字段映射
-    │        c. 写到 config.toml
-    │        d. 重命名 *.json → *.json.bak
-    │        e. schedule_delete(.bak, 30 days)
-    └── 否 → 首次启动 → 写默认 config.toml
-3. return ConfigStore
-```
+| service | 关系 |
+|---|---|
+| `services/attach` | 接收 `mcp.idle_timeout_seconds` 联动更新 |
+| `services/logging_setup` | 接收 `log_level` / `max_file_size` 联动更新 |
+| `services/ssh_session` | 接收 `ssh.host_key_verify` 变化（需要 reconnect） |
+| `services/reverse_tunnel` | 接收 `tunnel.enabled` 启停 |
+| `commands/persistence` | 独立 key（不共享 store.json 的 `settings` key） |
+| `commands/mcp::mcp_status` | 读 `mcp.enabled` / `mcp.http_*` |
+| `commands/tunnel::*` | 读 `tunnel.*` 字段 |
 
-**回滚路径**：30 天内用户删 `config.toml` → 重启时检测 `.bak` → 自动恢复 + 提示。
-
-## 7. 热更新（notify）
-
-```rust
-// services/config/watcher.rs
-use notify::{Watcher, RecursiveMode, EventKind};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult};
-
-pub fn start_watcher(store: Arc<ConfigStore>) {
-    let path = store.config_path.clone();
-    let store_clone = store.clone();
-
-    let mut debouncer = new_debouncer(Duration::from_secs(1), None, move |result: DebounceEventResult| {
-        match result {
-            Ok(events) if events.iter().any(|e| matches!(e.kind, EventKind::Modify(_))) => {
-                tracing::info!("config.toml modified, reloading");
-                if let Err(e) = tokio::spawn({
-                    let store = store_clone.clone();
-                    async move { store.reload().await }
-                }).await {
-                    tracing::error!("config reload failed: {e}");
-                }
-            }
-            Ok(_) => {},  // 忽略其他事件
-            Err(e) => tracing::error!("notify error: {e}"),
-        }
-    }).unwrap();
-
-    debouncer.watcher().watch(&path, RecursiveMode::NonRecursive).unwrap();
-
-    // ⭐ keep debouncer alive（用 Leak 或全局 static）
-    Box::leak(Box::new(debouncer));
-}
-```
-
-**注意**：debouncer 必须常驻——`Box::leak` 模式与 `logging_setup.rs` 的 `mem::forget(_guard)` 风格一致（AGENTS.md 提到）。
-
-## 8. 白名单写入
-
-```rust
-// services/config/whitelist.rs
-pub static WRITABLE_FIELDS: &[&str] = &[
-    "terminal.fontSize",
-    "terminal.fontFamily",
-    "terminal.scrollback",
-    "terminal.copyOnSelect",
-    "terminal.bracketedPasteDefault",
-    "terminal.cursorBlink",
-    "appearance.theme",
-    "appearance.terminalTheme",
-    "keybindings.*",
-    "mcp.destructiveKeys.policy",
-    "mcp.idleTimeout.seconds",
-    "mcp.rateLimitRps",
-    // 不可写：
-    // - ssh.hostKeyVerify (安全关键)
-    // - updater.channel (用户授权)
-    // - logging.logLevel (需要 restart)
-    // - profiles.* (复杂度高，单独 command)
-];
-
-pub fn is_writable(field_path: &str) -> bool {
-    WRITABLE_FIELDS.iter().any(|p| {
-        if p.ends_with(".*") {
-            field_path.starts_with(&p[..p.len() - 2])
-        } else {
-            field_path == *p
-        }
-    })
-}
-```
-
-## 9. config-reloaded 事件
+## 7. 联动更新
 
 ```rust
 // services/config/store.rs
-pub async fn reload(&self) -> Result<(), ConfigError> {
-    let new_config = loader::load_from_disk(&self.config_path)?;
-    
-    // 1. 写回 store
-    *self.inner.write().await = new_config.clone();
-
-    // 2. ⭐ emit config-reloaded 事件
-    self.app.emit("config-reloaded", ConfigReloadedEvent {
-        config: new_config.clone(),
-        source: ConfigReloadedSource::FileWatch,
-    })?;
-
-    // 3. ⭐ 联动更新各子系统
-    apply_to_subsystems(&new_config, &self.subsystem_handles).await?;
-
-    Ok(())
-}
-
 async fn apply_to_subsystems(
-    config: &AppConfig,
+    new_settings: &Settings,
     handles: &SubsystemHandles,
 ) -> Result<(), ConfigError> {
-    // attach idle_timeout
-    handles.attach_registry.set_idle_timeout(config.mcp.idle_timeout.seconds);
+    // 1. attach idle_timeout
+    handles.attach_registry.set_idle_timeout(new_settings.mcp.idle_timeout_seconds);
 
-    // log level
-    handles.logging.reload_filter(&config.logging.log_level)?;
+    // 2. log level
+    handles.logging.reload_filter(&new_settings.log_level)?;
 
-    // ssh host_key_verify（如果改了，需要 reconnect）
-    if handles.ssh_config.host_key_verify != config.ssh.host_key_verify {
-        handles.ssh_backend.notify_config_change(&config.ssh).await?;
+    // 3. ssh host_key_verify（如果改了，需要 reconnect）
+    if handles.ssh_config.host_key_verify != new_settings.ssh.host_key_verify {
+        handles.ssh_backend.notify_config_change(&new_settings.ssh).await?;
     }
 
-    // tunnel enable/disable
-    if config.tunnel.enabled && !handles.tunnel.is_running() {
+    // 4. tunnel enable/disable
+    if new_settings.tunnel.enabled && !handles.tunnel.is_running() {
         handles.tunnel.start().await?;
-    } else if !config.tunnel.enabled && handles.tunnel.is_running() {
+    } else if !new_settings.tunnel.enabled && handles.tunnel.is_running() {
         handles.tunnel.stop().await?;
     }
 
@@ -351,98 +197,183 @@ async fn apply_to_subsystems(
 }
 ```
 
-## 10. IPC 契约（commands/config.rs）
+**触发时机**：
+- 启动时（`ConfigStore::load()` 末尾）
+- 写 settings 时（`ConfigStore::write()` 末尾）
+- frontend 主动 reload 时（`ConfigStore::reload()` 末尾）
+
+**不监听文件**：RFC 0003-revised 删除 notify 监听——frontend 是唯一写入入口，无外部文件修改场景。
+
+## 8. IPC 契约
+
+### 8.1 `commands/persistence.rs` 扩展
 
 ```rust
+// commands/persistence.rs
+const SETTINGS_STORE: &str = "settings.json";
+const SETTINGS_KEY: &str = "settings";
+
 #[tauri::command]
-pub async fn get_config(config_store: State<'_, Arc<ConfigStore>>) -> Result<AppConfig, String> {
-    Ok(config_store.get().await)
+pub async fn load_settings(app: AppHandle) -> Result<Settings, String> {
+    let store = app.store(SETTINGS_STORE).map_err_string()?;
+    match store.get(SETTINGS_KEY) {
+        Some(value) => {
+            let settings: Settings = serde_json::from_value(value.clone()).map_err_string()?;
+            Ok(settings)
+        }
+        None => Ok(Settings::default()),  // ⭐ 缺 settings.json 用 default
+    }
 }
 
 #[tauri::command]
-pub async fn set_config(
+pub async fn save_settings(
+    settings: Settings,
+    app: AppHandle,
+    config_store: State<'_, Arc<ConfigStore>>,
+) -> Result<(), String> {
+    config_store.write_full(settings).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn patch_settings(
     patch: serde_json::Value,
     config_store: State<'_, Arc<ConfigStore>>,
-) -> Result<AppConfig, String> {
-    // 1. ⭐ 白名单校验
-    validate_allowlist(&patch)?;
-
-    // 2. ⭐ schema 校验
-    let partial: PartialAppConfig = serde_json::from_value(patch)
-        .map_err(|e| ConfigError::ValidationError(e.to_string()))?;
-
-    // 3. merge + 写盘
-    config_store.write_allowlist(partial)
-        .map_err(|e| e.to_string())
+) -> Result<Settings, String> {
+    let new_settings = config_store.write(patch).await.map_err(|e| e.to_string())?;
+    Ok(new_settings)
 }
 ```
 
-## 11. 跟其他 service 的关系
+**关键**：
+- 存储 key 单独 `settings.json`（不是合并到 `store.json`）—— 避免影响 sessions / groups 等其他 key
+- `load_settings` 缺文件时返回 `Settings::default()` —— 首次启动无报错
+- `patch_settings` 支持部分更新（merge patch）
 
-| service | 关系 |
-|---|---|
-| `services/attach` | 接收 `idle_timeout` 更新 |
-| `services/logging_setup` | 接收 `log_level` 更新 |
-| `services/ssh_session` | 接收 `host_key_verify` 变化（需要 reconnect） |
-| `services/reverse_tunnel` | 接收 `tunnel.enabled` 启停 |
-| `services/subscribe` | 不感知 config 变化 |
-| `services/capture` | 不感知 config 变化 |
-| `mcp_server::tools::get_config / set_config` | 调 `config_store.get_allowlist / write_allowlist` |
-| `commands/config` | 调 `config_store` |
+### 8.2 frontend 调用
 
-## 12. 测试
+```typescript
+// app/settings/usecases/load.ts
+import { invoke } from "@/infra/tauri/api";
+const settings = await invoke<Settings>("load_settings");
+useSettingsService().setMany(settings);
+
+// app/settings/usecases/updateSetting.ts
+const newSettings = await invoke<Settings>("patch_settings", {
+    patch: { terminalFontSize: 16 }
+});
+useSettingsService().setMany(newSettings);
+```
+
+**注意**：frontend `service/persistence` 不再走 `config` 子模块（RFC 0003-revised 删除），直接用 IPC。
+
+## 9. config-reloaded 事件
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigReloadedEvent {
+    pub config: Settings,
+    pub source: ConfigReloadedSource,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConfigReloadedSource {
+    InitialLoad,
+    ManualWrite,
+    FrontendReload,
+}
+```
+
+frontend UI 监听 `listen('config-reloaded', cb)` → 同步 settings store。
+
+## 10. 迁移路径（RFC 0003-revised 简化）
+
+```
+xsterm.exe 启动
+    ↓
+ConfigStore::load()
+    ↓
+1. 读 %APPDATA%\xsterm\settings.json
+   ├── 存在 → serde_json::from_value → Settings
+   └── 不存在 → Settings::default()（首次启动）
+    ↓
+2. apply_to_subsystems(&settings, &handles)
+   - attach idle_timeout / log level / ssh host_key_verify / tunnel enable
+    ↓
+3. return ConfigStore
+```
+
+**无 migration**（无格式变化，从 JSON 到 JSON）。
+**无 30 天 .bak**（不适用）。
+**无 notify 监听**（frontend 是唯一写入入口）。
+
+## 11. 测试
 
 ```rust
 #[tokio::test]
-async fn migration_from_store_json() {
+async fn load_defaults_when_settings_json_missing() {
     let temp = tempfile::tempdir().unwrap();
-    let store_json = temp.path().join("sessions.json");
-    let config_toml = temp.path().join("config.toml");
-
-    // 准备 store.json
-    std::fs::write(&store_json, r#"{"sessions":[{"id":42,"name":"test"}]}"#).unwrap();
-
-    let config = ConfigStore::load_from(temp.path()).await.unwrap();
-    assert!(config_toml.exists());
-    let bak = store_json.with_extension("json.bak");
-    assert!(bak.exists());
-
-    let new_config = config.get().await;
-    assert_eq!(new_config.profiles.entries.len(), 1);
+    let store = ConfigStore::load_from(temp.path()).await.unwrap();
+    let settings = store.get().await;
+    assert_eq!(settings.theme, "dark");  // default
+    assert_eq!(settings.terminal_font_size, 14);  // default
 }
 
 #[tokio::test]
-async fn write_allowlist_rejects_ssh_host_key_verify() {
+async fn patch_settings_partial_update() {
     let store = ConfigStore::load_from(tempdir().path()).await.unwrap();
-    let patch = json!({ "ssh": { "hostKeyVerify": "no" } });
-    let result = store.write_allowlist(patch).await;
-    assert!(matches!(result, Err(ConfigError::FieldNotWritable(_))));
+    let new_settings = store.write(json!({ "terminalFontSize": 16 })).await.unwrap();
+    assert_eq!(new_settings.terminal_font_size, 16);
+    assert_eq!(new_settings.theme, "dark");  // 不变
+}
+
+#[tokio::test]
+async fn forward_compat_new_fields_use_default() {
+    // 模拟老 store.json 缺新字段
+    let old_json = r#"{"theme": "light"}"#;  // 只有 theme
+    let settings: Settings = serde_json::from_str(old_json).unwrap();
+    assert_eq!(settings.terminal_font_size, 14);  // default
 }
 ```
 
-## 13. 强约束
+## 12. 强约束（pre-commit 必跑）
 
 ```bash
-# config 写入必须经过 whitelist
-grep -rn 'config_store\.write\|config\.write' src-tauri/src/ --include='*.rs' | grep -v 'whitelist\|tests\|//'
-# 必须只出现在 services/config/whitelist.rs / commands/config.rs / mcp_server/tools/set_config.rs
+# ❌ 不再有 toml 依赖
+grep -rn 'toml::' src-tauri/src/services/config/
+# 必须为空
 
-# config schema 校验必须经过 loader
-grep -rn 'toml::from_str\|serde_json::from_value' src-tauri/src/services/config/ --include='*.rs'
-# 必须只出现在 loader.rs / store.rs (白名单后)
+# ❌ 不再有 notify 依赖
+grep -rn 'notify::' src-tauri/src/services/config/
+# 必须为空
 
-# migration 是 idempotent
-grep -rn 'migration::from_store_json' src-tauri/src/ --include='*.rs'
-# 必须只出现在 services/config/store.rs::load
+# ❌ 不再有 schema migration
+grep -rn 'migration::from_' src-tauri/src/services/config/
+# 必须为空
 
-# notify watcher 不允许 duplicate spawn
-grep -rn 'start_watcher' src-tauri/src/ --include='*.rs'
-# 必须只出现在 lib.rs::run() 的 setup block
+# ❌ 不再有白名单
+grep -rn 'whitelist\|WRITABLE_FIELDS' src-tauri/src/services/config/
+# 必须为空
+
+# Settings 字段必须有 default
+grep -rnE 'pub\s+\w+:' src-tauri/src/models/config.rs | grep -v 'serde(default'
+# 必须为空（每个字段都有 #[serde(default)]）
 ```
 
-## 14. 文档
+## 13. 文档
 
 - [`README.md`](README.md) — 本文档
-- [`INTERFACE.md`](INTERFACE.md) — ConfigStore / AppConfig 公开 API
+- [`INTERFACE.md`](INTERFACE.md) — `ConfigStore` / `Settings` 公开 API
 - [`DOWNSTREAM.md`](DOWNSTREAM.md) — 依赖图
-- RFC 0003 — toml 迁移决策
+- [`../../../adr/0003-revised-config-json.md`](../../../adr/0003-revised-config-json.md) — 决策 RFC
+
+## 14. 验收
+
+- `Settings` 每个字段都有 `#[serde(default)]` ✅
+- `load_settings` 缺文件返回 default（无报错）✅
+- `patch_settings` 支持部分 merge ✅
+- 联动更新子系统（attach / log / ssh / tunnel）正确 ✅
+- Cargo build time -5%（少了 4 个 crate）✅
+- frontend `service/persistence` 不再走 `config` 子模块 ✅

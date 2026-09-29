@@ -71,7 +71,7 @@ services/
 ├── attach/               ⭐ NEW（attach 状态机 + 用户键盘屏蔽 + 60min 自动释放）
 ├── subscribe/            ⭐ NEW（OutputRing 环形缓冲 + 序号生成 + subscriber fan-out）
 ├── capture/              ⭐ NEW（text / ansi / screenshot 三模式；tmux 走控制器，其他走 xterm grid）
-├── config/               ⭐ NEW（toml 加载 + 热更新 + migration 30 天回退）
+├── config/               ⭐ 简化（RFC 0003-revised：JSON store + 联动更新，无 toml / migration / notify）
 └── reverse_tunnel/       ⭐ NEW（russh -R 反向隧道 + 指数退避重连）
 ```
 
@@ -116,7 +116,7 @@ models/
 ├── attach.rs             ⭐ NEW（AttachState / AttachSource / McpAttachChangedEvent）
 ├── subscription.rs       ⭐ NEW（OutputRing / RingEntry / Subscriber / SubscriptionHandle）
 ├── profile.rs            ⭐ NEW（Profile / ProfileType / ProfileFilter）
-└── config.rs             ⭐ NEW（AppConfig / TerminalConfig / ProfilesConfig / McpConfig / SshConfig / UpdaterConfig）
+└── config.rs             ⚠️ 简化（Settings + McpSettings / SshSettings / TunnelSettings）
 ```
 
 **删除**（RFC 0002-revised）：
@@ -166,7 +166,7 @@ commands ─┬──► services ──► infrastructure ──► (外部 cra
 | `services/attach/` | **NEW**（attach 状态机独占实现） |
 | `services/subscribe/` | **NEW**（OutputRing + 序号 + 推送） |
 | `services/capture/` | **NEW**（capture 三模式） |
-| `services/config/` | **NEW**（toml + notify + migration） |
+| `services/config/` | **简化**（tauri-plugin-store JSON + 联动更新） |
 | `services/reverse_tunnel/` | **NEW**（russh -R + 指数退避） |
 | `infrastructure/pty.rs` | 现有 |
 | `infrastructure/ssh.rs` | 现有（host_key_verify 默认改为 ask） |
@@ -185,7 +185,7 @@ commands ─┬──► services ──► infrastructure ──► (外部 cra
 | ~~`models/mcp.rs`~~ | **删除**（移到 frontend `model/mcp/types.ts`） |
 | ~~`mcp_server/`~~ | **删除**（移到 frontend `app/mcp/`） |
 
-**注意**：`commands/persistence.rs` 现有功能**保留**（sessions / groups / attached_tmux），但**新增** `config.toml` 路径由 `commands/config.rs` 提供（PR-3 完成时迁移；过渡期双轨）。详见 [`services/config/README.md`](services/config/README.md) §6 迁移路径。
+**注意**：`commands/persistence.rs` 现有功能**保留**（sessions / groups / attached_tmux），**新增** `save_settings / load_settings / patch_settings` 接 frontend service/persistence。详见 [`services/config/README.md`](services/config/README.md) §8 IPC 契约。
 
 ## 5. 关键设计决策
 
@@ -234,9 +234,11 @@ src/app/mcp/                ⭐ frontend TS 层
 - OutputRing 数据**必须在 backend**——不能搬到 frontend（PTY/SSH/tmux 后端读循环是 backend 唯一持有）
 - frontend MCP subscribe_output 跟前端 xterm render 共享同一份 backend `session-output` BinaryFrame 事件源
 
-### 5.4 config 独立 service + migration（不变）
+### 5.4 config 独立 service（简化：JSON 直存，RFC 0003-revised）
 
-`services/config/` 是**独立 module**（ADR 0003）：
+- tauri-plugin-store JSON 持久化（settings.json / sessions.json 等独立 key）
+- 联动更新子系统（attach idle_timeout / log level / ssh host_key_verify / tunnel enable）
+- **无 toml / migration / 30 天 .bak / notify 监听** —— frontend 直存，不需要
 - toml 加载 + notify 热更新 + 30 天 .bak 回退
 - 替代 `tauri-plugin-store`（保留作为过渡期双轨）
 - 白名单字段写入（防 frontend 误改敏感配置）
@@ -266,7 +268,7 @@ src/app/mcp/                ⭐ frontend TS 层
 - `attach.rs` — **NEW**
 - `subscription.rs` — **NEW**
 - `profile.rs` — **NEW**
-- `config.rs` — **NEW**
+- ~~`config.rs`~~ — **删除**（RFC 0003-revised：JSON 直存无需独立 command module；settings 读写由 `commands/persistence.rs` 扩展承载）
 - ~~`mcp.rs`~~ — **删除**（移到 frontend）
 
 ## 6. 跨语言 wire 契约
@@ -278,7 +280,7 @@ src/app/mcp/                ⭐ frontend TS 层
 | `#[derive(Serialize, Deserialize)]` struct | `interface X` | 手写（现状，ts-specta 未启用） |
 | `#[tauri::command] fn` 签名 | `invoke<T>(name, args)` | 手写（IPC 契约见 `commands/*/INTERFACE.md`） |
 | `app.emit(name, payload)` | `listen<T>(name, cb)` | 事件契约见 `infrastructure/events/CONTRACT.md` |
-| `models::config::AppConfig` | `AppConfig` interface | toml schema 双向校验 |
+| `models::config::Settings` | `Settings` interface | serde_json 序列化（无 toml） |
 
 **Rust 事件名**（emit → frontend listen）：
 | 事件名 | payload 类型 | 何时 emit |
@@ -288,7 +290,7 @@ src/app/mcp/                ⭐ frontend TS 层
 | `session-closed` | `u32`（session_id） | session 关闭 |
 | `tmux-events` | `TmuxEvent` 枚举 | tmux 控制模式事件 |
 | `mcp-attach-changed` | `{ sessionId, clientId, action }` | MCP attach 状态变化（frontend MCP 工具 attach / detach） |
-| `config-reloaded` | `AppConfig` | toml 文件改动被 reload |
+| `config-reloaded` | `Settings` | settings.json 写后 / 启动加载 |
 | `system-theme-changed` | `String` | OS 主题切换 |
 | `tunnel-status-changed` | `TunnelStatus` | 反向隧道连接状态变化 |
 
@@ -315,12 +317,11 @@ tauri::Builder::default()
     │       let reload_handle = init_logging(&log_dir, &config);
     │       app.manage(Arc::new(reload_handle));
     │
-    │       // 2. ⭐ config.toml 加载 + migration
+    │       // 2. ⭐ settings.json 加载（tauri-plugin-store）
     │       let config_store = services::config::ConfigStore::load(app.handle())?;
     │       app.manage(Arc::new(config_store));
     │
-    │       // 3. ⭐ notify 热更新监听
-    │       services::config::start_watcher(state::<ConfigStore>, ...);
+    │       // ⚠️ RFC 0003-revised：无 notify 热更新监听（frontend 是唯一写入入口）
     │
     │       // 4. ⭐ OutputChannel 注册（emit 给前端订阅）
     │       let backend = RealAppBackend::new(app.handle().clone());
@@ -343,7 +344,7 @@ tauri::Builder::default()
 2. listen('session-output', handler)       // backend BinaryFrame 推流
 3. listen('mcp-attach-changed', handler)   // backend attach 状态广播
 4. ⭐ app/mcp/server.ts::startServer(ctx)   // frontend HTTP server 启动
-   - 读 config.toml [mcp.http] 决定 port + token
+   - 读 settings.json 决定 port + token（tauri-plugin-store）
    - spawn HTTP server @ 127.0.0.1:19847
    - register 9 个 MCP 工具
 5. app/session.loadAll() + app/workspace.loadLastWorkspace() + app/terminal.autoAttachTmuxServers()
@@ -483,7 +484,7 @@ app/session/usecases/ai_takeover/attach.ts
 ### 7.5 反向 SSH 隧道流程（M8）
 
 ```
-config.toml [tunnel] enabled = true
+settings.json [tunnel] enabled = true
     ↓
 services::reverse_tunnel::start_if_enabled(state)
     ↓ 启动时
@@ -538,9 +539,7 @@ grep -rn 'attach_state\.insert\|attach_state\.remove' src-tauri/src/ --include='
 grep -rn 'output_ring.*push\|output_ring.*insert' src-tauri/src/ --include='*.rs'
 # 必须只出现在 services/subscribe/ 和 services/session_manager/
 
-# 7. config.toml 白名单字段写入
-grep -rn 'config\.write\|config_store\.update' src-tauri/src/ --include='*.rs' | grep -v 'config/mod.rs\|config/migration'
-# 写入必须经过 services/config::whitelist::* 检查
+# 7. ⚠️ 删除（RFC 0003-revised）——无白名单写入（JSON 直存，frontend UI 受信）
 
 # 8. ❌ frontend MCP 不能直连 PTY/SSH/tmux
 grep -rnE 'portable_pty|russh::|TmuxController' src/app/mcp/ --include='*.ts'
@@ -560,7 +559,7 @@ grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state|output_rings
 | **services/attach** | cargo test + mockall | 状态机 + idle timeout + 互斥 |
 | **services/subscribe** | cargo test | OutputRing 满 + seq 连续 + 多 subscriber |
 | **services/capture** | cargo test | text / ansi 模式剥离 + tmux 路由 |
-| **services/config** | cargo test + tempfile | migration roundtrip + notify 事件 |
+| **services/config** | cargo test + tempfile | JSON roundtrip + forward compat (default) |
 | **services/reverse_tunnel** | 集成测试（需 sshd） | 5 次重连 + token 鉴权 |
 | **commands/** | cargo test（mock state） | 每个命令的 happy path + 错误分支 |
 | **infrastructure/** | cargo test | pty open + ssh 连接 + binary_frame roundtrip |
@@ -583,7 +582,7 @@ grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state|output_rings
 | `attach idle timeout` 检测 | < 1s drift | ❌ | tokio::time::interval 60s |
 | **frontend MCP HTTP server start** | < 500ms | ❌ 新建 | Tauri WebView 内 fetch server |
 | **MCP HTTP tool call 延迟** | < 5ms | n/a | invoke IPC 单跳 |
-| `config.toml` reload | < 1s | ❌ | notify debounced |
+| `settings.json` reload | 即时（store API 同步） | ⚠️ | ⚠️ 无文件监听——frontend 是唯一写入入口 |
 | 100 sessions × 10k 行 ring | ≤ 200MB | ⚠️ 单 session | OutputRing 100k 行上限 |
 | 反向隧道重连 | ≤ 5 次指数退避 | ❌ | 1/2/4/8/16s |
 
@@ -606,7 +605,7 @@ grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state|output_rings
 
 - `127.0.0.1` only（默认）—— 不监听 `0.0.0.0`
 - Bearer token 鉴权（强制）
-- token 持久化到 `config.toml [mcp.http.token]`
+- token 持久化到 `settings.json` (mcp.http.token)
 - token regenerate 通过 UI / `invoke('regenerate_mcp_token')`
 
 ### 11.3 MCP 工具权限
@@ -632,48 +631,40 @@ grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state|output_rings
 const ALLOWED_DESTRUCTIVE = ["Ctrl+C", "Ctrl+D", "Ctrl+Z", "Ctrl+Break"];
 ```
 
-其余 `Ctrl+*` / `Alt+*` 组合键默认拒绝。用户可在 `config.toml [mcp.destructiveKeys.policy] = "allow"` 开启全部。
+其余 `Ctrl+*` / `Alt+*` 组合键默认拒绝。用户可在 `settings.json` (mcp.destructiveKeys.policy = "allow") 开启全部。
 
 ### 11.5 SSH host key 验证
 
 **现状**（AGENTS.md 标注）：禁用
 **终点**：默认 `ask`（首次连接 prompt，accept 后写入 `%APPDATA%\xsterm\ssh\known_hosts`；变更时警告）
-**实现**：复用 `russh-keys::parse_known_hosts` + 写回。`config.toml [ssh.hostKeyVerify]` 控制行为。
+**实现**：复用 `russh-keys::parse_known_hosts` + 写回。`settings.json` (ssh.hostKeyVerify) 控制行为。
 
-### 11.6 config.toml 白名单写入
+### 11.6 ~~config.toml 白名单写入~~ —— ❌ 删除（RFC 0003-revised）
 
-`services::config::whitelist::WRITABLE_FIELDS`：
-```rust
-&[
-    "terminal.font_size", "terminal.font_family", "terminal.cursor_blink",
-    "appearance.theme", "appearance.terminal_theme",
-    "keybindings.*",
-    "mcp.destructive_keys.policy",
-    "mcp.idle_timeout.seconds",
-    // 不可写：ssh.host_key_verify, updater.channel, telemetry.*
-]
-```
-
-其余字段通过 `set_config` MCP 工具返回 `FIELD_NOT_WRITABLE` 错误。
+JSON 直存不需要白名单——frontend UI 是受信的，字段控制暴露在 frontend UI 层（settings 抽屉不暴露敏感字段如 ssh.hostKeyVerify）。
 
 ## 12. 依赖（新增）
 
 ```toml
 # Cargo.toml 新增依赖（attach / subscribe / capture / config / tunnel 5 个新 service）
 [dependencies]
-notify = "6"                            # config.toml 热更新
-notify-debouncer-full = "0.3"           # notify 事件去抖
-toml = "0.8"                            # config 序列化
+tauri-plugin-store = "2"                # ✅ 已有（用于 settings.json / sessions.json 等）
 uuid = { version = "1", features = ["v4"] }  # MCP session_id（双向映射）
 regex = "1"                             # capture / wait_for 正则
 once_cell = "1"                         # 全局单例（rate_limit / metrics）
 
 # ❌ 不再需要 rmcp + schemars（MCP server 移到 frontend TS）
+# ❌ 不再需要 toml + notify + notify-debouncer-full（JSON 直存）
 
 [dev-dependencies]
 mockall = "0.12"  # 已有
-tempfile = "3"    # config migration 测试
+tempfile = "3"    # JSON roundtrip 测试
 ```
+
+**净变化**（RFC 0002-revised + RFC 0003-revised）：
+- ❌ 删除：rmcp, schemars, toml, notify, notify-debouncer-full（5 个 crate）
+- ✅ 新增：仅 uuid + regex + once_cell（3 个 crate，已存在或轻量级）
+- build time -10%
 
 **frontend `app/mcp/` 新增依赖**（TS）：
 ```json
@@ -714,7 +705,7 @@ tempfile = "3"    # config migration 测试
 | **§2 M6 MCP server** | **RFC 0002-revised** | **attach 状态机**：`services/attach` | **协议层 + 9 工具**：`app/mcp/` |
 | **§2 M7 本地 AI 接管** | target-arch §5.5 | **attach 透传**：`commands/mcp::attach_session` | **AI takeover UX**：`app/session/usecases/ai_takeover/` |
 | **§2 M8 远程 SSH agent** | target-arch §3.1 (2) | `services/reverse_tunnel/` + `commands/tunnel.rs` | 端口转发 frontend MCP HTTP |
-| **§2 M9 配置 toml** | RFC 0003 | `services/config/` + `commands/config.rs` | |
+| **§2 M9 配置 JSON** | RFC 0003-revised | `services/config/` + `commands/persistence.rs` 扩展 | |
 | §2 M11 自动更新 | (未来) | frontend + 平台商店通道 | |
 | §3 数据流 | PRD §3 | 端到端（PTY → tokio mpsc → Tauri IPC → xterm.js） | |
 | §4 数据权限 | RFC + target-arch §8 | **§11 安全模型** | |
@@ -735,7 +726,7 @@ tempfile = "3"    # config migration 测试
 
 如果未来要升级 MCP：
 1. **加 stdio transport**：Tauri sidecar spawn `xsterm-mcp-stdio.exe` + stdio pipe 桥接 frontend HTTP server
-2. **加 list_profiles / get_config / set_config**：frontend `app/mcp/tools/` 加 3 个工具，backend `services/config` 加白名单 `WRITABLE_FIELDS` + `commands/config::set_config`
+2. ~~**加 list_profiles / get_config / set_config**：frontend `app/mcp/tools/` 加 3 个工具~~ —— RFC 0003-revised 删除 set_config（前端 zod + 直存已够）；list_profiles / get_config 在 v1.0 可选
 3. **拆 crates**：`services/attach / subscribe / capture` 可独立 crate（独立编译 + 独立单测）
 4. **拆 MCP SDK**：自研 ~200 行 TS 已够用，不需要 MCP SDK 依赖
 

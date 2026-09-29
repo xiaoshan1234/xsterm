@@ -5,7 +5,7 @@
 > **决策点对应**：本文采用以下决议（pdm 2026-09-11 拍板，详见 `doc/adr/legacy-rfcs/`）：
 > - **D-α** tmux 实现：**保留 xsterm -CC 全量实现**，对标 iTerm2（RFC 0001）
 > - **D-β** MCP server 拆分：**MVP 阶段单二进制 + 内部模块**（RFC 0002）
-> - **D-γ** 配置格式：**迁移 `config.toml`**，启动时一次性迁移旧 store JSON + 30 天回退（RFC 0003）
+> - **D-γ** 配置格式：**保留 `tauri-plugin-store` JSON 格式**（RFC 0003-revised）
 > - **D-δ** 命名：**保留 `xsterm` 品牌**，对外宣传用 "AI Terminal"（RFC 0004）
 
 ---
@@ -38,7 +38,7 @@ xsterm/
 │       │       │   ├── attach/             # NEW: attach/detach 状态机
 │       │       │   ├── subscribe/          # NEW: 序号环形缓冲
 │       │       │   ├── capture/            # NEW: screen capture
-│       │       │   └── config/             # NEW: toml + 热更新
+│       │       │   └── config/             # NEW (revised): tauri-plugin-store JSON + 联动更新
 │       │       ├── infrastructure/
 │       │       │   ├── pty.rs
 │       │       │   ├── ssh.rs              # 现有（host key 校验开关化）
@@ -50,12 +50,11 @@ xsterm/
 │       │   └── xsterm-mcp.rs               # NEW: MCP stdio 子进程入口
 │       └── ...
 ├── crates/
-│   ├── pty-bridge/               # 抽出 portable-pty（可选，第一阶段不抽）
-│   ├── mcp-server/               # 抽出 rmcp 实现（可选；先在 src-tauri 内）
-│   ├── ssh-client/               # 抽出 russh（可选）
-│   ├── ssh-tunnel/               # NEW: 反向 SSH 隧道
-│   ├── config/                   # NEW: toml 配置加载
-│   └── updater/                  # NEW: 应用内更新
+├── pty-bridge/               # 抽出 portable-pty（可选，第一阶段不抽）
+├── mcp-server/               # 抽出 rmcp 实现（可选；先在 src-tauri 内）
+├── ssh-client/               # 抽出 russh（可选）
+├── ssh-tunnel/               # NEW: 反向 SSH 隧道
+└── updater/                  # NEW: 应用内更新
 ├── ui/                           # 前端组件库（独立 npm package，v1.1）
 ├── docs/                         # VitePress 文档站（v1.0 必出）
 │   ├── index.md
@@ -235,81 +234,88 @@ pub struct RingEntry {
 }
 ```
 
-### 3.2 配置（终态）
+### 3.2 配置（终态）—— ⚠️ RFC 0003-revised：保留 JSON 格式
 
-**文件路径**：`%APPDATA%\xsterm\config.toml`（D-γ 推荐迁移 toml）
+> **2026-09 决策**：保留 `tauri-plugin-store` JSON 格式，**不迁移到 toml**。理由：frontend 直存场景下 JSON 比 toml 简单（少 4 个 crate 依赖 + 无 migration + frontend 集成更直接）。
+>
+> 详见 [`doc/dev/adr/0003-revised-config-json.md`](../adr/0003-revised-config-json.md)。
 
-```toml
-# 注释友好；启动时由 store JSON 一次性迁移
-version = 1
+**文件路径**：`%APPDATA%\xsterm\settings.json`（tauri-plugin-store）
 
-[general]
-product_name = "xsterm"
-theme = "dark"
-default_profile = "pwsh"
-
-[terminal]
-font_size = 14
-font_family = "Cascadia Code"
-scrollback = 10000
-copy_on_select = true
-bracketed_paste_default = true
-
-[profiles.pwsh]
-type = "local"
-shell = "pwsh.exe"
-cwd = "%USERPROFILE%"
-
-[profiles.ssh-dev]
-type = "ssh"
-host = "dev.example.com"
-port = 22
-user = "loner"
-auth = "agent"  # password | key | agent
-
-[profiles.wsl-ubuntu]
-type = "wsl"
-distro = "Ubuntu"
-
-[profiles.docker-node]
-type = "docker"
-container_id = ""
-
-[mcp]
-destructive_keys.policy = "deny"  # deny | ask | allow
-idle_timeout_seconds = 3600
-audit.enabled = false
-
-[mcp.http]
-enabled = false
-host = "127.0.0.1"
-port = 19847
-
-[ssh]
-host_key_verify = "ask"  # NEW：默认开启验证（覆盖 AGENTS.md 标注的"已知 gap"）
-known_hosts_path = "%APPDATA%\\xsterm\\ssh\\known_hosts"
-
-[updater]
-channel = "github"  # store | github | disabled
-auto_check = true
-
-[privacy]
-telemetry = false
+```json
+{
+  "settings": {
+    "theme": "dark",
+    "terminalFontFamily": "Cascadia Code",
+    "terminalFontSize": 14,
+    "terminalScrollback": 10000,
+    "terminalCopyOnSelect": true,
+    "terminalBracketedPasteDefault": true,
+    "logLevel": "info",
+    "sidebarWidth": 240,
+    "showSidebar": true,
+    "keybindings": {
+      "newTab": "Ctrl+T",
+      "closeTab": "Ctrl+W",
+      "splitHorizontal": "Ctrl+Shift+D",
+      "splitVertical": "Ctrl+Shift+E"
+    },
+    "mcp": {
+      "enabled": true,
+      "httpEnabled": false,
+      "httpPort": 19847,
+      "httpToken": null,
+      "destructiveKeysPolicy": "deny",
+      "idleTimeoutSeconds": 3600,
+      "rateLimitRps": 100
+    },
+    "ssh": {
+      "hostKeyVerify": "ask",
+      "keepaliveIntervalSecs": 15,
+      "connectTimeoutSecs": 10
+    },
+    "tunnel": {
+      "enabled": false,
+      "sshHost": "",
+      "sshUser": "",
+      "sshPort": 22,
+      "localMcpPort": 19847,
+      "remotePort": 19848,
+      "allowedRemoteUsers": []
+    }
+  }
+}
 ```
 
-### 3.3 持久化（迁移路径）
+**关键**：
+- frontend `@tauri-apps/plugin-store` 直接读写
+- backend `services/config` 包装 store + 联动更新子系统
+- 每个字段 `#[serde(default)]` —— 向前兼容（旧 settings.json 缺字段用 default）
+- **不**用 `deny_unknown_fields` —— JSON 容忍前端新增字段
+- 配套独立 store：`sessions.json` / `groups.json` / `attached_tmux.json` / `log_config.json`（已有，各自独立 key）
 
-| 现有（store JSON） | 终态（toml） | 迁移 |
-|---|---|---|
-| `sessions.json` (SavedSessionConfig[]) | `config.toml [profiles.*]` | 启动时检测到旧 store → 一次性转换 |
-| `settings.json` | `config.toml` | 同上 |
-| `groups.json` | `config.toml [groups.*]` | 同上 |
-| `attached_tmux.json` | `config.toml [tmux.attached.*]` | 同上 |
-| log config | `config.toml [logging]` | 同上 |
+### 3.3 持久化（无迁移）
 
-**迁移代码位置**：`src-tauri/src/services/config/migration.rs`（NEW）。
-**触发**：`lib.rs::run()` 启动时检测 `config.toml` 不存在但 `*.json` 存在 → 调用迁移 → 写 `config.toml` → 保留旧 JSON 30 天后清理。
-**回滚**：30 天内用户删除 `config.toml` 即回退到 JSON（用于验证迁移正确性）。
+> **RFC 0003-revised**：store JSON 一直是权威文件，**无迁移路径**。
+
+```
+%APPDATA%\xsterm\
+├── settings.json                # Settings（应用配置）
+├── sessions.json                # SavedSessionConfig 列表
+├── groups.json                  # Group 列表
+├── attached_tmux.json           # AttachedTmuxServer 列表
+├── log_config.json              # logging 配置
+├── ssh\known_hosts               # SSH known_hosts（已有）
+├── cache\                        # 主题/字体缓存（已有）
+└── logs\                         # 应用日志（已有）
+```
+
+**单一权威文件 = settings.json**（应用配置）。
+**独立 store file** = 各业务领域独立 key（sessions / groups / attached_tmux / log_config）。
+
+**无迁移代码**（`services/config/migration.rs` 不存在）。
+**无 .bak 回退**（无格式变化）。
+**无 notify 监听**（frontend 是唯一写入入口，不需要外部文件监听）。
 
 ---
 
@@ -603,25 +609,33 @@ pub async fn send_keys(
 
 ---
 
-## 9. 持久化与迁移
+## 9. 持久化 —— ⚠️ RFC 0003-revised：无迁移
 
-### 9.1 数据迁移
+### 9.1 启动加载
 
 ```
 xsterm.exe 启动
   ↓
-检查 %APPDATA%\xsterm\config.toml 是否存在
-  ├─ 是 → 加载
-  └─ 否 → 检查 *.json
-       ├─ 是 → 调 migration::from_store_json() → 写 config.toml → 保留 JSON 30 天
-       └─ 否 → 首次启动 → 写默认 config.toml
+检查 %APPDATA%\xsterm\settings.json 是否存在
+  ├─ 是 → 读 settings key → Settings::deserialize
+  └─ 否 → Settings::default()（首次启动）
+  ↓
+apply_to_subsystems(&settings, &handles)
+  ├─ attach_idle_timeout / log_level / ssh_host_key_verify / tunnel_enable
+  ↓
+return ConfigStore
 ```
 
-### 9.2 热更新
+### 9.2 写更新
 
-`notify 6.x` 监听 `config.toml`：
-- 修改 → 重新 parse → 通知 SessionManager / SessionContext / ThemeContext
-- schema 校验失败 → 拒绝更新 + UI toast（不重启）
+`tauri-plugin-store` 自身 reactive API：
+- frontend `invoke('patch_settings', { patch })` → backend `ConfigStore::write(patch)`
+- write 内部 merge + atomic save + apply_to_subsystems + emit `config-reloaded` 事件
+- **不**监听文件——frontend 是唯一写入入口
+
+schema 校验：
+- frontend `service/settings` 用 zod 校验（用户输入前）
+- backend `Settings::deserialize` 容忍未知字段（`#[serde(default)]`）
 
 ---
 
@@ -691,7 +705,7 @@ docs/
 | MCP 子进程崩溃 | 主进程持有 Child，wait 返回 | 重启子进程；UI 提示"AI 接管暂不可用" |
 | 反向隧道断 | russh reconnect | 指数退避 1/2/4/8/16s × 5 次；UI toast |
 | tmux 进程崩 | `tmux-controller-exit` 事件 | UI 显示 retry banner（现有功能）|
-| 配置 toml 解析失败 | schema 校验 | 拒绝更新；保留旧 config；UI 提示 |
+| 配置 JSON 反序列化失败 | schema 校验（`#[serde(default)]`） | frontend zod 校验 + backend default 兜底；UI 提示 |
 | 订阅 buffer 满 | OutputRing 满 | 发 `output-overflow` 通知 + `full` 快照 |
 | attach agent 失联 | stdio EOF / HTTP stream 关闭 | 自动 detach |
 | update 下载失败 | HTTP 4xx/5xx | 重试 3 次；UI 提示"稍后重试" |

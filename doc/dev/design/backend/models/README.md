@@ -14,7 +14,7 @@
 | `attach.rs` | ⭐ NEW | ~200 | AttachState / AttachSource / McpAttachChangedEvent |
 | `subscription.rs` | ⭐ NEW | ~150 | OutputRingEntry / SubscribeResult / OutputOverflowEvent |
 | `profile.rs` | ⭐ NEW | ~250 | Profile / ProfileType / SessionConfig union |
-| `config.rs` | ⭐ NEW | ~600 | AppConfig + 11 个子 config struct（见 services/config） |
+| `config.rs` | ⚠️ 简化（RFC 0003-revised） | ~400 | Settings + 5 个子 struct（见 services/config） |
 | ~~`mcp.rs`~~ | ❌ 删除（RFC 0002-revised） | n/a | 12 个 MCP 工具的 params/result 类型镜像移到 frontend `model/mcp/types.ts` |
 
 ## 2. 设计原则
@@ -28,7 +28,7 @@
 | `AttachState` | `models/attach.rs` | attach service 是唯一消费者 |
 | `OutputRingEntry` | `models/subscription.rs` | subscribe service 是唯一消费者 |
 | `SessionConfig` | `models/profile.rs` | profile / create_session 业务 |
-| `AppConfig` | `models/config.rs` | config service |
+| `Settings` | `models/config.rs` | config service |
 | `SendKeysParams` 等 12 个 MCP 工具类型 | ~~`models/mcp.rs`~~ → frontend `model/mcp/types.ts` | frontend `app/mcp/tools/` 是唯一消费者（RFC 0002-revised） |
 
 ### 2.2 禁止
@@ -49,7 +49,7 @@ pub struct Xxx { ... }
 
 如果需要默认值：`#[derive(Default)]`。
 
-> **注**：MCP JSON Schema 派生（`schemars`）**仅用于 backend IPC payload**——MCP 12 工具的 JSON Schema 派生已移到 frontend `app/mcp/tools/` 通过 zod / valibot 派生。
+> **注**：MCP JSON Schema 派生（`schemars`）**已删除**（RFC 0002-revised + 0003-revised）——MCP 12 工具在 frontend `app/mcp/tools/` 通过 zod / valibot 派生；Settings schema 校验在 frontend 通过 zod 承担。backend 不需要 JsonSchema 派生。
 
 ## 3. `models/attach.rs` —— NEW
 
@@ -192,8 +192,8 @@ pub enum SshAuthConfig {
 详见 [`services/config/README.md §4`](../services/config/README.md)。关键类型：
 
 ```rust
-// 完整 AppConfig + 11 个子 struct
-pub struct AppConfig {
+// 完整 Settings + 5 个子 struct
+pub struct Settings {
     pub version: u32,
     pub general: GeneralConfig,
     pub terminal: TerminalConfig,
@@ -255,25 +255,21 @@ pub struct SessionInfo {
 - **`rename_all = "camelCase"`** —— 所有 struct 跟字段名（IPC 跟 TS 镜像一致）
 - **`#[serde(default)]`** —— 新增字段向前兼容（无 toml 迁移）
 - **`#[serde(skip_serializing_if = ...)`** —— Option 字段不输出 None
-- **`#[serde(deny_unknown_fields)]`** —— 仅在顶层 AppConfig（避免用户 typo）
 - **`#[serde(tag = "type", rename_all = "lowercase")]`** —— tagged union（MCP 工具 / Profile）
+- ⚠️ **不再用 `#[serde(deny_unknown_fields)]`** —— JSON 直存需要容忍前端新字段（RFC 0003-revised）；前端 zod 校验替代
 
-## 10. JsonSchema 派生
+## 10. ~~JsonSchema 派生~~ —— ❌ 删除（RFC 0003-revised）
 
-凡是被 MCP 工具用的类型都要 derive JsonSchema：
+`schemars` crate 不再使用。理由：
+- MCP JSON Schema 派生移到 frontend `app/mcp/tools/`（通过 zod / valibot）
+- Settings schema 校验在 frontend（zod）
+- backend 不需要对外暴露 JSON Schema——frontend 直存 store.json 不需要 backend 校验
 
+如果未来 backend 需要导出 schema 供 IDE / 文档使用：
 ```rust
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SendKeysParams {
-    pub session_id: String,
-    pub text: Option<String>,
-    pub keys: Option<Vec<KeySpec>>,
-    // ...
-}
+// 可选：单独 crate `xsterm-schema` 生成 JSON Schema 文件（不依赖 schemars）
+// 例如通过手动维护 JSON 文件 + serde_json::from_str 验证
 ```
-
-`schemars::schema_for!(SendKeysParams)` 生成 JSON Schema → MCP `Tool.input_schema`。
 
 ## 11. 跟 frontend TS 镜像
 
@@ -286,7 +282,7 @@ pub struct SendKeysParams {
 | `SessionInfo.attached: Option<AttachState>` | `attached?: AttachState \| null` |
 | `SessionInfo.mcp_session_id: Option<String>` | `mcpSessionId?: string` |
 | `Profile` | `Profile` interface（替代旧 SavedSessionConfig） |
-| `AppConfig` | `AppConfig` interface |
+| `Settings` | `Settings` interface |
 
 详见 [`frontend model README`](../../design/frontend/model/README.md) §5。
 
@@ -309,23 +305,23 @@ fn roundtrip_session_info() {
 }
 
 #[test]
-fn app_config_unknown_field_rejected() {
-    let toml = r#"
-        version = 1
-        unknown_field = "x"
-    "#;
-    let result: Result<AppConfig, _> = toml::from_str(toml);
-    assert!(result.is_err());
+fn settings_unknown_field_tolerated() {
+    // ⚠️ JSON 直存不拒绝未知字段——前端可能加新字段
+    let json = r#"{
+        "theme": "dark",
+        "unknownField": "x"
+    }"#;
+    let settings: Settings = serde_json::from_str(json).unwrap();
+    assert_eq!(settings.theme, "dark");
+    // unknownField 被忽略，不报错
 }
 
 #[test]
-fn app_config_defaults_fill_missing() {
-    let toml = r#"
-        version = 1
-    "#;
-    let config: AppConfig = toml::from_str(toml).unwrap();
-    assert_eq!(config.terminal.font_size, 14);  // default
-    assert_eq!(config.mcp.rate_limit_rps, 100);
+fn settings_defaults_fill_missing() {
+    let json = r#"{}"#;
+    let settings: Settings = serde_json::from_str(json).unwrap();
+    assert_eq!(settings.terminal_font_size, 14);  // default
+    assert_eq!(settings.mcp.rate_limit_rps, 100);
 }
 ```
 
