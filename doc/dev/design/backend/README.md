@@ -56,7 +56,7 @@ commands/
 - ✅ 保留 attach / detach 透传（backend `services::attach::AttachRegistry` 是 attach 状态的真相源）
 - ✅ 保留 mcp_status / regenerate_token（backend 持有 token + port + enabled 配置）
 
-详见 [`commands/README.md`](commands/README.md)。
+详见 §5.9.1（子模块设计附录）。
 
 ### 2.2 `services/` — 业务编排
 
@@ -84,7 +84,7 @@ services/
 - 每个 service 子模块**单一职责**——attach 只管状态机，subscribe 只管环形缓冲 + 推送，capture 只管屏幕快照
 - 跨子模块调用必须通过 `SessionManager` 公开 API（attache state 查 `session_manager.attach_registry()`）
 
-详见 [`services/README.md`](services/README.md)。
+详见 §5.9.2（子模块设计附录）。
 
 ### 2.3 `infrastructure/` — 平台抽象
 
@@ -185,7 +185,7 @@ commands ─┬──► services ──► infrastructure ──► (外部 cra
 | ~~`models/mcp.rs`~~ | **删除**（移到 frontend `model/mcp/types.ts`） |
 | ~~`mcp_server/`~~ | **删除**（移到 frontend `app/mcp/`） |
 
-**注意**：`commands/persistence.rs` 现有功能**保留**（sessions / groups / attached_tmux），**新增** `save_settings / load_settings / patch_settings` 接 frontend service/persistence。详见 [`backend/commands/README.md §3.4`](commands/README.md) IPC 契约 + `models/capture.md`（capture 算法层）。
+**注意**：`commands/persistence.rs` 现有功能**保留**（sessions / groups / attached_tmux），**新增** `save_settings / load_settings / patch_settings` 接 frontend service/persistence。详见 §5.9.1 + [`models/capture.md`](models/capture.md)（capture 算法层）。
 
 ## 5. 关键设计决策
 
@@ -379,6 +379,130 @@ pub fn try_create(&self) -> Result<(), SessionError> {
 ```
 
 **详细设计**已合并到 [`services/session_manager_extension.md`](doc/dev/history/services-simplification-rfc-0006/session_manager_extension.md)（归档可追溯，RFC 0006 把独立 doc 合并进 backend/README.md §5.8）。
+
+## 5.9 子模块设计附录
+
+> **设计原则**：backend 顶层 README 是唯一权威。子 module 不再单独维护 README——所有内容合入此处。INTERFACE / DOWNSTREAM 等独立契约文档保留（详细 schema / 依赖图）。
+
+### 5.9.1 `commands/` 子模块（4 个 module，~40 IPC 命令）
+
+| module | 命令数 | 职责 |
+|---|---|---|
+| `session.rs` | 23 + 3 | 现有 create / close / write / resize / tmux；⭐ NEW `capture_text / capture_ansi / capture_screenshot`（RFC 0006 接 `models::capture`） |
+| `persistence.rs` | 6 + 3 | 现有 save/load sessions / groups / attached_tmux；⭐ NEW `load_settings / save_settings / patch_settings`（RFC 0003-revised settings.json 直存）+ internal helper `after_settings_changed` 联动 |
+| `logging.rs` | 4 | 现有 log_message / get/set_log_config / get_log_dir |
+| `mcp.rs` | 6 | ⚠️ 简化（RFC 0002-revised）：attach / detach / get_session_attach_state / list_attached_sessions / mcp_status / regenerate_mcp_token |
+| `tunnel.rs` | 4 | ⭐ NEW（RFC 0006）：tunnel_start / stop / status / generate_script |
+| ~~`config.rs`~~ | ❌ 删除 | RFC 0003-revised：settings 读写由 `persistence.rs` 扩展承载 |
+
+**all_handlers() 入口**（完整 40+ 命令注册）：
+- session: `create_local_session / create_ssh_session / create_tmux_session / probe_tmux_session_exists / create_session / write_session / resize_tmux_pane / resize_pty_session / resize_ssh_session / close_session / list_sessions / upload_image_to_ssh_session / get_session_output_channel / create_tmux_pane / kill_tmux_pane / create_tmux_window / kill_tmux_window / rename_tmux_window / attach_tmux_session / capture_tmux_pane / get_attached_tmux_servers / auto_attach_tmux_servers / detach_tmux_controller / kill_server_via_controller / unmark_attached_tmux / capture_text / capture_ansi / capture_screenshot`
+- persistence: `save_sessions / load_sessions / save_groups / load_groups / save_attached_tmux_servers / load_attached_tmux_servers / load_settings / save_settings / patch_settings`
+- logging: `log_message / get_log_config / set_log_config / get_log_dir`
+- mcp: `attach_session / detach_session / get_session_attach_state / list_attached_sessions / mcp_status / regenerate_mcp_token`
+- tunnel: `tunnel_start / tunnel_stop / tunnel_status / generate_tunnel_script`
+
+**每个命令的固定结构**：
+```rust
+#[tauri::command]
+pub async fn <name>(
+    <入参>: <Type>,
+    state: State<'_, Arc<SessionManager>>,  // 或 AttachRegistry / AppHandle 等
+    app: AppHandle,
+) -> Result<<返回 Type>, String> {
+    // 1. 调 services/<module>::<fn>
+    // 2. 错误转 String（Tauri IPC 标准）
+    // 3. 返回 Result<T, String>
+}
+```
+
+**禁止**：
+- 命令内 `tokio::spawn` 长跑任务（调 services）
+- 命令持有 `Arc<Mutex/RwLock>`（走 `State`）
+- 命令跨 IPC 调用其他命令（共享走 services）
+- 命令直跳 `infra/pty/ssh/tmux`（穿过 services 抽象）
+
+**关键 IPC 契约**（重点）：
+- `attach_session(sessionId, clientId)` → `services::attach::try_attach`
+- `write_session(sessionId, data)` → `services::session_manager::write`（自动 attach 权限检查）
+- `capture_text(sessionId, lines)` → tmux 走 capture-pane；其他走 OutputRing tail + `models::capture::capture`
+- `patch_settings(patch)` → settings.json merge + `after_settings_changed` 联动
+- `mcp_status()` → frontend 启动时调一次读 mcp.http 配置
+
+### 5.9.2 `services/` 子模块（6 个 module，RFC 0006 精简）
+
+| module | 状态 | 职责 |
+|---|---|---|
+| `session_manager.rs` | ✅ 核心注册表 | DashMap<u32, Arc<ActiveSession>> + attach_registry / subscribe_registry / session_id_index / profiles / quota |
+| `local_session/` | ✅ PTY handle | spawn + read_loop（推 OutputRing + emit_binary） |
+| `ssh_session/` | ✅ russh channel | 连接 + keepalive + reverse_tunnel |
+| `tmux_session/` | ✅ tmux controller | -CC 控制模式解析 + dispatch |
+| `session_log.rs` | ✅ file writer | tracing → 滚动日志 |
+| `attach/` | ✅ DashMap<u32, AttachState> | 独占状态机 + idle_timeout sweeper + `mcp-attach-changed` event |
+| `subscribe/` | ✅ DashMap<u32, Arc<OutputRing>> | 环形缓冲 + AtomicU64 序号 + 多 subscriber fan-out + 50ms 批处理 |
+| `reverse_tunnel/` | ✅ TunnelHandle + 重连 task | russh -R + 1/2/4/8/16s 指数退避 × 5 + PS/bash 脚本生成 |
+
+**下沉**（无状态）：
+- ❌ ~~`services/config/`~~ → `commands/persistence.rs::after_settings_changed` helper
+- ❌ ~~`services/capture/`~~ → `models/capture.rs`（pure function）
+
+**3 问判定 service 是否该存在**（防止过度抽象）：
+1. 持有可变状态？（DashMap/Mutex/Atomic/长跑 task）→ service
+2. pure function？→ model
+3. IO wrapper（包装外部库 API）？→ commands / infrastructure
+
+**friend module 模式**：
+- `session_manager` 直接读 `attach_registry / subscribe_registry` 字段（friend）
+- `attach / subscribe` 不读 `session_manager.sessions`（走公开 API）
+
+**每个 service 独立 INTERFACE.md / DOWNSTREAM.md**（不删）：
+- `services/attach/INTERFACE.md`（292 行）+ `services/attach/DOWNSTREAM.md`（127 行）
+- `services/subscribe/INTERFACE.md`（147 行）+ `services/subscribe/DOWNSTREAM.md`（87 行）
+- `services/reverse_tunnel/INTERFACE.md`（96 行）+ `services/reverse_tunnel/DOWNSTREAM.md`（97 行）
+
+### 5.9.3 `infrastructure/` 子模块（5 个 module，纯平台抽象）
+
+| module | 现状 | 职责 |
+|---|---|---|
+| `pty.rs` | ✅ | `portable-pty` 封装 + ConPTY/winpty 适配 |
+| `ssh.rs` | ✅ + RFC 0003-revised 修复 | `russh` 封装 + `host_key_verify` 默认 `ask`（修复 AGENTS.md 已知 gap）+ known_hosts 写回 |
+| `tmux/` | ✅ | tmux -CC 控制模式（controller + parser + dispatch + protocol） |
+| `session_backend.rs` | ✅ + RFC 0006 扩展 | `trait SessionBackend` 扩展 `capture_text / capture_ansi / upload_image` |
+| `app_backend.rs` | ✅ + RFC 0006 扩展 | `trait AppBackend` 扩展 emit `mcp-attach-changed / config-reloaded / output-overflow / tunnel-status-changed` |
+| `binary_frame.rs` | ✅ | `[0xA1][0x01][session_id BE 4B][payload_len BE 4B][payload]` wire format |
+| `clipboard.rs` | ✅ | `tauri-plugin-clipboard-manager` 包装 |
+
+**禁止**：
+- `infrastructure/*` 调 `services/*` 或 `commands/*`（只被动调用）
+- `infrastructure/*` 持有跨调用可变状态（只持有平台句柄）
+
+### 5.9.4 `models/` 子模块（7 个 module，纯数据契约）
+
+| module | 现状 | 内容 |
+|---|---|---|
+| `session.rs` | ✅ | SessionInfo / SessionType / LocalSessionConfig / SSHSessionConfig / TmuxCcConfig / SessionBackend capability |
+| `capabilities.rs` | ✅ + 扩展 | CapabilityFlags（+ image_protocol / unicode11） |
+| `group.rs` | ✅ | GroupStore |
+| `attach.rs` | ✅ NEW | AttachState / AttachSource / McpAttachChangedEvent |
+| `subscription.rs` | ✅ NEW | RingEntry / SubscribeResult / OutputChunk / OutputOverflowEvent |
+| `profile.rs` | ✅ NEW | Profile / ProfileType / SessionConfig union / SshAuthConfig |
+| `config.rs` | ⚠️ 简化 | Settings + McpSettings / SshSettings / TunnelSettings（每个字段 `#[serde(default)]`） |
+| `capture.rs` | ⭐ NEW（RFC 0006） | CaptureMode + CaptureResult + 3 个 pure function |
+| ~~`mcp.rs`~~ | ❌ 删除 | 移到 frontend `model/mcp/types.ts` |
+
+**serde 约定**：
+- `#[serde(rename_all = "camelCase")]` — 所有 struct / 字段（IPC 跟 TS 镜像一致）
+- `#[serde(default)]` — 每个字段，向前兼容
+- `#[serde(skip_serializing_if = ...)]` — Option 字段不输出 None
+- `#[serde(tag = "type", rename_all = "lowercase")]` — tagged union（Profile）
+- ❌ 不再用 `#[serde(deny_unknown_fields)]` — JSON 直存容忍前端新字段
+- ❌ 不用 JsonSchema — schema 校验在 frontend（zod）
+
+**TS 镜像同步**：
+- Rust `Settings` ↔ TS `Settings` interface
+- Rust `SessionInfo.attached: Option<AttachState>` ↔ TS `attached?: AttachState | null`
+- Rust `SessionInfo.mcp_session_id: Option<String>` ↔ TS `mcpSessionId?: string`
+- Rust `Profile` ↔ TS `Profile`（替代旧 SavedSessionConfig）
 
 ## 6. 跨语言 wire 契约
 
@@ -786,19 +910,17 @@ tempfile = "3"    # JSON roundtrip 测试
 
 ## 13. 文档地图
 
+> **唯一权威**：本文档。子 module 不再单独维护 README——所有内容合入 §5.9。INTERFACE / DOWNSTREAM / capture.md 保留。
+
 | 子系统 | 文档 |
 |---|---|
-| 顶层架构 | 本文档 |
-| `commands/` | [`commands/README.md`](commands/README.md) |
-| `services/` | [`services/README.md`](services/README.md) |
-| `services/attach/` | [`services/attach/README.md`](services/attach/README.md) |
-| [`services/subscribe/`](services/subscribe/README.md) | OutputRing 详情 |
-| ~~[`services/capture/`](services/capture/README.md)~~ | ❌ 下沉到 [`models/capture.md`](models/capture.md)（RFC 0006） |
-| ~~[`services/config/`](services/config/README.md)~~ | ❌ 下沉到 [`commands/README.md §3.4`](commands/README.md)（RFC 0006） |
-| [`services/reverse_tunnel/`](services/reverse_tunnel/README.md) | 反向 SSH 隧道 |
-| `infrastructure/` | [`infrastructure/README.md`](infrastructure/README.md) |
-| `models/` | [`models/README.md`](models/README.md) |
-| ~~`mcp_server/`~~ | **已归档**到 `doc/dev/history/mcp-server-backend-rfc-0002/backend-design/`（RFC 0002 决策保留可追溯） |
+| **顶层架构** | **本文档** |
+| `services/attach/` 详细契约 | [`services/attach/INTERFACE.md`](services/attach/INTERFACE.md) + [`DOWNSTREAM.md`](services/attach/DOWNSTREAM.md) |
+| `services/subscribe/` 详细契约 | [`services/subscribe/INTERFACE.md`](services/subscribe/INTERFACE.md) + [`DOWNSTREAM.md`](services/subscribe/DOWNSTREAM.md) |
+| `services/reverse_tunnel/` 详细契约 | [`services/reverse_tunnel/INTERFACE.md`](services/reverse_tunnel/INTERFACE.md) + [`DOWNSTREAM.md`](services/reverse_tunnel/DOWNSTREAM.md) |
+| `models/capture.rs` 详细设计 | [`models/capture.md`](models/capture.md) |
+| ~~`services/config / capture / config.rs`~~ | ❌ 删除 / 下沉（RFC 0003/0006） |
+| ~~`mcp_server/`~~ | 已归档到 `doc/dev/history/mcp-server-backend-rfc-0002/`（RFC 0002 superseded） |
 | **frontend MCP** | [`doc/dev/design/frontend/app/mcp/`](../frontend/app/mcp/README.md)（302 行 RESPONSIBILITY + 332 行 INTERFACE + 153 行 DOWNSTREAM） |
 
 ## 14. 跟 PRD / RFC 对应
