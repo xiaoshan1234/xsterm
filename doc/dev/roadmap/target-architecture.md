@@ -37,8 +37,7 @@ xsterm/
 │       │       │   ├── session_log.rs      # 现有
 │       │       │   ├── attach/             # NEW: attach/detach 状态机
 │       │       │   ├── subscribe/          # NEW: 序号环形缓冲
-│       │       │   ├── capture/            # NEW: screen capture
-│       │       │   └── config/             # NEW (revised): tauri-plugin-store JSON + 联动更新
+│       │       │   └── config/             # NEW (revised): tauri-plugin-store JSON + 联动更新（RFC 0006 内联到 commands/persistence.rs）
 │       │       ├── infrastructure/
 │       │       │   ├── pty.rs
 │       │       │   ├── ssh.rs              # 现有（host key 校验开关化）
@@ -337,10 +336,10 @@ pub struct SessionManager {
 }
 ```
 
-### 4.2 终态结构
+### 4.2 终态结构（RFC 0006 调整后）
 
 ```rust
-// session_manager.rs 扩展
+// session_manager.rs 扩展（无 capture state —— capture 算法层在 models/capture.rs）
 pub(crate) enum ActiveSession {
     Pty(Box<dyn SessionBackend + Send>),
     Ssh(Box<SshSessionWrapper>),
@@ -354,18 +353,21 @@ pub struct SessionManager {
     next_id: AtomicU32,
     tmux_controllers: DashMap<u32, Arc<TmuxController>>,
     docker_containers: DashMap<u32, Arc<DockerHandle>>,  // NEW
-    
-    // NEW：attach / subscribe / capture 状态
-    attach_state: DashMap<u32, AttachState>,           // session_id → AttachState
-    output_rings: DashMap<u32, Arc<OutputRing>>,       // session_id → ring buffer
-    subscribers: DashMap<u32, Vec<Subscriber>>,         // session_id → N subscribers
-    profiles: DashMap<String, Profile>,                 // profile_name → Profile（NEW）
-    quota: Arc<SessionQuota>,                          // 100 sessions max
-    
+
+    // NEW：attach / subscribe 状态（RFC 0006：capture 算法下移到 models）
+    attach_registry: Arc<AttachRegistry>,           // friend with services/attach
+    subscribe_registry: Arc<SubscribeRegistry>,     // friend with services/subscribe
+    session_id_index: DashMap<String, u32>,        // mcp_session_id → u32
+    reverse_index: DashMap<u32, String>,            // u32 → mcp_session_id
+    profiles: DashMap<String, Profile>,              // profile_name → Profile（NEW）
+    quota: Arc<SessionQuota>,                        // 100 sessions max
+
     // NEW：审计
-    audit_log: Option<Arc<AuditLog>>,                  // mcp.audit.enabled 时启用
+    audit_log: Option<Arc<AuditLog>>,                // mcp.audit.enabled 时启用
 }
 ```
+
+> **⚠️ RFC 0006 调整**：原设计 `output_rings / subscribers` DashMap 已下沉到 `services::subscribe::SubscribeRegistry`（独立 module）。SessionManager 只持有 `Arc<SubscribeRegistry>` 引用。capture 算法层（strip_ansi regex）在 `models/capture.rs`——没状态、pure function，不进 SessionManager。
 
 ### 4.3 SessionBackend 扩展
 
@@ -401,7 +403,7 @@ pub trait SessionBackend: Send + Sync {
 > 详见：
 > - **决策**：[`doc/dev/adr/0002-revised-mcp-frontend.md`](../adr/0002-revised-mcp-frontend.md) —— override 原 RFC 0002
 > - **frontend MCP 设计**：[`doc/dev/design/frontend/app/mcp/`](../design/frontend/app/mcp/)（RESPONSIBILITY 302 行 + INTERFACE 332 行 + DOWNSTREAM 153 行）
-> - **backend 支撑**：[`doc/dev/design/backend/README.md §7`](../design/backend/README.md) —— attach / subscribe / capture / tunnel 4 个 service 提供 IPC 镜像
+> - **backend 支撑**：[`doc/dev/design/backend/README.md`](../design/backend/README.md) —— attach / subscribe / tunnel 3 个 service + capture 算法在 models（RFC 0006）
 >
 > ### 5.1 frontend MCP server 位置（已迁移）
 >

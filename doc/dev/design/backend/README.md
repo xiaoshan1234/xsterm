@@ -165,8 +165,8 @@ commands ─┬──► services ──► infrastructure ──► (外部 cra
 | `services/session_log.rs` | 现有 |
 | `services/attach/` | **NEW**（attach 状态机独占实现） |
 | `services/subscribe/` | **NEW**（OutputRing + 序号 + 推送） |
-| `services/capture/` | **NEW**（capture 三模式） |
-| `services/config/` | **简化**（tauri-plugin-store JSON + 联动更新） |
+| ~~`services/capture/`~~ | **删除**（RFC 0006 —— pure function 下沉到 `models/capture.rs`） |
+| ~~`services/config/`~~ | **删除**（RFC 0006 —— 无状态，下沉到 `commands/persistence.rs` 扩展） |
 | `services/reverse_tunnel/` | **NEW**（russh -R + 指数退避） |
 | `infrastructure/pty.rs` | 现有 |
 | `infrastructure/ssh.rs` | 现有（host_key_verify 默认改为 ask） |
@@ -185,7 +185,7 @@ commands ─┬──► services ──► infrastructure ──► (外部 cra
 | ~~`models/mcp.rs`~~ | **删除**（移到 frontend `model/mcp/types.ts`） |
 | ~~`mcp_server/`~~ | **删除**（移到 frontend `app/mcp/`） |
 
-**注意**：`commands/persistence.rs` 现有功能**保留**（sessions / groups / attached_tmux），**新增** `save_settings / load_settings / patch_settings` 接 frontend service/persistence。详见 [`services/config/README.md`](services/config/README.md) §8 IPC 契约。
+**注意**：`commands/persistence.rs` 现有功能**保留**（sessions / groups / attached_tmux），**新增** `save_settings / load_settings / patch_settings` 接 frontend service/persistence。详见 [`backend/commands/README.md §3.4`](commands/README.md) IPC 契约 + `models/capture.md`（capture 算法层）。
 
 ## 5. 关键设计决策
 
@@ -225,9 +225,8 @@ src/app/mcp/                ⭐ frontend TS 层
 
 ### 5.3 subscribe / capture 独立 service（不变）
 
-`services/subscribe/` 和 `services/capture/` 是**独立 module**：
+`services/subscribe/` 是**独立 module**：
 - subscribe = 环形缓冲 + 序号 + fan-out（**真源在 backend**——PTY/SSH/tmux 后端读循环推 entry）
-- capture = text / ansi / screenshot（tmux capture-pane 是 backend 命令；text/ansi fallback 走 OutputRing tail）
 - frontend MCP subscribe_output 通过 `listen('session-output')` + OutputRing 序号管理
 
 **关键**：
@@ -270,6 +269,116 @@ src/app/mcp/                ⭐ frontend TS 层
 - `profile.rs` — **NEW**
 - ~~`config.rs`~~ — **删除**（RFC 0003-revised：JSON 直存无需独立 command module；settings 读写由 `commands/persistence.rs` 扩展承载）
 - ~~`mcp.rs`~~ — **删除**（移到 frontend）
+
+### 5.8 SessionManager 核心注册表扩展（RFC 0006 合并自原独立 doc）
+
+`SessionManager` 是 backend 状态机核心，扩展后结构：
+
+```rust
+pub struct SessionManager {
+    // ============ 现有字段 ============
+    sessions: DashMap<u32, Arc<ActiveSession>>,
+    session_id_source: Arc<SessionIdSource>,
+    pty_system: Box<dyn PtySystem>,
+    ssh_backend: Arc<dyn SshBackend>,
+    tmux_controllers: DashMap<u32, Arc<TmuxController>>,
+    next_controller_id: AtomicU32,
+
+    // ============ ⭐ RFC 0006 扩展字段 ============
+    pub attach_registry: Arc<AttachRegistry>,        // friend with services/attach
+    pub subscribe_registry: Arc<SubscribeRegistry>,  // friend with services/subscribe
+    pub session_id_index: DashMap<String, u32>,       // mcp_session_id → u32
+    pub reverse_index: DashMap<u32, String>,          // u32 → mcp_session_id
+    pub profiles: DashMap<String, Profile>,
+    pub quota: Arc<SessionQuota>,
+    pub audit_log: Option<Arc<AuditLog>>,
+}
+
+pub(crate) enum ActiveSession {
+    Pty(Box<dyn SessionBackend + Send>),
+    Ssh(Box<SshSession>),
+    Tmux(Box<TmuxPaneHandle>),
+}
+
+// ============ SessionBackend trait 扩展 ============
+pub trait SessionBackend: Send + Sync {
+    // 现有 5 个方法保留
+    fn get_session_info(&self) -> &SessionInfo;
+    fn get_capabilities(&self) -> CapabilityFlags;
+    fn write(&self, data: &[u8]) -> Result<(), String>;
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
+    fn close(self: Box<Self>) -> Result<(), String>;
+    // ⭐ NEW:
+    fn capture_text(&self, start: i32, end: i32, strip_ansi: bool) -> Result<String, String>;
+    fn capture_ansi(&self, start: i32, end: i32) -> Result<String, String>;
+    fn upload_image(&self, filename: &str, data: &[u8]) -> Result<String, String>;
+}
+```
+
+**5 个集成点**：
+
+1. **write() 权限检查**（attach 状态机集成）：
+```rust
+pub async fn write(
+    &self,
+    session_id: u32,
+    bytes: &[u8],
+    caller_client_id: Option<&str>,  // ⭐ 新增参数
+) -> Result<(), SessionError> {
+    // 1. ⭐ attach 权限检查（双层防御后端层）
+    if !self.attach_registry.check_write_permission(session_id, caller_client_id) {
+        return Err(SessionError::PermissionDenied);
+    }
+    // 2. 原有 write 逻辑
+    let backend = self.sessions.get(&session_id).ok_or(SessionError::NotFound(session_id))?;
+    backend.value().write(bytes).map_err(SessionError::WriteFailed)
+}
+```
+
+2. **close() 清理**（attach + subscribe + mcp_session_id）：
+```rust
+pub async fn close(&self, session_id: u32) -> Result<(), SessionError> {
+    self.attach_registry.force_detach(session_id);
+    self.subscribe_registry.remove(session_id);
+    if let Some((_, mcp_id)) = self.reverse_index.remove(&session_id) {
+        self.session_id_index.remove(&mcp_id);
+    }
+    // ... 原有 close 逻辑
+    self.quota.release();
+    Ok(())
+}
+```
+
+3. **create_local 注入 OutputRing + mcp_session_id**：
+```rust
+let session_id = self.session_id_source.allocate();
+let mcp_session_id = format!("tab-{}", &Uuid::new_v4().simple().to_string()[..6]);
+self.session_id_index.insert(mcp_session_id.clone(), session_id);
+self.reverse_index.insert(session_id, mcp_session_id.clone());
+
+let ring = self.subscribe_registry.get_or_create(session_id);
+services::local_session::create(&config, ring.clone())?;
+```
+
+4. **mcp_session_id 双向映射**：
+```rust
+pub fn lookup_by_mcp_id(&self, mcp_id: &str) -> Option<u32>;
+pub fn mcp_id_for(&self, u32_id: u32) -> Option<String>;
+```
+
+5. **quota 检查**：
+```rust
+pub fn try_create(&self) -> Result<(), SessionError> {
+    let current = self.quota.current.fetch_add(1, Ordering::SeqCst);
+    if current >= self.quota.max {
+        self.quota.current.fetch_sub(1, Ordering::SeqCst);
+        return Err(SessionError::QuotaExceeded);
+    }
+    Ok(())
+}
+```
+
+**详细设计**已合并到 [`services/session_manager_extension.md`](doc/dev/history/services-simplification-rfc-0006/session_manager_extension.md)（归档可追溯，RFC 0006 把独立 doc 合并进 backend/README.md §5.8）。
 
 ## 6. 跨语言 wire 契约
 
@@ -318,8 +427,8 @@ tauri::Builder::default()
     │       app.manage(Arc::new(reload_handle));
     │
     │       // 2. ⭐ settings.json 加载（tauri-plugin-store）
-    │       let config_store = services::config::ConfigStore::load(app.handle())?;
-    │       app.manage(Arc::new(config_store));
+    │       // settings 读写在 commands/persistence::load_settings/save_settings/patch_settings
+    │       // 联动更新在 commands/persistence::after_settings_changed helper
     │
     │       // ⚠️ RFC 0003-revised：无 notify 热更新监听（frontend 是唯一写入入口）
     │
@@ -558,8 +667,8 @@ grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state|output_rings
 | **services/session_manager** | cargo test + mockall | 已有覆盖；扩展 attache / output_ring |
 | **services/attach** | cargo test + mockall | 状态机 + idle timeout + 互斥 |
 | **services/subscribe** | cargo test | OutputRing 满 + seq 连续 + 多 subscriber |
-| **services/capture** | cargo test | text / ansi 模式剥离 + tmux 路由 |
-| **services/config** | cargo test + tempfile | JSON roundtrip + forward compat (default) |
+| ~~**services/capture**~~ | ~~移到 `models/capture.rs`（pure function）~~ | text / ansi 模式剥离 regex 测试 |
+| ~~**services/config**~~ | ~~移到 `commands/persistence.rs` 扩展~~ | JSON roundtrip + forward compat (default) |
 | **services/reverse_tunnel** | 集成测试（需 sshd） | 5 次重连 + token 鉴权 |
 | **commands/** | cargo test（mock state） | 每个命令的 happy path + 错误分支 |
 | **infrastructure/** | cargo test | pty open + ssh 连接 + binary_frame roundtrip |
@@ -682,12 +791,11 @@ tempfile = "3"    # JSON roundtrip 测试
 | 顶层架构 | 本文档 |
 | `commands/` | [`commands/README.md`](commands/README.md) |
 | `services/` | [`services/README.md`](services/README.md) |
-| `services/session_manager_extension` | [`services/session_manager_extension.md`](services/session_manager_extension.md) |
 | `services/attach/` | [`services/attach/README.md`](services/attach/README.md) |
-| `services/subscribe/` | [`services/subscribe/README.md`](services/subscribe/README.md) |
-| `services/capture/` | [`services/capture/README.md`](services/capture/README.md) |
-| `services/config/` | [`services/config/README.md`](services/config/README.md) |
-| `services/reverse_tunnel/` | [`services/reverse_tunnel/README.md`](services/reverse_tunnel/README.md) |
+| [`services/subscribe/`](services/subscribe/README.md) | OutputRing 详情 |
+| ~~[`services/capture/`](services/capture/README.md)~~ | ❌ 下沉到 [`models/capture.md`](models/capture.md)（RFC 0006） |
+| ~~[`services/config/`](services/config/README.md)~~ | ❌ 下沉到 [`commands/README.md §3.4`](commands/README.md)（RFC 0006） |
+| [`services/reverse_tunnel/`](services/reverse_tunnel/README.md) | 反向 SSH 隧道 |
 | `infrastructure/` | [`infrastructure/README.md`](infrastructure/README.md) |
 | `models/` | [`models/README.md`](models/README.md) |
 | ~~`mcp_server/`~~ | **已归档**到 `doc/dev/history/mcp-server-backend-rfc-0002/backend-design/`（RFC 0002 决策保留可追溯） |
@@ -705,7 +813,7 @@ tempfile = "3"    # JSON roundtrip 测试
 | **§2 M6 MCP server** | **RFC 0002-revised** | **attach 状态机**：`services/attach` | **协议层 + 9 工具**：`app/mcp/` |
 | **§2 M7 本地 AI 接管** | target-arch §5.5 | **attach 透传**：`commands/mcp::attach_session` | **AI takeover UX**：`app/session/usecases/ai_takeover/` |
 | **§2 M8 远程 SSH agent** | target-arch §3.1 (2) | `services/reverse_tunnel/` + `commands/tunnel.rs` | 端口转发 frontend MCP HTTP |
-| **§2 M9 配置 JSON** | RFC 0003-revised | `services/config/` + `commands/persistence.rs` 扩展 | |
+| **§2 M9 配置 JSON** | RFC 0003-revised | `commands/persistence.rs` 扩展（settings IPC + after_settings_changed） | |
 | §2 M11 自动更新 | (未来) | frontend + 平台商店通道 | |
 | §3 数据流 | PRD §3 | 端到端（PTY → tokio mpsc → Tauri IPC → xterm.js） | |
 | §4 数据权限 | RFC + target-arch §8 | **§11 安全模型** | |
@@ -727,7 +835,7 @@ tempfile = "3"    # JSON roundtrip 测试
 如果未来要升级 MCP：
 1. **加 stdio transport**：Tauri sidecar spawn `xsterm-mcp-stdio.exe` + stdio pipe 桥接 frontend HTTP server
 2. ~~**加 list_profiles / get_config / set_config**：frontend `app/mcp/tools/` 加 3 个工具~~ —— RFC 0003-revised 删除 set_config（前端 zod + 直存已够）；list_profiles / get_config 在 v1.0 可选
-3. **拆 crates**：`services/attach / subscribe / capture` 可独立 crate（独立编译 + 独立单测）
+3. **拆 crates**：`services/attach / subscribe` 可独立 crate（独立编译 + 独立单测）
 4. **拆 MCP SDK**：自研 ~200 行 TS 已够用，不需要 MCP SDK 依赖
 
 **MCP 协议层**不受影响（`app/mcp/tools` 不变），只改 transport / 工具集。

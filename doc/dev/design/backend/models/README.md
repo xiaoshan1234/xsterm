@@ -14,7 +14,8 @@
 | `attach.rs` | ⭐ NEW | ~200 | AttachState / AttachSource / McpAttachChangedEvent |
 | `subscription.rs` | ⭐ NEW | ~150 | OutputRingEntry / SubscribeResult / OutputOverflowEvent |
 | `profile.rs` | ⭐ NEW | ~250 | Profile / ProfileType / SessionConfig union |
-| `config.rs` | ⚠️ 简化（RFC 0003-revised） | ~400 | Settings + 5 个子 struct（见 services/config） |
+| `config.rs` | ⚠️ 简化（RFC 0003-revised） | ~400 | Settings + 5 个子 struct（见 services/config 历史） |
+| `capture.rs` | ⭐ NEW（RFC 0006） | ~150 | CaptureMode + CaptureResult + capture_text/ansi/screenshot pure functions |
 | ~~`mcp.rs`~~ | ❌ 删除（RFC 0002-revised） | n/a | 12 个 MCP 工具的 params/result 类型镜像移到 frontend `model/mcp/types.ts` |
 
 ## 2. 设计原则
@@ -230,6 +231,42 @@ export type KeySpec = { type: "char"; value: string } | { type: "key"; value: Ke
 ```
 
 详见 [`doc/dev/design/frontend/app/mcp/`](../../frontend/app/mcp/README.md) 完整 schema + JSON-RPC 协议层。
+
+## 7.5 `models/capture.rs` —— ⭐ NEW（RFC 0006）
+
+```rust
+// models/capture.rs
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptureMode {
+    Text,
+    Ansi,
+    Screenshot,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CaptureError {
+    #[error("mode {0:?} not supported")]
+    UnsupportedMode(CaptureMode),
+    #[error("internal: {0}")]
+    Internal(String),
+}
+
+/// 主入口：pure function，根据 mode 路由
+pub fn capture(
+    mode: CaptureMode,
+    raw_bytes: &[u8],
+    lines: usize,
+) -> Result<CaptureResult, CaptureError>;
+```
+
+**关键**：
+- ✅ Pure function（无 IO / 无状态）
+- ✅ regex ANSI 转义剥离（OnceCell 缓存）
+- ✅ screenshot MVP 返回 `UnsupportedMode`
+- ✅ 下沉自原 `services/capture/`（RFC 0006）
+
+详见 [`capture.md`](capture.md) 完整设计。
 
 ## 8. `models/session.rs` 扩展
 

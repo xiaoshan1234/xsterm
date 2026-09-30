@@ -92,7 +92,7 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
 #[tauri::command]
 pub async fn <name>(
     <入参>: <Type>,
-    state: State<'_, Arc<SessionManager>>,  // 或 ConfigStore / AttachRegistry 等
+    state: State<'_, Arc<SessionManager>>,  // 或 AttachRegistry / AppHandle 等
     app: AppHandle,
 ) -> Result<<返回 Type>, String> {
     // 1. 调 services/<module>::<fn>
@@ -188,7 +188,104 @@ pub async fn get_session_attach_state(
 
 **frontend 启动时拉一次**：所有 attach state 灌入本地 mirror state（`app/mcp/client_state.ts`）。
 
-### 3.4 list_attached_sessions IPC
+## 3.4 `commands/persistence.rs` 扩展（settings 承载，RFC 0006）
+
+settings.json 读写由 `commands/persistence.rs` 扩展承载（替代原 `services/config/`）：
+
+```rust
+// commands/persistence.rs —— 扩展
+const SETTINGS_STORE: &str = "settings.json";
+const SETTINGS_KEY: &str = "settings";
+
+/// ⭐ internal helper（不是 IPC）—— 其他 commands 复用
+pub async fn load_settings_internal(app: &AppHandle) -> Result<Settings, String> {
+    let store = app.store(SETTINGS_STORE).map_err_string()?;
+    match store.get(SETTINGS_KEY) {
+        Some(value) => serde_json::from_value::<Settings>(value.clone()).map_err_string(),
+        None => Ok(Settings::default()),  // 缺文件用 default
+    }
+}
+
+pub async fn save_settings_internal(
+    app: &AppHandle,
+    settings: Settings,
+) -> Result<(), String> {
+    let store = app.store(SETTINGS_STORE).map_err_string()?;
+    store.set(SETTINGS_KEY, serde_json::to_value(settings).map_err_string()?);
+    store.save().map_err_string()?;
+    Ok(())
+}
+
+/// ⭐ 联动更新（替代原 services/config::apply_to_subsystems）
+pub async fn after_settings_changed(app: &AppHandle) -> Result<(), String> {
+    let settings = load_settings_internal(app).await?;
+
+    // 1. attach idle_timeout
+    if let Some(attach_registry) = app.try_state::<Arc<AttachRegistry>>() {
+        attach_registry.set_idle_timeout(settings.mcp.idle_timeout_seconds);
+    }
+
+    // 2. log level
+    if let Some(logging) = app.try_state::<Arc<LoggingHandle>>() {
+        logging.reload_filter(&settings.log_level)?;
+    }
+
+    // 3. ssh host_key_verify（如果改了，需要 reconnect）
+    if let Some(ssh_backend) = app.try_state::<Arc<SshBackendImpl>>() {
+        ssh_backend.notify_config_change(&settings.ssh).await?;
+    }
+
+    // 4. tunnel enable/disable
+    if let Some(tunnel_state) = app.try_state::<Option<Arc<TunnelHandle>>>() {
+        // ... start / stop tunnel
+    }
+
+    // 5. emit config-reloaded 事件
+    app.emit("config-reloaded", ConfigReloadedEvent {
+        config: settings,
+        source: ConfigReloadedSource::ManualWrite,
+    })?;
+
+    Ok(())
+}
+
+// ============ IPC 镜像 ============
+
+#[tauri::command]
+pub async fn load_settings(app: AppHandle) -> Result<Settings, String> {
+    load_settings_internal(&app).await
+}
+
+#[tauri::command]
+pub async fn save_settings(
+    settings: Settings,
+    app: AppHandle,
+) -> Result<(), String> {
+    save_settings_internal(&app, settings).await?;
+    after_settings_changed(&app).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn patch_settings(
+    patch: serde_json::Value,
+    app: AppHandle,
+) -> Result<Settings, String> {
+    let mut settings = load_settings_internal(&app).await?;
+    merge_patch(&mut settings, patch);
+    save_settings_internal(&app, settings.clone()).await?;
+    after_settings_changed(&app).await?;
+    Ok(settings)
+}
+```
+
+**关键**：
+- ❌ 不再有 `services/config/ConfigStore` class
+- ✅ settings 读写 + 联动更新都在 `commands/persistence.rs` 一个文件
+- ✅ `after_settings_changed` 是普通 async 函数，不是 service
+- ✅ frontend 调 `invoke('load_settings')` / `invoke('save_settings', ...)` / `invoke('patch_settings', ...)`
+
+### 3.5 list_attached_sessions IPC
 
 ```rust
 #[tauri::command]
@@ -199,19 +296,17 @@ pub async fn list_attached_sessions(
 }
 ```
 
-### 3.5 mcp_status IPC
+### 3.6 mcp_status IPC
 
 ```rust
 #[tauri::command]
-pub async fn mcp_status(
-    config_store: State<'_, Arc<ConfigStore>>,
-) -> Result<McpStatus, String> {
-    let config = config_store.get().await;
+pub async fn mcp_status(app: AppHandle) -> Result<McpStatus, String> {
+    let settings = persistence::load_settings_internal(&app).await?;
     Ok(McpStatus {
-        enabled: config.mcp.enabled,
-        http_port: config.mcp.http.port,
-        http_token_masked: mask_token(&config.mcp.http.token),
-        http_enabled: config.mcp.http.enabled,
+        enabled: settings.mcp.enabled,
+        http_port: settings.mcp.http_port,
+        http_token_masked: mask_token(settings.mcp.http_token.as_deref()),
+        http_enabled: settings.mcp.http_enabled,
     })
 }
 
@@ -227,22 +322,75 @@ pub struct McpStatus {
 
 **frontend 启动时调一次**：决定是否启动 app/mcp HTTP server + 用哪个 port。
 
-### 3.6 regenerate_mcp_token IPC
+### 3.7 regenerate_mcp_token IPC
 
 ```rust
 #[tauri::command]
-pub async fn regenerate_mcp_token(
-    config_store: State<'_, Arc<ConfigStore>>,
-) -> Result<String, String> {
+pub async fn regenerate_mcp_token(app: AppHandle) -> Result<String, String> {
     let new_token = generate_random_token();
-    let mut config = config_store.get().await;
-    config.mcp.http.token = Some(new_token.clone());
-    config_store.write_allowlist(config).await.map_err(|e| e.to_string())?;
+    let mut settings = persistence::load_settings_internal(&app).await?;
+    settings.mcp.http_token = Some(new_token.clone());
+    persistence::save_settings_internal(&app, settings).await?;
+    persistence::after_settings_changed(&app).await?;
     Ok(new_token)
 }
 ```
 
 **返回**：新 token 明文（仅此一次返回完整 token——之后只能拿到 masked）。
+
+## 3.8 capture_text / capture_ansi IPC（RFC 0006）
+
+```rust
+#[tauri::command]
+pub async fn capture_text(
+    session_id: u32,
+    lines: u32,
+    subscribe_registry: State<'_, Arc<SubscribeRegistry>>,
+) -> Result<String, String> {
+    // tmux 走 capture-pane 命令（精准）
+    if let Some(tmux_session) = session_manager.is_tmux(session_id) {
+        return TmuxController::capture_pane(&tmux_session, lines).await;
+    }
+
+    // 其他（local PTY / SSH）走 OutputRing tail fallback
+    let ring = subscribe_registry.get(session_id)
+        .ok_or_else(|| "session not found".to_string())?;
+    let entries = ring.tail(lines as usize).await;
+    let raw_bytes: Vec<u8> = entries.iter().flat_map(|e| e.data.iter().copied()).collect();
+
+    // ⭐ 算法层在 models::capture
+    models::capture::capture(models::capture::CaptureMode::Text, &raw_bytes, lines as usize)
+        .map(|r| r.content)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn capture_ansi(
+    session_id: u32,
+    lines: u32,
+    subscribe_registry: State<'_, Arc<SubscribeRegistry>>,
+) -> Result<String, String> {
+    // 类似 capture_text，但不剥 ANSI
+    // ...
+    models::capture::capture(models::capture::CaptureMode::Ansi, &raw_bytes, lines as usize)
+        .map(|r| r.content)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn capture_screenshot(session_id: u32) -> Result<String, String> {
+    // ⭐ MVP 不支持
+    Err("screenshot mode not supported in MVP".to_string())
+}
+```
+
+**关键**：
+- 算法在 `models/capture.rs`（pure function，无 IO）
+- 数据源在 `services::subscribe::OutputRing::tail()`（backend 唯一真源）
+- tmux 走 `TmuxController::capture_pane`（backend 命令）
+- IPC 在 `commands/session.rs`（2 个新命令）
+
+详见 [`models/capture.md`](../models/capture.md)。
 
 ## 4. `commands/tunnel.rs` —— NEW
 
@@ -321,7 +469,7 @@ pub async fn generate_tunnel_script(
 
 ## 5. ~~`commands/config.rs`~~ —— ❌ 删除（RFC 0003-revised）
 
-JSON 直存不需要独立 `commands/config.rs`——settings 读写由 `commands/persistence.rs` 扩展承载（`load_settings / save_settings / patch_settings`），详见 [`services/config/INTERFACE.md §3.2`](../services/config/INTERFACE.md)。
+JSON 直存不需要独立 `commands/config.rs`——settings 读写由 `commands/persistence.rs` 扩展承载（`load_settings / save_settings / patch_settings` + `after_settings_changed` 联动函数），详见 [`commands/README.md §3.4`](#34-commands-persistencers-扩展settings-承载)。
 
 **删除内容**：
 - ❌ `get_config` IPC（白名单读）—— frontend 直读 store 不需要 IPC 镜像

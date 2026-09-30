@@ -1,67 +1,69 @@
-# Backend · Services — 设计
+# Backend · Services — 设计（RFC 0006 精简后）
 
 > **位置**：`src-tauri/src/services/`
 > **职责**：业务编排 + 跨 layer 状态 + 子系统独立 module
-> **拆分**：核心（session_manager + 4 个 session 子 module）+ 5 个 NEW 子 module
+> **拆分**：⭐ **6 个 module**（RFC 0006 精简后）—— 只保留"真有状态需要集中管理"
 
-## 1. 子 module 索引
+## 1. 6 个 module 索引
 
 ```
 src-tauri/src/services/
-├── mod.rs                    5 行 re-exports
+├── mod.rs                       6 行 re-exports
 │
-├── session_manager.rs        ⭐ 扩展现有（~3500 行）—— 核心注册表 + 状态机中心
-│                             [详见 session_manager_extension.md]
+├── session_manager.rs           ⭐ 核心注册表（DashMap<u32, Arc<ActiveSession>> + 扩展字段）
 │
-├── local_session/            ✅ 现有——local PTY spawn + read_loop
-├── ssh_session/              ✅ 现有——russh 连接 + tunnel channel
-├── tmux_session/             ✅ 现有——tmux -CC 控制模式解析 + dispatch
-├── session_log.rs            ✅ 现有——tracing → 文件
+├── local_session/               ✅ PTY handle 持有 + bytes read_loop
+├── ssh_session/                 ✅ russh connection 持有
+├── tmux_session/                ✅ tmux -CC controller 持有
+├── session_log.rs               ✅ tracing 文件 writer
 │
-├── ⭐ attach/                独立状态机——AI 独占 session
-│   [详见 services/attach/README.md]
-│
-├── ⭐ subscribe/             OutputRing 环形缓冲 + 序号 + 多 subscriber fan-out
-│   [详见 services/subscribe/README.md]
-│
-├── ⭐ capture/               3 种 capture 模式（text / ansi / screenshot）
-│   [详见 services/capture/README.md]
-│
-├── ⭐ config/                toml 加载 + notify 热更新 + migration
-│   [详见 services/config/README.md]
-│
-└── ⭐ reverse_tunnel/        russh -R 反向隧道 + 指数退避重连
-    [详见 services/reverse_tunnel/README.md]
+├── attach/                      ✅ DashMap<u32, AttachState> 状态机 + 60min idle timeout
+├── subscribe/                   ✅ DashMap<u32, Arc<OutputRing>> 全局索引 + 环形缓冲
+└── reverse_tunnel/              ✅ TunnelHandle + 重连 task
 ```
 
-## 2. 设计原则
+**删除**（RFC 0006 下沉）：
+- ❌ `services/config/` —— 没自有状态，下沉到 `commands/persistence.rs` 扩展
+- ❌ `services/capture/` —— 没自有状态，pure function 下沉到 `models/capture.rs`
 
-### 2.1 子 module 边界严格
+详见 [`doc/dev/adr/0006-services-simplification.md`](../../adr/0006-services-simplification.md)。
 
-- 每个子 module **单一职责**
-- 跨子 module 调用走 `SessionManager` 公开 API（不直读 private 字段）
-- 子 module 之间**不互相调**——通过 SessionManager 间接
+## 2. 设计原则（RFC 0006）
 
-### 2.2 friend module 模式（attach / subscribe 是 SessionManager 的 friend）
+### 2.1 3 问判断 service 是否该存在
 
 ```
-session_manager.rs 持有 attach_registry / subscribe_registry 字段（pub）
-attach/* 持有 DashMap<u32, AttachState>（pub）
-subscribe/* 持有 DashMap<u32, Arc<OutputRing>>（pub）
+问 1: 这个 module 持有可变状态吗？（DashMap / Mutex / Atomic* / 长跑 task handle）
+  ├─ 是 → service ✅
+  └─ 否 → 问 2
 
-session_manager.rs 直接读 attach_registry / subscribe_registry 字段
-attach/* / subscribe/* 不读 session_manager.sessions 字段（走公开 API）
+问 2: 这个 module 是 pure function / pure data transform 吗？
+  ├─ 是 → model ✅
+  └─ 否 → 问 3
+
+问 3: 这个 module 是 IO wrapper（包装外部库 API）吗？
+  ├─ 是 → commands 或 infrastructure ✅
+  └─ 否 → 重新评估
 ```
 
-**这是 user profile memory 中的 "destination-of-payload" 拆分原则的体现**——attach 数据归 attach，subscribe 数据归 subscribe，session 数据归 session_manager。
+### 2.2 避免"层级洁癖"
 
-### 2.3 子 module 公开 / 内部
+**反例**（不要做）：
+- ❌ "frontend 有 6 个 module → backend 也要 6 个 service" → 错！frontend 按"产品功能"切分，backend 按"状态"切分
+- ❌ "每个 frontend service 都对应 backend service" → 错！frontend service 是 zustand store（前端状态），backend 状态是独立的
+- ❌ "wrapper service"——只是 API 包装，无状态无 IO 调度 → 应该下沉到 commands 或 models
 
-每个子 module 的 `mod.rs` 暴露的符号：
-- `pub use <file>::<公开类型>` —— 给 caller
-- `<file>::private_helper` —— 子 module 内部 helper（pub(crate) 或 mod-private）
+### 2.3 service 边界判定
 
-详见各子 module 的 INTERFACE.md。
+**真正需要 service** 的标志（满足任一）：
+1. 持有跨调用的可变状态（DashMap / Mutex）
+2. 长跑 task（tokio::spawn 后台循环）
+3. 跨多 module 共享的全局索引（registry pattern）
+4. 复杂的内部状态机（attach / tunnel）
+
+**反例**（已下沉）：
+- `services/config` —— 只是 tauri-plugin-store wrapper，无自有状态
+- `services/capture` —— 纯函数（strip_ansi + 文本处理）
 
 ## 3. 依赖图
 
@@ -69,71 +71,62 @@ attach/* / subscribe/* 不读 session_manager.sessions 字段（走公开 API）
 session_manager
 ├── attach        (friend, 通过 Arc<AttachRegistry>)
 ├── subscribe     (friend, 通过 Arc<SubscribeRegistry>)
-├── capture       (call, 通过 subscribe + session_manager.capture_*)
 ├── local_session (owned, 持有 PTY handle)
 ├── ssh_session   (owned, 持有 russh client)
 ├── tmux_session  (owned, 持有 tmux controller)
 ├── session_log   (owned, 持有 log writer)
-└── config        (owned, 持有 ConfigStore for 联动更新)
+└── reverse_tunnel (owned, 持有 TunnelHandle)
 
-attach       ←─ mcp_server/tools/attach_session
-subscribe    ←─ mcp_server/tools/subscribe_output
-capture      ←─ mcp_server/tools/capture_screen
-config       ←─ mcp_server/tools/get_config/set_config
+attach       ←─ mcp_server/tools/attach_session + commands/mcp::attach_session + reverse_tunnel
+subscribe    ←─ mcp_server/tools/subscribe_output + services::capture (调 OutputRing::tail)
 local_session ←─ commands/session::create_local_session
 ssh_session  ←─ commands/session::create_ssh_session
-tmux_session ←─ commands/session::create_tmux_session
-reverse_tunnel ←─ commands/tunnel::tunnel_start
-
-mcp_server    ←─ commands/mcp::mcp_status + 各工具
-mcp_server    ←─ commands/session::write_session (镜像)
+tmux_session ←─ commands/session::create_tmux_session + commands/session::capture_pane
 ```
 
-## 4. 子模块对外暴露规则
+## 4. 公开 / 内部规则
 
-| 子 module | 必须对外暴露 | 不对外暴露 |
+| module | 必须对外暴露 | 不对外暴露 |
 |---|---|---|
 | `session_manager` | `Arc<SessionManager>` + 所有 pub 方法 | private DashMap 字段 |
-| `local_session` | `create()` / `spawn()` 公开函数 | PTY handle 内部状态 |
+| `local_session` | `create()` 公开函数 | PTY handle 内部状态 |
 | `ssh_session` | `create()` 公开函数 | russh client 内部状态 |
 | `tmux_session` | `TmuxController` (Arc) + 公开方法 | parser / dispatch 内部 |
 | `attach` | `AttachRegistry` (Arc) + `AttachSource` / `AttachState` 类型 | idle_timeout task handle |
 | `subscribe` | `SubscribeRegistry` (Arc) + `OutputRing` (Arc) + `RingEntry` | sweep task handle |
-| `capture` | `capture_screen()` + `CaptureMode` / `CaptureResult` / `CaptureError` | text / ansi 内部 regex |
-| `config` | `ConfigStore` (Arc) + `AppConfig` (在 models/config.rs) | notify watcher handle |
 | `reverse_tunnel` | `TunnelHandle` + `TunnelStatus` / `TunnelConfig` | russh client + reconnect loop |
 | `session_log` | `start_session_logging()` | tracing-subscriber 内部 |
 
 ## 5. 测试
 
-每个子 module 都有 `*.test.rs` 或 `#[cfg(test)] mod tests`：
-
-| 子 module | 测试类型 |
+| module | 测试类型 |
 |---|---|
-| `session_manager` | mockall（mock PtySystem / SshBackend / SessionBackend） |
+| `session_manager` | mockall（mock Pty/ssh/session_backend）+ attach 集成测试 |
 | `local_session` | 集成测试（spawn PowerShell 验证 PTY 双向通信） |
 | `ssh_session` | 集成测试（mock sshd） |
-| `tmux_session` | 单元 + 集成（mock tmux controller） |
+| `tmux_session` | 单元 + 集成（启动真实 tmux 进程） |
 | `attach` | mockall（state machine 100% 覆盖） |
 | `subscribe` | tokio test（ring + 多 subscriber + overflow） |
-| `capture` | tokio test（text / ansi / screenshot） |
-| `config` | tempfile + tokio（migration roundtrip + notify） |
 | `reverse_tunnel` | mock sshd + 5 次重连模拟 |
+| `session_log` | 单元（log file rotation） |
 
 ## 6. 性能预算
 
-详见各子 module 的 "性能预算" 节。
+详见各 module 的 "性能预算" 节。
 
 ## 7. 强约束（pre-commit 必跑）
 
 ```bash
 # 子 module 不能互相调（除 friend module 通过 Arc 共享）
-grep -rnE 'use\s+crate::services::(attach|subscribe|capture|config|reverse_tunnel)' src-tauri/src/services/
+grep -rnE 'use\s+crate::services::(attach|subscribe|reverse_tunnel)' src-tauri/src/services/
 # 必须只出现在 session_manager.rs（friend）
 
 # 子 module 不能反向依赖 commands / mcp_server / infrastructure
 grep -rnE 'use\s+crate::(commands|mcp_server|infrastructure)' src-tauri/src/services/
 # 必须为空
+
+# 子 module 必须真有状态（每个 module 都有 pub DashMap / Atomic / 长跑 task）
+# 通过人工 review 验证——新增 service 必须有"3 问"判定依据
 ```
 
 ## 8. 文档
@@ -141,16 +134,17 @@ grep -rnE 'use\s+crate::(commands|mcp_server|infrastructure)' src-tauri/src/serv
 | 文档 | 内容 |
 |---|---|
 | [`services/README.md`](README.md) | 本文档 |
-| [`services/session_manager_extension.md`](session_manager_extension.md) | SessionManager 扩展设计 |
-| [`services/attach/README.md`](attach/README.md) | attach 状态机 |
-| [`services/subscribe/README.md`](subscribe/README.md) | OutputRing 详情 |
-| [`services/capture/README.md`](capture/README.md) | capture 路径 |
-| [`services/config/README.md`](config/README.md) | toml 加载 + notify + migration |
-| [`services/reverse_tunnel/README.md`](reverse_tunnel/README.md) | 反向 SSH 隧道 |
+| [`services/attach/`](attach/README.md) | attach 状态机 |
+| [`services/subscribe/`](subscribe/README.md) | OutputRing 详情 |
+| [`services/reverse_tunnel/`](reverse_tunnel/README.md) | 反向 SSH 隧道 |
+| [`../README.md §4`](../README.md) | **核心注册表扩展**（SessionManager，含 attach / subscribe 集成说明） |
+| [`../models/capture.md`](../models/capture.md) | capture pure function（RFC 0006 下沉自 services/capture） |
+| [`../../adr/0006-services-simplification.md`](../../adr/0006-services-simplification.md) | 决策 |
 
 ## 9. 验收
 
-- 9 个子 module（4 现有 + 5 NEW）全部按设计落地 ✅
-- SessionManager 扩展所有字段接入 ✅
-- 子 module 边界无跨调（grep 校验通过） ✅
-- 100% 测试覆盖关键路径（attach / subscribe / capture / config） ✅
+- 6 个 services module 全部满足"3 问"判定（有状态 / 真服务） ✅
+- `services/config` + `services/capture` 已下沉 + 归档可追溯 ✅
+- SessionManager 扩展合并到 backend/README.md §4 ✅
+- backend docs 从 21 份精简到 16 份 ✅
+- 所有 PRD §2 M1-M11 功能不变 ✅
