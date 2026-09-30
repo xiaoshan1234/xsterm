@@ -858,15 +858,23 @@ tempfile = "3"    # JSON roundtrip 测试
 
 ## 13. 文档地图
 
-> **唯一权威**：本文档。子 module README 已合并。每个 module 配 RESPONSIBILITY / INTERFACE / DOWNSTREAM 3 份独立契约文档（不删）。
+> **唯一权威**：本文档。每个 module 配 RESPONSIBILITY / INTERFACE / DOWNSTREAM 3 份独立契约文档（共 32 module × 3 = **96 份 module docs**，已全部生成）。
 
 | 子系统 | 文档 |
 |---|---|
 | **顶层架构** | **本文档** |
-| `services/registry/attach_registry.rs` 详细契约 | [`services/attach/INTERFACE.md`](services/attach/INTERFACE.md) + [`DOWNSTREAM.md`](services/attach/DOWNSTREAM.md) |
-| `services/output/ring.rs + publisher.rs` 详细契约 | [`services/subscribe/INTERFACE.md`](services/subscribe/INTERFACE.md) + [`DOWNSTREAM.md`](services/subscribe/DOWNSTREAM.md) |
-| `services/transport/tunnel.rs` 详细契约 | [`services/reverse_tunnel/INTERFACE.md`](services/reverse_tunnel/INTERFACE.md) + [`DOWNSTREAM.md`](services/reverse_tunnel/DOWNSTREAM.md) |
-| `models/capture.rs` 详细设计 | [`models/capture.md`](models/capture.md) |
+| **commands/** 9 module × 3 docs = 27 份 | `commands/{session,workspace,terminal,tmux,settings,mcp,persistence,logging,tunnel}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/registry/** 4 module × 3 docs = 12 份 | `services/registry/{session_manager,attach_registry,subscribe_registry,profile_registry}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/lifecycle/** 3 module × 3 docs = 9 份 | `services/lifecycle/{local,ssh,tmux}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/output/** 2 module × 3 docs = 6 份 | `services/output/{ring,publisher}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/capture/** 2 module × 3 docs = 6 份 | `services/capture/{tmux,ansi}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/transport/** 1 module × 3 docs = 3 份 | `services/transport/tunnel/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/persistence/** 2 module × 3 docs = 6 份 | `services/persistence/{store,migration}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/io/** 2 module × 3 docs = 6 份 | `services/io/{log,wire}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **services/audit/** 1 module × 3 docs = 3 份 | `services/audit/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **infrastructure/** 7 module × 3 docs = 21 份 | `infrastructure/{pty,ssh,tmux,session_backend,app_backend,clipboard,logging_setup}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
+| **models/capture.rs** 详细设计 | [`models/capture.md`](models/capture.md) |
+| **models/README.md** | [`models/README.md`](models/README.md)（7 domain 索引） |
 | `services/registry/session_manager.rs` 扩展设计 | [`doc/dev/history/backend-module-restructure-rfc-0007/session_manager_extension.md`](../../history/backend-module-restructure-rfc-0007/session_manager_extension.md)（归档） |
 | ~~`services/config / capture / config.rs`~~ | ❌ 删除 / 下沉（RFC 0003/0006） |
 | ~~`mcp_server/`~~ | 已归档到 `doc/dev/history/mcp-server-backend-rfc-0002/`（RFC 0002 superseded） |
@@ -876,19 +884,6 @@ tempfile = "3"    # JSON roundtrip 测试
 - 模块实现 + RESPONSIBILITY.md（职责 + 边界 + 禁止项）
 - INTERFACE.md（公开 API + 类型 + 函数签名）
 - DOWNSTREAM.md（依赖图 + 强约束 grep）
-
-**每个 module 应补的 3 份文档（待 PR 创建）**：
-- `commands/{workspace,terminal,tmux,settings,mcp,tunnel}.rs` 各自 RESPONSIBILITY + INTERFACE + DOWNSTREAM
-- `services/registry/{session_manager,attach_registry,subscribe_registry,profile_registry}.rs` 各自 3 份
-- `services/lifecycle/{local,ssh,tmux}.rs` 各自 3 份
-- `services/output/{ring,publisher}.rs` 各自 3 份
-- `services/capture/{tmux,ansi}.rs` 各自 3 份
-- `services/transport/tunnel.rs` RESPONSIBILITY + DOWNSTREAM（已有 INTERFACE.md）
-- `services/persistence/{store,migration}.rs` 各自 3 份
-- `services/io/{log,wire}.rs` 各自 3 份
-- `services/audit/mod.rs` 3 份
-- `infrastructure/{pty,ssh,tmux,session_backend,app_backend,clipboard,logging_setup}.rs` 各自 3 份
-- `models/{session,workspace,settings,attach,subscription,profile,capture}/` 各自 3 份
 
 ## 14. 跟 PRD / RFC 对应
 
