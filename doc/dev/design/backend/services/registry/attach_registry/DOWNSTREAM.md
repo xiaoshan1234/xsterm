@@ -1,12 +1,12 @@
 # Services · Attach — 对下依赖
 
-> **位置**：`src-tauri/src/services/attach/`
+> **位置**：`src-tauri/src/services/registry/attach_registry.rs` (RFC 0007 下沉自 `services/attach/`)
 > **依赖层级**：被多个上游 caller 调用，本身依赖少
 
 ## 1. 依赖图
 
 ```
-services/attach/registry.rs
+services/registry/attach_registry.rs
 ├── dashmap (crate)
 ├── tokio (crate)        [time::Duration 用于 idle_timeout]
 ├── serde (derive)
@@ -14,7 +14,7 @@ services/attach/registry.rs
 ├── tauri (AppHandle + Emitter)
 └── models/attach.rs (AttachState 类型)
 
-services/attach/idle_timeout.rs
+services/registry/attach_registry.rs::idle_timeout
 ├── tokio::time::interval
 └── services/attach::registry (AttachRegistry)
 ```
@@ -62,7 +62,7 @@ services/attach/idle_timeout.rs
 attach 的 idle_timeout_seconds 来自 settings.json `mcp.idleTimeoutSeconds` 字段：
 
 ```rust
-// services/config/mod.rs
+// services/persistence/store.rs (config 已下沉到 persistence, RFC 0003-revised)
 pub fn apply_to_attach_registry(config: &AppConfig, registry: &AttachRegistry) {
     registry.set_idle_timeout(config.mcp.idle_timeout.seconds);
 }
@@ -79,13 +79,13 @@ fn on_config_reloaded(new_config: AppConfig) {
 
 ## 7. 不允许的依赖
 
-- ❌ `services/attach/*` → `services/session_manager`（friend module 不算；只能通过公开 API）
-- ❌ `services/attach/*` → `services/subscribe / capture`（attach 不感知其他 service 状态）
-- ❌ `services/attach/*` → `services/local_session / ssh_session / tmux_session`（attach 不接触 PTY/SSH/tmux）
-- ❌ `services/attach/*` → `mcp_server/*`（attach 不依赖 MCP 协议层）
-- ❌ `services/attach/*` → `commands/*`（services 不依赖 commands）
-- ❌ `services/attach/*` → `infrastructure/pty / ssh / tmux`（同上）
-- ❌ `services/attach/*` → `models::session`（attach 不感知 session 元数据）
+- ❌ `services/registry/attach_registry` → `services/registry/session_manager`（friend module 不算；只能通过公开 API）
+- ❌ `services/registry/attach_registry` → `services/output/ring` / `services/capture`（attach 不感知其他 service 状态）
+- ❌ `services/registry/attach_registry` → `services/lifecycle/{local,ssh,tmux}`（attach 不接触 PTY/SSH/tmux）
+- ❌ `services/registry/attach_registry` → `app/mcp/*`（frontend MCP, RFC 0002-revised — attach 不依赖 MCP 协议层）
+- ❌ `services/registry/attach_registry` → `commands/*`（services 不依赖 commands）
+- ❌ `services/registry/attach_registry` → `infrastructure/{pty,ssh,tmux}`（同上）
+- ❌ `services/registry/attach_registry` → `models::session`（attach 不感知 session 元数据）
 
 ## 8. 生命周期
 
@@ -100,24 +100,24 @@ fn on_config_reloaded(new_config: AppConfig) {
 
 ```bash
 # attach 不依赖 SessionManager 内部字段
-grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state)\.' src-tauri/src/services/attach/
+grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state)\.' src-tauri/src/services/registry/attach_registry.rs
 # 必须为空
 
 # attach 不依赖 PTY/SSH/tmux
-grep -rnE 'portable_pty|russh::|TmuxController' src-tauri/src/services/attach/
+grep -rnE 'portable_pty|russh::|TmuxController' src-tauri/src/services/registry/attach_registry.rs
 # 必须为空
 
 # attach 不依赖 MCP 协议层
-grep -rnE 'rmcp::|McpServerImpl|McpContext' src-tauri/src/services/attach/
+grep -rnE 'rmcp::|McpServerImpl|McpContext' src-tauri/src/services/registry/attach_registry.rs
 # 必须为空
 
 # attach 不感知 config_store 内部（除 idle_timeout 配置）
-grep -rn 'config_store\.' src-tauri/src/services/attach/ | grep -v 'tests\|//'
+grep -rn 'config_store\.' src-tauri/src/services/registry/attach_registry.rs | grep -v 'tests\|//'
 # 必须只出现在 idle_timeout.rs 的 set_idle_timeout 调用点
 
 # attach 修改只在 attach/ 和 session_manager.rs
 grep -rn 'attach_state\.insert\|attach_state\.remove' src-tauri/src/ --include='*.rs'
-# 必须只出现在 services/attach/ 和 services/session_manager.rs
+# 必须只出现在 services/registry/attach_registry.rs 和 services/registry/session_manager.rs
 ```
 
 ## 10. 依赖变更流程
