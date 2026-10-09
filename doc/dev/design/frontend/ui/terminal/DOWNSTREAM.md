@@ -10,9 +10,9 @@ modules/terminal/
 ├── api.ts ─────►  session/api.ts           (核心：terminal 强依赖 session 数据)
 ├── view/   ─────►  session/api.ts           (组件内读 session)
 ├── view/   ─────►  shell/api.ts             (拿 <Icon> <Button> 等 UI 原子)
-├── view/   ─────►  shared/ui                (跨 module 共用的小工具：纯函数)
+├── view/   ─────►  model/cross-cutting/ui                (跨 module 共用的小工具：纯函数, v4 重命名自 shared/)
 ├── store.ts ─────►  session/api.ts          (订阅 session store 变化)
-├── model.ts ─────►  shared/types            (PaneNode 等基础类型)
+├── model.ts ─────►  model/cross-cutting/types            (PaneNode 等基础类型, v4 重命名自 shared/)
 └── *.test.ts
 ```
 

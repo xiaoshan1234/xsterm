@@ -14,7 +14,7 @@ modules/shell/
 ├── view/    ────►  terminal/api.ts         (不直接调；workspace 嵌入 terminal)
 ├── init.ts  ────►  workspace/api.ts        (loadLastWorkspace)
 ├── init.ts  ────►  settings/api.ts         (loadSettings)
-├── init.ts  ────►  shared/persistence      (tauri-plugin-store)
+├── init.ts  ────►  model/cross-cutting/persistence      (tauri-plugin-store wrapper, v4 重命名自 shared/)
 └── primitives/  ──►  (无下层依赖，最纯的展示)
 ```
 

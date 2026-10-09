@@ -12,7 +12,7 @@ modules/workspace/
 ├── view/    ────►  shell/api.ts           (UI 原子 <Button> <Icon>)
 ├── view/    ────►  shell/api.ts           (useAppShell().openDialog 触发 dialog)
 ├── store.ts ────►  session/api.ts         (订阅 session store)
-├── store.ts ────►  shared/persistence     (load/save workspaces)
+├── store.ts ────►  model/cross-cutting/persistence     (load/save workspaces, v4 重命名自 shared/)
 ├── model.ts ────►  session/types          (跨 module 类型引用)
 └── *.test.ts
 ```
