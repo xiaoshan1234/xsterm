@@ -858,7 +858,8 @@ tempfile = "3"    # JSON roundtrip 测试
 
 ## 13. 文档地图
 
-> **唯一权威**：本文档。每个 module 配 RESPONSIBILITY / INTERFACE / DOWNSTREAM 3 份独立契约文档（共 32 module × 3 = **96 份 module docs**，已全部生成）。
+> **唯一权威**：本文档。每个 module 配 RESPONSIBILITY / INTERFACE / DOWNSTREAM 3 份独立契约文档（共 33 module × 3 = **99 份 module docs**，已全部生成;含 7 infra + 9 commands + 17 services + 0 models）。
+> **注**:`models/` 子树 (RFC 0007 plan) 尚未生成 R/I/D — `models/capture.md` 是单 doc 例外（pure function）;`models/README.md` 是 RFC 0007 拆分 plan 描述文档。
 
 | 子系统 | 文档 |
 |---|---|
@@ -873,10 +874,11 @@ tempfile = "3"    # JSON roundtrip 测试
 | **services/io/** 2 module × 3 docs = 6 份 | `services/io/{log,wire}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
 | **services/audit/** 1 module × 3 docs = 3 份 | `services/audit/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
 | **infrastructure/** 7 module × 3 docs = 21 份 | `infrastructure/{pty,ssh,tmux,session_backend,app_backend,clipboard,logging_setup}/{RESPONSIBILITY,INTERFACE,DOWNSTREAM}.md` |
-| **models/capture.rs** 详细设计 | [`models/capture.md`](models/capture.md) |
-| **models/README.md** | [`models/README.md`](models/README.md)（7 domain 索引） |
+| **models/capture.md** | [`models/capture.md`](models/capture.md)（pure function, 例外单 doc; RFC 0006 下沉自 services/capture) |
+| **models/README.md** | [`models/README.md`](models/README.md)（⏳ RFC 0007 拆分 plan: 8 domain 描述; R/I/D 尚未生成) |
 | `services/registry/session_manager.rs` 扩展设计 | [`doc/dev/history/backend-module-restructure-rfc-0007/session_manager_extension.md`](../../history/backend-module-restructure-rfc-0007/session_manager_extension.md)（归档） |
-| ~~`services/config / capture / config.rs`~~ | ❌ 删除 / 下沉（RFC 0003/0006） |
+| ~~`services/config / config.rs`~~ | ✅ RFC 0003-revised 删除 services/config/ 模块 + commands/config.rs（settings 直存 tauri-plugin-store） |
+| ~~`services/capture`~~ | ✅ 下沉到 `models/capture.md`（RFC 0006）— 但 `services/capture/{ansi,tmux}` 保留为业务编排层（与 models/capture 算法层并存） |
 | ~~`mcp_server/`~~ | 已归档到 `doc/dev/history/mcp-server-backend-rfc-0002/`（RFC 0002 superseded） |
 | **frontend 设计** | [`doc/dev/design/frontend/README.md`](../../frontend/README.md)（唯一权威） |
 
