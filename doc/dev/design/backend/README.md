@@ -401,10 +401,10 @@ pub fn try_create(&self) -> Result<(), SessionError> {
 
 | module | 命令数 | 职责 | 关联 services / models |
 |---|---|---|---|
-| `session.rs` | 23 + 3 NEW | create_local_session / create_ssh_session / create_tmux_session / create_session / write_session / resize_pty_session / resize_ssh_session / close_session / list_sessions / upload_image_to_ssh_session / get_session_output_channel / capture_text / capture_ansi / capture_screenshot | `services/registry/session_manager` + `services/lifecycle/{local,ssh,tmux}` + `models/capture` |
-| `workspace.rs` | 5 NEW | create_workspace / close_workspace / rename_workspace / save_workspace / load_workspace / load_last_workspace | frontend 持有 workspace 状态（backend 镜像持久化） |
+| `session.rs` | 15 (designed target: 23 + 3 = 26, partial implementation) | create_local_session / create_ssh_session / create_tmux_session / create_session / write_session / resize_pty_session / resize_ssh_session / close_session / list_sessions / upload_image_to_ssh_session / get_session_output_channel / capture_text / capture_ansi / capture_screenshot / probe_tmux_session_exists | `services/registry/session_manager` + `services/lifecycle/{local,ssh,tmux}` + `models/capture` |
+| `workspace.rs` | 13 (5 NEW + 8 missing from §5.1 prior count) | create_workspace / close_workspace / rename_workspace / save_workspace / load_workspace / load_last_workspace / delete_saved_workspace / create_group / delete_group / move_config_to_group / save_window / load_window / delete_saved_window | frontend 持有 workspace 状态（backend 镜像持久化） |
 | `terminal.rs` | 4 NEW | resize_terminal / set_cursor_blink / set_theme / get_terminal_capabilities | `models/session/capabilities` |
-| `tmux.rs` | 14 | create_tmux_pane / kill_tmux_pane / create_tmux_window / kill_tmux_window / rename_tmux_window / attach_tmux_session / capture_tmux_pane / get_attached_tmux_servers / auto_attach_tmux_servers / detach_tmux_controller / kill_server_via_controller / unmark_attached_tmux / resize_tmux_pane / probe_tmux_session_exists | `services/lifecycle/tmux` + `services/capture/tmux` |
+| `tmux.rs` | 13 (designed target: 14) | create_tmux_pane / kill_tmux_pane / create_tmux_window / kill_tmux_window / rename_tmux_window / attach_tmux_session / capture_tmux_pane / get_attached_tmux_servers / auto_attach_tmux_servers / detach_tmux_controller / kill_server_via_controller / unmark_attached_tmux / resize_tmux_pane | `services/lifecycle/tmux` + `services/capture/tmux` |
 | `settings.rs` | 3 | load_settings / save_settings / patch_settings | `services/persistence/store` |
 | `mcp.rs` | 6 | attach_session / detach_session / get_session_attach_state / list_attached_sessions / mcp_status / regenerate_mcp_token | `services/registry/attach_registry` |
 | `persistence.rs` | 6 + 3 | save_sessions / load_sessions / save_groups / load_groups / save_attached_tmux_servers / load_attached_tmux_servers + load_settings / save_settings / patch_settings（`after_settings_changed` 联动） | `services/persistence/store` |
@@ -412,7 +412,7 @@ pub fn try_create(&self) -> Result<(), SessionError> {
 | `tunnel.rs` | 4 NEW | tunnel_start / tunnel_stop / tunnel_status / generate_tunnel_script | `services/transport/tunnel` |
 | ~~`config.rs`~~ | ❌ 删除 | RFC 0003-revised：settings 读写由 `persistence.rs` 扩展承载 |
 
-**all_handlers() 入口**（完整 45 命令注册）：见 `commands/mod.rs::all_handlers()` 实现。
+**all_handlers() 入口**（实证 71 个 IPC 命令注册;§5.1 各行声明的目标数 vs INTERFACE.md 实证数以 INTERFACE 为准）:见 `commands/mod.rs::all_handlers()` 实现。
 
 ### 5.2 `services/` 子模块（7 子 module + 1 audit，按 lifecycle / 状态类型 / 资源切）
 
