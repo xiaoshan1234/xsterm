@@ -15,8 +15,8 @@
 src/
 ├── app/             业务编排（5+1 module 按产品功能切分）
 ├── ui/              视图渲染（5 module 按产品功能切分）
-├── model/           数据 + 算法（5 + 1 = 6 domain）
-├── service/         运行时状态 + IPC 桥（6 domain）
+├── model/           数据 + 算法（5 个正式 domain + 1 个 helper; cross-cutting 不算正式 domain）
+├── service/         运行时状态 + IPC 桥（5 domain; logger 已合入 infra）
 └── infra/           物理适配（唯一允许直跳 @tauri-apps/api）
 ```
 
@@ -99,19 +99,19 @@ modules/<name>/
 - 其他 module `import { X } from "@/ui/modules/<name>/api"`
 - **禁止**直接 import `view/*` 或 `store.ts` 或 `model.ts`
 
-### 2.3 `model/` — 数据 + 算法（5 + 1 = 6 domain）
+### 2.3 `model/` — 数据 + 算法（5 个正式 domain + 1 个 helper）
 
-**5 + 1 = 6 个目录**：
+**5 个正式 domain + 1 个 helper**:
 
-```
-src/model/
-├── session/        Session / SessionConfig / SessionDisplayConfig
-├── workspace/      Workspace / Window / Group / PaneNode（含 paneTree 算法）
-├── terminal/       TerminalTheme / 5 个 ANSI 调色板
-├── settings/       Settings / SettingsCategory / LogLevel（含 TerminalTheme / 5 个 ANSI 调色板）
-├── tmux/           TmuxController / AttachedServer / TmuxPane / TmuxWindow
-└── common/         跨域纯函数（textTransform / constants / generateId）
-```
+| 目录 | 内容 |
+|---|---|
+| `session/` | Session / SessionConfig / SessionDisplayConfig |
+| `workspace/` | Workspace / Window / Group / PaneNode（含 paneTree 算法） |
+| `settings/` | Settings / SettingsCategory / LogLevel（**含** TerminalTheme / 5 个 ANSI 调色板 — terminal 是 settings 的视觉子集, 不独立成 domain） |
+| `tmux/` | TmuxController / AttachedServer / TmuxPane / TmuxWindow |
+| `cross-cutting/` | 跨域纯函数（textTransform / constants / generateId）— **helper, 不是正式 domain** |
+
+注: 旧版前端模型曾有独立的 `terminal/` domain, 但 TerminalTheme / 调色板 与 settings 强耦合（动态切换主题时 settings.threshold/lighting reload 触发 ANSI 重生成）, 已合并入 `settings/terminal/` 子目录。
 
 **每个 domain 文件模板**（template）：
 ```typescript
@@ -138,11 +138,11 @@ model/<domain>/
 
 **关键**：rules 函数**不可变**——返回新对象，旧对象可安全丢弃。这让 zustand store 触发 re-render 时引用比较正常工作。
 
-### 2.4 `service/` — 运行时状态 + IPC 桥（6 domain）
+### 2.4 `service/` — 运行时状态 + IPC 桥（5 个 domain）
 
-**6 个 domain 划分**：
-- 业务 domain：`session` / `workspace` / `tmux` / `settings` / `persistence`
-- 工具 domain：`logger`（基础设施辅助）
+**5 个 domain 划分**:
+- 业务 domain: `session` / `workspace` / `tmux` / `settings` / `persistence`
+- ~~工具 domain `logger`~~ → 已合并到 `infra/logger/` (logger 是底层原语, 见下面"已删除/合并")
 
 ```
 src/service/
