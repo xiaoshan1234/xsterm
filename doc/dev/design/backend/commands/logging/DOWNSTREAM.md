@@ -33,7 +33,8 @@ Logging (commands/logging)
 |---|---|---|
 | frontend `app/<module>/usecases/` | `invoke('<command>', args)` | UI 用户操作 |
 | frontend `service/<domain>/repository.ts` | `invoke('<command>', args)` | reactive state 变更 |
-| frontend `app/mcp/tools/<tool>.ts`（RFC 0002-revised） | `invoke('<command>', args)` | MCP agent 操作 |
+| backend `services/mcp/tools/<tool>.rs`（RFC 0002-revised-2 backend MCP server） | `services::mcp::dispatch` 内部调 | MCP agent 直接 HTTP/stdio 调用 |
+| frontend `app/mcp/listener.ts` listen('mcp-tool-*') | (无 invoke) | UI 实时显示 MCP 操作 |
 | frontend `app/session/usecases/ai_takeover/` | `invoke('attach_session', ...)` | UI "🤖 AI 接管" 按钮 |
 
 ## 5. 下游被调

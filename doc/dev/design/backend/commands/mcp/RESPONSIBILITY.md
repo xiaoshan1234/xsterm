@@ -96,7 +96,7 @@ frontend `app/<module>` ↔ backend `commands/<module>` 一对一映射——fro
 
 ### 6.2 RFC 历史
 
-- RFC 0002-revised：12 个 MCP 工具移到 frontend；backend commands/mcp 只透传 attach 状态
+- RFC 0002-revised-2: 12 个 MCP 工具移到 backend `services/mcp/tools/` (HTTP + stdio 双 transport); frontend 仅 listener UI 显示
 - RFC 0003-revised：settings.json 直存，无 toml/migration/whitelist
 - RFC 0006：capture 算法下沉到 models/capture；commands/session 新增 capture_text / capture_ansi / capture_screenshot
 - RFC 0007：module 重新划分，commands 按 frontend app module 镜像切 9 个
@@ -111,7 +111,7 @@ frontend `app/<module>` ↔ backend `commands/<module>` 一对一映射——fro
 
 
 **关键约束**：
-- ⚠️ RFC 0002-revised：12 个 MCP 工具在 frontend app/mcp/；backend 只透传 attach 状态
+- ⚠️ RFC 0002-revised-2: 12 个 MCP 工具在 backend `services/mcp/tools/`; frontend 只 listener UI 显示 (history 见 doc/dev/adr/0002-revised-2-mcp-services-module.md)
 
 
 - 每个命令 happy path + 错误分支测试 ✅

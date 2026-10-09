@@ -1,7 +1,7 @@
 # Module · App Session — AI 接管（本地一键 + 释放）
 
 > **位置**：`src/app/modules/session/usecases/ai_takeover/`（PRD §2 M7 + §7.2）
-> **类型**：跨 module 业务编排（app/session + app/workspace + app/shell + integration/mcp 业务镜像, 监听 services/mcp 事件）
+> **类型**：跨 module 业务编排（app/session + app/workspace + app/shell + app/mcp listener, RFC 0002-revised-2）
 > **UI 对应**：`ui/session/` 的"🤖 AI 接管"按钮 + "释放"按钮 + 顶部 banner
 
 ## 1. 这个 module 负责什么
