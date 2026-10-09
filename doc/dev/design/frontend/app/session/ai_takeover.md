@@ -1,12 +1,12 @@
 # Module · App Session — AI 接管（本地一键 + 释放）
 
 > **位置**：`src/app/modules/session/usecases/ai_takeover/`（PRD §2 M7 + §7.2）
-> **类型**：跨 module 业务编排（app/session + app/workspace + app/shell + integration/mcp）
+> **类型**：跨 module 业务编排（app/session + app/workspace + app/shell + app/mcp）
 > **UI 对应**：`ui/session/` 的"🤖 AI 接管"按钮 + "释放"按钮 + 顶部 banner
 
 ## 1. 这个 module 负责什么
 
-PRD §2 M7 + §7.2 描述的"本地 AI 一键接管"流程——不通过 MCP 入口,而是 UI 按钮直接发起;但底层走的还是同一份 `McpAttachState` 独占机制(由 backend `integration/mcp` 持有)。
+PRD §2 M7 + §7.2 描述的"本地 AI 一键接管"流程——不通过 MCP 入口,而是 UI 按钮直接发起;但底层走的还是同一份 `McpAttachState` 独占机制(由 backend `commands/mcp` + `services/registry/attach_registry` 持有)。
 
 承担 3 类职责:
 
@@ -15,7 +15,7 @@ PRD §2 M7 + §7.2 描述的"本地 AI 一键接管"流程——不通过 MCP �
 3. **释放口令检测** —— 监听 session output,匹配配置的口令(默认 `ctrl-cmd-ai-release`)自动 detach
 
 **为什么 backend 不直出"AI takeover IPC"**:
-- 独占状态已经在 `integration/mcp::McpAttachState` 实现
+- 独占状态已经在 `app/mcp::client_state.ts` (frontend mirror) + `services/registry/attach_registry` (backend 真源) 实现
 - 复用同一份机制避免重复实现 + 状态分裂
 - 触发方式是"模拟 MCP client":backend 收到 `attach_session` 后只关心 client_id,不关心 client 是 UI 还是 stdio
 
@@ -24,7 +24,7 @@ PRD §2 M7 + §7.2 描述的"本地 AI 一键接管"流程——不通过 MCP �
 | module | 关系 |
 |---|---|
 | `app/session/usecases/aiTakeover` | 顶层编排 |
-| `integration/mcp` | 调 `attach_session` / `detach_session` MCP 工具 (通过 backend emit IPC,因为 frontend 没有直连 stdio) |
+| `app/mcp` (frontend TS, RFC 0002-revised) | 调 `attach_session` / `detach_session` MCP 工具 (通过 backend `invoke()` IPC) |
 | `app/workspace` | attach 后,workspace pane 状态展示 "AI 接管中" 标识 |
 | `app/shell` | 启动时检查 "auto takeover last session" 配置 |
 | `infra/tauri/commands/mcp` | 需要新增 IPC handler 把 MCP 工具暴露给 frontend(详见 §4) |
@@ -77,8 +77,8 @@ pub async fn detach_session(/* 同上 */) -> Result<(), String>;
 
 **关键**:
 - `commands/mcp` 是 v6 后新增的 4th module(原 §1 commands 表格说 3 module —— 后面 P0-3 完成后加 4th)
-- 实际是 **MCP attach 工具的 IPC 镜像** —— 内部委托 `integration/mcp::tools::attach_session` 实现
-- `commands/mcp` 自身不持有状态 —— 全权委托给 `integration/mcp`
+- 实际是 **MCP attach 工具的 IPC 镜像** —— 内部委托 `app/mcp/tools/attach_session.ts` 实现
+- `commands/mcp` 自身不持有状态 —— 全权委托给 `services/registry/attach_registry`
 
 ## 5. 释放口令检测
 
@@ -172,7 +172,7 @@ export function AiTakeoverBanner() {
 
 考虑过 `commands/mcp/` 做成独立 module(在 commands 顶层加第 4 个)。**但**:
 - attach / detach 只 2 个 IPC,不值得独立 module
-- 业务逻辑全在 `integration/mcp` —— commands/mcp 只是镜像
+- 业务逻辑全在 `services/registry/attach_registry` (backend 真源) + `app/mcp` (frontend 镜像) —— `commands/mcp` 只是 IPC 透传
 - 加进 `commands/session` 也可 —— attach 本质上是 "session 操作"的扩展
 
 **当前决策**: 加进 `commands/session`(详见 §4 代码示例)。
@@ -196,6 +196,6 @@ export function AiTakeoverBanner() {
 ## 9. 文档地图
 
 - 顶层 PRD: §2 M7 / §7.2
-- backend 实现: `integration/mcp/RESPONSIBILITY.md` §8.5 (`McpAttachState`)
+- backend 实现: `services/registry/attach_registry/RESPONSIBILITY.md` §X (`McpAttachState`) + frontend `app/mcp/RESPONSIBILITY.md`
 - frontend 流程: 本文
 - 释放口令配置: `service/settings/RESPONSIBILITY.md`(未来 settings 拆分后)
