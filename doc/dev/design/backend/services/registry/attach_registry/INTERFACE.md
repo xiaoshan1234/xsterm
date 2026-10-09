@@ -1,6 +1,6 @@
 # Services · Attach — 对外接口
 
-> **位置**：`src-tauri/src/services/registry/attach_registry.rs` (RFC 0007 下沉自 `services/attach/`)
+> **位置**：`src-tauri/src/services/registry/attach_registry.rs` (RFC 0007 下沉自 `services/attach/`; 与 RFC 0002-revised-2 无关)
 > **唯一入口**：`session_manager.attach_registry()` 拿 `Arc<AttachRegistry>`
 > **公开类型**：`AttachRegistry` / `AttachSource` / `AttachState` / `AttachError`
 
@@ -99,9 +99,9 @@ impl AttachRegistry {
 
 | caller | 调用方式 | 用途 |
 |---|---|---|
-| `app/mcp/tools/attach_session.ts` (frontend, RFC 0002-revised) | `attach_registry.try_attach(session_id, AttachSource::Mcp { ... })` | MCP client attach |
-| `app/mcp/tools/detach_session.ts` (frontend, RFC 0002-revised) | `attach_registry.detach(session_id, client_id)` | MCP client detach |
-| `app/mcp/server.ts` HTTP EOF handler (frontend, RFC 0002-revised) | `attach_registry.force_detach(session_id)` | HTTP stream close 自动释放 |
+| `services/mcp/tools/attach_session.rs` (backend, RFC 0002-revised-2) | `attach_registry.try_attach(session_id, AttachSource::Mcp { ... })` | MCP client attach |
+| `services/mcp/tools/detach_session.rs` (backend, RFC 0002-revised-2) | `attach_registry.detach(session_id, client_id)` | MCP client detach |
+| `services/mcp/http.rs` HTTP EOF handler (backend, RFC 0002-revised-2) | `attach_registry.force_detach(session_id)` | HTTP stream close 自动释放 |
 | `commands/mcp::attach_session` | `attach_registry.try_attach(session_id, AttachSource::Ui { client_id: "ui-takeover" })` | frontend UI takeover |
 | `commands/mcp::detach_session` | `attach_registry.detach(session_id, "ui-takeover")` | frontend "释放"按钮 |
 | `services/reverse_tunnel` | `attach_registry.try_attach(session_id, AttachSource::Tunnel { ... })` | 远端 agent 接管 |
@@ -111,17 +111,17 @@ impl AttachRegistry {
 
 ### 2.2 禁止
 
-- ❌ `app/mcp/*` 直接调 `attach_registry.inner`（必须用公开 API; frontend MCP 调 IPC 触发 backend `commands/mcp::attach_session` / `detach_session`）
+- ❌ `services/mcp/*` 直接调 `attach_registry.inner`（必须用公开 API; backend MCP 工具实现统一在 `services/mcp/tools/`）
 - ❌ `commands/*` 直接调 `try_attach` 跳过 source 类型——必须显式传 `AttachSource`
 - ❌ `services/subscribe / capture` 调 `check_write_permission`——它们不感知 attach 状态
 - ❌ frontend 调 `try_attach`（必须通过 `invoke('attach_session')` 走 IPC）
 
 ## 3. 接缝契约
 
-### 3.1 app/mcp ↔ attach (RFC 0002-revised)
+### 3.1 services/mcp ↔ attach (RFC 0002-revised-2)
 
 ```rust
-// app/mcp/tools/attach_session.ts (RFC 0002-revised — frontend MCP client tool; 后端镜像由 commands/mcp 透传)
+// services/mcp/tools/attach_session.rs (RFC 0002-revised-2 — backend MCP tool impl)
 use crate::services::attach::AttachSource;
 
 pub async fn handle(ctx: &McpContext, params: AttachSessionParams) -> Result<...> {
@@ -286,8 +286,8 @@ pub async fn detach_session(
 
 | caller | AttachError → caller error |
 |---|---|
-| `app/mcp/tools/attach_session.ts` (frontend MCP tool) | → `McpError::SessionAlreadyAttached` (-32003) |
-| `app/mcp/tools/detach_session.ts` (frontend MCP tool) | → `McpError::SessionNotAttached` (-32002) |
+| `services/mcp/tools/attach_session.rs` (backend MCP tool) | → `McpError::SessionAlreadyAttached` (-32003) |
+| `services/mcp/tools/detach_session.rs` (backend MCP tool) | → `McpError::SessionNotAttached` (-32002) |
 | `commands/mcp` | → `Result<(), String>` (Tauri IPC 错误字符串) |
 | `services/session_manager::write` | → `SessionError::PermissionDenied` |
 | `services/reverse_tunnel` | → log warn + 不重试 |
