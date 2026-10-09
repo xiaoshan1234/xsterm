@@ -42,9 +42,9 @@ services/registry/attach_registry.rs::idle_timeout
 | `services/session_manager::write` | `check_write_permission` | 每次 PTY/SSH/tmux 写入时 |
 | `services/session_manager::close` | `force_detach` | 关闭 session 时 |
 | `services/reverse_tunnel::*` | `try_attach` / `detach` | 远端 agent 接管时 |
-| `mcp_server/tools/attach_session` | `try_attach(AttachSource::Mcp)` | MCP client attach |
-| `mcp_server/tools/detach_session` | `detach` | MCP client detach |
-| `mcp_server/server` (EOF handler) | `force_detach` | stdio EOF / HTTP stream close |
+| `app/mcp/tools/attach_session.ts` (frontend, RFC 0002-revised) | `try_attach(AttachSource::Mcp)` | MCP client attach |
+| `app/mcp/tools/detach_session.ts` (frontend, RFC 0002-revised) | `detach` | MCP client detach |
+| `app/mcp/server.ts` HTTP stream close (frontend, RFC 0002-revised) | `force_detach` | HTTP stream close 自动释放 |
 | `commands/mcp::attach_session` | `try_attach(AttachSource::Ui)` | frontend UI takeover |
 | `commands/mcp::detach_session` | `detach` | frontend 释放按钮 |
 | `services/attach::idle_timeout` | `list()` + `force_detach` | 后台 sweeper |
