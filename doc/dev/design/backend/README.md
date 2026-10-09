@@ -899,7 +899,8 @@ tempfile = "3"    # JSON roundtrip 测试
 | **§2 M6 MCP server** | **RFC 0002-revised** | **attach 状态机**：`services/registry/attach_registry.rs` + `services/output/ring.rs` | **协议层 + 9 工具**：`app/mcp/` |
 | **§2 M7 本地 AI 接管** | target-arch §5.5 | **attach 透传**：`commands/mcp::attach_session` | **AI takeover UX**：`app/session/usecases/ai_takeover/` |
 | **§2 M8 远程 SSH agent** | target-arch §3.1 (2) | `services/transport/tunnel.rs` + `commands/tunnel.rs` | 端口转发 frontend MCP HTTP |
-| **§2 M9 配置 JSON** | RFC 0003-revised | `commands/persistence.rs` 扩展（settings IPC + `after_settings_changed`） | |
+| **§2 M9 配置 JSON** | RFC 0003-revised (**supersede PRD §2 M9 原文**: TOML+watch → JSON 直存 tauri-plugin-store; 见 RFC 0003-revised ADR) | `commands/persistence.rs` 扩展（settings IPC + `after_settings_changed`） | |
+| **§2 M10 Microsoft Store 上架** | (未来) | frontend + 平台商店通道（MSIX / EV 证书 / Store UX 由 frontend PM 负责）; backend 无依赖 | |
 | §2 M11 自动更新 | (未来) | frontend + 平台商店通道 | |
 | §3 数据流 | PRD §3 | 端到端（PTY → tokio mpsc → Tauri IPC → xterm.js） | |
 | §4 数据权限 | RFC + target-arch §8 | **§11 安全模型** | |
