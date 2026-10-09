@@ -3,13 +3,13 @@
 > **位置**：`src-tauri/src/` 下的 4 层并列顶层目录
 > **关注点**：4 层架构按职责切 module（RFC 0007）
 > **目标平台**：Windows 10/11 64-bit（Tauri 2 + WebView2 + ConPTY + MSVC）
-> **MCP server 位置**（RFC 0002-revised）：frontend `app/mcp/`
+> **MCP server 位置**（RFC 0002-revised-2）：backend `services/mcp/`（HTTP + stdio 双 transport）
 
 > **文档策略**：本文档是 backend 唯一权威 README。每个 module 配 RESPONSIBILITY / INTERFACE / DOWNSTREAM 3 份契约文档（独立保留）。子 module README 不再单独维护——合入本文档 §5.9。
 
 ## 1. 一句话架构
 
-**backend = 4 层 + 0 个独立子系统（MCP server 移到 frontend）**
+**backend = 4 层 + 1 个独立子系统（services/mcp/ MCP server，RFC 0002-revised-2; frontend 退化为 listener）**
 
 ```
 src-tauri/src/
@@ -41,10 +41,10 @@ src-tauri/src/
 | `terminal.rs` | terminal 显示（resize / cursor / theme） | `app/terminal` | ⭐ NEW |
 | `tmux.rs` | tmux -CC（controller / pane / window / script） | `app/terminal` | ⭐ NEW |
 | `settings.rs` | settings 持久化（load / save / patch） | `app/settings` | ⭐ NEW |
-| `mcp.rs` | MCP attach/state/status/token | `app/mcp` | ⚠️ 简化（4→6 命令） |
+| `mcp.rs` | MCP attach/state/status/token + HTTP/stdio transport 控制 (start/stop/status) | `services/mcp` + `services/registry/attach_registry` | 10 commands (6 透传 + 4 transport 控制) |
 | `persistence.rs` | 业务持久化（sessions / groups / attached_tmux）+ settings 扩展 | `service/persistence` | ⭐ 扩展 |
 | `logging.rs` | logging（log_message / config） | `infra/logger` | ✅ 现有 |
-| `tunnel.rs` | reverse_tunnel 启停 | `app/mcp` | ⭐ NEW |
+| `tunnel.rs` | reverse_tunnel 启停 | `services/mcp` (stdio 路径) + `services/transport/tunnel` | ⭐ NEW |
 | `mod.rs` | `all_handlers()` 注册 | — | — |
 
 **职责**：
@@ -103,7 +103,7 @@ src-tauri/src/services/
 │
 ├── transport/                 网络传输
 │   ├── tunnel.rs              ⭐ reverse_tunnel russh -R + 指数退避（拆分自原 services/reverse_tunnel/）
-│   └── http.rs                （future）stdio/TCP bridge（为未来 RFC 0002-revised 升级预留）
+│   └── http.rs                ✅ MCP stdio bridge — `xstdiod-sidecar.exe` HTTP↔stdin/stdout 转发（RFC 0002-revised-2）
 │
 ├── persistence/               持久化业务
 │   ├── store.rs               ⭐ tauri-plugin-store wrapper（统一所有 store.json 读写）
@@ -145,7 +145,7 @@ src-tauri/src/services/
 
 **禁止**：
 - ❌ 子 module 互相调（除 friend module 通过 Arc 共享）
-- ❌ 反向依赖 commands / mcp_server / infrastructure
+- ❌ 反向依赖 commands / infrastructure / services/mcp (RFC 0002-revised-2: MCP server 在 services/mcp/)
 - ❌ 文件名用 `_session.rs` / `_helper.rs` / `_utils.rs` / `_common.rs`（杂物桶，user profile memory 警告）
 
 详见 §5.9.2。
@@ -240,38 +240,54 @@ commands ─┬──► services ──► infrastructure ──► (外部 cra
 - ❌ models 不能依赖任何业务 crate
 
 **frontend ↔ backend 跨进程**：
-- frontend `app/mcp/*` 通过 `invoke()` 调 backend `commands/<module>`（不直接调 `services/<submodule>`）
+- frontend `app/mcp/listener.ts` 通过 `listen('mcp-*')` 订阅 backend MCP 事件做 UI 显示（不调任何业务状态）
 - frontend `service/*`（zustand store）通过 `infra/tauri/repositories/*` 调 backend `commands/<module>`
 - backend 不感知 MCP 协议存在——backend 只看到"frontend 调 IPC"
 
 ## 4. 关键设计决策
 
-### 4.1 MCP server 在 frontend app 层（RFC 0002-revised）
+### 4.1 MCP server 在 backend services/mcp/ 层（RFC 0002-revised-2）
 
 ```
-src/app/mcp/                ⭐ frontend TS 层
-├── server.ts               HTTP server + JSON-RPC 2.0
-├── tools/                  9 个 MCP 工具实现
-├── transport/http.ts       HTTP transport（127.0.0.1:19847 + Bearer token）
-├── auth.ts                 Bearer token 验证
-├── safety.ts               破坏性快捷键白名单
-├── client_state.ts         attach 独占状态（mirror backend attach_registry）
-├── context.ts              依赖注入（service store + invoke + emit）
-├── types.ts                MCP wire 类型（无 backend 镜像）
-└── errors.ts               McpError → JSON-RPC error 映射
+src-tauri/src/services/mcp/    ⭐ backend Rust 子 module (RFC 0007 风格, 跟 subscribe_registry 同级)
+├── mod.rs                 入口 + transport 选择 + 启动序列
+├── http.rs                HTTP server (127.0.0.1:19847 + Bearer token + tokio)
+├── stdio.rs               stdio transport (spawn xstdiod-sidecar.exe)
+├── tools/                 12 个 MCP 工具实现 (list_sessions / close_session / send_keys /
+│                          capture_screen / subscribe_output / attach_session /
+│                          detach_session / wait_for / list_attached_sessions /
+│                          list_profiles / get_config / get_session_attach_state)
+├── auth.rs                Bearer token 验证 + 速率限制 (100/s per tool)
+├── safety.rs              破坏性快捷键白名单 (Ctrl+C / Ctrl+D / Ctrl+Z / Ctrl+Break)
+├── audit.rs               AuditLog 框架 (复用 services/audit)
+├── types.rs               MCP wire types (req/resp/error)
+├── events.rs              emit `mcp-tool-called` / `mcp-tool-returned` /
+│                          `mcp-server-status` 给 frontend listen
+└── service_init.rs        注入 attach_registry / session_manager / subscribe_registry /
+                          capture / audit 依赖
 ```
 
-**为什么 frontend 跑**（RFC 0002-revised）：
-- MCP 协议层 = UI 层自然延伸（AI 接管 UX + attach banner + tool log 全在 frontend）
-- 直接读 `service/session/store`、`service/workspace/store`（frontend zustand store）—— **0 IPC 成本**
-- attach 状态变化直接 emit Tauri event 给 UI banner
-- WebView 没有 stdin/stdout，但有 fetch —— HTTP transport 天然适配
-- Claude Desktop / Cursor / Codex 都支持 HTTP MCP（2025+ 版本）
+**为什么 backend 跑**（RFC 0002-revised-2, 2026-10-09 复盘）：
+- **stdio 支持必选**: WebView 没有 stdin/stdout;Claude Desktop / Cursor 走 stdio MCP 必须 backend 处理。RFC 0002-revised 放弃 stdio 是错判。
+- **调试链路短**: MCP client → backend tokio → attach / subscribe / capture,2 跳。vs RFC 0002-revised 的 client → frontend HTTP → frontend IPC → backend → service,4 跳。
+- **业务状态真实源**: attach / OutputRing / capture 已在 backend;把 MCP server 也放 backend 避免 frontend ↔ backend 跨进程状态同步 (attach banner 用 listen 即够)。
+- **stdlib MCP 协议层**: tools 用 `rmcp` SDK + `schemars` schema 生成 (RFC 0002-revised 删了这两个 crate 是错的)。
+- **transport 双栈**: HTTP 直连 (127.0.0.1:19847) + stdio 经 sidecar 转发 (1 个 stdio client 1 个 sidecar.exe)。
 
-**backend 不感知 MCP**：
-- ❌ backend 没有 `mcp_server/` module
-- ✅ backend 提供 IPC 镜像（`commands/session::write_session` / `commands/session::close_session` / `commands/session::create_session` / `commands/mcp::attach_session` / `commands/mcp::detach_session` / `commands/tunnel::*`）
-- frontend MCP 工具 = TS facade over invoke
+**frontend 角色**（退化）：
+- ❌ 不再有 `app/mcp/server.ts` / `tools/*.ts` / `transport/http.ts`
+- ✅ `app/mcp/listener.ts` 通过 `listen('mcp-tool-called' / 'mcp-tool-returned' / 'mcp-attach-changed' / 'mcp-server-status')` 做 UI banner + MCP 操作日志
+- ✅ `app/mcp/ui/McpStatusPanel.tsx` 显示 MCP server 状态 (HTTP / stdio 启停 + 活跃 stdio client 数)
+- ✅ `app/mcp/ui/McpAttachBanner.tsx` attach banner (与 RFC 0002-revised UI 一致)
+
+**attach / subscribe / capture 仍独立 service**（不变）：
+- `services/registry/attach_registry` 仍是 attach 真源 (被 services/mcp 直接调 try_attach)
+- `services/output/ring` + `services/output/publisher` 仍订阅真源
+- `services/capture/{ansi,tmux}` 仍业务编排层 (models/capture 仍算法层)
+- `services/transport/tunnel` 仍 reverse_tunnel 真源
+- `services/audit` 仍审计日志真源 (被 services/mcp/audit.rs 复用)
+
+### 4.2 attach 状态机独立 service（不变）
 
 ### 4.2 attach 状态机独立 service（不变）
 
@@ -540,7 +556,11 @@ tauri::Builder::default()
     │       // 4. ⭐ reverse_tunnel 自动重连（如果 enabled）
     │       services::transport::tunnel::start_if_enabled(...);
     │
-    │       // ⚠️ 不再有 mcp_server::start()——MCP server 由 frontend app/mcp 启动
+    │       // 5. ⭐ MCP server 启动 (RFC 0002-revised-2: backend Rust)
+    │       let mcp_port = services::mcp::http::start(state, app.handle(), settings.mcp.http)?;
+    │       if settings.mcp.stdio.enabled {
+    │           services::mcp::stdio::spawn_sidecar(state, mcp_port)?;
+    │       }
     │   })
     ├── invoke_handler(commands::all_handlers())
     └── run(generate_context!())
@@ -548,13 +568,13 @@ tauri::Builder::default()
 
 **frontend 启动序列**（`app/shell::usecases/initialize.ts`）：
 ```
-1. invoke('shell_initialize_logging')      // backend logging
-2. listen('session-output', handler)       // backend BinaryFrame 推流
-3. listen('mcp-attach-changed', handler)   // backend attach 状态广播
-4. ⭐ app/mcp/server.ts::startServer(ctx)   // frontend HTTP server 启动
-   - 读 settings.json [mcp.http] 决定 port + token
-   - spawn HTTP server @ 127.0.0.1:19847
-   - register 9 个 MCP 工具
+1. invoke('shell_initialize_logging')               // backend logging
+2. listen('session-output', handler)                // backend BinaryFrame 推流
+3. listen('mcp-attach-changed', handler)            // backend attach 状态广播
+4. ⭐ app/mcp/listener.ts::startListening(ctx)       // frontend listener 启动 (RFC 0002-revised-2)
+   - listen('mcp-tool-called' / 'mcp-tool-returned')  // MCP 操作日志
+   - listen('mcp-server-status')                       // HTTP / stdio server 状态
+   - listen('mcp-attach-changed')                       // attach banner (订阅前端)
 5. app/settings.load() + app/workspace.loadLastWorkspace() + app/terminal.autoAttachTmuxServers()
 6. readiness.setReady(true)
 ```
@@ -591,28 +611,29 @@ app/session/usecases/createLocal.ts
 ui/workspace: re-render → pane 显示 terminal
 ```
 
-### 7.3 MCP subscribe_output 流程（frontend TS 实现 + backend 支撑）
+### 7.3 MCP subscribe_output 流程（backend Rust 实现, RFC 0002-revised-2）
 
 ```
 AI agent POST http://127.0.0.1:19847/mcp
    ↓ HTTP + Bearer token
-frontend app/mcp/server.ts handler
+backend services/mcp/http.rs handler
     ↓
-1. token verify (auth.ts)
-2. JSON-RPC 2.0 parse (server.ts)
-3. dispatch → app/mcp/tools/subscribe_output.ts
+1. token verify (services/mcp/auth.rs)
+2. JSON-RPC 2.0 parse (services/mcp/types.rs)
+3. dispatch → services/mcp/tools/subscribe_output.rs
     ↓
-4. ctx.resolveSessionId("tab-7f3a9b")  → 查 service/session/store
-5. ctx.requireAttached(sessionId, callerClientId)  → 本地 mirror state 检查
-6. ctx.serviceSession.subscribeOutput(sessionId, sinceSeq, callback)
+4. ctx.resolveSessionId("tab-7f3a9b")  → 查 session_manager session_id_index
+5. ctx.requireAttached(sessionId, callerClientId)  → attach_registry.check_write_permission
+6. subscribe_registry.subscribe(sessionId, sinceSeq, callback)
     ↓
-7. service/session/bridge:
-   - listener 已 listen('session-output', ...)
-   - 解析 BinaryFrame → (sessionId, seq, bytes, timestamp)
-   - 跟 sinceSeq 比较，只推 > sinceSeq 的 entry
+7. backend OutputRing push (PTY read_loop 已 ring.push(bytes))
+   - 跟 sinceSeq 比较, 只推 > sinceSeq 的 entry
    - 通过 callback 推回 MCP tool
     ↓
-8. app/mcp/tools/subscribe_output 推回 MCP client (HTTP SSE / notification)
+8. services/mcp/tools/subscribe_output 推回 MCP client (HTTP SSE / notification)
+    ↓
+9. ⭐ services/mcp/events.rs emit "mcp-tool-called" / "mcp-tool-returned"
+   - frontend app/mcp/listener.ts 监听 → MCP 操作日志 UI
 ```
 
 **关键**：subscribe_output 数据源是 backend `session-output` BinaryFrame 事件，frontend 通过 service/session/bridge 解析；MCP 工具、UI xterm render 共享同一份事件源。
@@ -637,13 +658,13 @@ app/session/usecases/ai_takeover/attach.ts
 6. Terminal.tsx: useEffect 订阅 attachState → keydown capture 阶段 preventDefault()
     ↓
 7. ⭐ MCP send_keys 路径（关键：同步显示）：
-   frontend app/mcp/tools/send_keys.ts:
-     - ctx.requireAttached(sessionId, "mcp-client-uuid")
-     - safety.isDestructive(keys, policy)
+   backend services/mcp/tools/send_keys.rs:
+     - requireAttached(sessionId, "mcp-client-uuid")
+     - safety.isDestructive(keys, policy)  // services/mcp/safety.rs
      - bytes 序列化
-     - invoke('write_session', { sessionId, data })
+     - session_manager.write(sessionId, data, caller_client_id)
    ↓
-   backend commands/session::write_session:
+   backend session_manager.write:
      - ⭐ attach_registry.check_write_permission(sessionId, "mcp-client-uuid")
        → 已 attach 且 caller == attach_client → 允许
      - write to PTY
@@ -673,10 +694,10 @@ AI agent 在 remote 通过 ssh.example.com:remote_port 连入
     ↓ TCP → forward
 3. reverse_tunnel 检测新连接 → forward bytes → local 127.0.0.1:19847
     ↓
-4. ⭐ local frontend MCP HTTP server（app/mcp/server.ts）收到请求
-   - frontend HTTP server 跑在 Tauri WebView 内
-   - 远端 agent 通过反向 SSH 隧道连到本机 WebView 内的 HTTP server
-   - 复用同一份 9 个工具 + Bearer token
+4. ⭐ local backend MCP HTTP server（services/mcp/http.rs）收到请求
+   - backend HTTP server 跑在 tokio runtime（与 WebView 无关）
+   - 远端 agent 通过反向 SSH 隧道连到本机 tokio HTTP server
+   - 复用同一份 12 个工具 + Bearer token
     ↓
 5. 连接断开 → russh reconnect 指数退避（1/2/4/8/16s × 5 次）
    → emit "tunnel-status-changed" → UI toast
@@ -697,9 +718,9 @@ grep -rn 'use\s\+crate::\(commands\|services\)' src-tauri/src/infrastructure/
 grep -rn 'use\s\+crate::commands' src-tauri/src/services/
 # 必须为空
 
-# 4. ❌ 不再有 mcp_server module
-find src-tauri/src -name 'mcp_server' -type d
-# 必须为空
+# 4. ✅ services/mcp module 存在 (RFC 0002-revised-2; 与 services/registry/{attach,session_manager,subscribe,profile}_registry 同级)
+find src-tauri/src/services -maxdepth 1 -type d -name 'mcp'
+# 必须命中 services/mcp/
 
 # 5. attach state 修改只在 services/registry/attach_registry.rs 和 services/registry/session_manager.rs
 grep -rn 'attach_state\.insert\|attach_state\.remove' src-tauri/src/ --include='*.rs'
@@ -713,13 +734,13 @@ grep -rn 'output_ring.*push\|output_ring.*insert' src-tauri/src/ --include='*.rs
 grep -rn 'config_store\.write\|config\.write' src-tauri/src/ --include='*.rs' | grep -v 'services/persistence/store'
 # 必须为空（写入只通过 services/persistence/store 内部）
 
-# 8. ❌ frontend MCP 不能直连 PTY/SSH/tmux
-grep -rnE 'portable_pty|russh::|TmuxController' src/app/mcp/ --include='*.ts'
-# 必须为空（MCP 通过 invoke 间接）
+# 8. ✅ MCP server 在 services/mcp/, 不在 src/app/mcp/ (RFC 0002-revised-2)
+grep -rn 'portable_pty\|russh::\|TmuxController' src-tauri/src/services/mcp/ --include='*.rs'
+# 必须为空 (services/mcp 通过 attach_registry / session_manager 间接调用)
 
-# 9. ❌ frontend MCP 不直读 SessionManager 字段
-grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state|output_rings)\.(get|iter)' src/app/mcp/
-# 必须为空（必须通过 service/* 公开 API）
+# 9. ✅ MCP server 不直读 SessionManager 字段
+grep -rnE 'session_manager\.(sessions|tmux_controllers|attach_state|output_rings)\.(get|iter)' src-tauri/src/services/mcp/
+# 必须为空 (必须通过 attach_registry / subscribe_registry 公开 API)
 
 # 10. ❌ 禁止的文件名（杂物桶检测）
 grep -rn 'fn _helper\|fn _utils\|fn _common\|mod _session' src-tauri/src/ --include='*.rs'
@@ -730,6 +751,10 @@ grep -rn 'use\s\+crate::commands' src-tauri/src/services/
 grep -rn 'use\s\+crate::services' src-tauri/src/infrastructure/
 grep -rn 'use\s\+crate::infrastructure' src-tauri/src/models/
 # 必须都为空
+
+# 12. ❌ src/app/mcp/ 不再是 MCP server (RFC 0002-revised-2: 退化到 listener only)
+find src/app/mcp/ -name 'server.ts' -o -name 'tools.ts' -o -name 'transport.ts'
+# 必须为空
 ```
 
 ## 9. 测试策略
@@ -746,8 +771,8 @@ grep -rn 'use\s\+crate::infrastructure' src-tauri/src/models/
 | **services/lifecycle/{local,ssh,tmux}** | cargo test + mockall | spawn / read_loop / close |
 | **commands/** | cargo test（mock state） | 每个命令的 happy path + 错误分支 |
 | **infrastructure/** | cargo test | pty open + ssh 连接 + binary_frame roundtrip |
-| **frontend app/mcp/** | vitest | 9 工具 + JSON-RPC 2.0 协议 + auth + safety |
-| **frontend app/mcp/**（集成） | Python MCP client | HTTP round-trip + Claude Desktop 配置模拟 |
+| **services/mcp/** | cargo test + mockall + tokio_test | 12 工具 + JSON-RPC 2.0 解析 + auth (Bearer token) + safety (Ctrl+C/D/Z/Break 白名单) + rate_limit + stdio sidecar spawn |
+| **services/mcp/**（集成） | Python MCP client + stdio subprocess | HTTP round-trip + Claude Desktop 配置模拟 + stdio via sidecar |
 | **集成（end-to-end）** | Python MCP SDK + 自带 client | HTTP round-trip + AI 接管 UX |
 | **TUI 兼容** | vttest | ≥ 90% |
 
@@ -763,8 +788,9 @@ grep -rn 'use\s\+crate::infrastructure' src-tauri/src/models/
 | `capture_screen (screenshot)` | < 500ms | ❌ | xterm.js offscreen renderer |
 | `attach_session` 状态切换 | < 20ms | ❌ 新建 | DashMap CAS + emit |
 | `attach idle timeout` 检测 | < 1s drift | ❌ | tokio::time::interval 60s |
-| **frontend MCP HTTP server start** | < 500ms | ❌ 新建 | Tauri WebView 内 fetch server |
-| **MCP HTTP tool call 延迟** | < 5ms | n/a | invoke IPC 单跳 |
+| **backend MCP HTTP server start** | < 200ms | ❌ 新建 | tokio HTTP listener @ 127.0.0.1:19847 |
+| **MCP HTTP tool call 延迟** | < 5ms | n/a | in-process call (无 IPC 跳转) |
+| **MCP stdio sidecar spawn** | < 100ms | ❌ 新建 | `tokio::process::Command::spawn("xstdiod-sidecar.exe")` |
 | `settings.json` reload | 即时（store API 同步） | ⚠️ | ⚠️ 无文件监听——frontend 是唯一写入入口 |
 | 100 sessions × 10k 行 ring | ≤ 200MB | ⚠️ 单 session | OutputRing 100k 行上限 |
 | 反向隧道重连 | ≤ 5 次指数退避 | ❌ | 1/2/4/8/16s |
@@ -807,9 +833,9 @@ grep -rn 'use\s\+crate::infrastructure' src-tauri/src/models/
 
 ### 11.4 破坏性快捷键白名单
 
-`app/mcp/safety.ts::ALLOWED_DESTRUCTIVE`（frontend TS）：
-```typescript
-const ALLOWED_DESTRUCTIVE = ["Ctrl+C", "Ctrl+D", "Ctrl+Z", "Ctrl+Break"];
+`services/mcp/safety.rs::ALLOWED_DESTRUCTIVE`（backend Rust）：
+```rust
+const ALLOWED_DESTRUCTIVE: &[&str] = &["Ctrl+C", "Ctrl+D", "Ctrl+Z", "Ctrl+Break"];
 ```
 
 其余 `Ctrl+*` / `Alt+*` 组合键默认拒绝。用户可在 `settings.json` (mcp.destructiveKeys.policy = "allow") 开启全部。
@@ -834,7 +860,7 @@ uuid = { version = "1", features = ["v4"] }  # MCP session_id（双向映射）
 regex = "1"                             # capture / wait_for 正则
 once_cell = "1"                         # 全局单例（rate_limit / metrics）
 
-# ❌ 不再需要 rmcp + schemars（MCP server 移到 frontend TS）
+# ✅ services/mcp/ 需要 rmcp + schemars (RFC 0002-revised-2: MCP server 回 backend)
 # ❌ 不再需要 toml + notify + notify-debouncer-full（JSON 直存）
 
 [dev-dependencies]
@@ -842,19 +868,15 @@ mockall = "0.12"  # 已有
 tempfile = "3"    # JSON roundtrip 测试
 ```
 
-**净变化**（RFC 0002-revised + RFC 0003-revised）：
-- ❌ 删除：rmcp, schemars, toml, notify, notify-debouncer-full（5 个 crate）
-- ✅ 新增：仅 uuid + regex + once_cell（3 个 crate，已存在或轻量级）
-- build time -10%
+**净变化**（RFC 0002-revised-2 + RFC 0003-revised）：
+- ✅ 新增：rmcp + schemars（2 个 crate，services/mcp/ 协议层必需）
+- ✅ 已有：uuid + regex + once_cell（3 个 crate）
+- ❌ 删除：toml + notify + notify-debouncer-full（3 个 crate，JSON 直存）
+- build time +5% (rmcp + schemars 编译开销)
 
-**frontend `app/mcp/` 新增依赖**（TS）：
-```json
-{
-  "@modelcontextprotocol/sdk": "^1.0",  // 或自研（推荐自研，~200 行 TS）
-  "uuid": "^9.0",
-  "express": "^4.18"                    // HTTP server（如自研可用浏览器原生 fetch）
-}
-```
+**frontend `app/mcp/` 退化依赖**（TS）：
+- 仅保留 `@tauri-apps/api`（listen）+ `zustand`（listener store）
+- ❌ 删除：@modelcontextprotocol/sdk + express + uuid (frontend 不再 serve MCP, 只 listen 事件)
 
 ## 13. 文档地图
 
@@ -896,7 +918,7 @@ tempfile = "3"    # JSON roundtrip 测试
 | §2 M3 TUI 完整档 | 现有 | xterm.js + frontend | |
 | §2 M4 复制粘贴 | 现有 | xterm.js + frontend | |
 | §2 M5 快捷键 | 现有 | frontend keymap | |
-| **§2 M6 MCP server** | **RFC 0002-revised** | **attach 状态机**：`services/registry/attach_registry.rs` + `services/output/ring.rs` | **协议层 + 9 工具**：`app/mcp/` |
+| **§2 M6 MCP server (HTTP + stdio)** | **RFC 0002-revised-2** (supersedes RFC 0002-revised) | **backend `services/mcp/`** (HTTP @ 127.0.0.1:19847 + stdio via `xstdiod-sidecar.exe`); frontend 仅 `app/mcp/listener.ts` listen `mcp-attach-changed` / `mcp-tool-called` / `mcp-tool-returned` / `mcp-server-status` | **协议层 + 12 工具**：`services/mcp/tools/` |
 | **§2 M7 本地 AI 接管** | target-arch §5.5 | **attach 透传**：`commands/mcp::attach_session` | **AI takeover UX**：`app/session/usecases/ai_takeover/` |
 | **§2 M8 远程 SSH agent** | target-arch §3.1 (2) | `services/transport/tunnel.rs` + `commands/tunnel.rs` | 端口转发 frontend MCP HTTP |
 | **§2 M9 配置 JSON** | RFC 0003-revised (**supersede PRD §2 M9 原文**: TOML+watch → JSON 直存 tauri-plugin-store; 见 RFC 0003-revised ADR) | `commands/persistence.rs` 扩展（settings IPC + `after_settings_changed`） | |
