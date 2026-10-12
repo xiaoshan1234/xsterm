@@ -7,6 +7,7 @@
 > -  [`backend/README.md`](backend/README.md) = backend 单边 4 层细节 (`commands/ services/ infrastructure/ models/`)
 > -  [`frontend/README.md`](frontend/README.md) = frontend 单边 5 层细节 (`app/ ui/ model/ service/ infra/`)
 > -  [`doc/dev/architecture/`](../../architecture/README.md) = 4+1 视图 (logical/process/dev/physical/scenarios), 跟代码快照对齐
+> -  **可视化**: [`_OVERVIEW_canvas.html`](_OVERVIEW_canvas.html) (dark-themed SVG canvas, 浏览器打开) 或 [`_OVERVIEW_canvas.png`](_OVERVIEW_canvas.png) (静态预览)
 > -  本文件**不**复制两侧 README 的层细节, 只在需要端到端时才引用
 
 ---

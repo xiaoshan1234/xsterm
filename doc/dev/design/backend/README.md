@@ -5,6 +5,8 @@
 > **目标平台**：Windows 10/11 64-bit（Tauri 2 + WebView2 + ConPTY + MSVC）
 > **MCP server 位置**（RFC 0002-revised-2）：backend `services/mcp/`（HTTP + stdio 双 transport）
 
+> **可视化**: 跨进程架构图 (dark-themed SVG canvas) 见 [`_OVERVIEW_canvas.html`](_OVERVIEW_canvas.html) (用浏览器打开) 或 [`_OVERVIEW_canvas.png`](_OVERVIEW_canvas.png) (静态预览)
+
 > **文档策略**：本文档是 backend 唯一权威 README。每个 module 配 RESPONSIBILITY / INTERFACE / DOWNSTREAM 3 份契约文档（独立保留）。子 module README 不再单独维护——合入本文档 §5.9。
 
 ## 1. 一句话架构

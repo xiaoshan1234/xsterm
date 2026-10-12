@@ -5,6 +5,8 @@
 > **目标平台**：Tauri 2 + WebView2 + React 19 + TypeScript 5.8 + Vite 7
 > **MCP server 位置**（RFC 0002-revised-2，supersedes RFC 0002-revised）：backend `services/mcp/`（HTTP + stdio 双 transport）；frontend `app/mcp/listener.ts` 仅 listen `mcp-attach-changed` / `mcp-tool-called` / `mcp-tool-returned` / `mcp-server-status` 做 UI 实时显示
 
+> **可视化**: 跨进程架构图 (dark-themed SVG canvas) 见 [`_OVERVIEW_canvas.html`](_OVERVIEW_canvas.html) (用浏览器打开) 或 [`_OVERVIEW_canvas.png`](_OVERVIEW_canvas.png) (静态预览)
+
 > **文档策略**：本文档是 frontend 唯一权威 README。各 module 的 RESPONSIBILITY / INTERFACE / DOWNSTREAM 独立保留。子层 README 已合并到本文档。
 
 ## 1. 一句话架构
