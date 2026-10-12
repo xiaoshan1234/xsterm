@@ -584,3 +584,365 @@ doc/dev/history/                       ← 历史归档 (保留可追溯)
 1. 未来大流量场景: BinaryFrame 改用 `Arc<Vec<u8>>` 共享内存, 避免序列化/反序列化 (Tauri 2 支持 `Channel<Vec<u8>>` 流式订阅)
 2. 大 session 数: OutputRing 100k 行上限 (当前), 超过时走 capture_screen 主动拉取
 3. 远程 agent 反向隧道: 端口压缩 / 连接复用 (后续 HTTP/2 MCP)
+
+---
+
+## 17. 层次图 (CLI 友好的 ASCII 视图)
+
+> 5 张图, 全部 ≤78 列宽, monospace 终端可直接阅读。
+
+### 17.1 总览图: 前后端 4+5 层 + 跨进程 wire
+
+```
+┌─────────────────────────────────────┐  ┌─────────────────────────────────────┐
+│   frontend (Tauri WebView)          │  │   backend (Tauri main, tokio)      │
+│   src/  ─ 5 layers                  │  │   src-tauri/src/ ─ 4 layers        │
+│                                     │  │                                     │
+│   ┌──────────────────────────┐      │  │   ┌──────────────────────────┐      │
+│   │ app/  (业务编排)         │      │  │   │ commands/ (IPC handlers) │      │
+│   │ shell workspace terminal │ ─────┼──┼─► │ 9 × #[tauri::command]    │      │
+│   │ session settings mcp     │      │  │   │ 75 IPC (镜像 frontend)    │      │
+│   └────────┬─────────────────┘      │  │   └────────┬─────────────────┘      │
+│            │ useXxxApi()              │  │            │ 调                      │
+│   ┌────────▼─────────────────┐      │  │   ┌────────▼─────────────────┐      │
+│   │ ui/   (视图渲染)         │      │  │   │ services/ (业务编排)      │      │
+│   │ shell workspace terminal │      │  │   │ registry  lifecycle       │      │
+│   │ session settings         │      │  │   │ output capture  transport │      │
+│   └────────┬─────────────────┘      │  │   │ persistence  io  audit   │      │
+│            │                         │  │   │ ⭐ mcp (RFC 0002-revised-2) │    │
+│   ┌────────▼─────────────────┐      │  │   └────────┬─────────────────┘      │
+│   │ model/  (纯数据)         │      │  │   │         │ 持有真源状态          │
+│   │ session workspace settings│ 镜像 │  │   │         │  (DashMap / Mutex) │
+│   │ tmux  cross-cutting      │◄─────┼──┼───┘         ▼                     │
+│   └────────┬─────────────────┘      │  │   ┌──────────────────────────┐      │
+│            │                         │  │   │ infrastructure/ (平台)    │      │
+│   ┌────────▼─────────────────┐      │  │   │ pty ssh tmux              │      │
+│   │ service/  (运行时状态)   │      │  │   │ session_backend app_backend│     │
+│   │ session workspace tmux   │      │  │   │ clipboard logging_setup   │      │
+│   │ settings persistence     │      │  │   └────────┬─────────────────┘      │
+│   └────────┬─────────────────┘      │  │   ┌────────▼─────────────────┐      │
+│            │ invoke() / listen()    │  │   │ models/ (纯数据)          │      │
+│   ┌────────▼─────────────────┐      │  │   │ session workspace settings│      │
+│   │ infra/  (平台适配)       │      │  │   │ attach subscription       │      │
+│   │ ⭐ tauri (唯一调 api)    │      │  │   │ profile capture           │      │
+│   │ store  clipboard  logger  │      │  │   │ (⏳ RFC 0007 plan)         │      │
+│   └──────────────────────────┘      │  │   └──────────────────────────┘      │
+│                                     │  │                                     │
+└────────────────┬────────────────────┘  └────────────────┬────────────────────┘
+                 │                                            │
+                 │   invoke('cmd', args)    listen('event', cb)
+                 │   ─────────────────►    ◄─────────────────
+                 │            Tauri IPC (typed)
+                 │            BinaryFrame 0xA1 0x01 [sid 4B] [len 4B] [data]
+                 │            session-output channel
+                 └────────────────────────────────────────────┘
+```
+
+**legend**:
+- frontend `app/` ↔ backend `commands/`: 一一映射, IPC 签名镜像
+- frontend `service/` 镜像 backend `services/registry/*` 真源状态
+- frontend `model/` 镜像 backend `models/*` serde 类型
+- backend `services/mcp/` (RFC 0002-revised-2) 是新加的 MCP server 协议层
+
+### 17.2 数据流图: 一次 session 创建 + 输出推流
+
+```
+[用户]      ui/workspace        app/session        service/session        backend
+   │            │                    │                    │                    │
+   │ click "+"  │                    │                    │                    │
+   ├───────────►│                    │                    │                    │
+   │            │ openDialog(create)│                    │                    │
+   │            ├───────────────────►│                    │                    │
+   │            │                    │ createLocal(cfg)   │                    │
+   │            │                    ├───────────────────►│                    │
+   │            │                    │                    │ invoke('create...') │
+   │            │                    │                    ├───────────────────►│
+   │            │                    │                    │  commands::session │
+   │            │                    │                    │     ::create_local  │
+   │            │                    │                    │            │         │
+   │            │                    │                    │            ▼         │
+   │            │                    │                    │  services::registry::│
+   │            │                    │                    │    session_manager  │
+   │            │                    │                    │   ::create_local()  │
+   │            │                    │                    │  ┌─────────────┐    │
+   │            │                    │                    │  │ allocate id │    │
+   │            │                    │                    │  │ gen mcp_id  │    │
+   │            │                    │                    │  │ get_or_create│    │
+   │            │                    │                    │  │   OutputRing│    │
+   │            │                    │                    │  │ spawn PTY   │    │
+   │            │                    │                    │  │ spawn read_ │    │
+   │            │                    │                    │  │   loop      │    │
+   │            │                    │                    │  └─────────────┘    │
+   │            │                    │                    │            │         │
+   │            │                    │                    │ ◄────── SessionInfo │
+   │            │                    │                    │            │         │
+   │            │                    │ ◄──────── upsert ──┤            │         │
+   │            │                    │ (zustand store)    │            │         │
+   │            │                    │ openInWorkspace    │            │         │
+   │            │                    │  ──────►          │            │         │
+   │            │ ◄──── render ──────┤                    │            │         │
+   │            │ (pane tree update) │                    │            │         │
+   │            │                    │                    │            │         │
+   │            │                    │  listen('session-output', parse)             │
+   │            │                    │  (startup hook 1 次)                          │
+   │            │                    │                    │            │         │
+   │            │                    │      ┌─── PTY output bytes ────►           │
+   │            │                    │      │   (read_loop 长跑 tokio task)         │
+   │            │                    │      │                                     │
+   │            │                    │      │   ring.push(bytes)                    │
+   │            │                    │      │   app.emit('session-output',          │
+   │            │                    │      │     BinaryFrame{0xA1, 0x01,           │
+   │            │                    │      │       session_id, len, data})        │
+   │            │                    │      │                                     │
+   │            │                    │ ◄────┘ (1 IPC event per chunk)             │
+   │            │                    │ parse → (sid, seq, bytes)                   │
+   │            │                    │      ┌──► ui/terminal/xterm render           │
+   │            │                    │      ├──► app/mcp/listener (MCP 日志)      │
+   │            │                    │      └──► ui/session/* state mirror          │
+```
+
+**关键观察**:
+- 创建 1 次 invoke 单跳 (~150ms 实证)
+- 后续 PTY 输出走 `session-output` BinaryFrame 推流 (1 个 event bus, 3 个 frontend 订阅者共享)
+- backend OutputRing 是 MCP `subscribe_output` 工具的真源 — frontend 通过 listen 拿到同一份数据
+
+### 17.3 MCP server 位置 (RFC 0002-revised-2)
+
+```
+                  AI agent (Claude Desktop / Cursor / 自研)
+                              │
+                              │ stdio (stdin/stdout)
+                              │   OR
+                              │ HTTP POST 127.0.0.1:19847 + Bearer token
+                              ▼
+        ┌──────────────────────────────────────────────┐
+        │   backend  services/mcp/  (RFC 0002-revised-2)
+        │   ┌────────────────────────────────────────┐ │
+        │   │ http.rs   ─── tokio HTTP listener      │ │
+        │   │ stdio.rs  ─── spawn xstdiod-sidecar.exe │ │
+        │   │ auth.rs   ─── Bearer token 验证        │ │
+        │   │ safety.rs ─── 破坏键白名单 (Ctrl+C/D/Z) │ │
+        │   │ audit.rs  ─── 复用 services/audit      │ │
+        │   │ events.rs ─── emit mcp-tool-*          │ │
+        │   │ tools/    ─── 12 MCP 工具              │ │
+        │   │   ├ list_sessions  create_session(*)  │ │
+        │   │   ├ close_session  send_keys           │ │
+        │   │   ├ capture_screen (text/ansi/screen)  │ │
+        │   │   ├ subscribe_output                  │ │
+        │   │   ├ attach_session  detach_session     │ │
+        │   │   ├ wait_for  list_attached_sessions   │ │
+        │   │   ├ list_profiles(*)  get_config(*)    │ │
+        │   │   └ get_session_attach_state           │ │
+        │   └────────┬───────────────────────────────┘ │
+        └────────────┼──────────────────────────────────┘
+                     │ 调  ↓
+        ┌────────────▼──────────────────────────────────┐
+        │   services/registry/                          │
+        │   ├ attach_registry  (try_attach / detach)   │
+        │   ├ session_manager  (create / write / close) │
+        │   └ subscribe_registry (OutputRing + 序号)    │
+        ├───────────────────────────────────────────────┤
+        │   services/capture/{ansi,tmux}.rs             │
+        │   services/audit/  (复用)                     │
+        │   services/transport/tunnel.rs (reverse_tunnel)│
+        └────────────┬──────────────────────────────────┘
+                     │
+                     │  emit mcp-tool-called / mcp-tool-returned
+                     │  emit mcp-attach-changed (透传 attach_registry)
+                     │  emit mcp-server-status
+                     ▼
+        ┌──────────────────────────────────────────────┐
+        │   frontend  app/mcp/  (RFC 0002-revised-2)    │
+        │   listener.ts  ─ listen 4 类事件             │
+        │   store.ts     ─ zustand mirror (UI 渲染用)  │
+        │   api.ts       ─ useMcpListener() hook        │
+        │   ui/                                           │
+        │   ├ McpStatusPanel.tsx (server 状态 + tool 日志)│
+        │   └ McpAttachBanner.tsx (attach banner)      │
+        └──────────────────────────────────────────────┘
+```
+
+**为什么 backend 跑 (vs RFC 0002-revised frontend 方案)**:
+- WebView 无 stdin/stdout, Claude Desktop stdio 配置走不通 → 必须 backend stdio sidecar
+- 调试链路: client → backend tokio → attach_registry (2 跳) vs 原 frontend 方案 (4 跳)
+- 业务状态 (attach / OutputRing / capture / tunnel) 已在 backend; MCP server 也放 backend 避免跨进程状态同步
+
+### 17.4 attach 状态机 (M7, 双层防御)
+
+```
+                  ┌────────────────────────────┐
+                  │   attach_registry (backend) │
+                  │   DashMap<u32, AttachState> │
+                  │   真源 (per session 单 client)│
+                  └─────────────┬──────────────┘
+                                │
+       ┌────────────────────────┼─────────────────────────┐
+       │ caller: ui  takeover │ caller: MCP client       │
+       │ attach_session(clientId="ui-takeover")            │
+       │  IPC #1 (commands/mcp)                              │
+       │              │  调  ▼                               │
+       │              │ try_attach(AttachSource::Ui)        │
+       │              │  CAS check                          │
+       │              │  emit "mcp-attach-changed"         │
+       │              │     { sessionId, clientId, "attach"} │
+       └──────────────┼──────────────────────────┬──────────┘
+                      │                          │
+                      ▼                          ▼
+       ┌──────────────────────────┐  ┌──────────────────────────┐
+       │ frontend 前端层 (immediate)│  │ frontend listener 层    │
+       │ Terminal.tsx              │  │ app/mcp/listener.ts      │
+       │  useEffect 订阅 attachState│  │ listen("mcp-attach-     │
+       │  attached → keydown capture│  │   changed", handler)    │
+       │  preventDefault()         │  │ → store.setAttachBanner │
+       │  屏蔽 user 键盘输入       │  │ → zustand re-render     │
+       │  ★ 不等 IPC 往返          │  │ → ui/mcp/McpAttachBanner│
+       └──────────────────────────┘  │   显示 "🤖 AI 接管中"   │
+                                      └──────────────────────────┘
+                                                  │
+                                                  ▼
+       ┌──────────────────────────────────────────────────────┐
+       │ backend 后端层 (per write, 强制)                     │
+       │ session_manager::write()                            │
+       │   ↓                                                  │
+       │ attach_registry.check_write_permission(            │
+       │   session_id, caller_client_id)                     │
+       │   → 未 attach  → 允许 user 写入                    │
+       │   → attached by caller → 允许 (MCP 写入)             │
+       │   → attached by 其他 → 拒绝 (写 PTY 失败)            │
+       └──────────────────────────────────────────────────────┘
+```
+
+**关键**: 双层防御
+- 前端层: `keydown` capture 阶段 `preventDefault()` (immediate UI response)
+- 后端层: `check_write_permission()` 在 `session_manager::write()` 入口强制校验 (即使前端被绕过, 写入也失败)
+
+### 17.5 启动序列时序 (端到端, 5+9 步)
+
+```
+time   backend (lib.rs::run() setup)        frontend (useShellApi().initialize())
+════   ══════════════════════════          ═══════════════════════════════════════
+t0     ┌─ tauri::Builder::default()
+t1     │  plugin(opener)
+t2     │  plugin(store)
+t3     │  plugin(clipboard_manager)
+t4     │  manage(Arc<SessionManager>)
+t5     │  setup(|app| {
+t6     │    1. logging_setup
+t7     │    2. ConfigStore::load       ─emit "config-reloaded"─► (后端 ready)
+t8     │    3. OutputChannel register  ─emit "session-output-channel"─►
+t9     │    4. reverse_tunnel::start
+t10    │    5. ⭐ services/mcp::http::start
+t11    │         (tokio @ 127.0.0.1:19847)
+t12    │    6. ⭐ services/mcp::stdio::spawn
+t13    │         sidecar (1 client 1 proc)
+t14    │  })
+t15    │  invoke_handler(75 IPC 注册)
+t16    │  run(generate_context!())
+t17    └─► Tauri ready, WebView open   ┌─ main.tsx → App.tsx → AppLayout
+t18                                  │  useShellApi().initialize()
+t19                                  │  1. invoke('shell_init_logging')
+t20                                  │  2. listen('session-output')    ◄ t8
+t21                                  │  3. listen('session-closed')
+t22                                  │  4. ⭐ mcp/listener.startListen  ◄ t10
+t23                                  │  5. session/bridge.setupListeners
+t24                                  │  6. workspace.loadLastWorkspace
+t25                                  │  7. settings.load()             ◄ t7
+t26                                  │  8. terminal.autoAttachTmux
+t27                                  │  9. readiness.setReady(true)
+t28                                  └─► UI 显示, 用户可操作
+```
+
+**关键观察**:
+- backend 启动完成 (t17) 早于 frontend 启动完成 (t28)
+- **AI agent 可在 t10 之后立即连入** (即便 frontend UI 还没完全显示)
+- t8 的 `session-output-channel` 必须在 frontend 启动前就 emit, 否则 frontend listen 会错过早期事件
+- frontend 启动 9 步中 4 步 (t20/t22/t23/t25) 是 listen/load, 5 步是其他初始化
+
+### 17.6 持久化分布 (跨进程数据所有权)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  backend (真源)                                                  │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │ services/persistence/store.rs (tauri-plugin-store wrapper)│    │
+│  │ ┌─────────────┬─────────────┬──────────────┬───────────┐  │    │
+│  │ │ settings    │ sessions    │ groups       │ attached_ │  │    │
+│  │ │ .json       │ .json       │ .json        │ tmux.json │  │    │
+│  │ │ (MCP/tunnel/│ (saved      │ (saved       │ (auto-    │  │    │
+│  │ │ ssh/term    │ profiles)   │ workspace    │ attached  │  │    │
+│  │ │ prefs)      │             │ groups)      │ tmux list)│  │    │
+│  │ └─────────────┴─────────────┴──────────────┴───────────┘  │    │
+│  │                                                            │    │
+│  │ services/io/log.rs                                          │    │
+│  │ ┌──────────────────────────┐                               │    │
+│  │ │ log_config.json (logger)  │  (RFC 0003-revised:           │    │
+│  │ └──────────────────────────┘   JSON 直存, 每个字段        │    │
+│  │                                #[serde(default)])          │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  infrastructure/logging_setup.rs                                 │
+│  ┌──────────────────────────────────────────┐                    │
+│  │ rolling log files (X.log, X.log.1, ...)  │  (zstd 压缩)      │
+│  └──────────────────────────────────────────┘                    │
+└──────────────────────────────────────────────────────────────────┘
+                              │
+                              │  invoke('load_settings' / 'save_settings' / 'patch_settings')
+                              │  invoke('load_sessions' / 'save_sessions' / 'load_groups' / 'save_groups' / etc.)
+                              │  listen('config-reloaded')  (settings 写后触发)
+                              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  frontend (镜像 + UI 渲染)                                       │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │ service/settings/store.ts  (zustand, 仅 UI 渲染)         │    │
+│  │   ← 镜像 backend settings.json (reactive)                │    │
+│  │   ← 写走 invoke('patch_settings', { patch })             │    │
+│  │                                                          │    │
+│  │ service/persistence/  (frontend 直存 - v5.1 NEW)         │    │
+│  │   ← sessions.json / groups.json 走 frontend 直存         │    │
+│  │   ⭐  backend 不再感知 sessions/groups 真源              │    │
+│  │   (attached_tmux 仍 backend 真源, settings 直存 backend)  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**关键 (RFC 0003-revised supersede PRD §2 M9 原文 TOML+watch)**:
+- ❌ 不再有 `services/config/` 模块 (RFC 0006 下沉)
+- ❌ 不再有 `commands/config.rs` (设置读写由 `commands/persistence.rs` 扩展承载)
+- ✅ JSON 直存, 每个字段 `#[serde(default)]` 向前兼容
+- frontend 是 settings.json 唯一写入入口 (UI 层是受信的)
+- v5.1 起: sessions/groups 改走 frontend service/persistence 直存 (vs 之前 backend 真源)
+
+### 17.7 文档地图 (在哪里读什么)
+
+```
+                              ┌────────────────────────┐
+                              │   doc/dev/design/       │
+                              │   _OVERVIEW.md  ◄──── 你在这里
+                              │   (跨进程视角, 唯一入口)│
+                              └────────┬───────────────┘
+                                       │
+                ┌──────────────────────┼──────────────────────┐
+                │                      │                      │
+        ┌───────▼──────┐      ┌────────▼────────┐    ┌───────▼──────┐
+        │  backend/    │      │   frontend/     │    │ architecture/│
+        │  README.md   │      │   README.md     │    │ README.md   │
+        │  (4 层细节)  │      │   (5 层细节)    │    │ (4+1 视图)  │
+        └──────┬───────┘      └────────┬────────┘    └───────┬──────┘
+               │                       │                     │
+        ┌──────▼─────────────────────────▼─────────┐  ┌──────▼──────────┐
+        │  R/I/D × 33 backend module 契约 docs      │  │ 01-logical-view │
+        │  (commands 9, services 17, infra 7)       │  │ 02-process-view │
+        │                                           │  │ 03-development  │
+        │  R/I/D × 25 frontend module 契约 docs     │  │ 04-physical     │
+        │  (app 6, ui 5, model 5, service 5,        │  │ 05-scenarios    │
+        │   infra 4)                                │  │ 06-tmux-runtime │
+        └───────────────────────────────────────────┘  └─────────────────┘
+
+        ┌─────────────┐  ┌─────────────┐  ┌──────────────────────────┐
+        │ adr/        │  │ history/    │  │ changelog/               │
+        │ 9 个 ADR    │  │ 归档设计     │  │ bugs.md / perf.md        │
+        │ (MCP 决策   │  │ RFC 0002    │  │ (修复记录 + perf 优化)  │
+        │  见 0002-   │  │ RFC 0002-   │  │                          │
+        │ revised-2)  │  │ revised     │  │                          │
+        └─────────────┘  └─────────────┘  └──────────────────────────┘
+```
