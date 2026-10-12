@@ -14,8 +14,8 @@
       padding: 2rem;
       color: white;
     }
-    .container { max-width: 1200px; margin: 0 auto; }
-    .header { margin-bottom: 2rem; }
+    .container { max-width: 1280px; margin: 0 auto; }
+    .header { margin-bottom: 1.5rem; }
     .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
     .pulse-dot {
       width: 12px; height: 12px; background: #22d3ee;
@@ -31,12 +31,12 @@
       padding: 1.5rem;
       overflow-x: auto;
     }
-    svg { width: 100%; min-width: 1000px; display: block; }
+    svg { width: 100%; min-width: 1200px; display: block; }
     .cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 1rem;
-      margin-top: 2rem;
+      margin-top: 1.5rem;
     }
     .card {
       background: rgba(15, 23, 42, 0.5);
@@ -59,7 +59,6 @@
 </head>
 <body>
   <div class="container">
-    <!-- Header -->
     <div class="header">
       <div class="header-row">
         <div class="pulse-dot"></div>
@@ -68,9 +67,22 @@
       <p class="subtitle">跨进程架构 · frontend WebView (TS) ↔ backend tokio (Rust) · RFC 0002-revised-2 (MCP backend) · 2026-10</p>
     </div>
 
-    <!-- Main Diagram -->
     <div class="diagram-container">
-      <svg viewBox="0 0 1180 760">
+      <!--
+        viewBox 1240 x 920 (was 1180 x 760, +160px height for 3 distinct emit-arrow corridors)
+        Layout (y coordinates):
+          y=40    external callers title
+          y=60-150  external caller boxes (4 boxes, 90px tall, well-spaced)
+          y=200-700  Tauri process boundary (500px tall, internal structure below)
+          y=720-790  persistence layer (4 file boxes, 70px tall)
+          y=810-900  legend (moved to bottom for breathing room)
+
+        3 emit-arrow corridors (well-separated, no overlap):
+          ① session-output BinaryFrame:  y=540 (top corridor)
+          ② mcp-attach-changed:           y=620 (middle corridor)
+          ③ mcp-tool-* / mcp-server-status: y=700 (bottom corridor)
+      -->
+      <svg viewBox="0 0 1240 920">
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
             <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
@@ -89,301 +101,298 @@
           </pattern>
         </defs>
 
-        <!-- Background Grid -->
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- =================================================================
-             Tauri process boundary (large amber dashed)
+             ROW 1: External callers (y=60-150) — 4 boxes, 100px gaps
              ================================================================= -->
-        <rect x="20" y="280" width="1140" height="380" rx="12"
+        <text x="40" y="42" fill="#94a3b8" font-size="10" font-weight="600">EXTERNAL CALLERS (above Tauri process boundary)</text>
+
+        <rect x="40" y="60" width="220" height="90" rx="6"
+              fill="rgba(30, 41, 59, 0.6)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="150" y="86" fill="white" font-size="12" font-weight="600" text-anchor="middle">AI Agent</text>
+        <text x="150" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">Claude Desktop · Cursor · Codex</text>
+        <text x="150" y="120" fill="#94a3b8" font-size="9" text-anchor="middle">自研 agent</text>
+        <text x="150" y="138" fill="#94a3b8" font-size="8" text-anchor="middle">(MCP protocol consumer)</text>
+
+        <rect x="350" y="60" width="220" height="90" rx="6"
+              fill="rgba(120, 53, 15, 0.4)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="460" y="86" fill="white" font-size="12" font-weight="600" text-anchor="middle">xstdiod-sidecar.exe</text>
+        <text x="460" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">独立 cargo binary</text>
+        <text x="460" y="120" fill="#94a3b8" font-size="9" text-anchor="middle">1 stdio client 1 process</text>
+        <text x="460" y="138" fill="#fbbf24" font-size="8" text-anchor="middle">spawn via tokio::process</text>
+
+        <rect x="660" y="60" width="220" height="90" rx="6"
+              fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="770" y="86" fill="white" font-size="12" font-weight="600" text-anchor="middle">reverse_tunnel</text>
+        <text x="770" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">russh -R 反向隧道</text>
+        <text x="770" y="120" fill="#94a3b8" font-size="9" text-anchor="middle">端口转发 → 127.0.0.1:19847</text>
+        <text x="770" y="138" fill="#fb7185" font-size="8" text-anchor="middle">1/2/4/8/16s 指数退避重连</text>
+
+        <rect x="970" y="60" width="240" height="90" rx="6"
+              fill="rgba(120, 53, 15, 0.4)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="1090" y="86" fill="white" font-size="12" font-weight="600" text-anchor="middle">MCP HTTP entry</text>
+        <text x="1090" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">@ 127.0.0.1:19847</text>
+        <text x="1090" y="120" fill="#94a3b8" font-size="9" text-anchor="middle">+ Bearer token (强制)</text>
+        <text x="1090" y="138" fill="#fbbf24" font-size="8" text-anchor="middle">+ rate_limit 100/s per tool</text>
+
+        <!-- Row 1 horizontal arrows (top y=105, clear of all boxes) -->
+        <line x1="260" y1="105" x2="348" y2="105" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="304" y="99" fill="#94a3b8" font-size="9" text-anchor="middle">stdio</text>
+
+        <line x1="570" y1="105" x2="968" y2="105" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="769" y="99" fill="#fbbf24" font-size="9" text-anchor="middle">HTTP localhost bridge (sidecar → backend)</text>
+
+        <line x1="880" y1="105" x2="968" y2="105" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrowhead-rose)"/>
+        <text x="924" y="99" fill="#fb7185" font-size="9" text-anchor="middle">TCP fwd</text>
+
+        <!-- AI Agent → reverse_tunnel (curved over the top, dashed rose) -->
+        <path d="M 150 150 Q 150 175 180 175 L 740 175 Q 770 175 770 152"
+              fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5"/>
+        <text x="465" y="170" fill="#fb7185" font-size="9" text-anchor="middle">SSH -R (remote agent over reverse_tunnel)</text>
+
+        <!-- MCP HTTP entry → backend services/mcp (vertical drop into Tauri) -->
+        <line x1="1090" y1="150" x2="1090" y2="450" stroke="#34d399" stroke-width="2" marker-end="url(#arrowhead-emerald)"/>
+        <text x="1098" y="280" fill="#34d399" font-size="9">enter Tauri process</text>
+        <text x="1098" y="296" fill="#34d399" font-size="9">→ services/mcp/</text>
+
+        <!-- =================================================================
+             TAURI PROCESS BOUNDARY (y=200-700) — 500px tall, generous
+             ================================================================= -->
+        <rect x="20" y="200" width="1200" height="500" rx="12"
               fill="rgba(251, 191, 36, 0.04)" stroke="#fbbf24"
               stroke-width="1" stroke-dasharray="8,4"/>
-        <text x="36" y="298" fill="#fbbf24" font-size="10" font-weight="600">Tauri 2 Process · Windows 10/11 · WebView2 + tokio · single binary</text>
+        <text x="36" y="220" fill="#fbbf24" font-size="11" font-weight="700">TAURI 2 PROCESS · Windows 10/11 · WebView2 + tokio · single binary</text>
 
-        <!-- =================================================================
-             TOP: External callers (above the Tauri boundary)
-             ================================================================= -->
-
-        <!-- AI Agent (external) -->
-        <rect x="40" y="50" width="180" height="80" rx="6"
-              fill="rgba(30, 41, 59, 0.6)" stroke="#94a3b8" stroke-width="1.5"/>
-        <text x="130" y="74" fill="white" font-size="12" font-weight="600" text-anchor="middle">AI Agent</text>
-        <text x="130" y="90" fill="#94a3b8" font-size="9" text-anchor="middle">Claude Desktop · Cursor · Codex</text>
-        <text x="130" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">自研 agent</text>
-        <text x="130" y="120" fill="#94a3b8" font-size="8" text-anchor="middle">(MCP protocol consumer)</text>
-
-        <!-- stdio sidecar (cloud/amber, separate subprocess) -->
-        <rect x="320" y="50" width="180" height="80" rx="6"
-              fill="rgba(120, 53, 15, 0.4)" stroke="#fbbf24" stroke-width="1.5"/>
-        <text x="410" y="74" fill="white" font-size="12" font-weight="600" text-anchor="middle">xstdiod-sidecar.exe</text>
-        <text x="410" y="90" fill="#94a3b8" font-size="9" text-anchor="middle">独立 cargo binary</text>
-        <text x="410" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">1 stdio client 1 process</text>
-        <text x="410" y="120" fill="#fbbf24" font-size="8" text-anchor="middle">spawn via tokio::process</text>
-
-        <!-- reverse_tunnel (security/rose, transport) -->
-        <rect x="600" y="50" width="180" height="80" rx="6"
-              fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
-        <text x="690" y="74" fill="white" font-size="12" font-weight="600" text-anchor="middle">reverse_tunnel</text>
-        <text x="690" y="90" fill="#94a3b8" font-size="9" text-anchor="middle">russh -R 反向隧道</text>
-        <text x="690" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">端口转发 127.0.0.1:19847</text>
-        <text x="690" y="120" fill="#fb7185" font-size="8" text-anchor="middle">1/2/4/8/16s 指数退避</text>
-
-        <!-- Local MCP HTTP (entry into Tauri) -->
-        <rect x="880" y="50" width="240" height="80" rx="6"
-              fill="rgba(120, 53, 15, 0.4)" stroke="#fbbf24" stroke-width="1.5"/>
-        <text x="1000" y="74" fill="white" font-size="12" font-weight="600" text-anchor="middle">MCP HTTP @ 127.0.0.1:19847</text>
-        <text x="1000" y="90" fill="#94a3b8" font-size="9" text-anchor="middle">+ Bearer token (强制)</text>
-        <text x="1000" y="104" fill="#94a3b8" font-size="9" text-anchor="middle">+ rate_limit 100/s per tool</text>
-        <text x="1000" y="120" fill="#fbbf24" font-size="8" text-anchor="middle">localhost only · 1 process</text>
-
-        <!-- =================================================================
-             LEFT: Frontend (Tauri WebView, cyan) — 5 layers collapsed
-             ================================================================= -->
-        <rect x="40" y="330" width="420" height="310" rx="10"
+        <!-- ===== FRONTEND (left, y=240-440) ===== -->
+        <rect x="40" y="240" width="480" height="200" rx="10"
               fill="rgba(8, 51, 68, 0.3)" stroke="#22d3ee" stroke-width="1.5"/>
-        <text x="60" y="352" fill="#22d3ee" font-size="11" font-weight="700">frontend (Tauri WebView · chromium)</text>
-        <text x="60" y="368" fill="#94a3b8" font-size="9">src/ · 5 layers · React 19 + TS 5.8 + Vite 7</text>
+        <text x="60" y="262" fill="#22d3ee" font-size="12" font-weight="700">frontend (Tauri WebView · chromium)</text>
+        <text x="60" y="278" fill="#94a3b8" font-size="9">src/ · 5 layers · React 19 + TS 5.8 + Vite 7</text>
 
-        <!-- app/ layer -->
-        <rect x="60" y="385" width="180" height="50" rx="6"
+        <rect x="60" y="295" width="220" height="50" rx="6"
               fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.2"/>
-        <text x="150" y="402" fill="white" font-size="10" font-weight="600" text-anchor="middle">app/ 业务编排</text>
-        <text x="150" y="418" fill="#94a3b8" font-size="8" text-anchor="middle">shell workspace terminal</text>
-        <text x="150" y="430" fill="#94a3b8" font-size="8" text-anchor="middle">session settings mcp</text>
+        <text x="170" y="313" fill="white" font-size="10" font-weight="600" text-anchor="middle">app/ 业务编排</text>
+        <text x="170" y="329" fill="#94a3b8" font-size="8" text-anchor="middle">shell workspace terminal</text>
+        <text x="170" y="341" fill="#94a3b8" font-size="8" text-anchor="middle">session settings mcp</text>
 
-        <!-- ui/ layer -->
-        <rect x="260" y="385" width="180" height="50" rx="6"
+        <rect x="290" y="295" width="220" height="50" rx="6"
               fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.2"/>
-        <text x="350" y="402" fill="white" font-size="10" font-weight="600" text-anchor="middle">ui/ 视图渲染</text>
-        <text x="350" y="418" fill="#94a3b8" font-size="8" text-anchor="middle">React + xterm.js</text>
-        <text x="350" y="430" fill="#94a3b8" font-size="8" text-anchor="middle">McpStatusPanel + Banner</text>
+        <text x="400" y="313" fill="white" font-size="10" font-weight="600" text-anchor="middle">ui/ 视图渲染</text>
+        <text x="400" y="329" fill="#94a3b8" font-size="8" text-anchor="middle">React + xterm.js</text>
+        <text x="400" y="341" fill="#94a3b8" font-size="8" text-anchor="middle">McpStatusPanel + Banner</text>
 
-        <!-- model/ layer -->
-        <rect x="60" y="450" width="180" height="50" rx="6"
+        <rect x="60" y="365" width="220" height="50" rx="6"
               fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.2"/>
-        <text x="150" y="467" fill="white" font-size="10" font-weight="600" text-anchor="middle">model/ 纯数据</text>
-        <text x="150" y="483" fill="#94a3b8" font-size="8" text-anchor="middle">session workspace settings</text>
-        <text x="150" y="495" fill="#94a3b8" font-size="8" text-anchor="middle">tmux cross-cutting</text>
+        <text x="170" y="383" fill="white" font-size="10" font-weight="600" text-anchor="middle">model/ 纯数据</text>
+        <text x="170" y="399" fill="#94a3b8" font-size="8" text-anchor="middle">session workspace settings</text>
+        <text x="170" y="411" fill="#94a3b8" font-size="8" text-anchor="middle">tmux cross-cutting</text>
 
-        <!-- service/ layer -->
-        <rect x="260" y="450" width="180" height="50" rx="6"
+        <rect x="290" y="365" width="220" height="50" rx="6"
               fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.2"/>
-        <text x="350" y="467" fill="white" font-size="10" font-weight="600" text-anchor="middle">service/ zustand 镜像</text>
-        <text x="350" y="483" fill="#94a3b8" font-size="8" text-anchor="middle">session workspace tmux</text>
-        <text x="350" y="495" fill="#94a3b8" font-size="8" text-anchor="middle">settings persistence</text>
+        <text x="400" y="383" fill="white" font-size="10" font-weight="600" text-anchor="middle">service/ zustand 镜像</text>
+        <text x="400" y="399" fill="#94a3b8" font-size="8" text-anchor="middle">session workspace tmux</text>
+        <text x="400" y="411" fill="#94a3b8" font-size="8" text-anchor="middle">settings persistence</text>
 
-        <!-- infra/ layer (with tauri emphasized) -->
-        <rect x="60" y="515" width="380" height="50" rx="6"
+        <rect x="60" y="425" width="450" height="20" rx="4"
               fill="rgba(8, 51, 68, 0.6)" stroke="#22d3ee" stroke-width="1.5"/>
-        <text x="250" y="532" fill="white" font-size="10" font-weight="600" text-anchor="middle">infra/ 平台适配</text>
-        <text x="250" y="548" fill="#94a3b8" font-size="8" text-anchor="middle">⭐ tauri (唯一 invoke/listen) · store · clipboard · logger</text>
-        <text x="250" y="560" fill="#22d3ee" font-size="8" text-anchor="middle">app/mcp/listener.ts (RFC 0002-revised-2: listener only)</text>
+        <text x="285" y="439" fill="white" font-size="10" font-weight="600" text-anchor="middle">infra/ ⭐ tauri (唯一 invoke/listen) · store · clipboard · logger</text>
 
-        <!-- Listener detail card -->
-        <rect x="60" y="580" width="380" height="48" rx="6"
-              fill="rgba(8, 51, 68, 0.5)" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3,3"/>
-        <text x="70" y="598" fill="#22d3ee" font-size="9" font-weight="600">app/mcp/listener.ts — listen 4 类事件:</text>
-        <text x="70" y="612" fill="#94a3b8" font-size="8">mcp-attach-changed · mcp-tool-called · mcp-tool-returned · mcp-server-status</text>
-        <text x="70" y="624" fill="#94a3b8" font-size="8">→ McpStatusPanel + McpAttachBanner (UI 实时显示 MCP 操作)</text>
-
-        <!-- =================================================================
-             RIGHT: Backend (tokio, emerald) — 4 layers + MCP highlighted
-             ================================================================= -->
-        <rect x="500" y="330" width="640" height="310" rx="10"
+        <!-- ===== BACKEND (right, y=240-440) ===== -->
+        <rect x="580" y="240" width="620" height="200" rx="10"
               fill="rgba(6, 78, 59, 0.3)" stroke="#34d399" stroke-width="1.5"/>
-        <text x="520" y="352" fill="#34d399" font-size="11" font-weight="700">backend (Tauri main · tokio runtime)</text>
-        <text x="520" y="368" fill="#94a3b8" font-size="9">src-tauri/src/ · 4 layers · Rust 2021 + Tauri 2</text>
+        <text x="600" y="262" fill="#34d399" font-size="12" font-weight="700">backend (Tauri main · tokio runtime)</text>
+        <text x="600" y="278" fill="#94a3b8" font-size="9">src-tauri/src/ · 4 layers · Rust 2021 + Tauri 2</text>
 
-        <!-- commands/ layer -->
-        <rect x="520" y="385" width="150" height="50" rx="6"
+        <rect x="600" y="295" width="180" height="50" rx="6"
               fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.2"/>
-        <text x="595" y="402" fill="white" font-size="10" font-weight="600" text-anchor="middle">commands/</text>
-        <text x="595" y="418" fill="#94a3b8" font-size="8" text-anchor="middle">9 × #[tauri::command]</text>
-        <text x="595" y="430" fill="#94a3b8" font-size="8" text-anchor="middle">75 IPC handlers</text>
+        <text x="690" y="313" fill="white" font-size="10" font-weight="600" text-anchor="middle">commands/</text>
+        <text x="690" y="329" fill="#94a3b8" font-size="8" text-anchor="middle">9 × #[tauri::command]</text>
+        <text x="690" y="341" fill="#94a3b8" font-size="8" text-anchor="middle">75 IPC handlers</text>
 
-        <!-- services/ layer (with mcp highlighted) -->
-        <rect x="685" y="385" width="200" height="50" rx="6"
+        <rect x="800" y="295" width="180" height="50" rx="6"
               fill="rgba(6, 78, 59, 0.6)" stroke="#34d399" stroke-width="1.5"/>
-        <text x="785" y="402" fill="white" font-size="10" font-weight="600" text-anchor="middle">services/ 业务编排</text>
-        <text x="785" y="418" fill="#94a3b8" font-size="8" text-anchor="middle">registry lifecycle output capture</text>
-        <text x="785" y="430" fill="#34d399" font-size="8" text-anchor="middle">⭐ mcp (RFC 0002-revised-2)</text>
+        <text x="890" y="313" fill="white" font-size="10" font-weight="600" text-anchor="middle">services/ 业务编排</text>
+        <text x="890" y="329" fill="#94a3b8" font-size="8" text-anchor="middle">registry lifecycle output</text>
+        <text x="890" y="341" fill="#34d399" font-size="8" text-anchor="middle">⭐ mcp (RFC 0002-revised-2)</text>
 
-        <!-- ⭐ mcp detail card (highlighted) -->
-        <rect x="900" y="385" width="220" height="50" rx="6"
-              fill="rgba(6, 78, 59, 0.7)" stroke="#34d399" stroke-width="2"/>
-        <text x="1010" y="402" fill="white" font-size="10" font-weight="700" text-anchor="middle">⭐ services/mcp/</text>
-        <text x="1010" y="418" fill="#94a3b8" font-size="8" text-anchor="middle">http.rs + stdio.rs + 12 tools/</text>
-        <text x="1010" y="430" fill="#34d399" font-size="8" text-anchor="middle">auth + safety + audit + events.rs</text>
+        <rect x="1000" y="295" width="180" height="50" rx="6"
+              fill="rgba(6, 78, 59, 0.8)" stroke="#34d399" stroke-width="2"/>
+        <text x="1090" y="313" fill="white" font-size="10" font-weight="700" text-anchor="middle">⭐ services/mcp/</text>
+        <text x="1090" y="329" fill="#94a3b8" font-size="8" text-anchor="middle">http + stdio + 12 tools</text>
+        <text x="1090" y="341" fill="#34d399" font-size="8" text-anchor="middle">auth + safety + audit + events</text>
 
-        <!-- services/ attach_registry (callout) -->
-        <rect x="520" y="450" width="150" height="50" rx="6"
+        <rect x="600" y="365" width="180" height="50" rx="6"
               fill="rgba(6, 78, 59, 0.5)" stroke="#34d399" stroke-width="1.2"/>
-        <text x="595" y="467" fill="white" font-size="10" font-weight="600" text-anchor="middle">attach_registry</text>
-        <text x="595" y="483" fill="#94a3b8" font-size="8" text-anchor="middle">try_attach / detach</text>
-        <text x="595" y="495" fill="#94a3b8" font-size="8" text-anchor="middle">check_write_permission</text>
+        <text x="690" y="383" fill="white" font-size="10" font-weight="600" text-anchor="middle">attach_registry</text>
+        <text x="690" y="399" fill="#94a3b8" font-size="8" text-anchor="middle">try_attach / detach</text>
+        <text x="690" y="411" fill="#94a3b8" font-size="8" text-anchor="middle">check_write_permission</text>
 
-        <!-- services/ session_manager (callout) -->
-        <rect x="685" y="450" width="200" height="50" rx="6"
+        <rect x="800" y="365" width="180" height="50" rx="6"
               fill="rgba(6, 78, 59, 0.5)" stroke="#34d399" stroke-width="1.2"/>
-        <text x="785" y="467" fill="white" font-size="10" font-weight="600" text-anchor="middle">session_manager / OutputRing</text>
-        <text x="785" y="483" fill="#94a3b8" font-size="8" text-anchor="middle">create / write / close</text>
-        <text x="785" y="495" fill="#94a3b8" font-size="8" text-anchor="middle">ring.push(bytes) → emit BinaryFrame</text>
+        <text x="890" y="383" fill="white" font-size="10" font-weight="600" text-anchor="middle">session_manager</text>
+        <text x="890" y="399" fill="#94a3b8" font-size="8" text-anchor="middle">+ subscribe_registry</text>
+        <text x="890" y="411" fill="#94a3b8" font-size="8" text-anchor="middle">OutputRing + 序号</text>
 
-        <!-- services/ audit (callout) -->
-        <rect x="900" y="450" width="220" height="50" rx="6"
+        <rect x="1000" y="365" width="180" height="50" rx="6"
               fill="rgba(6, 78, 59, 0.5)" stroke="#34d399" stroke-width="1.2"/>
-        <text x="1010" y="467" fill="white" font-size="10" font-weight="600" text-anchor="middle">audit / capture / tunnel / io</text>
-        <text x="1010" y="483" fill="#94a3b8" font-size="8" text-anchor="middle">audit Log + rate_limit</text>
-        <text x="1010" y="495" fill="#94a3b8" font-size="8" text-anchor="middle">capture {ansi, tmux} + reverse_tunnel</text>
+        <text x="1090" y="383" fill="white" font-size="10" font-weight="600" text-anchor="middle">audit · capture · tunnel</text>
+        <text x="1090" y="399" fill="#94a3b8" font-size="8" text-anchor="middle">capture {ansi, tmux}</text>
+        <text x="1090" y="411" fill="#94a3b8" font-size="8" text-anchor="middle">reverse_tunnel + audit</text>
 
-        <!-- infrastructure/ layer -->
-        <rect x="520" y="515" width="280" height="50" rx="6"
+        <rect x="600" y="425" width="280" height="20" rx="4"
               fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.2"/>
-        <text x="660" y="532" fill="white" font-size="10" font-weight="600" text-anchor="middle">infrastructure/ 平台抽象</text>
-        <text x="660" y="548" fill="#94a3b8" font-size="8" text-anchor="middle">pty · ssh · tmux · session_backend</text>
-        <text x="660" y="560" fill="#94a3b8" font-size="8" text-anchor="middle">app_backend · clipboard · logging_setup</text>
+        <text x="740" y="439" fill="white" font-size="10" font-weight="600" text-anchor="middle">infrastructure/ pty · ssh · tmux · session_backend</text>
 
-        <!-- models/ layer -->
-        <rect x="815" y="515" width="305" height="50" rx="6"
+        <rect x="900" y="425" width="280" height="20" rx="4"
               fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.2"/>
-        <text x="967" y="532" fill="white" font-size="10" font-weight="600" text-anchor="middle">models/ 纯数据契约 (serde)</text>
-        <text x="967" y="548" fill="#94a3b8" font-size="8" text-anchor="middle">session workspace settings attach</text>
-        <text x="967" y="560" fill="#94a3b8" font-size="8" text-anchor="middle">subscription profile capture (⏳ RFC 0007 plan)</text>
+        <text x="1040" y="439" fill="white" font-size="10" font-weight="600" text-anchor="middle">models/ 纯数据契约 (serde) ⏳ RFC 0007 plan</text>
 
-        <!-- attach detail callout -->
-        <rect x="520" y="580" width="600" height="48" rx="6"
-              fill="rgba(6, 78, 59, 0.5)" stroke="#34d399" stroke-width="1" stroke-dasharray="3,3"/>
-        <text x="530" y="598" fill="#34d399" font-size="9" font-weight="600">attach 状态机 — 双层防御:</text>
-        <text x="530" y="612" fill="#94a3b8" font-size="8">后端: session_manager::write() → attach_registry.check_write_permission() (per write 强制)</text>
-        <text x="530" y="624" fill="#94a3b8" font-size="8">前端: Terminal.tsx useEffect 订阅 attachState → attached 时 keydown capture preventDefault() (immediate)</text>
-
-        <!-- =================================================================
-             BOTTOM: Persistence layer (database violet)
-             ================================================================= -->
-
-        <!-- settings.json -->
-        <rect x="320" y="680" width="180" height="65" rx="6"
-              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="410" y="703" fill="white" font-size="11" font-weight="600" text-anchor="middle">settings.json</text>
-        <text x="410" y="720" fill="#94a3b8" font-size="8" text-anchor="middle">MCP / ssh / tunnel / term prefs</text>
-        <text x="410" y="733" fill="#a78bfa" font-size="8" text-anchor="middle">backend 真源 (RFC 0003-revised)</text>
-
-        <!-- sessions.json -->
-        <rect x="520" y="680" width="180" height="65" rx="6"
-              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="610" y="703" fill="white" font-size="11" font-weight="600" text-anchor="middle">sessions.json + groups.json</text>
-        <text x="610" y="720" fill="#94a3b8" font-size="8" text-anchor="middle">saved profiles + workspace groups</text>
-        <text x="610" y="733" fill="#a78bfa" font-size="8" text-anchor="middle">frontend service/persistence (v5.1)</text>
-
-        <!-- attached_tmux.json -->
-        <rect x="720" y="680" width="180" height="65" rx="6"
-              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="810" y="703" fill="white" font-size="11" font-weight="600" text-anchor="middle">attached_tmux.json</text>
-        <text x="810" y="720" fill="#94a3b8" font-size="8" text-anchor="middle">auto-attach 列表 (server)</text>
-        <text x="810" y="733" fill="#a78bfa" font-size="8" text-anchor="middle">backend 真源</text>
-
-        <!-- log files -->
-        <rect x="920" y="680" width="200" height="65" rx="6"
-              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-        <text x="1020" y="703" fill="white" font-size="11" font-weight="600" text-anchor="middle">rolling log files (zstd)</text>
-        <text x="1020" y="720" fill="#94a3b8" font-size="8" text-anchor="middle">X.log, X.log.1, ... (rolling)</text>
-        <text x="1020" y="733" fill="#a78bfa" font-size="8" text-anchor="middle">backend infrastructure/logging_setup</text>
-
-        <!-- =================================================================
-             ARROWS — drawn early (per skill rules, behind boxes)
-             ================================================================= -->
-
-        <!-- AI agent → stdio sidecar (left top horizontal) -->
-        <line x1="220" y1="90" x2="318" y2="90" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <text x="269" y="84" fill="#94a3b8" font-size="8" text-anchor="middle">stdio</text>
-
-        <!-- AI agent → reverse_tunnel (jump to right) -->
-        <path d="M 130 130 L 130 200 Q 130 220 150 220 L 690 220 Q 710 220 710 200 L 710 132"
-              fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5"/>
-        <text x="420" y="214" fill="#fb7185" font-size="8" text-anchor="middle">SSH -R (remote agent over reverse_tunnel)</text>
-
-        <!-- stdio sidecar → MCP HTTP entry (stdin/stdout bridge via HTTP) -->
-        <line x1="500" y1="90" x2="878" y2="90" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <text x="689" y="84" fill="#fbbf24" font-size="8" text-anchor="middle">HTTP localhost bridge</text>
-
-        <!-- MCP HTTP entry → backend services/mcp (vertical, into the Tauri box) -->
-        <line x1="1000" y1="130" x2="1000" y2="383" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-emerald)"/>
-
-        <!-- reverse_tunnel → MCP HTTP entry (TCP forward) -->
-        <line x1="780" y1="90" x2="878" y2="90" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrowhead-rose)"/>
-        <text x="829" y="84" fill="#fb7185" font-size="8" text-anchor="middle">TCP forward</text>
-
-        <!-- IPC channel — between frontend and backend (horizontal arrow in middle gap) -->
-        <line x1="460" y1="490" x2="498" y2="490" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowhead-cyan)"/>
-        <line x1="498" y1="500" x2="460" y2="500" stroke="#34d399" stroke-width="2" marker-end="url(#arrowhead-emerald)"/>
-        <text x="479" y="478" fill="#94a3b8" font-size="9" font-weight="600" text-anchor="middle">Tauri IPC</text>
-        <text x="479" y="515" fill="#94a3b8" font-size="8" text-anchor="middle">invoke('cmd')</text>
-        <text x="479" y="527" fill="#94a3b8" font-size="8" text-anchor="middle">listen('event')</text>
-
-        <!-- services/mcp emit → frontend app/mcp/listener (crossing the IPC channel) -->
-        <path d="M 1010 580 L 1010 670 Q 1010 700 990 700 L 250 700 Q 230 700 230 670 L 230 626"
-              fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,3"/>
-        <text x="620" y="694" fill="#34d399" font-size="8" text-anchor="middle">emit mcp-attach-changed / mcp-tool-* / mcp-server-status</text>
-
-        <!-- backend attach_registry → frontend Terminal.tsx (attach) -->
-        <path d="M 595 580 L 595 615 Q 595 640 575 640 L 350 640 Q 330 640 330 615 L 330 565"
-              fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,3"/>
-
-        <!-- backend session_manager → frontend xterm (BinaryFrame) -->
-        <path d="M 785 515 L 785 540 Q 785 565 250 565 Q 230 565 230 565 L 230 535"
-              fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,3"/>
-        <text x="500" y="558" fill="#34d399" font-size="8" text-anchor="middle">session-output BinaryFrame [0xA1][0x01][sid 4B][len 4B][data] → 1 event → 3 订阅者</text>
-
-        <!-- settings.json ↔ backend (small bidirectional) -->
-        <line x1="410" y1="680" x2="410" y2="640" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="2,2"/>
-        <line x1="610" y1="680" x2="610" y2="640" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="2,2"/>
-        <line x1="810" y1="680" x2="810" y2="640" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="2,2"/>
-        <line x1="1020" y1="680" x2="1020" y2="640" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="2,2"/>
-
-        <!-- =================================================================
-             LEGEND (must be outside the Tauri boundary)
-             ================================================================= -->
-        <rect x="20" y="170" width="1000" height="40" rx="6"
+        <!-- ===== Tauri IPC channel (vertical, in the gap at x=520-580) ===== -->
+        <rect x="520" y="295" width="50" height="125" rx="6"
               fill="rgba(15, 23, 42, 0.7)" stroke="#1e293b" stroke-width="1"/>
-        <text x="40" y="190" fill="white" font-size="10" font-weight="600">Legend</text>
+        <text x="545" y="313" fill="#94a3b8" font-size="10" font-weight="700" text-anchor="middle">Tauri</text>
+        <text x="545" y="328" fill="#94a3b8" font-size="10" font-weight="700" text-anchor="middle">IPC</text>
+        <text x="545" y="345" fill="#94a3b8" font-size="8" text-anchor="middle">invoke()</text>
+        <text x="545" y="358" fill="#94a3b8" font-size="8" text-anchor="middle">listen()</text>
 
-        <rect x="100" y="182" width="14" height="14" rx="2" fill="rgba(30, 41, 59, 0.6)" stroke="#94a3b8" stroke-width="1"/>
-        <text x="120" y="193" fill="#94a3b8" font-size="9">External (AI agent)</text>
+        <!-- Demo arrows on the IPC channel -->
+        <line x1="520" y1="385" x2="510" y2="385" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowhead-cyan)"/>
+        <line x1="575" y1="400" x2="585" y2="400" stroke="#34d399" stroke-width="2" marker-end="url(#arrowhead-emerald)"/>
 
-        <rect x="240" y="182" width="14" height="14" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
-        <text x="260" y="193" fill="#94a3b8" font-size="9">Frontend (Tauri WebView)</text>
+        <!-- =================================================================
+             DETAIL CALLOUTS — y=460-525 (BELOW the layer boxes, ABOVE corridors)
+             ================================================================= -->
+        <rect x="40" y="460" width="500" height="65" rx="6"
+              fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="52" y="480" fill="#22d3ee" font-size="10" font-weight="700">app/mcp/listener.ts (frontend, listener only)</text>
+        <text x="52" y="497" fill="#94a3b8" font-size="8">listen 4 类 mcp-* 事件:</text>
+        <text x="52" y="511" fill="#94a3b8" font-size="8">mcp-attach-changed · mcp-tool-called · mcp-tool-returned · mcp-server-status</text>
+        <text x="52" y="523" fill="#94a3b8" font-size="8">→ McpStatusPanel (server 状态 + tool 日志) + McpAttachBanner (attach banner)</text>
 
-        <rect x="430" y="182" width="14" height="14" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
-        <text x="450" y="193" fill="#94a3b8" font-size="9">Backend (tokio / Rust)</text>
+        <rect x="580" y="460" width="620" height="65" rx="6"
+              fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="592" y="480" fill="#34d399" font-size="10" font-weight="700">attach 状态机 — 双层防御 (per write 强制)</text>
+        <text x="592" y="497" fill="#94a3b8" font-size="8">后端层: session_manager::write() → attach_registry.check_write_permission(session_id, caller_client_id)</text>
+        <text x="592" y="511" fill="#94a3b8" font-size="8">前端层: Terminal.tsx useEffect 订阅 attachState → attached 时 keydown capture preventDefault() (immediate)</text>
+        <text x="592" y="523" fill="#94a3b8" font-size="8">效果: user 键盘被屏蔽 / MCP 写入允许 (caller==attach_client) / 其他 MCP client 拒绝</text>
 
-        <rect x="620" y="182" width="14" height="14" rx="2" fill="rgba(120, 53, 15, 0.4)" stroke="#fbbf24" stroke-width="1"/>
-        <text x="640" y="193" fill="#94a3b8" font-size="9">Cloud / Subprocess (sidecar)</text>
+        <!-- =================================================================
+             3 EMIT-ARROW CORRIDORS (y=540, 620, 700) — well separated
+             Each: orthogonal L-shape from a backend box, leftward, then up
+             Vertical drop from box, horizontal traverse, vertical rise to target
+             ================================================================= -->
 
-        <rect x="830" y="182" width="14" height="14" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
-        <text x="850" y="193" fill="#94a3b8" font-size="9">Persistence (file system)</text>
+        <!-- ① BinaryFrame (TOP corridor, y=540) -->
+        <!-- From: session_manager box (x=800-980, y=365-415), bottom-center (890, 415) -->
+        <!-- To: xterm in ui/ box (x=290-510, y=295-345), bottom-center (400, 345) -->
+        <!-- Path: down from (890,415) to (890,540), left to (400,540), up to (400,345) -->
+        <path d="M 890 415 L 890 540 L 400 540 L 400 345"
+              fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="5,3"
+              marker-end="url(#arrowhead-emerald)"/>
+        <text x="645" y="534" fill="#34d399" font-size="10" font-weight="700" text-anchor="middle">① session-output BinaryFrame [0xA1][0x01][sid 4B][len 4B][data]  →  1 event → 3 订阅者</text>
 
-        <rect x="40" y="218" width="14" height="14" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/>
-        <text x="60" y="229" fill="#94a3b8" font-size="9">Security (reverse_tunnel / token verify)</text>
+        <!-- ② mcp-attach-changed (MIDDLE corridor, y=620) — riser at x=180 (far left) -->
+        <!-- From: attach_registry box (x=600-780, y=365-415), bottom-center (690, 415) -->
+        <!-- To: Terminal.tsx in infra/ box (x=60-510, y=425-445), top-center (180, 425) -->
+        <!-- Path: down from (690,415) to (690,620), left to (180,620), up to (180,425) -->
+        <path d="M 690 415 L 690 620 L 180 620 L 180 445"
+              fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="5,3"
+              marker-end="url(#arrowhead-emerald)"/>
+        <text x="435" y="614" fill="#34d399" font-size="10" font-weight="700" text-anchor="middle">② mcp-attach-changed { sessionId, clientId, action }  →  Terminal.tsx attachState</text>
 
-        <line x1="280" y1="225" x2="294" y2="225" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowhead-cyan)"/>
-        <line x1="294" y1="234" x2="280" y2="234" stroke="#34d399" stroke-width="2" marker-end="url(#arrowhead-emerald)"/>
-        <text x="300" y="229" fill="#94a3b8" font-size="9">invoke / listen (Tauri IPC)</text>
+        <!-- ③ mcp-tool-* / mcp-server-status (BOTTOM corridor, y=700) — riser at x=420 (mid-left) -->
+        <!-- From: services/mcp/ box (x=1000-1180, y=295-345), bottom-center (1090, 345) -->
+        <!-- To: app/mcp/listener.ts in callout (x=40-540, y=460-525), top-center (420, 460) -->
+        <!-- Path: down from (1090,345) to (1090,700), left to (420,700), up to (420,460) -->
+        <path d="M 1090 345 L 1090 700 L 420 700 L 420 460"
+              fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="5,3"
+              marker-end="url(#arrowhead-emerald)"/>
+        <text x="755" y="694" fill="#34d399" font-size="10" font-weight="700" text-anchor="middle">③ mcp-tool-called / mcp-tool-returned / mcp-server-status  →  app/mcp/listener.ts</text>
 
-        <line x1="490" y1="225" x2="504" y2="225" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <text x="510" y="229" fill="#94a3b8" font-size="9">std call</text>
+        <!-- =================================================================
+             PERSISTENCE LAYER (y=720-790) — 4 file types, 240px wide each
+             Vertical lines to backend (dashed violet, distinct x)
+             ================================================================= -->
+        <text x="40" y="712" fill="#94a3b8" font-size="10" font-weight="600">PERSISTENCE (RFC 0003-revised · JSON 直存, 每个字段 #[serde(default)])</text>
 
-        <line x1="600" y1="225" x2="614" y2="225" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead-rose)"/>
-        <text x="620" y="229" fill="#94a3b8" font-size="9">SSH / encrypted flow</text>
+        <rect x="100" y="725" width="240" height="60" rx="6"
+              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="220" y="748" fill="white" font-size="11" font-weight="600" text-anchor="middle">settings.json</text>
+        <text x="220" y="763" fill="#94a3b8" font-size="8" text-anchor="middle">MCP / ssh / tunnel / term prefs</text>
+        <text x="220" y="776" fill="#a78bfa" font-size="8" text-anchor="middle">backend 真源 (tauri-plugin-store)</text>
 
-        <line x1="800" y1="225" x2="814" y2="225" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrowhead-emerald)"/>
-        <text x="820" y="229" fill="#94a3b8" font-size="9">Tauri event emit (backend → frontend listen)</text>
+        <rect x="400" y="725" width="240" height="60" rx="6"
+              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="520" y="748" fill="white" font-size="11" font-weight="600" text-anchor="middle">sessions.json + groups.json</text>
+        <text x="520" y="763" fill="#94a3b8" font-size="8" text-anchor="middle">saved profiles + workspace groups</text>
+        <text x="520" y="776" fill="#a78bfa" font-size="8" text-anchor="middle">frontend service/persistence (v5.1)</text>
 
-        <line x1="40" y1="252" x2="54" y2="252" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="2,2"/>
-        <text x="60" y="255" fill="#94a3b8" font-size="9">persistence IO</text>
+        <rect x="700" y="725" width="240" height="60" rx="6"
+              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="820" y="748" fill="white" font-size="11" font-weight="600" text-anchor="middle">attached_tmux.json</text>
+        <text x="820" y="763" fill="#94a3b8" font-size="8" text-anchor="middle">auto-attach 列表 (server)</text>
+        <text x="820" y="776" fill="#a78bfa" font-size="8" text-anchor="middle">backend 真源 (server 启动时加载)</text>
+
+        <rect x="1000" y="725" width="220" height="60" rx="6"
+              fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="1110" y="748" fill="white" font-size="11" font-weight="600" text-anchor="middle">rolling log files</text>
+        <text x="1110" y="763" fill="#94a3b8" font-size="8" text-anchor="middle">X.log, X.log.1, ... (zstd)</text>
+        <text x="1110" y="776" fill="#a78bfa" font-size="8" text-anchor="middle">backend infrastructure/logging</text>
+
+        <!-- Persistence IO lines REMOVED — they were crossing 3 corridor horizontals at 6 points
+             and adding visual noise. The "backend 真源" label in each persistence box already
+             communicates the cross-process ownership (backend owns the file, frontend
+             reads via IPC). The 4 boxes themselves are sufficient as the legend. -->
+
+        <!-- =================================================================
+             LEGEND (y=810-905) — moved to bottom for breathing room
+             ================================================================= -->
+        <rect x="20" y="810" width="1200" height="90" rx="6"
+              fill="rgba(15, 23, 42, 0.7)" stroke="#1e293b" stroke-width="1"/>
+        <text x="40" y="830" fill="white" font-size="11" font-weight="700">Legend</text>
+
+        <!-- Color swatches (row 1, y=843) -->
+        <rect x="40" y="843" width="14" height="14" rx="2" fill="rgba(30, 41, 59, 0.6)" stroke="#94a3b8" stroke-width="1"/>
+        <text x="60" y="854" fill="#94a3b8" font-size="9">External</text>
+
+        <rect x="140" y="843" width="14" height="14" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
+        <text x="160" y="854" fill="#94a3b8" font-size="9">Frontend</text>
+
+        <rect x="240" y="843" width="14" height="14" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="260" y="854" fill="#94a3b8" font-size="9">Backend</text>
+
+        <rect x="340" y="843" width="14" height="14" rx="2" fill="rgba(120, 53, 15, 0.4)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="360" y="854" fill="#94a3b8" font-size="9">Cloud / Subprocess</text>
+
+        <rect x="500" y="843" width="14" height="14" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="520" y="854" fill="#94a3b8" font-size="9">Persistence</text>
+
+        <rect x="620" y="843" width="14" height="14" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/>
+        <text x="640" y="854" fill="#94a3b8" font-size="9">Security / Tunnel</text>
+
+        <!-- Arrow swatches (row 2, y=880) -->
+        <line x1="40" y1="880" x2="56" y2="880" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowhead-cyan)"/>
+        <text x="62" y="883" fill="#94a3b8" font-size="9">invoke (frontend→backend)</text>
+
+        <line x1="220" y1="880" x2="236" y2="880" stroke="#34d399" stroke-width="2" marker-end="url(#arrowhead-emerald)"/>
+        <text x="242" y="883" fill="#94a3b8" font-size="9">listen / emit (backend→frontend)</text>
+
+        <line x1="450" y1="880" x2="466" y2="880" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="472" y="883" fill="#94a3b8" font-size="9">stdio / HTTP localhost</text>
+
+        <line x1="650" y1="880" x2="666" y2="880" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead-rose)"/>
+        <text x="672" y="883" fill="#94a3b8" font-size="9">SSH / reverse_tunnel</text>
+
+        <line x1="850" y1="880" x2="866" y2="880" stroke="#a78bfa" stroke-width="1" stroke-dasharray="2,2"/>
+        <text x="872" y="883" fill="#94a3b8" font-size="9">persistence IO</text>
+
+        <!-- Row 3: corridor numbers (y=900) -->
+        <text x="40" y="900" fill="#34d399" font-size="9" font-weight="700">① ② ③</text>
+        <text x="60" y="900" fill="#94a3b8" font-size="9">3 distinct emit-arrow corridors (y=540 / 620 / 700), no overlap</text>
       </svg>
     </div>
 
-    <!-- Info Cards -->
     <div class="cards">
       <div class="card">
         <div class="card-header">
@@ -391,27 +400,27 @@
           <h3>Frontend (5 layers)</h3>
         </div>
         <ul>
-          <li>• app/ 业务编排 (6 modules: shell/workspace/terminal/session/settings/mcp)</li>
+          <li>• app/ 业务编排 (6 modules)</li>
           <li>• ui/ 视图渲染 (5 modules + xterm.js)</li>
-          <li>• model/ 纯数据 (session/workspace/settings/tmux/cross-cutting)</li>
-          <li>• service/ zustand 镜像 (5 domains, 镜像 backend 真源)</li>
+          <li>• model/ 纯数据 (5 domains)</li>
+          <li>• service/ zustand 镜像 (5 domains)</li>
           <li>• infra/ 平台适配 (tauri/store/clipboard/logger)</li>
-          <li>• ⭐ app/mcp/listener.ts — listen 4 类 mcp-* 事件 (退化后)</li>
+          <li>• ⭐ app/mcp/listener.ts — listen 4 mcp-* 事件</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot emerald"></div>
-          <h3>Backend (4 layers · RFC 0002-revised-2)</h3>
+          <h3>Backend (4 layers)</h3>
         </div>
         <ul>
-          <li>• commands/ — 9 modules × #[tauri::command], 75 IPC handlers</li>
-          <li>• services/ — registry/lifecycle/output/capture/transport/persistence/io/audit</li>
-          <li>• ⭐ services/mcp/ — MCP server (HTTP + stdio 双 transport, 12 tools)</li>
-          <li>• infrastructure/ — pty/ssh/tmux/session_backend/app_backend/clipboard/logging_setup</li>
-          <li>• models/ — 纯数据契约 (serde 派生, ⏳ RFC 0007 拆分 plan)</li>
-          <li>• attach_registry: try_attach / detach / check_write_permission (双层防御后端)</li>
+          <li>• commands/ — 9 × #[tauri::command], 75 IPC</li>
+          <li>• services/ — 8 子 module</li>
+          <li>• ⭐ services/mcp/ — MCP server (HTTP+stdio, 12 tools)</li>
+          <li>• infrastructure/ — pty/ssh/tmux/session_backend</li>
+          <li>• models/ — 纯数据契约 (⏳ RFC 0007 plan)</li>
+          <li>• attach_registry — 双层防御后端</li>
         </ul>
       </div>
 
@@ -421,17 +430,15 @@
           <h3>跨进程 wire (Tauri IPC)</h3>
         </div>
         <ul>
-          <li>• invoke('cmd', args) → Result&lt;T, String&gt; (frontend→backend 单跳, 镜像 serde)</li>
-          <li>• listen('event', cb) ← Unlisten (backend→frontend 推流, 11 类事件)</li>
-          <li>• BinaryFrame: [0xA1][0x01][sid BE 4B][len BE 4B][data] (session-output 高效编码)</li>
-          <li>• session-output 1 个 event → 3 订阅者 (xterm + mcp listener + state mirror)</li>
-          <li>• MCP emit: mcp-attach-changed / mcp-tool-called / mcp-tool-returned / mcp-server-status</li>
-          <li>• 禁止: frontend 直读 backend 内部字段; backend 反向依赖 frontend</li>
+          <li>• invoke('cmd', args) → Result&lt;T, String&gt;</li>
+          <li>• listen('event', cb) ← Unlisten</li>
+          <li>• BinaryFrame: [0xA1][0x01][sid][len][data]</li>
+          <li>• session-output: 1 event → 3 订阅者</li>
+          <li>• MCP emit: mcp-attach-changed / mcp-tool-* / mcp-server-status</li>
         </ul>
       </div>
     </div>
 
-    <!-- Footer -->
     <p class="footer">
       xsterm · Tauri 2 + WebView2 + Rust + tokio · single binary Windows installer · 2026-10-09
     </p>
