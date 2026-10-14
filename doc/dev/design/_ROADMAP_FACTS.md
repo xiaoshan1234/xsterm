@@ -24,26 +24,34 @@
 
 ```
 src-tauri/src/
-├── commands/        IPC handlers (9 × Tauri command modules)
-├── services/        业务编排
-│   ├── tmux_session/   ⭐ V3 核心, 18+ 文件, 已重构过 5+ 次
-│   │   ├── mod.rs
-│   │   ├── controller/ (commands + id_map + io_tasks + mod + registry + spawn + subscriber + sync + tests)
-│   │   ├── protocol/   (codec + command + events + mod + parser + wire)
-│   │   ├── bridge/    (mod)
-│   │   ├── dispatch.rs
-│   │   └── errors.rs
-│   ├── registry/     (session_manager 等)
-│   ├── output/       (OutputRing)
-│   ├── capture/      (ansi, tmux capture-pane)
-│   └── ... (其他 services)
-├── infrastructure/
-│   ├── tmux/         ⭐ V3 平台抽象, backend.rs + mod.rs (2 文件)
-│   ├── pty/ ssh/ session_backend/ app_backend/ clipboard/ logging_setup/
-│   └── ...
-├── models/          (serde 派生)
-└── ...
+├── commands/        IPC handlers (4 modules — 比之前 design 假设的 9 个少 5 个)
+│   ├── mod.rs
+│   ├── logging.rs        log_message
+│   ├── persistence.rs    settings/sessions/groups/attached_tmux
+│   └── session.rs        create_local / create_ssh / write / close / capture
+├── services/        业务编排 (5 modules — 比之前 design 假设的 8 子 module 少 3 个)
+│   ├── mod.rs
+│   ├── local_session.rs  pty 本地 shell
+│   ├── session_log.rs    rolling log
+│   ├── session_manager.rs (注: 不是 registry 子目录, 是 flat file)
+│   ├── ssh_session.rs    ssh 远程 shell
+│   └── tmux_session/     ⭐ V3 核心, 18+ 文件, 已重构 5+ 次
+│       ├── mod.rs + errors.rs + dispatch.rs
+│       ├── controller/ (commands + id_map + io_tasks + mod + registry + spawn + subscriber + sync + tests)
+│       ├── protocol/   (codec + command + events + mod + parser + wire)
+│       └── bridge/    (mod)
+└── infrastructure/
+    ├── tmux/         ⭐ V3 平台抽象, backend.rs + mod.rs (2 文件)
+    ├── pty/ (单文件)
+    ├── ssh/ (单文件)
+    ├── app_backend.rs + session_backend.rs
+    ├── clipboard.rs
+    └── logging_setup.rs
 ```
+
+> **重大修订**: 我之前 4 轮 design 假设 backend 是 `services/registry/{session_manager,attach_registry,subscribe_registry,profile_registry}.rs` 4 个 friend module, 实际是 1 个 `session_manager.rs` flat file + `tmux_session/` 子目录。**V3 已经按"独立 service"重构成 18+ 文件, 不是我之前假设的"session_manager 字段"**
+
+> **V2 修订**: backend 实际**没有** `commands/workspace.rs` / `commands/terminal.rs` / `commands/settings.rs` — **V2 panel split / workspace / terminal settings 全部只有 frontend UI, 没有 backend IPC 配套**
 
 **V1 验证**:
 - `commands/session.rs` 存在 (V1 IPC handler)
@@ -79,13 +87,29 @@ $ find src -iname '*mcp*'
 
 ```
 src/
-├── app/            业务编排 (6 modules per frontend/README §2.1)
-├── ui/             视图渲染
-├── model/          纯数据
-├── service/        zustand store
-├── infra/          平台适配 (tauri/store/clipboard/logger)
-└── ... (其他)
+├── main.tsx (229 bytes) + App.tsx (3060 bytes)
+├── app/             业务编排 (非常扁平, 不是 6-module 结构)
+│   ├── index.ts
+│   ├── rules/ (rule 文件若干)
+│   └── useCases/ (useCase 文件若干)
+├── ui/              视图渲染 (扁平 18+ .tsx, 没有按 workspace/session 切分 module)
+│   ├── AppLayout.tsx + NavBar.tsx + Pane.tsx + PaneTree.tsx + PaneInitCard.tsx
+│   ├── CommandSendPanel.tsx
+│   ├── InitWindowView.tsx
+│   ├── dialogs/  icons/  primitives/  settings/  sidebar/  styles/  assets/
+│   └── (18+ .tsx + 6+ .css 散落)
+├── (model/ 不存在)
+├── (service/ 不存在)
+└── (infra/ 不存在)
 ```
+
+> **重大修订**: 我之前 4 轮 design 假设 frontend 是 `app/{shell,workspace,terminal,session,settings,mcp}/` 6 个 module + `ui/{shell,workspace,terminal,session,settings}/` 5 个 module + `model/{...}/` 5 个 domain + `service/{...}/` 5 个 domain + `infra/{tauri,store,clipboard,logger}/` 4 个子 module — **4 层全部空想, 0 行代码对应**
+
+> **V2 修订**: ui/Pane.tsx + PaneTree.tsx + PaneInitCard.tsx + sidebar/ 实际**是 V2 panel split / workspace 渲染**, 但**没有 backend workspace 状态同步** (没有 commands/workspace.rs IPC), workspace 状态是 frontend 私有, **重启会丢**
+
+> **V3 修订**: ui/ 没有任何 tmux 相关文件, V3 tmux **只有 backend 18+ 文件, frontend UI 未接**
+
+> **V4 修订**: app/mcp/ **0 行代码, 0 行 doc 之外的 doc** (跟 backend 一样, 全部是 _OVERVIEW.md 描述的"空想 doc")
 
 **V4 验证**:
 - 跟 backend 一样, **frontend `app/mcp/` 目录 0 行代码**, 只有 doc
