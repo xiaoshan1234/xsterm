@@ -1,31 +1,92 @@
-/* M2 提前落地 M3 的 tokens.css —— chrome 视觉合约。
-   完整 token 表见 DESIGN.md §4。本文件只含 M2 chrome 实际使用的子集,
-   M3 再补全。 */
+/* chrome 视觉合约。完整 token 表 + 颜色用途见 DESIGN.md §4 §5 §6。
+   本文件是 chrome CSS 唯一允许写 hex 字面量的地方。 */
+
 :root {
+  /* === Surfaces (暖深 IDE 灰阶) === */
   --canvas: #1a1a1a;
   --canvas-soft: #1f1f1f;
   --surface-card: #242424;
+  --surface-strong: #2e2e2e;
+  --bg-hover: #2a2a2a;
+  --bg-active: #333333;
+
+  /* === Hairlines (替代 border + shadow) === */
   --hairline: #2e2e2e;
+  --hairline-soft: #262626;
   --hairline-strong: #3a3a3a;
+
+  /* === Text === */
   --ink: #e8e6e0;
   --body: #b8b6b0;
+  --body-strong: #e8e6e0;
   --muted: #7a7a78;
+  --muted-soft: #4a4a48;
+  --text-on-accent: #ffffff;
+
+  /* === Accent (Cursor Orange — 唯一电气感) === */
   --accent: #f54e00;
+  --accent-hover: #ff5e1a;
+  --accent-active: #d04200;
   --accent-soft: rgba(245, 78, 0, 0.12);
+
+  /* === Semantic === */
   --error: #cf2d56;
-  --error-soft: rgba(207, 45, 86, 0.12);
+  --error-bg: rgba(207, 45, 86, 0.12);
+  --warning: #f0a020;
+  --warning-bg: rgba(240, 160, 32, 0.12);
+  --success: #1f8a65;
+  --success-bg: rgba(31, 138, 65, 0.12);
+
+  /* === Typography === */
   --font-ui:
     "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono:
     "JetBrains Mono", "Fira Code", "IBM Plex Mono", Menlo, Monaco, "Courier New", monospace;
-  --radius-md: 8px;
+
+  --text-size-display-lg: 26px;
+  --text-size-title-md: 18px;
+  --text-size-title-sm: 16px;
+  --text-size-body-md: 16px;
+  --text-size-body-sm: 14px;
+  --text-size-caption: 13px;
+  --text-size-button: 14px;
+  --text-size-code: 13px;
+  --text-size-caption-uppercase: 11px;
+
+  --text-weight-regular: 400;
+  --text-weight-medium: 500;
+  --text-weight-semibold: 600;
+
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.4;
+  --line-height-relaxed: 1.5;
+
+  --tracking-caption-uppercase: 0.88px;
+
+  /* === Spacing (4px base) === */
+  --space-xxs: 4px;
   --space-xs: 8px;
   --space-sm: 12px;
   --space-base: 16px;
+  --space-md: 20px;
   --space-lg: 24px;
   --space-xl: 32px;
+  --space-xxl: 48px;
+  --space-section: 80px;
+
+  /* === Radius === */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+
+  /* === Overlay === */
+  --overlay: rgba(0, 0, 0, 0.55);
 }
 
+/* === Global resets === */
 * {
   box-sizing: border-box;
 }
@@ -34,9 +95,35 @@ html,
 body,
 #root {
   margin: 0;
+  padding: 0;
   height: 100%;
+  overflow: hidden;
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: var(--text-size-body-sm);
+  font-weight: var(--text-weight-regular);
+  line-height: var(--line-height-relaxed);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
 }

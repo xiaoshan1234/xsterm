@@ -1,4 +1,5 @@
 import type { PaneNode, PanePath } from "../../data/model/pane";
+import type { SessionId } from "../../data/model/session";
 import PaneChrome from "../components/PaneChrome";
 import PaneInitCard from "../components/PaneInitCard";
 import { usePaneTreeContext } from "../hooks/paneTreeContext";
@@ -8,6 +9,7 @@ interface SplitContainerProps {
   node: PaneNode;
   tabId: number;
   focusedPath: PanePath;
+  paneNumbers: Map<SessionId, number>;
 }
 
 function pathAt(path: PanePath, step: 0 | 1): PanePath {
@@ -22,16 +24,23 @@ function isFocused(path: PanePath, focused: PanePath): boolean {
   return true;
 }
 
-export default function SplitContainer({ node, tabId, focusedPath }: SplitContainerProps) {
+export default function SplitContainer({
+  node,
+  tabId,
+  focusedPath,
+  paneNumbers,
+}: SplitContainerProps) {
   const { initToLeaf, splitActivePane, closeLeaf, focusLeaf } = usePaneTreeContext();
 
   if (node.kind === "leaf") {
+    const paneNumber = paneNumbers.get(node.sessionId) ?? 0;
     return (
       <PaneChrome
         tabId={tabId}
         path={focusedPath}
         focused={isFocused(focusedPath, focusedPath)}
         leaf={node}
+        paneNumber={paneNumber}
         onFocus={() => focusLeaf(tabId, node.sessionId)}
         onSplitH={() => void splitActivePane(tabId, "h")}
         onSplitV={() => void splitActivePane(tabId, "v")}
@@ -48,10 +57,20 @@ export default function SplitContainer({ node, tabId, focusedPath }: SplitContai
     return (
       <div className="splitContainer splitH">
         <div className="splitPane">
-          <SplitContainer node={node.left} tabId={tabId} focusedPath={pathAt(focusedPath, 0)} />
+          <SplitContainer
+            node={node.left}
+            tabId={tabId}
+            focusedPath={pathAt(focusedPath, 0)}
+            paneNumbers={paneNumbers}
+          />
         </div>
         <div className="splitPane">
-          <SplitContainer node={node.right} tabId={tabId} focusedPath={pathAt(focusedPath, 1)} />
+          <SplitContainer
+            node={node.right}
+            tabId={tabId}
+            focusedPath={pathAt(focusedPath, 1)}
+            paneNumbers={paneNumbers}
+          />
         </div>
       </div>
     );
@@ -60,10 +79,20 @@ export default function SplitContainer({ node, tabId, focusedPath }: SplitContai
   return (
     <div className="splitContainer splitV">
       <div className="splitPane">
-        <SplitContainer node={node.top} tabId={tabId} focusedPath={pathAt(focusedPath, 0)} />
+        <SplitContainer
+          node={node.top}
+          tabId={tabId}
+          focusedPath={pathAt(focusedPath, 0)}
+          paneNumbers={paneNumbers}
+        />
       </div>
       <div className="splitPane">
-        <SplitContainer node={node.bottom} tabId={tabId} focusedPath={pathAt(focusedPath, 1)} />
+        <SplitContainer
+          node={node.bottom}
+          tabId={tabId}
+          focusedPath={pathAt(focusedPath, 1)}
+          paneNumbers={paneNumbers}
+        />
       </div>
     </div>
   );

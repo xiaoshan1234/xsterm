@@ -1,0 +1,56 @@
+.iconStrip {
+  width: 52px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xxs);
+  padding: var(--space-xs) 0;
+  background: var(--canvas);
+  border-right: 1px solid var(--hairline);
+  user-select: none;
+}
+
+.iconStripItem {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+
+.iconStripItem:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+
+.iconStripItemActive {
+  color: var(--ink);
+  background: var(--bg-active);
+}
+
+.iconStripItemActive::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.iconStripItemIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

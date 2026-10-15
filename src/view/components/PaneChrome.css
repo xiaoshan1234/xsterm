@@ -77,3 +77,20 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+.paneChromeBadge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  padding: 1px var(--space-xs);
+  font-size: var(--text-size-caption-uppercase);
+  font-weight: var(--text-weight-semibold);
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border-bottom-left-radius: var(--radius-sm);
+  pointer-events: none;
+  user-select: none;
+  letter-spacing: var(--tracking-caption-uppercase);
+}

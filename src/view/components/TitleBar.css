@@ -1,0 +1,81 @@
+.titleBar {
+  display: flex;
+  align-items: stretch;
+  height: 28px;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--hairline);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.titleBarBrand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm) 0 var(--space-base);
+  flex-shrink: 0;
+}
+
+.titleBarLogo {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.titleBarName {
+  font-size: var(--text-size-caption);
+  font-weight: var(--text-weight-medium);
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+.titleBarToggle {
+  width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+  border-radius: 0;
+}
+
+.titleBarToggle:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.titleBarDragRegion {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+}
+
+.titleBarControls {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.titleBarButton {
+  width: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+  border-radius: 0;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+
+.titleBarButton:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.titleBarButtonClose:hover {
+  background: var(--error);
+  color: var(--text-on-accent);
+}

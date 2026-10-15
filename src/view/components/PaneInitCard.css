@@ -13,30 +13,30 @@
 
 .paneInitTitle {
   margin: 0;
-  font-size: 22px;
-  font-weight: 500;
+  font-size: var(--text-size-title-md);
+  font-weight: var(--text-weight-medium);
   letter-spacing: 0;
 }
 
 .paneInitSubtitle {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-size-caption);
 }
 
 .paneInitButton {
   margin-top: var(--space-base);
   padding: var(--space-sm) var(--space-lg);
   background: var(--accent);
-  color: var(--ink);
+  color: var(--text-on-accent);
   border: none;
   border-radius: var(--radius-md);
   font: inherit;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-size-button);
+  font-weight: var(--text-weight-medium);
   cursor: pointer;
 }
 
 .paneInitButton:hover {
-  background: #ff5e1a;
+  background: var(--accent-hover);
 }

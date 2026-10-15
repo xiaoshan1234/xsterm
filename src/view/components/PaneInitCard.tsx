@@ -1,18 +1,10 @@
-import type { ShellKind } from "../../data/model/shell";
-import { SHELL_KINDS } from "../../data/model/shell";
+import { SHELL_KINDS, SHELL_LABEL, type ShellKind } from "../../data/model/shell";
 import "./PaneInitCard.css";
 
 interface PaneInitCardProps {
   shell: ShellKind;
   onCreate: () => void;
 }
-
-const SHELL_LABEL: Record<ShellKind, string> = {
-  powershell: "PowerShell",
-  wsl: "WSL",
-  git_bash: "Git Bash",
-  bash: "Bash",
-};
 
 export default function PaneInitCard({ shell, onCreate }: PaneInitCardProps) {
   // SHELL_KINDS 当前 4 个 shell,M2 只启用 powershell / bash(其他等 M5 接入)。

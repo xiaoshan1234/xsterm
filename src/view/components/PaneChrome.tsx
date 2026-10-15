@@ -13,6 +13,7 @@ interface PaneChromeProps {
   path: PanePath;
   focused: boolean;
   leaf: { kind: "leaf"; sessionId: SessionId; shell: string; status: "alive" | "dead" };
+  paneNumber: number;
   onFocus: () => void;
   onSplitH: () => void;
   onSplitV: () => void;
@@ -23,6 +24,7 @@ export default function PaneChrome({
   tabId,
   focused,
   leaf,
+  paneNumber,
   onFocus,
   onSplitH,
   onSplitV,
@@ -51,6 +53,9 @@ export default function PaneChrome({
 
   return (
     <div ref={wrapperRef} className={className} onMouseDown={onFocus}>
+      <div className="paneChromeBadge" aria-label={`Pane ${paneNumber}`}>
+        {paneNumber}
+      </div>
       {leaf.status === "dead" ? (
         <div className="paneChromeBanner">
           <span className="paneChromeBannerLabel">Process exited</span>

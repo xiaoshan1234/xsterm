@@ -1,0 +1,95 @@
+.statusBar {
+  display: flex;
+  align-items: stretch;
+  height: 28px;
+  background: var(--canvas-soft);
+  border-top: 1px solid var(--hairline);
+  color: var(--muted);
+  font-size: var(--text-size-caption);
+  font-weight: var(--text-weight-regular);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.statusBarLeft,
+.statusBarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  padding: 0 var(--space-base);
+}
+
+.statusBarLeft {
+  flex: 1 1 0;
+  border-right: 1px solid var(--hairline);
+}
+
+.statusBarRight {
+  flex-shrink: 0;
+}
+
+.statusBarAction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
+  height: 100%;
+  color: var(--body);
+  font-size: var(--text-size-caption);
+  font-weight: var(--text-weight-regular);
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--hairline);
+  cursor: pointer;
+}
+
+.statusBarAction:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.statusBarActionMuted {
+  color: var(--muted-soft);
+  cursor: not-allowed;
+}
+
+.statusBarActionIcon {
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+}
+
+.statusBarItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  color: var(--muted);
+  padding: 0 var(--space-sm);
+}
+
+.statusBarItemValue {
+  color: var(--body);
+  font-weight: var(--text-weight-medium);
+}
+
+.statusBarItemShell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--ink);
+}
+
+.statusBarDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.statusBarDivider {
+  width: 1px;
+  height: 12px;
+  background: var(--hairline);
+  margin: 0 var(--space-xs);
+}
