@@ -80,7 +80,10 @@ If you only need a Linux build (`cargo run` from WSL to validate logic),
   `FitAddon`, and Tauri event listeners. Add new UI either as sibling
   components in `src/components/` or by extending `Terminal.tsx`.
 - xterm.js version: `@xterm/xterm@^6.0.0` + `@xterm/addon-fit@^0.11.0`. Theme
-  is hardcoded inline in `Terminal.tsx`. No CSS variables yet.
+  is hardcoded inline in `Terminal.tsx`; xterm content is on a separate
+  theme layer from chrome (see the "Frontend design" section below and
+  `DESIGN.md` §3.2). No CSS variables in chrome yet — `src/styles/tokens.css`
+  per `DESIGN.md` §4 has not been created.
 - Plain CSS only — `src/App.css` is global resets, `Terminal.tsx` uses an
   inline style for the container height. No CSS-in-JS, no Tailwind.
 
@@ -122,6 +125,92 @@ If you only need a Linux build (`cargo run` from WSL to validate logic),
 - Tauri 2 context object: do not edit `src-tauri/gen/schemas/` (regenerated
   on `tauri dev` / `tauri build`).
 
+## Frontend design — `DESIGN.md` is authoritative
+
+**The full spec lives in [`DESIGN.md`](DESIGN.md).** This section captures the
+invariants the agent must not violate. If this section and `DESIGN.md` ever
+disagree, `DESIGN.md` wins — fix `AGENTS.md`, not the codebase. Read
+`DESIGN.md` once before writing any chrome (any UI outside the xterm
+container).
+
+### Two themes, decoupled
+
+xsterm has **two independent** theme systems. They live on different stacks by
+intent — never bridge them.
+
+| Surface | Authority | Where it lives |
+|---|---|---|
+| **Shell chrome** — titlebar, status bar, buttons, dialogs, banners, settings, anything outside the xterm container | `DESIGN.md` §3.1 + §4 | CSS variables in `src/styles/tokens.css` `:root`, consumed via `var(--...)` |
+| **xterm terminal content** — PTY output, cursor, selection, 24-bit color | `DESIGN.md` §3.2 | xterm.js `theme` prop (currently inline in `src/components/Terminal.tsx`; will move to `src/types/theme.ts`) |
+
+xterm is canvas-rendered and does **not** read CSS variables. The two share no
+code path; their hex literals only happen to overlap by convention. xterm's
+ANSI palette is **not** `--accent` — leave it inside the §3.2 layer.
+
+### Hard rules (chrome only, unless noted)
+
+- **Single accent.** `--accent: #f54e00` (Cursor Orange) is the only "electric"
+  color. Use only for: primary CTA, focus border, active underline, focus ring,
+  wordmark. **Never** on body text, **never** as a default border.
+- **Weight discipline.** Chrome uses `400` / `500` only. `≥ 600` (bold) is
+  banned in chrome. The only exceptions are: wordmark, `caption-uppercase`
+  (11px / 600 / uppercase), and code blocks (which sit inside the `--font-mono`
+  zones). `--font-mono` is reserved for xterm container wrappers (if needed),
+  code blocks, command echoes, and explicit monospace snippets — **never** the
+  whole UI.
+- **Hairline-only depth.** 1px borders via `var(--hairline*)` do all the
+  layering. **No `box-shadow`** on cards / sections / inputs / panes.
+  Floating overlays (Dialog / ContextMenu / popover) are the only documented
+  exception — log new uses in `DESIGN.md` §12.2.
+- **No gradients / glow.** No `linear-gradient`, no `radial-gradient`, no
+  `text-shadow` glow. Flat surfaces only.
+- **No hardcoded hex in component CSS.** Every color / spacing / radius / font
+  resolves through `var(--...)` from `:root`. The `:root` block itself in
+  `src/styles/tokens.css` is the only place hex literals belong, plus the
+  documented exceptions in `DESIGN.md` §12.
+- **No Tailwind / CSS-in-JS / CSS Modules.** Plain global CSS only.
+- **No VSCode blue hex** (`#0e639c` / `#1177bb`) — leaks VSCode vibes.
+- **No legacy semantic tokens** (`--bg-primary`, `--border-color`,
+  `--text-secondary`, etc.) — use the vocabulary from `DESIGN.md` §4.
+
+### Spacing & radius (chrome)
+
+- Spacing rhythm: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48 / 80 (px). Default field
+  gap = 16px (`--space-base`). Major section gap = 80px (`--space-section`).
+- Radius decision tree:
+  - button / input → `--radius-md` (8px)
+  - card / dialog → `--radius-lg` (12px)
+  - list row → `--radius-sm` (6px)
+  - inline tag / badge → `--radius-xs` (4px) or `--radius-pill`
+  - avatar / status dot → `--radius-pill`
+  - Cards **never** use 4 / 6px. Buttons / inputs **never** use 12 / 16px.
+
+### Validation (`DESIGN.md` §13)
+
+Run before claiming a UI change done — all three must produce empty results
+(after `src/styles/tokens.css` exists; otherwise the first command will
+false-positive on hex matches in `Terminal.tsx` until tokens land):
+
+```bash
+# Forbidden token names, forbidden palette, gradients — must be empty
+grep -rn -E "(--bg-primary|--bg-secondary|--bg-tertiary|--text-primary|--text-secondary|--text-muted|--border-color|#0e639c|#1177bb|linear-gradient)" src/ \
+  --include="*.ts" --include="*.tsx" --include="*.css"
+
+# Bold weights in chrome — must be empty
+grep -rn -E "font-weight: ?(600|700|bold)" src/ --include="*.ts" --include="*.tsx" --include="*.css"
+
+# box-shadow locations — only the §12.2 / §12.3 exceptions should appear
+grep -rn "box-shadow:" src/components/ --include="*.css"
+```
+
+### Token reference pointer
+
+Full catalog (surface tiers, hairline tiers, semantic colors, typography scale,
+spacing scale, radius scale, overlay) → **`DESIGN.md` §4**. Component specs
+(Button, Form input, Card, Dialog, Tab, Banner) → **`DESIGN.md` §8**. Color
+usage table (token / where it's used / where it isn't) → **`DESIGN.md` §5**.
+Documented exceptions → **`DESIGN.md` §12**.
+
 ## .gitignore
 
 - Ignored: `dist/`, `node_modules/`, `src-tauri/target/`,
@@ -136,8 +225,10 @@ If you only need a Linux build (`cargo run` from WSL to validate logic),
   Don't run `npm run lint` / `npm run format` — they will fail.
 - **No** Vitest / unit-test setup, no `test/` directory at project root
   (the `test/` dir under `ref/xsterm/` is reference only).
-- **No** design-system doc, no theme tokens, no router, no global
-  React context.
+- **No** theme tokens file yet (`src/styles/tokens.css` not created — follow
+  `DESIGN.md` §4 when creating it), no router, no global React context.
+  (The design-system spec itself **does** exist — see `DESIGN.md` and the
+  "Frontend design" section above.)
 - **No** CI workflow files (`.github/`) — verification is dev responsibility.
 - **No** `opencode.json` at the project root (the `.opencode/` folder is the
   OpenCode agent's own plugin workspace, not project config).
