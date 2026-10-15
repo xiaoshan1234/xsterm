@@ -1,15 +1,15 @@
 // L5 — 把 L2 (services) 和 L4 (xterm) 桥到 React 生命周期。
 // 见 ARCHITECTURE §6 依赖图。
 //
-// M2 重构:不再 spawn,只接管 parent (usePaneTree) 已 spawn 的 sessionId,
-// 订阅该 id 的 terminal-data / terminal-exit 并路由到 xterm。生命周期(spawn /
-// close / reconnect)由 usePaneTree 统一编排。
+// 设计:**xterm 由 PaneChrome 拥有**,useTerminalSession 通过 prop 接收同一份
+// 引用。这样 listener 收到的数据直接写到 PaneChrome 正在渲染的那个 xterm。
+// 早期版本 useTerminalSession 内部维护自己的 xterm state,跟 PaneChrome 断开了,
+// 导致 listener 写入的数据在视觉上看不到(经典 stale-state 坑)。
 //
-// **race fix**:listener 不等 xterm ready 就订阅,output 在 xterm 还没准备好时
-// 缓存到 bufferRef,xterm 落地后 flush。否则 spawn 后第一段输出(PowerShell
-// 启动 banner / prompt)会丢失,用户看到空 xterm 或"无法正常打开"。
+// 仍然保留 buffer:在 xterm 还没就绪的极短窗口内(典型 < 50ms),先入 buffer,
+// xterm 落地后 flush。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { Terminal } from "../../adapter/xterm/xterm";
 
 import type { SessionId } from "../../data/model/session";
@@ -18,48 +18,38 @@ import { onSessionExit } from "../../data/service/session";
 
 export interface UseTerminalSessionOptions {
   sessionId: SessionId;
+  xterm: Terminal | null;
   onExit?: () => void;
 }
 
-export interface UseTerminalSessionResult {
-  onTermReady: (term: Terminal) => void;
-  isReady: boolean;
-}
+const decoder = new TextDecoder();
 
-export function useTerminalSession(options: UseTerminalSessionOptions): UseTerminalSessionResult {
-  const { sessionId, onExit } = options;
-  const [xterm, setXterm] = useState<Terminal | null>(null);
-  const [isReady, setIsReady] = useState(false);
-
+export function useTerminalSession({ sessionId, xterm, onExit }: UseTerminalSessionOptions): void {
+  // 用 ref 跟踪最新值,避免 listener / onData 闭包过期
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
-  const xtermRef = useRef<Terminal | null>(null);
+  const xtermRef = useRef<Terminal | null>(xterm);
   xtermRef.current = xterm;
   const bufferedRef = useRef<Uint8Array[]>([]);
-  const decoderRef = useRef(new TextDecoder());
 
-  const handleTermReady = useCallback((term: Terminal) => {
-    setXterm(term);
-    setIsReady(true);
-  }, []);
-
-  // xterm ready 后 flush buffer;之后 xterm 变更也走这个路径(reconnect)。
+  // xterm 落地后 flush buffer
   useEffect(() => {
     if (!xterm) return;
     if (bufferedRef.current.length === 0) return;
     for (const chunk of bufferedRef.current) {
-      xterm.write(decoderRef.current.decode(chunk));
+      xterm.write(decoder.decode(chunk));
     }
     bufferedRef.current = [];
   }, [xterm]);
 
-  // 订阅:不等 xterm ready,提前缓冲
+  // 订阅 terminal-data / terminal-exit + 设 xterm.onData 输入
   useEffect(() => {
     let cancelled = false;
     let unlistenData: (() => void) | null = null;
     let unlistenExit: (() => void) | null = null;
+    let onDataDisposer: { dispose: () => void } | null = null;
     let firstDataLogged = false;
 
     (async () => {
@@ -70,7 +60,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
           const chunk = new Uint8Array(payload.data);
           const t = xtermRef.current;
           if (t) {
-            t.write(decoderRef.current.decode(chunk));
+            t.write(decoder.decode(chunk));
           } else {
             bufferedRef.current.push(chunk);
           }
@@ -101,7 +91,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
 
         const t = xtermRef.current;
         if (t) {
-          t.onData((keystroke) => {
+          onDataDisposer = t.onData((keystroke) => {
             const bytes = Array.from(keystroke).map((c) => c.charCodeAt(0));
             writeTerminal(sessionIdRef.current, new Uint8Array(bytes)).catch((err) => {
               console.error("writeTerminal failed:", err);
@@ -117,8 +107,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
       cancelled = true;
       unlistenData?.();
       unlistenExit?.();
+      onDataDisposer?.dispose();
     };
   }, [sessionId]);
-
-  return { onTermReady: handleTermReady, isReady };
 }
