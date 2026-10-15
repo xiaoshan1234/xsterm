@@ -59,8 +59,8 @@ fn spawn_terminal(
                 if n == 0 {
                     break;
                 }
-                let data = buf[..n].to_vec();
-                if let Err(e) = app.emit("terminal-data", data) {
+                let chunk = buf[..n].to_vec();
+                if let Err(e) = app.emit("terminal-data", chunk) {
                     eprintln!("Failed to emit: {}", e);
                     break;
                 }
@@ -73,10 +73,10 @@ fn spawn_terminal(
 }
 
 #[tauri::command]
-fn write_terminal(data: Vec<u8>, state: State<'_, Mutex<PtyState>>) -> Result<(), String> {
+fn write_terminal(input: Vec<u8>, state: State<'_, Mutex<PtyState>>) -> Result<(), String> {
     let mut state_guard = state.lock().map_err(|e| e.to_string())?;
     if let Some(ref mut writer) = state_guard.writer {
-        writer.write_all(&data).map_err(|e| e.to_string())?;
+        writer.write_all(&input).map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())?;
     }
     Ok(())

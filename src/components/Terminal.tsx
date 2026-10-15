@@ -67,9 +67,9 @@ export default function Terminal() {
       xterm.write(text);
     });
 
-    xterm.onData((data) => {
-      const arr = Array.from(data).map((c) => c.charCodeAt(0));
-      invoke("write_terminal", { data: arr });
+    xterm.onData((keystroke) => {
+      const byteCodes = Array.from(keystroke).map((c) => c.charCodeAt(0));
+      invoke("write_terminal", { input: byteCodes });
     });
 
     const handleResize = () => {
