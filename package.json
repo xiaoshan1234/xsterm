@@ -14,16 +14,15 @@
     "fmt:rs:check": "cd src-tauri && cargo fmt --check"
   },
   "dependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.64.7",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/api": "~2.11.0",
+    "@tauri-apps/plugin-opener": "~2.5.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
+    "@tauri-apps/cli": "~2.11.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",

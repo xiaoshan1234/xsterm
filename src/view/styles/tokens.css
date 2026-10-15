@@ -1,0 +1,42 @@
+/* M2 提前落地 M3 的 tokens.css —— chrome 视觉合约。
+   完整 token 表见 DESIGN.md §4。本文件只含 M2 chrome 实际使用的子集,
+   M3 再补全。 */
+:root {
+  --canvas: #1a1a1a;
+  --canvas-soft: #1f1f1f;
+  --surface-card: #242424;
+  --hairline: #2e2e2e;
+  --hairline-strong: #3a3a3a;
+  --ink: #e8e6e0;
+  --body: #b8b6b0;
+  --muted: #7a7a78;
+  --accent: #f54e00;
+  --accent-soft: rgba(245, 78, 0, 0.12);
+  --error: #cf2d56;
+  --error-soft: rgba(207, 45, 86, 0.12);
+  --font-ui:
+    "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "Fira Code", "IBM Plex Mono", Menlo, Monaco, "Courier New", monospace;
+  --radius-md: 8px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-base: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}

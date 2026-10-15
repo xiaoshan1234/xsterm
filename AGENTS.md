@@ -55,14 +55,19 @@ You're in WSL (`Platform: linux`). This project produces a Windows binary
 run build` / `tauri dev` / `tauri build`, prefer the Windows toolchain** —
 WSL-native builds produce Linux binaries the Tauri shell can't load.
 
-Use the `wsl-windows-interop` skill to bridge:
+**Use the scripts in [`scripts/`](scripts/) — do not call `cargo` / `npm`
+directly from WSL for cross-cutting work.** The WSL↔Windows path is
+fragile (Windows mount permissions, npm optional-deps like
+`@rollup/rollup-linux-x64-gnu`).
 
-- Frontend build/check: `powershell.exe -NoProfile -Command "Set-Location
-  'C:\Users\LONER\1111\prj\xsterm'; npm run build"` (or `tauri dev`).
-- Backend: `cargo.exe build --release` is callable directly from WSL once
-  Rust is installed on the Windows side.
-- Type check only: `powershell.exe -NoProfile -Command "Set-Location
-  'C:\...\xsterm'; npx tsc --noEmit"`.
+- `./scripts/xsterm.sh dev` — full Tauri dev (Windows binary, Vite on :1420)
+- `./scripts/xsterm.sh build` — production bundle
+- `./scripts/xsterm.sh check` — `tsc --noEmit` + `cargo check`
+- `./scripts/xsterm.sh tsc` / `cargo` / `format` / `format-check` — finer
+
+Or from PowerShell directly:
+
+- `powershell -NoProfile -File scripts/build-windows.ps1 dev`
 
 If you only need a Linux build (`cargo run` from WSL to validate logic),
 `portable-pty` already branches on `cfg!(target_os = "windows")` and spawns
@@ -70,57 +75,65 @@ If you only need a Linux build (`cargo run` from WSL to validate logic),
 
 ## Code layout
 
+> 完整层次文档见 [`doc/arch/ARCHITECTURE.md`](doc/arch/ARCHITECTURE.md) 和 [`doc/arch/LAYERS.md`](doc/arch/LAYERS.md)。速查:[`doc/arch/frontend-quick-ref.md`](doc/arch/frontend-quick-ref.md)。
+> 本节是 brief 摘要。
+
 ### Frontend (`src/`)
 
-- Entry chain: `index.html` → `src/main.tsx` → `src/App.tsx`
-  → `src/components/Terminal.tsx`. `App.tsx` is a thin wrapper; the entire
-  terminal UI lives in `Terminal.tsx`.
-- No router, no state library, no UI framework — bare React + xterm.js.
-  `Terminal.tsx` uses `useRef` + a single `useEffect` to mount xterm, the
-  `FitAddon`, and Tauri event listeners. Add new UI either as sibling
-  components in `src/components/` or by extending `Terminal.tsx`.
-- xterm.js version: `@xterm/xterm@^6.0.0` + `@xterm/addon-fit@^0.11.0`. Theme
-  is hardcoded inline in `Terminal.tsx`; xterm content is on a separate
-  theme layer from chrome (see the "Frontend design" section below and
-  `DESIGN.md` §3.2). No CSS variables in chrome yet — `src/styles/tokens.css`
-  per `DESIGN.md` §4 has not been created.
-- Plain CSS only — `src/App.css` is global resets, `Terminal.tsx` uses an
-  inline style for the container height. No CSS-in-JS, no Tailwind.
+- Entry chain: `index.html` → `src/main.tsx` → `src/ui/App.tsx` → 各种
+  `src/ui/*` 组件。
+- **目录 ↔ 层映射**:
+  - `src/ui/` → **L7**(chrome: TabBar / SplitContainer / PaneChrome / PaneInitCard / App)
+  - `src/ui/styles/` → **L8**(design tokens,M2 提前落地)
+  - `src/hooks/` → **L5**(usePaneTree / useTerminalSession / paneTreeContext)
+  - `src/infra/xterm/` → **L4**(唯一 `@xterm/*` 入口)
+  - `src/model/` → **L3**(纯 TS 数据结构,PaneNode / PaneTree / SessionId)
+  - `src/service/` → **L2**(唯一 `invoke`/`listen` 入口,pty.ts / session.ts)
+  - `src/main.tsx` → entry,import `./ui/App` + `./ui/styles/tokens.css`
+- xterm.js version: `@xterm/xterm@^6.0.0` + `@xterm/addon-fit@^0.11.0`。
+  xterm 主题在 `src/infra/xterm/theme.ts`,与 chrome tokens 独立
+  (DESIGN.md §3.2)。
+- Plain CSS only — 每个组件自带 `.css` 文件,无 CSS-in-JS / Tailwind。
 
 ### Frontend ↔ Backend IPC (Tauri 2)
 
-- **Commands** (TS → Rust, via `invoke()`):
-  - `spawn_terminal({ rows, cols })` → opens a PTY and starts the reader thread.
-  - `write_terminal({ data: number[] })` → bytes to the PTY master.
-  - `resize_terminal(rows, cols)` → currently a no-op stub; do not rely on it.
-- **Event** (Rust → TS, via `listen()`):
-  - `terminal-data` — payload is `Vec<u8>` (raw PTY bytes). The frontend
-    decodes it with `new TextDecoder().decode(new Uint8Array(payload))`.
-    Note the mismatch: Rust emits `Vec<u8>` (numbers), the frontend receives
-    `number[]` and reconstructs `Uint8Array` — keep both sides in sync if
-    the payload type changes.
-- Do not import from `@tauri-apps/api` directly inside new components — match
-  `Terminal.tsx`'s pattern and call `invoke()` / `listen()` inline. There is
-  no `services/` layer yet.
+- **Commands** (TS → Rust, all `snake_case`,见 `src/service/`):
+  - `spawn_terminal({ rows, cols, shell })` → `SessionId` (number)
+  - `write_terminal({ id, data: number[] })` — bytes to PTY master
+  - `resize_terminal({ id, rows, cols })`
+  - `close_session({ id })` — 幂等(NotFound 当成功)
+  - `list_sessions()` → `SessionInfo[]`
+- **Events** (Rust → TS):
+  - `terminal-data` — payload `{ id: number, data: number[] }`(M2 加 id,见
+    `doc/arch/ARCHITECTURE.md` §5.2)
+  - `terminal-exit` — payload `{ id: number }`(M2 新增,触发 PaneChrome banner)
+- L2 是**唯一**调 `@tauri-apps/api` 的层。L3 / L4 / L5 / L7 不得 `import`
+  `invoke` / `listen`(R1)。
+- L4 是**唯一** import `@xterm/*` 的层(R3)。L5 / L7 通过
+  `import type { Terminal } from "../infra/xterm/xterm"` 拿类型。
 
 ### Backend (`src-tauri/`)
 
 - Entry: `src-tauri/src/main.rs` → `xsterm_lib::run()` (note the `_lib`
   suffix in the lib name — it is required on Windows to avoid clashing with
   the bin target; see `Cargo.toml` and rust-lang/cargo#8519). Do not rename.
-- `lib.rs` registers `tauri-plugin-opener`, manages one `Mutex<PtyState>`
-  (holds the master writer), and generates handlers for the three commands
-  above via `tauri::generate_handler!`.
-- Tauri 2 capabilities live in `src-tauri/capabilities/default.json`.
-  Currently only `core:default` + `opener:default`. **Adding a plugin**
-  (e.g. `clipboard-manager`, `store`) requires three steps:
+- 层次:
+  - `src-tauri/src/core/` → **L0**(纯 Rust,无 Tauri 依赖;`pty` / `shell` / `session`)
+  - `src-tauri/src/commands/` + `events.rs` + `state.rs` + `error.rs` → **L1**(Tauri 胶水)
+  - `lib.rs` → 入口:plugin 注册 + `generate_handler!` + dispatch 线程
+- 跨层契约:命令 handler 第一行 `state.manager.lock()`,主体委托
+  `core::session::SessionManager`;reader 线程 `mpsc::sync_channel` →
+  L1 dispatch → `app.emit("terminal-data", payload)`。
+- Tauri 2 capabilities live in `src-tauri/capabilities/default.json`。
+  目前 `core:default` + `opener:default`。**Adding a plugin** requires
+  three steps:
   1. add the crate to `[dependencies]` in `Cargo.toml`,
   2. register `.plugin(...)` in `lib.rs::run()`,
   3. add the permission identifier to `capabilities/default.json`.
 
   Skipping step 3 compiles cleanly but throws at runtime in the webview.
-- Shell selection lives in `lib.rs::spawn_terminal`: `powershell.exe
-  -NoLogo -NoProfile` on Windows, `/bin/bash --login` elsewhere.
+- Shell 抽象在 `core/shell.rs`:M1 实现 PowerShell / Bash(其他
+  `Wsl` / `GitBash` 标 `ShellError::Unsupported`)。
 - `src-tauri/build.rs` is just `tauri_build::build()` — leave alone.
 - Tauri 2 context object: do not edit `src-tauri/gen/schemas/` (regenerated
   on `tauri dev` / `tauri build`).
@@ -219,8 +232,8 @@ ANSI palette is **not** `--accent` — leave it inside the §3.2 layer.
 ### Validation (`DESIGN.md` §13)
 
 Run before claiming a UI change done — all three must produce empty results
-(after `src/styles/tokens.css` exists; otherwise the first command will
-false-positive on hex matches in `Terminal.tsx` until tokens land):
+(after `src/ui/styles/tokens.css` exists; otherwise the first command will
+false-positive on hex matches in chrome files until tokens land):
 
 ```bash
 # Forbidden token names, forbidden palette, gradients — must be empty
@@ -231,7 +244,7 @@ grep -rn -E "(--bg-primary|--bg-secondary|--bg-tertiary|--text-primary|--text-se
 grep -rn -E "font-weight: ?(600|700|bold)" src/ --include="*.ts" --include="*.tsx" --include="*.css"
 
 # box-shadow locations — only the §12.2 / §12.3 exceptions should appear
-grep -rn "box-shadow:" src/components/ --include="*.css"
+grep -rn "box-shadow:" src/ui/ --include="*.css"
 ```
 
 ### Token reference pointer
@@ -252,20 +265,36 @@ Documented exceptions → **`DESIGN.md` §12**.
 
 ## What does NOT exist yet (don't assume)
 
-- **No** ESLint / Prettier / `cargo fmt` runner script in `package.json`.
-  Don't run `npm run lint` / `npm run format` — they will fail.
+- **No** ESLint / Prettier in `package.json`'s scripts — but `scripts/xsterm.sh format`
+  / `format-check` 跑 Prettier + cargo fmt(从 WSL 调 PowerShell)。
 - **No** Vitest / unit-test setup, no `test/` directory at project root
   (the `test/` dir under `ref/xsterm/` is reference only).
-- **No** theme tokens file yet (`src/styles/tokens.css` not created — follow
-  `DESIGN.md` §4 when creating it), no router, no global React context.
-  (The design-system spec itself **does** exist — see `DESIGN.md` and the
-  "Frontend design" section above.)
+- **No** router, no global state library (Zustand etc.) — 当前用 React Context +
+  useReducer-style 状态在 `usePaneTree`。
 - **No** CI workflow files (`.github/`) — verification is dev responsibility.
 - **No** `opencode.json` at the project root (the `.opencode/` folder is the
   OpenCode agent's own plugin workspace, not project config).
 
-If you add any of these (lint, format, test, CI), update `package.json` and
-this file in the same change.
+如果加了新东西(lint rule、test 框架、CI、新 plugin),在同一次 commit 改
+`AGENTS.md` 标记。
+
+## Platform-specific deps 铁律(WSL 踩过的坑)
+
+**禁止**把 `@rollup/rollup-{linux,darwin,win32,...}-*` 写进 `package.json`。
+项目是 **Windows-only**,这些 platform binaries 走 `vite` 的 `optionalDependencies`
+自动装,**不要**手动 pin,**不要**在 WSL 里 `npm install --force <platform>`
+救场。
+
+- 项目是 Windows-only — `package.json` 不应该有 platform-pin
+- `node_modules` 里出现当前 OS 对应的 rollup binary 是正常的(vite optionalDeps 拉的)
+- 装错 / 缺了 → 在 Windows 侧跑 `npm install --include=optional`(见 `scripts/xsterm.sh setup`),
+  **不要**在 WSL 装 Linux 的顶替
+- **从 WSL 验证构建**:只跑 `npx tsc --noEmit` + `cargo check`,**不要** `npm run build`
+  (后者会触发 vite 找 Linux rollup,污染 lockfile)
+- 历史踩坑:本项目曾被显式 pin `@rollup/rollup-linux-x64-gnu` 和 `-win32-x64-msvc`,
+  已被本次 A 重整清理;`package-lock.json` 里的 `linux-x64-gnu` 是 lockfile 跨平台
+  问题,在 Windows 上 `rm -rf node_modules package-lock.json && npm install` 重生
+  即可
 
 ## Naming rules
 

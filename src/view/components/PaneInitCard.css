@@ -1,0 +1,42 @@
+.paneInitCard {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-base);
+  padding: var(--space-xl);
+  background: var(--canvas);
+  color: var(--ink);
+  text-align: center;
+}
+
+.paneInitTitle {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.paneInitSubtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.paneInitButton {
+  margin-top: var(--space-base);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--accent);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.paneInitButton:hover {
+  background: #ff5e1a;
+}

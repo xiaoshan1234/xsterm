@@ -1,0 +1,21 @@
+.splitContainer {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.splitH {
+  flex-direction: row;
+}
+
+.splitV {
+  flex-direction: column;
+}
+
+.splitPane {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}

@@ -16,17 +16,17 @@
 
 ## 2. 验收口径（行为不退化）
 
-| # | 检查 | 通过条件 |
-|---|---|---|
-| V1 | 启动 | 启动 `npm run tauri dev` 后 5 秒内出现 xterm 容器 + PowerShell 提示符 |
-| V2 | 输入回显 | 键入字符，xterm 正确显示；回车后 PowerShell 执行 |
-| V4 | 关闭 | 关窗后 PTY 子进程退出（不留僵尸 powershell.exe） |
-| V5 | 文件大小 | `src-tauri/src/lib.rs` ≤ 80 行 |
-| V6 | 文件大小 | `src/components/Terminal.tsx` ≤ 40 行 |
-| V7 | 构建 | `npm run build` 通过 |
-| V8 | 构建 | `cargo build --release` 通过 |
-| V9 | 依赖方向 | ARCHITECTURE 附录 A 矩阵无违规（grep 验证） |
-| V10 | grep 红线 | `Terminal.tsx` 仍允许内联 xterm theme（这是 L4 的雏形，不算违规） |
+| #   | 检查      | 通过条件                                                              |
+| --- | --------- | --------------------------------------------------------------------- |
+| V1  | 启动      | 启动 `npm run tauri dev` 后 5 秒内出现 xterm 容器 + PowerShell 提示符 |
+| V2  | 输入回显  | 键入字符，xterm 正确显示；回车后 PowerShell 执行                      |
+| V4  | 关闭      | 关窗后 PTY 子进程退出（不留僵尸 powershell.exe）                      |
+| V5  | 文件大小  | `src-tauri/src/lib.rs` ≤ 80 行                                        |
+| V6  | 文件大小  | `src/components/Terminal.tsx` ≤ 40 行(已迁到 `src/ui/`,历史记录)      |
+| V7  | 构建      | `npm run build` 通过                                                  |
+| V8  | 构建      | `cargo build --release` 通过                                          |
+| V9  | 依赖方向  | ARCHITECTURE 附录 A 矩阵无违规（grep 验证）                           |
+| V10 | grep 红线 | `Terminal.tsx` 仍允许内联 xterm theme（这是 L4 的雏形，不算违规）     |
 
 不在 V1–V10 内：多 session、tab、split、设置、buffer、clipboard、store。M2+ 范围。
 
@@ -86,7 +86,7 @@ lib/xterm/
 
 **修改**：
 
-- `src/components/Terminal.tsx`：从 ~65 行缩到 ≤ 40 行。只组合 `useTerminalSession` + 渲染 `<TerminalView />`。
+- `src/components/Terminal.tsx`(已迁到 `src/ui/Terminal.tsx` → M2 重构为 `PaneChrome.tsx`):从 ~65 行缩到 ≤ 40 行。只组合 `useTerminalSession` + 渲染 `<TerminalView />`。
 - `src/App.tsx`：不变。
 - `src/App.css`：不变。
 - `src/main.tsx`：不变。
@@ -170,44 +170,51 @@ pub struct TerminalDataPayload { pub data: Vec<u8> }  // M1 不含 id（M2 加�
 
 ```typescript
 // services/pty.ts
-export interface SpawnOptions { rows: number; cols: number; shell: ShellKind }
-export async function spawnTerminal(opts: SpawnOptions): Promise<SessionId>
-export async function writeTerminal(id: SessionId, data: Uint8Array): Promise<void>
-export async function resizeTerminal(id: SessionId, rows: number, cols: number): Promise<void>
-export function onTerminalData(handler: (data: number[]) => void): UnlistenFn
+export interface SpawnOptions {
+  rows: number;
+  cols: number;
+  shell: ShellKind;
+}
+export async function spawnTerminal(opts: SpawnOptions): Promise<SessionId>;
+export async function writeTerminal(id: SessionId, data: Uint8Array): Promise<void>;
+export async function resizeTerminal(id: SessionId, rows: number, cols: number): Promise<void>;
+export function onTerminalData(handler: (data: number[]) => void): UnlistenFn;
 ```
 
 ### 5.3 Hook
 
 ```typescript
 // hooks/useTerminalSession.ts
-export interface UseTerminalSessionOpts { rows: number; cols: number }
+export interface UseTerminalSessionOpts {
+  rows: number;
+  cols: number;
+}
 export function useTerminalSession(opts: UseTerminalSessionOpts): {
   containerRef: RefObject<HTMLDivElement>;
   isReady: boolean;
-}
+};
 ```
 
 ## 6. 风险与对策
 
-| 风险 | 影响 | 对策 |
-|---|---|---|
-| Reader thread 与 Tauri `Emitter` 生命周期耦合出错 | 关闭时 panic / 数据丢失 | reader 写 mpsc channel；L1 `setup` 起 dispatch 线程从 channel 读 + `app.emit`。emit 不在 reader 里 |
-| `Mutex<SessionManager>` 粒度太粗，所有命令排队 | resize 体感卡顿 | M1 可接受；M2 起按 `SessionId` 分锁（`DashMap<SessionId, Mutex<Handle>>`） |
-| `SessionId` 用 `u64` 进程内序号 vs uuid | 多窗口/RPC 扩展性 | M1 用 u64；M2 评估 uuid。ARCHITECTURE §L0 已标记 Q3 |
-| `Vec<u8>` payload 在多 session 时无法路由 | M2 起致命 | M1 不动；M2 在 reader dispatch 加 `id`，payload 升级——已在 ARCHITECTURE §5.2 标注 |
-| WSL 命令行 `AppData` 路径解析在 Linux 跑 cargo test 时 panic | Linux CI 跑不通 | M1 不做 Linux 测试；只在 Windows 验证 |
-| 事件名 / 命令名拼写错位（TS ↔ Rust） | 静默失败 | 把名称抽到 `events.rs` / `services/types.ts` 常量；两端 `grep` 一致性检查（自验） |
-| 重构过程中 xterm 主题被 chrome 变量污染 | DESIGN.md §3 红线 | xterm theme 在 `lib/xterm/theme.ts` 独立；reviewer grep `var(--` 应在 `lib/xterm/` 找不到 |
+| 风险                                                         | 影响                    | 对策                                                                                               |
+| ------------------------------------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------- |
+| Reader thread 与 Tauri `Emitter` 生命周期耦合出错            | 关闭时 panic / 数据丢失 | reader 写 mpsc channel；L1 `setup` 起 dispatch 线程从 channel 读 + `app.emit`。emit 不在 reader 里 |
+| `Mutex<SessionManager>` 粒度太粗，所有命令排队               | resize 体感卡顿         | M1 可接受；M2 起按 `SessionId` 分锁（`DashMap<SessionId, Mutex<Handle>>`）                         |
+| `SessionId` 用 `u64` 进程内序号 vs uuid                      | 多窗口/RPC 扩展性       | M1 用 u64；M2 评估 uuid。ARCHITECTURE §L0 已标记 Q3                                                |
+| `Vec<u8>` payload 在多 session 时无法路由                    | M2 起致命               | M1 不动；M2 在 reader dispatch 加 `id`，payload 升级——已在 ARCHITECTURE §5.2 标注                  |
+| WSL 命令行 `AppData` 路径解析在 Linux 跑 cargo test 时 panic | Linux CI 跑不通         | M1 不做 Linux 测试；只在 Windows 验证                                                              |
+| 事件名 / 命令名拼写错位（TS ↔ Rust）                         | 静默失败                | 把名称抽到 `events.rs` / `services/types.ts` 常量；两端 `grep` 一致性检查（自验）                  |
+| 重构过程中 xterm 主题被 chrome 变量污染                      | DESIGN.md §3 红线       | xterm theme 在 `lib/xterm/theme.ts` 独立；reviewer grep `var(--` 应在 `lib/xterm/` 找不到          |
 
 ## 7. 实施顺序（建议）
 
 1. **Rust 先行
-**。先写 `core/`（不依赖 Tauri，可在 WSL `cargo check` 跑通），再写 `commands/`，最后改 `lib.rs` 接入。
+   **。先写 `core/`（不依赖 Tauri，可在 WSL `cargo check` 跑通），再写 `commands/`，最后改 `lib.rs` 接入。
 2. **TS 后行
-**。先写 `domain/`，再写 `services/`，再写 `lib/xterm/`，再写 `hooks/`，最后改 `Terminal.tsx`。
+   **。先写 `domain/`，再写 `services/`，再写 `lib/xterm/`，再写 `hooks/`，最后改 `Terminal.tsx`。
 3. **验证
-**。每步后 `npm run build` + `cargo build --release`（V7/V8）。最后 `npm run tauri dev` 跑 V1/V2/V3/V4。
+   **。每步后 `npm run build` + `cargo build --release`（V7/V8）。最后 `npm run tauri dev` 跑 V1/V2/V3/V4。
 
 ## 8. 不在 M1 范围（Out of Scope）
 
@@ -244,6 +251,6 @@ export function useTerminalSession(opts: UseTerminalSessionOpts): {
 
 ## 修订记录
 
-| 日期 | 变更 |
-|---|---|
+| 日期 | 变更          |
+| ---- | ------------- |
 | 初版 | M1 文件级蓝图 |

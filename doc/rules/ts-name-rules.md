@@ -11,22 +11,22 @@
 
 ## 文件命名
 
-| 类型 | 格式 | 示例 |
-|---|---|---|
-| React 组件 | `PascalCase.tsx` | `src/components/Terminal.tsx` |
-| 模块 / 工具 | `camelCase.ts` | `src/services/sessionService.ts`（待建） |
-| Vite / 配置 | `kebab-case.ts` | `vite.config.ts`、`tsconfig.node.json` |
-| 类型声明 | `kebab-case.d.ts` | `vite-env.d.ts` |
+| 类型        | 格式              | 示例                                         |
+| ----------- | ----------------- | -------------------------------------------- |
+| React 组件  | `PascalCase.tsx`  | `src/ui/TabBar.tsx`、`src/ui/PaneChrome.tsx` |
+| 模块 / 工具 | `camelCase.ts`    | `src/service/pty.ts`                         |
+| Vite / 配置 | `kebab-case.ts`   | `vite.config.ts`、`tsconfig.node.json`       |
+| 类型声明    | `kebab-case.d.ts` | `vite-env.d.ts`                              |
 
 ## 变量命名
 
-| 类型 | 格式 | 示例 |
-|---|---|---|
-| 普通变量 | `camelCase` | `terminalRef`、`xtermRows` |
-| 布尔 | `camelCase` + `is` / `has` / `should` / `can` 前缀 | `isMounted`、`hasError` |
-| 数组 / 集合 | 复数名词 | `terminals`、`userList` |
-| 局部常量（config 对象、一次性魔数） | `camelCase` | `const defaultRows = 24` |
-| 全局 / 跨模块常量 | `UPPER_SNAKE_CASE` | `const MAX_TERMINAL_ROWS = 200` |
+| 类型                                | 格式                                               | 示例                            |
+| ----------------------------------- | -------------------------------------------------- | ------------------------------- |
+| 普通变量                            | `camelCase`                                        | `terminalRef`、`xtermRows`      |
+| 布尔                                | `camelCase` + `is` / `has` / `should` / `can` 前缀 | `isMounted`、`hasError`         |
+| 数组 / 集合                         | 复数名词                                           | `terminals`、`userList`         |
+| 局部常量（config 对象、一次性魔数） | `camelCase`                                        | `const defaultRows = 24`        |
+| 全局 / 跨模块常量                   | `UPPER_SNAKE_CASE`                                 | `const MAX_TERMINAL_ROWS = 200` |
 
 ## 函数 / 方法
 
@@ -50,7 +50,7 @@
 enum Status {
   Ok = "ok",
   Failed = "failed",
-  Pending = "pending"
+  Pending = "pending",
 }
 ```
 
@@ -81,14 +81,14 @@ const MAX_PANE_BYTES = ...     // 非 const 模块允许 SCREAMING
 
 ## 速查
 
-| 代码类型 | 格式 | 示例 |
-|---|---|---|
-| 组件 / 类 / 类型 | `PascalCase` | `Terminal`、`UserInfo` |
-| 变量 / 函数 / 数组 | `camelCase` | `terminalRef`、`handleResize`、`userList` |
-| 布尔 | `is` / `has` / `should` / `can` + `camelCase` | `isMounted`、`hasError` |
-| 全局常量 | `UPPER_SNAKE_CASE` | `MAX_TERMINAL_ROWS` |
-| TSX 文件 | `PascalCase.tsx` | `Terminal.tsx` |
-| TS 模块 | `camelCase.ts` | `sessionService.ts` |
-| 枚举成员 | `UPPER_SNAKE_CASE` 字符串 | `Status.Ok = "ok"` |
-| 泛型 | `T` / 业务语义 `PascalCase` | `<T>`、`<ItemType>` |
-| Tauri command 字符串 | `snake_case`（与 Rust 对齐） | `"spawn_terminal"` |
+| 代码类型             | 格式                                          | 示例                                      |
+| -------------------- | --------------------------------------------- | ----------------------------------------- |
+| 组件 / 类 / 类型     | `PascalCase`                                  | `Terminal`、`UserInfo`                    |
+| 变量 / 函数 / 数组   | `camelCase`                                   | `terminalRef`、`handleResize`、`userList` |
+| 布尔                 | `is` / `has` / `should` / `can` + `camelCase` | `isMounted`、`hasError`                   |
+| 全局常量             | `UPPER_SNAKE_CASE`                            | `MAX_TERMINAL_ROWS`                       |
+| TSX 文件             | `PascalCase.tsx`                              | `Terminal.tsx`                            |
+| TS 模块              | `camelCase.ts`                                | `sessionService.ts`                       |
+| 枚举成员             | `UPPER_SNAKE_CASE` 字符串                     | `Status.Ok = "ok"`                        |
+| 泛型                 | `T` / 业务语义 `PascalCase`                   | `<T>`、`<ItemType>`                       |
+| Tauri command 字符串 | `snake_case`（与 Rust 对齐）                  | `"spawn_terminal"`                        |

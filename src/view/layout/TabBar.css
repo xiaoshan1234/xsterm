@@ -1,0 +1,81 @@
+.tabBar {
+  display: flex;
+  align-items: stretch;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--hairline);
+  height: 36px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-base);
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--hairline);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+}
+
+.tab:hover {
+  color: var(--body);
+  background: var(--canvas-soft);
+}
+
+.tabActive {
+  color: var(--ink);
+  background: var(--canvas-soft);
+}
+
+.tabActive::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.tabClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tabClose:hover {
+  background: var(--hairline);
+  color: var(--ink);
+}
+
+.tabNew {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.tabNew:hover {
+  color: var(--ink);
+  background: var(--canvas-soft);
+}

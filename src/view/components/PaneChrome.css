@@ -1,0 +1,79 @@
+.paneChrome {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--canvas);
+  outline: 1px solid var(--hairline);
+  outline-offset: -1px;
+  position: relative;
+}
+
+.paneChromeFocused {
+  outline-color: var(--accent);
+}
+
+.paneChromeBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+  padding: 6px var(--space-base);
+  background: var(--error-soft);
+  border-bottom: 1px solid var(--error);
+  color: var(--ink);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.paneChromeBannerLabel {
+  flex: 1 1 0;
+}
+
+.paneChromeXterm {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.paneChromeToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 4px var(--space-sm);
+  background: var(--canvas-soft);
+  border-top: 1px solid var(--hairline);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.paneChrome:hover .paneChromeToolbar,
+.paneChromeFocused .paneChromeToolbar {
+  opacity: 1;
+}
+
+.paneChromeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  color: var(--body);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.paneChromeBtn:hover {
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+
+.paneChromeBtnAccent {
+  border-color: var(--accent);
+  color: var(--accent);
+}

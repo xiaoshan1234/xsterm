@@ -4,7 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-import type { SessionId } from "../domain/session";
+import type { SessionId } from "../model/session";
 import type { TerminalDataPayload, ResizeRequest, SpawnRequest, WriteRequest } from "./types";
 
 const COMMAND_SPAWN = "spawn_terminal";
@@ -26,7 +26,9 @@ export async function resizeTerminal(id: SessionId, rows: number, cols: number):
   await invoke(COMMAND_RESIZE, payload);
 }
 
-export function onTerminalData(handler: (data: TerminalDataPayload) => void): Promise<UnlistenFn> {
+export function onTerminalData(
+  handler: (payload: TerminalDataPayload) => void,
+): Promise<UnlistenFn> {
   return listen<TerminalDataPayload>(EVENT_TERMINAL_DATA, (event) => {
     handler(event.payload);
   });
