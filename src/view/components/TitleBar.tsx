@@ -1,4 +1,5 @@
 import { useWindowControls } from "../hooks/useWindowControls";
+import { CloseIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from "./Icon";
 import "./TitleBar.css";
 
 interface TitleBarProps {
@@ -44,7 +45,7 @@ export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps
       <div className="titleBarDragRegion" data-tauri-drag-region onDoubleClick={toggleMaximize} />
       <div className="titleBarControls">
         <button className="titleBarButton" type="button" aria-label="Minimize" onClick={minimize}>
-          ─
+          <MinimizeIcon />
         </button>
         <button
           className="titleBarButton"
@@ -52,7 +53,7 @@ export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps
           aria-label={isMaximized ? "Restore" : "Maximize"}
           onClick={toggleMaximize}
         >
-          {isMaximized ? "❐" : "□"}
+          {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
         </button>
         <button
           className="titleBarButton titleBarButtonClose"
@@ -60,7 +61,7 @@ export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps
           aria-label="Close"
           onClick={close}
         >
-          ×
+          <CloseIcon />
         </button>
       </div>
     </header>
