@@ -125,6 +125,37 @@ If you only need a Linux build (`cargo run` from WSL to validate logic),
 - Tauri 2 context object: do not edit `src-tauri/gen/schemas/` (regenerated
   on `tauri dev` / `tauri build`).
 
+## Architecture — `doc/arch/` is authoritative
+
+**The structural spec lives in [`doc/arch/ARCHITECTURE.md`](doc/arch/ARCHITECTURE.md)**
+with per-layer detail in [`doc/arch/LAYERS.md`](doc/arch/LAYERS.md). Active
+milestone blueprint (what to build *now*) lives in `doc/blueprint/M*.md`.
+
+Scope split, mirrored from the `DESIGN.md` relationship:
+
+| Document | Scope |
+|---|---|
+| `DESIGN.md` | chrome **visual** (colors / spacing / radius / hairline) |
+| `doc/arch/ARCHITECTURE.md` | **structure & module boundaries** (who owns what, who may depend on whom) |
+
+If `AGENTS.md` and either doc disagree, the doc wins — fix `AGENTS.md`.
+
+### Headline rules (full list in `ARCHITECTURE.md` §4)
+
+- **8 layers, single-direction.** Top depends on bottom, bottom knows nothing
+  above. Names L0–L8 from `ARCHITECTURE.md` §1.
+- **L2 is the only TS layer that imports `@tauri-apps/api`.** L3, L4, L5, L7
+  must not `invoke` / `listen`.
+- **L4 is the only TS layer that imports `@xterm/*`.** L7 must not `new Terminal()`.
+- **L0 (Rust core) does not depend on Tauri.** `src-tauri/src/core/` must not
+  `use tauri::...`.
+- **PaneTree lives in L3 (TS).** Rust does not know about tabs / splits. The
+  foreign key is `SessionId`.
+- **IPC command / event names are `snake_case`** on both sides; literal-string
+  matching. Mirror types are hand-written (no codegen until M5).
+
+If a future change wants to violate one of these, update the doc first.
+
 ## Frontend design — `DESIGN.md` is authoritative
 
 **The full spec lives in [`DESIGN.md`](DESIGN.md).** This section captures the
