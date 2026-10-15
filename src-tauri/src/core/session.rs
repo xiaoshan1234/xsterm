@@ -26,6 +26,7 @@ impl std::fmt::Display for SessionId {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionInfo {
     pub id: SessionId,
     pub shell_kind: ShellKind,

@@ -10,6 +10,7 @@ mod state;
 use tauri::Emitter;
 
 use crate::core::session::{reader_channel, ReaderMessage, SessionManager};
+use crate::events::{TerminalDataPayload, TerminalExitPayload};
 use crate::state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -30,6 +31,8 @@ pub fn run() {
             commands::spawn::spawn_terminal,
             commands::write::write_terminal,
             commands::resize::resize_terminal,
+            commands::session::close_session,
+            commands::session::list_sessions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -41,13 +44,17 @@ fn start_dispatch(app: tauri::AppHandle, rx: std::sync::mpsc::Receiver<ReaderMes
     std::thread::spawn(move || {
         while let Ok(msg) = rx.recv() {
             match msg {
-                ReaderMessage::Data { chunk, .. } => {
-                    if let Err(e) = app.emit(events::TERMINAL_DATA, chunk) {
+                ReaderMessage::Data { id, chunk } => {
+                    let payload = TerminalDataPayload { id, data: chunk };
+                    if let Err(e) = app.emit(events::TERMINAL_DATA, payload) {
                         eprintln!("failed to emit terminal-data: {e}");
                     }
                 }
-                ReaderMessage::Exit { .. } => {
-                    // M1 单会话,不向前端发 exit。M2 多会话时 dispatch 这里 emit terminal-exit。
+                ReaderMessage::Exit { id } => {
+                    let payload = TerminalExitPayload { id };
+                    if let Err(e) = app.emit(events::TERMINAL_EXIT, payload) {
+                        eprintln!("failed to emit terminal-exit: {e}");
+                    }
                 }
             }
         }
