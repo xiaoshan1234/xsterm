@@ -76,9 +76,7 @@ fn spawn_terminal(
 fn write_terminal(data: Vec<u8>, state: State<'_, Mutex<PtyState>>) -> Result<(), String> {
     let mut state_guard = state.lock().map_err(|e| e.to_string())?;
     if let Some(ref mut writer) = state_guard.writer {
-        writer
-            .write_all(&data)
-            .map_err(|e| e.to_string())?;
+        writer.write_all(&data).map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())?;
     }
     Ok(())

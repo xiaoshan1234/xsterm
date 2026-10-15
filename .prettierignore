@@ -1,0 +1,12 @@
+dist
+node_modules
+src-tauri/target
+src-tauri/gen
+.husky
+.omo
+.hermes
+.logs
+.opencode
+ref
+tauri-dev.log
+vite-dev.log
