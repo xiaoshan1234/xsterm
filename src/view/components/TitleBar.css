@@ -30,21 +30,6 @@
   letter-spacing: 0;
 }
 
-.titleBarToggle {
-  width: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-size: 14px;
-  border-radius: 0;
-}
-
-.titleBarToggle:hover {
-  background: var(--bg-hover);
-  color: var(--ink);
-}
-
 .titleBarDragRegion {
   flex: 1 1 0;
   min-width: 0;

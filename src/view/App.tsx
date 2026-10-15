@@ -53,7 +53,7 @@ export default function App() {
 
   return (
     <PaneTreeProviderWithHook>
-      <TitleBar sidebarOpen={activePanel !== null} onToggleSidebar={togglePanel} />
+      <TitleBar />
       <div className="contentArea">
         <Sidebar activePanel={activePanel} setActivePanel={setActivePanel} />
         <Workspace />

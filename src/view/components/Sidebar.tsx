@@ -91,25 +91,32 @@ function AboutIcon() {
   );
 }
 
-const PANELS: IconStripItem[] = [
+const PANELS_TOP: IconStripItem[] = [
   { id: "sessions", label: "Sessions", icon: <SessionsIcon /> },
-  { id: "settings", label: "Settings", icon: <SettingsIcon /> },
   { id: "shortcuts", label: "Shortcuts", icon: <ShortcutsIcon /> },
+];
+
+const PANELS_BOTTOM: IconStripItem[] = [
+  { id: "settings", label: "Settings", icon: <SettingsIcon /> },
   { id: "about", label: "About", icon: <AboutIcon /> },
 ];
 
+const ALL_PANELS = [...PANELS_TOP, ...PANELS_BOTTOM];
+
 export default function Sidebar({ activePanel, setActivePanel }: SidebarProps) {
-  const activePanelDef = activePanel ? (PANELS.find((p) => p.id === activePanel) ?? null) : null;
+  const activePanelDef = activePanel
+    ? (ALL_PANELS.find((p) => p.id === activePanel) ?? null)
+    : null;
+  const onSelect = (id: string) =>
+    setActivePanel((current) => (current === id ? null : (id as SidebarPanel)));
 
   return (
     <div className="sidebar" aria-label="Sidebar">
-      <IconStrip
-        activeId={activePanel}
-        items={PANELS}
-        onSelect={(id) =>
-          setActivePanel((current) => (current === id ? null : (id as SidebarPanel)))
-        }
-      />
+      <div className="iconStripColumn">
+        <IconStrip activeId={activePanel} items={PANELS_TOP} onSelect={onSelect} />
+        <div className="iconStripSpacer" />
+        <IconStrip activeId={activePanel} items={PANELS_BOTTOM} onSelect={onSelect} />
+      </div>
       {activePanelDef ? (
         <ContentPanel panel={activePanelDef} onClose={() => setActivePanel(null)} />
       ) : null}

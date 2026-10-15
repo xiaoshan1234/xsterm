@@ -2,12 +2,7 @@ import { useWindowControls } from "../hooks/useWindowControls";
 import { CloseIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from "./Icon";
 import "./TitleBar.css";
 
-interface TitleBarProps {
-  sidebarOpen: boolean;
-  onToggleSidebar: () => void;
-}
-
-export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
+export default function TitleBar() {
   const { minimize, toggleMaximize, close, isMaximized } = useWindowControls();
 
   return (
@@ -33,15 +28,6 @@ export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps
         </svg>
         <span className="titleBarName">xsterm</span>
       </div>
-      <button
-        className="titleBarToggle"
-        type="button"
-        aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-        aria-pressed={sidebarOpen}
-        onClick={onToggleSidebar}
-      >
-        {sidebarOpen ? "«" : "»"}
-      </button>
       <div className="titleBarDragRegion" data-tauri-drag-region onDoubleClick={toggleMaximize} />
       <div className="titleBarControls">
         <button className="titleBarButton" type="button" aria-label="Minimize" onClick={minimize}>
