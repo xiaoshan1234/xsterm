@@ -1,5 +1,4 @@
 .paneChrome {
-  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -7,29 +6,11 @@
   background: var(--canvas);
   outline: 1px solid var(--hairline);
   outline-offset: -1px;
-  position: relative;
+  overflow: hidden;
 }
 
 .paneChromeFocused {
   outline-color: var(--accent);
-}
-
-.paneChromeBanner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-base);
-  padding: 6px var(--space-base);
-  background: var(--error-soft);
-  border-bottom: 1px solid var(--error);
-  color: var(--ink);
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.paneChromeBannerLabel {
-  flex: 1 1 0;
 }
 
 .paneChromeXterm {

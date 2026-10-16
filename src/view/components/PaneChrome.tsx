@@ -1,24 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Terminal } from "../../adapter/xterm/xterm";
 import TerminalView from "../../adapter/xterm/TerminalView";
 import { useContainerFit } from "../../adapter/xterm/useContainerFit";
 import { useTerminalSession } from "../hooks/useTerminalSession";
 import { usePaneTreeContext } from "../hooks/paneTreeContext";
 import { ContextMenuOverlay, useContextMenu, type ContextMenuItem } from "./primitives/ContextMenu";
-import type { PanePath } from "../../data/model/pane";
 import type { SessionId } from "../../data/model/session";
 import "./PaneChrome.css";
 
 interface PaneChromeProps {
   tabId: number;
-  path: PanePath;
+  sessionId: SessionId;
   focused: boolean;
-  leaf: { kind: "leaf"; sessionId: SessionId; shell: string; status: "alive" | "dead" };
   paneNumber: number;
-  onFocus: () => void;
-  onSplitH: () => void;
-  onSplitV: () => void;
-  onClose: () => void;
+  style: CSSProperties;
 }
 
 async function copySelection(xterm: Terminal | null): Promise<void> {
@@ -34,17 +29,14 @@ async function copySelection(xterm: Terminal | null): Promise<void> {
 
 export default function PaneChrome({
   tabId,
+  sessionId,
   focused,
-  leaf,
   paneNumber,
-  onFocus,
-  onSplitH,
-  onSplitV,
-  onClose,
+  style,
 }: PaneChromeProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [xterm, setXterm] = useState<Terminal | null>(null);
-  const { markDead, reconnectLeaf } = usePaneTreeContext();
+  const { markDead, reconnectLeaf, splitActivePane, closeLeaf, focusLeaf } = usePaneTreeContext();
   const { state, open, close } = useContextMenu();
 
   const handleTermReady = useCallback((term: Terminal) => {
@@ -52,11 +44,12 @@ export default function PaneChrome({
   }, []);
 
   const handleExit = useCallback(() => {
-    markDead(tabId, leaf.sessionId);
-  }, [markDead, tabId, leaf.sessionId]);
+    markDead(tabId, sessionId);
+  }, [markDead, tabId, sessionId]);
 
+  // 关键:把 PaneChrome 的 xterm 传给 hook,共享同一份引用
   useTerminalSession({
-    sessionId: leaf.sessionId,
+    sessionId,
     xterm,
     onExit: handleExit,
   });
@@ -80,8 +73,8 @@ export default function PaneChrome({
 
   const menuItems = useMemo<ContextMenuItem[]>(() => {
     const items: ContextMenuItem[] = [
-      { label: "Split Horizontal", onClick: () => onSplitH() },
-      { label: "Split Vertical", onClick: () => onSplitV() },
+      { label: "Split Horizontal", onClick: () => void splitActivePane(tabId, "h") },
+      { label: "Split Vertical", onClick: () => void splitActivePane(tabId, "v") },
       { separator: true },
       {
         label: "Copy",
@@ -93,46 +86,32 @@ export default function PaneChrome({
         onClick: () => xterm?.clear(),
         disabled: !xterm,
       },
-    ];
-    if (leaf.status === "dead") {
-      items.push({
+      {
         label: "Reconnect",
-        onClick: () => void reconnectLeaf(tabId, leaf.sessionId),
-      });
-    }
-    items.push({ separator: true });
-    items.push({ label: "Close Pane", onClick: onClose, danger: true });
+        onClick: () => void reconnectLeaf(tabId, sessionId),
+      },
+      { separator: true },
+      {
+        label: "Close Pane",
+        onClick: () => void closeLeaf(tabId, sessionId),
+        danger: true,
+      },
+    ];
     return items;
-  }, [xterm, leaf.status, leaf.sessionId, onSplitH, onSplitV, onClose, reconnectLeaf, tabId]);
-
-  const className = focused ? "paneChrome paneChromeFocused" : "paneChrome";
+  }, [xterm, sessionId, splitActivePane, closeLeaf, reconnectLeaf, tabId]);
 
   return (
     <>
       <div
         ref={wrapperRef}
-        className={className}
-        onMouseDown={onFocus}
+        className={`paneChrome${focused ? " paneChromeFocused" : ""}`}
+        style={style}
+        onMouseDown={() => focusLeaf(tabId, sessionId)}
         onContextMenu={handleContextMenu}
       >
         <div className="paneChromeBadge" aria-label={`Pane ${paneNumber}`}>
           {paneNumber}
         </div>
-        {leaf.status === "dead" ? (
-          <div className="paneChromeBanner">
-            <span className="paneChromeBannerLabel">Process exited</span>
-            <button
-              className="paneChromeBtn paneChromeBtnAccent"
-              type="button"
-              onClick={() => void reconnectLeaf(tabId, leaf.sessionId)}
-            >
-              Reconnect
-            </button>
-            <button className="paneChromeBtn" type="button" onClick={onClose}>
-              Close
-            </button>
-          </div>
-        ) : null}
         <div className="paneChromeXterm">
           <TerminalView onTermReady={handleTermReady} />
         </div>
