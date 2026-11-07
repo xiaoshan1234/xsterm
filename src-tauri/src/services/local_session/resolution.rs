@@ -7,8 +7,6 @@
 //! in the parent `local_session` module — these helpers are not part
 //! of the crate's public API.
 
-use portable_pty::CommandBuilder;
-
 /// Fallback shell on Unix-like systems when the `SHELL` env var is missing.
 pub(super) const UNIX_FALLBACK_SHELL: &str = "/bin/bash";
 /// PowerShell argument to suppress the logo banner.
@@ -130,11 +128,11 @@ pub(super) fn resolve_windows_home() -> String {
 
 /// Append shell-specific flags to a [`CommandBuilder`] before spawn
 /// — `-NoLogo` for PowerShell / pwsh; `--login` for bash on Unix.
-pub(super) fn apply_shell_flags(cmd: &mut CommandBuilder, shell_name: &str) {
+pub(super) fn apply_shell_flags(args: &mut Vec<String>, shell_name: &str) {
     if shell_name.contains("powershell") || shell_name.contains("pwsh") {
-        cmd.arg(POWERSHELL_NOLOGO_FLAG);
+        args.push(POWERSHELL_NOLOGO_FLAG.to_string());
     } else if shell_name == "bash" && !cfg!(target_os = "windows") {
-        cmd.arg(BASH_LOGIN_FLAG);
+        args.push(BASH_LOGIN_FLAG.to_string());
     }
 }
 
