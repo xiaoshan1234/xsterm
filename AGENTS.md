@@ -38,9 +38,10 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ### 4.1 前端（`src/`）
 
-- 入口链：`index.html` → `src/main.tsx` → `src/App.tsx` → `src/components/AppLayout.tsx`
-- 全局状态走 React Context：`SessionContext`（会话 / workspace / pane / group）、`ThemeContext`、`LoggerContext`
-- 所有 Tauri IPC 收敛在：`src/services/sessionService.ts`（invoke）与 `src/contexts/session/useTauriListeners.ts`（listen）
+- 入口链：`index.html` → `src/main.tsx` → `src/app/App.tsx` → `src/app/AppLayout.tsx`
+- 目录按功能划分：`src/app/`（应用外壳）、`src/features/`（功能模块：`terminal/`、`sessions/`、`workspace/`、`sidebar/`、`settings/`）、`src/shared/`（跨功能共享：`ui/`、`icons/`、`hooks/`、`utils/`）
+- 全局状态走 React Context：`SessionContext`（会话 / workspace / pane / group，位于 `src/features/sessions/`）、`ThemeContext`、`LoggerContext`
+- 所有 Tauri IPC 收敛在：`src/services/sessionService.ts`（invoke）与 `src/features/sessions/state/useTauriListeners.ts`（listen）
 - 样式只用纯 CSS：全局 token 在 `src/styles/global.css` 的 `:root`，组件样式与组件同目录（`<Component>.css`）。禁止 Tailwind / CSS-in-JS / CSS Modules
 - 无路由，视图切换由 `AppLayout` 内部状态驱动
 
@@ -59,7 +60,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 ## 5. 关键坑（Gotchas）
 
 - `invoke()` 非类型安全（无 tauri-specta / 生成绑定），命令名与参数形状错误只在运行时暴露。
-- 窗口 `decorations: false`，自定义标题栏在 `src/components/NavBar.tsx`（用 `getCurrentWindow()`）。
+- 窗口 `decorations: false`，自定义标题栏在 `src/app/NavBar.tsx`（用 `getCurrentWindow()`）。
 - Vite dev server 固定 1420 端口 + `strictPort: true`；被占用则启动失败。
 - 不要用普通浏览器打开 `http://localhost:1420`（`__TAURI_INTERNALS__` 未定义，invoke 全抛错）。
 - 生成文件勿手改：`src/vite-env.d.ts`、`src-tauri/gen/schemas/`。

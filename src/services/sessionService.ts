@@ -23,7 +23,7 @@ export interface SessionInfo {
   /**
    * hidden (bootstrap) tmux panes are not rendered by the frontend.
    * MVP `tmux -CC new` panes have `is_hidden = false`; tmux attaches
- * flag the bootstrap pane as hidden.
+   * flag the bootstrap pane as hidden.
    */
   isHidden?: boolean;
 }
@@ -85,10 +85,7 @@ export async function attachTmux(config: TmuxCcConfig): Promise<SessionInfo> {
  * `Pane` mounts) so the user sees existing scrollback before live
  * `session-output` events stream in.
  */
-export async function captureTmuxPane(
-  xstermSessionId: number,
-  lines: number,
-): Promise<string> {
+export async function captureTmuxPane(xstermSessionId: number, lines: number): Promise<string> {
   logger.debug("sessionService", "captureTmuxPane", { xstermSessionId, lines });
   const result = await invoke<string>("capture_tmux_pane", {
     xstermSessionId,
@@ -247,10 +244,7 @@ export async function killTmuxPane(xstermSessionId: number): Promise<void> {
  *
  * Mirrors req-006 §4.5.
  */
-export async function createTmuxWindow(
-  controllerId: number,
-  name?: string,
-): Promise<SessionInfo> {
+export async function createTmuxWindow(controllerId: number, name?: string): Promise<SessionInfo> {
   logger.debug("sessionService", "createTmuxWindow", { controllerId, name });
   const result = await invoke<SessionInfo>("create_tmux_window", {
     controllerId,
@@ -288,10 +282,7 @@ export async function killTmuxWindow(xstermWindowId: number): Promise<void> {
  * id). The frontend looks this up from the `tmux-window-added` event
  * payload when it created the Window.
  */
-export async function renameTmuxWindow(
-  xstermWindowId: number,
-  name: string,
-): Promise<void> {
+export async function renameTmuxWindow(xstermWindowId: number, name: string): Promise<void> {
   logger.debug("sessionService", "renameTmuxWindow", { xstermWindowId, name });
   await invoke("rename_tmux_window", { xstermWindowId, name });
   logger.debug("sessionService", "renameTmuxWindow:result", undefined);

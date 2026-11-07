@@ -276,7 +276,7 @@ export interface SessionDisplayConfig {
   // LocalSessionConfig / SSHSessionConfig (consumed by the Rust backend to
   // set `TERM` / `LC_ALL` env on the PTY). The TerminalTab UI dispatches
   // edits to the connection-specific config based on its `connectionType`
-  // prop — see src/components/dialogs/TerminalTab.tsx.
+  // prop — see src/features/sessions/dialogs/TerminalTab.tsx.
 
   // Logging
   /** Session output logging configuration. */

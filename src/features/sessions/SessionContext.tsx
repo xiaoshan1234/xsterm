@@ -1,0 +1,45 @@
+import { createContext, useContext, type ReactNode } from "react";
+import { type SessionContextType } from "./state/types";
+import { useSessionState } from "./state/useSessionState";
+import { useSessionPersistence } from "./state/useSessionPersistence";
+import { useSessionActions } from "./state/useSessionActions";
+import { useTauriListeners } from "./state/useTauriListeners";
+
+export type { SessionContextType };
+
+const SessionContext = createContext<SessionContextType | null>(null);
+
+export function SessionProvider({ children }: { children: ReactNode }) {
+  const state = useSessionState();
+  const persistence = useSessionPersistence(state);
+  const actions = useSessionActions({ ...state, ...persistence });
+  useTauriListeners(state);
+
+  const value: SessionContextType = {
+    sessions: state.sessions,
+    setSessions: state.setSessions,
+    savedConfigs: state.savedConfigs,
+    workspaces: state.workspaces,
+    activeWorkspaceId: state.activeWorkspaceId,
+    savedWorkspaces: state.savedWorkspaces,
+    savedWindowConfigs: state.savedWindowConfigs,
+    groups: state.groups,
+    globalLocalEcho: state.globalLocalEcho,
+    setGlobalLocalEcho: state.setGlobalLocalEcho,
+    getEffectiveLocalEcho: state.getEffectiveLocalEcho,
+    tmuxControllerErrors: state.tmuxControllerErrors,
+    setTmuxControllerErrors: state.setTmuxControllerErrors,
+    tmuxControllerConfigsRef: state.tmuxControllerConfigsRef,
+    ...actions,
+  };
+
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+export function useSession() {
+  const context = useContext(SessionContext);
+  if (!context) {
+    throw new Error("useSession must be used within a SessionProvider");
+  }
+  return context;
+}
