@@ -30,6 +30,7 @@ chrono = "0.4"
 tauri-plugin-clipboard-manager = "2"
 dashmap = "6"
 futures-core = "0.3"
+xscore = { path = "../third_party/xscore/crates/xscore" }
 
 [dev-dependencies]
 mockall = "0.12"
