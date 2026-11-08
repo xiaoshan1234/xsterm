@@ -19,18 +19,18 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ## 3. 构建命令
 
-| 命令 | 作用 |
-|---|---|
-| `npm run dev` | 只启动 Vite dev server（1420 端口） |
-| `npm run tauri dev` | 完整 Tauri 开发模式（Vite + Rust 编译 + 启动应用） |
-| `npm run build` | `tsc` 类型检查 + `vite build` → `dist/` |
-| `npm run tauri build` | 生产构建 + 打包 |
-| `npm test` / `npm run test:watch` | 前端单元测试（Vitest） |
-| `cargo test --manifest-path src-tauri/Cargo.toml` | Rust 单元测试 |
-| `cargo check --manifest-path src-tauri/Cargo.toml` | Rust 快速类型检查 |
-| `npm run lint` / `npm run lint:fix` | ESLint（`src/`） |
-| `npm run format` / `npm run format:check` | Prettier |
-| `cargo fmt --manifest-path src-tauri/Cargo.toml` | rustfmt |
+| 命令                                               | 作用                                               |
+| -------------------------------------------------- | -------------------------------------------------- |
+| `npm run dev`                                      | 只启动 Vite dev server（1420 端口）                |
+| `npm run tauri dev`                                | 完整 Tauri 开发模式（Vite + Rust 编译 + 启动应用） |
+| `npm run build`                                    | `tsc` 类型检查 + `vite build` → `dist/`            |
+| `npm run tauri build`                              | 生产构建 + 打包                                    |
+| `npm test` / `npm run test:watch`                  | 前端单元测试（Vitest）                             |
+| `cargo test --manifest-path src-tauri/Cargo.toml`  | Rust 单元测试                                      |
+| `cargo check --manifest-path src-tauri/Cargo.toml` | Rust 快速类型检查                                  |
+| `npm run lint` / `npm run lint:fix`                | ESLint（`src/`）                                   |
+| `npm run format` / `npm run format:check`          | Prettier                                           |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml`   | rustfmt                                            |
 
 > 平台说明：本项目面向 Windows（WebView2 + MSVC）。若在 WSL 中构建，必须用 Windows 工具链（`powershell.exe -Command "Set-Location '...'; npm run ..."` 或 `cargo.exe`），不要用 WSL 原生 cargo/node 产出 Linux 二进制。
 
@@ -38,12 +38,15 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ### 4.1 前端（`src/`）
 
-- 入口链：`index.html` → `src/main.tsx` → `src/app/App.tsx` → `src/app/AppLayout.tsx`
-- 目录按功能划分：`src/app/`（应用外壳）、`src/features/`（功能模块：`terminal/`、`sessions/`、`workspace/`、`sidebar/`、`settings/`）、`src/shared/`（跨功能共享：`ui/`、`icons/`、`hooks/`、`utils/`）
-- 全局状态走 React Context：`SessionContext`（会话 / workspace / pane / group，位于 `src/features/sessions/`）、`ThemeContext`、`LoggerContext`
-- 所有 Tauri IPC 收敛在：`src/services/sessionService.ts`（invoke）与 `src/features/sessions/state/useTauriListeners.ts`（listen）
+- 入口链：`index.html` → `src/main.tsx` → `src/app/App.tsx` → `src/app/AppLayout.tsx`。迁移期结束后由新 AppShell 取代 `AppLayout`。
+- 新 Shell 设计预览位于 `src/app/shell/`；通过 `VITE_UI_PREVIEW=true` 或 `#ui-preview` 启用，默认仍运行旧 `AppLayout`。
+- 目标顶层：`src/app/`（应用装配与 shell）、`src/features/`（纵向功能切片）、`src/models/`（纯领域模型）、`src/infra/`（仅公共日志与通用配置持久化）、`src/shared/`（无业务依赖的 UI、hooks、utils）。
+- `src/models/` 不得依赖 React、Tauri、DOM、Store 或任何上层目录；`src/infra/` 不得依赖 `app/`、`features/`、`models/`。
+- Feature 内按 `ui/`、`application/`、`state/`、`selectors/`、`viewModels/`、`infrastructure/`、`persistence/` 组织。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。
+- 全局状态走 feature 内 React Context / reducers / selectors。迁移期间现有 SessionContext 仍可保留，但新代码不得继续扩展其大而全 API。
+- Tauri IPC 必须收敛在 feature-local infrastructure adapter；组件不得直接 `invoke()` 或 `listen()` 原始后端事件。
 - 样式只用纯 CSS：全局 token 在 `src/styles/global.css` 的 `:root`，组件样式与组件同目录（`<Component>.css`）。禁止 Tailwind / CSS-in-JS / CSS Modules
-- 无路由，视图切换由 `AppLayout` 内部状态驱动
+- 无路由，视图和全局面板切换由 AppShell 内部状态驱动。
 
 ### 4.2 后端（`src-tauri/`）
 
@@ -68,12 +71,13 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 - 版本号三处同步：`package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json`。
 - 日志初始化故意泄漏一个 guard（`logging_setup.rs` 的 `std::mem::forget`）以保持滚动 writer 存活，勿删。
 - Rust mock 测试在 `services/session_manager.rs` 内联 `#[cfg(test)]`（mockall）。
-- `list_sessions` 已注册但前端 `sessionService.ts` 未暴露 wrapper；要用先加前端包装。
+- `list_terminals` 已注册；使用前必须在对应 feature infrastructure 中增加类型化 wrapper。
 
 ## 6. 持久化与日志
 
 - 用 `tauri-plugin-store` 把配置存为 JSON（app data 目录）：sessions / groups / attached_tmux / log_config。
-- 前端日志经 `log_message` 转后端，由 tracing 写滚动日志。
+- `src/infra/storage/JsonStore.ts` 只提供通用 key/value 持久化；领域 schema、迁移、校验归属对应 feature 的 `persistence/`。
+- 前端日志经 `src/infra/logging/` 的 `log_message` adapter 转后端，由 tracing 写滚动日志。
 
 ## 7. Husky（提交钩子）
 
@@ -83,8 +87,9 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ## 8. 文档地图
 
-| 文档 | 作用 |
-|---|---|
-| `DESIGN.md` | 前端设计系统（权威），所有 UI 改动前必读 |
-| `rules/ts-name-rules.md` | TS/TSX 命名规范 |
-| `rules/rust-name-rules.md` | Rust 命名规范 |
+| 文档                       | 作用                                                          |
+| -------------------------- | ------------------------------------------------------------- |
+| `DESIGN.md`                | 前端设计系统（权威），所有 UI 改动前必读                      |
+| `UI_COMPONENTS.md`         | AppShell、全局组件、Manager、Dialog、View Model 与 Model 契约 |
+| `rules/ts-name-rules.md`   | TS/TSX 命名规范                                               |
+| `rules/rust-name-rules.md` | Rust 命名规范                                                 |

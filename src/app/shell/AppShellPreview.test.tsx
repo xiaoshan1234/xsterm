@@ -1,0 +1,47 @@
+/** @vitest-environment jsdom */
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { AppShellPreview } from "./AppShellPreview";
+
+afterEach(cleanup);
+
+describe("AppShellPreview", () => {
+  it("opens managers and the global text sender", () => {
+    const { container } = render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Terminal Manager" }));
+    expect(screen.getByRole("heading", { name: "Terminal Manager" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New Terminal" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New Group" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Text Sender" }));
+    expect(screen.getByRole("region", { name: "Global text sender" })).toBeTruthy();
+    expect(container.querySelector(".shell-text-sender-slot")).toBeTruthy();
+  });
+
+  it("renders status managers without create footers", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Terminal Status" }));
+    expect(screen.getByRole("heading", { name: "Terminal Status" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New Terminal" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "tmux Status" }));
+    expect(screen.getByRole("heading", { name: "tmux Status" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New tmux Session" })).toBeNull();
+  });
+
+  it("blocks the app shell while an error dialog is open", () => {
+    const { container } = render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Error" }));
+
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(container.querySelector(".shell-content")?.hasAttribute("inert")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Acknowledge" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(container.querySelector(".shell-content")?.hasAttribute("inert")).toBe(false);
+  });
+});

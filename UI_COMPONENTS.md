@@ -7,8 +7,21 @@
 ## 1. 状态
 
 - 当前阶段：设计稿
-- 实施状态：尚未开始代码改造
+- 实施状态：Phase 1–2 静态 Shell 与占位组件已落地
 - 目标：先固定 UI 壳层和组件边界，再实现功能，最后迁移现有组件
+
+预览入口：
+
+```powershell
+$env:VITE_UI_PREVIEW = "true"
+npm run tauri dev
+```
+
+浏览器预览可使用：
+
+```text
+http://localhost:1420/#ui-preview
+```
 
 ## 2. 设计目标
 
