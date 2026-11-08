@@ -217,6 +217,17 @@ describe("buildFrontendSession", () => {
     expect(session.displayConfig).toBe(displayConfig);
   });
 
+  it("forwards capabilities from SessionInfo", () => {
+    const capabilities = {
+      supportsResize: true,
+      supportsReconnect: false,
+      supportsLocalEcho: true,
+      supportsMultiplex: false,
+    };
+    const session = buildFrontendSession({ ...info, capabilities }, "config-1", "local");
+    expect(session.capabilities).toEqual(capabilities);
+  });
+
   it("preserves the type discriminator (ssh)", () => {
     const sshInfo = {
       ...info,

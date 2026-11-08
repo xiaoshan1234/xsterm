@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import type { CapabilityFlags } from "../../../types/capabilities";
 import {
   type Session,
   type SessionType,
@@ -10,27 +9,10 @@ import {
   type TmuxWindowClosedEvent,
   type TmuxWindowRenamedEvent,
 } from "../../../types/session";
-import {
-  createLeafPane,
-  findPaneNode,
-  getLeafPaneIds,
-  removeSessionAndCollapse,
-  withRecomputedSessionIds,
-} from "./paneUtils";
+import { createLeafPane, withRecomputedSessionIds } from "./paneUtils";
+import { closeWindow, removeSessionsFromWorkspaces, renameWindow } from "./eventTransitions";
+import { TMUX_PANE_CAPABILITIES } from "./capabilities";
 import { type SessionState } from "./types";
-
-/**
- * capability flags mirrored from `CapabilityFlags::for_tmux()`
- * (see `src-tauri/src/models/capabilities.rs`). Tmux panes support
- * resize / reconnect but not local echo; they DO advertise
- * `supportsMultiplex` which is the unlock flag for split UI.
- */
-const TMUX_PANE_CAPABILITIES: CapabilityFlags = {
-  supportsResize: true,
-  supportsReconnect: true,
-  supportsLocalEcho: false,
-  supportsMultiplex: true,
-};
 
 /**
  * Build a Session-shaped entry for a tmux pane that just arrived via
@@ -112,20 +94,7 @@ export function useTauriListeners({
         const stillExists = sessionsRef.current.some((s) => s.id === sessionId);
         if (!stillExists) return;
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-        setWorkspaces((prev) =>
-          prev.map((workspace) =>
-            withRecomputedSessionIds({
-              ...workspace,
-              windows: workspace.windows.map((window) => {
-                const newRoot = removeSessionAndCollapse(window.rootPane, sessionId);
-                const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
-                  ? window.activePaneId
-                  : (getLeafPaneIds(newRoot)[0] ?? null);
-                return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
-              }),
-            }),
-          ),
-        );
+        setWorkspaces((prev) => removeSessionsFromWorkspaces(prev, [sessionId]));
       }).catch((e) => {
         console.error("Failed to listen session-closed:", e);
         return null;
@@ -194,23 +163,7 @@ export function useTauriListeners({
             establishingSessionsRef.current.delete(id);
           }
           setSessions((prev) => prev.filter((s) => !deadIds.has(s.id)));
-          setWorkspaces((prev) =>
-            prev.map((workspace) =>
-              withRecomputedSessionIds({
-                ...workspace,
-                windows: workspace.windows.map((window) => {
-                  let root = window.rootPane;
-                  for (const id of deadIds) {
-                    root = removeSessionAndCollapse(root, id);
-                  }
-                  const newActivePaneId = findPaneNode(root, window.activePaneId ?? "")
-                    ? window.activePaneId
-                    : (getLeafPaneIds(root)[0] ?? null);
-                  return { ...window, rootPane: root, activePaneId: newActivePaneId };
-                }),
-              }),
-            ),
-          );
+          setWorkspaces((prev) => removeSessionsFromWorkspaces(prev, deadIds));
         }
         if (storedConfig) {
           setTmuxControllerErrors((prev) => {
@@ -286,20 +239,7 @@ export function useTauriListeners({
           const stillExists = sessionsRef.current.some((s) => s.id === xstermSessionId);
           if (!stillExists) return;
           setSessions((prev) => prev.filter((s) => s.id !== xstermSessionId));
-          setWorkspaces((prev) =>
-            prev.map((workspace) =>
-              withRecomputedSessionIds({
-                ...workspace,
-                windows: workspace.windows.map((window) => {
-                  const newRoot = removeSessionAndCollapse(window.rootPane, xstermSessionId);
-                  const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
-                    ? window.activePaneId
-                    : (getLeafPaneIds(newRoot)[0] ?? null);
-                  return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
-                }),
-              }),
-            ),
-          );
+          setWorkspaces((prev) => removeSessionsFromWorkspaces(prev, [xstermSessionId]));
         },
       ).catch((e) => {
         console.error("Failed to listen tmux-pane-removed:", e);
@@ -425,54 +365,7 @@ export function useTauriListeners({
           // Find the workspace containing the xsterm Window and drop
           // the Window. If the workspace ends up empty, replace with
           // an init window.
-          setWorkspaces((prev) =>
-            prev.map((workspace) => {
-              const targetWindow = workspace.windows.find(
-                (w) => w.xstermWindowId === xstermWindowId,
-              );
-              // The frontend may not have a Window for this
-              // xstermWindowId (e.g. the controller exited before
-              // the user-facing Window was created, or this is the
-              // bootstrap window which doesn't have xstermWindowId
-              // exposed to the frontend). Skip.
-              if (!targetWindow) return workspace;
-              const remaining = workspace.windows.filter(
-                (w) => w.xstermWindowId !== xstermWindowId,
-              );
-              let nextWindows = remaining;
-              let nextActiveId = workspace.activeWindowId;
-              if (remaining.length === 0) {
-                const initPaneId = crypto.randomUUID();
-                const initWindow = {
-                  id: crypto.randomUUID(),
-                  name: "New Session",
-                  activePaneId: initPaneId,
-                  windowType: "init" as const,
-                  rootPane: {
-                    id: initPaneId,
-                    type: "leaf" as const,
-                    size: 100,
-                  },
-                };
-                nextWindows = [initWindow];
-                nextActiveId = initWindow.id;
-              } else if (nextActiveId === targetWindow.id) {
-                const closedIndex = workspace.windows.findIndex(
-                  (w) => w.xstermWindowId === xstermWindowId,
-                );
-                const fallback =
-                  remaining[closedIndex - 1] ??
-                  remaining[closedIndex] ??
-                  remaining[remaining.length - 1];
-                nextActiveId = fallback?.id ?? null;
-              }
-              return withRecomputedSessionIds({
-                ...workspace,
-                windows: nextWindows,
-                activeWindowId: nextActiveId,
-              });
-            }),
-          );
+          setWorkspaces((prev) => closeWindow(prev, xstermWindowId));
         },
       ).catch((e) => {
         console.error("Failed to listen tmux-window-closed:", e);
@@ -491,14 +384,7 @@ export function useTauriListeners({
         "tmux-window-renamed",
         (event) => {
           const { xstermWindowId, name } = event.payload;
-          setWorkspaces((prev) =>
-            prev.map((workspace) => ({
-              ...workspace,
-              windows: workspace.windows.map((w) =>
-                w.xstermWindowId === xstermWindowId ? { ...w, name } : w,
-              ),
-            })),
-          );
+          setWorkspaces((prev) => renameWindow(prev, xstermWindowId, name));
         },
       ).catch((e) => {
         console.error("Failed to listen tmux-window-renamed:", e);

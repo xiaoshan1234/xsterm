@@ -12,6 +12,7 @@ import {
   withRecomputedSessionIds,
 } from "./paneUtils";
 import { assertSessionNotUsedElsewhere } from "./useSessionActions.helpers";
+import { TMUX_PANE_CAPABILITIES } from "./capabilities";
 
 interface UsePaneActionsDeps {
   sessionsRef: React.MutableRefObject<Session[]>;
@@ -254,12 +255,7 @@ async function splitTmuxPaneInternal(
       tmuxPaneId: parentTmuxPaneId,
       tmuxControllerId: controllerId,
       isHidden: false,
-      capabilities: {
-        supportsResize: true,
-        supportsReconnect: true,
-        supportsLocalEcho: false,
-        supportsMultiplex: true,
-      },
+      capabilities: TMUX_PANE_CAPABILITIES,
       createdAt: Date.now(),
       lastActivityAt: Date.now(),
     };

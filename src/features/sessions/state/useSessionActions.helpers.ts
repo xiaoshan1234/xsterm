@@ -68,6 +68,7 @@ export function buildFrontendSession(
     ...(info.tmuxPaneId !== undefined ? { tmuxPaneId: info.tmuxPaneId } : {}),
     ...(info.tmuxControllerId !== undefined ? { tmuxControllerId: info.tmuxControllerId } : {}),
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),
+    ...(info.capabilities !== undefined ? { capabilities: info.capabilities } : {}),
   };
 }
 
