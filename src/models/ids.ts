@@ -1,3 +1,8 @@
+/**
+ * Branded identifiers prevent accidental mixing of workspace, pane, terminal,
+ * and tmux identifiers. A branded id is still a string or number at runtime,
+ * but callers must create it through one of the factories below.
+ */
 export type Brand<Value, Name extends string> = Value & {
   readonly __brand: Name;
 };
@@ -8,6 +13,7 @@ export type PaneId = Brand<string, "PaneId">;
 export type LaunchConfigId = Brand<string, "LaunchConfigId">;
 
 export type TerminalId = Brand<number, "TerminalId">;
+/** Backend stream id used by a tmux pane; it is not an xsterm `Terminal`. */
 export type TerminalStreamId = Brand<number, "TerminalStreamId">;
 export type TmuxControllerId = Brand<number, "TmuxControllerId">;
 
@@ -67,6 +73,8 @@ export function createTmuxControllerId(value: number): TmuxControllerId {
 }
 
 export function createTmuxWindowId(value: string): TmuxWindowId {
+  // tmux uses @N for windows and %N for panes. Keeping those shapes distinct
+  // avoids passing a pane id where a window id is expected.
   if (!/^@\d+$/.test(value)) {
     throw new Error("TmuxWindowId must look like @1");
   }

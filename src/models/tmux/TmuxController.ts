@@ -27,6 +27,11 @@ export type TmuxControllerStatus =
       readonly error: string;
     };
 
+/**
+ * Aggregate root for one tmux control connection. A controller owns all of its
+ * windows and panes, and may be projected into a Workspace through one or more
+ * `TmuxWindowReference` values.
+ */
 export interface TmuxController {
   readonly kind: "tmux-controller";
   readonly id: TmuxControllerId;
@@ -75,6 +80,8 @@ export function connectTmuxController(
   windows: readonly TmuxWindow[],
   connectedAt: number,
 ): ModelResult<TmuxController> {
+  // Windows and panes are unique across the controller, not just within one
+  // window. This keeps pane lookup and tmux events unambiguous.
   const validationResult = validateTmuxWindows(windows);
   if (!validationResult.ok) {
     return validationResult;

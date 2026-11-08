@@ -1,3 +1,8 @@
+/**
+ * Result type used by model factories and transitions that can reject invalid
+ * input. Throwing is reserved for programmer errors; expected validation
+ * failures should be represented explicitly.
+ */
 export type ModelErrorCode =
   | "duplicate-id"
   | "invalid-id"

@@ -1,3 +1,7 @@
+/**
+ * Terminal lifecycle state. The union prevents combinations such as
+ * `isConnected=false` without a disconnect or failure reason.
+ */
 export type TerminalStatus =
   | { readonly kind: "connecting" }
   | {

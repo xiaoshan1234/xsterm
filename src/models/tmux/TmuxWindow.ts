@@ -8,12 +8,17 @@ import {
   type TmuxPaneNode,
 } from "./TmuxPaneLayout";
 
+/**
+ * A window owned by one `TmuxController`. Every pane and the layout must belong
+ * to the same tmux window; direct SSH/local terminals cannot be inserted here.
+ */
 export interface TmuxWindow {
   readonly kind: "tmux-window";
   readonly id: TmuxWindowId;
   readonly name: string;
   readonly activePaneId: TmuxPaneId;
   readonly panes: readonly TmuxPane[];
+  /** Mirrors tmux-owned layout; the frontend must not treat it as authoritative. */
   readonly layout: TmuxPaneNode;
 }
 

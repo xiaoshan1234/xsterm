@@ -17,6 +17,10 @@ import {
 } from "./Workspace";
 import { renameDirectWindow, type WorkspaceWindow } from "./WorkspaceWindow";
 
+/**
+ * Pure layout operations for direct windows. These functions validate model
+ * invariants but do not create, close, or reconnect backend terminals.
+ */
 export function activateWorkspaceWindow(
   workspace: Workspace,
   windowId: WindowId,
@@ -100,6 +104,8 @@ export function splitDirectWindowPane(
   terminalId: TerminalId,
   ratio = 0.5,
 ): ModelResult<Workspace> {
+  // The new terminal must not already be attached elsewhere in the workspace;
+  // this mirrors the constraint enforced by the Workspace factory.
   const window = findDirectWindowInWorkspace(workspace, windowId);
   if (!window) {
     return modelFailure("not-found", "Direct window does not exist");
@@ -136,6 +142,8 @@ export function detachTerminalFromWorkspace(
   workspace: Workspace,
   terminalId: TerminalId,
 ): ModelResult<Workspace> {
+  // Detaching preserves the pane as an empty leaf. Pane removal/collapse is a
+  // separate UI action and should not break the active pane invariant.
   let hasChanged = false;
 
   const windows = workspace.windows.map((window) => {

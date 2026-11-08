@@ -7,6 +7,10 @@ import {
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 import { createConnectingStatus, type TerminalStatus } from "../terminal/TerminalStatus";
 
+/**
+ * A pane owned by a tmux window. `streamId` is the backend terminal stream used
+ * for output and input; it is not a standalone xsterm `Terminal`.
+ */
 export interface TmuxPane {
   readonly kind: "tmux-pane";
   readonly id: TmuxPaneId;

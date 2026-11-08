@@ -1,5 +1,10 @@
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 
+/**
+ * Runtime-only connection summary used for display and terminal operations.
+ * Credentials and full launch options live in `SshConnectionConfig` and
+ * `LocalTerminalLaunchConfig`, not here.
+ */
 export interface LocalTerminalTransport {
   readonly kind: "local";
   readonly shell: string;

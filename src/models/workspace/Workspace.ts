@@ -13,6 +13,13 @@ import {
   type WorkspaceWindow,
 } from "./WorkspaceWindow";
 
+/**
+ * Aggregate root for user-visible tabs and layouts. It references runtime
+ * terminal/controller ids but never owns backend connections.
+ *
+ * `activeWindowId` must point to an existing window. Terminal ids are derived
+ * by selectors instead of stored as a redundant cache.
+ */
 export interface Workspace {
   readonly kind: "workspace";
   readonly id: WorkspaceId;
@@ -45,6 +52,8 @@ export function createWorkspace(input: CreateWorkspaceInput): ModelResult<Worksp
     return modelFailure("invalid-layout", "Active window must exist in the workspace");
   }
 
+  // Validate cross-window uniqueness before returning a model that selectors
+  // and persistence code will treat as valid.
   const terminalIds = collectWorkspaceTerminalIdsFromWindows(input.windows);
   if (new Set(terminalIds).size !== terminalIds.length) {
     return modelFailure(
@@ -92,6 +101,7 @@ export function findDirectWindowInWorkspace(
 }
 
 export function collectWorkspaceTerminalIds(workspace: Workspace): readonly TerminalId[] {
+  // This is intentionally derived from the layout rather than persisted.
   return collectWorkspaceTerminalIdsFromWindows(workspace.windows);
 }
 

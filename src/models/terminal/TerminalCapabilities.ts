@@ -1,3 +1,4 @@
+/** Capabilities advertised by the backend for this terminal transport. */
 export interface TerminalCapabilities {
   readonly canReconnect: boolean;
   readonly canResize: boolean;

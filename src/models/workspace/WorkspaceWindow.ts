@@ -9,6 +9,10 @@ import {
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 import { findDirectPane, type DirectPaneNode } from "./DirectPaneTree";
 
+/**
+ * A direct window owns an editable frontend pane tree and may contain mixed
+ * local/SSH terminal references.
+ */
 export interface DirectWindow {
   readonly kind: "direct-window";
   readonly id: WindowId;
@@ -17,6 +21,10 @@ export interface DirectWindow {
   readonly layout: DirectPaneNode;
 }
 
+/**
+ * A reference to a window owned by a `TmuxController`. It deliberately has no
+ * editable direct pane tree, which makes tmux/direct pane mixing impossible.
+ */
 export interface TmuxWindowReference {
   readonly kind: "tmux-window-reference";
   readonly id: WindowId;

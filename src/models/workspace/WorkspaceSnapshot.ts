@@ -32,6 +32,7 @@ export interface DirectWindowSnapshot {
 export interface TmuxWindowReferenceSnapshot {
   readonly kind: "tmux-window-reference";
   readonly id: WindowId;
+  /** Persist the launch config that can recreate/attach this controller. */
   readonly controllerConfigId: LaunchConfigId;
   readonly tmuxWindowId: TmuxWindowId;
 }
@@ -45,6 +46,7 @@ export interface DirectPaneLeafSnapshot {
     | { readonly kind: "empty" }
     | {
         readonly kind: "terminal";
+        /** Runtime `TerminalId` is intentionally replaced by its launch config. */
         readonly configId: LaunchConfigId;
       };
 }

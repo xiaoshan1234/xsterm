@@ -10,6 +10,12 @@ import {
   type TerminalCapabilities,
 } from "./TerminalCapabilities";
 import {
+  createDefaultTerminalDisplayConfig,
+  resolveTerminalDisplayConfig,
+  type ResolvedTerminalDisplayConfig,
+  type TerminalDisplayOverrides,
+} from "./TerminalDisplayConfig";
+import {
   createConnectedStatus,
   createConnectingStatus,
   createDisconnectedStatus,
@@ -18,6 +24,13 @@ import {
 } from "./TerminalStatus";
 import { type TerminalTransport } from "./TerminalTransport";
 
+/**
+ * A live terminal that owns exactly one backend terminal stream. Local shells
+ * and SSH terminals share this model because both are attached to one pane.
+ *
+ * tmux panes are intentionally not represented as `Terminal`; they belong to a
+ * `TmuxController` aggregate.
+ */
 export interface Terminal {
   readonly kind: "terminal";
   readonly id: TerminalId;
@@ -26,6 +39,8 @@ export interface Terminal {
   readonly transport: TerminalTransport;
   readonly status: TerminalStatus;
   readonly capabilities: TerminalCapabilities;
+  /** Fully resolved; consumers never have to apply defaults themselves. */
+  readonly displayConfig: ResolvedTerminalDisplayConfig;
   readonly createdAt: number;
 }
 
@@ -35,6 +50,7 @@ export interface CreateTerminalInput {
   title: string;
   transport: TerminalTransport;
   capabilities?: TerminalCapabilities;
+  displayConfig?: ResolvedTerminalDisplayConfig;
   createdAt?: number;
 }
 
@@ -79,6 +95,7 @@ export function createTerminal(input: CreateTerminalInput): ModelResult<Terminal
     transport: input.transport,
     status: createConnectingStatus(),
     capabilities: input.capabilities ?? createDefaultTerminalCapabilities(),
+    displayConfig: input.displayConfig ?? createDefaultTerminalDisplayConfig(),
     createdAt,
   });
 }
@@ -117,6 +134,23 @@ export function renameTerminal(terminal: Terminal, title: string): ModelResult<T
   return modelSuccess({
     ...terminal,
     title: normalizedTitle,
+  });
+}
+
+export function updateTerminalDisplayConfig(
+  terminal: Terminal,
+  overrides: TerminalDisplayOverrides,
+): ModelResult<Terminal> {
+  // Runtime changes are layered over the effective config so unsaved terminals
+  // and saved terminals follow the same behavior.
+  const displayResult = resolveTerminalDisplayConfig(terminal.displayConfig, overrides);
+  if (!displayResult.ok) {
+    return displayResult;
+  }
+
+  return modelSuccess({
+    ...terminal,
+    displayConfig: displayResult.value,
   });
 }
 

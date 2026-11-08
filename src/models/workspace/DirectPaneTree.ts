@@ -1,6 +1,10 @@
 import { type PaneId, type TerminalId, createPaneId } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 
+/**
+ * Layout tree for a direct workspace window. Leaf content references a
+ * standalone `Terminal`; local and SSH terminals may coexist in this tree.
+ */
 export type DirectPaneDirection = "horizontal" | "vertical";
 
 export type DirectPaneContent =
@@ -181,6 +185,8 @@ export function splitDirectPane(
   direction: DirectPaneDirection,
   ratio = 0.5,
 ): ModelResult<DirectPaneNode> {
+  // Keep pane ids globally unique inside one layout so updates remain
+  // deterministic and a terminal cannot be attached twice by accident.
   const currentPane = findDirectPane(node, targetPaneId);
   if (!currentPane) {
     return modelFailure("not-found", "Pane to split does not exist");

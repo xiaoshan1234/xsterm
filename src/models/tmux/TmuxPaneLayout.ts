@@ -1,6 +1,10 @@
 import { type TmuxPaneId } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 
+/**
+ * Frontend mirror of tmux's pane topology. A split always has exactly two
+ * children; `ratio` describes the first child's proportion.
+ */
 export type TmuxPaneDirection = "horizontal" | "vertical";
 
 export interface TmuxPaneLeaf {

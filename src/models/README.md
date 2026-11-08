@@ -6,7 +6,8 @@ This directory contains pure frontend domain models. It must not import from
 ## Core concepts
 
 - `Terminal` is one local or SSH terminal stream. It owns exactly one
-  terminal surface and can be attached to one pane at a time.
+  terminal surface, one resolved display configuration, and can be attached to
+  one pane at a time.
 - `TmuxController` is one tmux control connection. It owns tmux windows and
   panes, including their layout.
 - `Workspace` owns user-visible window order and layout references. It does not
@@ -27,6 +28,17 @@ mixtures cannot be expressed in TypeScript.
 
 `WorkspaceSnapshot` is intentionally separate from `Workspace`. Snapshots store
 launch config ids, not runtime terminal or tmux controller ids.
+
+Launch configuration is also split by concern:
+
+- `LocalTerminalLaunchConfig` owns shell arguments and environment variables.
+- `SshTerminalLaunchConfig` owns the full `SshConnectionConfig`, including
+  authentication and connection tuning.
+- `SavedLaunchConfig` stores display overrides separately from the launch
+  configuration.
+
+Runtime `TerminalTransport` only keeps the public SSH connection summary. It
+must not contain passwords, private-key passphrases, or other credentials.
 
 ## Dependency rule
 

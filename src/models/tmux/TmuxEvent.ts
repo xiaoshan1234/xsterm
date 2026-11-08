@@ -1,6 +1,11 @@
 import { type TmuxControllerId, type TmuxPaneId, type TmuxWindowId } from "../ids";
 import { type TmuxPane } from "./TmuxPane";
 
+/**
+ * Domain events produced after infra has normalized raw Tauri tmux payloads.
+ * All identifiers are branded and all tmux ids refer to the frontend's current
+ * controller projection.
+ */
 export type TmuxEvent =
   | {
       readonly kind: "tmux.controller-exited";
