@@ -760,15 +760,6 @@ impl TmuxController {
         self.session_name.lock().ok().and_then(|g| g.clone())
     }
 
-    /// Test-only: inject a `session_name` from outside `spawn_attach`.
-    /// `#[cfg(test)]` so it never links into production binaries.
-    #[cfg(test)]
-    pub(crate) fn set_session_name_for_tests(&self, name: impl Into<String>) {
-        if let Ok(mut slot) = self.session_name.lock() {
-            *slot = Some(name.into());
-        }
-    }
-
     /// Tear the controller down.
     ///
     /// - Sets the `killed` flag so the monitor task does not emit a
@@ -1248,60 +1239,6 @@ impl TmuxController {
     /// out of the pane-id space and never collide across controllers.
     pub(crate) fn allocate_xsterm_window_id(&self) -> u32 {
         self.next_xsterm_window_id.fetch_add(1, Ordering::Relaxed)
-    }
-
-    /// Construct a `TmuxController` for unit tests without spawning a
-    /// real `tmux -CC` child process. The returned controller has an
-    /// empty backend slot (no monitor task is spawned) and the supplied
-    /// `stdin_tx` / `app_backend`. The dispatch task is NOT spawned
-    /// here — tests that need it call
-    /// [`spawn_dispatch_task`] directly with their own
-    /// `mpsc::UnboundedSender<ControlEvent>`.
-    ///
-    /// `pub(crate)` so tests in `services::session_manager` (and
-    /// future sibling crates) can wire end-to-end flows against a
-    /// fake backend. Production callers must use
-    /// [`TmuxController::spawn_local`] / [`TmuxController::spawn_with_args`].
-    #[cfg(test)]
-    pub(crate) fn new_for_tests(
-        controller_id: u32,
-        base_xsterm_id: u32,
-        stdin_tx: mpsc::UnboundedSender<String>,
-        app_backend: Arc<dyn AppBackend>,
-    ) -> Arc<Self> {
-        use std::collections::VecDeque;
-        let (first_pane_tx, first_pane_rx) = oneshot::channel::<(u32, String)>();
-        Arc::new(Self {
-            controller_id,
-            backend: Arc::new(Mutex::new(None)),
-            killed: Arc::new(AtomicBool::new(false)),
-            stdin_tx,
-            app_backend,
-            pane_bindings: std::sync::Mutex::new(HashMap::new()),
-            pane_window_bindings: std::sync::Mutex::new(HashMap::new()),
-            next_xsterm_id: AtomicU32::new(base_xsterm_id),
-            // Use a parallel window-id offset (controller_id + 1_000_000)
-            // so tests that share a controller never collide with the
-            // pane-id allocator.
-            next_xsterm_window_id: AtomicU32::new(base_xsterm_id + 500_000),
-            first_pane_tx: std::sync::Mutex::new(Some(first_pane_tx)),
-            first_pane_rx: tokio::sync::Mutex::new(Some(first_pane_rx)),
-            pending_splits: std::sync::Mutex::new(VecDeque::new()),
-            pending_windows: std::sync::Mutex::new(VecDeque::new()),
-            pending_window_pane: std::sync::Mutex::new(HashMap::new()),
-            window_bindings: std::sync::Mutex::new(HashMap::new()),
-            session_name: std::sync::Mutex::new(None),
-            pending_capture: std::sync::Mutex::new(None),
-
-            current_command_id: std::sync::Mutex::new(None),
-            current_command_lines: std::sync::Mutex::new(Vec::new()),
-
-            pending_capture_body: std::sync::Mutex::new(Vec::new()),
-            capture_lock: tokio::sync::Mutex::new(()),
-            // 5 s mirrors the production SPLIT_PANE_TIMEOUT (kept in
-            // sync by hand — the constant is private to this module).
-            split_pane_timeout: Duration::from_secs(5),
-        })
     }
 
     /// Insert `(pane_id → xsterm_session_id)` into the binding map. The

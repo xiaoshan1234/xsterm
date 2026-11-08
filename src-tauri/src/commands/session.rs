@@ -4,8 +4,7 @@ use tauri::{AppHandle, State};
 
 use crate::infrastructure::app_backend::{AppBackend, RealAppBackend};
 use crate::models::session::{
-    AttachedTmuxServer, LocalSessionConfig, SSHSessionConfig, SessionConfig, SessionInfo,
-    TmuxCcConfig,
+    AttachedTmuxServer, LocalSessionConfig, SSHSessionConfig, SessionInfo, TmuxCcConfig,
 };
 use crate::services::session_manager::{AutoAttachOutcome, SessionManager};
 
@@ -48,31 +47,6 @@ pub async fn create_ssh_session(
         Arc::new(RealAppBackend::new(app));
     state.create_ssh(config, backend).inspect(|info| {
         tracing::info!("SSH session created: id={}", info.id);
-    })
-}
-
-/// Create a new session from a generic [`SessionConfig`] discriminated union.
-///
-/// This is the unified entry point the frontend uses to create either a local
-/// shell session or an SSH session through a single command. The legacy
-/// `create_local_session` and `create_ssh_session` commands remain available
-/// for backward compatibility.
-#[tauri::command]
-pub async fn create_session(
-    config: SessionConfig,
-    state: State<'_, Arc<SessionManager>>,
-    app: AppHandle,
-) -> Result<SessionInfo, String> {
-    tracing::info!("Creating session via generic SessionConfig");
-    let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
-        Arc::new(RealAppBackend::new(app));
-    match config {
-        SessionConfig::Local(local) => state.create_local(local, backend),
-        SessionConfig::Ssh(ssh) => state.create_ssh(ssh, backend),
-        SessionConfig::TmuxCc(tmux) => state.create_tmux(&tmux, backend).await,
-    }
-    .inspect(|info| {
-        tracing::info!("Session created via generic command: id={}", info.id);
     })
 }
 

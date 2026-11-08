@@ -333,29 +333,6 @@ pub fn tmux_pane_info(
     }
 }
 
-/// Discriminated union for the configuration required to create a session.
-///
-/// Used by the generic `create_session` Tauri command so the frontend can pass
-/// either a local or SSH config via a single call. The shape is intentionally
-/// `{type, config}` so it mirrors the TS `SessionType` discriminated union.
-///
-/// Note: this is distinct from [`SessionType`], which is a *runtime* type tag
-/// attached to an already-created `SessionInfo`. `SessionConfig` is the input
-/// payload used at session creation time.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", content = "config", rename_all = "camelCase")]
-pub enum SessionConfig {
-    /// Configuration for a local shell session.
-    #[serde(rename = "local")]
-    Local(LocalSessionConfig),
-    /// Configuration for an SSH session.
-    #[serde(rename = "ssh")]
-    Ssh(SSHSessionConfig),
-    /// Configuration for a tmux `-CC` controller session.
-    #[serde(rename = "tmuxCc")]
-    TmuxCc(TmuxCcConfig),
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SessionLoggingConfig {
@@ -1154,20 +1131,6 @@ mod tests {
     }
 
     #[test]
-    fn session_config_tmux_variant_roundtrip() {
-        let json = r#"{"type":"tmuxCc","config":{"name":"work","tmuxSessionName":"main","socketName":"dev"}}"#;
-        let parsed: SessionConfig = serde_json::from_str(json).expect("TmuxCc SessionConfig");
-        match parsed {
-            SessionConfig::TmuxCc(cfg) => {
-                assert_eq!(cfg.name.as_deref(), Some("work"));
-                assert_eq!(cfg.tmux_session_name.as_deref(), Some("main"));
-                assert_eq!(cfg.socket_name.as_deref(), Some("dev"));
-            }
-            other => panic!("expected SessionConfig::TmuxCc, got {other:?}"),
-        }
-    }
-
-    #[test]
     fn tmux_pane_info_populates_all_tmux_fields() {
         let info = tmux_pane_info(
             42,
@@ -1242,59 +1205,6 @@ mod tests {
         let without_json = serde_json::to_string(&without_window).unwrap();
         assert!(with_json.contains("\"tmuxWindowId\":\"@2\""));
         assert!(!without_json.contains("tmuxWindowId"));
-    }
-
-    #[test]
-    fn session_config_payload_term_type_roundtrip() {
-        // Mirrors what the frontend sends: discriminated union with the
-        // local/ssh variant tagged by `type` and the payload under `config`,
-        // plus camelCase `termType` / `charset` inside.
-        let local_json = r#"{
-            "type": "local",
-            "config": {
-                "name": "my-local",
-                "shellTemplate": "bash",
-                "termType": "xterm-256color",
-                "charset": "utf-8",
-                "initialCols": 100,
-                "initialRows": 30
-            }
-        }"#;
-        let parsed: SessionConfig =
-            serde_json::from_str(local_json).expect("deserialize SessionConfig::Local");
-        match parsed {
-            SessionConfig::Local(local) => {
-                assert_eq!(local.term_type.as_deref(), Some("xterm-256color"));
-                assert_eq!(local.charset.as_deref(), Some("utf-8"));
-                assert_eq!(local.initial_cols, Some(100));
-                assert_eq!(local.initial_rows, Some(30));
-            }
-            SessionConfig::Ssh(_) => panic!("expected Local variant"),
-            SessionConfig::TmuxCc(_) => panic!("expected Local variant"),
-        }
-
-        let ssh_json = r#"{
-            "type": "ssh",
-            "config": {
-                "host": "example.com",
-                "port": 22,
-                "username": "u",
-                "auth_type": "password",
-                "password": "p",
-                "termType": "screen",
-                "charset": "gbk"
-            }
-        }"#;
-        let parsed: SessionConfig =
-            serde_json::from_str(ssh_json).expect("deserialize SessionConfig::Ssh");
-        match parsed {
-            SessionConfig::Ssh(ssh) => {
-                assert_eq!(ssh.term_type.as_deref(), Some("screen"));
-                assert_eq!(ssh.charset.as_deref(), Some("gbk"));
-            }
-            SessionConfig::Local(_) => panic!("expected Ssh variant"),
-            SessionConfig::TmuxCc(_) => panic!("expected Ssh variant"),
-        }
     }
 }
 

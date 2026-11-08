@@ -5,7 +5,6 @@ import {
   type Session,
   type LocalSessionConfig,
   type SSHSessionConfig,
-  type SessionType,
   type TmuxCcConfig,
 } from "../types/session";
 import type { CapabilityFlags } from "../types/capabilities";
@@ -28,28 +27,23 @@ export interface SessionInfo {
   isHidden?: boolean;
 }
 
-export async function createSession(config: SessionType): Promise<SessionInfo> {
-  logger.debug("sessionService", "createSession", { config });
-  const result = await invoke<SessionInfo>("create_session", { config });
-  logger.debug("sessionService", "createSession:result", result);
-  return result;
-}
-
 export async function listSessions(): Promise<SessionInfo[]> {
   const result = await invoke<SessionInfo[]>("list_sessions");
   return result;
 }
 
-// Called by tests and diagnostics; not yet wired into a UI surface but
-// the Rust command has been exposed in the Tauri handler list for a while.
-// AGENTS.md mentioned this wrapper was missing — added for completeness.
-
 export async function createLocal(config: LocalSessionConfig): Promise<SessionInfo> {
-  return createSession({ type: "local", config });
+  logger.debug("sessionService", "createLocal", { config });
+  const result = await invoke<SessionInfo>("create_local_session", { config });
+  logger.debug("sessionService", "createLocal:result", result);
+  return result;
 }
 
 export async function createSsh(config: SSHSessionConfig): Promise<SessionInfo> {
-  return createSession({ type: "ssh", config });
+  logger.debug("sessionService", "createSsh", { config });
+  const result = await invoke<SessionInfo>("create_ssh_session", { config });
+  logger.debug("sessionService", "createSsh:result", result);
+  return result;
 }
 
 /**
