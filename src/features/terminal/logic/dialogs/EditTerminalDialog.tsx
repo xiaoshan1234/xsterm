@@ -6,7 +6,7 @@ import SessionTab from "./ConnectionTab";
 import { validateSshConfig } from "./SshTerminalForm";
 import { SessionFormLayout, type SessionFormSidebarItem } from "./TerminalFormLayout";
 import "./EditTerminalDialog.css";
-import { DEFAULT_GROUP_ID } from "../state/constants";
+import { DEFAULT_GROUP_ID } from "../../../sessions";
 import {
   DEFAULT_SSH,
   SHELL_SIDEBAR_ITEMS,

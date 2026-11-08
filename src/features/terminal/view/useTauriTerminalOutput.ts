@@ -2,7 +2,7 @@ import { useEffect, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { useSession } from "../logic/TerminalContext";
+import { useSession } from "../../sessions";
 import {
   appendTerminalOutput,
   getTerminalOutput,

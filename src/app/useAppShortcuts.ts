@@ -1,5 +1,5 @@
 import { useShortcuts } from "../shared/hooks/useShortcut";
-import { useSession } from "../features/terminal/logic/TerminalContext";
+import { useSession } from "../features/sessions";
 import type { PaneNode, SplitDirection } from "../types/terminal";
 
 export function useAppShortcuts({

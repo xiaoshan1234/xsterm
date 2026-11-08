@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useSession } from "../terminal/logic/TerminalContext";
+import { useSession } from "../sessions";
 import {
   type LocalTerminalConfig,
   type SshConfig,

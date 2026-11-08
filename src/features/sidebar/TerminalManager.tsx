@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
-import { useSession } from "../terminal/logic/TerminalContext";
-import { DEFAULT_GROUP_ID } from "../terminal/logic/state/constants";
+import { DEFAULT_GROUP_ID, useSession } from "../sessions";
 import { type SavedTerminalConfig, type TerminalGroup } from "../../types/terminal";
 import {
   ShellIcon,

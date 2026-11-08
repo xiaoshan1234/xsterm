@@ -1,7 +1,7 @@
 import { useTheme } from "../../../contexts/ThemeContext";
 import { FormCheckboxField } from "../../../shared/ui/FormCheckboxField";
 import { FormSelectField } from "../../../shared/ui/FormSelectField";
-import { useSession } from "../../terminal/logic/TerminalContext";
+import { useSession } from "../../sessions";
 
 export function SettingsPanel() {
   const { currentThemeKey, setTheme, themeKeys } = useTheme();

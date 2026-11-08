@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../../services/terminalService";
+import * as terminalService from "../../../services/terminalService";
 import type {
   LocalTerminalConfig,
   SshConfig,
@@ -7,7 +7,7 @@ import type {
   TmuxSessionConfig,
   Window,
   Workspace,
-} from "../../../../types/terminal";
+} from "../../../types/terminal";
 import { createLeafPane, generateId, withRecomputedSessionIds } from "./paneUtils";
 import {
   assertSessionNotUsedElsewhere,

@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useSession } from "../features/terminal/logic/TerminalContext";
-import { DEFAULT_GROUP_ID } from "../features/terminal/logic/state/constants";
+import { DEFAULT_GROUP_ID, useSession } from "../features/sessions";
 import { useAppShortcuts } from "./useAppShortcuts";
-import { useTmuxAutoAttach } from "../features/terminal/logic/useTmuxAutoAttach";
+import { useTmuxAutoAttach } from "../features/tmux/application/useTmuxAutoAttach";
 import NavBar from "./NavBar";
 import Sidebar from "../features/sidebar/Sidebar";
 import { WorkspaceContainer } from "../features/workspace/WorkspaceContainer";

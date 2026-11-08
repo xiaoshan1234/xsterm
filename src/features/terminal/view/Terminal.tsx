@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import { useSession } from "../logic/TerminalContext";
+import { useSession } from "../../sessions";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { type TerminalDisplayConfig } from "../../../types/terminal";
 import { uploadImageToSshTerminal } from "../../../services/terminalService";

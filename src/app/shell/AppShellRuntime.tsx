@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSession } from "../../features/terminal/logic/TerminalContext";
-import { type SavedTerminalConfig } from "../../types/terminal";
-import { DEFAULT_GROUP_ID } from "../../features/terminal/logic/state/constants";
+import { DEFAULT_GROUP_ID, useSession } from "../../features/sessions";
 import NavBar from "../NavBar";
 import { WorkspaceContainer } from "../../features/workspace/WorkspaceContainer";
 import { TerminalManagerPanel } from "../../features/terminal/ui/TerminalManagerPanel";
@@ -28,18 +26,27 @@ import { ErrorDialog, type ErrorDialogData } from "./ErrorDialog";
 import { GlobalOverlayHost } from "./GlobalOverlayHost";
 import { GlobalTextSender } from "./GlobalTextSender";
 import { TOOL_TITLES, type ToolId } from "./types";
-import CreateTerminalDialog from "../../features/terminal/logic/dialogs/CreateTerminalDialog";
-import { EditTerminalDialog } from "../../features/terminal/logic/dialogs/EditTerminalDialog";
+import {
+  CreateTerminalDialog,
+  EditTerminalDialog,
+  type EditableTerminalConfig,
+} from "../../features/terminal/ui/dialogs";
+import {
+  CreateTmuxDialog,
+  EditTmuxDialog,
+  type EditableTmuxConfig,
+} from "../../features/tmux/ui/dialogs";
 import { NewGroupDialog } from "../../features/terminal/logic/dialogs/NewGroupDialog";
 import { EditGroupDialog } from "../../features/terminal/logic/dialogs/EditGroupDialog";
 import { SaveDialog } from "../../features/workspace/dialogs/SaveDialog";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
-
-type CreateTab = "local" | "ssh" | "tmux-pane";
+import { useTmuxAutoAttach } from "../../features/tmux/application/useTmuxAutoAttach";
 
 type RuntimeDialog =
-  | { kind: "create"; initialTab: CreateTab; groupId: number }
-  | { kind: "edit-terminal"; config: SavedTerminalConfig }
+  | { kind: "create-terminal"; initialTab: "local" | "ssh"; groupId: number }
+  | { kind: "create-tmux" }
+  | { kind: "edit-terminal"; config: EditableTerminalConfig }
+  | { kind: "edit-tmux"; config: EditableTmuxConfig }
   | { kind: "new-group" }
   | { kind: "edit-group"; groupId: number }
   | { kind: "rename-window"; configId: string; defaultName: string }
@@ -55,6 +62,7 @@ interface ConfirmState {
 
 export function AppShellRuntime() {
   const session = useSession();
+  useTmuxAutoAttach();
   const {
     terminals,
     workspaces,
@@ -82,7 +90,6 @@ export function AppShellRuntime() {
     toggleGroup,
     createGroup,
     deleteGroup,
-    updateConfig,
     moveConfigToGroup,
     applyDisplayConfigToLiveSession,
     deleteSavedWindow,
@@ -171,10 +178,22 @@ export function AppShellRuntime() {
     [createWindowFromSavedConfig, showError],
   );
 
-  const openEditConfig = useCallback(
+  const openEditTerminalConfig = useCallback(
     (configId: string) => {
       const config = savedConfigs.find((candidate) => candidate.id === configId);
-      if (config) setDialog({ kind: "edit-terminal", config });
+      if (config?.type === "local" || config?.type === "ssh") {
+        setDialog({ kind: "edit-terminal", config });
+      }
+    },
+    [savedConfigs],
+  );
+
+  const openEditTmuxConfig = useCallback(
+    (configId: string) => {
+      const config = savedConfigs.find((candidate) => candidate.id === configId);
+      if (config?.type === "tmux-pane") {
+        setDialog({ kind: "edit-tmux", config });
+      }
     },
     [savedConfigs],
   );
@@ -257,7 +276,11 @@ export function AppShellRuntime() {
           <TerminalManagerPanel
             groups={terminalManagerGroups}
             onNewTerminal={() =>
-              setDialog({ kind: "create", initialTab: "local", groupId: DEFAULT_GROUP_ID })
+              setDialog({
+                kind: "create-terminal",
+                initialTab: "local",
+                groupId: DEFAULT_GROUP_ID,
+              })
             }
             onNewGroup={() => setDialog({ kind: "new-group" })}
             onToggleGroup={toggleGroup}
@@ -271,7 +294,7 @@ export function AppShellRuntime() {
               })
             }
             onOpenConfig={openConfig}
-            onEditConfig={openEditConfig}
+            onEditConfig={openEditTerminalConfig}
             onRemoveConfig={removeConfig}
           />
         );
@@ -288,15 +311,9 @@ export function AppShellRuntime() {
         return (
           <TmuxManagerPanel
             items={tmuxManagerItems}
-            onNewTmux={() =>
-              setDialog({
-                kind: "create",
-                initialTab: "tmux-pane",
-                groupId: DEFAULT_GROUP_ID,
-              })
-            }
+            onNewTmux={() => setDialog({ kind: "create-tmux" })}
             onOpenConfig={openConfig}
-            onEditConfig={openEditConfig}
+            onEditConfig={openEditTmuxConfig}
             onRemoveConfig={removeConfig}
           />
         );
@@ -380,7 +397,8 @@ export function AppShellRuntime() {
     focusTerminal,
     loadWindow,
     openConfig,
-    openEditConfig,
+    openEditTerminalConfig,
+    openEditTmuxConfig,
     openWorkspace,
     reconnectTerminalWithError,
     removeConfig,
@@ -398,16 +416,18 @@ export function AppShellRuntime() {
 
   const overlay = (
     <GlobalOverlayHost>
-      {!error && dialog?.kind === "create" && (
+      {!error && dialog?.kind === "create-terminal" && (
         <CreateTerminalDialog
           isOpen
           onClose={() => setDialog(null)}
           onCreateLocal={createLocalSession}
           onCreateSsh={createSshSession}
-          onCreateTmux={createTmuxSession}
           initialTab={dialog.initialTab}
           initialGroupId={dialog.groupId}
         />
+      )}
+      {!error && dialog?.kind === "create-tmux" && (
+        <CreateTmuxDialog isOpen onClose={() => setDialog(null)} onCreateTmux={createTmuxSession} />
       )}
       {!error && dialog?.kind === "edit-terminal" && (
         <EditTerminalDialog
@@ -417,8 +437,20 @@ export function AppShellRuntime() {
           groups={groups}
           groupId={findConfigGroupId(groups, dialog.config.id)}
           onSave={(config, groupId) => {
-            updateConfig(config);
             moveConfigToGroup(config.id, groupId);
+            const liveTerminal = terminals.find((terminal) => terminal.configId === config.id);
+            if (liveTerminal && config.displayConfig) {
+              applyDisplayConfigToLiveSession(liveTerminal.id, config.displayConfig);
+            }
+          }}
+        />
+      )}
+      {!error && dialog?.kind === "edit-tmux" && (
+        <EditTmuxDialog
+          isOpen
+          onClose={() => setDialog(null)}
+          config={dialog.config}
+          onSave={(config) => {
             const liveTerminal = terminals.find((terminal) => terminal.configId === config.id);
             if (liveTerminal && config.displayConfig) {
               applyDisplayConfigToLiveSession(liveTerminal.id, config.displayConfig);

@@ -13,7 +13,7 @@ import {
   type TmuxSessionConfig,
   type Window,
   type Workspace,
-} from "../../../../types/terminal";
+} from "../../../types/terminal";
 
 export interface TerminalContextType {
   terminals: Terminal[];

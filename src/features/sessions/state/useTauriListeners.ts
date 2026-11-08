@@ -7,7 +7,7 @@ import {
   type TmuxWindowAddedEvent,
   type TmuxWindowClosedEvent,
   type TmuxWindowRenamedEvent,
-} from "../../../../types/terminal";
+} from "../../../types/terminal";
 import { createLeafPane, withRecomputedSessionIds } from "./paneUtils";
 import { closeWindow, removeSessionsFromWorkspaces, renameWindow } from "./eventTransitions";
 import { TMUX_PANE_CAPABILITIES } from "./capabilities";

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { type SavedWorkspace, type Workspace } from "../../types/terminal";
-import { useSession } from "../terminal/logic/TerminalContext";
+import { useSession } from "../sessions";
 import { LayoutIcon } from "../../shared/icons/Icon";
 import { Dialog } from "../../shared/ui/Dialog";
 import { FormField } from "../../shared/ui/FormField";

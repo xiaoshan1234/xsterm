@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../../services/terminalService";
+import * as terminalService from "../../../services/terminalService";
 import type {
   LocalTerminalConfig,
   SavedTerminalConfig,
@@ -10,8 +10,8 @@ import type {
   TmuxSessionConfig,
   Window,
   Workspace,
-} from "../../../../types/terminal";
-import { clearTerminalOutput } from "../../../../shared/utils/terminalOutputBuffer";
+} from "../../../types/terminal";
+import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import {
   findPaneNode,
   getLeafPaneIds,

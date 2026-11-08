@@ -7,14 +7,19 @@
 ## 1. 状态
 
 - 当前阶段：设计稿
-- 实施状态：Phase 1–3 已完成；Phase 4 已开始，新 Shell 通过兼容 View Model 接入旧 SessionContext
+- 实施状态：Phase 1–3 已完成；Phase 4 进行中，新 Shell 已成为默认入口并接入旧 SessionContext
 - 目标：先固定 UI 壳层和组件边界，再实现功能，最后迁移现有组件
 
-运行时新 Shell 预览：
+默认入口：
 
 ```powershell
-$env:VITE_UI_PREVIEW = "true"
 npm run tauri dev
+```
+
+旧 Shell 回退：
+
+```powershell
+cmd /c "set VITE_LEGACY_APP=true&& npm run tauri dev"
 ```
 
 纯静态组件稿：
@@ -633,6 +638,7 @@ BottomBar
 - 字段分组遵循 TerminalLaunchConfig。
 - 支持 Save Config。
 - 提交期间禁用重复提交和关闭。
+- 不再包含 tmux 创建入口。
 
 #### CreateTmuxDialog
 
@@ -640,18 +646,21 @@ BottomBar
 - 必须选择基础 Local/SSH 配置。
 - 字段分组遵循 TmuxLaunchConfig。
 - 支持创建新 tmux 或 attach 现有 tmux。
+- 不再包含 Local/SSH Terminal 创建入口。
 
 #### EditTerminalDialog
 
 - 编辑保存配置，不直接修改现有运行时 Terminal 身份。
 - 显示配置可以应用到当前运行实例。
 - 连接配置的修改默认用于下一次启动，界面必须明确提示。
+- 只接受 Local/SSH 保存配置。
 
 #### EditTmuxDialog
 
 - 编辑保存的 tmux launch config。
 - 不直接修改 tmux-owned window/pane 拓扑。
 - 显示配置可以应用到当前 pane view。
+- 可以编辑保存的 base config、tmux 名称、socket 和 start command。
 
 ### 10.3 PromptDialog
 
@@ -900,7 +909,8 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
 - 新 Shell 已接入配置/状态 Manager
 - 新 Shell 已接入 WorkspaceView、BottomBar 和 TextSender
-- Dialog 仍暂时复用旧表单实现
+- 四个 Dialog 已拆分并接入运行时新 Shell
+- 会话/workspace/pane 状态内核已迁移到 `features/sessions/state`
 - 待迁移 Sidebar / BottomBar / CommandSendPanel 的旧实现
 - 拆分全局 Context
 - 更新 AGENTS.md 和目录规则

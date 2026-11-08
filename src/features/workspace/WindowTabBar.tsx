@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { Window } from "../../types/terminal";
-import { useSession } from "../terminal/logic/TerminalContext";
+import { useSession } from "../sessions";
 import { ContextMenu, type ContextMenuItem } from "../../shared/ui/ContextMenu";
 import { PlusIcon, SaveIcon, CloseIcon } from "../../shared/icons/Icon";
 import "./TabBar.css";

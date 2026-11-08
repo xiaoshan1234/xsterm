@@ -1,4 +1,4 @@
-import { SessionProvider } from "../features/terminal/logic/TerminalContext";
+import { SessionProvider } from "../features/sessions";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { LoggerProvider } from "../contexts/LoggerContext";
 import AppLayout from "./AppLayout";
@@ -8,9 +8,8 @@ import "../styles/global.css";
 import "../styles/layout.css";
 
 export default function App() {
-  const isRuntimeShellPreview = import.meta.env.DEV && import.meta.env.VITE_UI_PREVIEW === "true";
-  const isStaticUiPreview =
-    import.meta.env.DEV && !isRuntimeShellPreview && window.location.hash === "#ui-preview";
+  const isStaticUiPreview = import.meta.env.DEV && window.location.hash === "#ui-preview";
+  const isLegacyApp = import.meta.env.DEV && import.meta.env.VITE_LEGACY_APP === "true";
 
   if (isStaticUiPreview) {
     return <AppShellPreview />;
@@ -19,9 +18,7 @@ export default function App() {
   return (
     <SessionProvider>
       <ThemeProvider>
-        <LoggerProvider>
-          {isRuntimeShellPreview ? <AppShellRuntime /> : <AppLayout />}
-        </LoggerProvider>
+        <LoggerProvider>{isLegacyApp ? <AppLayout /> : <AppShellRuntime />}</LoggerProvider>
       </ThemeProvider>
     </SessionProvider>
   );

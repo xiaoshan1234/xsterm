@@ -1,11 +1,11 @@
 import { useCallback, useEffect } from "react";
-import * as terminalStorage from "../../../../services/terminalStorage";
+import * as terminalStorage from "../../../services/terminalStorage";
 import {
   type SavedTerminalConfig,
   type SavedWindowConfig,
   type SavedWorkspace,
   type TerminalGroup,
-} from "../../../../types/terminal";
+} from "../../../types/terminal";
 import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "./constants";
 import { type SessionPersistence } from "./types";
 

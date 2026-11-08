@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { type Workspace, type PaneNode } from "../../types/terminal";
-import { useSession } from "../terminal/logic/TerminalContext";
+import { useSession } from "../sessions";
 import { useClampedPanelHeight } from "../../shared/hooks/useClampedPanelHeight";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";

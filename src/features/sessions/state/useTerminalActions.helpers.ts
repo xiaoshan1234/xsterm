@@ -1,10 +1,10 @@
-import type * as terminalService from "../../../../services/terminalService";
+import type * as terminalService from "../../../services/terminalService";
 import type {
   Terminal,
   TerminalDisplayConfig,
   TerminalKind,
   Workspace,
-} from "../../../../types/terminal";
+} from "../../../types/terminal";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 /**

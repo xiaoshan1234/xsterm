@@ -1,5 +1,5 @@
 import { type SavedTerminalConfig, type TerminalGroup } from "../../../types/terminal";
-import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "../logic/state/constants";
+import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "../../sessions";
 
 export type RawTerminalKind = "local" | "ssh";
 

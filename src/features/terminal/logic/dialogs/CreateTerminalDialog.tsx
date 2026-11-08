@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSession } from "../TerminalContext";
+import { DEFAULT_GROUP_ID, useSession } from "../../../sessions";
 import {
   type LocalTerminalConfig,
   type SshConfig,
@@ -25,7 +25,6 @@ import {
 import { useTerminalForm } from "./useTerminalForm";
 import { SessionFormPanels } from "./TerminalFormPanels";
 import "./CreateTerminalDialog.css";
-import { DEFAULT_GROUP_ID } from "../state/constants";
 
 interface CreateTerminalDialogProps {
   isOpen: boolean;

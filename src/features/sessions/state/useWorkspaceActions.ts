@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../../services/terminalService";
-import type { Terminal, Workspace } from "../../../../types/terminal";
-import { clearTerminalOutput } from "../../../../shared/utils/terminalOutputBuffer";
+import * as terminalService from "../../../services/terminalService";
+import type { Terminal, Workspace } from "../../../types/terminal";
+import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface UseWorkspaceActionsDeps {
   workspacesRef: React.MutableRefObject<Workspace[]>;

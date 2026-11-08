@@ -1,8 +1,7 @@
 import { useCallback } from "react";
-import { useSession } from "../logic/TerminalContext";
+import { type TmuxControllerError, useSession } from "../../sessions";
 import * as terminalService from "../../../services/terminalService";
 import type { Terminal, TmuxSessionConfig } from "../../../types/terminal";
-import type { TmuxControllerError } from "../logic/state/types";
 import "./TmuxControllerErrorBanner.css";
 
 interface TmuxControllerErrorBannerProps {

@@ -1,4 +1,4 @@
-import { useSession } from "../terminal/logic/TerminalContext";
+import { useSession } from "../sessions";
 import { type Workspace } from "../../types/terminal";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";

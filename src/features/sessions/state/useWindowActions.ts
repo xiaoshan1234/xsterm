@@ -1,13 +1,13 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../../services/terminalService";
+import * as terminalService from "../../../services/terminalService";
 import type {
   PaneNode,
   SavedTerminalConfig,
   Terminal,
   Window,
   Workspace,
-} from "../../../../types/terminal";
-import { clearTerminalOutput } from "../../../../shared/utils/terminalOutputBuffer";
+} from "../../../types/terminal";
+import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 function findPaneSessionId(pane: PaneNode, paneId: string): number | undefined {
   if (pane.id === paneId) return pane.terminalId;

@@ -19,7 +19,7 @@ import { useTerminalResize } from "./useTerminalResize";
 import type { TerminalDisplayConfig } from "../../../types/terminal";
 
 const resizeTerminalMock = vi.fn(async (_id: number, _rows: number, _cols: number) => {});
-vi.mock("../logic/TerminalContext", () => ({
+vi.mock("../../sessions", () => ({
   useSession: () => ({ resizeTerminal: resizeTerminalMock }),
 }));
 

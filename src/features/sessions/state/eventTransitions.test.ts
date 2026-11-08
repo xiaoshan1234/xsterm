@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PaneNode, Window, Workspace } from "../../../../types/terminal";
+import type { PaneNode, Window, Workspace } from "../../../types/terminal";
 import { closeWindow, removeSessionsFromWorkspaces, renameWindow } from "./eventTransitions";
 
 function leaf(id: string, terminalId?: number): PaneNode {

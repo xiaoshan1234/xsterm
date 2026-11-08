@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useSession } from "../TerminalContext";
+import { useSession } from "../../../sessions";
 import { type SavedTerminalConfig, type TmuxSessionConfig } from "../../../../types/terminal";
 import { FormSelectField, type FormSelectOption } from "../../../../shared/ui/FormSelectField";
 import { FormTextField } from "../../../../shared/ui/FormTextField";

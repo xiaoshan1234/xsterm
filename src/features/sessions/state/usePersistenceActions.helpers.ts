@@ -1,6 +1,6 @@
-import * as terminalService from "../../../../services/terminalService";
-import type { Terminal } from "../../../../types/terminal";
-import { clearTerminalOutput } from "../../../../shared/utils/terminalOutputBuffer";
+import * as terminalService from "../../../services/terminalService";
+import type { Terminal } from "../../../types/terminal";
+import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface RollbackDeps {
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;

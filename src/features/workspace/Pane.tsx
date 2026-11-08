@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { type PaneNode, type SplitDirection, type Workspace } from "../../types/terminal";
-import { useSession } from "../terminal/logic/TerminalContext";
+import { useSession } from "../sessions";
 import * as paneTree from "../../shared/utils/paneTreeUtils";
-import { isSessionUsedInOtherWindow, getPaneNumber } from "../terminal/logic/state/paneUtils";
+import { getPaneNumber, isSessionUsedInOtherWindow } from "../sessions";
 import { useTheme } from "../../contexts/ThemeContext";
 import Terminal, { type TerminalRef } from "../terminal/view/Terminal";
 import { ContextMenu, type ContextMenuRef } from "../../shared/ui/ContextMenu";

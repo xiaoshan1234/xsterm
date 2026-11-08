@@ -3,13 +3,13 @@ import {
   type Terminal,
   type SplitDirection,
   type Workspace,
-} from "../../../../types/terminal";
+} from "../../../types/terminal";
 import {
   findPaneNode,
   getLeafPaneIds,
   mapPaneTree,
   replacePaneNode,
-} from "../../../../shared/utils/paneTreeUtils";
+} from "../../../shared/utils/paneTreeUtils";
 
 export { findPaneNode, getLeafPaneIds, mapPaneTree, replacePaneNode };
 

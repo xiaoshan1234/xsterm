@@ -5,12 +5,7 @@ import {
   dispatchByType,
   getUniqueWindowName,
 } from "./useTerminalActions.helpers";
-import type {
-  Terminal,
-  TerminalDisplayConfig,
-  Window,
-  Workspace,
-} from "../../../../types/terminal";
+import type { Terminal, TerminalDisplayConfig, Window, Workspace } from "../../../types/terminal";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 // ---------- Fixtures --------------------------------------------------------

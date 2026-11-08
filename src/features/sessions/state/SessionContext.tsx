@@ -1,13 +1,13 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { type TerminalContextType } from "./state/types";
-import { useTerminalState } from "./state/useTerminalState";
-import { useTerminalPersistence } from "./state/useTerminalPersistence";
-import { useTerminalActions } from "./state/useTerminalActions";
-import { useTauriListeners } from "./state/useTauriListeners";
+import { type TerminalContextType } from "./types";
+import { useTerminalState } from "./useTerminalState";
+import { useTerminalPersistence } from "./useTerminalPersistence";
+import { useTerminalActions } from "./useTerminalActions";
+import { useTauriListeners } from "./useTauriListeners";
 
 export type { TerminalContextType };
 
-const TerminalContext = createContext<TerminalContextType | null>(null);
+const SessionContext = createContext<TerminalContextType | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const state = useTerminalState();
@@ -33,11 +33,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ...actions,
   };
 
-  return <TerminalContext.Provider value={value}>{children}</TerminalContext.Provider>;
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
 export function useSession() {
-  const context = useContext(TerminalContext);
+  const context = useContext(SessionContext);
   if (!context) {
     throw new Error("useSession must be used within a SessionProvider");
   }

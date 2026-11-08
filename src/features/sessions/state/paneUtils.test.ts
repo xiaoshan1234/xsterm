@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type PaneNode, type Terminal, type Workspace } from "../../../../types/terminal";
+import { type PaneNode, type Terminal, type Workspace } from "../../../types/terminal";
 import {
   collapseEmptySplits,
   collectSessionIdsFromPaneTree,

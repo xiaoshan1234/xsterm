@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { SavedTerminalConfig, TerminalGroup } from "../../../../types/terminal";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../types/terminal";
 import { DEFAULT_GROUP_ID } from "./constants";
 
 interface UseGroupActionsDeps {

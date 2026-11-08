@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useSession } from "../TerminalContext";
+import { useSession } from "../../../sessions";
 import { Dialog } from "../../../../shared/ui/Dialog";
 
 interface SelectTerminalDialogProps {

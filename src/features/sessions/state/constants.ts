@@ -1,3 +1,4 @@
+/** Session-wide defaults shared by saved terminal configs and managers. */
 export const DEFAULT_GROUP_ID = 0;
 export const DEFAULT_GROUP_NAME = "default";
 

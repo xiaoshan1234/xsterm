@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { type FitAddon } from "@xterm/addon-fit";
-import { useSession } from "../logic/TerminalContext";
+import { useSession } from "../../sessions";
 import { type TerminalDisplayConfig } from "../../../types/terminal";
 
 export function useTerminalResize(
