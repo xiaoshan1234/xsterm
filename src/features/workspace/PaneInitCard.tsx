@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useSession } from "../terminals/TerminalContext";
+import { useSession } from "../terminal/logic/TerminalContext";
 import {
   type LocalTerminalConfig,
   type SshConfig,
@@ -7,8 +7,8 @@ import {
   type TmuxSessionConfig,
 } from "../../types/terminal";
 import { PlusIcon, FolderOpenIcon } from "../../shared/icons/Icon";
-import CreateTerminalDialog from "../terminals/dialogs/CreateTerminalDialog";
-import { SelectTerminalDialog } from "../terminals/dialogs/SelectTerminalDialog";
+import CreateTerminalDialog from "../terminal/logic/dialogs/CreateTerminalDialog";
+import { SelectTerminalDialog } from "../terminal/logic/dialogs/SelectTerminalDialog";
 import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {

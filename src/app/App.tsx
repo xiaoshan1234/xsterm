@@ -1,4 +1,4 @@
-import { SessionProvider } from "../features/terminals/TerminalContext";
+import { SessionProvider } from "../features/terminal/logic/TerminalContext";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { LoggerProvider } from "../contexts/LoggerContext";
 import AppLayout from "./AppLayout";

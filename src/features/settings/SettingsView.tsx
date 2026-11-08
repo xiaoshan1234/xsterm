@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useSession } from "../terminals/TerminalContext";
+import { useSession } from "../terminal/logic/TerminalContext";
 import { PRESET_THEMES } from "../../types/theme";
 import {
   getLogConfig,

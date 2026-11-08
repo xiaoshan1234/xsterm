@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { useSession } from "../terminals/TerminalContext";
-import { DEFAULT_GROUP_ID } from "../terminals/state/constants";
+import { useSession } from "../terminal/logic/TerminalContext";
+import { DEFAULT_GROUP_ID } from "../terminal/logic/state/constants";
 import { type SavedTerminalConfig, type TerminalGroup } from "../../types/terminal";
 import {
   ShellIcon,
@@ -11,12 +11,14 @@ import {
   PlusIcon,
 } from "../../shared/icons/Icon";
 import { ContextMenu } from "../../shared/ui/ContextMenu";
-import { EditGroupDialog } from "../terminals/dialogs/EditGroupDialog";
-import { EditTerminalDialog } from "../terminals/dialogs/EditTerminalDialog";
-import { NewGroupDialog } from "../terminals/dialogs/NewGroupDialog";
+import { EditGroupDialog } from "../terminal/logic/dialogs/EditGroupDialog";
+import { EditTerminalDialog } from "../terminal/logic/dialogs/EditTerminalDialog";
+import { NewGroupDialog } from "../terminal/logic/dialogs/NewGroupDialog";
 import { useTerminalDragDrop } from "./useTerminalDragDrop";
 
 interface TerminalManagerProps {
+  onCreateTerminal: () => void;
+  onCreateTerminalWithGroup: (groupId: number) => void;
   onCreateSession: () => void;
   onCreateSessionWithGroup: (groupId: number) => void;
 }
@@ -28,6 +30,8 @@ interface TerminalManagerProps {
  * Sessions can be grouped by TerminalGroup, with drag-and-drop grouping support.
  */
 export function TerminalManager({
+  onCreateTerminal,
+  onCreateTerminalWithGroup,
   onCreateSession,
   onCreateSessionWithGroup,
 }: TerminalManagerProps) {
@@ -131,11 +135,13 @@ export function TerminalManager({
             : savedConfigs.filter((c) => group.configIds.includes(c.id));
           const contextMenuItems = isDefault
             ? [
-                { label: "Create Terminal", onClick: () => onCreateSessionWithGroup(group.id) },
+                { label: "Create Terminal", onClick: () => onCreateTerminalWithGroup(group.id) },
+                { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
                 { label: "Edit", onClick: () => setEditingGroup(group) },
               ]
             : [
-                { label: "Create Terminal", onClick: () => onCreateSessionWithGroup(group.id) },
+                { label: "Create Terminal", onClick: () => onCreateTerminalWithGroup(group.id) },
+                { label: "Create Session", onClick: () => onCreateSessionWithGroup(group.id) },
                 { label: "Edit", onClick: () => setEditingGroup(group) },
                 { label: "Delete", onClick: () => deleteGroup(group.id), danger: true },
               ];
@@ -199,9 +205,13 @@ export function TerminalManager({
           <PlusIcon size={14} />
           New Group
         </button>
-        <button className="submenu-item" onClick={onCreateSession}>
+        <button className="submenu-item" onClick={onCreateTerminal}>
           <PlusIcon size={14} />
           New Terminal
+        </button>
+        <button className="submenu-item" onClick={onCreateSession}>
+          <PlusIcon size={14} />
+          New Session
         </button>
       </div>
 

@@ -1,15 +1,15 @@
 import { useCallback, useRef, useState } from "react";
 import { type PaneNode, type SplitDirection, type Workspace } from "../../types/terminal";
-import { useSession } from "../terminals/TerminalContext";
+import { useSession } from "../terminal/logic/TerminalContext";
 import * as paneTree from "../../shared/utils/paneTreeUtils";
-import { isSessionUsedInOtherWindow, getPaneNumber } from "../terminals/state/paneUtils";
+import { isSessionUsedInOtherWindow, getPaneNumber } from "../terminal/logic/state/paneUtils";
 import { useTheme } from "../../contexts/ThemeContext";
-import Terminal, { type TerminalRef } from "../terminal/Terminal";
+import Terminal, { type TerminalRef } from "../terminal/view/Terminal";
 import { ContextMenu, type ContextMenuRef } from "../../shared/ui/ContextMenu";
-import { SelectTerminalDialog } from "../terminals/dialogs/SelectTerminalDialog";
+import { SelectTerminalDialog } from "../terminal/logic/dialogs/SelectTerminalDialog";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
-import { TmuxControllerErrorBanner } from "../terminal/TmuxControllerErrorBanner";
+import { TmuxControllerErrorBanner } from "../terminal/view/TmuxControllerErrorBanner";
 import * as terminalService from "../../services/terminalService";
 import "./Pane.css";
 

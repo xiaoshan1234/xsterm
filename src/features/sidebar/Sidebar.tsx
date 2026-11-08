@@ -15,6 +15,8 @@ const DEFAULT_SUBMENU_WIDTH = 200;
 type SettingsCategory = "appearance" | "shortcuts" | "logging" | "about";
 
 interface SidebarProps {
+  onCreateTerminal: () => void;
+  onCreateTerminalWithGroup: (groupId: number) => void;
   onCreateSession: () => void;
   onCreateSessionWithGroup: (groupId: number) => void;
   onToggleLogs: () => void;
@@ -40,6 +42,8 @@ const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
 ];
 
 export default function Sidebar({
+  onCreateTerminal,
+  onCreateTerminalWithGroup,
   onCreateSession,
   onCreateSessionWithGroup,
   onToggleLogs,
@@ -86,6 +90,8 @@ export default function Sidebar({
       {sidebarPanel === "chat" && (
         <div className="sidebar-submenu" style={{ width: submenuWidth }}>
           <TerminalManager
+            onCreateTerminal={onCreateTerminal}
+            onCreateTerminalWithGroup={onCreateTerminalWithGroup}
             onCreateSession={onCreateSession}
             onCreateSessionWithGroup={onCreateSessionWithGroup}
           />

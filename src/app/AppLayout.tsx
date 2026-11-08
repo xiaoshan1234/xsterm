@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useSession } from "../features/terminals/TerminalContext";
-import { DEFAULT_GROUP_ID } from "../features/terminals/state/constants";
+import { useSession } from "../features/terminal/logic/TerminalContext";
+import { DEFAULT_GROUP_ID } from "../features/terminal/logic/state/constants";
 import { useAppShortcuts } from "./useAppShortcuts";
-import { useTmuxAutoAttach } from "../features/terminals/useTmuxAutoAttach";
+import { useTmuxAutoAttach } from "../features/terminal/logic/useTmuxAutoAttach";
 import NavBar from "./NavBar";
 import Sidebar from "../features/sidebar/Sidebar";
 import { WorkspaceContainer } from "../features/workspace/WorkspaceContainer";
 import { WorkspaceBottomBar } from "../features/workspace/WorkspaceBottomBar";
 import { SettingsView } from "../features/settings/SettingsView";
-import CreateTerminalDialog from "../features/terminals/dialogs/CreateTerminalDialog";
+import CreateTerminalDialog from "../features/terminal/logic/dialogs/CreateTerminalDialog";
 import "../styles/pane.css";
 
 export default function AppLayout() {
@@ -32,6 +32,7 @@ export default function AppLayout() {
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createTerminalGroupId, setCreateTerminalGroupId] = useState<number>(DEFAULT_GROUP_ID);
+  const [createInitialTab, setCreateInitialTab] = useState<"local" | "tmux-pane">("local");
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<
     "appearance" | "shortcuts" | "logging" | "about"
@@ -54,7 +55,10 @@ export default function AppLayout() {
   }, []);
 
   useAppShortcuts({
-    onCreateSession: () => setShowCreateDialog(true),
+    onCreateSession: () => {
+      setCreateInitialTab("local");
+      setShowCreateDialog(true);
+    },
     onToggleLogs: () => {},
   });
   useTmuxAutoAttach();
@@ -72,11 +76,23 @@ export default function AppLayout() {
       <NavBar />
       <div className="content-area">
         <Sidebar
+          onCreateTerminal={() => {
+            setCreateInitialTab("local");
+            setCreateTerminalGroupId(DEFAULT_GROUP_ID);
+            setShowCreateDialog(true);
+          }}
+          onCreateTerminalWithGroup={(groupId) => {
+            setCreateInitialTab("local");
+            setCreateTerminalGroupId(groupId);
+            setShowCreateDialog(true);
+          }}
           onCreateSession={() => {
+            setCreateInitialTab("tmux-pane");
             setCreateTerminalGroupId(DEFAULT_GROUP_ID);
             setShowCreateDialog(true);
           }}
           onCreateSessionWithGroup={(groupId) => {
+            setCreateInitialTab("tmux-pane");
             setCreateTerminalGroupId(groupId);
             setShowCreateDialog(true);
           }}
@@ -138,6 +154,7 @@ export default function AppLayout() {
         onCreateSsh={createSshSession}
         onCreateTmux={createTmuxSession}
         initialGroupId={createTerminalGroupId}
+        initialTab={createInitialTab}
       />
     </div>
   );
