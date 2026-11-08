@@ -1,0 +1,16 @@
+.confirm-dialog-copy {
+  color: var(--body);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+.confirm-dialog-danger {
+  background: var(--error);
+  color: var(--text-on-accent);
+}

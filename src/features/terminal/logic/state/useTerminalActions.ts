@@ -201,6 +201,7 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     reorderWindows: windowActions.reorderWindows,
     renameWindow: windowActions.renameWindow,
     createDefaultWorkspace: workspaceActions.createDefaultWorkspace,
+    createEmptyWorkspace: workspaceActions.createEmptyWorkspace,
     setActiveWorkspace: workspaceActions.setActiveWorkspace,
     closeWorkspace: workspaceActions.closeWorkspace,
     ...persistence,

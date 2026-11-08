@@ -3,15 +3,16 @@ import { ThemeProvider } from "../contexts/ThemeContext";
 import { LoggerProvider } from "../contexts/LoggerContext";
 import AppLayout from "./AppLayout";
 import { AppShellPreview } from "./shell/AppShellPreview";
+import { AppShellRuntime } from "./shell/AppShellRuntime";
 import "../styles/global.css";
 import "../styles/layout.css";
 
 export default function App() {
-  const isUiPreview =
-    import.meta.env.DEV &&
-    (import.meta.env.VITE_UI_PREVIEW === "true" || window.location.hash === "#ui-preview");
+  const isRuntimeShellPreview = import.meta.env.DEV && import.meta.env.VITE_UI_PREVIEW === "true";
+  const isStaticUiPreview =
+    import.meta.env.DEV && !isRuntimeShellPreview && window.location.hash === "#ui-preview";
 
-  if (isUiPreview) {
+  if (isStaticUiPreview) {
     return <AppShellPreview />;
   }
 
@@ -19,7 +20,7 @@ export default function App() {
     <SessionProvider>
       <ThemeProvider>
         <LoggerProvider>
-          <AppLayout />
+          {isRuntimeShellPreview ? <AppShellRuntime /> : <AppLayout />}
         </LoggerProvider>
       </ThemeProvider>
     </SessionProvider>

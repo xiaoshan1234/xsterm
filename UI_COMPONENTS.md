@@ -7,17 +7,17 @@
 ## 1. 状态
 
 - 当前阶段：设计稿
-- 实施状态：Phase 1–2 静态 Shell 与占位组件已落地
+- 实施状态：Phase 1–3 已完成；Phase 4 已开始，新 Shell 通过兼容 View Model 接入旧 SessionContext
 - 目标：先固定 UI 壳层和组件边界，再实现功能，最后迁移现有组件
 
-预览入口：
+运行时新 Shell 预览：
 
 ```powershell
 $env:VITE_UI_PREVIEW = "true"
 npm run tauri dev
 ```
 
-浏览器预览可使用：
+纯静态组件稿：
 
 ```text
 http://localhost:1420/#ui-preview
@@ -890,15 +890,18 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
 ### Phase 3：Model 对接
 
-- View Model / Selector
-- PaneTargetRef 解析
-- Terminal 与 tmux 的 View Model 汇合
+- Terminal/tmux Tauri command 与 event adapter
+- 配置 Manager View Model
+- Terminal/tmux 状态 Manager View Model
+- Workspace Pane 位置选择器
+- PaneTargetRef 解析和用户显示信息
 
 ### Phase 4：现有代码改造
 
-- 迁移 Sidebar
-- 迁移 BottomBar
-- 迁移 CommandSendPanel
+- 新 Shell 已接入配置/状态 Manager
+- 新 Shell 已接入 WorkspaceView、BottomBar 和 TextSender
+- Dialog 仍暂时复用旧表单实现
+- 待迁移 Sidebar / BottomBar / CommandSendPanel 的旧实现
 - 拆分全局 Context
 - 更新 AGENTS.md 和目录规则
 

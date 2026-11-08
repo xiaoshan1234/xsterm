@@ -39,7 +39,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 ### 4.1 前端（`src/`）
 
 - 入口链：`index.html` → `src/main.tsx` → `src/app/App.tsx` → `src/app/AppLayout.tsx`。迁移期结束后由新 AppShell 取代 `AppLayout`。
-- 新 Shell 设计预览位于 `src/app/shell/`；通过 `VITE_UI_PREVIEW=true` 或 `#ui-preview` 启用，默认仍运行旧 `AppLayout`。
+- 新 Shell 位于 `src/app/shell/`；`VITE_UI_PREVIEW=true` 启动接入旧 SessionContext 的运行时新 Shell，`#ui-preview` 启动纯静态组件稿，默认仍运行旧 `AppLayout`。
 - 目标顶层：`src/app/`（应用装配与 shell）、`src/features/`（纵向功能切片）、`src/models/`（纯领域模型）、`src/infra/`（仅公共日志与通用配置持久化）、`src/shared/`（无业务依赖的 UI、hooks、utils）。
 - `src/models/` 不得依赖 React、Tauri、DOM、Store 或任何上层目录；`src/infra/` 不得依赖 `app/`、`features/`、`models/`。
 - Feature 内按 `ui/`、`application/`、`state/`、`selectors/`、`viewModels/`、`infrastructure/`、`persistence/` 组织。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。

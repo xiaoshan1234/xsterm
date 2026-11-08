@@ -406,6 +406,33 @@
   overflow: hidden;
 }
 
+.shell-runtime-workspaces {
+  position: relative;
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.shell-empty-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  flex-direction: column;
+  gap: var(--space-sm);
+  color: var(--muted);
+}
+
+.shell-empty-main h2 {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 500;
+}
+
 .shell-workspace-preview {
   display: flex;
   flex-direction: column;
@@ -620,6 +647,11 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-xs);
+}
+
+.shell-sender-controls .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .shell-bottom-bar {

@@ -9,15 +9,24 @@ interface TextSenderTarget {
 interface GlobalTextSenderProps {
   targets: readonly TextSenderTarget[];
   selectedTargetId: string;
+  text: string;
+  statusMessage?: string;
   onSelectTarget: (targetId: string) => void;
+  onTextChange: (text: string) => void;
+  onSend: () => void;
 }
 
 export function GlobalTextSender({
   targets,
   selectedTargetId,
+  text,
+  statusMessage = "3 lines ready · no active job",
   onSelectTarget,
+  onTextChange,
+  onSend,
 }: GlobalTextSenderProps) {
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
+  const canSend = selectedTarget?.isAvailable === true && text.length > 0;
 
   return (
     <section className="shell-text-sender" aria-label="Global text sender">
@@ -32,7 +41,9 @@ export function GlobalTextSender({
             id="shell-target-select"
             value={selectedTargetId}
             onChange={(event) => onSelectTarget(event.target.value)}
+            disabled={targets.length === 0}
           >
+            {targets.length === 0 && <option value="">No available pane</option>}
             {targets.map((target) => (
               <option key={target.id} value={target.id}>
                 {target.label} · {target.breadcrumb}
@@ -45,7 +56,8 @@ export function GlobalTextSender({
         <div className="shell-text-sender-editor">
           <textarea
             aria-label="Command text"
-            defaultValue={"echo \"preview target\"\nprintf 'ready\\n'"}
+            value={text}
+            onChange={(event) => onTextChange(event.target.value)}
             spellCheck={false}
           />
         </div>
@@ -56,7 +68,7 @@ export function GlobalTextSender({
             <span>{selectedTarget?.breadcrumb}</span>
           </div>
           <div className="shell-sender-controls">
-            <button type="button" className="btn btn--primary">
+            <button type="button" className="btn btn--primary" disabled={!canSend} onClick={onSend}>
               Send
             </button>
             <button type="button" className="btn btn--secondary">
@@ -65,7 +77,7 @@ export function GlobalTextSender({
           </div>
           <div className="shell-status-block">
             <span className="shell-status-label">Queue</span>
-            <span>3 lines ready · no active job</span>
+            <span>{statusMessage}</span>
           </div>
         </aside>
       </div>

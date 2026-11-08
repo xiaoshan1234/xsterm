@@ -78,6 +78,7 @@ export interface TerminalContextType {
     windowType?: "terminal" | "init",
   ) => Window;
   createDefaultWorkspace: () => Workspace;
+  createEmptyWorkspace: () => Workspace;
   createInitWindow: () => Window;
   replaceInitWindowWithTerminal: (
     workspaceId: string,
@@ -230,6 +231,7 @@ export interface SessionActions {
     windowType?: "terminal" | "init",
   ) => Window;
   createDefaultWorkspace: () => Workspace;
+  createEmptyWorkspace: () => Workspace;
   createInitWindow: () => Window;
   replaceInitWindowWithTerminal: (
     workspaceId: string,

@@ -39,6 +39,9 @@ export function AppShellPreview() {
   const [activeWorkspace, setActiveWorkspace] = useState("Default");
   const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(TEXT_SENDER_TARGETS[0].id);
+  const [textSenderDraft, setTextSenderDraft] = useState(
+    "echo \"preview target\"\nprintf 'ready\\n'",
+  );
   const [activeDialog, setActiveDialog] = useState<PreviewDialogId | null>(null);
 
   const toolPanelContent = useMemo(
@@ -58,7 +61,10 @@ export function AppShellPreview() {
         <GlobalTextSender
           targets={TEXT_SENDER_TARGETS}
           selectedTargetId={selectedTargetId}
+          text={textSenderDraft}
           onSelectTarget={setSelectedTargetId}
+          onTextChange={setTextSenderDraft}
+          onSend={() => undefined}
         />
       }
       overlay={

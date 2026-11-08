@@ -56,6 +56,43 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
     return workspace;
   }, [setWorkspaces, setActiveWorkspaceId, workspacesRef]);
 
+  const createEmptyWorkspace = useCallback((): Workspace => {
+    const existingNames = new Set(workspacesRef.current.map((workspace) => workspace.name));
+    let suffix = 1;
+    let name = "New Workspace";
+    while (existingNames.has(name)) {
+      suffix += 1;
+      name = `New Workspace ${suffix}`;
+    }
+
+    const workspaceId = crypto.randomUUID();
+    const windowId = crypto.randomUUID();
+    const paneId = crypto.randomUUID();
+    const workspace: Workspace = {
+      id: workspaceId,
+      name,
+      windows: [
+        {
+          id: windowId,
+          name: "New Terminal",
+          activePaneId: paneId,
+          windowType: "init",
+          rootPane: {
+            id: paneId,
+            type: "leaf",
+            size: 100,
+          },
+        },
+      ],
+      activeWindowId: windowId,
+      terminalIds: [],
+    };
+
+    setWorkspaces((prev) => [...prev, workspace]);
+    setActiveWorkspaceId(workspaceId);
+    return workspace;
+  }, [setWorkspaces, setActiveWorkspaceId, workspacesRef]);
+
   const setActiveWorkspace = useCallback(
     (workspaceId: string) => {
       setActiveWorkspaceId(workspaceId);
@@ -98,6 +135,7 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
 
   return {
     createDefaultWorkspace,
+    createEmptyWorkspace,
     setActiveWorkspace,
     closeWorkspace,
   };
