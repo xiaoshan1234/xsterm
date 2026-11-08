@@ -27,8 +27,8 @@
 }
 
 .dialog--medium {
-  width: 480px;
-  height: 600px;
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
 }
 
 .dialog--with-sidebar {

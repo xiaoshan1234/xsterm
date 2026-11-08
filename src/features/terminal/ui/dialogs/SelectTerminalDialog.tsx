@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useSavedLaunchConfigs, useTerminalRuntime, useWorkspaceLayout } from "../../../sessions";
 import { Dialog } from "../../../../shared/ui/Dialog";
+import "./SelectTerminalDialog.css";
 
 interface SelectTerminalDialogProps {
   isOpen: boolean;
