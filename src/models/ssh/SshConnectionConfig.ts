@@ -10,11 +10,12 @@ import {
 } from "./SshAuthentication";
 
 /**
- * Complete configuration required to establish an SSH connection. This is a
- * launch/persistence model and may contain credentials.
+ * Complete SSH connection metadata. Secrets are referenced by credential ids
+ * and resolved by infrastructure; this model is safe to retain in application
+ * state and persistence.
  *
- * Use `toSshTerminalTransport` before storing connection details on a running
- * terminal so passwords and passphrases do not leak into runtime UI state.
+ * `toSshTerminalTransport` strips non-display connection tuning before the
+ * value is attached to a running terminal.
  */
 export interface SshConnectionConfig {
   readonly host: string;

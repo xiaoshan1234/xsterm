@@ -16,6 +16,7 @@ import { type TmuxLaunchConfig } from "./TmuxLaunchConfig";
  * presentation defaults can evolve without rewriting SSH or shell settings.
  */
 export interface SavedLaunchConfig {
+  readonly version: 1;
   readonly id: LaunchConfigId;
   readonly name: string;
   readonly config: TerminalLaunchConfig | TmuxLaunchConfig;
@@ -48,6 +49,7 @@ export function createSavedLaunchConfig(
 
   try {
     return modelSuccess({
+      version: 1,
       id: createLaunchConfigId(input.id),
       name,
       config: input.config,

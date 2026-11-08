@@ -99,6 +99,7 @@ describe("TerminalLaunchConfig", () => {
     );
 
     expect(saved.config).toEqual(config);
+    expect(saved.version).toBe(1);
     expect(saved.displayConfig).toMatchObject({
       fontSize: 16,
       sizingMode: {

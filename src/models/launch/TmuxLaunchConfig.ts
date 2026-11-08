@@ -1,4 +1,5 @@
-import { modelSuccess, type ModelResult } from "../result";
+import { createLaunchConfigId, type LaunchConfigId } from "../ids";
+import { modelFailure, modelSuccess, type ModelResult } from "../result";
 import {
   createSshConnectionConfig,
   type CreateSshConnectionConfigInput,
@@ -30,6 +31,8 @@ export type TmuxLaunchTransport = LocalTmuxLaunchTransport | SshTmuxLaunchTransp
  */
 export interface TmuxLaunchConfig {
   readonly kind: "tmux";
+  /** Saved Local/SSH config selected as the transport source in the UI. */
+  readonly baseConfigId?: LaunchConfigId;
   readonly tmuxSessionName?: string;
   readonly startCommand?: string;
   /** Environment overrides applied to the tmux server or initial command. */
@@ -38,6 +41,7 @@ export interface TmuxLaunchConfig {
 }
 
 export function createLocalTmuxLaunchConfig(input?: {
+  baseConfigId?: string;
   tmuxSessionName?: string;
   socketName?: string;
   startCommand?: string;
@@ -59,6 +63,7 @@ export function createLocalTmuxLaunchConfig(input?: {
 }
 
 export function createSshTmuxLaunchConfig(input: {
+  baseConfigId?: string;
   tmuxSessionName?: string;
   socketName?: string;
   startCommand?: string;
@@ -86,6 +91,7 @@ export function createSshTmuxLaunchConfig(input: {
 }
 
 function createTmuxLaunchConfig(input: {
+  baseConfigId?: string;
   tmuxSessionName?: string;
   startCommand?: string;
   environment: ShellEnvironmentConfig;
@@ -94,8 +100,21 @@ function createTmuxLaunchConfig(input: {
   const tmuxSessionName = input.tmuxSessionName?.trim();
   const startCommand = input.startCommand?.trim();
 
+  let baseConfigId: LaunchConfigId | undefined;
+  if (input.baseConfigId !== undefined) {
+    try {
+      baseConfigId = createLaunchConfigId(input.baseConfigId);
+    } catch (error) {
+      return modelFailure(
+        "invalid-id",
+        error instanceof Error ? error.message : "Invalid tmux base config id",
+      );
+    }
+  }
+
   return modelSuccess({
     kind: "tmux",
+    ...(baseConfigId ? { baseConfigId } : {}),
     ...(tmuxSessionName ? { tmuxSessionName } : {}),
     ...(startCommand ? { startCommand } : {}),
     environment: input.environment,

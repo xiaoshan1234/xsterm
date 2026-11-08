@@ -43,7 +43,12 @@ describe("tmux controller model", () => {
         layout,
       }),
     );
-    const launch = unwrap(createLocalTmuxLaunchConfig({ socketName: "work" }));
+    const launch = unwrap(
+      createLocalTmuxLaunchConfig({
+        baseConfigId: " base-shell ",
+        socketName: "work",
+      }),
+    );
     const controller = unwrap(
       createTmuxController({
         id: 7,
@@ -55,6 +60,7 @@ describe("tmux controller model", () => {
 
     expect(connected.windows).toHaveLength(1);
     expect(connected.status).toEqual({ kind: "connected", connectedAt: 1_000 });
+    expect(launch.baseConfigId).toBe("base-shell");
     expect(findTmuxPaneInController(connected, secondPaneId)?.pane.streamId).toBe(102);
   });
 

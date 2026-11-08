@@ -11,6 +11,7 @@ export type WorkspaceId = Brand<string, "WorkspaceId">;
 export type WindowId = Brand<string, "WindowId">;
 export type PaneId = Brand<string, "PaneId">;
 export type LaunchConfigId = Brand<string, "LaunchConfigId">;
+export type SshCredentialId = Brand<string, "SshCredentialId">;
 
 export type TerminalId = Brand<number, "TerminalId">;
 /** Backend stream id used by a tmux pane; it is not an xsterm `Terminal`. */
@@ -28,10 +29,11 @@ function createStringIdentifier<Name extends string>(
   value: string,
   name: Name,
 ): Brand<string, Name> {
-  if (!isNonEmptyString(value)) {
+  const normalized = value.trim();
+  if (!isNonEmptyString(normalized)) {
     throw new Error(`${name} must be a non-empty string`);
   }
-  return value as Brand<string, Name>;
+  return normalized as Brand<string, Name>;
 }
 
 function createNumericIdentifier<Name extends string>(
@@ -58,6 +60,10 @@ export function createPaneId(value: string): PaneId {
 
 export function createLaunchConfigId(value: string): LaunchConfigId {
   return createStringIdentifier(value, "LaunchConfigId");
+}
+
+export function createSshCredentialId(value: string): SshCredentialId {
+  return createStringIdentifier(value, "SshCredentialId");
 }
 
 export function createTerminalId(value: number): TerminalId {

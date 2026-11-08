@@ -1,3 +1,4 @@
+export * from "./PaneTarget";
 export * from "./RawPaneTree";
 export * from "./Workspace";
 export * from "./WorkspaceOperations";

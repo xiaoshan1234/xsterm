@@ -14,6 +14,8 @@ This directory contains pure frontend domain models. It must not import from
   own backend connections.
 - `TmuxWindowReference` links a workspace tab to a window owned by a
   `TmuxController`.
+- `PaneTargetRef` identifies a user-selected pane independently from the
+  current backend terminal stream.
 
 ## Layout boundaries
 
@@ -39,6 +41,10 @@ Launch configuration is also split by concern:
 
 Runtime `TerminalTransport` only keeps the public SSH connection summary. It
 must not contain passwords, private-key passphrases, or other credentials.
+SSH authentication stores credential ids, not secret values.
+
+Workspace snapshots are parsed through `parseWorkspaceSnapshot` before use.
+The version field is enforced and nested pane/window ids are validated.
 
 ## Dependency rule
 

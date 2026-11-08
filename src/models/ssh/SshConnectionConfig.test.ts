@@ -20,7 +20,7 @@ describe("SshConnectionConfig", () => {
         authentication: {
           kind: "private-key",
           keyFile: "~/.ssh/id_ed25519",
-          passphrase: "secret",
+          passphraseCredentialId: "credential-passphrase",
         },
         keepaliveIntervalSeconds: 30,
         connectionTimeoutSeconds: 15,
@@ -32,6 +32,7 @@ describe("SshConnectionConfig", () => {
     expect(config.authentication).toMatchObject({
       kind: "private-key",
       keyFile: "~/.ssh/id_ed25519",
+      passphraseCredentialId: "credential-passphrase",
     });
     expect(config.keepaliveIntervalSeconds).toBe(30);
     expect(config.enableCompression).toBe(true);
@@ -45,7 +46,7 @@ describe("SshConnectionConfig", () => {
         username: "developer",
         authentication: {
           kind: "password",
-          password: "top-secret",
+          credentialId: "credential-password",
         },
       }),
     );
@@ -57,7 +58,7 @@ describe("SshConnectionConfig", () => {
       port: 2222,
       username: "developer",
     });
-    expect(transport).not.toHaveProperty("password");
+    expect(transport).not.toHaveProperty("credentialId");
   });
 
   it("validates authentication and timing properties", () => {
@@ -66,11 +67,11 @@ describe("SshConnectionConfig", () => {
         host: "example.com",
         port: 22,
         username: "developer",
-        authentication: { kind: "password", password: "" },
+        authentication: { kind: "password", credentialId: "" },
       }),
     ).toMatchObject({
       ok: false,
-      error: { code: "invalid-value" },
+      error: { code: "invalid-id" },
     });
 
     expect(
@@ -78,7 +79,7 @@ describe("SshConnectionConfig", () => {
         host: "example.com",
         port: 22,
         username: "developer",
-        authentication: { kind: "password", password: "secret" },
+        authentication: { kind: "password", credentialId: "credential-password" },
         connectionTimeoutSeconds: 0,
       }),
     ).toMatchObject({

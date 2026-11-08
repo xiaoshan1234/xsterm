@@ -1,42 +1,48 @@
+import { createSshCredentialId, type SshCredentialId } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 
 /**
- * Sensitive SSH authentication material. This type belongs to launch
- * configuration only; it must never be copied into a runtime `Terminal`.
+ * SSH authentication metadata stored in domain and persistence models.
+ * Passwords and passphrases are intentionally replaced by credential ids that
+ * are resolved by the security infrastructure only when connecting.
  */
 export type SshAuthentication =
   | {
       readonly kind: "password";
-      readonly password: string;
+      readonly credentialId: SshCredentialId;
     }
   | {
       readonly kind: "private-key";
       readonly keyFile: string;
-      readonly passphrase?: string;
+      readonly passphraseCredentialId?: SshCredentialId;
     };
 
 export type SshAuthenticationInput =
   | {
       kind: "password";
-      password: string;
+      credentialId: string;
     }
   | {
       kind: "private-key";
       keyFile: string;
-      passphrase?: string;
+      passphraseCredentialId?: string;
     };
 
 export function createSshAuthentication(
   input: SshAuthenticationInput,
 ): ModelResult<SshAuthentication> {
   if (input.kind === "password") {
-    if (!input.password) {
-      return modelFailure("invalid-value", "SSH password must not be empty");
+    try {
+      return modelSuccess({
+        kind: "password",
+        credentialId: createSshCredentialId(input.credentialId),
+      });
+    } catch (error) {
+      return modelFailure(
+        "invalid-id",
+        error instanceof Error ? error.message : "Invalid SSH credential id",
+      );
     }
-    return modelSuccess({
-      kind: "password",
-      password: input.password,
-    });
   }
 
   const keyFile = input.keyFile.trim();
@@ -44,9 +50,21 @@ export function createSshAuthentication(
     return modelFailure("invalid-value", "SSH key file must not be empty");
   }
 
+  let passphraseCredentialId: SshCredentialId | undefined;
+  if (input.passphraseCredentialId !== undefined) {
+    try {
+      passphraseCredentialId = createSshCredentialId(input.passphraseCredentialId);
+    } catch (error) {
+      return modelFailure(
+        "invalid-id",
+        error instanceof Error ? error.message : "Invalid SSH passphrase credential id",
+      );
+    }
+  }
+
   return modelSuccess({
     kind: "private-key",
     keyFile,
-    ...(input.passphrase ? { passphrase: input.passphrase } : {}),
+    ...(passphraseCredentialId ? { passphraseCredentialId } : {}),
   });
 }

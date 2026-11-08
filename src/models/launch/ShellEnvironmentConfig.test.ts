@@ -53,6 +53,7 @@ describe("ShellEnvironmentConfig", () => {
   it("rejects invalid and case-insensitive duplicate names", () => {
     expect(
       createShellEnvironmentConfig({
+        nameCase: "insensitive",
         variables: { PATH: "/a", Path: "/b" },
       }),
     ).toMatchObject({
@@ -68,5 +69,29 @@ describe("ShellEnvironmentConfig", () => {
       ok: false,
       error: { code: "invalid-value" },
     });
+  });
+
+  it("replaces inherited variables case-insensitively when configured", () => {
+    const environment = unwrap(
+      createShellEnvironmentConfig({
+        nameCase: "insensitive",
+        variables: {
+          Path: "C:\\Custom",
+        },
+      }),
+    );
+    const merged = mergeShellEnvironment(
+      {
+        PATH: "C:\\Windows",
+        HOME: "C:\\Users\\developer",
+      },
+      environment,
+    );
+
+    expect(merged).toMatchObject({
+      Path: "C:\\Custom",
+      HOME: "C:\\Users\\developer",
+    });
+    expect(merged).not.toHaveProperty("PATH");
   });
 });
