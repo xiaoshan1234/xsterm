@@ -5,6 +5,7 @@ import {
   type Session,
   type LocalSessionConfig,
   type SSHSessionConfig,
+  type SessionLoggingConfig,
   type TmuxCcConfig,
 } from "../types/session";
 import type { CapabilityFlags } from "../types/capabilities";
@@ -32,16 +33,22 @@ export async function listSessions(): Promise<SessionInfo[]> {
   return result;
 }
 
-export async function createLocal(config: LocalSessionConfig): Promise<SessionInfo> {
-  logger.debug("sessionService", "createLocal", { config });
-  const result = await invoke<SessionInfo>("create_local_session", { config });
+export async function createLocal(
+  config: LocalSessionConfig,
+  logging?: SessionLoggingConfig,
+): Promise<SessionInfo> {
+  logger.debug("sessionService", "createLocal", { config, logging });
+  const result = await invoke<SessionInfo>("create_local_session", { config, logging });
   logger.debug("sessionService", "createLocal:result", result);
   return result;
 }
 
-export async function createSsh(config: SSHSessionConfig): Promise<SessionInfo> {
-  logger.debug("sessionService", "createSsh", { config });
-  const result = await invoke<SessionInfo>("create_ssh_session", { config });
+export async function createSsh(
+  config: SSHSessionConfig,
+  logging?: SessionLoggingConfig,
+): Promise<SessionInfo> {
+  logger.debug("sessionService", "createSsh", { config, logging });
+  const result = await invoke<SessionInfo>("create_ssh_session", { config, logging });
   logger.debug("sessionService", "createSsh:result", result);
   return result;
 }
@@ -52,9 +59,12 @@ export async function createSsh(config: SSHSessionConfig): Promise<SessionInfo> 
  * `sessionType.type === "tmux-cc"`; the frontend builds the corresponding
  * `Session` (with `tmuxPaneId` / `tmuxControllerId`).
  */
-export async function createTmux(config: TmuxCcConfig): Promise<SessionInfo> {
-  logger.debug("sessionService", "createTmux", { config });
-  const result = await invoke<SessionInfo>("create_tmux_session", { config });
+export async function createTmux(
+  config: TmuxCcConfig,
+  logging?: SessionLoggingConfig,
+): Promise<SessionInfo> {
+  logger.debug("sessionService", "createTmux", { config, logging });
+  const result = await invoke<SessionInfo>("create_tmux_session", { config, logging });
   logger.debug("sessionService", "createTmux:result", result);
   return result;
 }

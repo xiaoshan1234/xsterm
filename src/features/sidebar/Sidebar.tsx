@@ -12,7 +12,7 @@ const MIN_SUBMENU_WIDTH = 140;
 const MAX_SUBMENU_WIDTH = 400;
 const DEFAULT_SUBMENU_WIDTH = 200;
 
-type SettingsCategory = "appearance" | "shortcuts" | "about";
+type SettingsCategory = "appearance" | "shortcuts" | "logging" | "about";
 
 interface SidebarProps {
   onCreateSession: () => void;
@@ -35,6 +35,7 @@ interface SidebarProps {
 const SETTINGS_CATEGORIES: { key: SettingsCategory; label: string }[] = [
   { key: "appearance", label: "Appearance" },
   { key: "shortcuts", label: "Shortcuts" },
+  { key: "logging", label: "Logging" },
   { key: "about", label: "About" },
 ];
 

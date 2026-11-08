@@ -32,11 +32,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
-        // Perf 004: SessionManager uses DashMap + AtomicU32 internally, so no
-        // outer Mutex is needed — concurrent IPC handlers touch different
-        // shards in parallel without serialising on each other.
-        .manage(Arc::new(SessionManager::new()))
-        // Tauri 2's `Builder::setup` is a single `Option<Box<F>>` slot — the
+        // Tauri 2's `Builder::setup` is a single `Option<Box<F>>` slot - the
         // *last* `.setup(...)` call wins, all earlier ones are silently
         // discarded. Earlier drafts split this into two `.setup()` blocks
         // (logging first, RealAppBackend second) and lost the logging
@@ -46,7 +42,7 @@ pub fn run() {
         // Perf 001: emit the binary `session-output` Channel to the frontend
         // so it can listen for raw bytes instead of going through
         // JSON `[id, [byte, byte, ...]]`. The emit fires before the frontend
-        // is loaded (no listener yet), so it's effectively a no-op — the
+        // is loaded (no listener yet), so it is effectively a no-op - the
         // frontend pulls the channel via the `get_session_output_channel`
         // command after the WebView is up. See `binary_frame.rs` for the
         // wire format.
@@ -62,6 +58,20 @@ pub fn run() {
             let reload_handle = init_logging(&log_dir, &config);
             app.manage(Arc::new(reload_handle));
             tracing::info!("Application starting, log dir: {:?}", log_dir);
+
+            // --- per-session logging + SessionManager ---
+            // Perf 004: SessionManager uses DashMap + AtomicU32 internally, so
+            // no outer Mutex is needed - concurrent IPC handlers touch
+            // different shards in parallel without serialising on each other.
+            use services::session_log::SessionLogRegistry;
+            let session_log_dir = app
+                .handle()
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| log_dir.clone())
+                .join("session-logs");
+            let session_logs = Arc::new(SessionLogRegistry::new(session_log_dir));
+            app.manage(Arc::new(SessionManager::new(session_logs)));
 
             // --- binary output channel (was second setup block) ---
             use infrastructure::app_backend::RealAppBackend;

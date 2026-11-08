@@ -4,8 +4,10 @@ use tauri::{AppHandle, State};
 
 use crate::infrastructure::app_backend::{AppBackend, RealAppBackend};
 use crate::models::session::{
-    AttachedTmuxServer, LocalSessionConfig, SSHSessionConfig, SessionInfo, TmuxCcConfig,
+    AttachedTmuxServer, LocalSessionConfig, SSHSessionConfig, SessionInfo, SessionLoggingConfig,
+    TmuxCcConfig,
 };
+use crate::services::session_log::SessionLoggingBackend;
 use crate::services::session_manager::{AutoAttachOutcome, SessionManager};
 
 /// Hard ceiling on a single `write_session` payload. The frontend sends one
@@ -19,21 +21,26 @@ const MAX_WRITE_PAYLOAD_BYTES: usize = 1024 * 1024;
 #[tauri::command]
 pub async fn create_local_session(
     config: LocalSessionConfig,
+    logging: Option<SessionLoggingConfig>,
     state: State<'_, Arc<SessionManager>>,
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
     tracing::info!("Creating local session");
-    let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
-        Arc::new(RealAppBackend::new(app));
-    state.create_local(config, backend).inspect(|info| {
-        tracing::info!("Local session created: id={}", info.id);
-    })
+    let inner: Arc<dyn AppBackend> = Arc::new(RealAppBackend::new(app));
+    let backend: Arc<dyn AppBackend> =
+        Arc::new(SessionLoggingBackend::new(inner, state.session_logs()));
+    state
+        .create_local(config, backend, logging)
+        .inspect(|info| {
+            tracing::info!("Local session created: id={}", info.id);
+        })
 }
 
 /// Create a new SSH session.
 #[tauri::command]
 pub async fn create_ssh_session(
     config: SSHSessionConfig,
+    logging: Option<SessionLoggingConfig>,
     state: State<'_, Arc<SessionManager>>,
     app: AppHandle,
 ) -> Result<SessionInfo, String> {
@@ -43,9 +50,10 @@ pub async fn create_ssh_session(
         config.host,
         config.port
     );
-    let backend: Arc<dyn crate::infrastructure::app_backend::AppBackend> =
-        Arc::new(RealAppBackend::new(app));
-    state.create_ssh(config, backend).inspect(|info| {
+    let inner: Arc<dyn AppBackend> = Arc::new(RealAppBackend::new(app));
+    let backend: Arc<dyn AppBackend> =
+        Arc::new(SessionLoggingBackend::new(inner, state.session_logs()));
+    state.create_ssh(config, backend, logging).inspect(|info| {
         tracing::info!("SSH session created: id={}", info.id);
     })
 }
@@ -122,6 +130,7 @@ pub fn upload_image_to_ssh_session(
 #[tauri::command]
 pub async fn create_tmux_session(
     config: TmuxCcConfig,
+    logging: Option<SessionLoggingConfig>,
     state: State<'_, Arc<SessionManager>>,
     backend: State<'_, Arc<RealAppBackend>>,
     app: AppHandle,
@@ -135,8 +144,10 @@ pub async fn create_tmux_session(
         config.ssh.is_some()
     );
     let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
-    let dyn_backend: Arc<dyn AppBackend> = arc_real;
-    let result = state.create_tmux(&config, dyn_backend).await;
+    let inner: Arc<dyn AppBackend> = arc_real;
+    let wrapped: Arc<dyn AppBackend> =
+        Arc::new(SessionLoggingBackend::new(inner, state.session_logs()));
+    let result = state.create_tmux(&config, wrapped, logging).await;
     if let Err(ref e) = result {
         tracing::error!(
             "create_tmux_session failed: {} (config was: name={:?}, tmux_session={:?}, socket={:?}, base_config_id={:?}, has_ssh={})",

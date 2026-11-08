@@ -31,7 +31,7 @@ export default function LoggingTab({ config = {}, onChange }: LoggingTabProps) {
       />
       <FormTextField
         label="File Name Template"
-        placeholder="%n_%Y-%m-%d_%H-%M-%S.log"
+        placeholder="{{name}}_{{ts:%Y-%m-%d_%H-%M-%S}}.log"
         value={logging.fileNameTemplate}
         onChange={(fileNameTemplate) => updateLogging({ fileNameTemplate })}
       />
@@ -43,7 +43,7 @@ export default function LoggingTab({ config = {}, onChange }: LoggingTabProps) {
       />
       <FormTextField
         label="Line Format"
-        placeholder="[%Y-%m-%d %H:%M:%S] %v"
+        placeholder="[{{ts}}] {{line}}"
         value={logging.lineFormat}
         onChange={(lineFormat) => updateLogging({ lineFormat })}
       />

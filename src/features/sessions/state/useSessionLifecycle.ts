@@ -164,7 +164,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Session> => {
       return createAndActivateSession(
         "local",
-        () => sessionService.createLocal(config),
+        () => sessionService.createLocal(config, displayConfig?.logging),
         config,
         save,
         false,
@@ -188,7 +188,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Session> => {
       return createAndActivateSession(
         "ssh",
-        () => sessionService.createSsh(config),
+        () => sessionService.createSsh(config, displayConfig?.logging),
         config,
         save,
         false,
@@ -206,7 +206,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Session> => {
       return createAndActivateSession(
         "local",
-        () => sessionService.createLocal(config),
+        () => sessionService.createLocal(config, displayConfig?.logging),
         config,
         save,
         true,
@@ -224,7 +224,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Session> => {
       return createAndActivateSession(
         "ssh",
-        () => sessionService.createSsh(config),
+        () => sessionService.createSsh(config, displayConfig?.logging),
         config,
         save,
         true,
@@ -248,7 +248,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Session> => {
       return createAndActivateSession(
         "tmux-cc",
-        () => sessionService.createTmux(config),
+        () => sessionService.createTmux(config, displayConfig?.logging),
         config,
         save,
         false,
@@ -271,7 +271,7 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Session> => {
       return createAndActivateSession(
         "tmux-cc",
-        () => sessionService.createTmux(config),
+        () => sessionService.createTmux(config, displayConfig?.logging),
         config,
         save,
         true,
@@ -448,9 +448,18 @@ export function useSessionLifecycle(deps: UseSessionLifecycleDeps) {
 
       const info = await dispatchByType(
         config.type,
-        () => sessionService.createLocal(config.config as LocalSessionConfig),
-        () => sessionService.createSsh(config.config as SSHSessionConfig),
-        () => sessionService.createTmux(config.config as TmuxCcConfig),
+        () =>
+          sessionService.createLocal(
+            config.config as LocalSessionConfig,
+            config.displayConfig?.logging,
+          ),
+        () =>
+          sessionService.createSsh(
+            config.config as SSHSessionConfig,
+            config.displayConfig?.logging,
+          ),
+        () =>
+          sessionService.createTmux(config.config as TmuxCcConfig, config.displayConfig?.logging),
       );
       const type: Session["type"] = config.type;
 

@@ -333,6 +333,16 @@ pub fn tmux_pane_info(
     }
 }
 
+/// Per-session output logging configuration.
+///
+/// Defaults to disabled. When enabled, the backend records the terminal's
+/// output stream (`session-output`) only — user keystrokes are never captured
+/// separately; any echoed input appears only because it is part of the
+/// terminal's own output.
+///
+/// Template placeholders: `{{name}}` (session name), `{{id}}` (xsterm session
+/// id), `{{ts}}` (timestamp `YYYY-MM-DD HH:mm:ss`), `{{ts:<strftime>}}`
+/// (custom timestamp), and `{{line}}` (output chunk text, line format only).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SessionLoggingConfig {

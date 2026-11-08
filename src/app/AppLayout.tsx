@@ -34,7 +34,7 @@ export default function AppLayout() {
   const [createSessionGroupId, setCreateSessionGroupId] = useState<number>(DEFAULT_GROUP_ID);
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<
-    "appearance" | "shortcuts" | "about"
+    "appearance" | "shortcuts" | "logging" | "about"
   >("appearance");
   const [sidebarPanel, setSidebarPanel] = useState<
     "chat" | "settings" | "workspace" | "windows" | null

@@ -287,15 +287,25 @@ export interface SessionDisplayConfig {
 }
 
 export interface SessionLoggingConfig {
-  /** Whether to record session output. @default false */
+  /** Whether to record the terminal's output stream for this session. @default false */
   enabled?: boolean;
   /** Overwrite or append to the log file. @default true */
   append?: boolean;
-  /** Log file name template. Supports %n (session name), %Y (year), etc. @default "%n_%Y-%m-%d_%H-%M-%S.log" */
+  /**
+   * Log file name template. Placeholders: `{{name}}` (session name), `{{id}}`
+   * (xsterm session id), `{{ts}}` (timestamp `YYYY-MM-DD HH:mm:ss`), and
+   * `{{ts:<strftime>}}` (custom timestamp).
+   * @default "{{name}}_{{ts:%Y-%m-%d_%H-%M-%S}}.log"
+   */
   fileNameTemplate?: string;
   /** Maximum log file size in MB. 0 or unset means unlimited. @default 10 */
   maxSizeMb?: number;
-  /** Format string for log lines. %v is the actual output content. @default "[%Y-%m-%d %H:%M:%S] %v" */
+  /**
+   * Format string applied to each output line. `{{line}}` is the output chunk
+   * text. Session logging records terminal output only; user keystrokes are
+   * never captured separately.
+   * @default "[{{ts}}] {{line}}"
+   */
   lineFormat?: string;
 }
 

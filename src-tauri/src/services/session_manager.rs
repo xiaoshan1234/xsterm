@@ -14,7 +14,7 @@ use crate::models::session::{
     SSHSessionConfig, SessionInfo, SessionLoggingConfig, SplitDirection, TmuxCcConfig,
 };
 use crate::services::local_session::create_local_session;
-use crate::services::session_log::start_session_logging;
+use crate::services::session_log::SessionLogRegistry;
 use crate::services::ssh_session::create_ssh_session as infra_create_ssh;
 use crate::services::tmux::TmuxController;
 
@@ -180,17 +180,41 @@ pub struct SessionManager {
     ssh_backend: Box<dyn SshBackend>,
     tmux_controllers: DashMap<u32, Arc<TmuxController>>,
     next_controller_id: AtomicU32,
+    session_logs: Arc<SessionLogRegistry>,
 }
 
 impl SessionManager {
-    /// Create a new session manager with default platform backends.
-    pub fn new() -> Self {
+    /// Create a new session manager with default platform backends and the
+    /// given per-session log registry.
+    pub fn new(session_logs: Arc<SessionLogRegistry>) -> Self {
         Self {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             ssh_backend: Box::new(SshBackendImpl::new()),
             tmux_controllers: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
+            session_logs,
+        }
+    }
+
+    /// Return a clone of the session log registry for output fan-out.
+    pub fn session_logs(&self) -> Arc<SessionLogRegistry> {
+        Arc::clone(&self.session_logs)
+    }
+
+    fn start_logging(
+        &self,
+        session_id: u32,
+        logging: Option<&SessionLoggingConfig>,
+        session_name: &str,
+    ) {
+        let config = logging.cloned().unwrap_or_default();
+        if let Err(e) = self.session_logs.start(session_id, &config, session_name) {
+            tracing::warn!(
+                "Failed to start session logging for session {}: {}",
+                session_id,
+                e
+            );
         }
     }
 
@@ -199,18 +223,13 @@ impl SessionManager {
         &self,
         config: LocalSessionConfig,
         backend: Arc<dyn AppBackend>,
+        logging: Option<SessionLoggingConfig>,
     ) -> Result<SessionInfo, String> {
         let id = self.allocate_session_id();
 
         let session = create_local_session(config, backend, id)?;
-
-        // Acknowledge the session's logging configuration. The wiring of the
-        // output stream into the log writer is deferred to a follow-up wave;
-        // for now the call emits a tracing event when logging is enabled.
-        let logging_config = SessionLoggingConfig::default();
-        if let Err(e) = start_session_logging(id, &logging_config) {
-            tracing::warn!("Failed to start session logging for session {}: {}", id, e);
-        }
+        let session_name = session.info().name.clone();
+        self.start_logging(id, logging.as_ref(), &session_name);
 
         Ok(self.insert_session(id, ActiveSession::Pty(Box::new(session))))
     }
@@ -220,17 +239,13 @@ impl SessionManager {
         &self,
         config: SSHSessionConfig,
         backend: Arc<dyn AppBackend>,
+        logging: Option<SessionLoggingConfig>,
     ) -> Result<SessionInfo, String> {
         let id = self.allocate_session_id();
 
         let wrapper = infra_create_ssh(self.ssh_backend.as_ref(), config, backend, id)?;
-
-        // Acknowledge the session's logging configuration. See `create_local`
-        // for the rationale on the deferred wiring.
-        let logging_config = SessionLoggingConfig::default();
-        if let Err(e) = start_session_logging(id, &logging_config) {
-            tracing::warn!("Failed to start session logging for session {}: {}", id, e);
-        }
+        let session_name = wrapper.info().name.clone();
+        self.start_logging(id, logging.as_ref(), &session_name);
 
         Ok(self.insert_session(id, ActiveSession::Ssh(Box::new(wrapper))))
     }
@@ -250,6 +265,7 @@ impl SessionManager {
         &self,
         config: &TmuxCcConfig,
         backend: Arc<dyn AppBackend>,
+        logging: Option<SessionLoggingConfig>,
     ) -> Result<SessionInfo, String> {
         let controller_id = self.allocate_controller_id();
         let controller =
@@ -278,6 +294,8 @@ impl SessionManager {
             false,
             tmux_window_id.as_deref(),
         );
+
+        self.start_logging(xsterm_id, logging.as_ref(), &info.name);
 
         let handle = TmuxPaneHandle {
             controller: Arc::clone(&controller),
@@ -851,6 +869,7 @@ impl SessionManager {
     /// If anything else still holds a clone of the Arc we surface that as an
     /// error instead of silently leaking.
     pub fn close(&self, id: u32) -> Result<(), String> {
+        self.session_logs.stop(id);
         let Some((_, arc)) = self.sessions.remove(&id) else {
             return Ok(());
         };
@@ -873,18 +892,13 @@ impl SessionManager {
     }
 }
 
-impl Default for SessionManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::infrastructure::session_backend::SessionBackend;
     use crate::models::capabilities::CapabilityFlags;
     use crate::models::session::{SessionInfo, SessionType};
+    use crate::services::session_log::SessionLogRegistry;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
 
@@ -953,7 +967,7 @@ mod tests {
         let writes = backend.writes.clone();
         let resizes = backend.resizes.clone();
         let closed = backend.closed.clone();
-        let manager = SessionManager::new();
+        let manager = SessionManager::new(Arc::new(SessionLogRegistry::new(std::env::temp_dir())));
         manager
             .sessions
             .insert(1, Arc::new(ActiveSession::Pty(Box::new(backend))));

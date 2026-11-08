@@ -50,9 +50,18 @@ export function useSessionActions(opts: UseSessionActionsOptions): SessionAction
 
       const info = await dispatchByType(
         config.type,
-        () => sessionService.createLocal(config.config as LocalSessionConfig),
-        () => sessionService.createSsh(config.config as SSHSessionConfig),
-        () => sessionService.createTmux(config.config as TmuxCcConfig),
+        () =>
+          sessionService.createLocal(
+            config.config as LocalSessionConfig,
+            config.displayConfig?.logging,
+          ),
+        () =>
+          sessionService.createSsh(
+            config.config as SSHSessionConfig,
+            config.displayConfig?.logging,
+          ),
+        () =>
+          sessionService.createTmux(config.config as TmuxCcConfig, config.displayConfig?.logging),
       );
       const session = buildFrontendSession(info, configId, config.type, config.displayConfig);
       setSessions((prev) => [...prev, session]);
