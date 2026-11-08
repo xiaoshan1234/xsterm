@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { logger } from "../contexts/LoggerContext";
+import { logger } from "./loggerService";
 import {
   type AttachedTmuxServer,
   type Session,
@@ -121,24 +121,14 @@ export async function autoAttachTmuxServers(): Promise<AutoAttachOutcome[]> {
 // would defeat the batching. Do not add rAF batching here.
 export function writeSession(id: number, data: string): Promise<void> {
   const encoded = new TextEncoder().encode(data);
-  return invoke("write_session", { sessionId: id, data: encoded }).then(
-    () => undefined,
-    (e) => {
-      console.error("[xsterm] write_session failed:", e);
-    },
-  );
+  return invoke("write_session", { sessionId: id, data: encoded }).then(() => undefined);
 }
 
 // Fire-and-forget paste chunk write. Used by usePasteBatcher after the
 // clipboard payload has been encoded once and split into UTF-8-safe chunks.
 // Caller is responsible for pacing; this wrapper stays thin.
 export function writeSessionBytes(id: number, data: Uint8Array): Promise<void> {
-  return invoke("write_session", { sessionId: id, data }).then(
-    () => undefined,
-    (e) => {
-      console.error("[xsterm] write_session failed:", e);
-    },
-  );
+  return invoke("write_session", { sessionId: id, data }).then(() => undefined);
 }
 
 export async function resizeSession(id: number, rows: number, cols: number): Promise<void> {

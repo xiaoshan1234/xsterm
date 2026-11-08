@@ -3,6 +3,7 @@ import { useSession } from "../sessions/SessionContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { type SessionDisplayConfig } from "../../types/session";
 import { uploadImageToSshSession } from "../../services/sessionService";
+import { logger } from "../../services/loggerService";
 import { getClipboardImages } from "./clipboard";
 import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
@@ -176,7 +177,9 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
           const buffer = await file.arrayBuffer();
           const bytes = Array.from(new Uint8Array(buffer));
           const remotePath = await uploadImageToSshSession(sessionId, file.name, bytes);
-          writeSessionRef.current(sessionId, remotePath);
+          writeSessionRef.current(sessionId, remotePath).catch((err) => {
+            logger.error("terminal", "writeSession:imagePath", err);
+          });
         } catch (err) {
           console.error("[xsterm] Failed to upload pasted image:", err);
         }
@@ -277,7 +280,9 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       // showing up only on the *next* keystroke. With the Rust side
       // already coalescing reads into 64 KiB chunks (Perf 005), the
       // JS-side input batching buys nothing and only hurts latency.
-      writeSessionRef.current(sessionId, data);
+      writeSessionRef.current(sessionId, data).catch((err) => {
+        logger.error("terminal", "writeSession:keystroke", err);
+      });
     });
 
     const selectionDisposer = xterm.onSelectionChange(() => {

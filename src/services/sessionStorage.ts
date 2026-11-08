@@ -1,5 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { logger } from "../contexts/LoggerContext";
+import { logger } from "./loggerService";
 import {
   type LocalSessionConfig,
   type PaneNode,

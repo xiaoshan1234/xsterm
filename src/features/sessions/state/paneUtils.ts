@@ -4,6 +4,14 @@ import {
   type SplitDirection,
   type Workspace,
 } from "../../../types/session";
+import {
+  findPaneNode,
+  getLeafPaneIds,
+  mapPaneTree,
+  replacePaneNode,
+} from "../../../shared/utils/paneTreeUtils";
+
+export { findPaneNode, getLeafPaneIds, mapPaneTree, replacePaneNode };
 
 export function generateId(): string {
   return crypto.randomUUID();
@@ -33,40 +41,11 @@ export function createSplitNode(
   };
 }
 
-export function findPaneNode(root: PaneNode, id: string): PaneNode | null {
-  if (root.id === id) return root;
-  if (root.children) {
-    for (const child of root.children) {
-      const found = findPaneNode(child, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-export function mapPaneTree(root: PaneNode, mapper: (node: PaneNode) => PaneNode): PaneNode {
-  const mapped = mapper(root);
-  if (mapped.children) {
-    return { ...mapped, children: mapped.children.map((child) => mapPaneTree(child, mapper)) };
-  }
-  return mapped;
-}
-
 export function forEachPane(root: PaneNode, callback: (node: PaneNode) => void): void {
   callback(root);
   if (root.children) {
     root.children.forEach((child) => forEachPane(child, callback));
   }
-}
-
-export function getLeafPaneIds(root: PaneNode): string[] {
-  const ids: string[] = [];
-  forEachPane(root, (node) => {
-    if (node.type === "leaf") {
-      ids.push(node.id);
-    }
-  });
-  return ids;
 }
 
 export function removeSessionFromPaneTree(root: PaneNode, sessionId: number): PaneNode {
@@ -102,15 +81,6 @@ export function collapseEmptySplits(root: PaneNode): PaneNode {
 
 export function removeSessionAndCollapse(root: PaneNode, sessionId: number): PaneNode {
   return collapseEmptySplits(removeSessionFromPaneTree(root, sessionId));
-}
-
-export function replacePaneNode(root: PaneNode, targetId: string, replacement: PaneNode): PaneNode {
-  if (root.id === targetId) return replacement;
-  if (!root.children) return root;
-  return {
-    ...root,
-    children: root.children.map((child) => replacePaneNode(child, targetId, replacement)),
-  };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { writeSessionBytes } from "../../services/sessionService";
+import { logger } from "../../services/loggerService";
 import { convertLineEndings } from "./textTransform";
 
 /**
@@ -127,7 +128,11 @@ export function usePasteBatcher(sessionId: number) {
 
     // Append to the queue. `.catch(() => {})` isolates failures so one
     // rejection doesn't poison every subsequent paste.
-    appendToPasteQueue(inputQueueRef, () => writeSessionBytes(sessionIdRef.current, bytes));
+    appendToPasteQueue(inputQueueRef, () =>
+      writeSessionBytes(sessionIdRef.current, bytes).catch((err) => {
+        logger.error("usePasteBatcher", "writeSessionBytes", err);
+      }),
+    );
   }, []);
 
   // On unmount, do NOT cancel the queue — pending bytes should still reach

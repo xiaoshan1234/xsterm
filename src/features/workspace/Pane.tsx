@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { type PaneNode, type SplitDirection, type Workspace } from "../../types/session";
 import { useSession } from "../sessions/SessionContext";
-import * as paneTree from "./paneTreeUtils";
+import * as paneTree from "../../shared/utils/paneTreeUtils";
 import { isSessionUsedInOtherWindow, getPaneNumber } from "../sessions/state/paneUtils";
 import { useTheme } from "../../contexts/ThemeContext";
 import Terminal, { type TerminalRef } from "../terminal/Terminal";
