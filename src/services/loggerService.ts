@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { LogLevel } from "../types/log";
+
+enum LogLevel {
+  DEBUG = "debug",
+  INFO = "info",
+  WARN = "warn",
+  ERROR = "error",
+}
 
 export interface Logger {
   debug: (source: string, message: string, data?: unknown) => void;
