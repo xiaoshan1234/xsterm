@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useSession } from "../sessions/SessionContext";
+import { useSession } from "../terminals/TerminalContext";
 import { PRESET_THEMES } from "../../types/theme";
 import {
   getLogConfig,
@@ -11,7 +11,7 @@ import {
 import "./SettingsView.css";
 
 const SHORTCUTS = [
-  { label: "New session", keys: "Ctrl+Shift+N" },
+  { label: "New terminal", keys: "Ctrl+Shift+N" },
   { label: "Next tab", keys: "Ctrl+Tab" },
   { label: "Previous tab", keys: "Ctrl+Shift+Tab" },
   { label: "Close current tab", keys: "Ctrl+W" },
@@ -83,8 +83,8 @@ function LoggingSettingsSection() {
         </div>
       </div>
       <p className="settings-select-hint">
-        Controls how much detail the software (debug) log keeps. Session output logging is
-        configured per session.
+        Controls how much detail the software (debug) log keeps. Terminal output logging is
+        configured per terminal.
       </p>
       <div className="settings-path-field">
         <span className="settings-path-label">Log directory</span>
@@ -141,7 +141,7 @@ export function SettingsView({ activeCategory = "appearance" }: SettingsViewProp
                 <span className="settings-toggle-label">Global local echo</span>
               </label>
               <p className="settings-toggle-hint">
-                Show typed characters locally before the remote echo arrives. Per-session overrides
+                Show typed characters locally before the remote echo arrives. Per-terminal overrides
                 will take priority.
               </p>
             </div>

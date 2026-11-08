@@ -1,43 +1,46 @@
 import { useCallback } from "react";
-import { useSession } from "../sessions/SessionContext";
-import * as sessionService from "../../services/sessionService";
-import type { Session, TmuxCcConfig } from "../../types/session";
-import type { TmuxControllerError } from "../sessions/state/types";
+import { useSession } from "../terminals/TerminalContext";
+import * as terminalService from "../../services/terminalService";
+import type { Terminal, TmuxSessionConfig } from "../../types/terminal";
+import type { TmuxControllerError } from "../terminals/state/types";
 import "./TmuxControllerErrorBanner.css";
 
 interface TmuxControllerErrorBannerProps {
   /** Sessions currently rendered in this pane window — the banner only shows when one of them has a tmux error. */
-  paneSessions: Session[];
+  paneSessions: Terminal[];
 }
 
 /**
  * in-pane error banner shown when the tmux controller backing
- * one of the `Session`s in this pane window exits unexpectedly.
+ * one of the `Terminal`s in this pane window exits unexpectedly.
  * Mirrors the look of `Pane.tsx`'s `pane-disconnect-banner` but adds
  * a Retry button that re-creates the controller with the original
- * `TmuxCcConfig` captured at create / attach time.
+ * `TmuxSessionConfig` captured at create / attach time.
  */
 export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorBannerProps) {
   const { tmuxControllerErrors, setTmuxControllerErrors } = useSession();
 
-  const match: { controllerId: number; config: TmuxCcConfig; reason?: string } | null = (() => {
-    for (const session of paneSessions) {
-      if (session.tmuxControllerId === undefined) continue;
-      const err = tmuxControllerErrors.get(session.tmuxControllerId);
-      if (err) {
-        return {
-          controllerId: session.tmuxControllerId,
-          config: err.config,
-          reason: err.reason,
-        };
+  const match: { controllerId: number; config: TmuxSessionConfig; reason?: string } | null =
+    (() => {
+      for (const terminal of paneSessions) {
+        if (terminal.tmuxSessionId === undefined) continue;
+        const err = tmuxControllerErrors.get(terminal.tmuxSessionId);
+        if (err) {
+          return {
+            controllerId: terminal.tmuxSessionId,
+            config: err.config,
+            reason: err.reason,
+          };
+        }
       }
-    }
-    return null;
-  })();
+      return null;
+    })();
 
   const handleRetry = useCallback(async () => {
     if (!match) return;
-    const op = match.config.tmuxSessionName ? sessionService.attachTmux : sessionService.createTmux;
+    const op = match.config.tmuxSessionName
+      ? terminalService.attachTmux
+      : terminalService.createTmux;
     try {
       await op(match.config);
     } catch (e) {

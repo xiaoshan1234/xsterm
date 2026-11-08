@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { buildPaneContextMenu, type PaneMenuActions } from "./paneContextMenu";
-import type { Session } from "../../types/session";
+import type { Terminal } from "../../types/terminal";
 
-function session(overrides: Partial<Session> = {}): Session {
+function terminal(overrides: Partial<Terminal> = {}): Terminal {
   return {
     id: 1,
     configId: "cfg-1",
     name: "s1",
     type: "local",
     isConnected: true,
-    sessionType: { type: "local", config: { shell: "", cwd: "" } },
+    kind: { type: "local", shell: "", cwd: "" },
     ...overrides,
   };
 }
@@ -22,7 +22,7 @@ const noopActions: PaneMenuActions = {
   paste: async () => undefined,
   clear: () => undefined,
   closePane: () => undefined,
-  closeSession: () => undefined,
+  closeTerminal: () => undefined,
 };
 
 function labels(items: ReturnType<typeof buildPaneContextMenu>): string[] {
@@ -30,18 +30,18 @@ function labels(items: ReturnType<typeof buildPaneContextMenu>): string[] {
 }
 
 describe("buildPaneContextMenu", () => {
-  it("includes only Split + Attach + Close Pane when there is no session", () => {
+  it("includes only Split + Attach + Close Pane when there is no terminal", () => {
     const items = buildPaneContextMenu(undefined, noopActions);
     expect(labels(items)).toEqual([
       "Split Horizontal",
       "Split Vertical",
-      "Attach Session",
+      "Attach Terminal",
       "Close Pane",
     ]);
   });
 
-  it("includes Select All, Copy, Paste, Clear Pane, Close Pane, Close Session when a connected session is attached", () => {
-    const items = buildPaneContextMenu(session({ isConnected: true }), noopActions);
+  it("includes Select All, Copy, Paste, Clear Pane, Close Pane, Close Terminal when a connected terminal is attached", () => {
+    const items = buildPaneContextMenu(terminal({ isConnected: true }), noopActions);
     expect(labels(items)).toEqual([
       "Split Horizontal",
       "Split Vertical",
@@ -50,12 +50,12 @@ describe("buildPaneContextMenu", () => {
       "Paste",
       "Clear Pane",
       "Close Pane",
-      "Close Session",
+      "Close Terminal",
     ]);
   });
 
-  it("omits Paste when the session exists but is not connected", () => {
-    const items = buildPaneContextMenu(session({ isConnected: false }), noopActions);
+  it("omits Paste when the terminal exists but is not connected", () => {
+    const items = buildPaneContextMenu(terminal({ isConnected: false }), noopActions);
     expect(labels(items)).toEqual([
       "Split Horizontal",
       "Split Vertical",
@@ -63,29 +63,29 @@ describe("buildPaneContextMenu", () => {
       "Copy",
       "Clear Pane",
       "Close Pane",
-      "Close Session",
+      "Close Terminal",
     ]);
   });
 
   it("marks both Close items as danger", () => {
-    const items = buildPaneContextMenu(session(), noopActions);
+    const items = buildPaneContextMenu(terminal(), noopActions);
     const closePane = items.find((i) => i.label === "Close Pane");
-    const closeSession = items.find((i) => i.label === "Close Session");
+    const closeTerminal = items.find((i) => i.label === "Close Terminal");
     expect(closePane?.danger).toBe(true);
-    expect(closeSession?.danger).toBe(true);
+    expect(closeTerminal?.danger).toBe(true);
   });
 
   it("does not mark non-close items as danger", () => {
-    const items = buildPaneContextMenu(session(), noopActions);
+    const items = buildPaneContextMenu(terminal(), noopActions);
     const dangerItems = items.filter((i) => i.danger);
-    expect(labels(dangerItems)).toEqual(["Close Pane", "Close Session"]);
+    expect(labels(dangerItems)).toEqual(["Close Pane", "Close Terminal"]);
   });
 
-  it("Close Pane comes before Close Session when both are present", () => {
-    const items = buildPaneContextMenu(session(), noopActions);
+  it("Close Pane comes before Close Terminal when both are present", () => {
+    const items = buildPaneContextMenu(terminal(), noopActions);
     const closePaneIdx = items.findIndex((i) => i.label === "Close Pane");
-    const closeSessionIdx = items.findIndex((i) => i.label === "Close Session");
-    expect(closePaneIdx).toBeLessThan(closeSessionIdx);
+    const closeTerminalIdx = items.findIndex((i) => i.label === "Close Terminal");
+    expect(closePaneIdx).toBeLessThan(closeTerminalIdx);
   });
 
   it("Split Horizontal passes 'horizontal' to startSplit", () => {
@@ -114,7 +114,7 @@ describe("buildPaneContextMenu", () => {
 
   it("Close Pane delegates to actions.closePane", () => {
     let called = false;
-    const items = buildPaneContextMenu(session(), {
+    const items = buildPaneContextMenu(terminal(), {
       ...noopActions,
       closePane: () => {
         called = true;

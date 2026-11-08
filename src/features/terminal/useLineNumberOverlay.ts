@@ -36,8 +36,8 @@ interface UseLineNumberOverlayOptions {
   hostRef: RefObject<HTMLDivElement | null>;
   /** The overlay element itself. */
   overlayRef: RefObject<HTMLDivElement | null>;
-  /** Re-initialises the overlay when the pane is bound to another session. */
-  sessionId: number;
+  /** Re-initialises the overlay when the pane is bound to another terminal. */
+  terminalId: number;
   /** Show or hide the line number gutter. @default true */
   enabled?: boolean;
 }
@@ -114,7 +114,7 @@ export function useLineNumberOverlay({
   termRef,
   hostRef,
   overlayRef,
-  sessionId,
+  terminalId,
   enabled = true,
 }: UseLineNumberOverlayOptions): void {
   useEffect(() => {
@@ -211,5 +211,5 @@ export function useLineNumberOverlay({
         overlay.style.display = "none";
       }
     };
-  }, [termRef, hostRef, overlayRef, sessionId, enabled]);
+  }, [termRef, hostRef, overlayRef, terminalId, enabled]);
 }

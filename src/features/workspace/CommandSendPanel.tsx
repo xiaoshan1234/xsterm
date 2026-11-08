@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { type Session, type Workspace } from "../../types/session";
+import { type Terminal, type Workspace } from "../../types/terminal";
 import { useDragResize } from "../../shared/hooks/useDragResize";
 import { getDefaultPaneId, useCommandTargets } from "./useCommandTargets";
 import { useCommandExecutor } from "./useCommandExecutor";
@@ -7,8 +7,8 @@ import "./CommandSendPanel.css";
 
 interface CommandSendPanelProps {
   workspace: Workspace;
-  sessions: Session[];
-  writeSession: (id: number, data: string) => Promise<void>;
+  terminals: Terminal[];
+  writeTerminal: (id: number, data: string) => Promise<void>;
   style?: CSSProperties;
   onHeightChange?: (height: number) => void;
 }
@@ -17,7 +17,7 @@ type SplitMode = "line" | "character";
 
 export default function CommandSendPanel({
   workspace,
-  writeSession,
+  writeTerminal,
   style,
   onHeightChange,
 }: CommandSendPanelProps) {
@@ -32,7 +32,7 @@ export default function CommandSendPanel({
     splitMode,
     count,
     intervalMs,
-    writeSession,
+    writeTerminal,
     getTargetSessions: targets.getTargetSessions,
   });
 

@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
-import { type SavedWindowConfig, type SavedWorkspace, type Workspace } from "../../types/session";
+import { type SavedWindowConfig, type SavedWorkspace, type Workspace } from "../../types/terminal";
 import { useDragResize } from "../../shared/hooks/useDragResize";
 import { SidebarToolbar, type SidebarMenu } from "./SidebarToolbar";
-import { SessionManager } from "./SessionManager";
+import { TerminalManager } from "./TerminalManager";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { WindowManager } from "./WindowManager";
 import "./Sidebar.css";
@@ -85,7 +85,7 @@ export default function Sidebar({
 
       {sidebarPanel === "chat" && (
         <div className="sidebar-submenu" style={{ width: submenuWidth }}>
-          <SessionManager
+          <TerminalManager
             onCreateSession={onCreateSession}
             onCreateSessionWithGroup={onCreateSessionWithGroup}
           />

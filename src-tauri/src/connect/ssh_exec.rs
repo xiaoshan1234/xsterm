@@ -11,7 +11,7 @@ use russh::keys::{decode_secret_key, PrivateKeyWithHashAlg, PublicKey};
 use tokio::net::{TcpSocket, TcpStream};
 
 use crate::shared::error::StringError;
-use crate::shared::session::SSHSessionConfig;
+use crate::shared::session::SshConfig;
 
 struct ClientHandler;
 
@@ -26,7 +26,7 @@ impl russh::client::Handler for ClientHandler {
     }
 }
 
-async fn open_configured_tcp_stream(config: &SSHSessionConfig) -> Result<TcpStream, String> {
+async fn open_configured_tcp_stream(config: &SshConfig) -> Result<TcpStream, String> {
     let nodelay = config.tcp_nodelay.unwrap_or(true);
     let keepalive = config.so_keepalive.unwrap_or(false);
 
@@ -75,7 +75,7 @@ async fn open_configured_tcp_stream(config: &SSHSessionConfig) -> Result<TcpStre
 
 async fn authenticate(
     handle: &mut russh::client::Handle<ClientHandler>,
-    config: &SSHSessionConfig,
+    config: &SshConfig,
 ) -> Result<(), String> {
     match config.auth_type.as_str() {
         "password" => {
@@ -114,7 +114,7 @@ async fn authenticate(
 }
 
 async fn exec_ssh_command(
-    config: &SSHSessionConfig,
+    config: &SshConfig,
     command: &str,
     stdin_data: Vec<u8>,
 ) -> Result<(), String> {
@@ -177,7 +177,7 @@ async fn exec_ssh_command(
 
 /// Upload `data` to `remote_path` via a fresh SSH exec channel (`cat > path`).
 pub async fn upload_file_via_ssh(
-    config: &SSHSessionConfig,
+    config: &SshConfig,
     remote_path: &str,
     data: Vec<u8>,
 ) -> Result<(), String> {

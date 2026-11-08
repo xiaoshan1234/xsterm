@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useSession } from "../features/sessions/SessionContext";
-import { DEFAULT_GROUP_ID } from "../features/sessions/state/constants";
+import { useSession } from "../features/terminals/TerminalContext";
+import { DEFAULT_GROUP_ID } from "../features/terminals/state/constants";
 import { useAppShortcuts } from "./useAppShortcuts";
-import { useTmuxAutoAttach } from "../features/sessions/useTmuxAutoAttach";
+import { useTmuxAutoAttach } from "../features/terminals/useTmuxAutoAttach";
 import NavBar from "./NavBar";
 import Sidebar from "../features/sidebar/Sidebar";
 import { WorkspaceContainer } from "../features/workspace/WorkspaceContainer";
 import { WorkspaceBottomBar } from "../features/workspace/WorkspaceBottomBar";
 import { SettingsView } from "../features/settings/SettingsView";
-import CreateSessionDialog from "../features/sessions/dialogs/CreateSessionDialog";
+import CreateTerminalDialog from "../features/terminals/dialogs/CreateTerminalDialog";
 import "../styles/pane.css";
 
 export default function AppLayout() {
@@ -31,7 +31,7 @@ export default function AppLayout() {
     closeWorkspace,
   } = useSession();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [createSessionGroupId, setCreateSessionGroupId] = useState<number>(DEFAULT_GROUP_ID);
+  const [createTerminalGroupId, setCreateTerminalGroupId] = useState<number>(DEFAULT_GROUP_ID);
   const [activeView, setActiveView] = useState<"terminal" | "settings">("terminal");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState<
     "appearance" | "shortcuts" | "logging" | "about"
@@ -73,11 +73,11 @@ export default function AppLayout() {
       <div className="content-area">
         <Sidebar
           onCreateSession={() => {
-            setCreateSessionGroupId(DEFAULT_GROUP_ID);
+            setCreateTerminalGroupId(DEFAULT_GROUP_ID);
             setShowCreateDialog(true);
           }}
           onCreateSessionWithGroup={(groupId) => {
-            setCreateSessionGroupId(groupId);
+            setCreateTerminalGroupId(groupId);
             setShowCreateDialog(true);
           }}
           onToggleLogs={() => {}}
@@ -131,13 +131,13 @@ export default function AppLayout() {
           )}
         </div>
       </div>
-      <CreateSessionDialog
+      <CreateTerminalDialog
         isOpen={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
         onCreateLocal={createLocalSession}
         onCreateSsh={createSshSession}
         onCreateTmux={createTmuxSession}
-        initialGroupId={createSessionGroupId}
+        initialGroupId={createTerminalGroupId}
       />
     </div>
   );

@@ -1,27 +1,27 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { type FitAddon } from "@xterm/addon-fit";
-import { useSession } from "../sessions/SessionContext";
-import { type SessionDisplayConfig } from "../../types/session";
+import { useSession } from "../terminals/TerminalContext";
+import { type TerminalDisplayConfig } from "../../types/terminal";
 
 export function useTerminalResize(
   containerRef: RefObject<HTMLDivElement | null>,
   termRef: RefObject<XTerm | null>,
   fitAddonRef: RefObject<FitAddon | null>,
-  sessionId: number,
-  displayConfig?: SessionDisplayConfig,
+  terminalId: number,
+  displayConfig?: TerminalDisplayConfig,
   isWindowActive: boolean = true,
 ): void {
-  const { resizeSession } = useSession();
-  const resizeSessionRef = useRef(resizeSession);
+  const { resizeTerminal } = useSession();
+  const resizeTerminalRef = useRef(resizeTerminal);
 
   useEffect(() => {
-    resizeSessionRef.current = resizeSession;
-  }, [resizeSession]);
+    resizeTerminalRef.current = resizeTerminal;
+  }, [resizeTerminal]);
 
   // Mirror displayConfig into a ref so the debounced ResizeObserver closure
   // always reads the latest sizing mode without re-subscribing to the observer.
-  const displayConfigRef = useRef<SessionDisplayConfig | undefined>(displayConfig);
+  const displayConfigRef = useRef<TerminalDisplayConfig | undefined>(displayConfig);
   useEffect(() => {
     displayConfigRef.current = displayConfig;
   }, [displayConfig]);
@@ -47,7 +47,7 @@ export function useTerminalResize(
       if (displayConfigRef.current?.sizingMode === "fixed") return;
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
-        resizeSessionRef.current(sessionId, xterm.rows, xterm.cols);
+        resizeTerminalRef.current(terminalId, xterm.rows, xterm.cols);
       }
     };
 
@@ -85,11 +85,11 @@ export function useTerminalResize(
         clearTimeout(resizeTimer);
       }
     };
-  }, [containerRef, termRef, fitAddonRef, sessionId, isWindowActive]);
+  }, [containerRef, termRef, fitAddonRef, terminalId, isWindowActive]);
 
   // Runtime apply: when the user changes sizingMode, cols, or rows via the
-  // EditSessionDialog, push the new size to the live xterm + PTY without
-  // requiring a session restart.
+  // EditTerminalDialog, push the new size to the live xterm + PTY without
+  // requiring a terminal restart.
   // - "fixed": lock xterm (and PTY) to displayConfig.cols × displayConfig.rows.
   // - "auto": re-fit to container and resync PTY from current xterm dims.
   useEffect(() => {
@@ -107,18 +107,18 @@ export function useTerminalResize(
       const targetRows = displayConfig?.rows ?? xterm.rows ?? 24;
       if (xterm.cols !== targetCols || xterm.rows !== targetRows) {
         xterm.resize(targetCols, targetRows);
-        resizeSessionRef.current(sessionId, targetRows, targetCols);
+        resizeTerminalRef.current(terminalId, targetRows, targetCols);
       }
     } else {
       fitAddon.fit();
-      resizeSessionRef.current(sessionId, xterm.rows, xterm.cols);
+      resizeTerminalRef.current(terminalId, xterm.rows, xterm.cols);
     }
   }, [
     displayConfig?.sizingMode,
     displayConfig?.cols,
     displayConfig?.rows,
     isWindowActive,
-    sessionId,
+    terminalId,
     containerRef,
     termRef,
     fitAddonRef,

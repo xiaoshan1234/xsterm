@@ -1,6 +1,6 @@
 import { useShortcuts } from "../shared/hooks/useShortcut";
-import { useSession } from "../features/sessions/SessionContext";
-import type { PaneNode, SplitDirection } from "../types/session";
+import { useSession } from "../features/terminals/TerminalContext";
+import type { PaneNode, SplitDirection } from "../types/terminal";
 
 export function useAppShortcuts({
   onCreateSession,
@@ -9,24 +9,24 @@ export function useAppShortcuts({
   onCreateSession: () => void;
   onToggleLogs: () => void;
 }) {
-  const { workspaces, activeWorkspaceId, setActivePane, closeSession, splitPane } = useSession();
+  const { workspaces, activeWorkspaceId, setActivePane, closeTerminal, splitPane } = useSession();
 
   const activeWindowFor = (workspace: (typeof workspaces)[number]) =>
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
 
   // Ctrl+\ / Ctrl+Shift+\ split the active pane (vertical /
   // horizontal). The split is routed through `splitPane` which detects
-  // tmux sessions via `supportsMultiplex` and dispatches to the
-  // backend; non-multiplex sessions fall through to the existing
-  // "open dialog and let the user pick a session" flow.
+  // tmux terminals via `supportsMultiplex` and dispatches to the
+  // backend; non-multiplex terminals fall through to the existing
+  // "open dialog and let the user pick a terminal" flow.
   const splitActivePane = (direction: SplitDirection): void => {
     const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) return;
     const window = activeWindowFor(workspace);
     if (!window || !window.activePaneId) return;
     const pane = findPane(window.rootPane, window.activePaneId);
-    if (!pane || pane.type !== "leaf" || pane.sessionId === undefined) return;
-    splitPane(workspace.id, window.id, pane.id, direction, pane.sessionId);
+    if (!pane || pane.type !== "leaf" || pane.terminalId === undefined) return;
+    splitPane(workspace.id, window.id, pane.id, direction, pane.terminalId);
   };
 
   useShortcuts([
@@ -74,8 +74,8 @@ export function useAppShortcuts({
         const window = activeWindowFor(workspace);
         if (!window || !window.activePaneId) return;
         const pane = findPane(window.rootPane, window.activePaneId);
-        if (pane?.sessionId !== undefined) {
-          closeSession(pane.sessionId);
+        if (pane?.terminalId !== undefined) {
+          closeTerminal(pane.terminalId);
         }
       },
     },

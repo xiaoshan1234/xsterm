@@ -22,7 +22,7 @@ export function SidebarToolbar({ activeMenu, onMenuClick, onToggleLogs }: Sideba
         <button
           className={`sidebar-btn ${activeMenu === "chat" ? "active" : ""}`}
           onClick={() => onMenuClick("chat")}
-          title="Session Manager"
+          title="Terminal Manager"
         >
           <ChatIcon />
         </button>

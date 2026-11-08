@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { type Workspace, type PaneNode } from "../../types/session";
-import { useSession } from "../sessions/SessionContext";
+import { type Workspace, type PaneNode } from "../../types/terminal";
+import { useSession } from "../terminals/TerminalContext";
 import { useClampedPanelHeight } from "../../shared/hooks/useClampedPanelHeight";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
@@ -32,7 +32,7 @@ interface WorkspaceContainerProps {
 
 export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceContainerProps) {
   const {
-    sessions,
+    terminals,
     setActiveWorkspace,
     setActiveWindow,
     setActivePane,
@@ -42,7 +42,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     renameWindow,
     saveWindow,
     saveWorkspace,
-    writeSession,
+    writeTerminal,
     savedWorkspaces,
   } = useSession();
 
@@ -147,8 +147,8 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
       {commandPanelOpen && (
         <CommandSendPanel
           workspace={workspace}
-          sessions={sessions}
-          writeSession={writeSession}
+          terminals={terminals}
+          writeTerminal={writeTerminal}
           style={{ height: commandPanelHeight, minHeight: 120 }}
           onHeightChange={handlePanelHeightChange}
         />

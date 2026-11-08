@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { PaneNode, Window, Workspace } from "../../types/session";
-import { findFirstLeafWithSession, findPaneNode, forEachPane } from "../sessions/state/paneUtils";
+import type { PaneNode, Window, Workspace } from "../../types/terminal";
+import { findFirstLeafWithSession, findPaneNode, forEachPane } from "../terminals/state/paneUtils";
 
 function getLeafPanesWithSession(root: PaneNode): PaneNode[] {
   const panes: PaneNode[] = [];
   forEachPane(root, (node) => {
-    if (node.type === "leaf" && node.sessionId !== undefined) {
+    if (node.type === "leaf" && node.terminalId !== undefined) {
       panes.push(node);
     }
   });
@@ -15,7 +15,7 @@ function getLeafPanesWithSession(root: PaneNode): PaneNode[] {
 function getDefaultPaneId(window: Window): string | null {
   if (window.activePaneId) {
     const pane = findPaneNode(window.rootPane, window.activePaneId);
-    if (pane?.type === "leaf" && pane.sessionId !== undefined) {
+    if (pane?.type === "leaf" && pane.terminalId !== undefined) {
       return pane.id;
     }
   }
@@ -69,8 +69,8 @@ export function useCommandTargets(workspace: Workspace): CommandTargets {
 
     const resolvedPaneId = targetPaneId === "active" ? selectedWindow.activePaneId : targetPaneId;
     const pane = resolvedPaneId ? findPaneNode(selectedWindow.rootPane, resolvedPaneId) : null;
-    if (pane && pane.type === "leaf" && pane.sessionId !== undefined) {
-      return [pane.sessionId];
+    if (pane && pane.type === "leaf" && pane.terminalId !== undefined) {
+      return [pane.terminalId];
     }
     return [];
   }, [workspace, targetWindowId, targetPaneId]);

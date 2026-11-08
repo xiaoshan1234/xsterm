@@ -1,5 +1,5 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
-import { type PaneNode, type Workspace } from "../../types/session";
+import { type PaneNode, type Workspace } from "../../types/terminal";
 import { useDragResize } from "../../shared/hooks/useDragResize";
 import { Pane } from "./Pane";
 

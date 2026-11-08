@@ -2,14 +2,14 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::connect::app_backend::{AppBackend, RealAppBackend};
-use crate::connect::registry::{AutoAttachOutcome, SessionRegistry};
-use crate::feature::logging::session_log::SessionLoggingBackend;
+use crate::connect::registry::{AutoAttachOutcome, TerminalRegistry};
+use crate::feature::logging::session_log::TerminalLoggingBackend;
 use crate::shared::session::{
-    AttachedTmuxServer, LocalSessionConfig, SSHSessionConfig, SessionInfo, SessionLoggingConfig,
-    TmuxCcConfig,
+    AttachedTmuxServer, LocalTerminalConfig, SshConfig, TerminalInfo, TerminalLoggingConfig,
+    TmuxSessionConfig,
 };
 
-/// Hard ceiling on a single `write_session` payload. The frontend sends one
+/// Hard ceiling on a single `write_terminal` payload. The frontend sends one
 /// IPC call per paste (Perf 011 made that feasible by offloading the actual
 /// `write_all` to a dedicated thread), so a healthy client never reaches
 /// this — it's a defence-in-depth limit against a misbehaving caller. See
@@ -18,16 +18,16 @@ const MAX_WRITE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
 /// Create a new local shell session.
 #[tauri::command]
-pub async fn create_local_session(
-    config: LocalSessionConfig,
-    logging: Option<SessionLoggingConfig>,
-    state: State<'_, Arc<SessionRegistry>>,
+pub async fn create_local_terminal(
+    config: LocalTerminalConfig,
+    logging: Option<TerminalLoggingConfig>,
+    state: State<'_, Arc<TerminalRegistry>>,
     app: AppHandle,
-) -> Result<SessionInfo, String> {
+) -> Result<TerminalInfo, String> {
     tracing::info!("Creating local session");
     let inner: Arc<dyn AppBackend> = Arc::new(RealAppBackend::new(app));
     let backend: Arc<dyn AppBackend> =
-        Arc::new(SessionLoggingBackend::new(inner, state.session_logs()));
+        Arc::new(TerminalLoggingBackend::new(inner, state.session_logs()));
     state
         .create_local(config, backend, logging)
         .inspect(|info| {
@@ -37,12 +37,12 @@ pub async fn create_local_session(
 
 /// Create a new SSH session.
 #[tauri::command]
-pub async fn create_ssh_session(
-    config: SSHSessionConfig,
-    logging: Option<SessionLoggingConfig>,
-    state: State<'_, Arc<SessionRegistry>>,
+pub async fn create_ssh_terminal(
+    config: SshConfig,
+    logging: Option<TerminalLoggingConfig>,
+    state: State<'_, Arc<TerminalRegistry>>,
     app: AppHandle,
-) -> Result<SessionInfo, String> {
+) -> Result<TerminalInfo, String> {
     tracing::info!(
         "Creating SSH session: {}@{}:{}",
         config.username,
@@ -51,7 +51,7 @@ pub async fn create_ssh_session(
     );
     let inner: Arc<dyn AppBackend> = Arc::new(RealAppBackend::new(app));
     let backend: Arc<dyn AppBackend> =
-        Arc::new(SessionLoggingBackend::new(inner, state.session_logs()));
+        Arc::new(TerminalLoggingBackend::new(inner, state.session_logs()));
     state
         .create_ssh(config, backend, logging)
         .await
@@ -68,10 +68,10 @@ pub async fn create_ssh_session(
 /// by id via `DashMap::get` and dispatches to the backend's
 /// `write(&self, data)`.
 #[tauri::command]
-pub async fn write_session(
+pub async fn write_terminal(
     session_id: u32,
     data: Vec<u8>,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
     if data.len() > MAX_WRITE_PAYLOAD_BYTES {
         return Err(format!(
@@ -85,20 +85,20 @@ pub async fn write_session(
 
 /// Resize the PTY of an existing session.
 #[tauri::command]
-pub async fn resize_session(
+pub async fn resize_terminal(
     session_id: u32,
     rows: u16,
     cols: u16,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
     state.resize(session_id, rows, cols).await
 }
 
 /// Close an existing session.
 #[tauri::command]
-pub async fn close_session(
+pub async fn close_terminal(
     session_id: u32,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
     tracing::info!("Closing session: id={}", session_id);
     state.close(session_id).await
@@ -106,18 +106,20 @@ pub async fn close_session(
 
 /// List metadata for all active sessions.
 #[tauri::command]
-pub fn list_sessions(state: State<'_, Arc<SessionRegistry>>) -> Result<Vec<SessionInfo>, String> {
+pub fn list_terminals(
+    state: State<'_, Arc<TerminalRegistry>>,
+) -> Result<Vec<TerminalInfo>, String> {
     Ok(state.list())
 }
 
 /// Upload an image file to the SSH server for the given session and return the
 /// remote path where it was stored.
 #[tauri::command]
-pub fn upload_image_to_ssh_session(
+pub fn upload_image_to_ssh_terminal(
     session_id: u32,
     filename: String,
     data: Vec<u8>,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<String, String> {
     state.upload_image(session_id, &filename, data)
 }
@@ -131,12 +133,12 @@ pub fn upload_image_to_ssh_session(
 /// `is_hidden = true` so the frontend suppresses it.
 #[tauri::command]
 pub async fn create_tmux_session(
-    config: TmuxCcConfig,
-    logging: Option<SessionLoggingConfig>,
-    state: State<'_, Arc<SessionRegistry>>,
+    config: TmuxSessionConfig,
+    logging: Option<TerminalLoggingConfig>,
+    state: State<'_, Arc<TerminalRegistry>>,
     backend: State<'_, Arc<RealAppBackend>>,
     app: AppHandle,
-) -> Result<SessionInfo, String> {
+) -> Result<TerminalInfo, String> {
     tracing::info!(
         "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?} base_config_id={:?} has_ssh={}",
         config.name,
@@ -148,7 +150,7 @@ pub async fn create_tmux_session(
     let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
     let inner: Arc<dyn AppBackend> = arc_real;
     let wrapped: Arc<dyn AppBackend> =
-        Arc::new(SessionLoggingBackend::new(inner, state.session_logs()));
+        Arc::new(TerminalLoggingBackend::new(inner, state.session_logs()));
     let result = state.create_tmux(&config, wrapped, logging).await;
     if let Err(ref e) = result {
         tracing::error!(
@@ -175,8 +177,8 @@ pub async fn create_tmux_session(
         tracing::info!(
             "tmux session created: id={} controller_id={} pane={:?} hidden={}",
             info.id,
-            info.tmux_controller_id.unwrap_or(0),
-            info.tmux_pane_id,
+            info.tmux_session_id().unwrap_or(0),
+            info.tmux_pane_id(),
             info.is_hidden,
         );
     })
@@ -184,7 +186,7 @@ pub async fn create_tmux_session(
 
 /// Split the tmux pane backing an xsterm session via `split-window`.
 ///
-/// Returns a [`SessionInfo`] for the newly created pane (a fresh
+/// Returns a [`TerminalInfo`] for the newly created pane (a fresh
 /// xsterm session whose backend is a new tmux pane); the frontend
 /// binds it to a new xsterm pane leaf in the PaneTree.
 ///
@@ -197,7 +199,7 @@ pub async fn create_tmux_session(
 /// - `direction` — `"horizontal"` (`split-window -h`, right of parent)
 ///   or `"vertical"` (`split-window -v`, below parent).
 ///
-/// Returns a [`SessionInfo`] for the newly created pane, with
+/// Returns a [`TerminalInfo`] for the newly created pane, with
 /// `is_hidden = false` because user-driven splits must render normally.
 /// The controller also fires a `tmux-pane-added` event with the
 /// `parentTmuxWindowId` field; the frontend listener for that event is
@@ -207,8 +209,8 @@ pub async fn create_tmux_pane(
     controller_id: u32,
     parent_xsterm_session_id: u32,
     direction: String,
-    state: State<'_, Arc<SessionRegistry>>,
-) -> Result<SessionInfo, String> {
+    state: State<'_, Arc<TerminalRegistry>>,
+) -> Result<TerminalInfo, String> {
     tracing::info!(
         "create_tmux_pane: controller_id={} parent_xsterm_session_id={} direction={:?}",
         controller_id,
@@ -222,7 +224,7 @@ pub async fn create_tmux_pane(
             tracing::info!(
                 "create_tmux_pane: new pane xsterm_id={} tmux_pane_id={:?}",
                 info.id,
-                info.tmux_pane_id,
+                info.tmux_pane_id(),
             );
         })
 }
@@ -239,7 +241,7 @@ pub async fn create_tmux_pane(
 #[tauri::command]
 pub async fn kill_tmux_pane(
     xsterm_session_id: u32,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
     tracing::info!("kill_tmux_pane: xsterm_session_id={}", xsterm_session_id);
     state.kill_tmux_pane(xsterm_session_id)
@@ -257,11 +259,11 @@ pub async fn kill_tmux_pane(
 /// session" is non-deterministic when several exist on the same socket.
 #[tauri::command]
 pub async fn attach_tmux_session(
-    config: TmuxCcConfig,
-    state: State<'_, Arc<SessionRegistry>>,
+    config: TmuxSessionConfig,
+    state: State<'_, Arc<TerminalRegistry>>,
     backend: State<'_, Arc<RealAppBackend>>,
     app: AppHandle,
-) -> Result<SessionInfo, String> {
+) -> Result<TerminalInfo, String> {
     tracing::info!(
         "Attaching to tmux server: name={:?} tmux_session={:?} socket={:?}",
         config.name,
@@ -282,8 +284,8 @@ pub async fn attach_tmux_session(
         tracing::info!(
             "tmux attach succeeded: id={} controller_id={} pane={:?} hidden={}",
             info.id,
-            info.tmux_controller_id.unwrap_or(0),
-            info.tmux_pane_id,
+            info.tmux_session_id().unwrap_or(0),
+            info.tmux_pane_id(),
             info.is_hidden,
         );
     })
@@ -297,7 +299,7 @@ pub async fn attach_tmux_session(
 /// - `name` — optional display name for the new window. `None` lets
 ///   tmux pick a default name based on the running command.
 ///
-/// Returns the [`SessionInfo`] for the first pane of the new window;
+/// Returns the [`TerminalInfo`] for the first pane of the new window;
 /// the controller also emits `tmux-window-added` and `tmux-pane-added`
 /// events which the frontend listener uses to keep its state in sync
 /// (idempotent — if the Session already exists, the listener short-
@@ -306,8 +308,8 @@ pub async fn attach_tmux_session(
 pub async fn create_tmux_window(
     controller_id: u32,
     name: Option<String>,
-    state: State<'_, Arc<SessionRegistry>>,
-) -> Result<SessionInfo, String> {
+    state: State<'_, Arc<TerminalRegistry>>,
+) -> Result<TerminalInfo, String> {
     tracing::info!(
         "create_tmux_window: controller_id={} name={:?}",
         controller_id,
@@ -335,7 +337,7 @@ pub async fn create_tmux_window(
 #[tauri::command]
 pub async fn kill_tmux_window(
     xsterm_window_id: u32,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
     tracing::info!("kill_tmux_window: xsterm_window_id={}", xsterm_window_id);
     state.kill_tmux_window(xsterm_window_id)
@@ -357,7 +359,7 @@ pub async fn kill_tmux_window(
 pub async fn capture_tmux_pane(
     xsterm_session_id: u32,
     lines: i32,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<String, String> {
     tracing::info!(
         "capture_tmux_pane: xsterm_session_id={} lines={}",
@@ -374,7 +376,7 @@ pub async fn capture_tmux_pane(
 /// frontend can render the persisted list.
 #[tauri::command]
 pub async fn get_attached_tmux_servers(
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<Vec<AttachedTmuxServer>, String> {
     Ok(state.list_attached_tmux_servers())
 }
@@ -385,7 +387,7 @@ pub async fn get_attached_tmux_servers(
 /// Frontend wrapper: `sessionService.autoAttachTmuxServers()`. Called
 /// once on app startup to restore previous tmux sessions. The returned
 /// list carries one entry per previously-attached server — successful
-/// re-attachs expose the new `SessionInfo`; failures surface the error
+/// re-attachs expose the new `TerminalInfo`; failures surface the error
 /// string so the frontend can show partial-failure UI.
 ///
 /// Note: This is NOT full state restore — attach merely reconnects the
@@ -393,7 +395,7 @@ pub async fn get_attached_tmux_servers(
 /// afterwards. See Wave 4 spec §D4 / req-006 §5 for the rationale.
 #[tauri::command]
 pub async fn auto_attach_tmux_servers(
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
     backend: State<'_, Arc<RealAppBackend>>,
     app: AppHandle,
 ) -> Result<Vec<AutoAttachOutcome>, String> {
@@ -414,7 +416,7 @@ pub async fn auto_attach_tmux_servers(
 pub async fn rename_tmux_window(
     xsterm_window_id: u32,
     name: String,
-    state: State<'_, Arc<SessionRegistry>>,
+    state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
     tracing::info!(
         "rename_tmux_window: xsterm_window_id={} name={:?}",

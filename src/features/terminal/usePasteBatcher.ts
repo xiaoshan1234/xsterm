@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { writeSessionBytes } from "../../services/sessionService";
+import { writeTerminalBytes } from "../../services/terminalService";
 import { logger } from "../../services/loggerService";
 import { convertLineEndings } from "./textTransform";
 
@@ -87,7 +87,7 @@ export function appendToPasteQueue(
 }
 
 /**
- * Single-fire paste sender bound to a session.
+ * Single-fire paste sender bound to a terminal.
  *
  * With the Rust async writer (Perf 011, see `src-tauri/.../pty.rs`), the
  * IPC handler returns within microseconds after queuing bytes into a
@@ -113,13 +113,13 @@ export function appendToPasteQueue(
  * layer and survives future changes (e.g. introducing async encoding for
  * non-UTF-8 terminals).
  */
-export function usePasteBatcher(sessionId: number) {
-  const sessionIdRef = useRef(sessionId);
+export function usePasteBatcher(terminalId: number) {
+  const terminalIdRef = useRef(terminalId);
   const inputQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
+    terminalIdRef.current = terminalId;
+  }, [terminalId]);
 
   const enqueuePaste = useCallback((text: string, bracketedPasteMode: boolean) => {
     if (text.length === 0) return;
@@ -129,14 +129,14 @@ export function usePasteBatcher(sessionId: number) {
     // Append to the queue. `.catch(() => {})` isolates failures so one
     // rejection doesn't poison every subsequent paste.
     appendToPasteQueue(inputQueueRef, () =>
-      writeSessionBytes(sessionIdRef.current, bytes).catch((err) => {
-        logger.error("usePasteBatcher", "writeSessionBytes", err);
+      writeTerminalBytes(terminalIdRef.current, bytes).catch((err) => {
+        logger.error("usePasteBatcher", "writeTerminalBytes", err);
       }),
     );
   }, []);
 
   // On unmount, do NOT cancel the queue — pending bytes should still reach
-  // the PTY. If the component remounts with the same sessionId the queue
+  // the PTY. If the component remounts with the same terminalId the queue
   // is gone anyway (ref doesn't survive unmount), so this is the right
   // default: best-effort flush, no abort.
   useEffect(() => undefined, []);

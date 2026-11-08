@@ -1,10 +1,10 @@
 //! Per-session output logging.
 //!
-//! Writes the terminal's `session-output` byte stream to per-session files
+//! Writes the terminal's `terminal-output` byte stream to per-session files
 //! under `session-logs/`. The fan-out happens centrally in
-//! [`SessionLoggingBackend`], which wraps any [`AppBackend`] and taps the
-//! `session-output` event before forwarding it. Session logging defaults to
-//! disabled; only sessions whose [`SessionLoggingConfig::enabled`] is `true`
+//! [`TerminalLoggingBackend`], which wraps any [`AppBackend`] and taps the
+//! `terminal-output` event before forwarding it. Session logging defaults to
+//! disabled; only sessions whose [`TerminalLoggingConfig::enabled`] is `true`
 //! get a writer, so the tap is a single `DashMap` lookup for everyone else.
 
 use std::fs::{self, File, OpenOptions};
@@ -17,7 +17,7 @@ use dashmap::DashMap;
 
 use crate::connect::app_backend::AppBackend;
 use crate::shared::error::StringError;
-use crate::shared::session::SessionLoggingConfig;
+use crate::shared::session::TerminalLoggingConfig;
 
 /// Default timestamp format rendered by `{{ts}}`.
 const DEFAULT_TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
@@ -25,7 +25,7 @@ const DEFAULT_TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 const DEFAULT_MAX_SIZE_MB: u64 = 10;
 const BYTES_PER_MB: u64 = 1024 * 1024;
 
-/// Normalised, defaulted view over a [`SessionLoggingConfig`].
+/// Normalised, defaulted view over a [`TerminalLoggingConfig`].
 struct ResolvedLogConfig {
     append: bool,
     file_name_template: String,
@@ -33,8 +33,8 @@ struct ResolvedLogConfig {
     line_format: String,
 }
 
-impl From<&SessionLoggingConfig> for ResolvedLogConfig {
-    fn from(config: &SessionLoggingConfig) -> Self {
+impl From<&TerminalLoggingConfig> for ResolvedLogConfig {
+    fn from(config: &TerminalLoggingConfig) -> Self {
         Self {
             append: config.append.unwrap_or(true),
             file_name_template: config
@@ -248,12 +248,12 @@ fn open_target(path: &Path, append: bool) -> Result<(BufWriter<File>, u64), Stri
 }
 
 /// Registry of per-session log writers.
-pub struct SessionLogRegistry {
+pub struct TerminalLogRegistry {
     base_dir: PathBuf,
     writers: DashMap<u32, Arc<Mutex<SessionLogWriter>>>,
 }
 
-impl SessionLogRegistry {
+impl TerminalLogRegistry {
     pub fn new(base_dir: PathBuf) -> Self {
         Self {
             base_dir,
@@ -264,7 +264,7 @@ impl SessionLogRegistry {
     pub fn start(
         &self,
         session_id: u32,
-        config: &SessionLoggingConfig,
+        config: &TerminalLoggingConfig,
         session_name: &str,
     ) -> Result<(), String> {
         if !config.enabled.unwrap_or(false) {
@@ -311,18 +311,18 @@ impl SessionLogRegistry {
     }
 }
 
-/// [`AppBackend`] decorator that fans `session-output` out to the session log.
-pub struct SessionLoggingBackend {
+/// [`AppBackend`] decorator that fans `terminal-output` out to the session log.
+pub struct TerminalLoggingBackend {
     inner: Arc<dyn AppBackend>,
-    logs: Arc<SessionLogRegistry>,
+    logs: Arc<TerminalLogRegistry>,
 }
 
-impl SessionLoggingBackend {
-    pub fn new(inner: Arc<dyn AppBackend>, logs: Arc<SessionLogRegistry>) -> Self {
+impl TerminalLoggingBackend {
+    pub fn new(inner: Arc<dyn AppBackend>, logs: Arc<TerminalLogRegistry>) -> Self {
         Self { inner, logs }
     }
 
-    fn tap_session_output(&self, payload: &serde_json::Value) {
+    fn tap_terminal_output(&self, payload: &serde_json::Value) {
         let Some(session_id) = payload.get(0).and_then(|value| value.as_u64()) else {
             return;
         };
@@ -337,16 +337,16 @@ impl SessionLoggingBackend {
     }
 }
 
-impl AppBackend for SessionLoggingBackend {
+impl AppBackend for TerminalLoggingBackend {
     fn emit(&self, event: &str, payload: &serde_json::Value) -> Result<(), String> {
-        if event == "session-output" {
-            self.tap_session_output(payload);
+        if event == "terminal-output" {
+            self.tap_terminal_output(payload);
         }
         self.inner.emit(event, payload)
     }
 }
 
-/// Parse `[u8, u8, ...]` back out of a `session-output` JSON payload.
+/// Parse `[u8, u8, ...]` back out of a `terminal-output` JSON payload.
 fn extract_output_bytes(value: Option<&serde_json::Value>) -> Option<Vec<u8>> {
     let bytes = value?.as_array()?;
     let mut output = Vec::with_capacity(bytes.len());
@@ -364,8 +364,8 @@ fn extract_output_bytes(value: Option<&serde_json::Value>) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
 
-    fn logging_config(enabled: bool) -> SessionLoggingConfig {
-        SessionLoggingConfig {
+    fn logging_config(enabled: bool) -> TerminalLoggingConfig {
+        TerminalLoggingConfig {
             enabled: Some(enabled),
             append: Some(false),
             file_name_template: Some("{{name}}-{{id}}.log".to_string()),
@@ -408,7 +408,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("xsterm-slog-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
-        let registry = SessionLogRegistry::new(dir.clone());
+        let registry = TerminalLogRegistry::new(dir.clone());
         let config = logging_config(true);
         registry.start(42, &config, "main").unwrap();
         registry.write(42, b"hello\nworld");
@@ -429,7 +429,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("xsterm-slog-off-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
-        let registry = SessionLogRegistry::new(dir.clone());
+        let registry = TerminalLogRegistry::new(dir.clone());
         let config = logging_config(false);
         registry.start(9, &config, "main").unwrap();
         assert!(!registry.is_enabled(9));

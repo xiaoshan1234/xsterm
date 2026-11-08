@@ -3,15 +3,15 @@ use std::collections::HashMap;
 
 use crate::shared::capabilities::CapabilityFlags;
 
-/// Supported session types.
+/// Supported terminal kinds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum SessionType {
-    /// A local shell session running on the host machine.
+pub enum TerminalKind {
+    /// A local shell terminal running on the host machine.
     #[serde(rename = "local")]
     Local { shell: String, cwd: String },
 
-    /// A remote session connected over SSH.
+    /// A remote terminal connected over SSH.
     #[serde(rename = "ssh")]
     Ssh {
         host: String,
@@ -19,37 +19,52 @@ pub enum SessionType {
         user: String,
     },
 
-    /// A pane owned by a local `tmux -CC` controller.
-    #[serde(rename = "tmux-cc")]
-    TmuxCc {
-        controller_id: u32,
-        pane_id: String,
-        session_name: String,
+    /// A terminal running inside WSL.
+    #[serde(rename = "wsl")]
+    Wsl {
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        socket_name: Option<String>,
+        distribution: Option<String>,
     },
+
+    /// A pane inside a tmux session.
+    #[serde(rename = "tmux-pane")]
+    TmuxPane { session_id: u32, pane_id: String },
 }
 
-/// Metadata describing a terminal session.
+/// Metadata describing a live terminal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionInfo {
+pub struct TerminalInfo {
     pub id: u32,
     pub name: String,
-    pub session_type: SessionType,
+    pub kind: TerminalKind,
     pub is_connected: bool,
     pub capabilities: CapabilityFlags,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tmux_pane_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tmux_controller_id: Option<u32>,
     /// tmux window id (e.g. `@1`) the pane belongs to. The frontend
-    /// uses this to map a `Session` back to its containing `xsterm Window`.
-    /// `None` for non-tmux sessions (local PTY / SSH).
+    /// uses this to map a `Terminal` back to its containing `xsterm Window`.
+    /// `None` for non-tmux terminals.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tmux_window_id: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub is_hidden: bool,
+}
+
+impl TerminalInfo {
+    /// Return the tmux session id when this terminal is a tmux pane.
+    pub fn tmux_session_id(&self) -> Option<u32> {
+        match &self.kind {
+            TerminalKind::TmuxPane { session_id, .. } => Some(*session_id),
+            _ => None,
+        }
+    }
+
+    /// Return the tmux pane id when this terminal is a tmux pane.
+    pub fn tmux_pane_id(&self) -> Option<&str> {
+        match &self.kind {
+            TerminalKind::TmuxPane { pane_id, .. } => Some(pane_id),
+            _ => None,
+        }
+    }
 }
 
 #[inline]
@@ -60,7 +75,7 @@ fn is_false(b: &bool) -> bool {
 /// Configuration for creating a local shell session.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct LocalSessionConfig {
+pub struct LocalTerminalConfig {
     /// Optional display name for the session. Falls back to the shell basename
     /// when `None` or empty.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,7 +109,7 @@ pub struct LocalSessionConfig {
 /// Configuration for creating an SSH session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SSHSessionConfig {
+pub struct SshConfig {
     /// Optional display name for the session. Falls back to
     /// `format!("{}@{}", username, host)` when `None` or empty.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -143,7 +158,7 @@ pub struct SSHSessionConfig {
     pub proxy_jump: Option<String>,
 }
 
-impl Default for SSHSessionConfig {
+impl Default for SshConfig {
     fn default() -> Self {
         Self {
             name: None,
@@ -229,25 +244,25 @@ pub struct AttachedTmuxServer {
 /// Configuration for creating a tmux `-CC` controller session.
 ///
 /// Spawns a `tmux -CC` child process which then creates and owns one or
-/// more panes (each of which xsterm maps to a leaf [`SessionInfo`]). See
+/// more panes (each of which xsterm maps to a leaf [`TerminalInfo`]). See
 /// `doc/requirements/prd-0.1/req-006-tmux.md` §2 (D1) for the
 /// one-controller-N-panes design rationale.
 ///
 /// ## SSH + tmux -CC
 ///
-/// When [`TmuxCcConfig::ssh`] is `Some(_)`, the controller is run on the
+/// When [`TmuxSessionConfig::ssh`] is `Some(_)`, the controller is run on the
 /// remote host via an SSH exec channel — the SSH session opens
 /// `tmux -CC` on the remote side and its byte stream is bridged into the
 /// controller's I/O task the same way a local child process would be.
 /// When `ssh` is `None`, the controller spawns a local
 /// `tokio::process::Command` child.
 ///
-/// The frontend mirrors this shape with `TmuxCcConfig.ssh?: SSHSessionConfig`
+/// The frontend mirrors this shape with `TmuxSessionConfig.ssh?: SshConfig`
 /// in `src/types/session.ts`; the Create Session dialog exposes a
 /// dedicated "Tmux (SSH)" top tab that fills both halves of the payload.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct TmuxCcConfig {
+pub struct TmuxSessionConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -266,9 +281,9 @@ pub struct TmuxCcConfig {
     /// `tmux -CC` on the remote host via an SSH exec channel. When
     /// `None` (the default), the controller spawns a local `tmux -CC`
     /// child process. Mirrors `doc/requirements/prd-0.1/req-006-tmux.md`
-    /// §4.4 D5 + §4.7 (the `ssh` field on `TmuxCcConfig`).
+    /// §4.4 D5 + §4.7 (the `ssh` field on `TmuxSessionConfig`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ssh: Option<SSHSessionConfig>,
+    pub ssh: Option<SshConfig>,
     /// Frontend-only: id of the saved SSH or Local shell config this
     /// tmux session rides on. `CreateSessionDialog.handleCreate`
     /// looks the base config up and copies the SSH sub-config into
@@ -279,7 +294,7 @@ pub struct TmuxCcConfig {
     pub base_config_id: Option<String>,
 }
 
-/// Build a [`SessionInfo`] for a tmux pane freshly registered with
+/// Build a [`TerminalInfo`] for a tmux pane freshly registered with
 /// `controller_id` and `tmux_pane_id`.
 ///
 /// `display_name` is the user-visible name (falls back to the
@@ -298,36 +313,32 @@ pub struct TmuxCcConfig {
 /// to a tmux window (rare — only used by tests that construct a synthetic
 /// pane without a window).
 pub fn tmux_pane_info(
-    xsterm_session_id: u32,
-    controller_id: u32,
-    tmux_pane_id: impl Into<String>,
+    xsterm_terminal_id: u32,
+    session_id: u32,
+    pane_id: impl Into<String>,
     tmux_session_name: Option<&str>,
     display_name: Option<&str>,
     is_hidden: bool,
     tmux_window_id: Option<&str>,
-) -> SessionInfo {
-    let tmux_pane_id = tmux_pane_id.into();
+) -> TerminalInfo {
+    let pane_id = pane_id.into();
     let session_name = tmux_session_name
         .map(str::to_string)
-        .unwrap_or_else(|| format!("tmux-{controller_id}"));
-    let default_display = format!("{session_name}:{tmux_pane_id}");
+        .unwrap_or_else(|| format!("tmux-{session_id}"));
+    let default_display = format!("{session_name}:{pane_id}");
     let name = display_name
         .filter(|n| !n.trim().is_empty())
         .map(str::to_string)
         .unwrap_or(default_display);
-    SessionInfo {
-        id: xsterm_session_id,
+    TerminalInfo {
+        id: xsterm_terminal_id,
         name,
-        session_type: SessionType::TmuxCc {
-            controller_id,
-            pane_id: tmux_pane_id.clone(),
-            session_name,
-            socket_name: None,
+        kind: TerminalKind::TmuxPane {
+            session_id,
+            pane_id,
         },
         is_connected: true,
         capabilities: CapabilityFlags::for_tmux(),
-        tmux_pane_id: Some(tmux_pane_id),
-        tmux_controller_id: Some(controller_id),
         tmux_window_id: tmux_window_id.map(str::to_string),
         is_hidden,
     }
@@ -336,7 +347,7 @@ pub fn tmux_pane_info(
 /// Per-session output logging configuration.
 ///
 /// Defaults to disabled. When enabled, the backend records the terminal's
-/// output stream (`session-output`) only — user keystrokes are never captured
+/// output stream (`terminal-output`) only — user keystrokes are never captured
 /// separately; any echoed input appears only because it is part of the
 /// terminal's own output.
 ///
@@ -345,7 +356,7 @@ pub fn tmux_pane_info(
 /// (custom timestamp), and `{{line}}` (output chunk text, line format only).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
-pub struct SessionLoggingConfig {
+pub struct TerminalLoggingConfig {
     #[serde(default)]
     pub enabled: Option<bool>,
     #[serde(default)]
@@ -366,7 +377,7 @@ pub struct SessionLoggingConfig {
 /// `ResizeObserver` (the default, backward-compatible behavior). `Fixed`
 /// locks the terminal to a user-specified `cols` × `rows` and ignores
 /// container resizes at runtime. The PTY startup size is still set from
-/// `LocalSessionConfig::initial_rows` / `initial_cols` (or the SSH
+/// `LocalTerminalConfig::initial_rows` / `initial_cols` (or the SSH
 /// equivalents) regardless of this flag — it only affects runtime
 /// resizing behavior on the renderer side.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -439,7 +450,7 @@ pub struct DisplayConfig {
     #[serde(default)]
     pub rows: Option<u32>,
     #[serde(default)]
-    pub logging: Option<SessionLoggingConfig>,
+    pub logging: Option<TerminalLoggingConfig>,
 }
 
 /// Environment variables configuration.
@@ -467,7 +478,7 @@ fn default_version() -> u32 {
 ///   "name": "...",
 ///   "version": 1,
 ///   "type": "local" | "ssh",
-///   "config": { ...LocalSessionConfig | SSHSessionConfig },
+///   "config": { ...LocalTerminalConfig | SshConfig },
 ///   "displayConfig": { ...DisplayConfig }  // optional
 /// }
 /// ```
@@ -499,15 +510,15 @@ pub struct SavedSessionConfigV1 {
 ///
 /// Serialized as `{ "type": "...", "config": { ... } }`. The variants mirror
 /// the create-time [`SessionConfig`] enum but reuse the existing
-/// [`LocalSessionConfig`] / [`SSHSessionConfig`] payload structs.
+/// [`LocalTerminalConfig`] / [`SshConfig`] payload structs.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "config", rename_all = "camelCase")]
 pub enum SavedSessionConfigKind {
     #[serde(rename = "local")]
-    Local(LocalSessionConfig),
+    Local(LocalTerminalConfig),
     #[serde(rename = "ssh")]
-    Ssh(SSHSessionConfig),
+    Ssh(SshConfig),
 }
 
 #[cfg(test)]
@@ -516,7 +527,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_roundtrip_with_all_fields() {
-        let config = SSHSessionConfig {
+        let config = SshConfig {
             name: Some("my-server".to_string()),
             host: "example.com".to_string(),
             port: 2222,
@@ -540,8 +551,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&config).expect("serialize SSH config");
-        let roundtrip: SSHSessionConfig =
-            serde_json::from_str(&json).expect("deserialize SSH config");
+        let roundtrip: SshConfig = serde_json::from_str(&json).expect("deserialize SSH config");
 
         assert_eq!(roundtrip.name.as_deref(), Some("my-server"));
         assert_eq!(roundtrip.host, "example.com");
@@ -562,7 +572,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_roundtrip_with_new_fields_absent() {
-        let config = SSHSessionConfig {
+        let config = SshConfig {
             name: None,
             host: "localhost".to_string(),
             port: 22,
@@ -586,8 +596,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&config).expect("serialize SSH config");
-        let roundtrip: SSHSessionConfig =
-            serde_json::from_str(&json).expect("deserialize SSH config");
+        let roundtrip: SshConfig = serde_json::from_str(&json).expect("deserialize SSH config");
 
         assert_eq!(roundtrip.host, "localhost");
         assert_eq!(roundtrip.port, 22);
@@ -598,7 +607,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_known_hosts_path_only() {
-        let config = SSHSessionConfig {
+        let config = SshConfig {
             name: None,
             host: "remote.example.com".to_string(),
             port: 22,
@@ -625,8 +634,7 @@ mod tests {
         assert!(json.contains("knownHostsPath"));
         assert!(!json.contains("proxyJump"));
 
-        let roundtrip: SSHSessionConfig =
-            serde_json::from_str(&json).expect("deserialize SSH config");
+        let roundtrip: SshConfig = serde_json::from_str(&json).expect("deserialize SSH config");
         assert_eq!(
             roundtrip.known_hosts_path.as_deref(),
             Some("/custom/known_hosts")
@@ -636,7 +644,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_proxy_jump_only() {
-        let config = SSHSessionConfig {
+        let config = SshConfig {
             name: None,
             host: "internal.example.com".to_string(),
             port: 22,
@@ -663,8 +671,7 @@ mod tests {
         assert!(json.contains("proxyJump"));
         assert!(!json.contains("knownHostsPath"));
 
-        let roundtrip: SSHSessionConfig =
-            serde_json::from_str(&json).expect("deserialize SSH config");
+        let roundtrip: SshConfig = serde_json::from_str(&json).expect("deserialize SSH config");
         assert!(roundtrip.known_hosts_path.is_none());
         assert_eq!(
             roundtrip.proxy_jump.as_deref(),
@@ -674,7 +681,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_roundtrip_preserves_name_field() {
-        let original = SSHSessionConfig {
+        let original = SshConfig {
             name: Some("production-web".to_string()),
             host: "prod.example.com".to_string(),
             port: 22,
@@ -700,7 +707,7 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialize");
         assert!(json.contains("\"name\":\"production-web\""));
 
-        let roundtrip: SSHSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        let roundtrip: SshConfig = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(roundtrip.name.as_deref(), Some("production-web"));
         assert_eq!(roundtrip.host, "prod.example.com");
         assert_eq!(roundtrip.username, "deploy");
@@ -708,7 +715,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_omits_name_when_none() {
-        let config = SSHSessionConfig {
+        let config = SshConfig {
             name: None,
             host: "h.example.com".to_string(),
             port: 22,
@@ -734,13 +741,13 @@ mod tests {
         let json = serde_json::to_string(&config).expect("serialize");
         assert!(!json.contains("\"name\""));
 
-        let roundtrip: SSHSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        let roundtrip: SshConfig = serde_json::from_str(&json).expect("deserialize");
         assert!(roundtrip.name.is_none());
     }
 
     #[test]
     fn local_session_config_json_roundtrip_preserves_name_field() {
-        let original = LocalSessionConfig {
+        let original = LocalTerminalConfig {
             name: Some("my-shell".to_string()),
             shell: Some("/bin/zsh".to_string()),
             cwd: Some("/home/me".to_string()),
@@ -752,7 +759,7 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialize");
         assert!(json.contains("\"name\":\"my-shell\""));
 
-        let roundtrip: LocalSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        let roundtrip: LocalTerminalConfig = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(roundtrip.name.as_deref(), Some("my-shell"));
         assert_eq!(roundtrip.shell.as_deref(), Some("/bin/zsh"));
         assert_eq!(roundtrip.cwd.as_deref(), Some("/home/me"));
@@ -761,7 +768,7 @@ mod tests {
 
     #[test]
     fn local_session_config_json_omits_name_when_none() {
-        let config = LocalSessionConfig {
+        let config = LocalTerminalConfig {
             name: None,
             shell: None,
             cwd: None,
@@ -773,14 +780,14 @@ mod tests {
         let json = serde_json::to_string(&config).expect("serialize");
         assert!(!json.contains("\"name\""));
 
-        let roundtrip: LocalSessionConfig = serde_json::from_str(&json).expect("deserialize");
+        let roundtrip: LocalTerminalConfig = serde_json::from_str(&json).expect("deserialize");
         assert!(roundtrip.name.is_none());
     }
 
     #[test]
     fn local_session_config_json_missing_name_field_defaults_to_none() {
         let json_without_name = r#"{"shell":"/bin/bash"}"#;
-        let config: LocalSessionConfig =
+        let config: LocalTerminalConfig =
             serde_json::from_str(json_without_name).expect("deserialize");
         assert!(config.name.is_none());
         assert_eq!(config.shell.as_deref(), Some("/bin/bash"));
@@ -790,15 +797,14 @@ mod tests {
     fn ssh_session_config_json_missing_name_field_defaults_to_none() {
         let json_without_name =
             r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p"}"#;
-        let config: SSHSessionConfig =
-            serde_json::from_str(json_without_name).expect("deserialize");
+        let config: SshConfig = serde_json::from_str(json_without_name).expect("deserialize");
         assert!(config.name.is_none());
         assert_eq!(config.host, "h");
     }
 
     #[test]
     fn local_session_config_json_roundtrip_with_all_new_fields() {
-        let config = LocalSessionConfig {
+        let config = LocalTerminalConfig {
             name: Some("my-shell".to_string()),
             shell: Some("/bin/zsh".to_string()),
             cwd: Some("/home/me".to_string()),
@@ -813,7 +819,7 @@ mod tests {
             initial_cols: Some(120),
         };
 
-        let json = serde_json::to_string(&config).expect("serialize LocalSessionConfig");
+        let json = serde_json::to_string(&config).expect("serialize LocalTerminalConfig");
 
         assert!(json.contains("\"shellTemplate\""));
         assert!(json.contains("\"termType\""));
@@ -821,8 +827,8 @@ mod tests {
         assert!(json.contains("\"startupCommand\""));
         assert!(json.contains("\"startupDelayMs\""));
 
-        let roundtrip: LocalSessionConfig =
-            serde_json::from_str(&json).expect("deserialize LocalSessionConfig");
+        let roundtrip: LocalTerminalConfig =
+            serde_json::from_str(&json).expect("deserialize LocalTerminalConfig");
 
         assert_eq!(
             roundtrip.shell_template.as_deref(),
@@ -838,7 +844,7 @@ mod tests {
         assert_eq!(roundtrip.shell.as_deref(), Some("/bin/zsh"));
 
         let json_with_snake = r#"{"shell_template": "x", "startup_delay_ms": 999}"#;
-        let from_snake: LocalSessionConfig =
+        let from_snake: LocalTerminalConfig =
             serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
         assert!(from_snake.shell_template.is_none());
         assert!(from_snake.startup_delay_ms.is_none());
@@ -846,7 +852,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_json_roundtrip_with_all_new_fields() {
-        let config = SSHSessionConfig {
+        let config = SshConfig {
             name: Some("ssh-server".to_string()),
             host: "example.com".to_string(),
             port: 2222,
@@ -869,15 +875,14 @@ mod tests {
             proxy_jump: Some("bastion.example.com".to_string()),
         };
 
-        let json = serde_json::to_string(&config).expect("serialize SSHSessionConfig");
+        let json = serde_json::to_string(&config).expect("serialize SshConfig");
 
         assert!(json.contains("\"tcpNodelay\""));
         assert!(json.contains("\"soKeepalive\""));
         assert!(json.contains("\"nullPacketKeepalive\""));
         assert!(json.contains("\"charset\""));
 
-        let roundtrip: SSHSessionConfig =
-            serde_json::from_str(&json).expect("deserialize SSHSessionConfig");
+        let roundtrip: SshConfig = serde_json::from_str(&json).expect("deserialize SshConfig");
 
         assert_eq!(roundtrip.tcp_nodelay, Some(true));
         assert_eq!(roundtrip.so_keepalive, Some(true));
@@ -887,7 +892,7 @@ mod tests {
         assert_eq!(roundtrip.port, 2222);
 
         let json_with_snake = r#"{"host":"h","port":22,"username":"u","auth_type":"password","password":"p","tcpNodelay":true,"charset":"latin1"}"#;
-        let from_snake: SSHSessionConfig =
+        let from_snake: SshConfig =
             serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
         assert_eq!(from_snake.tcp_nodelay, Some(true));
         assert_eq!(from_snake.charset.as_deref(), Some("latin1"));
@@ -995,7 +1000,7 @@ mod tests {
 
     #[test]
     fn session_logging_config_json_roundtrip() {
-        let config = SessionLoggingConfig {
+        let config = TerminalLoggingConfig {
             enabled: Some(true),
             append: Some(false),
             file_name_template: Some("/tmp/session-{{id}}.log".to_string()),
@@ -1003,7 +1008,7 @@ mod tests {
             line_format: Some("[{{ts}}] {{line}}".to_string()),
         };
 
-        let json = serde_json::to_string(&config).expect("serialize SessionLoggingConfig");
+        let json = serde_json::to_string(&config).expect("serialize TerminalLoggingConfig");
 
         assert!(json.contains("\"enabled\""));
         assert!(json.contains("\"append\""));
@@ -1011,8 +1016,8 @@ mod tests {
         assert!(json.contains("\"maxSizeMb\""));
         assert!(json.contains("\"lineFormat\""));
 
-        let roundtrip: SessionLoggingConfig =
-            serde_json::from_str(&json).expect("deserialize SessionLoggingConfig");
+        let roundtrip: TerminalLoggingConfig =
+            serde_json::from_str(&json).expect("deserialize TerminalLoggingConfig");
 
         assert_eq!(roundtrip.enabled, Some(true));
         assert_eq!(roundtrip.append, Some(false));
@@ -1024,7 +1029,7 @@ mod tests {
         assert_eq!(roundtrip.line_format.as_deref(), Some("[{{ts}}] {{line}}"));
 
         let json_with_snake = r#"{"file_name_template": "x", "max_size_mb": 5}"#;
-        let from_snake: SessionLoggingConfig =
+        let from_snake: TerminalLoggingConfig =
             serde_json::from_str(json_with_snake).expect("deserialize snake_case JSON");
         assert!(from_snake.file_name_template.is_none());
         assert!(from_snake.max_size_mb.is_none());
@@ -1032,7 +1037,7 @@ mod tests {
 
     #[test]
     fn ssh_session_config_deserializes_flat_auth_type_field() {
-        // Frontend sends snake_case auth_type; SSHSessionConfig uses flat fields
+        // Frontend sends snake_case auth_type; SshConfig uses flat fields
         // with `#[serde(rename = "auth_type")]` to accept this payload.
         let json = r#"{
             "host": "example.com",
@@ -1041,7 +1046,7 @@ mod tests {
             "auth_type": "password",
             "password": "secret"
         }"#;
-        let config: SSHSessionConfig =
+        let config: SshConfig =
             serde_json::from_str(json).expect("frontend payload must deserialize");
         assert_eq!(config.host, "example.com");
         assert_eq!(config.port, 22);
@@ -1060,7 +1065,7 @@ mod tests {
             "key_file": "/home/user/.ssh/id_rsa",
             "passphrase": "secret"
         }"#;
-        let config: SSHSessionConfig =
+        let config: SshConfig =
             serde_json::from_str(json).expect("key auth payload must deserialize");
         assert_eq!(config.auth_type, "key");
         assert_eq!(config.key_file.as_deref(), Some("/home/user/.ssh/id_rsa"));
@@ -1071,7 +1076,7 @@ mod tests {
     fn ssh_session_config_rejects_legacy_authtype_field() {
         // Frontend BEFORE this fix sent { authType: "password", password: "..." }
         // (broken because SSHAuth was tagged with authType). After fix,
-        // SSHSessionConfig uses auth_type (snake_case), and deny_unknown_fields
+        // SshConfig uses auth_type (snake_case), and deny_unknown_fields
         // explicitly rejects any legacy authType field.
         let legacy_json = r#"{
             "host": "h",
@@ -1080,7 +1085,7 @@ mod tests {
             "authType": "password",
             "password": "p"
         }"#;
-        let result: Result<SSHSessionConfig, _> = serde_json::from_str(legacy_json);
+        let result: Result<SshConfig, _> = serde_json::from_str(legacy_json);
         assert!(
             result.is_err(),
             "deny_unknown_fields must reject legacy authType payload"
@@ -1088,7 +1093,7 @@ mod tests {
     }
 
     /// Regression test: frontend's TerminalTab dispatches Term Type / Charset
-    /// changes to LocalSessionConfig / SSHSessionConfig. Verify the camelCase
+    /// changes to LocalTerminalConfig / SshConfig. Verify the camelCase
     /// JSON payload the frontend sends (via `sessionService.createLocal` /
     /// `sessionService.createSsh`) round-trips through `SessionConfig` (the
     /// create-session input enum) into the snake_case Rust fields that
@@ -1096,7 +1101,7 @@ mod tests {
     /// user's Terminal Type setting will be silently dropped on the wire.
     #[test]
     fn tmux_cc_config_json_roundtrip_preserves_all_fields() {
-        let config = TmuxCcConfig {
+        let config = TmuxSessionConfig {
             name: Some("my tmux".to_string()),
             tmux_session_name: Some("work".to_string()),
             socket_name: Some("dev".to_string()),
@@ -1110,15 +1115,15 @@ mod tests {
             base_config_id: None,
         };
 
-        let json = serde_json::to_string(&config).expect("serialize TmuxCcConfig");
+        let json = serde_json::to_string(&config).expect("serialize TmuxSessionConfig");
         assert!(json.contains("\"tmuxSessionName\":\"work\""));
         assert!(json.contains("\"socketName\":\"dev\""));
         assert!(json.contains("\"startCommand\":\"clear\\n\""));
         assert!(json.contains("\"initialRows\":40"));
         assert!(json.contains("\"initialCols\":132"));
 
-        let roundtrip: TmuxCcConfig =
-            serde_json::from_str(&json).expect("deserialize TmuxCcConfig");
+        let roundtrip: TmuxSessionConfig =
+            serde_json::from_str(&json).expect("deserialize TmuxSessionConfig");
         assert_eq!(roundtrip.name.as_deref(), Some("my tmux"));
         assert_eq!(roundtrip.tmux_session_name.as_deref(), Some("work"));
         assert_eq!(roundtrip.socket_name.as_deref(), Some("dev"));
@@ -1130,7 +1135,8 @@ mod tests {
     #[test]
     fn tmux_cc_config_json_default_roundtrip_when_all_fields_missing() {
         let json = "{}";
-        let config: TmuxCcConfig = serde_json::from_str(json).expect("empty JSON must deserialize");
+        let config: TmuxSessionConfig =
+            serde_json::from_str(json).expect("empty JSON must deserialize");
         assert!(config.name.is_none());
         assert!(config.tmux_session_name.is_none());
         assert!(config.socket_name.is_none());
@@ -1155,23 +1161,19 @@ mod tests {
         assert_eq!(info.name, "editor pane");
         assert!(info.is_connected);
         assert!(info.capabilities.supports_multiplex);
-        assert_eq!(info.tmux_pane_id.as_deref(), Some("%13"));
-        assert_eq!(info.tmux_controller_id, Some(7));
+        assert_eq!(info.tmux_session_id(), Some(7));
+        assert_eq!(info.tmux_pane_id(), Some("%13"));
         assert_eq!(info.tmux_window_id.as_deref(), Some("@3"));
         assert!(!info.is_hidden);
-        match info.session_type {
-            SessionType::TmuxCc {
-                controller_id,
+        match info.kind {
+            TerminalKind::TmuxPane {
+                session_id,
                 pane_id,
-                session_name,
-                socket_name,
             } => {
-                assert_eq!(controller_id, 7);
+                assert_eq!(session_id, 7);
                 assert_eq!(pane_id, "%13");
-                assert_eq!(session_name, "main");
-                assert!(socket_name.is_none());
             }
-            other => panic!("expected SessionType::TmuxCc, got {other:?}"),
+            other => panic!("expected TerminalKind::TmuxPane, got {other:?}"),
         }
     }
 

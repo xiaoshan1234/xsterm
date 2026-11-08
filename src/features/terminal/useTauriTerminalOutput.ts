@@ -2,9 +2,9 @@ import { useEffect, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { useSession } from "../sessions/SessionContext";
-import { appendSessionOutput, getSessionOutput } from "../../shared/utils/sessionOutputBuffer";
-import { captureTmuxPane } from "../../services/sessionService";
+import { useSession } from "../terminals/TerminalContext";
+import { appendTerminalOutput, getTerminalOutput } from "../../shared/utils/terminalOutputBuffer";
+import { captureTmuxPane } from "../../services/terminalService";
 
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
@@ -53,23 +53,23 @@ function extractAndCopyOsc52(text: string): string {
   return text.replace(OSC52_REGEX, "");
 }
 
-export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, sessionId: number): void {
-  const { setSessions, sessions } = useSession();
+export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, terminalId: number): void {
+  const { setSessions, terminals } = useSession();
   // tmux scrollback replay applies only to tmux-backed panes.
-  const isTmuxPane = !!sessions.find((s) => s.id === sessionId && !!s.tmuxPaneId);
+  const isTmuxPane = !!terminals.find((s) => s.id === terminalId && !!s.tmuxPaneId);
 
-  // replay tmux scrollback once per pane per app session. The
+  // replay tmux scrollback once per pane per app terminal. The
   // replay happens BEFORE the live listener attaches so the user sees
   // historical content first, then live output streams on top. The
-  // `scrollbackReplayedRef` Set gates re-runs so a sessions-list update
+  // `scrollbackReplayedRef` Set gates re-runs so a terminals-list update
   // that re-fires this effect does not double-replay. Errors are
   // non-fatal (the pane still works without replay).
   useEffect(() => {
-    if (!isTmuxPane || scrollbackReplayedRef.has(sessionId)) return;
+    if (!isTmuxPane || scrollbackReplayedRef.has(terminalId)) return;
     const xterm = termRef.current;
     if (!xterm) return;
-    scrollbackReplayedRef.add(sessionId);
-    captureTmuxPane(sessionId, SCROLLBACK_LINES)
+    scrollbackReplayedRef.add(terminalId);
+    captureTmuxPane(terminalId, SCROLLBACK_LINES)
       .then((text) => {
         if (!text) return;
         try {
@@ -81,7 +81,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
       .catch((err) => {
         console.error("[xsterm] captureTmuxPane failed:", err);
       });
-  }, [isTmuxPane, sessionId, termRef]);
+  }, [isTmuxPane, terminalId, termRef]);
 
   // TEMPORARY REVERT (Perf 001 follow-up): reverted from binary
   // Channel<Vec<u8>> path back to listen<[number, number[]]>. The
@@ -92,7 +92,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
   // listener — making the user unable to type. The binary wire format
   // (binary_frame.rs and sessionOutputFrame.ts) were removed during the
   // backend reorg; output now flows exclusively through the JSON
-  // `session-output` event.
+  // `terminal-output` event.
   //
   // ALSO: removed the rAF queueing that caused a 1-frame (~16 ms) display
   // delay for each typed character. Before Perf 005 the rAF was useful
@@ -110,14 +110,14 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
     let unlisten: (() => void) | null = null;
 
     const handleOutput = (text: string) => {
-      appendSessionOutput(sessionId, text);
+      appendTerminalOutput(terminalId, text);
 
       const now = Date.now();
-      const last = lastTouchRef.get(sessionId) ?? 0;
+      const last = lastTouchRef.get(terminalId) ?? 0;
       if (now - last >= TOUCH_DEBOUNCE_MS) {
-        lastTouchRef.set(sessionId, now);
+        lastTouchRef.set(terminalId, now);
         setSessions((prev) =>
-          prev.map((s) => (s.id === sessionId ? { ...s, lastActivityAt: now } : s)),
+          prev.map((s) => (s.id === terminalId ? { ...s, lastActivityAt: now } : s)),
         );
       }
 
@@ -128,9 +128,9 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
       }
     };
 
-    listen<[number, number[]]>("session-output", (event) => {
+    listen<[number, number[]]>("terminal-output", (event) => {
       const [id, data] = event.payload;
-      if (id === sessionId) {
+      if (id === terminalId) {
         handleOutput(extractAndCopyOsc52(decodeOutput(data)));
       }
     })
@@ -144,18 +144,18 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
         // (e.g. shell prompt that arrived during the listen() Promise
         // resolution window). The listener registers synchronously inside
         // listen() so this is best-effort, not a strict race-free path.
-        const buffer = getSessionOutput(sessionId);
+        const buffer = getTerminalOutput(terminalId);
         if (buffer) {
           try {
             xterm.write(buffer);
           } catch (e) {
-            console.error("[xsterm] Failed to replay session output buffer:", e);
+            console.error("[xsterm] Failed to replay terminal output buffer:", e);
           }
         }
       })
       .catch((err) => {
         if (listenerActive) {
-          console.error("[xsterm] Failed to listen session-output:", err);
+          console.error("[xsterm] Failed to listen terminal-output:", err);
         }
       });
 
@@ -163,5 +163,5 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
       listenerActive = false;
       unlisten?.();
     };
-  }, [termRef, sessionId, setSessions]);
+  }, [termRef, terminalId, setSessions]);
 }

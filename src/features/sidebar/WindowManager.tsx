@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type SavedWindowConfig } from "../../types/session";
+import { type SavedWindowConfig } from "../../types/terminal";
 import { WindowIcon } from "../../shared/icons/Icon";
 import { Dialog } from "../../shared/ui/Dialog";
 import { FormField } from "../../shared/ui/FormField";

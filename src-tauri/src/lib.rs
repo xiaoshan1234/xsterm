@@ -11,7 +11,7 @@ mod connect;
 mod feature;
 mod shared;
 
-use connect::registry::SessionRegistry;
+use connect::registry::TerminalRegistry;
 use feature::logging::{cleanup_old_logs, get_log_config_impl, init_logging};
 use std::sync::Arc;
 use tauri::Manager;
@@ -42,16 +42,16 @@ pub fn run() {
             app.manage(Arc::new(reload_handle));
             tracing::info!("Application starting, log dir: {:?}", log_dir);
 
-            // --- per-session logging + SessionRegistry ---
-            use feature::logging::session_log::SessionLogRegistry;
+            // --- per-session logging + TerminalRegistry ---
+            use feature::logging::session_log::TerminalLogRegistry;
             let session_log_dir = app
                 .handle()
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| log_dir.clone())
                 .join("session-logs");
-            let session_logs = Arc::new(SessionLogRegistry::new(session_log_dir));
-            app.manage(Arc::new(SessionRegistry::new(session_logs)));
+            let session_logs = Arc::new(TerminalLogRegistry::new(session_log_dir));
+            app.manage(Arc::new(TerminalRegistry::new(session_logs)));
 
             // --- event emitter backend ---
             use connect::app_backend::RealAppBackend;

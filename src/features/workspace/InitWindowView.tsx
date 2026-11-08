@@ -1,5 +1,5 @@
-import { useSession } from "../sessions/SessionContext";
-import { type Workspace } from "../../types/session";
+import { useSession } from "../terminals/TerminalContext";
+import { type Workspace } from "../../types/terminal";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
 
@@ -9,13 +9,13 @@ interface InitWindowViewProps {
 }
 
 export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
-  const { replaceInitWindowWithSession } = useSession();
+  const { replaceInitWindowWithTerminal } = useSession();
 
   return (
     <div className="init-window-view">
       <PaneInitCard
-        onSessionCreated={(session) =>
-          replaceInitWindowWithSession(workspace.id, windowId, session)
+        onTerminalCreated={(terminal) =>
+          replaceInitWindowWithTerminal(workspace.id, windowId, terminal)
         }
       />
     </div>

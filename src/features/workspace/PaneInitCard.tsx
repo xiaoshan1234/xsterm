@@ -1,35 +1,37 @@
 import { useRef, useState } from "react";
-import { useSession } from "../sessions/SessionContext";
+import { useSession } from "../terminals/TerminalContext";
 import {
-  type LocalSessionConfig,
-  type SSHSessionConfig,
-  type Session,
-  type TmuxCcConfig,
-} from "../../types/session";
+  type LocalTerminalConfig,
+  type SshConfig,
+  type Terminal,
+  type TmuxSessionConfig,
+} from "../../types/terminal";
 import { PlusIcon, FolderOpenIcon } from "../../shared/icons/Icon";
-import CreateSessionDialog from "../sessions/dialogs/CreateSessionDialog";
-import { SelectSessionDialog } from "../sessions/dialogs/SelectSessionDialog";
+import CreateTerminalDialog from "../terminals/dialogs/CreateTerminalDialog";
+import { SelectTerminalDialog } from "../terminals/dialogs/SelectTerminalDialog";
 import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {
-  onSessionCreated: (session: Session) => void;
+  onTerminalCreated: (terminal: Terminal) => void;
   title?: string;
   subtitle?: string;
 }
 
 export function PaneInitCard({
-  onSessionCreated,
-  title = "Create a session",
-  subtitle = "Create new or open a saved session",
+  onTerminalCreated,
+  title = "Create a terminal",
+  subtitle = "Create new or open a saved terminal",
 }: PaneInitCardProps) {
   const {
-    sessions,
+    terminals,
     createLocalSessionOnly,
     createSshSessionOnly,
     createTmuxSessionOnly,
-    createSessionFromSavedConfig,
+    createTerminalFromSavedConfig,
   } = useSession();
-  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux-cc" | null>(null);
+  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux-pane" | null>(
+    null,
+  );
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -46,45 +48,45 @@ export function PaneInitCard({
     setIsSubmitting(false);
   };
 
-  const handleCreate = async (create: () => Promise<Session>): Promise<Session> => {
-    const session = await create();
+  const handleCreate = async (create: () => Promise<Terminal>): Promise<Terminal> => {
+    const terminal = await create();
     try {
-      onSessionCreated(session);
+      onTerminalCreated(terminal);
     } catch (e) {
-      if (e instanceof Error && e.message === "Session is already used in another window") {
-        window.alert("Session is already used in another window");
+      if (e instanceof Error && e.message === "Terminal is already used in another window") {
+        window.alert("Terminal is already used in another window");
       } else {
         throw e;
       }
     }
-    return session;
+    return terminal;
   };
 
-  const handleCreateLocal = (config: LocalSessionConfig, save: boolean) =>
+  const handleCreateLocal = (config: LocalTerminalConfig, save: boolean) =>
     handleCreate(() => createLocalSessionOnly(config, save));
 
-  const handleCreateSsh = (config: SSHSessionConfig, save: boolean) =>
+  const handleCreateSsh = (config: SshConfig, save: boolean) =>
     handleCreate(() => createSshSessionOnly(config, save));
 
-  const handleCreateTmux = (config: TmuxCcConfig, save: boolean) =>
+  const handleCreateTmux = (config: TmuxSessionConfig, save: boolean) =>
     handleCreate(() => createTmuxSessionOnly(config, save));
 
-  const handleSelectSession = (sessionId: number) => {
+  const handleSelectSession = (terminalId: number) => {
     if (!startSubmitting()) return;
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) {
+    const terminal = terminals.find((s) => s.id === terminalId);
+    if (!terminal) {
       endSubmitting();
       return;
     }
 
     try {
-      onSessionCreated(session);
+      onTerminalCreated(terminal);
       setShowSelectDialog(false);
     } catch (e) {
-      if (e instanceof Error && e.message === "Session is already used in another window") {
-        window.alert("Session is already used in another window");
+      if (e instanceof Error && e.message === "Terminal is already used in another window") {
+        window.alert("Terminal is already used in another window");
       } else {
-        window.alert(`Failed to create session: ${e instanceof Error ? e.message : String(e)}`);
+        window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);
       }
     } finally {
       endSubmitting();
@@ -94,14 +96,14 @@ export function PaneInitCard({
   const handleSelectConfig = async (configId: string) => {
     if (!startSubmitting()) return;
     try {
-      const session = await createSessionFromSavedConfig(configId);
-      onSessionCreated(session);
+      const terminal = await createTerminalFromSavedConfig(configId);
+      onTerminalCreated(terminal);
       setShowSelectDialog(false);
     } catch (e) {
-      if (e instanceof Error && e.message === "Session is already used in another window") {
-        window.alert("Session is already used in another window");
+      if (e instanceof Error && e.message === "Terminal is already used in another window") {
+        window.alert("Terminal is already used in another window");
       } else {
-        window.alert(`Failed to create session: ${e instanceof Error ? e.message : String(e)}`);
+        window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);
       }
     } finally {
       endSubmitting();
@@ -130,7 +132,7 @@ export function PaneInitCard({
           <span className="pane-init-card-option-label">Open Saved</span>
         </button>
       </div>
-      <CreateSessionDialog
+      <CreateTerminalDialog
         isOpen={createDialogTab !== null}
         onClose={() => setCreateDialogTab(null)}
         onCreateLocal={handleCreateLocal}
@@ -138,7 +140,7 @@ export function PaneInitCard({
         onCreateTmux={handleCreateTmux}
         initialTab={createDialogTab ?? "local"}
       />
-      <SelectSessionDialog
+      <SelectTerminalDialog
         isOpen={showSelectDialog}
         onClose={() => setShowSelectDialog(false)}
         onSelectSession={handleSelectSession}

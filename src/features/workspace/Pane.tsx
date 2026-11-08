@@ -1,16 +1,16 @@
 import { useCallback, useRef, useState } from "react";
-import { type PaneNode, type SplitDirection, type Workspace } from "../../types/session";
-import { useSession } from "../sessions/SessionContext";
+import { type PaneNode, type SplitDirection, type Workspace } from "../../types/terminal";
+import { useSession } from "../terminals/TerminalContext";
 import * as paneTree from "../../shared/utils/paneTreeUtils";
-import { isSessionUsedInOtherWindow, getPaneNumber } from "../sessions/state/paneUtils";
+import { isSessionUsedInOtherWindow, getPaneNumber } from "../terminals/state/paneUtils";
 import { useTheme } from "../../contexts/ThemeContext";
 import Terminal, { type TerminalRef } from "../terminal/Terminal";
 import { ContextMenu, type ContextMenuRef } from "../../shared/ui/ContextMenu";
-import { SelectSessionDialog } from "../sessions/dialogs/SelectSessionDialog";
+import { SelectTerminalDialog } from "../terminals/dialogs/SelectTerminalDialog";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
 import { TmuxControllerErrorBanner } from "../terminal/TmuxControllerErrorBanner";
-import * as sessionService from "../../services/sessionService";
+import * as terminalService from "../../services/terminalService";
 import "./Pane.css";
 
 interface PaneProps {
@@ -33,12 +33,12 @@ export function Pane({
   onActivate,
 }: PaneProps) {
   const {
-    sessions,
+    terminals,
     workspaces,
     splitPane,
-    closeSession,
+    closeTerminal,
     closePane,
-    createSessionFromSavedConfig,
+    createTerminalFromSavedConfig,
     updateWindowPaneTree,
   } = useSession();
   const { currentTheme } = useTheme();
@@ -62,33 +62,33 @@ export function Pane({
     setIsSubmitting(false);
   };
 
-  const session =
-    pane.sessionId !== undefined ? sessions.find((s) => s.id === pane.sessionId) : undefined;
+  const terminal =
+    pane.terminalId !== undefined ? terminals.find((s) => s.id === pane.terminalId) : undefined;
   const selectedWindow = workspace.windows.find((w) => w.id === windowId);
   const paneNumber = selectedWindow ? getPaneNumber(selectedWindow.rootPane, pane.id) : null;
 
   const handleStartSplit = useCallback(
     (direction: SplitDirection) => {
       // tmux panes (supportsMultiplex) split immediately
-      // through the backend — no "pick a session from the dialog"
+      // through the backend — no "pick a terminal from the dialog"
       // step because the new pane IS the new tmux pane. The
       // `tmux-pane-added` listener / `splitTmuxPaneInternal` updates
       // React state and the pane tree.
       if (
-        session?.capabilities?.supportsMultiplex &&
-        session.id !== undefined &&
-        pane.sessionId !== undefined
+        terminal?.capabilities?.supportsMultiplex &&
+        terminal.id !== undefined &&
+        pane.terminalId !== undefined
       ) {
-        splitPane(workspace.id, windowId, pane.id, direction, pane.sessionId);
+        splitPane(workspace.id, windowId, pane.id, direction, pane.terminalId);
         return;
       }
       // Non-multiplex path: open the dialog so the user picks what
-      // session to attach to the new leaf.
+      // terminal to attach to the new leaf.
       setPendingSplit(direction);
       setDialogMode("split");
       setShowSessionDialog(true);
     },
-    [session, pane.sessionId, splitPane, workspace.id, windowId, pane.id],
+    [terminal, pane.terminalId, splitPane, workspace.id, windowId, pane.id],
   );
 
   const handleStartAttach = useCallback(() => {
@@ -97,43 +97,43 @@ export function Pane({
     setShowSessionDialog(true);
   }, []);
 
-  const attachSessionToPane = useCallback(
-    (sessionId: number) => {
-      if (isSessionUsedInOtherWindow(workspaces, workspace.id, windowId, sessionId)) {
-        window.alert("Session is already used in another window");
+  const attachTerminalToPane = useCallback(
+    (terminalId: number) => {
+      if (isSessionUsedInOtherWindow(workspaces, workspace.id, windowId, terminalId)) {
+        window.alert("Terminal is already used in another window");
         return;
       }
-      const attachedSession = sessions.find((s) => s.id === sessionId);
+      const attachedSession = terminals.find((s) => s.id === terminalId);
       updateWindowPaneTree(workspace.id, windowId, (root) =>
         paneTree.replacePaneNode(root, pane.id, {
           ...pane,
-          sessionId,
+          terminalId,
           configId: attachedSession?.configId,
         }),
       );
       onActivate();
     },
-    [workspaces, workspace.id, windowId, pane, sessions, updateWindowPaneTree, onActivate],
+    [workspaces, workspace.id, windowId, pane, terminals, updateWindowPaneTree, onActivate],
   );
 
   const handleSelectSession = useCallback(
-    (sessionId: number) => {
+    (terminalId: number) => {
       if (!startSubmitting()) return;
       try {
         if (dialogMode === "split" && pendingSplit) {
-          const sessionConfigId = sessions.find((s) => s.id === sessionId)?.configId;
-          splitPane(workspace.id, windowId, pane.id, pendingSplit, sessionId, sessionConfigId);
+          const sessionConfigId = terminals.find((s) => s.id === terminalId)?.configId;
+          splitPane(workspace.id, windowId, pane.id, pendingSplit, terminalId, sessionConfigId);
         } else if (dialogMode === "attach") {
-          attachSessionToPane(sessionId);
+          attachTerminalToPane(terminalId);
         }
         setPendingSplit(null);
         setDialogMode(null);
         setShowSessionDialog(false);
       } catch (e) {
-        if (e instanceof Error && e.message === "Session is already used in another window") {
-          window.alert("Session is already used in another window");
+        if (e instanceof Error && e.message === "Terminal is already used in another window") {
+          window.alert("Terminal is already used in another window");
         } else {
-          window.alert(`Failed to attach session: ${e instanceof Error ? e.message : String(e)}`);
+          window.alert(`Failed to attach terminal: ${e instanceof Error ? e.message : String(e)}`);
         }
       } finally {
         endSubmitting();
@@ -146,8 +146,8 @@ export function Pane({
       windowId,
       pane.id,
       splitPane,
-      attachSessionToPane,
-      sessions,
+      attachTerminalToPane,
+      terminals,
     ],
   );
 
@@ -155,20 +155,20 @@ export function Pane({
     async (configId: string) => {
       if (!startSubmitting()) return;
       try {
-        const session = await createSessionFromSavedConfig(configId);
+        const terminal = await createTerminalFromSavedConfig(configId);
         if (dialogMode === "split" && pendingSplit) {
-          splitPane(workspace.id, windowId, pane.id, pendingSplit, session.id, session.configId);
+          splitPane(workspace.id, windowId, pane.id, pendingSplit, terminal.id, terminal.configId);
         } else if (dialogMode === "attach") {
-          attachSessionToPane(session.id);
+          attachTerminalToPane(terminal.id);
         }
         setPendingSplit(null);
         setDialogMode(null);
         setShowSessionDialog(false);
       } catch (e) {
-        if (e instanceof Error && e.message === "Session is already used in another window") {
-          window.alert("Session is already used in another window");
+        if (e instanceof Error && e.message === "Terminal is already used in another window") {
+          window.alert("Terminal is already used in another window");
         } else {
-          window.alert(`Failed to create session: ${e instanceof Error ? e.message : String(e)}`);
+          window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);
         }
       } finally {
         endSubmitting();
@@ -181,16 +181,16 @@ export function Pane({
       windowId,
       pane.id,
       splitPane,
-      createSessionFromSavedConfig,
-      attachSessionToPane,
+      createTerminalFromSavedConfig,
+      attachTerminalToPane,
     ],
   );
 
   const handleCloseSession = useCallback(() => {
-    if (pane.sessionId !== undefined) {
-      closeSession(pane.sessionId);
+    if (pane.terminalId !== undefined) {
+      closeTerminal(pane.terminalId);
     }
-  }, [pane.sessionId, closeSession]);
+  }, [pane.terminalId, closeTerminal]);
 
   const handleClear = useCallback(() => {
     terminalRef.current?.clear();
@@ -219,20 +219,20 @@ export function Pane({
   }, [closePane, workspace.id, windowId, pane.id]);
 
   const handleCreateTmuxWindow = useCallback(async () => {
-    if (session?.tmuxControllerId === undefined) return;
+    if (terminal?.tmuxSessionId === undefined) return;
     try {
-      await sessionService.createTmuxWindow(session.tmuxControllerId);
+      await terminalService.createTmuxWindow(terminal.tmuxSessionId);
     } catch (e) {
       console.error("Failed to create tmux window:", e);
       window.alert(`Failed to create tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [session?.tmuxControllerId]);
+  }, [terminal?.tmuxSessionId]);
 
   const handleKillTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
     if (xid === undefined) return;
     try {
-      await sessionService.killTmuxWindow(xid);
+      await terminalService.killTmuxWindow(xid);
     } catch (e) {
       console.error("Failed to kill tmux window:", e);
       window.alert(`Failed to kill tmux window: ${e instanceof Error ? e.message : String(e)}`);
@@ -245,7 +245,7 @@ export function Pane({
     const name = window.prompt("Rename tmux window:");
     if (name === null || name.trim() === "") return;
     try {
-      await sessionService.renameTmuxWindow(xid, name.trim());
+      await terminalService.renameTmuxWindow(xid, name.trim());
     } catch (e) {
       console.error("Failed to rename tmux window:", e);
       window.alert(`Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`);
@@ -253,7 +253,7 @@ export function Pane({
   }, [selectedWindow?.xstermWindowId]);
 
   const contextMenuItems = buildPaneContextMenu(
-    session,
+    terminal,
     {
       startSplit: handleStartSplit,
       startAttach: handleStartAttach,
@@ -262,7 +262,7 @@ export function Pane({
       paste: handlePaste,
       clear: handleClear,
       closePane: handleClosePane,
-      closeSession: handleCloseSession,
+      closeTerminal: handleCloseSession,
       createTmuxWindow: handleCreateTmuxWindow,
       killTmuxWindow: handleKillTmuxWindow,
       renameTmuxWindow: handleRenameTmuxWindow,
@@ -271,7 +271,7 @@ export function Pane({
   );
 
   // hidden panes (from tmux -CC attach) are suppressed. MVP panes have is_hidden = false.
-  if (session?.isHidden) {
+  if (terminal?.isHidden) {
     return null;
   }
 
@@ -288,38 +288,38 @@ export function Pane({
               {paneNumber}
             </div>
           )}
-          {session ? (
-            <div className="pane-session-container">
-              {!session.isConnected && (
+          {terminal ? (
+            <div className="pane-terminal-container">
+              {!terminal.isConnected && (
                 <div className="pane-disconnect-banner">
                   Connection lost. Press Enter to reconnect.
                 </div>
               )}
-              <TmuxControllerErrorBanner paneSessions={[session]} />
+              <TmuxControllerErrorBanner paneSessions={[terminal]} />
               <div className="pane-terminal-wrapper">
                 <Terminal
                   ref={terminalRef}
-                  sessionId={session.id}
-                  sessionType={session.type}
+                  terminalId={terminal.id}
+                  kind={terminal.type}
                   isActive={isActive && isWindowActive}
                   isWindowActive={isWindowActive}
                   onFocus={onActivate}
-                  isConnected={session.isConnected}
-                  configId={session.configId}
-                  displayConfig={session.displayConfig}
+                  isConnected={terminal.isConnected}
+                  configId={terminal.configId}
+                  displayConfig={terminal.displayConfig}
                 />
               </div>
             </div>
           ) : (
             <PaneInitCard
-              onSessionCreated={(session) => attachSessionToPane(session.id)}
-              title="No session"
-              subtitle="Create or open a session"
+              onTerminalCreated={(terminal) => attachTerminalToPane(terminal.id)}
+              title="No terminal"
+              subtitle="Create or open a terminal"
             />
           )}
         </div>
       </ContextMenu>
-      <SelectSessionDialog
+      <SelectTerminalDialog
         isOpen={showSessionDialog}
         onClose={() => {
           if (isSubmitting) return;

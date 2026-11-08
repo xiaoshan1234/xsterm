@@ -7,19 +7,19 @@ use xscore::platform::{LocalPty, Size};
 
 use crate::connect::app_backend::AppBackend;
 use crate::connect::forward::spawn_output_forwarder;
-use crate::connect::session::{BoundSession, TerminalTransport};
+use crate::connect::session::{BoundTerminal, TerminalTransport};
 use crate::shared::capabilities::CapabilityFlags;
-use crate::shared::session::{LocalSessionConfig, SessionInfo, SessionType};
+use crate::shared::session::{LocalTerminalConfig, TerminalInfo, TerminalKind};
 
 const UNIX_FALLBACK_SHELL: &str = "/bin/bash";
 const POWERSHELL_NOLOGO_FLAG: &str = "-NoLogo";
 const BASH_LOGIN_FLAG: &str = "--login";
 
-pub(crate) fn create_local_session(
-    config: LocalSessionConfig,
+pub(crate) fn create_local_terminal(
+    config: LocalTerminalConfig,
     backend: Arc<dyn AppBackend>,
     session_id: u32,
-) -> Result<BoundSession, String> {
+) -> Result<BoundTerminal, String> {
     let shell_path = resolve_shell_path(config.shell, config.shell_template.as_deref());
     let (shell_exe, mut shell_args) = parse_shell_command(&shell_path);
     let shell_name = extract_shell_name(&shell_exe);
@@ -69,23 +69,28 @@ pub(crate) fn create_local_session(
 
     let cols = config.initial_cols.unwrap_or(80);
     let rows = config.initial_rows.unwrap_or(24);
+    let is_wsl = is_wsl_exe(&shell_exe);
 
     let pty = Arc::new(LocalPty::new(shell_exe, shell_args, Some(cwd.clone()), env));
     let rx = pty
         .spawn(Size::new(cols, rows))
         .map_err(|e| e.to_string())?;
 
-    let info = SessionInfo {
-        id: session_id,
-        name: resolve_session_name(config.name, &shell_name),
-        session_type: SessionType::Local {
+    let kind = if is_wsl {
+        TerminalKind::Wsl { distribution: None }
+    } else {
+        TerminalKind::Local {
             shell: shell_path,
             cwd,
-        },
+        }
+    };
+
+    let info = TerminalInfo {
+        id: session_id,
+        name: resolve_session_name(config.name, &shell_name),
+        kind,
         is_connected: true,
         capabilities: CapabilityFlags::for_local(),
-        tmux_pane_id: None,
-        tmux_controller_id: None,
         tmux_window_id: None,
         is_hidden: false,
     };
@@ -104,7 +109,7 @@ pub(crate) fn create_local_session(
         });
     }
 
-    Ok(BoundSession {
+    Ok(BoundTerminal {
         info,
         capabilities: CapabilityFlags::for_local(),
         transport: TerminalTransport::Local(pty),

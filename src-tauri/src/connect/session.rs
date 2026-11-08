@@ -7,7 +7,7 @@ use xscore::platform::{LocalPty, Size};
 
 use crate::connect::tmux::TmuxSession;
 use crate::shared::capabilities::CapabilityFlags;
-use crate::shared::session::{SSHSessionConfig, SessionInfo};
+use crate::shared::session::{SshConfig, TerminalInfo};
 
 /// Transport backing a bound terminal session.
 pub(crate) enum TerminalTransport {
@@ -60,9 +60,9 @@ impl TerminalTransport {
 }
 
 /// Metadata and transport for one active session.
-pub(crate) struct BoundSession {
-    pub info: SessionInfo,
+pub(crate) struct BoundTerminal {
+    pub info: TerminalInfo,
     pub capabilities: CapabilityFlags,
     pub transport: TerminalTransport,
-    pub ssh_config: Option<SSHSessionConfig>,
+    pub ssh_config: Option<SshConfig>,
 }

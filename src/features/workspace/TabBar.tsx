@@ -1,12 +1,12 @@
 import { type MouseEvent, type KeyboardEvent } from "react";
-import { type Workspace, type PaneNode, type Session } from "../../types/session";
+import { type Workspace, type PaneNode, type Terminal } from "../../types/terminal";
 import { CloseIcon, ShellIcon, SshIcon, LayoutIcon } from "../../shared/icons/Icon";
 import { ContextMenu, type ContextMenuItem } from "../../shared/ui/ContextMenu";
 import "./TabBar.css";
 
 interface TabBarProps {
   workspaces: Workspace[];
-  sessions: Session[];
+  terminals: Terminal[];
   activeWorkspaceId: string | null;
   onSelect: (workspaceId: string) => void;
   onClose: (workspaceId: string) => void;
@@ -15,7 +15,7 @@ interface TabBarProps {
 
 export default function TabBar({
   workspaces,
-  sessions,
+  terminals,
   activeWorkspaceId,
   onSelect,
   onClose,
@@ -33,7 +33,7 @@ export default function TabBar({
         <WorkspaceTab
           key={workspace.id}
           workspace={workspace}
-          sessions={sessions}
+          terminals={terminals}
           isActive={workspace.id === activeWorkspaceId}
           isDefault={workspace.name === "default"}
           onSelect={() => onSelect(workspace.id)}
@@ -47,7 +47,7 @@ export default function TabBar({
 
 interface WorkspaceTabProps {
   workspace: Workspace;
-  sessions: Session[];
+  terminals: Terminal[];
   isActive: boolean;
   isDefault: boolean;
   onSelect: () => void;
@@ -67,7 +67,7 @@ function findPaneNode(root: PaneNode, id: string): PaneNode | null {
 }
 
 function getFirstLeafWithSession(root: PaneNode): PaneNode | null {
-  if (root.type === "leaf" && root.sessionId !== undefined) return root;
+  if (root.type === "leaf" && root.terminalId !== undefined) return root;
   if (root.children) {
     for (const child of root.children) {
       const found = getFirstLeafWithSession(child);
@@ -77,10 +77,10 @@ function getFirstLeafWithSession(root: PaneNode): PaneNode | null {
   return null;
 }
 
-function getWorkspaceSessionType(
+function getWorkspaceTerminalKind(
   workspace: Workspace,
-  sessions: Session[],
-): Session["type"] | null {
+  terminals: Terminal[],
+): Terminal["type"] | null {
   const activeWindow =
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];
   if (!activeWindow) return null;
@@ -88,14 +88,14 @@ function getWorkspaceSessionType(
   if (activeWindow.activePaneId) {
     leaf = findPaneNode(activeWindow.rootPane, activeWindow.activePaneId);
   }
-  if (!leaf || leaf.sessionId === undefined) {
+  if (!leaf || leaf.terminalId === undefined) {
     leaf = getFirstLeafWithSession(activeWindow.rootPane);
   }
-  if (!leaf || leaf.sessionId === undefined) return null;
-  return sessions.find((s) => s.id === leaf!.sessionId)?.type ?? null;
+  if (!leaf || leaf.terminalId === undefined) return null;
+  return terminals.find((s) => s.id === leaf!.terminalId)?.type ?? null;
 }
 
-function SessionTypeIcon({ type, size }: { type: Session["type"]; size: number }) {
+function TerminalKindIcon({ type, size }: { type: Terminal["type"]; size: number }) {
   switch (type) {
     case "local":
       return <ShellIcon size={size} />;
@@ -108,7 +108,7 @@ function SessionTypeIcon({ type, size }: { type: Session["type"]; size: number }
 
 function WorkspaceTab({
   workspace,
-  sessions,
+  terminals,
   isActive,
   isDefault,
   onSelect,
@@ -132,7 +132,7 @@ function WorkspaceTab({
     }
   };
 
-  const sessionType = getWorkspaceSessionType(workspace, sessions);
+  const kind = getWorkspaceTerminalKind(workspace, terminals);
 
   return (
     <ContextMenu items={contextMenuItems}>
@@ -151,11 +151,7 @@ function WorkspaceTab({
         onKeyDown={handleKeyDown}
       >
         <span className="tab-icon">
-          {sessionType ? (
-            <SessionTypeIcon type={sessionType} size={14} />
-          ) : (
-            <LayoutIcon size={14} />
-          )}
+          {kind ? <TerminalKindIcon type={kind} size={14} /> : <LayoutIcon size={14} />}
         </span>
         <span className="tab-title">{workspace.name}</span>
         {!isDefault && (

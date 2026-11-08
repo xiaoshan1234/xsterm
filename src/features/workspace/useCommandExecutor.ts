@@ -13,7 +13,7 @@ interface UseCommandExecutorDeps {
   splitMode: SplitMode;
   count: number;
   intervalMs: number;
-  writeSession: (id: number, data: string) => Promise<void>;
+  writeTerminal: (id: number, data: string) => Promise<void>;
   getTargetSessions: () => number[];
 }
 
@@ -38,7 +38,7 @@ function formatTimestamp(date: Date): string {
 }
 
 export function useCommandExecutor(deps: UseCommandExecutorDeps): CommandExecutor {
-  const { input, splitMode, count, intervalMs, writeSession, getTargetSessions } = deps;
+  const { input, splitMode, count, intervalMs, writeTerminal, getTargetSessions } = deps;
 
   const [runState, setRunState] = useState<RunState>("idle");
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
@@ -61,7 +61,7 @@ export function useCommandExecutor(deps: UseCommandExecutorDeps): CommandExecuto
   const countRef = useRef(count);
   const intervalValueRef = useRef(intervalMs);
   const splitModeRef = useRef(splitMode);
-  const writeSessionRef = useRef(writeSession);
+  const writeTerminalRef = useRef(writeTerminal);
   const getTargetSessionsRef = useRef(getTargetSessions);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export function useCommandExecutor(deps: UseCommandExecutorDeps): CommandExecuto
     countRef.current = count;
     intervalValueRef.current = intervalMs;
     splitModeRef.current = splitMode;
-    writeSessionRef.current = writeSession;
+    writeTerminalRef.current = writeTerminal;
     getTargetSessionsRef.current = getTargetSessions;
   });
 
@@ -115,9 +115,9 @@ export function useCommandExecutor(deps: UseCommandExecutorDeps): CommandExecuto
 
     const dataToSend = splitModeRef.current === "line" ? chunk + "\r\n" : chunk;
 
-    const sessionIds = getTargetSessionsRef.current();
-    sessionIds.forEach((id) => {
-      writeSessionRef.current(id, dataToSend).catch(console.error);
+    const terminalIds = getTargetSessionsRef.current();
+    terminalIds.forEach((id) => {
+      writeTerminalRef.current(id, dataToSend).catch(console.error);
     });
 
     if (splitModeRef.current === "line" && chunkToLineIndex.length > 0) {
@@ -174,8 +174,8 @@ export function useCommandExecutor(deps: UseCommandExecutorDeps): CommandExecuto
     const { chunks, chunkToLineIndex } = parseChunks();
     if (chunks.length === 0) return;
 
-    const sessionIds = getTargetSessionsRef.current();
-    if (sessionIds.length === 0) return;
+    const terminalIds = getTargetSessionsRef.current();
+    if (terminalIds.length === 0) return;
 
     chunksRef.current = chunks;
     chunkToLineIndexRef.current = chunkToLineIndex;
@@ -202,9 +202,9 @@ export function useCommandExecutor(deps: UseCommandExecutorDeps): CommandExecuto
     const chunk = chunks[chunkIndex];
     const dataToSend = splitModeRef.current === "line" ? chunk + "\r\n" : chunk;
 
-    const sessionIds = getTargetSessionsRef.current();
-    sessionIds.forEach((id) => {
-      writeSessionRef.current(id, dataToSend).catch(console.error);
+    const terminalIds = getTargetSessionsRef.current();
+    terminalIds.forEach((id) => {
+      writeTerminalRef.current(id, dataToSend).catch(console.error);
     });
 
     if (splitModeRef.current === "line" && chunkToLineIndexRef.current.length > 0) {

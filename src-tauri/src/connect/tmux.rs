@@ -12,7 +12,7 @@ use xscore::platform::tmux::{
 
 use crate::connect::app_backend::AppBackend;
 use crate::connect::forward::spawn_output_forwarder;
-use crate::shared::session::{SSHSessionConfig, SplitDirection, TmuxCcConfig};
+use crate::shared::session::{SplitDirection, SshConfig, TmuxSessionConfig};
 
 /// One tmux control connection owning N panes (and therefore N xsterm
 /// sessions). All state is guarded by `std::sync::Mutex` so the shared
@@ -34,7 +34,7 @@ pub(crate) struct TmuxSession {
 impl TmuxSession {
     /// Spawn a control connection that creates a new tmux session.
     pub(crate) async fn spawn_new(
-        config: &TmuxCcConfig,
+        config: &TmuxSessionConfig,
         app_backend: Arc<dyn AppBackend>,
         controller_id: u32,
     ) -> Result<Arc<Self>, String> {
@@ -58,7 +58,7 @@ impl TmuxSession {
 
     /// Spawn a control connection that attaches to an existing session.
     pub(crate) async fn spawn_attach(
-        config: &TmuxCcConfig,
+        config: &TmuxSessionConfig,
         app_backend: Arc<dyn AppBackend>,
         controller_id: u32,
     ) -> Result<Arc<Self>, String> {
@@ -66,7 +66,9 @@ impl TmuxSession {
             .tmux_session_name
             .as_deref()
             .filter(|name| !name.is_empty())
-            .ok_or_else(|| "tmux attach requires `tmuxSessionName` in TmuxCcConfig".to_string())?;
+            .ok_or_else(|| {
+                "tmux attach requires `tmuxSessionName` in TmuxSessionConfig".to_string()
+            })?;
         Self::spawn_with_mode(
             config,
             app_backend,
@@ -78,7 +80,7 @@ impl TmuxSession {
     }
 
     async fn spawn_with_mode(
-        config: &TmuxCcConfig,
+        config: &TmuxSessionConfig,
         app_backend: Arc<dyn AppBackend>,
         controller_id: u32,
         session_name: &str,
@@ -526,7 +528,7 @@ impl TmuxSession {
 }
 
 /// Build the xscore tmux target from an xsterm config.
-fn build_tmux_target(config: &TmuxCcConfig) -> Result<(TmuxHostConfig, TmuxSocket), String> {
+fn build_tmux_target(config: &TmuxSessionConfig) -> Result<(TmuxHostConfig, TmuxSocket), String> {
     let host = match config.ssh.as_ref() {
         Some(ssh) => TmuxHostConfig::Ssh {
             user: ssh.username.clone(),
@@ -552,7 +554,7 @@ fn build_tmux_target(config: &TmuxCcConfig) -> Result<(TmuxHostConfig, TmuxSocke
 }
 
 /// Map an xsterm SSH config onto xscore's `SshOptions`.
-pub(crate) fn ssh_options_from_config(config: &SSHSessionConfig) -> SshOptions {
+pub(crate) fn ssh_options_from_config(config: &SshConfig) -> SshOptions {
     SshOptions {
         keepalive_interval: config
             .keepalive_interval

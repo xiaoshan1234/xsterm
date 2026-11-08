@@ -1,5 +1,5 @@
 //! Output forwarder: drains an xscore transport receiver and emits
-//! `session-output` / `session-disconnected` events.
+//! `terminal-output` / `terminal-disconnected` events.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -18,7 +18,7 @@ const DRAIN_INTERVAL: Duration = Duration::from_millis(8);
 ///
 /// Emitted slices are always complete UTF-8; a trailing incomplete codepoint is
 /// held over and prefixed onto the next burst. When the receiver closes, a
-/// final `session-disconnected` event is emitted.
+/// final `terminal-disconnected` event is emitted.
 pub(crate) fn spawn_output_forwarder(
     mut rx: UnboundedReceiver<Vec<u8>>,
     backend: Arc<dyn AppBackend>,
@@ -65,14 +65,14 @@ pub(crate) fn spawn_output_forwarder(
 
             if !to_emit.is_empty()
                 && backend
-                    .emit("session-output", &serde_json::json!([session_id, to_emit]))
+                    .emit("terminal-output", &serde_json::json!([session_id, to_emit]))
                     .is_err()
             {
                 break;
             }
         }
 
-        let _ = backend.emit("session-disconnected", &serde_json::json!(session_id));
+        let _ = backend.emit("terminal-disconnected", &serde_json::json!(session_id));
     })
 }
 

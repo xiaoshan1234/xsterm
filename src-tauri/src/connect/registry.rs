@@ -6,16 +6,17 @@ use std::sync::Arc;
 use dashmap::DashMap;
 
 use crate::connect::app_backend::AppBackend;
-use crate::connect::local::create_local_session;
-use crate::connect::session::{BoundSession, TerminalTransport};
-use crate::connect::ssh::create_ssh_session;
+use crate::connect::local::create_local_terminal;
+use crate::connect::session::{BoundTerminal, TerminalTransport};
+use crate::connect::ssh::create_ssh_terminal;
 use crate::connect::ssh_exec::upload_file_via_ssh;
 use crate::connect::tmux::TmuxSession;
-use crate::feature::logging::session_log::SessionLogRegistry;
+use crate::feature::logging::session_log::TerminalLogRegistry;
 use crate::shared::capabilities::CapabilityFlags;
 use crate::shared::session::{
-    build_remote_image_path, tmux_pane_info, AttachedTmuxServer, LocalSessionConfig,
-    SSHSessionConfig, SessionInfo, SessionLoggingConfig, SplitDirection, TmuxCcConfig,
+    build_remote_image_path, tmux_pane_info, AttachedTmuxServer, LocalTerminalConfig,
+    SplitDirection, SshConfig, TerminalInfo, TerminalKind, TerminalLoggingConfig,
+    TmuxSessionConfig,
 };
 
 /// Per-server outcome from `auto_attach_on_startup`.
@@ -23,22 +24,22 @@ use crate::shared::session::{
 pub struct AutoAttachOutcome {
     pub session_key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub info: Option<SessionInfo>,
+    pub info: Option<TerminalInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
 /// Manages the lifecycle of all terminal sessions.
-pub(crate) struct SessionRegistry {
-    sessions: DashMap<u32, Arc<BoundSession>>,
+pub(crate) struct TerminalRegistry {
+    sessions: DashMap<u32, Arc<BoundTerminal>>,
     next_id: AtomicU32,
     tmux_sessions: DashMap<u32, Arc<TmuxSession>>,
     next_controller_id: AtomicU32,
-    session_logs: Arc<SessionLogRegistry>,
+    session_logs: Arc<TerminalLogRegistry>,
 }
 
-impl SessionRegistry {
-    pub(crate) fn new(session_logs: Arc<SessionLogRegistry>) -> Self {
+impl TerminalRegistry {
+    pub(crate) fn new(session_logs: Arc<TerminalLogRegistry>) -> Self {
         Self {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
@@ -48,14 +49,14 @@ impl SessionRegistry {
         }
     }
 
-    pub(crate) fn session_logs(&self) -> Arc<SessionLogRegistry> {
+    pub(crate) fn session_logs(&self) -> Arc<TerminalLogRegistry> {
         Arc::clone(&self.session_logs)
     }
 
     fn start_logging(
         &self,
         session_id: u32,
-        logging: Option<&SessionLoggingConfig>,
+        logging: Option<&TerminalLoggingConfig>,
         session_name: &str,
     ) {
         let config = logging.cloned().unwrap_or_default();
@@ -66,12 +67,12 @@ impl SessionRegistry {
 
     pub(crate) fn create_local(
         &self,
-        config: LocalSessionConfig,
+        config: LocalTerminalConfig,
         backend: Arc<dyn AppBackend>,
-        logging: Option<SessionLoggingConfig>,
-    ) -> Result<SessionInfo, String> {
+        logging: Option<TerminalLoggingConfig>,
+    ) -> Result<TerminalInfo, String> {
         let id = self.allocate_session_id();
-        let session = create_local_session(config, backend, id)?;
+        let session = create_local_terminal(config, backend, id)?;
         let name = session.info.name.clone();
         self.start_logging(id, logging.as_ref(), &name);
         Ok(self.insert_session(id, session))
@@ -79,12 +80,12 @@ impl SessionRegistry {
 
     pub(crate) async fn create_ssh(
         &self,
-        config: SSHSessionConfig,
+        config: SshConfig,
         backend: Arc<dyn AppBackend>,
-        logging: Option<SessionLoggingConfig>,
-    ) -> Result<SessionInfo, String> {
+        logging: Option<TerminalLoggingConfig>,
+    ) -> Result<TerminalInfo, String> {
         let id = self.allocate_session_id();
-        let session = create_ssh_session(config, backend, id).await?;
+        let session = create_ssh_terminal(config, backend, id).await?;
         let name = session.info.name.clone();
         self.start_logging(id, logging.as_ref(), &name);
         Ok(self.insert_session(id, session))
@@ -92,10 +93,10 @@ impl SessionRegistry {
 
     pub(crate) async fn create_tmux(
         &self,
-        config: &TmuxCcConfig,
+        config: &TmuxSessionConfig,
         backend: Arc<dyn AppBackend>,
-        logging: Option<SessionLoggingConfig>,
-    ) -> Result<SessionInfo, String> {
+        logging: Option<TerminalLoggingConfig>,
+    ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
         let controller = TmuxSession::spawn_new(config, backend, controller_id).await?;
         let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
@@ -117,9 +118,9 @@ impl SessionRegistry {
 
     pub(crate) async fn attach_tmux(
         &self,
-        config: &TmuxCcConfig,
+        config: &TmuxSessionConfig,
         backend: Arc<dyn AppBackend>,
-    ) -> Result<SessionInfo, String> {
+    ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
         let controller = TmuxSession::spawn_attach(config, backend, controller_id).await?;
         let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
@@ -171,7 +172,7 @@ impl SessionRegistry {
     ) -> Vec<AutoAttachOutcome> {
         let mut out = Vec::with_capacity(servers.len());
         for server in servers {
-            let cfg = TmuxCcConfig {
+            let cfg = TmuxSessionConfig {
                 name: None,
                 tmux_session_name: Some(server.session_name.clone()),
                 socket_name: server.socket_name.clone(),
@@ -212,7 +213,7 @@ impl SessionRegistry {
             .sessions
             .iter()
             .filter_map(|entry| {
-                (entry.value().info.tmux_controller_id == Some(controller_id)).then(|| *entry.key())
+                (entry.value().info.tmux_session_id() == Some(controller_id)).then(|| *entry.key())
             })
             .collect();
         for pane_id in pane_ids {
@@ -229,7 +230,7 @@ impl SessionRegistry {
         controller_id: u32,
         parent_xsterm_session_id: u32,
         direction: &str,
-    ) -> Result<SessionInfo, String> {
+    ) -> Result<TerminalInfo, String> {
         let direction = SplitDirection::parse(direction)
             .ok_or_else(|| format!("invalid split direction: {direction:?}"))?;
         let controller = self.tmux_controller(controller_id)?;
@@ -257,7 +258,7 @@ impl SessionRegistry {
         &self,
         controller_id: u32,
         window_name: Option<&str>,
-    ) -> Result<SessionInfo, String> {
+    ) -> Result<TerminalInfo, String> {
         let controller = self.tmux_controller(controller_id)?;
         let (_xsterm_window_id, tmux_window_id, xsterm_id, pane_id) =
             controller.new_window(window_name).await?;
@@ -313,14 +314,14 @@ impl SessionRegistry {
         controller.rename_window(&tmux_window_id, name)
     }
 
-    pub(crate) fn get(&self, id: u32) -> Result<Arc<BoundSession>, String> {
+    pub(crate) fn get(&self, id: u32) -> Result<Arc<BoundTerminal>, String> {
         self.sessions
             .get(&id)
             .map(|entry| entry.value().clone())
             .ok_or_else(|| format!("Session {id} not found"))
     }
 
-    pub(crate) fn get_ssh_config(&self, id: u32) -> Result<SSHSessionConfig, String> {
+    pub(crate) fn get_ssh_config(&self, id: u32) -> Result<SshConfig, String> {
         self.get(id)?
             .ssh_config
             .clone()
@@ -357,7 +358,7 @@ impl SessionRegistry {
         session.transport.close().await
     }
 
-    pub(crate) fn list(&self) -> Vec<SessionInfo> {
+    pub(crate) fn list(&self) -> Vec<TerminalInfo> {
         self.sessions
             .iter()
             .map(|entry| {
@@ -368,7 +369,7 @@ impl SessionRegistry {
             .collect()
     }
 
-    fn insert_session(&self, id: u32, session: BoundSession) -> SessionInfo {
+    fn insert_session(&self, id: u32, session: BoundTerminal) -> TerminalInfo {
         let info = session.info.clone();
         self.sessions.insert(id, Arc::new(session));
         info
@@ -379,8 +380,8 @@ impl SessionRegistry {
         xsterm_id: u32,
         controller_id: u32,
         pane_id: String,
-        mut info: SessionInfo,
-    ) -> SessionInfo {
+        mut info: TerminalInfo,
+    ) -> TerminalInfo {
         let Some(controller) = self
             .tmux_sessions
             .get(&controller_id)
@@ -389,9 +390,11 @@ impl SessionRegistry {
             return info;
         };
         info.capabilities = CapabilityFlags::for_tmux();
-        info.tmux_pane_id = Some(pane_id.clone());
-        info.tmux_controller_id = Some(controller_id);
-        let session = BoundSession {
+        info.kind = TerminalKind::TmuxPane {
+            session_id: controller_id,
+            pane_id: pane_id.clone(),
+        };
+        let session = BoundTerminal {
             info: info.clone(),
             capabilities: CapabilityFlags::for_tmux(),
             transport: TerminalTransport::TmuxPane {
@@ -415,12 +418,12 @@ impl SessionRegistry {
         let session = self.get(xsterm_id)?;
         let controller_id = session
             .info
-            .tmux_controller_id
+            .tmux_session_id()
             .ok_or_else(|| format!("session {xsterm_id} is not a tmux pane session"))?;
         let pane_id = session
             .info
-            .tmux_pane_id
-            .clone()
+            .tmux_pane_id()
+            .map(str::to_string)
             .ok_or_else(|| format!("session {xsterm_id} has no tmux_pane_id"))?;
         let controller = self.tmux_controller(controller_id)?;
         Ok((controller, pane_id))
@@ -428,15 +431,15 @@ impl SessionRegistry {
 
     fn tmux_pane_id(&self, xsterm_id: u32, controller_id: u32) -> Result<String, String> {
         let session = self.get(xsterm_id)?;
-        if session.info.tmux_controller_id != Some(controller_id) {
+        if session.info.tmux_session_id() != Some(controller_id) {
             return Err(format!(
                 "parent session {xsterm_id} belongs to a different controller"
             ));
         }
         session
             .info
-            .tmux_pane_id
-            .clone()
+            .tmux_pane_id()
+            .map(str::to_string)
             .ok_or_else(|| format!("session {xsterm_id} has no tmux_pane_id"))
     }
 

@@ -4,14 +4,14 @@ pub(crate) mod session;
 
 pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
-        session::create_local_session,
-        session::create_ssh_session,
+        session::create_local_terminal,
+        session::create_ssh_terminal,
         session::create_tmux_session,
-        session::write_session,
-        session::resize_session,
-        session::close_session,
-        session::list_sessions,
-        session::upload_image_to_ssh_session,
+        session::write_terminal,
+        session::resize_terminal,
+        session::close_terminal,
+        session::list_terminals,
+        session::upload_image_to_ssh_terminal,
         session::create_tmux_pane,
         session::kill_tmux_pane,
         session::create_tmux_window,

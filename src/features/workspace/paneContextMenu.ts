@@ -1,5 +1,5 @@
 import type { ContextMenuItem } from "../../shared/ui/ContextMenu";
-import type { Session, SplitDirection, Window } from "../../types/session";
+import type { Terminal, SplitDirection, Window } from "../../types/terminal";
 
 export interface PaneMenuActions {
   startSplit: (direction: SplitDirection) => void;
@@ -9,7 +9,7 @@ export interface PaneMenuActions {
   paste: () => Promise<void>;
   clear: () => void;
   closePane: () => void;
-  closeSession: () => void;
+  closeTerminal: () => void;
   /** create a new tmux window on the pane's controller. */
   createTmuxWindow?: () => void;
   /**
@@ -27,14 +27,14 @@ export interface PaneMenuActions {
  *
  * Layout:
  *  - Always: Split Horizontal, Split Vertical
- *  - If no session attached: Attach Session
- *  - If session attached: Select All, Copy, (Paste if connected), Clear Pane
+ *  - If no terminal attached: Attach Terminal
+ *  - If terminal attached: Select All, Copy, (Paste if connected), Clear Pane
  *  - Always: Close Pane (danger)
- *  - If session attached: Close Session (danger)
- *  - tmux session: New Tmux Window, Rename Tmux Window, Close Tmux Window
+ *  - If terminal attached: Close Terminal (danger)
+ *  - tmux terminal: New Tmux Window, Rename Tmux Window, Close Tmux Window
  */
 export function buildPaneContextMenu(
-  session: Session | undefined,
+  terminal: Terminal | undefined,
   actions: PaneMenuActions,
   containingWindow?: Window,
 ): ContextMenuItem[] {
@@ -43,24 +43,24 @@ export function buildPaneContextMenu(
     { label: "Split Vertical", onClick: () => actions.startSplit("vertical") },
   ];
 
-  if (!session) {
-    items.push({ label: "Attach Session", onClick: actions.startAttach });
+  if (!terminal) {
+    items.push({ label: "Attach Terminal", onClick: actions.startAttach });
   }
 
-  if (session) {
+  if (terminal) {
     items.push(
       { label: "Select All", onClick: actions.selectAll },
       { label: "Copy", onClick: actions.copy },
     );
-    if (session.isConnected) {
+    if (terminal.isConnected) {
       items.push({ label: "Paste", onClick: actions.paste });
     }
     items.push({ label: "Clear Pane", onClick: actions.clear });
   }
 
-  // tmux window management (only when the session is a tmux pane
+  // tmux window management (only when the terminal is a tmux pane
   // and the optional tmux handlers are provided by the caller).
-  const isTmux = session?.type === "tmux-cc";
+  const isTmux = terminal?.type === "tmux-pane";
   const hasTmuxWindowId = containingWindow?.xstermWindowId !== undefined;
   if (isTmux) {
     if (actions.createTmuxWindow) {
@@ -80,8 +80,8 @@ export function buildPaneContextMenu(
 
   items.push({ label: "Close Pane", onClick: actions.closePane, danger: true });
 
-  if (session) {
-    items.push({ label: "Close Session", onClick: actions.closeSession, danger: true });
+  if (terminal) {
+    items.push({ label: "Close Terminal", onClick: actions.closeTerminal, danger: true });
   }
 
   return items;

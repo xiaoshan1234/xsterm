@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import { useSession } from "../sessions/SessionContext";
+import { useSession } from "../terminals/TerminalContext";
 import { useTheme } from "../../contexts/ThemeContext";
-import { type SessionDisplayConfig } from "../../types/session";
-import { uploadImageToSshSession } from "../../services/sessionService";
+import { type TerminalDisplayConfig } from "../../types/terminal";
+import { uploadImageToSshTerminal } from "../../services/terminalService";
 import { logger } from "../../services/loggerService";
 import { getClipboardImages } from "./clipboard";
 import { useXterm } from "./useXterm";
@@ -17,21 +17,21 @@ import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";
 
 // Props:
-// - sessionId: Tauri session handle; all terminal operations (write, key) are routed to the backend via this ID
-// - sessionType: session type, "local" for local shell, "ssh" for remote connection
+// - terminalId: Tauri terminal handle; all terminal operations (write, key) are routed to the backend via this ID
+// - kind: terminal type, "local" for local shell, "ssh" for remote connection
 // - isActive: whether the current pane is active, determines focus/blur
 // - onFocus: triggered when clicked, notifies parent to switch active pane
 interface TerminalProps {
-  sessionId: number;
-  // tmux control-mode sessions use the same write/resize/close IPC
-  // surface as local; the `sessionType` prop is informational (e.g. for
-  // the `useClipboardImagePaste` branch on the `sessionType === "ssh"` path).
-  sessionType?: "local" | "ssh" | "tmux-cc";
+  terminalId: number;
+  // tmux control-mode terminals use the same write/resize/close IPC
+  // surface as local; the `kind` prop is informational (e.g. for
+  // the `useClipboardImagePaste` branch on the `kind === "ssh"` path).
+  kind?: "local" | "ssh" | "wsl" | "tmux-pane";
   isActive?: boolean;
   isWindowActive?: boolean;
   isConnected: boolean;
   configId: string;
-  displayConfig?: SessionDisplayConfig;
+  displayConfig?: TerminalDisplayConfig;
   onFocus?: () => void;
 }
 
@@ -52,8 +52,8 @@ const DEFAULT_XTERM_OPTIONS = {
 
 const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   {
-    sessionId,
-    sessionType,
+    terminalId,
+    kind,
     isActive = true,
     isWindowActive = true,
     isConnected,
@@ -73,8 +73,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
-  const { writeSession, getEffectiveLocalEcho, reconnectSession } = useSession();
-  const localEchoEnabled = getEffectiveLocalEcho(sessionId);
+  const { writeTerminal, getEffectiveLocalEcho, reconnectSession } = useSession();
+  const localEchoEnabled = getEffectiveLocalEcho(terminalId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
   const isFocusedRef = useRef(isActive);
@@ -98,20 +98,20 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     reconnectSessionRef.current = reconnectSession;
   }, [reconnectSession]);
 
-  const writeSessionRef = useRef(writeSession);
+  const writeTerminalRef = useRef(writeTerminal);
 
   useEffect(() => {
-    writeSessionRef.current = writeSession;
-  }, [writeSession]);
+    writeTerminalRef.current = writeTerminal;
+  }, [writeTerminal]);
 
   // Perf 010: paste chunking + confirmation. The batcher owns rAF pacing so
-  // a single paste doesn't hold the SessionManager mutex across one giant
+  // a single paste doesn't hold the TerminalManager mutex across one giant
   // write_all; the dialog gives the user a chance to scrub line endings
   // and tabs before any bytes reach the PTY.
   // Bracketed-paste wrap (Perf 011 follow-up): xterm.js tracks DEC mode 2004
   // automatically via `terminal.modes.bracketedPasteMode`; we read it here
   // so vim/fzf/etc. receive the ESC[200~ / ESC[201~ markers when supported.
-  const { enqueuePaste } = usePasteBatcher(sessionId);
+  const { enqueuePaste } = usePasteBatcher(terminalId);
   const [pendingPasteText, setPendingPasteText] = useState<string | null>(null);
 
   const readBracketedPasteMode = useCallback((): boolean => {
@@ -164,7 +164,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         return;
       }
 
-      if (sessionType !== "ssh") return;
+      if (kind !== "ssh") return;
 
       const imageItems = await getClipboardImages(e);
       if (imageItems.length === 0) return;
@@ -176,16 +176,16 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         try {
           const buffer = await file.arrayBuffer();
           const bytes = Array.from(new Uint8Array(buffer));
-          const remotePath = await uploadImageToSshSession(sessionId, file.name, bytes);
-          writeSessionRef.current(sessionId, remotePath).catch((err) => {
-            logger.error("terminal", "writeSession:imagePath", err);
+          const remotePath = await uploadImageToSshTerminal(terminalId, file.name, bytes);
+          writeTerminalRef.current(terminalId, remotePath).catch((err) => {
+            logger.error("terminal", "writeTerminal:imagePath", err);
           });
         } catch (err) {
           console.error("[xsterm] Failed to upload pasted image:", err);
         }
       }
     },
-    [sessionId, sessionType, requestPaste],
+    [terminalId, kind, requestPaste],
   );
 
   useEffect(() => {
@@ -193,8 +193,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     if (!xterm) return;
 
     isReconnectingRef.current = false;
-    // When reconnecting, a brand-new PTY/SSH session is created, but the xterm instance still retains
-    // the old session's mode state (e.g., mouse tracking mode). Without resetting these internal
+    // When reconnecting, a brand-new PTY/SSH terminal is created, but the xterm instance still retains
+    // the old terminal's mode state (e.g., mouse tracking mode). Without resetting these internal
     // states, xterm will still generate mouse event escape sequences on mouse movement and send them
     // to the new PTY, which has not enabled the corresponding mode, treating these sequences as
     // regular characters and displaying garbled output. reset() is equivalent to RIS, clearing the
@@ -263,7 +263,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (!isConnectedRef.current) {
         if (data === "\r" && !isReconnectingRef.current) {
           isReconnectingRef.current = true;
-          reconnectSessionRef.current(sessionId).finally(() => {
+          reconnectSessionRef.current(terminalId).finally(() => {
             isReconnectingRef.current = false;
           });
         }
@@ -280,8 +280,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       // showing up only on the *next* keystroke. With the Rust side
       // already coalescing reads into 64 KiB chunks (Perf 005), the
       // JS-side input batching buys nothing and only hurts latency.
-      writeSessionRef.current(sessionId, data).catch((err) => {
-        logger.error("terminal", "writeSession:keystroke", err);
+      writeTerminalRef.current(terminalId, data).catch((err) => {
+        logger.error("terminal", "writeTerminal:keystroke", err);
       });
     });
 
@@ -298,7 +298,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       dataDisposer.dispose();
       selectionDisposer.dispose();
     };
-  }, [sessionId]);
+  }, [terminalId]);
 
   useEffect(() => {
     document.addEventListener("paste", handlePaste, true);
@@ -309,13 +309,13 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
   // useTauriTerminalOutput: subscribes to Tauri backend PTY output stream, writes data to xterm display
   // useTerminalResize: listens for container size changes, calls fitAddon.fit() to make xterm adapt to the new size
-  useTauriTerminalOutput(termRef, sessionId);
-  useTerminalResize(containerRef, termRef, fitAddonRef, sessionId, displayConfig, isWindowActive);
+  useTauriTerminalOutput(termRef, terminalId);
+  useTerminalResize(containerRef, termRef, fitAddonRef, terminalId, displayConfig, isWindowActive);
   useLineNumberOverlay({
     termRef,
     hostRef,
     overlayRef: lineNumberOverlayRef,
-    sessionId,
+    terminalId,
     enabled: displayConfig?.lineNumberEnabled ?? true,
   });
 
@@ -349,7 +349,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       },
     }),
-    [sessionId, requestPaste],
+    [terminalId, requestPaste],
   );
 
   useEffect(() => {
