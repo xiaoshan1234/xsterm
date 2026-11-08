@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { autoAttachTmuxServers } from "../../../services/terminalService";
+import { tmuxCommands } from "../infrastructure";
 
 /**
  * re-attach every persisted `attachedTmuxServers` entry on
@@ -17,7 +17,8 @@ export function useTmuxAutoAttach(): void {
   useEffect(() => {
     if (ranRef.current) return;
     ranRef.current = true;
-    autoAttachTmuxServers()
+    tmuxCommands
+      .autoAttachTmuxServers()
       .then((results) => {
         if (results.length === 0) return;
         const succeeded = results.filter((r) => r.info !== undefined).length;

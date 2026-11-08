@@ -1,22 +1,15 @@
 import { useMemo } from "react";
-import { type SavedTerminalConfig, type TerminalGroup } from "../../../../types/terminal";
+import { type SavedTerminalConfig, type TerminalGroup } from "../../../../models/legacy/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { FormField } from "../../../../shared/ui/FormField";
-import { DEFAULT_GROUP_ID, useSession } from "../../../sessions";
-import SessionTab from "../../logic/dialogs/ConnectionTab";
-import { validateSshConfig } from "../../logic/dialogs/SshTerminalForm";
-import {
-  SessionFormLayout,
-  type SessionFormSidebarItem,
-} from "../../logic/dialogs/TerminalFormLayout";
-import { SessionFormPanels } from "../../logic/dialogs/TerminalFormPanels";
-import { useTerminalForm } from "../../logic/dialogs/useTerminalForm";
-import {
-  DEFAULT_SSH,
-  SHELL_SIDEBAR_ITEMS,
-  SSH_SIDEBAR_ITEMS,
-} from "../../logic/dialogs/terminalDialogItems";
-import "../../logic/dialogs/EditTerminalDialog.css";
+import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../sessions";
+import SessionTab from "./ConnectionTab";
+import { validateSshConfig } from "./SshTerminalForm";
+import { SessionFormLayout, type SessionFormSidebarItem } from "./TerminalFormLayout";
+import { SessionFormPanels } from "./TerminalFormPanels";
+import { useTerminalForm } from "./useTerminalForm";
+import { DEFAULT_SSH, SHELL_SIDEBAR_ITEMS, SSH_SIDEBAR_ITEMS } from "./terminalDialogItems";
+import "./EditTerminalDialog.css";
 
 export type EditableTerminalConfig = Extract<SavedTerminalConfig, { type: "local" | "ssh" }>;
 
@@ -37,7 +30,7 @@ export function EditTerminalDialog({
   groupId,
   onSave,
 }: EditTerminalDialogProps) {
-  const { updateConfig } = useSession();
+  const { updateConfig } = useSavedLaunchConfigs();
   const form = useTerminalForm({
     isOpen,
     initialConfigId: config.id,

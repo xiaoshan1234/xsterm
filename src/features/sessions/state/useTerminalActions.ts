@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../services/terminalService";
+import { terminalCommands } from "../../terminal/infrastructure";
+import { tmuxCommands } from "../../tmux/infrastructure";
 import type {
   LocalTerminalConfig,
   SshConfig,
@@ -7,7 +8,7 @@ import type {
   TmuxSessionConfig,
   Window,
   Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import { createLeafPane, generateId, withRecomputedSessionIds } from "./paneUtils";
 import {
   assertSessionNotUsedElsewhere,
@@ -51,13 +52,17 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
       const info = await dispatchByType(
         config.type,
         () =>
-          terminalService.createLocal(
+          terminalCommands.createLocalTerminal(
             config.config as LocalTerminalConfig,
             config.displayConfig?.logging,
           ),
-        () => terminalService.createSsh(config.config as SshConfig, config.displayConfig?.logging),
         () =>
-          terminalService.createTmux(
+          terminalCommands.createSshTerminal(
+            config.config as SshConfig,
+            config.displayConfig?.logging,
+          ),
+        () =>
+          tmuxCommands.createTmuxSession(
             config.config as TmuxSessionConfig,
             config.displayConfig?.logging,
           ),
@@ -185,6 +190,17 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
 
   const group = useGroupActions(opts);
 
+  const dismissTmuxControllerError = useCallback(
+    (controllerId: number) => {
+      opts.setTmuxControllerErrors((prev) => {
+        const next = new Map(prev);
+        next.delete(controllerId);
+        return next;
+      });
+    },
+    [opts.setTmuxControllerErrors],
+  );
+
   return {
     createTerminalFromSavedConfig,
     createWindowFromSession,
@@ -207,5 +223,6 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     ...persistence,
     ...group,
     applyDisplayConfigToLiveSession: lifecycle.applyDisplayConfigToLiveSession,
+    dismissTmuxControllerError,
   };
 }

@@ -1,4 +1,4 @@
-import { type PaneNode } from "../../types/terminal";
+import { type PaneNode } from "../../models/legacy/terminal";
 
 export function findPaneNode<T extends { id: string; children?: T[] }>(
   node: T,

@@ -3,7 +3,7 @@ import type {
   SavedWorkspace,
   Terminal,
   Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import { useSavedWindowActions } from "./useSavedWindowActions";
 import { useSavedWorkspaceActions } from "./useSavedWorkspaceActions";
 

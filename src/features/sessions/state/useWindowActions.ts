@@ -1,12 +1,12 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../services/terminalService";
+import { terminalCommands, toBackendTerminalHandle } from "../../terminal/infrastructure";
 import type {
   PaneNode,
   SavedTerminalConfig,
   Terminal,
   Window,
   Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 function findPaneSessionId(pane: PaneNode, paneId: string): number | undefined {
@@ -201,8 +201,8 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
       );
 
       terminalIdsToClose.forEach((terminalId) => {
-        terminalService
-          .closeTerminal(terminalId)
+        terminalCommands
+          .closeTerminal(toBackendTerminalHandle(terminalId))
           .catch((e) => console.error("Failed to close terminal:", e));
         establishingSessionsRef.current.delete(terminalId);
         clearTerminalOutput(terminalId);

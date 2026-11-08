@@ -7,19 +7,13 @@
 ## 1. 状态
 
 - 当前阶段：设计稿
-- 实施状态：Phase 1–3 已完成；Phase 4 进行中，新 Shell 已成为默认入口并接入旧 SessionContext
+- 实施状态：Phase 1–4 已完成；新 Shell 是唯一运行时入口，旧 Sidebar / BottomBar / CommandSendPanel 已移除
 - 目标：先固定 UI 壳层和组件边界，再实现功能，最后迁移现有组件
 
 默认入口：
 
 ```powershell
 npm run tauri dev
-```
-
-旧 Shell 回退：
-
-```powershell
-cmd /c "set VITE_LEGACY_APP=true&& npm run tauri dev"
 ```
 
 纯静态组件稿：
@@ -758,6 +752,19 @@ SavedLaunchConfig[]
 
 View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
+### 11.1 状态切片
+
+新代码不得继续依赖大而全的 `useSession()`。按实际职责使用：
+
+| Hook                   | 职责                                             |
+| ---------------------- | ------------------------------------------------ |
+| `useSavedLaunchConfigs` | 保存的 Terminal/tmux 配置、分组及配置管理动作   |
+| `useTerminalRuntime`    | Live Terminal 列表、运行状态、输入、关闭和重连  |
+| `useWorkspaceLayout`    | Workspace、Window、Pane 布局及快照管理          |
+| `useSessionPreferences` | 终端相关全局偏好                                |
+
+`useSession()` 仅作为 legacy 兼容聚合入口保留，不得在新增组件中继续使用。
+
 ## 12. 组件与 Model 映射
 
 | UI 组件               | 主要 Model                            | 派生 View Model          |
@@ -911,9 +918,10 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 - 新 Shell 已接入 WorkspaceView、BottomBar 和 TextSender
 - 四个 Dialog 已拆分并接入运行时新 Shell
 - 会话/workspace/pane 状态内核已迁移到 `features/sessions/state`
-- 待迁移 Sidebar / BottomBar / CommandSendPanel 的旧实现
-- 拆分全局 Context
-- 更新 AGENTS.md 和目录规则
+- 全局状态已拆为配置、运行时、布局和偏好四个切片
+- 旧 Sidebar / BottomBar / CommandSendPanel 已移除
+- Terminal/tmux 命令与事件统一经过 feature-local infrastructure adapter
+- AGENTS.md 和目录规则已同步
 
 ## 18. 验收标准
 

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../services/terminalService";
-import type { Terminal, Workspace } from "../../../types/terminal";
+import { terminalCommands, toBackendTerminalHandle } from "../../terminal/infrastructure";
+import type { Terminal, Workspace } from "../../../models/legacy/terminal";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface UseWorkspaceActionsDeps {
@@ -108,8 +108,8 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
       if (workspace.terminalIds.length > 0) {
         const idsToClose = new Set(workspace.terminalIds);
         idsToClose.forEach((terminalId) => {
-          terminalService
-            .closeTerminal(terminalId)
+          terminalCommands
+            .closeTerminal(toBackendTerminalHandle(terminalId))
             .catch((e) => console.error("Failed to close terminal:", e));
           establishingSessionsRef.current.delete(terminalId);
           clearTerminalOutput(terminalId);

@@ -2,7 +2,7 @@ import {
   type SavedWindowConfig,
   type SavedWorkspace,
   type Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 
 export interface WindowManagerItemViewData {
   configId: string;

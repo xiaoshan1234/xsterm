@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useSession } from "../../../sessions";
+import { useSavedLaunchConfigs, useTerminalRuntime, useWorkspaceLayout } from "../../../sessions";
 import { Dialog } from "../../../../shared/ui/Dialog";
 
 interface SelectTerminalDialogProps {
@@ -17,7 +17,9 @@ export function SelectTerminalDialog({
   onSelectConfig,
   disabled = false,
 }: SelectTerminalDialogProps) {
-  const { terminals, savedConfigs, workspaces } = useSession();
+  const { terminals } = useTerminalRuntime();
+  const { savedConfigs } = useSavedLaunchConfigs();
+  const { workspaces } = useWorkspaceLayout();
 
   const usedSessionIds = useMemo(() => {
     const used = new Set<number>();

@@ -5,22 +5,19 @@ import {
   type Terminal,
   type TerminalDisplayConfig,
   type TmuxSessionConfig,
-} from "../../../../types/terminal";
+} from "../../../../models/legacy/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID, useSession } from "../../../sessions";
-import { validateSshConfig } from "../../../terminal/logic/dialogs/SshTerminalForm";
+import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../sessions";
+import { validateSshConfig } from "../../../terminal/ui/dialogs/SshTerminalForm";
 import {
   SessionFormLayout,
   type SessionFormSidebarItem,
-} from "../../../terminal/logic/dialogs/TerminalFormLayout";
-import { SessionFormPanels } from "../../../terminal/logic/dialogs/TerminalFormPanels";
-import { useTerminalForm } from "../../../terminal/logic/dialogs/useTerminalForm";
-import {
-  DEFAULT_SSH,
-  TMUX_SIDEBAR_ITEMS,
-} from "../../../terminal/logic/dialogs/terminalDialogItems";
-import TmuxForm from "../../../terminal/logic/dialogs/TmuxForm";
-import "../../../terminal/logic/dialogs/CreateTerminalDialog.css";
+} from "../../../terminal/ui/dialogs/TerminalFormLayout";
+import { SessionFormPanels } from "../../../terminal/ui/dialogs/TerminalFormPanels";
+import { useTerminalForm } from "../../../terminal/ui/dialogs/useTerminalForm";
+import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/terminalDialogItems";
+import TmuxForm from "./TmuxForm";
+import "../../../terminal/ui/dialogs/CreateTerminalDialog.css";
 
 interface CreateTmuxDialogProps {
   isOpen: boolean;
@@ -30,10 +27,16 @@ interface CreateTmuxDialogProps {
     save: boolean,
     displayConfig?: TerminalDisplayConfig,
   ) => Promise<Terminal>;
+  initialGroupId?: number;
 }
 
-export function CreateTmuxDialog({ isOpen, onClose, onCreateTmux }: CreateTmuxDialogProps) {
-  const { saveConfigOnly, savedConfigs } = useSession();
+export function CreateTmuxDialog({
+  isOpen,
+  onClose,
+  onCreateTmux,
+  initialGroupId = DEFAULT_GROUP_ID,
+}: CreateTmuxDialogProps) {
+  const { addToGroup, saveConfigOnly, savedConfigs } = useSavedLaunchConfigs();
   const [tmuxConfig, setTmuxConfig] = useState<TmuxSessionConfig>({});
   const [shouldSaveConfig, setShouldSaveConfig] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,7 +101,8 @@ export function CreateTmuxDialog({ isOpen, onClose, onCreateTmux }: CreateTmuxDi
     form.setError("");
 
     try {
-      await onCreateTmux(prepared.config, shouldSaveConfig, form.displayConfig);
+      const terminal = await onCreateTmux(prepared.config, shouldSaveConfig, form.displayConfig);
+      addToGroup(initialGroupId, terminal.configId);
       onClose();
     } catch (error) {
       form.setError(error instanceof Error ? error.message : String(error));
@@ -111,7 +115,8 @@ export function CreateTmuxDialog({ isOpen, onClose, onCreateTmux }: CreateTmuxDi
   const handleSaveOnly = () => {
     const prepared = prepareConfig();
     if (!prepared) return;
-    saveConfigOnly("tmux-pane", prepared.config, form.displayConfig);
+    const savedConfig = saveConfigOnly("tmux-pane", prepared.config, form.displayConfig);
+    addToGroup(initialGroupId, savedConfig.id);
     onClose();
   };
 

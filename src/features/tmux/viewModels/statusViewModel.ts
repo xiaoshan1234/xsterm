@@ -1,4 +1,8 @@
-import { type SavedTerminalConfig, type Terminal, type Workspace } from "../../../types/terminal";
+import {
+  type SavedTerminalConfig,
+  type Terminal,
+  type Workspace,
+} from "../../../models/legacy/terminal";
 import {
   selectPaneLocations,
   type PaneLocationViewData,

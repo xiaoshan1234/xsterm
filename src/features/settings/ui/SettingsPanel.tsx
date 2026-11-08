@@ -1,11 +1,11 @@
-import { useTheme } from "../../../contexts/ThemeContext";
+import { useTheme } from "../../../shared/theme/ThemeContext";
 import { FormCheckboxField } from "../../../shared/ui/FormCheckboxField";
 import { FormSelectField } from "../../../shared/ui/FormSelectField";
-import { useSession } from "../../sessions";
+import { useSessionPreferences } from "../../sessions";
 
 export function SettingsPanel() {
   const { currentThemeKey, setTheme, themeKeys } = useTheme();
-  const { globalLocalEcho, setGlobalLocalEcho } = useSession();
+  const { globalLocalEcho, setGlobalLocalEcho } = useSessionPreferences();
 
   return (
     <div className="manager-panel-scroll">

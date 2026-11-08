@@ -3,22 +3,19 @@ import {
   type SavedTerminalConfig,
   type SshConfig,
   type TmuxSessionConfig,
-} from "../../../../types/terminal";
+} from "../../../../models/legacy/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID, useSession } from "../../../sessions";
-import { validateSshConfig } from "../../../terminal/logic/dialogs/SshTerminalForm";
+import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../sessions";
+import { validateSshConfig } from "../../../terminal/ui/dialogs/SshTerminalForm";
 import {
   SessionFormLayout,
   type SessionFormSidebarItem,
-} from "../../../terminal/logic/dialogs/TerminalFormLayout";
-import { SessionFormPanels } from "../../../terminal/logic/dialogs/TerminalFormPanels";
-import { useTerminalForm } from "../../../terminal/logic/dialogs/useTerminalForm";
-import {
-  DEFAULT_SSH,
-  TMUX_SIDEBAR_ITEMS,
-} from "../../../terminal/logic/dialogs/terminalDialogItems";
-import TmuxForm from "../../../terminal/logic/dialogs/TmuxForm";
-import "../../../terminal/logic/dialogs/EditTerminalDialog.css";
+} from "../../../terminal/ui/dialogs/TerminalFormLayout";
+import { SessionFormPanels } from "../../../terminal/ui/dialogs/TerminalFormPanels";
+import { useTerminalForm } from "../../../terminal/ui/dialogs/useTerminalForm";
+import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/terminalDialogItems";
+import TmuxForm from "./TmuxForm";
+import "../../../terminal/ui/dialogs/EditTerminalDialog.css";
 
 export type EditableTmuxConfig = Extract<SavedTerminalConfig, { type: "tmux-pane" }>;
 
@@ -30,7 +27,7 @@ interface EditTmuxDialogProps {
 }
 
 export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDialogProps) {
-  const { savedConfigs, updateConfig } = useSession();
+  const { savedConfigs, updateConfig } = useSavedLaunchConfigs();
   const [tmuxConfig, setTmuxConfig] = useState<TmuxSessionConfig>(config.config);
   const form = useTerminalForm({
     isOpen,

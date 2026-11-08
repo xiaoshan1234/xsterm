@@ -3,7 +3,7 @@ import type {
   LocalTerminalConfig,
   SshConfig,
   TerminalDisplayConfig,
-} from "../../../../types/terminal";
+} from "../../../../models/legacy/terminal";
 import { type SectionId } from "./terminalDialogItems";
 
 export interface UseSessionFormOptions {

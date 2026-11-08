@@ -1,14 +1,12 @@
 import { useRef, useState } from "react";
-import { useSession } from "../sessions";
+import { useTerminalRuntime } from "../sessions";
 import {
   type LocalTerminalConfig,
   type SshConfig,
   type Terminal,
-  type TmuxSessionConfig,
-} from "../../types/terminal";
+} from "../../models/legacy/terminal";
 import { PlusIcon, FolderOpenIcon } from "../../shared/icons/Icon";
-import CreateTerminalDialog from "../terminal/logic/dialogs/CreateTerminalDialog";
-import { SelectTerminalDialog } from "../terminal/logic/dialogs/SelectTerminalDialog";
+import { CreateTerminalDialog, SelectTerminalDialog } from "../terminal/ui/dialogs";
 import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {
@@ -22,16 +20,9 @@ export function PaneInitCard({
   title = "Create a terminal",
   subtitle = "Create new or open a saved terminal",
 }: PaneInitCardProps) {
-  const {
-    terminals,
-    createLocalSessionOnly,
-    createSshSessionOnly,
-    createTmuxSessionOnly,
-    createTerminalFromSavedConfig,
-  } = useSession();
-  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | "tmux-pane" | null>(
-    null,
-  );
+  const { terminals, createLocalSessionOnly, createSshSessionOnly, createTerminalFromSavedConfig } =
+    useTerminalRuntime();
+  const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -67,9 +58,6 @@ export function PaneInitCard({
 
   const handleCreateSsh = (config: SshConfig, save: boolean) =>
     handleCreate(() => createSshSessionOnly(config, save));
-
-  const handleCreateTmux = (config: TmuxSessionConfig, save: boolean) =>
-    handleCreate(() => createTmuxSessionOnly(config, save));
 
   const handleSelectSession = (terminalId: number) => {
     if (!startSubmitting()) return;
@@ -137,7 +125,6 @@ export function PaneInitCard({
         onClose={() => setCreateDialogTab(null)}
         onCreateLocal={handleCreateLocal}
         onCreateSsh={handleCreateSsh}
-        onCreateTmux={handleCreateTmux}
         initialTab={createDialogTab ?? "local"}
       />
       <SelectTerminalDialog

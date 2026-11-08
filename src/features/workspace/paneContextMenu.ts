@@ -1,5 +1,5 @@
 import type { ContextMenuItem } from "../../shared/ui/ContextMenu";
-import type { Terminal, SplitDirection, Window } from "../../types/terminal";
+import type { Terminal, SplitDirection, Window } from "../../models/legacy/terminal";
 
 export interface PaneMenuActions {
   startSplit: (direction: SplitDirection) => void;

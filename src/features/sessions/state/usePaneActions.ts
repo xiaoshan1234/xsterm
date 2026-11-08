@@ -1,6 +1,12 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../services/terminalService";
-import type { PaneNode, Terminal, SplitDirection, Workspace } from "../../../types/terminal";
+import { terminalCommands, toBackendTerminalHandle } from "../../terminal/infrastructure";
+import { tmuxCommands, toBackendControllerHandle } from "../../tmux/infrastructure";
+import type {
+  PaneNode,
+  Terminal,
+  SplitDirection,
+  Workspace,
+} from "../../../models/legacy/terminal";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import {
   createLeafPane,
@@ -114,7 +120,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
    * React state and collapse the pane tree.
    */
   const killTmuxPane = useCallback(async (xstermTerminalId: number): Promise<void> => {
-    await terminalService.killTmuxPane(xstermTerminalId);
+    await tmuxCommands.killTmuxPane(toBackendTerminalHandle(xstermTerminalId));
   }, []);
 
   const updateWindowPaneTree = useCallback(
@@ -147,7 +153,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
       const terminalId = pane.terminalId;
       if (terminalId !== undefined) {
         try {
-          await terminalService.closeTerminal(terminalId);
+          await terminalCommands.closeTerminal(toBackendTerminalHandle(terminalId));
         } catch (e) {
           console.error("Failed to close terminal backend:", e);
         } finally {
@@ -179,14 +185,25 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
   );
 
   const writeTerminal = useCallback(async (id: number, data: string): Promise<void> => {
-    await terminalService.writeTerminal(id, data);
+    await terminalCommands.writeTerminal(
+      toBackendTerminalHandle(id),
+      new TextEncoder().encode(data),
+    );
   }, []);
 
   const resizeTerminal = useCallback(
     async (id: number, rows: number, cols: number): Promise<void> => {
-      await terminalService.resizeTerminal(id, rows, cols);
+      await terminalCommands.resizeTerminal(toBackendTerminalHandle(id), rows, cols);
     },
     [],
+  );
+
+  const touchTerminalActivity = useCallback(
+    (id: number) => {
+      const now = Date.now();
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, lastActivityAt: now } : s)));
+    },
+    [setSessions],
   );
 
   return {
@@ -195,6 +212,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
     closePane,
     writeTerminal,
     resizeTerminal,
+    touchTerminalActivity,
     killTmuxPane,
   };
 }
@@ -204,7 +222,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
  *
  * 1. Look up the parent terminal; require `tmuxSessionId` and
  *    `tmuxPaneId` (i.e. it must be a tmux pane).
- * 2. Call `terminalService.createTmuxPane` and await the backend's
+ * 2. Call the tmux infrastructure adapter and await the backend's
  *    `TerminalInfo`. The backend's dispatch task also fires a
  *    `tmux-pane-added` event for idempotent cross-check, but the
  *    authoritative Terminal object comes from the return value.
@@ -238,7 +256,11 @@ async function splitTmuxPaneInternal(
 
   let newSessionId: number;
   try {
-    const info = await terminalService.createTmuxPane(controllerId, xstermTerminalId, direction);
+    const info = await tmuxCommands.createTmuxPane(
+      toBackendControllerHandle(controllerId),
+      toBackendTerminalHandle(xstermTerminalId),
+      direction,
+    );
     newSessionId = info.id;
   } catch (e) {
     console.error("splitTmuxPane: backend create_tmux_pane failed:", e);

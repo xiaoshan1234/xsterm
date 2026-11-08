@@ -1,4 +1,4 @@
-import { type TerminalDisplayConfig } from "../../../../types/terminal";
+import { type TerminalDisplayConfig } from "../../../../models/legacy/terminal";
 import { FormCheckboxField } from "../../../../shared/ui/FormCheckboxField";
 import { FormRadioGroup } from "../../../../shared/ui/FormRadioGroup";
 import "./InputTab.css";

@@ -1,4 +1,4 @@
-import { type SavedTerminalConfig } from "../../../types/terminal";
+import { type SavedTerminalConfig } from "../../../models/legacy/terminal";
 
 export interface TmuxManagerItemViewData {
   configId: string;

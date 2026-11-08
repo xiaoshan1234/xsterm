@@ -1,4 +1,4 @@
-import type { Window, Workspace } from "../../../types/terminal";
+import type { Window, Workspace } from "../../../models/legacy/terminal";
 import {
   findPaneNode,
   getLeafPaneIds,

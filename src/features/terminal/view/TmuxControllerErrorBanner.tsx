@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { type TmuxControllerError, useSession } from "../../sessions";
-import * as terminalService from "../../../services/terminalService";
-import type { Terminal, TmuxSessionConfig } from "../../../types/terminal";
+import { useTerminalRuntime } from "../../sessions";
+import { tmuxCommands } from "../../tmux/infrastructure";
+import type { Terminal, TmuxSessionConfig } from "../../../models/legacy/terminal";
 import "./TmuxControllerErrorBanner.css";
 
 interface TmuxControllerErrorBannerProps {
@@ -17,7 +17,7 @@ interface TmuxControllerErrorBannerProps {
  * `TmuxSessionConfig` captured at create / attach time.
  */
 export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorBannerProps) {
-  const { tmuxControllerErrors, setTmuxControllerErrors } = useSession();
+  const { tmuxControllerErrors, dismissTmuxControllerError } = useTerminalRuntime();
 
   const match: { controllerId: number; config: TmuxSessionConfig; reason?: string } | null =
     (() => {
@@ -38,8 +38,8 @@ export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorB
   const handleRetry = useCallback(async () => {
     if (!match) return;
     const op = match.config.tmuxSessionName
-      ? terminalService.attachTmux
-      : terminalService.createTmux;
+      ? tmuxCommands.attachTmuxSession
+      : tmuxCommands.createTmuxSession;
     try {
       await op(match.config);
     } catch (e) {
@@ -49,21 +49,13 @@ export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorB
       );
       return;
     }
-    setTmuxControllerErrors((prev: Map<number, TmuxControllerError>) => {
-      const next = new Map(prev);
-      next.delete(match.controllerId);
-      return next;
-    });
-  }, [match, setTmuxControllerErrors]);
+    dismissTmuxControllerError(match.controllerId);
+  }, [dismissTmuxControllerError, match]);
 
   const handleDismiss = useCallback(() => {
     if (!match) return;
-    setTmuxControllerErrors((prev: Map<number, TmuxControllerError>) => {
-      const next = new Map(prev);
-      next.delete(match.controllerId);
-      return next;
-    });
-  }, [match, setTmuxControllerErrors]);
+    dismissTmuxControllerError(match.controllerId);
+  }, [dismissTmuxControllerError, match]);
 
   if (!match) return null;
   return (

@@ -4,7 +4,7 @@ import {
   type Terminal,
   type TerminalGroup,
   type Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import { selectTerminalManagerGroups } from "./managerViewModel";
 import { selectTerminalStatusItems } from "./statusViewModel";
 

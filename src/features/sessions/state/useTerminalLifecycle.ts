@@ -1,5 +1,10 @@
 import { useCallback } from "react";
-import * as terminalService from "../../../services/terminalService";
+import {
+  terminalCommands,
+  toBackendTerminalHandle,
+  type TerminalInfoDto,
+} from "../../terminal/infrastructure";
+import { tmuxCommands } from "../../tmux/infrastructure";
 import type {
   LocalTerminalConfig,
   SavedTerminalConfig,
@@ -10,7 +15,7 @@ import type {
   TmuxSessionConfig,
   Window,
   Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import {
   findPaneNode,
@@ -75,7 +80,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   const createAndActivateSession = useCallback(
     async (
       type: Terminal["type"],
-      create: () => Promise<terminalService.TerminalInfo>,
+      create: () => Promise<TerminalInfoDto>,
       config: LocalTerminalConfig | SshConfig | TmuxSessionConfig,
       save: boolean,
       skipAutoWindow = false,
@@ -123,7 +128,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
           };
         } else {
           // tmux-pane saved config persists TmuxSessionConfig verbatim.
-          // Migration in services/terminalStorage.ts recognises type "tmux-pane".
+          // Migration in sessions/persistence/terminalStorage.ts recognises type "tmux-pane".
           const tmuxConfig = config as TmuxSessionConfig;
           savedConfig = {
             id: configId,
@@ -164,7 +169,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Terminal> => {
       return createAndActivateSession(
         "local",
-        () => terminalService.createLocal(config, displayConfig?.logging),
+        () => terminalCommands.createLocalTerminal(config, displayConfig?.logging),
         config,
         save,
         false,
@@ -188,7 +193,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Terminal> => {
       return createAndActivateSession(
         "ssh",
-        () => terminalService.createSsh(config, displayConfig?.logging),
+        () => terminalCommands.createSshTerminal(config, displayConfig?.logging),
         config,
         save,
         false,
@@ -206,7 +211,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Terminal> => {
       return createAndActivateSession(
         "local",
-        () => terminalService.createLocal(config, displayConfig?.logging),
+        () => terminalCommands.createLocalTerminal(config, displayConfig?.logging),
         config,
         save,
         true,
@@ -224,7 +229,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Terminal> => {
       return createAndActivateSession(
         "ssh",
-        () => terminalService.createSsh(config, displayConfig?.logging),
+        () => terminalCommands.createSshTerminal(config, displayConfig?.logging),
         config,
         save,
         true,
@@ -248,7 +253,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Terminal> => {
       return createAndActivateSession(
         "tmux-pane",
-        () => terminalService.createTmux(config, displayConfig?.logging),
+        () => tmuxCommands.createTmuxSession(config, displayConfig?.logging),
         config,
         save,
         false,
@@ -271,7 +276,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     ): Promise<Terminal> => {
       return createAndActivateSession(
         "tmux-pane",
-        () => terminalService.createTmux(config, displayConfig?.logging),
+        () => tmuxCommands.createTmuxSession(config, displayConfig?.logging),
         config,
         save,
         true,
@@ -375,7 +380,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       );
       const terminal = terminalsRef.current.find((s) => s.configId === configId);
       if (terminal) {
-        terminalService.closeTerminal(terminal.id).catch(console.error);
+        terminalCommands.closeTerminal(toBackendTerminalHandle(terminal.id)).catch(console.error);
         clearTerminalOutput(terminal.id);
         setSessions((prev) => prev.filter((s) => s.configId !== configId));
         setWorkspaces((prev) =>
@@ -410,7 +415,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   const closeTerminal = useCallback(
     async (id: number): Promise<void> => {
       try {
-        await terminalService.closeTerminal(id);
+        await terminalCommands.closeTerminal(toBackendTerminalHandle(id));
       } catch (e) {
         console.error("Failed to close terminal backend:", e);
       } finally {
@@ -449,13 +454,17 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       const info = await dispatchByType(
         config.type,
         () =>
-          terminalService.createLocal(
+          terminalCommands.createLocalTerminal(
             config.config as LocalTerminalConfig,
             config.displayConfig?.logging,
           ),
-        () => terminalService.createSsh(config.config as SshConfig, config.displayConfig?.logging),
         () =>
-          terminalService.createTmux(
+          terminalCommands.createSshTerminal(
+            config.config as SshConfig,
+            config.displayConfig?.logging,
+          ),
+        () =>
+          tmuxCommands.createTmuxSession(
             config.config as TmuxSessionConfig,
             config.displayConfig?.logging,
           ),
@@ -486,7 +495,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       setSessions((prev) => prev.filter((s) => s.id !== id));
 
       try {
-        await terminalService.closeTerminal(id);
+        await terminalCommands.closeTerminal(toBackendTerminalHandle(id));
       } catch (e) {
         console.error("Failed to close old terminal backend during reconnect:", e);
       } finally {

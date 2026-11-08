@@ -7,7 +7,7 @@ import {
   type TerminalGroup,
   type TmuxSessionConfig,
   type Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import { type TerminalState, type TmuxControllerError } from "./types";
 
 export function useTerminalState(): TerminalState {

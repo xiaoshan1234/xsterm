@@ -1,5 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { logger } from "./loggerService";
+import { frontendLogger as logger } from "../../../infra";
 import {
   type LocalTerminalConfig,
   type PaneNode,
@@ -9,7 +9,7 @@ import {
   type TerminalGroup,
   type SshConfig,
   type TmuxSessionConfig,
-} from "../types/terminal";
+} from "../../../models/legacy/terminal";
 
 interface GroupStore {
   groups: TerminalGroup[];

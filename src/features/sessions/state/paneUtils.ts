@@ -3,7 +3,7 @@ import {
   type Terminal,
   type SplitDirection,
   type Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import {
   findPaneNode,
   getLeafPaneIds,

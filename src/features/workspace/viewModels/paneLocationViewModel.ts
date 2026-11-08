@@ -1,4 +1,4 @@
-import { type PaneNode, type Terminal, type Workspace } from "../../../types/terminal";
+import { type PaneNode, type Terminal, type Workspace } from "../../../models/legacy/terminal";
 
 export interface PaneLocationViewData {
   workspaceId: string;

@@ -5,7 +5,13 @@ import {
   dispatchByType,
   getUniqueWindowName,
 } from "./useTerminalActions.helpers";
-import type { Terminal, TerminalDisplayConfig, Window, Workspace } from "../../../types/terminal";
+import type {
+  Terminal,
+  TerminalDisplayConfig,
+  Window,
+  Workspace,
+} from "../../../models/legacy/terminal";
+import { toBackendTerminalHandle } from "../../terminal/infrastructure";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 // ---------- Fixtures --------------------------------------------------------
@@ -40,29 +46,37 @@ function workspace(id: string, name: string, windows: Window[]): Workspace {
 }
 
 const displayConfig: TerminalDisplayConfig = { lineTimestamp: true };
+const capabilities = {
+  supportsResize: true,
+  supportsReconnect: false,
+  supportsLocalEcho: true,
+  supportsMultiplex: false,
+};
 
 // ---------- dispatchByType --------------------------------------------------
 
 describe("dispatchByType", () => {
   const tmux = async () =>
     ({
-      id: 3,
+      id: toBackendTerminalHandle(3),
       name: "T",
       isConnected: true,
       kind: { type: "tmux-pane", sessionId: 1, paneId: "%1" },
+      capabilities,
     }) as const;
 
   it("invokes the local creator for type 'local'", async () => {
     const local = async () =>
       ({
-        id: 1,
+        id: toBackendTerminalHandle(1),
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
+        capabilities,
       }) as const;
     const ssh = async () =>
       ({
-        id: 2,
+        id: toBackendTerminalHandle(2),
         name: "S",
         isConnected: true,
         kind: {
@@ -71,6 +85,7 @@ describe("dispatchByType", () => {
           port: 22,
           user: "",
         },
+        capabilities,
       }) as const;
 
     const result = await dispatchByType("local", local, ssh, tmux);
@@ -80,14 +95,15 @@ describe("dispatchByType", () => {
   it("invokes the ssh creator for type 'ssh'", async () => {
     const local = async () =>
       ({
-        id: 1,
+        id: toBackendTerminalHandle(1),
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
+        capabilities,
       }) as const;
     const ssh = async () =>
       ({
-        id: 2,
+        id: toBackendTerminalHandle(2),
         name: "S",
         isConnected: true,
         kind: {
@@ -96,6 +112,7 @@ describe("dispatchByType", () => {
           port: 22,
           user: "",
         },
+        capabilities,
       }) as const;
 
     const result = await dispatchByType("ssh", local, ssh, tmux);
@@ -105,14 +122,15 @@ describe("dispatchByType", () => {
   it("invokes the tmux creator for type 'tmux-pane'", async () => {
     const local = async () =>
       ({
-        id: 1,
+        id: toBackendTerminalHandle(1),
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
+        capabilities,
       }) as const;
     const ssh = async () =>
       ({
-        id: 2,
+        id: toBackendTerminalHandle(2),
         name: "S",
         isConnected: true,
         kind: {
@@ -121,6 +139,7 @@ describe("dispatchByType", () => {
           port: 22,
           user: "",
         },
+        capabilities,
       }) as const;
 
     const result = await dispatchByType("tmux-pane", local, ssh, tmux);
@@ -133,14 +152,15 @@ describe("dispatchByType", () => {
         "weird" as never,
         async () =>
           ({
-            id: 1,
+            id: toBackendTerminalHandle(1),
             name: "L",
             isConnected: true,
             kind: { type: "local", shell: "", cwd: "" },
+            capabilities,
           }) as const,
         async () =>
           ({
-            id: 2,
+            id: toBackendTerminalHandle(2),
             name: "S",
             isConnected: true,
             kind: {
@@ -149,13 +169,15 @@ describe("dispatchByType", () => {
               port: 22,
               user: "",
             },
+            capabilities,
           }) as const,
         async () =>
           ({
-            id: 3,
+            id: toBackendTerminalHandle(3),
             name: "T",
             isConnected: true,
             kind: { type: "tmux-pane", sessionId: 1, paneId: "%1" },
+            capabilities,
           }) as const,
       ),
     ).rejects.toThrow(/Unknown terminal type/);
@@ -199,10 +221,11 @@ describe("getUniqueWindowName", () => {
 
 describe("buildFrontendTerminal", () => {
   const info = {
-    id: 7,
+    id: toBackendTerminalHandle(7),
     name: "terminal-7",
     isConnected: true,
     kind: { type: "local", shell: "/bin/zsh", cwd: "/" } as const,
+    capabilities,
   };
 
   it("maps all info fields onto the Terminal object", () => {
@@ -217,6 +240,7 @@ describe("buildFrontendTerminal", () => {
       displayConfig: undefined,
       createdAt: expect.any(Number),
       lastActivityAt: expect.any(Number),
+      capabilities,
     });
   });
 

@@ -1,5 +1,5 @@
-import * as terminalService from "../../../services/terminalService";
-import type { Terminal } from "../../../types/terminal";
+import { terminalCommands, toBackendTerminalHandle } from "../../terminal/infrastructure";
+import type { Terminal } from "../../../models/legacy/terminal";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface RollbackDeps {
@@ -23,8 +23,8 @@ export function createRollback({ setSessions, establishingSessionsRef, logTag }:
     const idsToClose = new Set(terminalsToClose.map((s) => s.id));
     await Promise.all(
       terminalsToClose.map((terminal) =>
-        terminalService
-          .closeTerminal(terminal.id)
+        terminalCommands
+          .closeTerminal(toBackendTerminalHandle(terminal.id))
           .catch((e) => console.error(`Failed to close terminal during ${logTag} rollback:`, e)),
       ),
     );

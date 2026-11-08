@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_GROUP_ID, useSession } from "../../features/sessions";
+import {
+  DEFAULT_GROUP_ID,
+  useSavedLaunchConfigs,
+  useTerminalRuntime,
+  useWorkspaceLayout,
+} from "../../features/sessions";
 import NavBar from "../NavBar";
 import { WorkspaceContainer } from "../../features/workspace/WorkspaceContainer";
 import { TerminalManagerPanel } from "../../features/terminal/ui/TerminalManagerPanel";
@@ -36,11 +41,12 @@ import {
   EditTmuxDialog,
   type EditableTmuxConfig,
 } from "../../features/tmux/ui/dialogs";
-import { NewGroupDialog } from "../../features/terminal/logic/dialogs/NewGroupDialog";
-import { EditGroupDialog } from "../../features/terminal/logic/dialogs/EditGroupDialog";
+import { NewGroupDialog } from "../../features/terminal/ui/dialogs/NewGroupDialog";
+import { EditGroupDialog } from "../../features/terminal/ui/dialogs/EditGroupDialog";
 import { SaveDialog } from "../../features/workspace/dialogs/SaveDialog";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { useTmuxAutoAttach } from "../../features/tmux/application/useTmuxAutoAttach";
+import { useAppShortcuts } from "../useAppShortcuts";
 
 type RuntimeDialog =
   | { kind: "create-terminal"; initialTab: "local" | "ssh"; groupId: number }
@@ -61,14 +67,30 @@ interface ConfirmState {
 }
 
 export function AppShellRuntime() {
-  const session = useSession();
   useTmuxAutoAttach();
   const {
     terminals,
-    workspaces,
-    activeWorkspaceId,
+    closeTerminal,
+    reconnectSession,
+    writeTerminal,
+    createLocalSession,
+    createSshSession,
+    createTmuxSession,
+    applyDisplayConfigToLiveSession,
+  } = useTerminalRuntime();
+  const {
     savedConfigs,
     groups,
+    removeConfig,
+    toggleGroup,
+    createGroup,
+    deleteGroup,
+    moveConfigToGroup,
+    renameGroup,
+  } = useSavedLaunchConfigs();
+  const {
+    workspaces,
+    activeWorkspaceId,
     savedWorkspaces,
     savedWindowConfigs,
     setActiveWorkspace,
@@ -80,23 +102,11 @@ export function AppShellRuntime() {
     loadWorkspace,
     createDefaultWorkspace,
     createEmptyWorkspace,
-    closeTerminal,
-    reconnectSession,
-    writeTerminal,
-    createLocalSession,
-    createSshSession,
-    createTmuxSession,
-    removeConfig,
-    toggleGroup,
-    createGroup,
-    deleteGroup,
-    moveConfigToGroup,
-    applyDisplayConfigToLiveSession,
     deleteSavedWindow,
     renameSavedWindow,
     deleteSavedWorkspace,
     renameSavedWorkspace,
-  } = session;
+  } = useWorkspaceLayout();
 
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
@@ -107,6 +117,16 @@ export function AppShellRuntime() {
   const [textSenderDraft, setTextSenderDraft] = useState("");
   const [textSenderStatus, setTextSenderStatus] = useState("Ready");
   const initializedRef = useRef(false);
+
+  useAppShortcuts({
+    onCreateSession: () =>
+      setDialog({
+        kind: "create-terminal",
+        initialTab: "local",
+        groupId: DEFAULT_GROUP_ID,
+      }),
+    onToggleLogs: () => undefined,
+  });
 
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0] ?? null;
@@ -474,7 +494,7 @@ export function AppShellRuntime() {
           groups={groups}
           onClose={() => setDialog(null)}
           onSave={(groupId, name) => {
-            session.renameGroup(groupId, name);
+            renameGroup(groupId, name);
             setDialog(null);
           }}
         />
@@ -531,7 +551,7 @@ export function AppShellRuntime() {
                   workspace.id === activeWorkspace.id ? "workspace-view--active" : ""
                 }`}
               >
-                <WorkspaceContainer workspace={workspace} commandPanelOpen={false} />
+                <WorkspaceContainer workspace={workspace} />
               </div>
             ))}
           </div>

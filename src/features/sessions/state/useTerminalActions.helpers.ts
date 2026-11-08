@@ -1,10 +1,10 @@
-import type * as terminalService from "../../../services/terminalService";
+import type { TerminalInfoDto } from "../../terminal/infrastructure";
 import type {
   Terminal,
   TerminalDisplayConfig,
   TerminalKind,
   Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 /**
@@ -14,10 +14,10 @@ import { isSessionUsedInOtherWindow } from "./paneUtils";
  */
 export async function dispatchByType(
   type: TerminalKind["type"],
-  local: () => Promise<terminalService.TerminalInfo>,
-  ssh: () => Promise<terminalService.TerminalInfo>,
-  tmux: () => Promise<terminalService.TerminalInfo>,
-): Promise<terminalService.TerminalInfo> {
+  local: () => Promise<TerminalInfoDto>,
+  ssh: () => Promise<TerminalInfoDto>,
+  tmux: () => Promise<TerminalInfoDto>,
+): Promise<TerminalInfoDto> {
   switch (type) {
     case "local":
       return local();
@@ -56,7 +56,7 @@ export function getUniqueWindowName(
  * `xstermWindowId`) are forwarded when present.
  */
 export function buildFrontendTerminal(
-  info: terminalService.TerminalInfo,
+  info: TerminalInfoDto,
   configId: string,
   _type: Terminal["type"],
   displayConfig?: TerminalDisplayConfig,

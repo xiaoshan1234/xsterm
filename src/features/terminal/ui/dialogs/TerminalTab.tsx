@@ -2,7 +2,7 @@ import {
   type LocalTerminalConfig,
   type SshConfig,
   type TerminalDisplayConfig,
-} from "../../../../types/terminal";
+} from "../../../../models/legacy/terminal";
 import { FormNumberField } from "../../../../shared/ui/FormNumberField";
 import { FormRadioGroup } from "../../../../shared/ui/FormRadioGroup";
 import { FormSelectField } from "../../../../shared/ui/FormSelectField";

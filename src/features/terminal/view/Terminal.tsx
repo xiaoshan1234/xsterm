@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import { useSession } from "../../sessions";
-import { useTheme } from "../../../contexts/ThemeContext";
-import { type TerminalDisplayConfig } from "../../../types/terminal";
-import { uploadImageToSshTerminal } from "../../../services/terminalService";
-import { logger } from "../../../services/loggerService";
+import { useTerminalRuntime } from "../../sessions";
+import { useTheme } from "../../../shared/theme/ThemeContext";
+import { type TerminalDisplayConfig } from "../../../models/legacy/terminal";
+import { terminalCommands, toBackendTerminalHandle } from "../infrastructure";
+import { frontendLogger as logger } from "../../../infra";
 import { getClipboardImages } from "./clipboard";
 import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
@@ -73,7 +73,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
-  const { writeTerminal, getEffectiveLocalEcho, reconnectSession } = useSession();
+  const { writeTerminal, getEffectiveLocalEcho, reconnectSession } = useTerminalRuntime();
   const localEchoEnabled = getEffectiveLocalEcho(terminalId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
@@ -176,7 +176,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         try {
           const buffer = await file.arrayBuffer();
           const bytes = Array.from(new Uint8Array(buffer));
-          const remotePath = await uploadImageToSshTerminal(terminalId, file.name, bytes);
+          const remotePath = await terminalCommands.uploadImageToSshTerminal(
+            toBackendTerminalHandle(terminalId),
+            file.name,
+            new Uint8Array(bytes),
+          );
           writeTerminalRef.current(terminalId, remotePath).catch((err) => {
             logger.error("terminal", "writeTerminal:imagePath", err);
           });

@@ -1,13 +1,13 @@
 import { useEffect, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
-import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { useSession } from "../../sessions";
+import { useTerminalRuntime } from "../../sessions";
 import {
   appendTerminalOutput,
   getTerminalOutput,
 } from "../../../shared/utils/terminalOutputBuffer";
-import { captureTmuxPane } from "../../../services/terminalService";
+import { subscribeTerminalEvents, toBackendTerminalHandle } from "../infrastructure";
+import { tmuxCommands } from "../../tmux/infrastructure";
 
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
@@ -20,8 +20,8 @@ const scrollbackReplayedRef = new Set<number>();
 
 const SCROLLBACK_LINES = 2000;
 
-function decodeOutput(data: number[]): string {
-  return new TextDecoder().decode(new Uint8Array(data));
+function decodeOutput(data: Uint8Array): string {
+  return new TextDecoder().decode(data);
 }
 
 // OSC52: ESC ] 52 ; [clipboard] ; <base64-data> ; terminated by BEL or ESC \
@@ -57,7 +57,7 @@ function extractAndCopyOsc52(text: string): string {
 }
 
 export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, terminalId: number): void {
-  const { setSessions, terminals } = useSession();
+  const { touchTerminalActivity, terminals } = useTerminalRuntime();
   // tmux scrollback replay applies only to tmux-backed panes.
   const isTmuxPane = !!terminals.find((s) => s.id === terminalId && !!s.tmuxPaneId);
 
@@ -72,7 +72,8 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
     const xterm = termRef.current;
     if (!xterm) return;
     scrollbackReplayedRef.add(terminalId);
-    captureTmuxPane(terminalId, SCROLLBACK_LINES)
+    tmuxCommands
+      .captureTmuxPane(toBackendTerminalHandle(terminalId), SCROLLBACK_LINES)
       .then((text) => {
         if (!text) return;
         try {
@@ -119,9 +120,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       const last = lastTouchRef.get(terminalId) ?? 0;
       if (now - last >= TOUCH_DEBOUNCE_MS) {
         lastTouchRef.set(terminalId, now);
-        setSessions((prev) =>
-          prev.map((s) => (s.id === terminalId ? { ...s, lastActivityAt: now } : s)),
-        );
+        touchTerminalActivity(terminalId);
       }
 
       try {
@@ -131,11 +130,12 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       }
     };
 
-    listen<[number, number[]]>("terminal-output", (event) => {
-      const [id, data] = event.payload;
-      if (id === terminalId) {
-        handleOutput(extractAndCopyOsc52(decodeOutput(data)));
-      }
+    subscribeTerminalEvents({
+      onOutput: ({ terminalHandle, data }) => {
+        if (Number(terminalHandle) === terminalId) {
+          handleOutput(extractAndCopyOsc52(decodeOutput(data)));
+        }
+      },
     })
       .then((fn) => {
         if (!listenerActive) {
@@ -166,5 +166,5 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       listenerActive = false;
       unlisten?.();
     };
-  }, [termRef, terminalId, setSessions]);
+  }, [termRef, terminalId, touchTerminalActivity]);
 }

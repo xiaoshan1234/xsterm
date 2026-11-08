@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Terminal, type Workspace } from "../../../types/terminal";
+import { type Terminal, type Workspace } from "../../../models/legacy/terminal";
 import { selectTmuxStatusControllers } from "./statusViewModel";
 
 describe("tmux status view model", () => {

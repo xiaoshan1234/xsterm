@@ -1,6 +1,6 @@
 import { useShortcuts } from "../shared/hooks/useShortcut";
-import { useSession } from "../features/sessions";
-import type { PaneNode, SplitDirection } from "../types/terminal";
+import { useTerminalRuntime, useWorkspaceLayout } from "../features/sessions";
+import type { PaneNode, SplitDirection } from "../models/legacy/terminal";
 
 export function useAppShortcuts({
   onCreateSession,
@@ -9,7 +9,8 @@ export function useAppShortcuts({
   onCreateSession: () => void;
   onToggleLogs: () => void;
 }) {
-  const { workspaces, activeWorkspaceId, setActivePane, closeTerminal, splitPane } = useSession();
+  const { closeTerminal } = useTerminalRuntime();
+  const { workspaces, activeWorkspaceId, setActivePane, splitPane } = useWorkspaceLayout();
 
   const activeWindowFor = (workspace: (typeof workspaces)[number]) =>
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ?? workspace.windows[0];

@@ -1,16 +1,20 @@
 import { useCallback, useRef, useState } from "react";
-import { type PaneNode, type SplitDirection, type Workspace } from "../../types/terminal";
-import { useSession } from "../sessions";
+import { type PaneNode, type SplitDirection, type Workspace } from "../../models/legacy/terminal";
+import { useTerminalRuntime, useWorkspaceLayout } from "../sessions";
 import * as paneTree from "../../shared/utils/paneTreeUtils";
 import { getPaneNumber, isSessionUsedInOtherWindow } from "../sessions";
-import { useTheme } from "../../contexts/ThemeContext";
+import { useTheme } from "../../shared/theme/ThemeContext";
 import Terminal, { type TerminalRef } from "../terminal/view/Terminal";
 import { ContextMenu, type ContextMenuRef } from "../../shared/ui/ContextMenu";
-import { SelectTerminalDialog } from "../terminal/logic/dialogs/SelectTerminalDialog";
+import { SelectTerminalDialog } from "../terminal/ui/dialogs/SelectTerminalDialog";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
 import { TmuxControllerErrorBanner } from "../terminal/view/TmuxControllerErrorBanner";
-import * as terminalService from "../../services/terminalService";
+import {
+  tmuxCommands,
+  toBackendControllerHandle,
+  toBackendWindowHandle,
+} from "../tmux/infrastructure";
 import "./Pane.css";
 
 interface PaneProps {
@@ -32,15 +36,8 @@ export function Pane({
   isWindowActive,
   onActivate,
 }: PaneProps) {
-  const {
-    terminals,
-    workspaces,
-    splitPane,
-    closeTerminal,
-    closePane,
-    createTerminalFromSavedConfig,
-    updateWindowPaneTree,
-  } = useSession();
+  const { terminals, closeTerminal, createTerminalFromSavedConfig } = useTerminalRuntime();
+  const { workspaces, splitPane, closePane, updateWindowPaneTree } = useWorkspaceLayout();
   const { currentTheme } = useTheme();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
@@ -221,7 +218,7 @@ export function Pane({
   const handleCreateTmuxWindow = useCallback(async () => {
     if (terminal?.tmuxSessionId === undefined) return;
     try {
-      await terminalService.createTmuxWindow(terminal.tmuxSessionId);
+      await tmuxCommands.createTmuxWindow(toBackendControllerHandle(terminal.tmuxSessionId));
     } catch (e) {
       console.error("Failed to create tmux window:", e);
       window.alert(`Failed to create tmux window: ${e instanceof Error ? e.message : String(e)}`);
@@ -232,7 +229,7 @@ export function Pane({
     const xid = selectedWindow?.xstermWindowId;
     if (xid === undefined) return;
     try {
-      await terminalService.killTmuxWindow(xid);
+      await tmuxCommands.killTmuxWindow(toBackendWindowHandle(xid));
     } catch (e) {
       console.error("Failed to kill tmux window:", e);
       window.alert(`Failed to kill tmux window: ${e instanceof Error ? e.message : String(e)}`);
@@ -245,7 +242,7 @@ export function Pane({
     const name = window.prompt("Rename tmux window:");
     if (name === null || name.trim() === "") return;
     try {
-      await terminalService.renameTmuxWindow(xid, name.trim());
+      await tmuxCommands.renameTmuxWindow(toBackendWindowHandle(xid), name.trim());
     } catch (e) {
       console.error("Failed to rename tmux window:", e);
       window.alert(`Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`);

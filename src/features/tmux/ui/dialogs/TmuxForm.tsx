@@ -1,6 +1,9 @@
 import { useMemo } from "react";
-import { useSession } from "../../../sessions";
-import { type SavedTerminalConfig, type TmuxSessionConfig } from "../../../../types/terminal";
+import { useSavedLaunchConfigs } from "../../../sessions";
+import {
+  type SavedTerminalConfig,
+  type TmuxSessionConfig,
+} from "../../../../models/legacy/terminal";
 import { FormSelectField, type FormSelectOption } from "../../../../shared/ui/FormSelectField";
 import { FormTextField } from "../../../../shared/ui/FormTextField";
 
@@ -33,7 +36,7 @@ interface TmuxFormProps {
  * otherwise.
  */
 export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFormProps) {
-  const { savedConfigs } = useSession();
+  const { savedConfigs } = useSavedLaunchConfigs();
 
   // Only SSH + Local saved configs are valid bases for a tmux terminal.
   // (tmux-pane configs are excluded — nesting tmux inside tmux is not

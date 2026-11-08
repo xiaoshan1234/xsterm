@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
-import { writeTerminalBytes } from "../../../services/terminalService";
-import { logger } from "../../../services/loggerService";
+import { terminalCommands, toBackendTerminalHandle } from "../infrastructure";
+import { frontendLogger as logger } from "../../../infra";
 import { convertLineEndings } from "./textTransform";
 
 /**
@@ -129,9 +129,11 @@ export function usePasteBatcher(terminalId: number) {
     // Append to the queue. `.catch(() => {})` isolates failures so one
     // rejection doesn't poison every subsequent paste.
     appendToPasteQueue(inputQueueRef, () =>
-      writeTerminalBytes(terminalIdRef.current, bytes).catch((err) => {
-        logger.error("usePasteBatcher", "writeTerminalBytes", err);
-      }),
+      terminalCommands
+        .writeTerminal(toBackendTerminalHandle(terminalIdRef.current), bytes)
+        .catch((err) => {
+          logger.error("usePasteBatcher", "writeTerminal", err);
+        }),
     );
   }, []);
 

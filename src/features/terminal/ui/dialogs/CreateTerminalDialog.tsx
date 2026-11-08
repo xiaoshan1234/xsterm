@@ -4,23 +4,16 @@ import {
   type SshConfig,
   type Terminal,
   type TerminalDisplayConfig,
-} from "../../../../types/terminal";
+} from "../../../../models/legacy/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID, useSession } from "../../../sessions";
-import SessionTab from "../../logic/dialogs/ConnectionTab";
-import { validateSshConfig } from "../../logic/dialogs/SshTerminalForm";
-import {
-  SessionFormLayout,
-  type SessionFormSidebarItem,
-} from "../../logic/dialogs/TerminalFormLayout";
-import { SessionFormPanels } from "../../logic/dialogs/TerminalFormPanels";
-import { useTerminalForm } from "../../logic/dialogs/useTerminalForm";
-import {
-  DEFAULT_SSH,
-  SHELL_SIDEBAR_ITEMS,
-  SSH_SIDEBAR_ITEMS,
-} from "../../logic/dialogs/terminalDialogItems";
-import "../../logic/dialogs/CreateTerminalDialog.css";
+import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../sessions";
+import SessionTab from "./ConnectionTab";
+import { validateSshConfig } from "./SshTerminalForm";
+import { SessionFormLayout, type SessionFormSidebarItem } from "./TerminalFormLayout";
+import { SessionFormPanels } from "./TerminalFormPanels";
+import { useTerminalForm } from "./useTerminalForm";
+import { DEFAULT_SSH, SHELL_SIDEBAR_ITEMS, SSH_SIDEBAR_ITEMS } from "./terminalDialogItems";
+import "./CreateTerminalDialog.css";
 
 type TerminalCreateTab = "local" | "ssh";
 
@@ -49,7 +42,7 @@ export function CreateTerminalDialog({
   initialTab = "local",
   initialGroupId = DEFAULT_GROUP_ID,
 }: CreateTerminalDialogProps) {
-  const { groups, addToGroup, saveConfigOnly } = useSession();
+  const { groups, addToGroup, saveConfigOnly } = useSavedLaunchConfigs();
   const [topTab, setTopTab] = useState<TerminalCreateTab>(initialTab);
   const [shouldSaveConfig, setShouldSaveConfig] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

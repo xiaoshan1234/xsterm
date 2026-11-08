@@ -12,7 +12,6 @@ export function ToolPanel({ title, onClose, children }: ToolPanelProps) {
     <section className="shell-tool-panel" aria-label={title}>
       <header className="shell-tool-panel-header">
         <div>
-          <div className="shell-eyebrow">Tools</div>
           <h2>{title}</h2>
         </div>
         <button

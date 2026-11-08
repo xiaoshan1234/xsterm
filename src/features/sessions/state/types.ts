@@ -13,56 +13,60 @@ import {
   type TmuxSessionConfig,
   type Window,
   type Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 
-export interface TerminalContextType {
-  terminals: Terminal[];
-  setSessions: SetSessions;
-  savedConfigs: SavedTerminalConfig[];
-  workspaces: Workspace[];
-  activeWorkspaceId: string | null;
-  savedWorkspaces: SavedWorkspace[];
-  savedWindowConfigs: SavedWindowConfig[];
-  groups: TerminalGroup[];
+export interface SessionPreferencesContextType {
   globalLocalEcho: boolean;
   setGlobalLocalEcho: (enabled: boolean) => void;
+}
+
+export interface SavedLaunchConfigsContextType {
+  savedConfigs: SavedTerminalConfig[];
+  groups: TerminalGroup[];
+  saveConfigOnly: (
+    type: Terminal["type"],
+    config: LocalTerminalConfig | SshConfig | TmuxSessionConfig,
+    displayConfig?: TerminalDisplayConfig,
+  ) => SavedTerminalConfig;
+  removeConfig: (configId: string) => void;
+  addToGroup: (groupId: number, configId: string) => void;
+  removeFromGroup: (groupId: number, configId: string) => void;
+  moveConfigToGroup: (configId: string, groupId: number | null) => void;
+  createGroup: (name: string) => void;
+  deleteGroup: (id: number) => void;
+  renameGroup: (id: number, name: string) => void;
+  updateConfig: (config: SavedTerminalConfig) => void;
+  toggleGroup: (id: number) => void;
+}
+
+export interface TerminalRuntimeContextType {
+  terminals: Terminal[];
   getEffectiveLocalEcho: (terminalId: number) => boolean;
-  // tmux retry-banner state. Exposed here (not just on
-  // TerminalState) so the listener and the banner can read/write
-  // it through the regular `useSession()` API.
   tmuxControllerErrors: Map<number, TmuxControllerError>;
-  setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
-  tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
   createLocalSession: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   createTmuxSessionOnly: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
-  saveConfigOnly: (
-    type: Terminal["type"],
-    config: LocalTerminalConfig | SshConfig | TmuxSessionConfig,
-    displayConfig?: TerminalDisplayConfig,
-  ) => SavedTerminalConfig;
   openFromConfig: (configId: string) => Promise<Terminal>;
-  removeConfig: (configId: string) => void;
+  createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;
   reconnectSession: (id: number) => Promise<Terminal>;
-  closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
-  addToGroup: (groupId: number, configId: string) => void;
-  removeFromGroup: (groupId: number, configId: string) => void;
-  moveConfigToGroup: (configId: string, groupId: number | null) => void;
   renameSession: (id: number, name: string) => void;
-  createGroup: (name: string) => void;
-  deleteGroup: (id: number) => void;
-  renameGroup: (id: number, name: string) => void;
-  updateConfig: (config: SavedTerminalConfig) => void;
-  toggleGroup: (id: number) => void;
   writeTerminal: (id: number, data: string) => Promise<void>;
   resizeTerminal: (id: number, rows: number, cols: number) => Promise<void>;
   applyDisplayConfigToLiveSession: (id: number, patch: Partial<TerminalDisplayConfig>) => void;
+  touchTerminalActivity: (id: number) => void;
+  dismissTmuxControllerError: (controllerId: number) => void;
+}
+
+export interface WorkspaceLayoutContextType {
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  savedWorkspaces: SavedWorkspace[];
+  savedWindowConfigs: SavedWindowConfig[];
   createWorkspaceFromSession: (terminalId: number, configId: string, name?: string) => Workspace;
-  createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   createWindowFromSession: (
     terminalId: number,
     configId: string,
@@ -114,7 +118,15 @@ export interface TerminalContextType {
   renameSavedWindow: (id: string, name: string) => void;
   renameWindow: (workspaceId: string, windowId: string, name: string) => void;
   reorderWindows: (workspaceId: string, fromIndex: number, toIndex: number) => void;
+  closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
 }
+
+export interface TerminalContextType
+  extends
+    SessionPreferencesContextType,
+    SavedLaunchConfigsContextType,
+    TerminalRuntimeContextType,
+    WorkspaceLayoutContextType {}
 
 export type SetSavedConfigs = Dispatch<SetStateAction<SavedTerminalConfig[]>>;
 export type SetSessions = Dispatch<SetStateAction<Terminal[]>>;
@@ -185,37 +197,44 @@ export interface SessionPersistence {
   persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
 }
 
-export interface SessionActions {
+export interface SavedLaunchConfigActions {
+  saveConfigOnly: (
+    type: Terminal["type"],
+    config: LocalTerminalConfig | SshConfig | TmuxSessionConfig,
+    displayConfig?: TerminalDisplayConfig,
+  ) => SavedTerminalConfig;
+  removeConfig: (configId: string) => void;
+  addToGroup: (groupId: number, configId: string) => void;
+  removeFromGroup: (groupId: number, configId: string) => void;
+  moveConfigToGroup: (configId: string, groupId: number | null) => void;
+  createGroup: (name: string) => void;
+  deleteGroup: (id: number) => void;
+  renameGroup: (id: number, name: string) => void;
+  updateConfig: (config: SavedTerminalConfig) => void;
+  toggleGroup: (id: number) => void;
+}
+
+export interface TerminalRuntimeActions {
   createLocalSession: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   createTmuxSessionOnly: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
-  saveConfigOnly: (
-    type: Terminal["type"],
-    config: LocalTerminalConfig | SshConfig | TmuxSessionConfig,
-    displayConfig?: TerminalDisplayConfig,
-  ) => SavedTerminalConfig;
   openFromConfig: (configId: string) => Promise<Terminal>;
-  removeConfig: (configId: string) => void;
+  createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;
   reconnectSession: (id: number) => Promise<Terminal>;
-  closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
-  addToGroup: (groupId: number, configId: string) => void;
-  removeFromGroup: (groupId: number, configId: string) => void;
-  moveConfigToGroup: (configId: string, groupId: number | null) => void;
   renameSession: (id: number, name: string) => void;
-  createGroup: (name: string) => void;
-  deleteGroup: (id: number) => void;
-  renameGroup: (id: number, name: string) => void;
-  updateConfig: (config: SavedTerminalConfig) => void;
-  toggleGroup: (id: number) => void;
   writeTerminal: (id: number, data: string) => Promise<void>;
   resizeTerminal: (id: number, rows: number, cols: number) => Promise<void>;
   applyDisplayConfigToLiveSession: (id: number, patch: Partial<TerminalDisplayConfig>) => void;
+  touchTerminalActivity: (id: number) => void;
+  dismissTmuxControllerError: (controllerId: number) => void;
+}
+
+export interface WorkspaceLayoutActions {
   createWorkspaceFromSession: (terminalId: number, configId: string, name?: string) => Workspace;
-  createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   createWindowFromSession: (
     terminalId: number,
     configId: string,
@@ -267,7 +286,11 @@ export interface SessionActions {
   renameSavedWindow: (id: string, name: string) => void;
   renameWindow: (workspaceId: string, windowId: string, name: string) => void;
   reorderWindows: (workspaceId: string, fromIndex: number, toIndex: number) => void;
+  closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
 }
+
+export interface SessionActions
+  extends SavedLaunchConfigActions, TerminalRuntimeActions, WorkspaceLayoutActions {}
 
 export interface SessionProviderProps {
   children: ReactNode;

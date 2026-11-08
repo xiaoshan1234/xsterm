@@ -1,11 +1,9 @@
-import { useCallback, useRef, useState } from "react";
-import { type Workspace, type PaneNode } from "../../types/terminal";
-import { useSession } from "../sessions";
-import { useClampedPanelHeight } from "../../shared/hooks/useClampedPanelHeight";
+import { useCallback, useState } from "react";
+import { type Workspace, type PaneNode } from "../../models/legacy/terminal";
+import { useWorkspaceLayout } from "../sessions";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
 import { WindowTabBar } from "./WindowTabBar";
-import CommandSendPanel from "./CommandSendPanel";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
 import "./TabBar.css";
@@ -27,12 +25,10 @@ function updateNodeInTree(
 
 interface WorkspaceContainerProps {
   workspace: Workspace;
-  commandPanelOpen: boolean;
 }
 
-export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceContainerProps) {
+export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
   const {
-    terminals,
     setActiveWorkspace,
     setActiveWindow,
     setActivePane,
@@ -42,9 +38,8 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
     renameWindow,
     saveWindow,
     saveWorkspace,
-    writeTerminal,
     savedWorkspaces,
-  } = useSession();
+  } = useWorkspaceLayout();
 
   const activeWindow =
     workspace.windows.find((w) => w.id === workspace.activeWindowId) ??
@@ -54,12 +49,6 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
   const [renamingWindow, setRenamingWindow] = useState<{ id: string; name: string } | null>(null);
   const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { height: commandPanelHeight, onHeightChange: handlePanelHeightChange } =
-    useClampedPanelHeight({
-      containerRef,
-    });
 
   const handleActivatePane = useCallback(
     (windowId: string, paneId: string) => {
@@ -102,11 +91,7 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
   }, [workspace.name, workspace.id, saveWorkspace]);
 
   return (
-    <div
-      className="workspace-container"
-      ref={containerRef}
-      onMouseDown={() => setActiveWorkspace(workspace.id)}
-    >
+    <div className="workspace-container" onMouseDown={() => setActiveWorkspace(workspace.id)}>
       <WindowTabBar
         workspaceId={workspace.id}
         workspace={workspace}
@@ -144,15 +129,6 @@ export function WorkspaceContainer({ workspace, commandPanelOpen }: WorkspaceCon
           )}
         </div>
       ))}
-      {commandPanelOpen && (
-        <CommandSendPanel
-          workspace={workspace}
-          terminals={terminals}
-          writeTerminal={writeTerminal}
-          style={{ height: commandPanelHeight, minHeight: 120 }}
-          onHeightChange={handlePanelHeightChange}
-        />
-      )}
       {savingWindowId && (
         <SaveDialog
           isOpen={true}

@@ -1,5 +1,12 @@
 export { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME, isDefaultGroup } from "./state/constants";
-export { SessionProvider, useSession, type TerminalContextType } from "./state/SessionContext";
+export {
+  SessionProvider,
+  useSavedLaunchConfigs,
+  useSession,
+  useSessionPreferences,
+  useTerminalRuntime,
+  useWorkspaceLayout,
+} from "./state/SessionContext";
 export {
   findFirstLeafWithSession,
   findPaneNode,
@@ -7,4 +14,11 @@ export {
   getPaneNumber,
   isSessionUsedInOtherWindow,
 } from "./state/paneUtils";
-export type { TmuxControllerError } from "./state/types";
+export type {
+  SavedLaunchConfigsContextType,
+  SessionPreferencesContextType,
+  TerminalContextType,
+  TerminalRuntimeContextType,
+  TmuxControllerError,
+  WorkspaceLayoutContextType,
+} from "./state/types";

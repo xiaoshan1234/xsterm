@@ -5,7 +5,7 @@ import type {
   Terminal,
   Window,
   Workspace,
-} from "../../../types/terminal";
+} from "../../../models/legacy/terminal";
 import {
   createLeafPane,
   getDefaultWindowName,
