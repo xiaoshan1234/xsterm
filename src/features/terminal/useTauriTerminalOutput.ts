@@ -90,10 +90,9 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, session
   // cleanly, which caused `useTauriTerminalOutput` to break and prevented
   // the Terminal component from setting up its `xterm.onData` input
   // listener — making the user unable to type. The binary wire format
-  // (`src-tauri/src/infrastructure/binary_frame.rs`,
-  // `src/features/terminal/sessionOutputFrame.ts`) stays in place under
-  // `#[allow(dead_code)]` so we can flip the switch back on once the
-  // Tauri 2 channel-on-command path is understood.
+  // (binary_frame.rs and sessionOutputFrame.ts) were removed during the
+  // backend reorg; output now flows exclusively through the JSON
+  // `session-output` event.
   //
   // ALSO: removed the rAF queueing that caused a 1-frame (~16 ms) display
   // delay for each typed character. Before Perf 005 the rAF was useful

@@ -1,23 +1,20 @@
 //! xsterm Tauri backend.
 //!
-//! The crate is organized into layers:
-//! - `commands`: Tauri command handlers invoked from the frontend.
-//! - `services`: Business logic and session lifecycle management.
-//! - `infrastructure`: Low-level adapters for PTY, SSH, and the Tauri app handle.
-//! - `models`: Plain data structures shared across layers.
-//! - `logging_setup`: Application logging configuration and initialization.
+//! Layered as:
+//! - `command`: Tauri command handlers invoked from the frontend.
+//! - `connect`: connection / session layer built on xscore.
+//! - `feature`: product features (logging).
+//! - `shared`: cross-cutting data types and error helpers.
 
-mod commands;
-mod error;
-mod infrastructure;
-mod logging_setup;
-mod models;
-mod services;
+mod command;
+mod connect;
+mod feature;
+mod shared;
 
-use logging_setup::{cleanup_old_logs, get_log_config_impl, init_logging};
-use services::session_manager::SessionManager;
+use connect::registry::SessionRegistry;
+use feature::logging::{cleanup_old_logs, get_log_config_impl, init_logging};
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,22 +29,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
-        // Tauri 2's `Builder::setup` is a single `Option<Box<F>>` slot - the
-        // *last* `.setup(...)` call wins, all earlier ones are silently
-        // discarded. Earlier drafts split this into two `.setup()` blocks
-        // (logging first, RealAppBackend second) and lost the logging
-        // initialisation; consolidate everything into one block so both
-        // `tracing` and the binary output channel get initialized.
-        //
-        // Perf 001: emit the binary `session-output` Channel to the frontend
-        // so it can listen for raw bytes instead of going through
-        // JSON `[id, [byte, byte, ...]]`. The emit fires before the frontend
-        // is loaded (no listener yet), so it is effectively a no-op - the
-        // frontend pulls the channel via the `get_session_output_channel`
-        // command after the WebView is up. See `binary_frame.rs` for the
-        // wire format.
         .setup(|app| {
-            // --- logging (was first setup block) ---
+            // --- logging ---
             let log_dir = app
                 .handle()
                 .path()
@@ -59,11 +42,8 @@ pub fn run() {
             app.manage(Arc::new(reload_handle));
             tracing::info!("Application starting, log dir: {:?}", log_dir);
 
-            // --- per-session logging + SessionManager ---
-            // Perf 004: SessionManager uses DashMap + AtomicU32 internally, so
-            // no outer Mutex is needed - concurrent IPC handlers touch
-            // different shards in parallel without serialising on each other.
-            use services::session_log::SessionLogRegistry;
+            // --- per-session logging + SessionRegistry ---
+            use feature::logging::session_log::SessionLogRegistry;
             let session_log_dir = app
                 .handle()
                 .path()
@@ -71,20 +51,15 @@ pub fn run() {
                 .unwrap_or_else(|_| log_dir.clone())
                 .join("session-logs");
             let session_logs = Arc::new(SessionLogRegistry::new(session_log_dir));
-            app.manage(Arc::new(SessionManager::new(session_logs)));
+            app.manage(Arc::new(SessionRegistry::new(session_logs)));
 
-            // --- binary output channel (was second setup block) ---
-            use infrastructure::app_backend::RealAppBackend;
-            let backend = RealAppBackend::new(app.handle().clone());
-            let channel = backend.session_output_channel.clone();
-            app.manage(Arc::new(backend));
-            if let Err(e) = app.emit("session-output-channel", channel) {
-                tracing::error!("Failed to emit session-output channel: {e}");
-            }
+            // --- event emitter backend ---
+            use connect::app_backend::RealAppBackend;
+            app.manage(Arc::new(RealAppBackend::new(app.handle().clone())));
 
             Ok(())
         })
-        .invoke_handler(commands::all_handlers())
+        .invoke_handler(command::all_handlers())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
