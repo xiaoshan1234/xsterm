@@ -5,7 +5,7 @@ import {
   type WindowId,
   type WorkspaceId,
 } from "../ids";
-import { type DirectPaneDirection } from "./DirectPaneTree";
+import { type RawPaneDirection } from "./RawPaneTree";
 
 /**
  * Persisted layout format. Runtime-only ids such as TerminalId,
@@ -19,14 +19,14 @@ export interface WorkspaceSnapshot {
   readonly windows: readonly WorkspaceWindowSnapshot[];
 }
 
-export type WorkspaceWindowSnapshot = DirectWindowSnapshot | TmuxWindowReferenceSnapshot;
+export type WorkspaceWindowSnapshot = RawWindowSnapshot | TmuxWindowReferenceSnapshot;
 
-export interface DirectWindowSnapshot {
-  readonly kind: "direct-window";
+export interface RawWindowSnapshot {
+  readonly kind: "raw-window";
   readonly id: WindowId;
   readonly name: string;
   readonly activePaneId: PaneId;
-  readonly layout: DirectPaneNodeSnapshot;
+  readonly layout: RawPaneNodeSnapshot;
 }
 
 export interface TmuxWindowReferenceSnapshot {
@@ -37,9 +37,9 @@ export interface TmuxWindowReferenceSnapshot {
   readonly tmuxWindowId: TmuxWindowId;
 }
 
-export type DirectPaneNodeSnapshot = DirectPaneLeafSnapshot | DirectPaneSplitSnapshot;
+export type RawPaneNodeSnapshot = RawPaneLeafSnapshot | RawPaneSplitSnapshot;
 
-export interface DirectPaneLeafSnapshot {
+export interface RawPaneLeafSnapshot {
   readonly kind: "leaf";
   readonly id: PaneId;
   readonly content:
@@ -51,10 +51,10 @@ export interface DirectPaneLeafSnapshot {
       };
 }
 
-export interface DirectPaneSplitSnapshot {
+export interface RawPaneSplitSnapshot {
   readonly kind: "split";
   readonly id: PaneId;
-  readonly direction: DirectPaneDirection;
+  readonly direction: RawPaneDirection;
   readonly ratio: number;
-  readonly children: readonly [DirectPaneNodeSnapshot, DirectPaneNodeSnapshot];
+  readonly children: readonly [RawPaneNodeSnapshot, RawPaneNodeSnapshot];
 }

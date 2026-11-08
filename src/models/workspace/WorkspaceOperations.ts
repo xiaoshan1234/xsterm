@@ -1,24 +1,24 @@
 import { type TerminalId, type WindowId } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 import {
-  createTerminalDirectPane,
-  findDirectPane,
-  setDirectPaneContent,
-  splitDirectPane,
-  type DirectPaneDirection,
-  type DirectPaneNode,
-} from "./DirectPaneTree";
+  createTerminalPane,
+  findRawPane,
+  setRawPaneContent,
+  splitRawPane,
+  type RawPaneDirection,
+  type RawPaneNode,
+} from "./RawPaneTree";
 import {
   collectWorkspaceTerminalIds,
   createWorkspace,
-  findDirectWindowInWorkspace,
+  findRawWindowInWorkspace,
   findWorkspaceWindow,
   type Workspace,
 } from "./Workspace";
-import { renameDirectWindow, type WorkspaceWindow } from "./WorkspaceWindow";
+import { renameRawWindow, type WorkspaceWindow } from "./WorkspaceWindow";
 
 /**
- * Pure layout operations for direct windows. These functions validate model
+ * Pure layout operations for raw windows. These functions validate model
  * invariants but do not create, close, or reconnect backend terminals.
  */
 export function activateWorkspaceWindow(
@@ -35,7 +35,7 @@ export function activateWorkspaceWindow(
   });
 }
 
-export function renameWorkspaceDirectWindow(
+export function renameWorkspaceRawWindow(
   workspace: Workspace,
   windowId: WindowId,
   name: string,
@@ -44,11 +44,11 @@ export function renameWorkspaceDirectWindow(
   if (!window) {
     return modelFailure("not-found", "Window does not exist in this workspace");
   }
-  if (window.kind !== "direct-window") {
+  if (window.kind !== "raw-window") {
     return modelFailure("invalid-transition", "tmux window names are owned by the tmux controller");
   }
 
-  const renameResult = renameDirectWindow(window, name);
+  const renameResult = renameRawWindow(window, name);
   if (!renameResult.ok) {
     return renameResult;
   }
@@ -59,15 +59,15 @@ export function renameWorkspaceDirectWindow(
 export function attachTerminalToEmptyPane(
   workspace: Workspace,
   windowId: WindowId,
-  paneId: DirectPaneNode["id"],
+  paneId: RawPaneNode["id"],
   terminalId: TerminalId,
 ): ModelResult<Workspace> {
-  const window = findDirectWindowInWorkspace(workspace, windowId);
+  const window = findRawWindowInWorkspace(workspace, windowId);
   if (!window) {
-    return modelFailure("not-found", "Direct window does not exist");
+    return modelFailure("not-found", "Raw window does not exist");
   }
 
-  const pane = findDirectPane(window.layout, paneId);
+  const pane = findRawPane(window.layout, paneId);
   if (!pane) {
     return modelFailure("not-found", "Pane does not exist in this window");
   }
@@ -75,16 +75,16 @@ export function attachTerminalToEmptyPane(
     return modelFailure("invalid-transition", "Only an empty leaf can accept a terminal");
   }
   if (collectWorkspaceTerminalIds(workspace).includes(terminalId)) {
-    return modelFailure("duplicate-id", "Terminal instance is already attached to this workspace");
+    return modelFailure("duplicate-id", "Terminal is already attached to this workspace");
   }
 
   return modelSuccess({
     ...workspace,
     windows: workspace.windows.map((candidate) =>
-      candidate.id === windowId && candidate.kind === "direct-window"
+      candidate.id === windowId && candidate.kind === "raw-window"
         ? {
             ...candidate,
-            layout: setDirectPaneContent(candidate.layout, paneId, {
+            layout: setRawPaneContent(candidate.layout, paneId, {
               kind: "terminal",
               terminalId,
             }),
@@ -94,32 +94,32 @@ export function attachTerminalToEmptyPane(
   });
 }
 
-export function splitDirectWindowPane(
+export function splitRawWindowPane(
   workspace: Workspace,
   windowId: WindowId,
-  targetPaneId: DirectPaneNode["id"],
+  targetPaneId: RawPaneNode["id"],
   splitPaneId: string,
   newPaneId: string,
-  direction: DirectPaneDirection,
+  direction: RawPaneDirection,
   terminalId: TerminalId,
   ratio = 0.5,
 ): ModelResult<Workspace> {
   // The new terminal must not already be attached elsewhere in the workspace;
   // this mirrors the constraint enforced by the Workspace factory.
-  const window = findDirectWindowInWorkspace(workspace, windowId);
+  const window = findRawWindowInWorkspace(workspace, windowId);
   if (!window) {
-    return modelFailure("not-found", "Direct window does not exist");
+    return modelFailure("not-found", "Raw window does not exist");
   }
   if (collectWorkspaceTerminalIds(workspace).includes(terminalId)) {
-    return modelFailure("duplicate-id", "Terminal instance is already attached to this workspace");
+    return modelFailure("duplicate-id", "Terminal is already attached to this workspace");
   }
 
-  const newPaneResult = createTerminalDirectPane(newPaneId, terminalId);
+  const newPaneResult = createTerminalPane(newPaneId, terminalId);
   if (!newPaneResult.ok) {
     return newPaneResult;
   }
 
-  const splitResult = splitDirectPane(
+  const splitResult = splitRawPane(
     window.layout,
     targetPaneId,
     splitPaneId,
@@ -147,7 +147,7 @@ export function detachTerminalFromWorkspace(
   let hasChanged = false;
 
   const windows = workspace.windows.map((window) => {
-    if (window.kind !== "direct-window") {
+    if (window.kind !== "raw-window") {
       return window;
     }
 
@@ -158,7 +158,7 @@ export function detachTerminalFromWorkspace(
   });
 
   if (!hasChanged) {
-    return modelFailure("not-found", "Terminal instance is not attached to this workspace");
+    return modelFailure("not-found", "Terminal is not attached to this workspace");
   }
 
   return modelSuccess({
@@ -224,10 +224,10 @@ function replaceWorkspaceWindow(
 }
 
 function clearTerminalContent(
-  node: DirectPaneNode,
+  node: RawPaneNode,
   terminalId: TerminalId,
   onChanged: () => void,
-): DirectPaneNode {
+): RawPaneNode {
   if (node.kind === "leaf") {
     if (node.content.kind === "terminal" && node.content.terminalId === terminalId) {
       onChanged();

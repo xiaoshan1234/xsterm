@@ -2,36 +2,36 @@ import { type PaneId, type TerminalId, createPaneId } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 
 /**
- * Layout tree for a direct workspace window. Leaf content references a
+ * Layout tree for a raw workspace window. Leaf content references a
  * standalone `Terminal`; local and SSH terminals may coexist in this tree.
  */
-export type DirectPaneDirection = "horizontal" | "vertical";
+export type RawPaneDirection = "horizontal" | "vertical";
 
-export type DirectPaneContent =
+export type RawPaneContent =
   | { readonly kind: "empty" }
   | {
       readonly kind: "terminal";
       readonly terminalId: TerminalId;
     };
 
-export interface DirectPaneLeaf {
+export interface RawPaneLeaf {
   readonly kind: "leaf";
   readonly id: PaneId;
-  readonly content: DirectPaneContent;
+  readonly content: RawPaneContent;
 }
 
-export interface DirectPaneSplit {
+export interface RawPaneSplit {
   readonly kind: "split";
   readonly id: PaneId;
-  readonly direction: DirectPaneDirection;
+  readonly direction: RawPaneDirection;
   /** The first child's proportion, from 0.1 to 0.9. */
   readonly ratio: number;
-  readonly children: readonly [DirectPaneNode, DirectPaneNode];
+  readonly children: readonly [RawPaneNode, RawPaneNode];
 }
 
-export type DirectPaneNode = DirectPaneLeaf | DirectPaneSplit;
+export type RawPaneNode = RawPaneLeaf | RawPaneSplit;
 
-export function createEmptyDirectPane(id: string): ModelResult<DirectPaneLeaf> {
+export function createEmptyRawPane(id: string): ModelResult<RawPaneLeaf> {
   try {
     return modelSuccess({
       kind: "leaf",
@@ -43,10 +43,7 @@ export function createEmptyDirectPane(id: string): ModelResult<DirectPaneLeaf> {
   }
 }
 
-export function createTerminalDirectPane(
-  id: string,
-  terminalId: TerminalId,
-): ModelResult<DirectPaneLeaf> {
+export function createTerminalPane(id: string, terminalId: TerminalId): ModelResult<RawPaneLeaf> {
   try {
     return modelSuccess({
       kind: "leaf",
@@ -61,20 +58,20 @@ export function createTerminalDirectPane(
   }
 }
 
-export function createDirectPaneSplit(
+export function createRawPaneSplit(
   id: string,
-  direction: DirectPaneDirection,
+  direction: RawPaneDirection,
   ratio: number,
-  first: DirectPaneNode,
-  second: DirectPaneNode,
-): ModelResult<DirectPaneSplit> {
+  first: RawPaneNode,
+  second: RawPaneNode,
+): ModelResult<RawPaneSplit> {
   if (!Number.isFinite(ratio) || ratio < 0.1 || ratio > 0.9) {
-    return modelFailure("invalid-layout", "Direct split ratio must be between 0.1 and 0.9");
+    return modelFailure("invalid-layout", "Raw split ratio must be between 0.1 and 0.9");
   }
 
-  const paneIds = [...collectDirectPaneIds(first), ...collectDirectPaneIds(second)];
+  const paneIds = [...collectRawPaneIds(first), ...collectRawPaneIds(second)];
   if (new Set(paneIds).size !== paneIds.length) {
-    return modelFailure("duplicate-id", "Direct pane appears more than once in a layout");
+    return modelFailure("duplicate-id", "Raw pane appears more than once in a layout");
   }
 
   try {
@@ -95,26 +92,26 @@ export function createDirectPaneSplit(
   }
 }
 
-export function collectDirectPaneIds(node: DirectPaneNode): PaneId[] {
+export function collectRawPaneIds(node: RawPaneNode): PaneId[] {
   if (node.kind === "leaf") {
     return [node.id];
   }
 
-  return [...collectDirectPaneIds(node.children[0]), ...collectDirectPaneIds(node.children[1])];
+  return [...collectRawPaneIds(node.children[0]), ...collectRawPaneIds(node.children[1])];
 }
 
-export function collectDirectPaneTerminalIds(node: DirectPaneNode): TerminalId[] {
+export function collectTerminalIdsFromRawPaneTree(node: RawPaneNode): TerminalId[] {
   if (node.kind === "leaf") {
     return node.content.kind === "terminal" ? [node.content.terminalId] : [];
   }
 
   return [
-    ...collectDirectPaneTerminalIds(node.children[0]),
-    ...collectDirectPaneTerminalIds(node.children[1]),
+    ...collectTerminalIdsFromRawPaneTree(node.children[0]),
+    ...collectTerminalIdsFromRawPaneTree(node.children[1]),
   ];
 }
 
-export function findDirectPane(node: DirectPaneNode, paneId: PaneId): DirectPaneNode | null {
+export function findRawPane(node: RawPaneNode, paneId: PaneId): RawPaneNode | null {
   if (node.id === paneId) {
     return node;
   }
@@ -122,14 +119,14 @@ export function findDirectPane(node: DirectPaneNode, paneId: PaneId): DirectPane
     return null;
   }
 
-  return findDirectPane(node.children[0], paneId) ?? findDirectPane(node.children[1], paneId);
+  return findRawPane(node.children[0], paneId) ?? findRawPane(node.children[1], paneId);
 }
 
-export function replaceDirectPane(
-  node: DirectPaneNode,
+export function replaceRawPane(
+  node: RawPaneNode,
   paneId: PaneId,
-  replacement: DirectPaneNode,
-): DirectPaneNode {
+  replacement: RawPaneNode,
+): RawPaneNode {
   if (node.id === paneId) {
     return replacement;
   }
@@ -140,17 +137,17 @@ export function replaceDirectPane(
   return {
     ...node,
     children: [
-      replaceDirectPane(node.children[0], paneId, replacement),
-      replaceDirectPane(node.children[1], paneId, replacement),
+      replaceRawPane(node.children[0], paneId, replacement),
+      replaceRawPane(node.children[1], paneId, replacement),
     ],
   };
 }
 
-export function setDirectPaneContent(
-  node: DirectPaneNode,
+export function setRawPaneContent(
+  node: RawPaneNode,
   paneId: PaneId,
-  content: DirectPaneContent,
-): DirectPaneNode {
+  content: RawPaneContent,
+): RawPaneNode {
   if (node.kind === "leaf") {
     return node.id === paneId ? { ...node, content } : node;
   }
@@ -158,42 +155,42 @@ export function setDirectPaneContent(
   return {
     ...node,
     children: [
-      setDirectPaneContent(node.children[0], paneId, content),
-      setDirectPaneContent(node.children[1], paneId, content),
+      setRawPaneContent(node.children[0], paneId, content),
+      setRawPaneContent(node.children[1], paneId, content),
     ],
   };
 }
 
-export function removeDirectPane(node: DirectPaneNode, paneId: PaneId): DirectPaneNode | null {
+export function removeRawPane(node: RawPaneNode, paneId: PaneId): RawPaneNode | null {
   if (node.kind === "leaf") {
     return node.id === paneId ? null : node;
   }
 
-  const first = removeDirectPane(node.children[0], paneId);
-  const second = removeDirectPane(node.children[1], paneId);
+  const first = removeRawPane(node.children[0], paneId);
+  const second = removeRawPane(node.children[1], paneId);
 
   if (first === null) return second;
   if (second === null) return first;
   return { ...node, children: [first, second] };
 }
 
-export function splitDirectPane(
-  node: DirectPaneNode,
+export function splitRawPane(
+  node: RawPaneNode,
   targetPaneId: PaneId,
   splitPaneId: string,
-  newPane: DirectPaneNode,
-  direction: DirectPaneDirection,
+  newPane: RawPaneNode,
+  direction: RawPaneDirection,
   ratio = 0.5,
-): ModelResult<DirectPaneNode> {
+): ModelResult<RawPaneNode> {
   // Keep pane ids globally unique inside one layout so updates remain
   // deterministic and a terminal cannot be attached twice by accident.
-  const currentPane = findDirectPane(node, targetPaneId);
+  const currentPane = findRawPane(node, targetPaneId);
   if (!currentPane) {
     return modelFailure("not-found", "Pane to split does not exist");
   }
 
-  const existingPaneIds = collectDirectPaneIds(node);
-  const newPaneIds = collectDirectPaneIds(newPane);
+  const existingPaneIds = collectRawPaneIds(node);
+  const newPaneIds = collectRawPaneIds(newPane);
   if (existingPaneIds.some((id) => newPaneIds.includes(id))) {
     return modelFailure("duplicate-id", "New pane id already exists in the layout");
   }
@@ -211,10 +208,10 @@ export function splitDirectPane(
     return modelFailure("duplicate-id", "Split pane id already exists in the layout");
   }
 
-  const splitResult = createDirectPaneSplit(splitPaneId, direction, ratio, currentPane, newPane);
+  const splitResult = createRawPaneSplit(splitPaneId, direction, ratio, currentPane, newPane);
   if (!splitResult.ok) {
     return splitResult;
   }
 
-  return modelSuccess(replaceDirectPane(node, targetPaneId, splitResult.value));
+  return modelSuccess(replaceRawPane(node, targetPaneId, splitResult.value));
 }

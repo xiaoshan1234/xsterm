@@ -7,18 +7,18 @@ import {
   type WindowId,
 } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
-import { findDirectPane, type DirectPaneNode } from "./DirectPaneTree";
+import { findRawPane, type RawPaneNode } from "./RawPaneTree";
 
 /**
- * A direct window owns an editable frontend pane tree and may contain mixed
+ * A raw window owns an editable frontend pane tree and may contain mixed
  * local/SSH terminal references.
  */
-export interface DirectWindow {
-  readonly kind: "direct-window";
+export interface RawWindow {
+  readonly kind: "raw-window";
   readonly id: WindowId;
   readonly name: string;
-  readonly activePaneId: DirectPaneNode["id"];
-  readonly layout: DirectPaneNode;
+  readonly activePaneId: RawPaneNode["id"];
+  readonly layout: RawPaneNode;
 }
 
 /**
@@ -32,27 +32,27 @@ export interface TmuxWindowReference {
   readonly tmuxWindowId: TmuxWindowId;
 }
 
-export type WorkspaceWindow = DirectWindow | TmuxWindowReference;
+export type WorkspaceWindow = RawWindow | TmuxWindowReference;
 
-export interface CreateDirectWindowInput {
+export interface CreateRawWindowInput {
   id: string;
   name: string;
-  activePaneId: DirectPaneNode["id"];
-  layout: DirectPaneNode;
+  activePaneId: RawPaneNode["id"];
+  layout: RawPaneNode;
 }
 
-export function createDirectWindow(input: CreateDirectWindowInput): ModelResult<DirectWindow> {
+export function createRawWindow(input: CreateRawWindowInput): ModelResult<RawWindow> {
   const name = input.name.trim();
   if (!name) {
     return modelFailure("invalid-value", "Window name must not be empty");
   }
-  if (!findDirectPane(input.layout, input.activePaneId)) {
-    return modelFailure("invalid-layout", "Active pane must exist in the direct window");
+  if (!findRawPane(input.layout, input.activePaneId)) {
+    return modelFailure("invalid-layout", "Active pane must exist in the raw window");
   }
 
   try {
     return modelSuccess({
-      kind: "direct-window",
+      kind: "raw-window",
       id: createWindowId(input.id),
       name,
       activePaneId: input.activePaneId,
@@ -87,7 +87,7 @@ export function createTmuxWindowReference(
   }
 }
 
-export function renameDirectWindow(window: DirectWindow, name: string): ModelResult<DirectWindow> {
+export function renameRawWindow(window: RawWindow, name: string): ModelResult<RawWindow> {
   const normalizedName = name.trim();
   if (!normalizedName) {
     return modelFailure("invalid-value", "Window name must not be empty");

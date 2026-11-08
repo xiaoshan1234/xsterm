@@ -2,23 +2,19 @@ import { describe, expect, it } from "vitest";
 import { createPaneId, createTerminalId, createTmuxControllerId, createWindowId } from "../ids";
 import { type ModelResult } from "../result";
 import {
-  createEmptyDirectPane,
-  createDirectPaneSplit,
-  collectDirectPaneTerminalIds,
-  findDirectPane,
-} from "./DirectPaneTree";
+  collectTerminalIdsFromRawPaneTree,
+  createEmptyRawPane,
+  createRawPaneSplit,
+  findRawPane,
+} from "./RawPaneTree";
 import {
-  attachTerminalToEmptyPane,
   appendWorkspaceWindow,
+  attachTerminalToEmptyPane,
   detachTerminalFromWorkspace,
-  splitDirectWindowPane,
+  splitRawWindowPane,
 } from "./WorkspaceOperations";
 import { collectWorkspaceTerminalIds, createWorkspace, type Workspace } from "./Workspace";
-import {
-  createTmuxWindowReference,
-  createDirectWindow,
-  type DirectWindow,
-} from "./WorkspaceWindow";
+import { createRawWindow, createTmuxWindowReference, type RawWindow } from "./WorkspaceWindow";
 
 function unwrap<Value>(result: ModelResult<Value>): Value {
   expect(result.ok).toBe(true);
@@ -28,13 +24,13 @@ function unwrap<Value>(result: ModelResult<Value>): Value {
   return result.value;
 }
 
-function createDirectWorkspace(): {
+function createRawWorkspace(): {
   workspace: Workspace;
-  window: DirectWindow;
+  window: RawWindow;
 } {
-  const pane = unwrap(createEmptyDirectPane("pane-main"));
+  const pane = unwrap(createEmptyRawPane("pane-main"));
   const window = unwrap(
-    createDirectWindow({
+    createRawWindow({
       id: "window-1",
       name: "Main",
       activePaneId: pane.id,
@@ -53,9 +49,9 @@ function createDirectWorkspace(): {
   return { workspace, window };
 }
 
-describe("workspace direct terminal operations", () => {
-  it("allows local and SSH terminal instances to coexist in one direct window", () => {
-    const { workspace, window } = createDirectWorkspace();
+describe("workspace raw terminal operations", () => {
+  it("allows local and SSH raw terminals to coexist in one raw window", () => {
+    const { workspace, window } = createRawWorkspace();
     const localTerminalId = createTerminalId(1);
     const sshTerminalId = createTerminalId(2);
 
@@ -63,7 +59,7 @@ describe("workspace direct terminal operations", () => {
       attachTerminalToEmptyPane(workspace, window.id, createPaneId("pane-main"), localTerminalId),
     );
     const split = unwrap(
-      splitDirectWindowPane(
+      splitRawWindowPane(
         attached,
         window.id,
         createPaneId("pane-main"),
@@ -73,25 +69,25 @@ describe("workspace direct terminal operations", () => {
         sshTerminalId,
       ),
     );
-    const directWindow = split.windows[0] as DirectWindow;
+    const rawWindow = split.windows[0] as RawWindow;
 
     expect(collectWorkspaceTerminalIds(split)).toEqual([localTerminalId, sshTerminalId]);
-    expect(collectDirectPaneTerminalIds(directWindow.layout)).toEqual([
+    expect(collectTerminalIdsFromRawPaneTree(rawWindow.layout)).toEqual([
       localTerminalId,
       sshTerminalId,
     ]);
-    expect(directWindow.activePaneId).toBe(createPaneId("pane-ssh"));
+    expect(rawWindow.activePaneId).toBe(createPaneId("pane-ssh"));
   });
 
-  it("detaches a terminal by preserving the pane as an empty leaf", () => {
-    const { workspace, window } = createDirectWorkspace();
+  it("detaches a raw terminal by preserving the pane as an empty leaf", () => {
+    const { workspace, window } = createRawWorkspace();
     const terminalId = createTerminalId(3);
     const attached = unwrap(
       attachTerminalToEmptyPane(workspace, window.id, createPaneId("pane-main"), terminalId),
     );
     const detached = unwrap(detachTerminalFromWorkspace(attached, terminalId));
-    const directWindow = detached.windows[0] as DirectWindow;
-    const pane = findDirectPane(directWindow.layout, createPaneId("pane-main"));
+    const rawWindow = detached.windows[0] as RawWindow;
+    const pane = findRawPane(rawWindow.layout, createPaneId("pane-main"));
 
     expect(pane?.kind).toBe("leaf");
     if (pane?.kind === "leaf") {
@@ -100,14 +96,14 @@ describe("workspace direct terminal operations", () => {
     expect(collectWorkspaceTerminalIds(detached)).toEqual([]);
   });
 
-  it("rejects attaching the same terminal instance twice", () => {
-    const firstPane = unwrap(createEmptyDirectPane("pane-main"));
-    const secondPane = unwrap(createEmptyDirectPane("pane-next"));
+  it("rejects attaching the same raw terminal twice", () => {
+    const firstPane = unwrap(createEmptyRawPane("pane-main"));
+    const secondPane = unwrap(createEmptyRawPane("pane-next"));
     const layout = unwrap(
-      createDirectPaneSplit("pane-root", "horizontal", 0.5, firstPane, secondPane),
+      createRawPaneSplit("pane-root", "horizontal", 0.5, firstPane, secondPane),
     );
     const window = unwrap(
-      createDirectWindow({
+      createRawWindow({
         id: "window-1",
         name: "Main",
         activePaneId: firstPane.id,
@@ -140,8 +136,8 @@ describe("workspace direct terminal operations", () => {
     });
   });
 
-  it("allows direct and tmux windows to coexist as workspace tabs", () => {
-    const { workspace, window } = createDirectWorkspace();
+  it("allows raw and tmux windows to coexist as workspace tabs", () => {
+    const { workspace, window } = createRawWorkspace();
     const tmuxReference = unwrap(
       createTmuxWindowReference({
         id: "window-tmux-1",
@@ -161,6 +157,6 @@ describe("workspace direct terminal operations", () => {
           candidate.controllerId === createTmuxControllerId(6),
       ),
     ).toBe(true);
-    expect(window.kind).toBe("direct-window");
+    expect(window.kind).toBe("raw-window");
   });
 });

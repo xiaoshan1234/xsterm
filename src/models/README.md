@@ -17,7 +17,7 @@ This directory contains pure frontend domain models. It must not import from
 
 ## Layout boundaries
 
-- `DirectWindow` can contain local and SSH `Terminal` references.
+- `RawWindow` can contain local and SSH `Terminal` references.
 - `TmuxWindowReference` cannot contain direct terminal references.
 - tmux panes only appear inside their owning `TmuxController`.
 

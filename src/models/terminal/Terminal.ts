@@ -25,7 +25,7 @@ import {
 import { type TerminalTransport } from "./TerminalTransport";
 
 /**
- * A live terminal that owns exactly one backend terminal stream. Local shells
+ * A terminal that owns exactly one backend terminal stream. Local shells
  * and SSH terminals share this model because both are attached to one pane.
  *
  * tmux panes are intentionally not represented as `Terminal`; they belong to a

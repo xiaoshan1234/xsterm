@@ -6,12 +6,8 @@ import {
   type WorkspaceId,
 } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
-import { collectDirectPaneTerminalIds } from "./DirectPaneTree";
-import {
-  type DirectWindow,
-  type TmuxWindowReference,
-  type WorkspaceWindow,
-} from "./WorkspaceWindow";
+import { collectTerminalIdsFromRawPaneTree } from "./RawPaneTree";
+import { type RawWindow, type TmuxWindowReference, type WorkspaceWindow } from "./WorkspaceWindow";
 
 /**
  * Aggregate root for user-visible tabs and layouts. It references runtime
@@ -56,10 +52,7 @@ export function createWorkspace(input: CreateWorkspaceInput): ModelResult<Worksp
   // and persistence code will treat as valid.
   const terminalIds = collectWorkspaceTerminalIdsFromWindows(input.windows);
   if (new Set(terminalIds).size !== terminalIds.length) {
-    return modelFailure(
-      "duplicate-id",
-      "The same terminal instance cannot appear in multiple panes",
-    );
+    return modelFailure("duplicate-id", "The same raw terminal cannot appear in multiple panes");
   }
 
   const tmuxWindowKeys = input.windows
@@ -92,12 +85,12 @@ export function findWorkspaceWindow(
   return workspace.windows.find((window) => window.id === windowId) ?? null;
 }
 
-export function findDirectWindowInWorkspace(
+export function findRawWindowInWorkspace(
   workspace: Workspace,
   windowId: WindowId,
-): DirectWindow | null {
+): RawWindow | null {
   const window = findWorkspaceWindow(workspace, windowId);
-  return window?.kind === "direct-window" ? window : null;
+  return window?.kind === "raw-window" ? window : null;
 }
 
 export function collectWorkspaceTerminalIds(workspace: Workspace): readonly TerminalId[] {
@@ -124,6 +117,6 @@ export function collectTmuxWindowIdsForController(
 
 function collectWorkspaceTerminalIdsFromWindows(windows: readonly WorkspaceWindow[]): TerminalId[] {
   return windows.flatMap((window) =>
-    window.kind === "direct-window" ? collectDirectPaneTerminalIds(window.layout) : [],
+    window.kind === "raw-window" ? collectTerminalIdsFromRawPaneTree(window.layout) : [],
   );
 }
