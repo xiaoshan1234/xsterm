@@ -1,0 +1,58 @@
+import {
+  type LaunchConfigId,
+  type PaneId,
+  type TmuxWindowId,
+  type WindowId,
+  type WorkspaceId,
+} from "../ids";
+import { type DirectPaneDirection } from "./DirectPaneTree";
+
+/**
+ * Persisted layout format. Runtime-only ids such as TerminalId,
+ * TerminalStreamId and TmuxControllerId are intentionally absent.
+ */
+export interface WorkspaceSnapshot {
+  readonly version: 1;
+  readonly id: WorkspaceId;
+  readonly name: string;
+  readonly activeWindowId: WindowId;
+  readonly windows: readonly WorkspaceWindowSnapshot[];
+}
+
+export type WorkspaceWindowSnapshot = DirectWindowSnapshot | TmuxWindowReferenceSnapshot;
+
+export interface DirectWindowSnapshot {
+  readonly kind: "direct-window";
+  readonly id: WindowId;
+  readonly name: string;
+  readonly activePaneId: PaneId;
+  readonly layout: DirectPaneNodeSnapshot;
+}
+
+export interface TmuxWindowReferenceSnapshot {
+  readonly kind: "tmux-window-reference";
+  readonly id: WindowId;
+  readonly controllerConfigId: LaunchConfigId;
+  readonly tmuxWindowId: TmuxWindowId;
+}
+
+export type DirectPaneNodeSnapshot = DirectPaneLeafSnapshot | DirectPaneSplitSnapshot;
+
+export interface DirectPaneLeafSnapshot {
+  readonly kind: "leaf";
+  readonly id: PaneId;
+  readonly content:
+    | { readonly kind: "empty" }
+    | {
+        readonly kind: "terminal";
+        readonly configId: LaunchConfigId;
+      };
+}
+
+export interface DirectPaneSplitSnapshot {
+  readonly kind: "split";
+  readonly id: PaneId;
+  readonly direction: DirectPaneDirection;
+  readonly ratio: number;
+  readonly children: readonly [DirectPaneNodeSnapshot, DirectPaneNodeSnapshot];
+}

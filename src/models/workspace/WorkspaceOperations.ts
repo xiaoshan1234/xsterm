@@ -1,0 +1,241 @@
+import { type TerminalId, type WindowId } from "../ids";
+import { modelFailure, modelSuccess, type ModelResult } from "../result";
+import {
+  createTerminalDirectPane,
+  findDirectPane,
+  setDirectPaneContent,
+  splitDirectPane,
+  type DirectPaneDirection,
+  type DirectPaneNode,
+} from "./DirectPaneTree";
+import {
+  collectWorkspaceTerminalIds,
+  createWorkspace,
+  findDirectWindowInWorkspace,
+  findWorkspaceWindow,
+  type Workspace,
+} from "./Workspace";
+import { renameDirectWindow, type WorkspaceWindow } from "./WorkspaceWindow";
+
+export function activateWorkspaceWindow(
+  workspace: Workspace,
+  windowId: WindowId,
+): ModelResult<Workspace> {
+  if (!findWorkspaceWindow(workspace, windowId)) {
+    return modelFailure("not-found", "Window does not exist in this workspace");
+  }
+
+  return modelSuccess({
+    ...workspace,
+    activeWindowId: windowId,
+  });
+}
+
+export function renameWorkspaceDirectWindow(
+  workspace: Workspace,
+  windowId: WindowId,
+  name: string,
+): ModelResult<Workspace> {
+  const window = findWorkspaceWindow(workspace, windowId);
+  if (!window) {
+    return modelFailure("not-found", "Window does not exist in this workspace");
+  }
+  if (window.kind !== "direct-window") {
+    return modelFailure("invalid-transition", "tmux window names are owned by the tmux controller");
+  }
+
+  const renameResult = renameDirectWindow(window, name);
+  if (!renameResult.ok) {
+    return renameResult;
+  }
+
+  return replaceWorkspaceWindow(workspace, renameResult.value);
+}
+
+export function attachTerminalToEmptyPane(
+  workspace: Workspace,
+  windowId: WindowId,
+  paneId: DirectPaneNode["id"],
+  terminalId: TerminalId,
+): ModelResult<Workspace> {
+  const window = findDirectWindowInWorkspace(workspace, windowId);
+  if (!window) {
+    return modelFailure("not-found", "Direct window does not exist");
+  }
+
+  const pane = findDirectPane(window.layout, paneId);
+  if (!pane) {
+    return modelFailure("not-found", "Pane does not exist in this window");
+  }
+  if (pane.kind !== "leaf" || pane.content.kind !== "empty") {
+    return modelFailure("invalid-transition", "Only an empty leaf can accept a terminal");
+  }
+  if (collectWorkspaceTerminalIds(workspace).includes(terminalId)) {
+    return modelFailure("duplicate-id", "Terminal instance is already attached to this workspace");
+  }
+
+  return modelSuccess({
+    ...workspace,
+    windows: workspace.windows.map((candidate) =>
+      candidate.id === windowId && candidate.kind === "direct-window"
+        ? {
+            ...candidate,
+            layout: setDirectPaneContent(candidate.layout, paneId, {
+              kind: "terminal",
+              terminalId,
+            }),
+          }
+        : candidate,
+    ),
+  });
+}
+
+export function splitDirectWindowPane(
+  workspace: Workspace,
+  windowId: WindowId,
+  targetPaneId: DirectPaneNode["id"],
+  splitPaneId: string,
+  newPaneId: string,
+  direction: DirectPaneDirection,
+  terminalId: TerminalId,
+  ratio = 0.5,
+): ModelResult<Workspace> {
+  const window = findDirectWindowInWorkspace(workspace, windowId);
+  if (!window) {
+    return modelFailure("not-found", "Direct window does not exist");
+  }
+  if (collectWorkspaceTerminalIds(workspace).includes(terminalId)) {
+    return modelFailure("duplicate-id", "Terminal instance is already attached to this workspace");
+  }
+
+  const newPaneResult = createTerminalDirectPane(newPaneId, terminalId);
+  if (!newPaneResult.ok) {
+    return newPaneResult;
+  }
+
+  const splitResult = splitDirectPane(
+    window.layout,
+    targetPaneId,
+    splitPaneId,
+    newPaneResult.value,
+    direction,
+    ratio,
+  );
+  if (!splitResult.ok) {
+    return splitResult;
+  }
+
+  return replaceWorkspaceWindow(workspace, {
+    ...window,
+    layout: splitResult.value,
+    activePaneId: newPaneResult.value.id,
+  });
+}
+
+export function detachTerminalFromWorkspace(
+  workspace: Workspace,
+  terminalId: TerminalId,
+): ModelResult<Workspace> {
+  let hasChanged = false;
+
+  const windows = workspace.windows.map((window) => {
+    if (window.kind !== "direct-window") {
+      return window;
+    }
+
+    const layout = clearTerminalContent(window.layout, terminalId, () => {
+      hasChanged = true;
+    });
+    return hasChanged ? { ...window, layout } : window;
+  });
+
+  if (!hasChanged) {
+    return modelFailure("not-found", "Terminal instance is not attached to this workspace");
+  }
+
+  return modelSuccess({
+    ...workspace,
+    windows,
+  });
+}
+
+export function appendWorkspaceWindow(
+  workspace: Workspace,
+  window: WorkspaceWindow,
+  shouldActivate = true,
+): ModelResult<Workspace> {
+  const windows = [...workspace.windows, window];
+  return createWorkspace({
+    id: workspace.id,
+    name: workspace.name,
+    windows,
+    activeWindowId: shouldActivate ? window.id : workspace.activeWindowId,
+  });
+}
+
+export function removeWorkspaceWindow(
+  workspace: Workspace,
+  windowId: WindowId,
+): ModelResult<Workspace> {
+  if (workspace.windows.length === 1) {
+    return modelFailure("invalid-transition", "Workspace must keep at least one window");
+  }
+
+  const closedWindowIndex = workspace.windows.findIndex((window) => window.id === windowId);
+  if (closedWindowIndex < 0) {
+    return modelFailure("not-found", "Window does not exist in this workspace");
+  }
+
+  const windows = workspace.windows.filter((window) => window.id !== windowId);
+  const fallbackWindow =
+    windows[Math.max(0, closedWindowIndex - 1)] ??
+    windows[Math.min(closedWindowIndex, windows.length - 1)];
+  const activeWindowId =
+    workspace.activeWindowId === windowId ? fallbackWindow.id : workspace.activeWindowId;
+
+  return createWorkspace({
+    id: workspace.id,
+    name: workspace.name,
+    windows,
+    activeWindowId,
+  });
+}
+
+function replaceWorkspaceWindow(
+  workspace: Workspace,
+  replacement: WorkspaceWindow,
+): ModelResult<Workspace> {
+  return createWorkspace({
+    id: workspace.id,
+    name: workspace.name,
+    windows: workspace.windows.map((window) =>
+      window.id === replacement.id ? replacement : window,
+    ),
+    activeWindowId: workspace.activeWindowId,
+  });
+}
+
+function clearTerminalContent(
+  node: DirectPaneNode,
+  terminalId: TerminalId,
+  onChanged: () => void,
+): DirectPaneNode {
+  if (node.kind === "leaf") {
+    if (node.content.kind === "terminal" && node.content.terminalId === terminalId) {
+      onChanged();
+      return {
+        ...node,
+        content: { kind: "empty" },
+      };
+    }
+    return node;
+  }
+
+  return {
+    ...node,
+    children: [
+      clearTerminalContent(node.children[0], terminalId, onChanged),
+      clearTerminalContent(node.children[1], terminalId, onChanged),
+    ],
+  };
+}
