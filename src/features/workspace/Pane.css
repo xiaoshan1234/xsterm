@@ -20,6 +20,7 @@
 }
 
 .pane-terminal-wrapper {
+  position: relative;
   flex: 1;
   overflow: hidden;
   min-width: 0;

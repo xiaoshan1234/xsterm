@@ -1,15 +1,12 @@
 /*
  * Terminal host + line-number gutter overlay.
  *
- * The gutter is `position: absolute` and anchored to the nearest positioned
- * ancestor (.workspace-pane) — NOT to terminal-host — so it spans the pane's
- * full height even when a banner or wrapper shrinks terminal-host. Without
- * this, .workspace-pane--active's inset focus ring would be visible at the
- * pane's bottom edge (the gutter sits flush with that edge and is opaque to
- * cover it). terminal-host reserves a `padding-left: 48px` gutter so the
- * xterm mount never slides under it. Line numbers are positioned from the
- * gutter's top, which coincides with .xterm-screen's top in the flex column
- * layout above this component.
+ * The gutter is `position: absolute` and anchored to the terminal wrapper.
+ * Keeping it inside the terminal content region prevents it from spilling
+ * over the Window tab bar or other pane chrome. terminal-host reserves a
+ * `padding-left: 48px` gutter so the xterm mount never slides under it. Line
+ * numbers are positioned from the gutter's top, which coincides with
+ * .xterm-screen's top in the flex column layout above this component.
  */
 .terminal-host {
   display: flex;
@@ -25,10 +22,8 @@
 
 .terminal-line-number-overlay {
   position: absolute;
-  /* Anchored to .workspace-pane (not terminal-host) so the gutter spans the
-   * pane's full height even when a banner / wrapper shrinks terminal-host.
-   * This is what covers .workspace-pane--active's inset focus ring at the
-   * bottom of the pane. */
+  /* Anchored to .pane-terminal-wrapper so the gutter is clipped to the
+   * terminal content area. */
   top: 0;
   bottom: 0;
   left: 0;

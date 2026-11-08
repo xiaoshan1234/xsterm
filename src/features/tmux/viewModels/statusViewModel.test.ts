@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { type Terminal, type Workspace } from "../../../models/legacy/terminal";
 import { selectTmuxStatusControllers } from "./statusViewModel";
 
-describe("tmux status view model", () => {
+describe("Tmux status view model", () => {
   it("groups panes by controller and tmux window", () => {
     const terminals: Terminal[] = [
       createTmuxTerminal(10, "%1", "@1", true),

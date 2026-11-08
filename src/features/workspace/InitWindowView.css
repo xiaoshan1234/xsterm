@@ -1,8 +1,10 @@
 .init-window-view {
   flex: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
   background: var(--canvas);
   overflow: auto;
 }

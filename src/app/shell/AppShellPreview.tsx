@@ -77,7 +77,6 @@ export function AppShellPreview() {
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={activeDialog === "error"}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}
-      onCloseTool={() => setActiveTool(null)}
       onSelectWorkspace={setActiveWorkspace}
       onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
     />

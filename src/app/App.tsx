@@ -4,6 +4,7 @@ import { AppShellPreview } from "./shell/AppShellPreview";
 import { AppShellRuntime } from "./shell/AppShellRuntime";
 import "../styles/global.css";
 import "../styles/layout.css";
+import "../styles/pane.css";
 
 export default function App() {
   const isStaticUiPreview = import.meta.env.DEV && window.location.hash === "#ui-preview";

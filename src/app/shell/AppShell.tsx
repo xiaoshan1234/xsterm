@@ -3,6 +3,7 @@ import { BottomBar } from "./BottomBar";
 import { Toolbar } from "./Toolbar";
 import { ToolPanel } from "./ToolPanel";
 import { type ToolId } from "./types";
+import { useToolPanelWidth } from "./useToolPanelWidth";
 import "./AppShell.css";
 
 interface AppShellProps {
@@ -18,7 +19,6 @@ interface AppShellProps {
   isTextSenderOpen: boolean;
   isInteractionBlocked?: boolean;
   onSelectTool: (tool: ToolId) => void;
-  onCloseTool: () => void;
   onSelectWorkspace: (workspaceName: string) => void;
   onToggleTextSender: () => void;
 }
@@ -36,10 +36,11 @@ export function AppShell({
   isTextSenderOpen,
   isInteractionBlocked = false,
   onSelectTool,
-  onCloseTool,
   onSelectWorkspace,
   onToggleTextSender,
 }: AppShellProps) {
+  const { width: toolPanelWidth, startResize, nudgeWidth } = useToolPanelWidth();
+
   return (
     <div className="shell-root">
       <div
@@ -51,7 +52,12 @@ export function AppShell({
           <aside className="shell-left-sidebar">
             <Toolbar activeTool={activeTool} onSelectTool={onSelectTool} />
             {activeTool && (
-              <ToolPanel title={toolTitle} onClose={onCloseTool}>
+              <ToolPanel
+                title={toolTitle}
+                width={toolPanelWidth}
+                onResizeStart={startResize}
+                onResizeBy={nudgeWidth}
+              >
                 {toolPanelContent}
               </ToolPanel>
             )}

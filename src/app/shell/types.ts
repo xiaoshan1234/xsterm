@@ -19,8 +19,8 @@ export type PreviewDialogId =
 export const TOOL_TITLES: Readonly<Record<ToolId, string>> = {
   "terminal-manager": "Terminal Manager",
   "terminal-status-manager": "Terminal Status",
-  "tmux-manager": "tmux Manager",
-  "tmux-status-manager": "tmux Status",
+  "tmux-manager": "Tmux Manager",
+  "tmux-status-manager": "Tmux Status",
   "window-manager": "Window Manager",
   "workspace-manager": "Workspace Manager",
   settings: "Settings",

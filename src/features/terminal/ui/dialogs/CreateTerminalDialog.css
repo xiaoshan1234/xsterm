@@ -1,12 +1,13 @@
-/* Compound selector so this wins against .dialog--medium from Dialog.css. */
-.dialog.create-session-dialog {
-  width: 780px;
-  height: 640px;
+/* Shared by Terminal and tmux creation dialogs.
+ * Use the large form size while keeping it inside narrow viewports. */
+.dialog.create-terminal-dialog {
+  width: min(780px, calc(100vw - 48px));
+  height: min(640px, calc(100vh - 48px));
   max-width: 780px;
-  max-height: 640px;
+  max-height: calc(100vh - 48px);
 }
 
-.dialog.create-session-dialog .dialog-content {
+.dialog.create-terminal-dialog .dialog-content {
   flex: 1;
   min-height: 0;
   overflow: hidden;

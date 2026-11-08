@@ -174,10 +174,11 @@
 }
 
 .shell-tool-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
-  width: 232px;
-  min-width: 200px;
+  min-width: 140px;
+  max-width: 400px;
   height: 100%;
   background: var(--canvas-soft);
 }
@@ -185,9 +186,10 @@
 .shell-tool-panel-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  padding: var(--space-base);
+  justify-content: center;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 var(--space-sm);
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -198,6 +200,16 @@
   font-size: 16px;
   font-weight: 500;
   line-height: 1.4;
+}
+
+.shell-tool-panel-header h2 {
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shell-eyebrow {
@@ -217,6 +229,24 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.shell-tool-panel-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 5;
+  width: 6px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.shell-tool-panel-resizer:hover,
+.shell-tool-panel-resizer:focus-visible {
+  outline: none;
+  background: var(--accent-soft);
 }
 
 .shell-manager {
@@ -443,8 +473,9 @@
 
 .shell-window-tabs {
   display: flex;
-  align-items: center;
-  min-height: 38px;
+  align-items: stretch;
+  height: 36px;
+  min-height: 36px;
   border-bottom: 1px solid var(--hairline);
   background: var(--canvas-soft);
 }
@@ -452,7 +483,7 @@
 .shell-window-tabs-list {
   display: flex;
   align-items: stretch;
-  height: 38px;
+  height: 100%;
 }
 
 .shell-window-tab {
@@ -675,6 +706,7 @@
 .shell-bottom-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   height: 24px;
   padding: 0 var(--space-xs);
@@ -684,6 +716,7 @@
   color: var(--body);
   font-family: inherit;
   font-size: 12px;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -888,10 +921,6 @@
 }
 
 @media (max-width: 900px) {
-  .shell-tool-panel {
-    width: 200px;
-  }
-
   .shell-text-sender-grid {
     grid-template-columns: minmax(0, 1fr) 180px;
   }

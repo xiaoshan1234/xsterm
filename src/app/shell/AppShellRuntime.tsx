@@ -588,7 +588,6 @@ export function AppShellRuntime() {
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={error !== null}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}
-      onCloseTool={() => setActiveTool(null)}
       onSelectWorkspace={(workspaceName) => {
         const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
         if (workspace) setActiveWorkspace(workspace.id);

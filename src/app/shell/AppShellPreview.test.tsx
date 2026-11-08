@@ -12,8 +12,16 @@ describe("AppShellPreview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Terminal Manager" }));
     expect(screen.getByRole("heading", { name: "Terminal Manager" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Close Terminal Manager" })).toBeNull();
     expect(screen.getByRole("button", { name: "New Terminal" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "New Group" })).toBeTruthy();
+
+    const resizeHandle = screen.getByRole("separator", { name: "Resize Terminal Manager" });
+    fireEvent.keyDown(resizeHandle, { key: "ArrowRight" });
+    expect(resizeHandle.getAttribute("aria-valuenow")).toBe("208");
+    expect(
+      screen.getByRole("region", { name: "Terminal Manager" }).getAttribute("style"),
+    ).toContain("width: 208px");
 
     fireEvent.click(screen.getByRole("button", { name: "Text Sender" }));
     expect(screen.getByRole("region", { name: "Global text sender" })).toBeTruthy();
@@ -27,8 +35,8 @@ describe("AppShellPreview", () => {
     expect(screen.getByRole("heading", { name: "Terminal Status" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "New Terminal" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "tmux Status" }));
-    expect(screen.getByRole("heading", { name: "tmux Status" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Tmux Status" }));
+    expect(screen.getByRole("heading", { name: "Tmux Status" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "New tmux Session" })).toBeNull();
   });
 

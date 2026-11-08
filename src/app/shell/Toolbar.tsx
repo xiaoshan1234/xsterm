@@ -16,14 +16,14 @@ interface ToolbarProps {
 
 const CONFIGURATION_TOOLS = [
   { id: "terminal-manager", label: "Terminal Manager", icon: ChatIcon },
-  { id: "tmux-manager", label: "tmux Manager", icon: SessionIcon },
+  { id: "tmux-manager", label: "Tmux Manager", icon: SessionIcon },
   { id: "window-manager", label: "Window Manager", icon: WindowIcon },
   { id: "workspace-manager", label: "Workspace Manager", icon: WorkspaceIcon },
 ] as const;
 
 const STATUS_TOOLS = [
   { id: "terminal-status-manager", label: "Terminal Status", icon: TerminalIcon },
-  { id: "tmux-status-manager", label: "tmux Status", icon: LayoutIcon },
+  { id: "tmux-status-manager", label: "Tmux Status", icon: LayoutIcon },
 ] as const;
 
 export function Toolbar({ activeTool, onSelectTool }: ToolbarProps) {
