@@ -13,12 +13,18 @@
   overflow: hidden;
 }
 
-.session-form-layout .dialog-sidebar {
+.terminal-form-layout .dialog-sidebar {
   overflow: hidden;
 }
-.session-form-layout .dialog-panel {
+.terminal-form-layout .dialog-panel {
+  min-width: 0;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.terminal-form-layout .dialog-panel > * {
+  flex-shrink: 0;
 }
 
 .edit-terminal-fields {

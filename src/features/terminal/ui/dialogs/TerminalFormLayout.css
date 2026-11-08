@@ -50,10 +50,12 @@
 /* Layout wrapper: breaks out of .dialog-content padding so the
  * .dialog-body grid (sidebar + panel, defined in Dialog.css) can use the
  * full content area. */
-.session-form-layout {
+.terminal-form-layout {
   margin: -20px;
   display: flex;
   flex-direction: column;
   flex: 1;
+  width: 100%;
   min-height: 0;
+  overflow: hidden;
 }

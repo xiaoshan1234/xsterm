@@ -137,17 +137,27 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     [enqueuePaste, readBracketedPasteMode],
   );
 
+  const restoreTerminalFocus = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (isFocusedRef.current) {
+        termRef.current?.focus();
+      }
+    });
+  }, [termRef]);
+
   const handlePasteConfirm = useCallback(
     (transformedText: string) => {
       setPendingPasteText(null);
       enqueuePaste(transformedText, readBracketedPasteMode());
+      restoreTerminalFocus();
     },
-    [enqueuePaste, readBracketedPasteMode],
+    [enqueuePaste, readBracketedPasteMode, restoreTerminalFocus],
   );
 
   const handlePasteCancel = useCallback(() => {
     setPendingPasteText(null);
-  }, []);
+    restoreTerminalFocus();
+  }, [restoreTerminalFocus]);
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent) => {
