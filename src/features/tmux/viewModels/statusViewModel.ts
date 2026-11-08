@@ -59,7 +59,7 @@ export function selectTmuxStatusControllers(
 
     return {
       controllerId,
-      title: config?.name ?? `tmux controller ${controllerId}`,
+      title: config?.name ?? `Tmux controller ${controllerId}`,
       status,
       transport: config?.type === "tmux-pane" && config.config.ssh ? "ssh" : "local",
       windows,

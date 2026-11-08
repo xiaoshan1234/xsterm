@@ -13,7 +13,7 @@ export function MainAreaPreview({ onOpenDialog }: MainAreaPreviewProps) {
             1. Main
           </button>
           <button type="button" className="shell-window-tab">
-            2. tmux dev:@1
+            2. Tmux dev:@1
           </button>
         </div>
         <div className="shell-window-actions">
@@ -29,7 +29,7 @@ export function MainAreaPreview({ onOpenDialog }: MainAreaPreviewProps) {
             className="shell-text-button"
             onClick={() => onOpenDialog("create-tmux")}
           >
-            Create tmux
+            Create Tmux
           </button>
           <button
             type="button"
@@ -43,7 +43,7 @@ export function MainAreaPreview({ onOpenDialog }: MainAreaPreviewProps) {
             className="shell-text-button"
             onClick={() => onOpenDialog("edit-tmux")}
           >
-            Edit tmux
+            Edit Tmux
           </button>
           <button
             type="button"

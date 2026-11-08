@@ -221,7 +221,7 @@ export function Pane({
       await tmuxCommands.createTmuxWindow(toBackendControllerHandle(terminal.tmuxSessionId));
     } catch (e) {
       console.error("Failed to create tmux window:", e);
-      window.alert(`Failed to create tmux window: ${e instanceof Error ? e.message : String(e)}`);
+      window.alert(`Failed to create Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [terminal?.tmuxSessionId]);
 
@@ -232,20 +232,20 @@ export function Pane({
       await tmuxCommands.killTmuxWindow(toBackendWindowHandle(xid));
     } catch (e) {
       console.error("Failed to kill tmux window:", e);
-      window.alert(`Failed to kill tmux window: ${e instanceof Error ? e.message : String(e)}`);
+      window.alert(`Failed to kill Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [selectedWindow?.xstermWindowId]);
 
   const handleRenameTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
     if (xid === undefined) return;
-    const name = window.prompt("Rename tmux window:");
+    const name = window.prompt("Rename Tmux window:");
     if (name === null || name.trim() === "") return;
     try {
       await tmuxCommands.renameTmuxWindow(toBackendWindowHandle(xid), name.trim());
     } catch (e) {
       console.error("Failed to rename tmux window:", e);
-      window.alert(`Failed to rename tmux window: ${e instanceof Error ? e.message : String(e)}`);
+      window.alert(`Failed to rename Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [selectedWindow?.xstermWindowId]);
 

@@ -27,8 +27,8 @@ const TEXT_SENDER_TARGETS = [
   },
   {
     id: "tmux:3:@1:%2",
-    label: "tmux dev · editor",
-    breadcrumb: "Project X / tmux dev:@1 / %2",
+    label: "Tmux dev · editor",
+    breadcrumb: "Project X / Tmux dev:@1 / %2",
     status: "Connected",
     isAvailable: true,
   },

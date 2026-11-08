@@ -24,11 +24,11 @@ export function TmuxManagerPanel({
   return (
     <ManagerPanelFrame
       footer={
-        <ManagerActionButton label="New tmux Session" variant="primary" onClick={onNewTmux} />
+        <ManagerActionButton label="New Tmux Session" variant="primary" onClick={onNewTmux} />
       }
     >
       {items.length === 0 ? (
-        <ManagerEmptyState>No saved tmux configurations.</ManagerEmptyState>
+        <ManagerEmptyState>No saved Tmux configurations.</ManagerEmptyState>
       ) : (
         items.map((item) => (
           <ManagerRow

@@ -46,7 +46,7 @@ export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDial
   const handleSave = () => {
     const name = form.name.trim();
     if (!name) {
-      form.setError("tmux display name is required.");
+      form.setError("Tmux display name is required.");
       return;
     }
 
@@ -95,7 +95,7 @@ export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDial
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title="Edit tmux Session"
+      title="Edit Tmux Session"
       className="edit-terminal-dialog"
       footer={
         <div className="dialog-footer-buttons">

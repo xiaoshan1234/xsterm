@@ -45,7 +45,7 @@ export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorB
     } catch (e) {
       console.error("Failed to retry tmux controller:", e);
       window.alert(
-        `Failed to retry tmux controller: ${e instanceof Error ? e.message : String(e)}`,
+        `Failed to retry Tmux controller: ${e instanceof Error ? e.message : String(e)}`,
       );
       return;
     }

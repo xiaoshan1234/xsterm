@@ -37,7 +37,7 @@ describe("AppShellPreview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Tmux Status" }));
     expect(screen.getByRole("heading", { name: "Tmux Status" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "New tmux Session" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New Tmux Session" })).toBeNull();
   });
 
   it("blocks the app shell while an error dialog is open", () => {

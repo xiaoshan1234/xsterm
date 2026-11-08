@@ -170,7 +170,7 @@ export function CreateTmuxDialog({
           disabled={isSubmitting}
           onClick={handleCreate}
         >
-          {isSubmitting ? "Creating…" : "Create tmux"}
+          {isSubmitting ? "Creating…" : "Create Tmux"}
         </button>
       </div>
     </div>
@@ -180,7 +180,7 @@ export function CreateTmuxDialog({
     <Dialog
       isOpen={isOpen}
       onClose={closeDialog}
-      title="Create tmux Session"
+      title="Create Tmux Session"
       className="create-terminal-dialog"
       footer={footer}
     >

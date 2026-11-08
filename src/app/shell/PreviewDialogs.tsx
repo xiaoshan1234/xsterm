@@ -36,7 +36,7 @@ export function PreviewDialogs({ activeDialog, onClose }: PreviewDialogsProps) {
       <Dialog
         isOpen
         onClose={onClose}
-        title={activeDialog === "create-tmux" ? "Create tmux Session" : "Edit tmux Session"}
+        title={activeDialog === "create-tmux" ? "Create Tmux Session" : "Edit Tmux Session"}
         footer={
           <DialogFooter
             primaryLabel={activeDialog === "create-tmux" ? "Create" : "Save"}
@@ -121,7 +121,7 @@ function TmuxDialogPreview() {
           <option value="local">Local PowerShell</option>
         </select>
       </FormField>
-      <FormField label="tmux session">
+      <FormField label="Tmux session">
         <input type="text" defaultValue="dev" />
       </FormField>
       <FormField label="Socket name">

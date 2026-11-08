@@ -65,20 +65,20 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
               onClick={() => onOpenDialog("create-tmux")}
             >
               <PlusIcon size={14} />
-              New tmux Session
+              New Tmux Session
             </button>
           }
         >
           <ManagerItem
-            title="tmux dev"
+            title="Tmux dev"
             subtitle="Local · socket work"
-            badge="tmux"
+            badge="Tmux"
             onEdit={() => onOpenDialog("edit-tmux")}
           />
           <ManagerItem
-            title="Remote tmux"
+            title="Remote Tmux"
             subtitle="SSH · build@example.com"
-            badge="tmux"
+            badge="Tmux"
             onEdit={() => onOpenDialog("edit-tmux")}
           />
         </PreviewManagerFrame>
@@ -88,7 +88,7 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
       return (
         <PreviewManagerFrame>
           <StatusHeader count="1 controller · 3 windows · 7 panes" />
-          <ManagerItem title="tmux dev" subtitle="Socket work · 3 windows" badge="Connected" />
+          <ManagerItem title="Tmux dev" subtitle="Socket work · 3 windows" badge="Connected" />
           <div className="shell-status-tree">
             <span>@1 editor</span>
             <span>%1</span>

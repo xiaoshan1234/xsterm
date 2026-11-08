@@ -26,7 +26,7 @@ export function TmuxStatusPanel({ controllers, onFocusPane }: TmuxStatusPanelPro
         value={`${controllers.length} controllers · ${paneCount} panes`}
       />
       {controllers.length === 0 ? (
-        <ManagerEmptyState>No live tmux controllers.</ManagerEmptyState>
+        <ManagerEmptyState>No live Tmux controllers.</ManagerEmptyState>
       ) : (
         controllers.map((controller) => (
           <section key={controller.controllerId} className="manager-section">
