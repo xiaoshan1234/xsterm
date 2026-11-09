@@ -39,3 +39,4 @@ doc/.obsidian/*
 # Vendored third-party Rust repo (xscore) build artifacts
 third_party/xscore/target/
 third_party/xscore/crates/*/target/
+test.config
