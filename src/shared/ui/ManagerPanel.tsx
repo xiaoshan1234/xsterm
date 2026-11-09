@@ -20,12 +20,14 @@ export function ManagerPanelFrame({
 
 export function ManagerSection({
   label,
+  badge,
   isExpanded,
   onToggle,
   contextMenuItems,
   children,
 }: {
   label: string;
+  badge?: string;
   isExpanded: boolean;
   onToggle?: () => void;
   contextMenuItems?: readonly ContextMenuItem[];
@@ -37,7 +39,8 @@ export function ManagerSection({
         <span className={isExpanded ? "manager-chevron manager-chevron--open" : "manager-chevron"}>
           <ChevronIcon size={12} />
         </span>
-        <span>{label}</span>
+        <span className="manager-section-label">{label}</span>
+        {badge && <span className="manager-section-badge">{badge}</span>}
       </button>
     </div>
   );

@@ -223,6 +223,7 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     createWorkspaceFromSession,
     ...lifecycle,
     ...pane,
+    reportTerminalSize: opts.reportTerminalSize,
     createWindow: windowActions.createWindow,
     createInitWindow: windowActions.createInitWindow,
     replaceInitWindowWithTerminal: windowActions.replaceInitWindowWithTerminal,

@@ -345,6 +345,16 @@ impl TerminalRegistry {
         self.get(id)?.transport.resize(rows, cols).await
     }
 
+    pub(crate) async fn resize_tmux_window(
+        &self,
+        controller_id: u32,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), String> {
+        let controller = self.tmux_controller(controller_id)?;
+        controller.resize_client(cols, rows).await
+    }
+
     pub(crate) fn upload_image(
         &self,
         id: u32,

@@ -6,6 +6,7 @@ import { InitWindowView } from "./InitWindowView";
 import { WindowTabBar } from "./WindowTabBar";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
+import { useTmuxWindowResize } from "./useTmuxWindowResize";
 import "./TabBar.css";
 
 function updateNodeInTree(
@@ -28,6 +29,7 @@ interface WorkspaceContainerProps {
 }
 
 export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
+  useTmuxWindowResize(workspace);
   const {
     setActiveWorkspace,
     setActiveWindow,

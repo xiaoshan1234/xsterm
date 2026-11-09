@@ -12,12 +12,17 @@ export function useTerminalResize(
   displayConfig?: TerminalDisplayConfig,
   isWindowActive: boolean = true,
 ): void {
-  const { resizeTerminal } = useTerminalRuntime();
+  const { resizeTerminal, reportTerminalSize } = useTerminalRuntime();
   const resizeTerminalRef = useRef(resizeTerminal);
+  const reportTerminalSizeRef = useRef(reportTerminalSize);
 
   useEffect(() => {
     resizeTerminalRef.current = resizeTerminal;
   }, [resizeTerminal]);
+
+  useEffect(() => {
+    reportTerminalSizeRef.current = reportTerminalSize;
+  }, [reportTerminalSize]);
 
   // Mirror displayConfig into a ref so the debounced ResizeObserver closure
   // always reads the latest sizing mode without re-subscribing to the observer.
@@ -48,6 +53,7 @@ export function useTerminalResize(
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
         resizeTerminalRef.current(terminalId, xterm.rows, xterm.cols);
+        reportTerminalSizeRef.current(terminalId, xterm.rows, xterm.cols);
       }
     };
 
@@ -108,10 +114,12 @@ export function useTerminalResize(
       if (xterm.cols !== targetCols || xterm.rows !== targetRows) {
         xterm.resize(targetCols, targetRows);
         resizeTerminalRef.current(terminalId, targetRows, targetCols);
+        reportTerminalSizeRef.current(terminalId, targetRows, targetCols);
       }
     } else {
       fitAddon.fit();
       resizeTerminalRef.current(terminalId, xterm.rows, xterm.cols);
+      reportTerminalSizeRef.current(terminalId, xterm.rows, xterm.cols);
     }
   }, [
     displayConfig?.sizingMode,

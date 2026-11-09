@@ -41,6 +41,8 @@ export interface SavedLaunchConfigsContextType {
 
 export interface TerminalRuntimeContextType {
   terminals: Terminal[];
+  terminalSizesRef: MutableRefObject<Map<number, { rows: number; cols: number }>>;
+  terminalSizesVersion: number;
   getEffectiveLocalEcho: (terminalId: number) => boolean;
   tmuxControllerErrors: Map<number, TmuxControllerError>;
   createLocalSession: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
@@ -57,6 +59,7 @@ export interface TerminalRuntimeContextType {
   renameSession: (id: number, name: string) => void;
   writeTerminal: (id: number, data: string) => Promise<void>;
   resizeTerminal: (id: number, rows: number, cols: number) => Promise<void>;
+  reportTerminalSize: (terminalId: number, rows: number, cols: number) => void;
   applyDisplayConfigToLiveSession: (id: number, patch: Partial<TerminalDisplayConfig>) => void;
   touchTerminalActivity: (id: number) => void;
   dismissTmuxControllerError: (controllerId: number) => void;
@@ -196,6 +199,11 @@ export interface TerminalState {
   tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
   /** Controllers intentionally detached/closed; suppresses retry banners. */
   tmuxControllersClosingRef: MutableRefObject<Set<number>>;
+  /** Last fitted xterm dimensions per terminal. */
+  terminalSizesRef: MutableRefObject<Map<number, { rows: number; cols: number }>>;
+  /** Bumped whenever a terminal reports a new fitted size. */
+  terminalSizesVersion: number;
+  reportTerminalSize: (terminalId: number, rows: number, cols: number) => void;
 }
 
 export interface SessionPersistence {
@@ -237,6 +245,7 @@ export interface TerminalRuntimeActions {
   renameSession: (id: number, name: string) => void;
   writeTerminal: (id: number, data: string) => Promise<void>;
   resizeTerminal: (id: number, rows: number, cols: number) => Promise<void>;
+  reportTerminalSize: (terminalId: number, rows: number, cols: number) => void;
   applyDisplayConfigToLiveSession: (id: number, patch: Partial<TerminalDisplayConfig>) => void;
   touchTerminalActivity: (id: number) => void;
   dismissTmuxControllerError: (controllerId: number) => void;

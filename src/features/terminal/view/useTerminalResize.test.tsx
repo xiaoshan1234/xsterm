@@ -19,8 +19,12 @@ import { useTerminalResize } from "./useTerminalResize";
 import type { TerminalDisplayConfig } from "../../../models/legacy/terminal";
 
 const resizeTerminalMock = vi.fn(async (_id: number, _rows: number, _cols: number) => {});
+const reportTerminalSizeMock = vi.fn();
 vi.mock("../../sessions", () => ({
-  useTerminalRuntime: () => ({ resizeTerminal: resizeTerminalMock }),
+  useTerminalRuntime: () => ({
+    resizeTerminal: resizeTerminalMock,
+    reportTerminalSize: reportTerminalSizeMock,
+  }),
 }));
 
 interface XTermStub {
@@ -52,6 +56,7 @@ class ResizeObserverMock {
 
 beforeEach(() => {
   resizeTerminalMock.mockClear();
+  reportTerminalSizeMock.mockClear();
   observers.length = 0;
   globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 });

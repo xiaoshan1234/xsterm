@@ -362,6 +362,17 @@ impl TmuxSession {
         Ok(())
     }
 
+    /// Resize the tmux control client. tmux uses the control client size to
+    /// size the attached window, so this is what makes the tmux window track
+    /// the xsterm window container instead of the fixed spawn-time PTY size.
+    pub(crate) async fn resize_client(&self, cols: u16, rows: u16) -> Result<(), String> {
+        self.control
+            .send(&format!("refresh-client -C {cols}x{rows}"))
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub(crate) async fn split_pane(
         &self,
         parent_pane: &str,

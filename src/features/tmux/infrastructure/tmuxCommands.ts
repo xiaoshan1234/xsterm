@@ -19,6 +19,11 @@ export interface TmuxCommandClient {
   createTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto>;
   attachTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto>;
   detachTmuxSession(controllerHandle: BackendControllerHandle): Promise<void>;
+  resizeTmuxWindow(
+    controllerHandle: BackendControllerHandle,
+    cols: number,
+    rows: number,
+  ): Promise<void>;
   createTmuxPane(
     controllerHandle: BackendControllerHandle,
     parentTerminalHandle: BackendTerminalHandle,
@@ -57,6 +62,18 @@ export function createTmuxCommandClient(
     async detachTmuxSession(controllerHandle: BackendControllerHandle): Promise<void> {
       await invokeFunction<void>("detach_tmux_session", {
         controllerId: controllerHandle,
+      });
+    },
+
+    async resizeTmuxWindow(
+      controllerHandle: BackendControllerHandle,
+      cols: number,
+      rows: number,
+    ): Promise<void> {
+      await invokeFunction<void>("resize_tmux_window", {
+        controllerId: controllerHandle,
+        cols,
+        rows,
       });
     },
 

@@ -94,6 +94,18 @@ pub async fn resize_terminal(
     state.resize(session_id, rows, cols).await
 }
 
+/// Resize the tmux control client so its attached window follows the xsterm
+/// window size. `cols`/`rows` are the total frontend window dimensions.
+#[tauri::command]
+pub async fn resize_tmux_window(
+    controller_id: u32,
+    cols: u16,
+    rows: u16,
+    state: State<'_, Arc<TerminalRegistry>>,
+) -> Result<(), String> {
+    state.resize_tmux_window(controller_id, cols, rows).await
+}
+
 /// Close an existing session.
 #[tauri::command]
 pub async fn close_terminal(

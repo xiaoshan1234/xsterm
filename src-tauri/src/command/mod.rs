@@ -9,6 +9,7 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::create_tmux_session,
         session::write_terminal,
         session::resize_terminal,
+        session::resize_tmux_window,
         session::close_terminal,
         session::list_terminals,
         session::upload_image_to_ssh_terminal,

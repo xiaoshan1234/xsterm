@@ -65,6 +65,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const terminalRuntime = useMemo<TerminalRuntimeContextType>(
     () => ({
       terminals: state.terminals,
+      terminalSizesRef: state.terminalSizesRef,
+      terminalSizesVersion: state.terminalSizesVersion,
       getEffectiveLocalEcho: state.getEffectiveLocalEcho,
       tmuxControllerErrors: state.tmuxControllerErrors,
       createLocalSession: actions.createLocalSession,
@@ -81,12 +83,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       renameSession: actions.renameSession,
       writeTerminal: actions.writeTerminal,
       resizeTerminal: actions.resizeTerminal,
+      reportTerminalSize: actions.reportTerminalSize,
       applyDisplayConfigToLiveSession: actions.applyDisplayConfigToLiveSession,
       touchTerminalActivity: actions.touchTerminalActivity,
       dismissTmuxControllerError: actions.dismissTmuxControllerError,
     }),
     [
       state.terminals,
+      state.terminalSizesRef,
+      state.terminalSizesVersion,
       state.getEffectiveLocalEcho,
       state.tmuxControllerErrors,
       actions.createLocalSession,
@@ -103,6 +108,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       actions.renameSession,
       actions.writeTerminal,
       actions.resizeTerminal,
+      actions.reportTerminalSize,
       actions.applyDisplayConfigToLiveSession,
       actions.touchTerminalActivity,
       actions.dismissTmuxControllerError,

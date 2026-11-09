@@ -68,6 +68,23 @@
   min-width: 0;
 }
 
+.manager-section-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-section-badge {
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .manager-section-header:hover {
   background: var(--bg-hover);
 }

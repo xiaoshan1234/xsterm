@@ -1,0 +1,23 @@
+/* Terminal manager groups mirror the Tmux manager row language: compact
+ * spacing, a visible group count, and a soft rail for group members. */
+.terminal-manager-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.terminal-manager-groups .manager-section {
+  margin-bottom: 0;
+}
+
+.terminal-manager-groups .manager-section-items {
+  margin-left: var(--space-xs);
+  padding-left: var(--space-sm);
+  border-left: 1px solid var(--hairline);
+}
+
+.terminal-manager-groups .manager-empty-state {
+  padding: var(--space-sm);
+  text-align: left;
+}

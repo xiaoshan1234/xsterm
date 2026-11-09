@@ -38,6 +38,16 @@ export function useTerminalState(): TerminalState {
   // Controllers the user intentionally detached/closed. Used to suppress the
   // retry banner when the matching `tmux-controller-exit` arrives.
   const tmuxControllersClosingRef = useRef<Set<number>>(new Set());
+  // Last fitted xterm cell dimensions per terminal. Used by the tmux window
+  // resize bridge to derive the total frontend window size.
+  const terminalSizesRef = useRef<Map<number, { rows: number; cols: number }>>(new Map());
+  const [terminalSizesVersion, setTerminalSizesVersion] = useState(0);
+  const reportTerminalSize = useCallback((terminalId: number, rows: number, cols: number) => {
+    const previous = terminalSizesRef.current.get(terminalId);
+    if (previous?.rows === rows && previous?.cols === cols) return;
+    terminalSizesRef.current.set(terminalId, { rows, cols });
+    setTerminalSizesVersion((version) => version + 1);
+  }, []);
 
   const terminalsRef = useRef(terminals);
   const workspacesRef = useRef(workspaces);
@@ -99,5 +109,8 @@ export function useTerminalState(): TerminalState {
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
     tmuxControllersClosingRef,
+    terminalSizesRef,
+    terminalSizesVersion,
+    reportTerminalSize,
   };
 }
