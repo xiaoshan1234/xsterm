@@ -77,6 +77,13 @@ export interface TmuxWindowAddedEvent {
   layout: string;
 }
 
+export interface TmuxLayoutChangedEvent {
+  controllerHandle: BackendControllerHandle;
+  tmuxWindowId: string;
+  sessionName?: string;
+  panes: readonly TmuxWindowPaneDto[];
+}
+
 export interface TmuxWindowClosedEvent {
   controllerHandle: BackendControllerHandle;
   tmuxWindowId: string;

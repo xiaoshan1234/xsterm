@@ -3,6 +3,7 @@ import { toBackendTerminalHandle } from "../../terminal/infrastructure/handles";
 import { toBackendControllerHandle, toBackendWindowHandle } from "./handles";
 import {
   type TmuxControllerExitedEvent,
+  type TmuxLayoutChangedEvent,
   type TmuxPaneAddedEvent,
   type TmuxPanePausedEvent,
   type TmuxPaneRemovedEvent,
@@ -23,6 +24,7 @@ export interface TmuxEventHandlers {
   onPanePaused?: (event: TmuxPanePausedEvent) => void;
   onPaneContinued?: (event: TmuxPanePausedEvent) => void;
   onWindowAdded?: (event: TmuxWindowAddedEvent) => void;
+  onLayoutChanged?: (event: TmuxLayoutChangedEvent) => void;
   onWindowClosed?: (event: TmuxWindowClosedEvent) => void;
   onWindowRenamed?: (event: TmuxWindowRenamedEvent) => void;
 }
@@ -77,6 +79,18 @@ interface RawTmuxWindowClosed {
   controller_id: number;
   tmux_window_id: string;
   xsterm_window_id: number;
+}
+
+interface RawTmuxLayoutChanged {
+  controller_id: number;
+  tmux_window_id: string;
+  session_name?: string;
+  panes: Array<
+    RawTmuxPaneMetadata & {
+      tmux_pane_id: string;
+      xsterm_session_id: number;
+    }
+  >;
 }
 
 interface RawTmuxWindowRenamed extends RawTmuxWindowClosed {
@@ -148,6 +162,13 @@ export async function subscribeTmuxEvents(
     "tmux-window-renamed",
     listenFunction,
     normalizeWindowRenamed,
+  );
+  addSubscription(
+    subscriptions,
+    handlers.onLayoutChanged,
+    "tmux-layout-changed",
+    listenFunction,
+    normalizeLayoutChanged,
   );
 
   try {
@@ -244,6 +265,27 @@ export function normalizeWindowRenamed(payload: RawTmuxWindowRenamed): TmuxWindo
     tmuxWindowId: payload.tmux_window_id,
     backendWindowHandle: toBackendWindowHandle(payload.xsterm_window_id),
     name: payload.name,
+  };
+}
+
+export function normalizeLayoutChanged(payload: RawTmuxLayoutChanged): TmuxLayoutChangedEvent {
+  return {
+    controllerHandle: toBackendControllerHandle(payload.controller_id),
+    tmuxWindowId: payload.tmux_window_id,
+    ...(payload.session_name ? { sessionName: payload.session_name } : {}),
+    panes: (payload.panes ?? []).map((pane) => ({
+      terminalHandle: toBackendTerminalHandle(pane.xsterm_session_id),
+      tmuxPaneId: pane.tmux_pane_id,
+      windowIndex: pane.window_index,
+      paneIndex: pane.pane_index,
+      width: pane.width,
+      height: pane.height,
+      x: pane.x,
+      y: pane.y,
+      ...(pane.current_command ? { currentCommand: pane.current_command } : {}),
+      ...(pane.is_active !== undefined ? { isActive: pane.is_active } : {}),
+      ...(pane.window_name ? { windowName: pane.window_name } : {}),
+    })),
   };
 }
 

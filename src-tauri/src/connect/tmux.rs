@@ -1,7 +1,7 @@
 //! tmux adapter: a thin orchestration layer over xscore's `TmuxControl`.
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use xscore::platform::ssh::SshOptions;
@@ -44,6 +44,8 @@ pub(crate) struct TmuxSession {
     window_bindings: Mutex<HashMap<String, u32>>,
     bootstrap_pane: Mutex<Option<(u32, String)>>,
     pane_tasks: Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
+    layout_refresh_pending: Mutex<HashSet<String>>,
+    layout_refresh_scheduled: AtomicBool,
     next_xsterm_id: AtomicU32,
     next_xsterm_window_id: AtomicU32,
 }
@@ -120,6 +122,8 @@ impl TmuxSession {
             window_bindings: Mutex::new(HashMap::new()),
             bootstrap_pane: Mutex::new(None),
             pane_tasks: Mutex::new(HashMap::new()),
+            layout_refresh_pending: Mutex::new(HashSet::new()),
+            layout_refresh_scheduled: AtomicBool::new(false),
             next_xsterm_id: AtomicU32::new(id_base + 1),
             next_xsterm_window_id: AtomicU32::new(id_base + 1),
         });
@@ -141,7 +145,7 @@ impl TmuxSession {
         });
     }
 
-    fn handle_event(&self, event: TmuxEvent) {
+    fn handle_event(self: &Arc<Self>, event: TmuxEvent) {
         let backend = self.app_backend.as_ref();
         match event {
             TmuxEvent::PaneExited { pane } | TmuxEvent::PaneDied { pane } => {
@@ -187,6 +191,7 @@ impl TmuxSession {
                     );
                 }
             }
+            TmuxEvent::LayoutChange { handle, .. } => self.schedule_layout_refresh(handle),
             TmuxEvent::Exit { reason } => {
                 let _ = backend.emit(
                     "tmux-controller-exit",
@@ -207,6 +212,75 @@ impl TmuxSession {
             }
             _ => {}
         }
+    }
+
+    /// Coalesce rapid `%layout-change` notifications and publish the latest
+    /// pane geometry to the frontend so Tmux Status tracks window/pane resizes.
+    fn schedule_layout_refresh(self: &Arc<Self>, window: String) {
+        if let Ok(mut pending) = self.layout_refresh_pending.lock() {
+            pending.insert(window);
+        }
+        if self.layout_refresh_scheduled.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        let session = Arc::clone(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            session
+                .layout_refresh_scheduled
+                .store(false, Ordering::SeqCst);
+            let windows: Vec<String> = session
+                .layout_refresh_pending
+                .lock()
+                .map(|mut pending| pending.drain().collect())
+                .unwrap_or_default();
+            for window in windows {
+                session.refresh_window_layout(&window).await;
+            }
+        });
+    }
+
+    async fn refresh_window_layout(&self, window: &str) {
+        let Ok(panes) = self.list_extended_panes(window).await else {
+            return;
+        };
+        let bindings = self
+            .pane_bindings
+            .lock()
+            .map(|bindings| bindings.clone())
+            .unwrap_or_default();
+        let pane_entries: Vec<_> = panes
+            .iter()
+            .filter_map(|pane| {
+                let xsterm_id = bindings.get(&pane.handle).copied()?;
+                Some(serde_json::json!({
+                    "tmux_pane_id": pane.handle,
+                    "xsterm_session_id": xsterm_id,
+                    "window_index": pane.window_index,
+                    "pane_index": pane.pane_index,
+                    "width": pane.cols,
+                    "height": pane.rows,
+                    "x": pane.x,
+                    "y": pane.y,
+                    "current_command": pane.current_command,
+                    "is_active": pane.is_active,
+                    "window_name": pane.window_name,
+                }))
+            })
+            .collect();
+        if pane_entries.is_empty() {
+            return;
+        }
+        let _ = self.app_backend.emit(
+            "tmux-layout-changed",
+            &serde_json::json!({
+                "controller_id": self.controller_id,
+                "tmux_window_id": window,
+                "session_name": self.session_name.clone().unwrap_or_default(),
+                "panes": pane_entries,
+            }),
+        );
     }
 
     /// Discover every window and pane already present in the attached tmux

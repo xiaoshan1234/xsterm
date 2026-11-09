@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeControllerExited,
+  normalizeLayoutChanged,
   normalizePaneAdded,
   normalizePanePaused,
   normalizePaneRemoved,
@@ -140,6 +141,50 @@ describe("tmux event normalization", () => {
       tmuxWindowId: "@1",
       backendWindowHandle: toBackendWindowHandle(12),
       name: "server",
+    });
+  });
+
+  it("normalizes layout-change pane geometry", () => {
+    expect(
+      normalizeLayoutChanged({
+        controller_id: 3,
+        tmux_window_id: "@1",
+        session_name: "work",
+        panes: [
+          {
+            tmux_pane_id: "%2",
+            xsterm_session_id: 8,
+            window_index: 0,
+            pane_index: 1,
+            width: 88,
+            height: 30,
+            x: 72,
+            y: 0,
+            current_command: "bash",
+            is_active: true,
+            window_name: "editor",
+          },
+        ],
+      }),
+    ).toEqual({
+      controllerHandle: toBackendControllerHandle(3),
+      tmuxWindowId: "@1",
+      sessionName: "work",
+      panes: [
+        {
+          terminalHandle: toBackendTerminalHandle(8),
+          tmuxPaneId: "%2",
+          windowIndex: 0,
+          paneIndex: 1,
+          width: 88,
+          height: 30,
+          x: 72,
+          y: 0,
+          currentCommand: "bash",
+          isActive: true,
+          windowName: "editor",
+        },
+      ],
     });
   });
 });

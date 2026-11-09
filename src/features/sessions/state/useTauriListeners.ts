@@ -355,6 +355,41 @@ export function useTauriListeners({
           onWindowRenamed: ({ backendWindowHandle, name }) => {
             setWorkspaces((prev) => renameWindow(prev, Number(backendWindowHandle), name));
           },
+          onLayoutChanged: ({ controllerHandle, tmuxWindowId, sessionName, panes }) => {
+            const controllerId = Number(controllerHandle);
+            const panesByTerminalId = new Map(
+              panes.map((pane) => [Number(pane.terminalHandle), pane]),
+            );
+            setSessions((prev) =>
+              prev.map((terminal) => {
+                if (terminal.tmuxSessionId !== controllerId) return terminal;
+                const pane = panesByTerminalId.get(terminal.id);
+                if (!pane) return terminal;
+                return {
+                  ...terminal,
+                  tmuxPaneId: pane.tmuxPaneId,
+                  tmuxWindowId,
+                  tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
+                  tmuxWindowName: pane.windowName ?? terminal.tmuxWindowName,
+                  tmuxWindowIndex: pane.windowIndex,
+                  tmuxPaneIndex: pane.paneIndex,
+                  tmuxPaneWidth: pane.width,
+                  tmuxPaneHeight: pane.height,
+                  tmuxPaneCommand: pane.currentCommand ?? terminal.tmuxPaneCommand,
+                  tmuxPaneActive: pane.isActive ?? terminal.tmuxPaneActive,
+                  ...(terminal.kind.type === "tmux-pane"
+                    ? {
+                        kind: {
+                          type: "tmux-pane" as const,
+                          sessionId: terminal.kind.sessionId,
+                          paneId: pane.tmuxPaneId,
+                        },
+                      }
+                    : {}),
+                };
+              }),
+            );
+          },
         });
         if (disposed) cleanup();
         else cleanupTmux = cleanup;
