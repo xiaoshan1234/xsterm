@@ -66,13 +66,6 @@
   min-width: 0;
 }
 
-.manager-section-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding-right: 2px;
-}
-
 .manager-section-header:hover {
   background: var(--bg-hover);
 }
@@ -151,24 +144,6 @@
   color: var(--muted);
   font-size: 10px;
   white-space: nowrap;
-}
-
-.manager-text-action {
-  padding: 3px 5px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.manager-text-action:hover {
-  color: var(--ink);
-}
-
-.manager-text-action--danger {
-  color: var(--error);
 }
 
 .manager-status-header {

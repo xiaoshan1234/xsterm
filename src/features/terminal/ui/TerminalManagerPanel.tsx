@@ -56,18 +56,17 @@ export function TerminalManagerPanel({
               label: "Edit Group",
               onClick: () => onEditGroup(group.groupId),
             },
+            ...(!group.isDefault
+              ? [
+                  {
+                    id: "delete-group",
+                    label: "Delete Group",
+                    onClick: () => onDeleteGroup(group.groupId),
+                    danger: true,
+                  },
+                ]
+              : []),
           ]}
-          actions={
-            !group.isDefault ? (
-              <button
-                type="button"
-                className="manager-text-action manager-text-action--danger"
-                onClick={() => onDeleteGroup(group.groupId)}
-              >
-                Delete
-              </button>
-            ) : undefined
-          }
         >
           {group.items.length === 0 ? (
             <ManagerEmptyState>This group is empty.</ManagerEmptyState>

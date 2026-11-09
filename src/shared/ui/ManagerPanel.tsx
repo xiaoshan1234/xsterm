@@ -22,14 +22,12 @@ export function ManagerSection({
   label,
   isExpanded,
   onToggle,
-  actions,
   contextMenuItems,
   children,
 }: {
   label: string;
   isExpanded: boolean;
   onToggle?: () => void;
-  actions?: ReactNode;
   contextMenuItems?: readonly ContextMenuItem[];
   children?: ReactNode;
 }) {
@@ -41,7 +39,6 @@ export function ManagerSection({
         </span>
         <span>{label}</span>
       </button>
-      {actions && <div className="manager-section-actions">{actions}</div>}
     </div>
   );
 
