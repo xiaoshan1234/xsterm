@@ -13,10 +13,11 @@ const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
 /**
  * scrollback replay happens **once per tmux pane per mount**.
- * Module-level set so React strict-mode double-mounts do not double-replay
- * (which would visibly duplicate the scrollback on the focused pane).
+ * Keyed by the live xterm instance so React strict-mode double-mounts (which
+ * dispose the first instance and create a second one) still replay on the
+ * instance that actually survives.
  */
-const scrollbackReplayedRef = new Set<number>();
+const replayedXterms = new WeakSet<XTerm>();
 
 const SCROLLBACK_LINES = 2000;
 
@@ -68,10 +69,10 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
   // that re-fires this effect does not double-replay. Errors are
   // non-fatal (the pane still works without replay).
   useEffect(() => {
-    if (!isTmuxPane || scrollbackReplayedRef.has(terminalId)) return;
+    if (!isTmuxPane) return;
     const xterm = termRef.current;
-    if (!xterm) return;
-    scrollbackReplayedRef.add(terminalId);
+    if (!xterm || replayedXterms.has(xterm)) return;
+    replayedXterms.add(xterm);
     tmuxCommands
       .captureTmuxPane(toBackendTerminalHandle(terminalId), SCROLLBACK_LINES)
       .then((text) => {

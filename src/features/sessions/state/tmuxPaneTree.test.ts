@@ -8,7 +8,7 @@ describe("tmux layout parsing", () => {
   });
 
   it("parses a side-by-side split as horizontal", () => {
-    const node = parseTmuxGeometry("abcd,100x24,0,0[50x24,0,0,0,49x24,51,0,1]");
+    const node = parseTmuxGeometry("abcd,100x24,0,0{50x24,0,0,0,49x24,51,0,1}");
     expect(node).toMatchObject({
       kind: "split",
       direction: "horizontal",
@@ -30,6 +30,27 @@ describe("tmux layout parsing", () => {
       ],
     });
   });
+
+  it("parses nested mixed-direction layouts", () => {
+    const node = parseTmuxGeometry(
+      "d5c1,100x30,0,0{50x30,0,0[50x15,0,0,0,50x14,0,16,2],49x30,51,0,1}",
+    );
+    expect(node).toMatchObject({
+      kind: "split",
+      direction: "horizontal",
+      children: [
+        {
+          kind: "split",
+          direction: "vertical",
+          children: [
+            { kind: "leaf", width: 50, height: 15, x: 0, y: 0 },
+            { kind: "leaf", width: 50, height: 14, x: 0, y: 16 },
+          ],
+        },
+        { kind: "leaf", width: 49, height: 30, x: 51, y: 0 },
+      ],
+    });
+  });
 });
 
 describe("tmux pane tree building", () => {
@@ -38,7 +59,7 @@ describe("tmux pane tree building", () => {
       { terminalId: 8, width: 50, height: 24, x: 0, y: 0 },
       { terminalId: 9, width: 49, height: 24, x: 51, y: 0 },
     ];
-    const tree = buildTmuxPaneTree("abcd,100x24,0,0[50x24,0,0,0,49x24,51,0,1]", panes, "cfg-1");
+    const tree = buildTmuxPaneTree("abcd,100x24,0,0{50x24,0,0,0,49x24,51,0,1}", panes, "cfg-1");
 
     expect(tree).toMatchObject({
       type: "split",

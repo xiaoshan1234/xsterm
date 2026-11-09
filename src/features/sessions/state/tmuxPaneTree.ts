@@ -131,7 +131,23 @@ function parseNode(body: string, cursor: Cursor): TmuxGeometryNode | null {
     if (!second || !consume(body, cursor, "]")) return null;
     return {
       kind: "split",
-      direction: inferDirection(first, second),
+      direction: "vertical",
+      width: size.width,
+      height: size.height,
+      x,
+      y,
+      children: [first, second],
+    };
+  }
+
+  if (consume(body, cursor, "{")) {
+    const first = parseNode(body, cursor);
+    if (!first || !consume(body, cursor, ",")) return null;
+    const second = parseNode(body, cursor);
+    if (!second || !consume(body, cursor, "}")) return null;
+    return {
+      kind: "split",
+      direction: "horizontal",
       width: size.width,
       height: size.height,
       x,
@@ -167,10 +183,6 @@ function consume(body: string, cursor: Cursor, expected: string): boolean {
     return true;
   }
   return false;
-}
-
-function inferDirection(first: TmuxGeometryNode, second: TmuxGeometryNode): SplitDirection {
-  return first.y === second.y && first.x !== second.x ? "horizontal" : "vertical";
 }
 
 function rectangleKey(x: number, y: number, width: number, height: number): string {
