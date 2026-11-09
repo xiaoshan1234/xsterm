@@ -176,11 +176,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
       if (kind !== "ssh") return;
 
-      const imageItems = await getClipboardImages(e);
-      if (imageItems.length === 0) return;
-
+      // Take over the paste synchronously: discovering an image may await the
+      // Tauri clipboard fallback, and preventDefault must run before that.
       e.preventDefault();
       e.stopPropagation();
+      const imageItems = await getClipboardImages(e);
+      if (imageItems.length === 0) return;
 
       for (const file of imageItems) {
         try {

@@ -127,13 +127,13 @@ pub fn list_terminals(
 /// Upload an image file to the SSH server for the given session and return the
 /// remote path where it was stored.
 #[tauri::command]
-pub fn upload_image_to_ssh_terminal(
+pub async fn upload_image_to_ssh_terminal(
     session_id: u32,
     filename: String,
     data: Vec<u8>,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<String, String> {
-    state.upload_image(session_id, &filename, data)
+    state.upload_image(session_id, &filename, data).await
 }
 
 /// Create a new tmux `-CC` controller session.

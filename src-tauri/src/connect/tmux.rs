@@ -38,6 +38,7 @@ pub(crate) struct TmuxSession {
     controller_id: u32,
     control: Arc<TmuxControl>,
     session_name: Option<String>,
+    ssh_config: Option<SshConfig>,
     app_backend: Arc<dyn AppBackend>,
     pane_bindings: Mutex<HashMap<String, u32>>,
     pane_window_bindings: Mutex<HashMap<String, String>>,
@@ -74,6 +75,7 @@ impl TmuxSession {
             controller_id,
             control,
             session_name.to_string(),
+            config.ssh.clone(),
             app_backend,
         )
         .await
@@ -102,13 +104,21 @@ impl TmuxSession {
         let control = TmuxControl::spawn_new_session(&host, &socket, &session_name, cols, rows)
             .await
             .map_err(|e| e.to_string())?;
-        Self::build_session(controller_id, control, session_name, app_backend).await
+        Self::build_session(
+            controller_id,
+            control,
+            session_name,
+            config.ssh.clone(),
+            app_backend,
+        )
+        .await
     }
 
     async fn build_session(
         controller_id: u32,
         control: TmuxControl,
         session_name: String,
+        ssh_config: Option<SshConfig>,
         app_backend: Arc<dyn AppBackend>,
     ) -> Result<Arc<Self>, String> {
         let id_base = controller_id.saturating_mul(1_000_000);
@@ -116,6 +126,7 @@ impl TmuxSession {
             controller_id,
             control: Arc::new(control),
             session_name: Some(session_name),
+            ssh_config,
             app_backend,
             pane_bindings: Mutex::new(HashMap::new()),
             pane_window_bindings: Mutex::new(HashMap::new()),

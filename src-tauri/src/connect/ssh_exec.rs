@@ -117,7 +117,7 @@ async fn exec_ssh_command(
     config: &SshConfig,
     command: &str,
     stdin_data: Vec<u8>,
-) -> Result<i32, String> {
+) -> Result<Option<i32>, String> {
     let mut ssh_config = russh::client::Config::default();
     if let Some(secs) = config.keepalive_interval {
         ssh_config.keepalive_interval = Some(Duration::from_secs(secs as u64));
@@ -158,20 +158,23 @@ async fn exec_ssh_command(
         .await
         .map_err(|e| format!("failed to close stdin: {e}"))?;
 
-    let exit_status = loop {
+    let mut status = None;
+    loop {
         match channel.wait().await {
             Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
-                break exit_status;
+                status = Some(exit_status as i32);
+                break;
             }
-            Some(russh::ChannelMsg::Close) | Some(russh::ChannelMsg::Eof) | None => {
-                return Err("remote command closed without an exit status".to_string());
-            }
+            // Some servers send EOF before the exit-status message; keep
+            // waiting for Close/ExitStatus instead of failing the upload.
+            Some(russh::ChannelMsg::Eof) => continue,
+            Some(russh::ChannelMsg::Close) | None => break,
             _ => {}
         }
-    };
+    }
 
     let _ = channel.close().await;
-    Ok(exit_status as i32)
+    Ok(status)
 }
 
 /// Upload `data` to `remote_path` via a fresh SSH exec channel (`cat > path`).
@@ -181,9 +184,10 @@ pub async fn upload_file_via_ssh(
     data: Vec<u8>,
 ) -> Result<(), String> {
     let command = format!("cat > {remote_path}");
-    let status = exec_ssh_command(config, &command, data).await?;
-    if status != 0 {
-        return Err(format!("remote command exited with status {status}"));
+    if let Some(status) = exec_ssh_command(config, &command, data).await? {
+        if status != 0 {
+            return Err(format!("remote command exited with status {status}"));
+        }
     }
     Ok(())
 }
@@ -191,5 +195,7 @@ pub async fn upload_file_via_ssh(
 /// Run a command over SSH and return its exit status without interpreting
 /// non-zero statuses as hard failures. Used by tmux session existence checks.
 pub async fn ssh_exec_status(config: &SshConfig, command: &str) -> Result<i32, String> {
-    exec_ssh_command(config, command, Vec::new()).await
+    exec_ssh_command(config, command, Vec::new())
+        .await?
+        .ok_or_else(|| "remote command closed without an exit status".to_string())
 }

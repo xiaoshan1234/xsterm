@@ -355,7 +355,7 @@ impl TerminalRegistry {
         controller.resize_client(cols, rows).await
     }
 
-    pub(crate) fn upload_image(
+    pub(crate) async fn upload_image(
         &self,
         id: u32,
         filename: &str,
@@ -363,9 +363,7 @@ impl TerminalRegistry {
     ) -> Result<String, String> {
         let config = self.get_ssh_config(id)?;
         let remote_path = build_remote_image_path(filename)?;
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| format!("failed to create runtime for image upload: {e}"))?;
-        rt.block_on(upload_file_via_ssh(&config, &remote_path, data))?;
+        upload_file_via_ssh(&config, &remote_path, data).await?;
         Ok(remote_path)
     }
 
