@@ -627,6 +627,10 @@ impl TmuxSession {
         self.session_name.clone()
     }
 
+    pub(crate) fn ssh_config(&self) -> Option<SshConfig> {
+        self.ssh_config.clone()
+    }
+
     pub(crate) fn window_bindings(&self) -> Vec<(String, u32)> {
         self.window_bindings
             .lock()

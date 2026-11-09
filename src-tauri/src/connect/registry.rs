@@ -14,9 +14,9 @@ use crate::connect::tmux::TmuxSession;
 use crate::feature::logging::session_log::TerminalLogRegistry;
 use crate::shared::capabilities::CapabilityFlags;
 use crate::shared::session::{
-    build_remote_image_path, tmux_pane_info, AttachedTmuxServer, LocalTerminalConfig,
-    SplitDirection, SshConfig, TerminalInfo, TerminalKind, TerminalLoggingConfig,
-    TmuxSessionConfig,
+    build_local_image_path, build_remote_image_path, tmux_pane_info, AttachedTmuxServer,
+    LocalTerminalConfig, SplitDirection, SshConfig, TerminalInfo, TerminalKind,
+    TerminalLoggingConfig, TmuxSessionConfig,
 };
 
 /// Per-server outcome from `auto_attach_on_startup`.
@@ -330,13 +330,6 @@ impl TerminalRegistry {
             .ok_or_else(|| format!("Session {id} not found"))
     }
 
-    pub(crate) fn get_ssh_config(&self, id: u32) -> Result<SshConfig, String> {
-        self.get(id)?
-            .ssh_config
-            .clone()
-            .ok_or_else(|| format!("Session {id} is not an SSH session"))
-    }
-
     pub(crate) async fn write(&self, id: u32, data: &[u8]) -> Result<(), String> {
         self.get(id)?.transport.write(data).await
     }
@@ -361,10 +354,33 @@ impl TerminalRegistry {
         filename: &str,
         data: Vec<u8>,
     ) -> Result<String, String> {
-        let config = self.get_ssh_config(id)?;
-        let remote_path = build_remote_image_path(filename)?;
-        upload_file_via_ssh(&config, &remote_path, data).await?;
-        Ok(remote_path)
+        let session = self.get(id)?;
+
+        // Plain SSH sessions carry the transport config directly.
+        if let Some(config) = session.ssh_config.as_ref() {
+            let remote_path = build_remote_image_path(filename)?;
+            upload_file_via_ssh(config, &remote_path, data).await?;
+            return Ok(remote_path);
+        }
+
+        // tmux panes carry the SSH config on their controller. Local tmux
+        // sessions fall back to a local temp file whose path is typed into the
+        // pane, just like a remote upload path.
+        if let TerminalTransport::TmuxPane { control, .. } = &session.transport {
+            if let Some(config) = control.ssh_config() {
+                let remote_path = build_remote_image_path(filename)?;
+                upload_file_via_ssh(&config, &remote_path, data).await?;
+                return Ok(remote_path);
+            }
+
+            let local_path = build_local_image_path(filename)?;
+            tokio::fs::write(&local_path, data)
+                .await
+                .map_err(|e| format!("failed to write pasted image: {e}"))?;
+            return Ok(local_path.to_string_lossy().into_owned());
+        }
+
+        Err("Image paste is only supported for SSH and tmux sessions".to_string())
     }
 
     pub(crate) async fn close(&self, id: u32) -> Result<(), String> {

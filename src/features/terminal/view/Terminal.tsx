@@ -174,7 +174,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         return;
       }
 
-      if (kind !== "ssh") return;
+      if (kind !== "ssh" && kind !== "tmux-pane") return;
 
       // Take over the paste synchronously: discovering an image may await the
       // Tauri clipboard fallback, and preventDefault must run before that.

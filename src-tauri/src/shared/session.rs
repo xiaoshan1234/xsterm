@@ -1230,15 +1230,62 @@ mod tests {
 /// The path is `/tmp/paste_image_<timestamp>.<ext>` where `<ext>` is extracted
 /// from `filename` (defaults to `png` if no extension is present).
 pub fn build_remote_image_path(filename: &str) -> Result<String, String> {
-    let extension = std::path::Path::new(filename)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("png");
+    let extension = image_extension(filename);
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_millis();
     Ok(format!("/tmp/paste_image_{}.{}", timestamp, extension))
+}
+
+/// Build a local temp path for a pasted image. Used by local tmux sessions.
+pub fn build_local_image_path(filename: &str) -> Result<std::path::PathBuf, String> {
+    let extension = image_extension(filename);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+    Ok(std::env::temp_dir().join(format!("paste_image_{}.{}", timestamp, extension)))
+}
+
+fn image_extension(filename: &str) -> String {
+    std::path::Path::new(filename)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .filter(|extension| {
+            !extension.is_empty() && extension.chars().all(|c| c.is_ascii_alphanumeric())
+        })
+        .unwrap_or("png")
+        .to_ascii_lowercase()
+}
+
+#[cfg(test)]
+mod image_path_tests {
+    use super::{build_local_image_path, build_remote_image_path};
+
+    #[test]
+    fn image_paths_use_a_safe_lowercase_extension() {
+        let remote = build_remote_image_path("shot.PNG").expect("remote path");
+        assert!(remote.starts_with("/tmp/paste_image_"));
+        assert!(remote.ends_with(".png"));
+
+        let local = build_local_image_path("shot.PNG").expect("local path");
+        assert_eq!(
+            local.extension().and_then(|extension| extension.to_str()),
+            Some("png")
+        );
+        assert!(local
+            .file_name()
+            .expect("file name")
+            .to_string_lossy()
+            .starts_with("paste_image_"));
+    }
+
+    #[test]
+    fn image_paths_fall_back_to_png_for_unsafe_extensions() {
+        let remote = build_remote_image_path("shot.p!g").expect("remote path");
+        assert!(remote.ends_with(".png"));
+    }
 }
 
 #[cfg(test)]
