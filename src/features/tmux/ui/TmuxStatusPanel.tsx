@@ -1,10 +1,14 @@
+import { useState } from "react";
 import {
   ManagerEmptyState,
   ManagerPanelFrame,
   ManagerRow,
   ManagerStatusHeader,
 } from "../../../shared/ui/ManagerPanel";
-import { type TmuxStatusControllerViewData } from "../viewModels/statusViewModel";
+import {
+  type TmuxStatusControllerViewData,
+  type TmuxStatusWindowViewData,
+} from "../viewModels/statusViewModel";
 
 interface TmuxStatusPanelProps {
   controllers: readonly TmuxStatusControllerViewData[];
@@ -12,6 +16,7 @@ interface TmuxStatusPanelProps {
 }
 
 export function TmuxStatusPanel({ controllers, onFocusPane }: TmuxStatusPanelProps) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const paneCount = controllers.reduce(
     (total, controller) =>
       total +
@@ -34,6 +39,10 @@ export function TmuxStatusPanel({ controllers, onFocusPane }: TmuxStatusPanelPro
               title={controller.title}
               subtitle={`${controller.windows.length} windows · ${controller.transport.toUpperCase()}`}
               badge={controller.status === "connected" ? "Connected" : "Disconnected"}
+              isSelected={selectedKey === `controller:${controller.controllerId}`}
+              onSelect={() => setSelectedKey(`controller:${controller.controllerId}`)}
+              onOpen={() => focusFirstPane(controller.windows, onFocusPane)}
+              contextMenuItems={focusMenuItems(controller.windows, onFocusPane)}
             />
             {controller.windows.map((window) => (
               <div key={window.tmuxWindowId} className="manager-section-items">
@@ -41,6 +50,14 @@ export function TmuxStatusPanel({ controllers, onFocusPane }: TmuxStatusPanelPro
                   title={window.name}
                   subtitle={`${window.tmuxWindowId} · ${window.panes.length} panes`}
                   badge={window.status === "connected" ? "Connected" : "Disconnected"}
+                  isSelected={
+                    selectedKey === `window:${controller.controllerId}:${window.tmuxWindowId}`
+                  }
+                  onSelect={() =>
+                    setSelectedKey(`window:${controller.controllerId}:${window.tmuxWindowId}`)
+                  }
+                  onOpen={() => focusFirstPane([window], onFocusPane)}
+                  contextMenuItems={focusMenuItems([window], onFocusPane)}
                 />
                 {window.panes.map((pane) => (
                   <ManagerRow
@@ -48,7 +65,20 @@ export function TmuxStatusPanel({ controllers, onFocusPane }: TmuxStatusPanelPro
                     title={pane.title}
                     subtitle={`${pane.tmuxWindowId}/${pane.tmuxPaneId} · ${formatPaneLocation(pane.location)}`}
                     badge={pane.status === "connected" ? "Live" : "Down"}
-                    onClick={() => onFocusPane(pane.terminalId)}
+                    isSelected={
+                      selectedKey === `pane:${controller.controllerId}:${pane.terminalId}`
+                    }
+                    onSelect={() =>
+                      setSelectedKey(`pane:${controller.controllerId}:${pane.terminalId}`)
+                    }
+                    onOpen={() => onFocusPane(pane.terminalId)}
+                    contextMenuItems={[
+                      {
+                        id: "focus",
+                        label: "Focus",
+                        onClick: () => onFocusPane(pane.terminalId),
+                      },
+                    ]}
                   />
                 ))}
               </div>
@@ -58,6 +88,37 @@ export function TmuxStatusPanel({ controllers, onFocusPane }: TmuxStatusPanelPro
       )}
     </ManagerPanelFrame>
   );
+}
+
+function firstPaneId(windows: readonly TmuxStatusWindowViewData[]): number | undefined {
+  for (const window of windows) {
+    const pane = window.panes[0];
+    if (pane) return pane.terminalId;
+  }
+  return undefined;
+}
+
+function focusFirstPane(
+  windows: readonly TmuxStatusWindowViewData[],
+  onFocusPane: (terminalId: number) => void,
+): void {
+  const terminalId = firstPaneId(windows);
+  if (terminalId !== undefined) onFocusPane(terminalId);
+}
+
+function focusMenuItems(
+  windows: readonly TmuxStatusWindowViewData[],
+  onFocusPane: (terminalId: number) => void,
+): Array<{ id: string; label: string; onClick: () => void }> {
+  const terminalId = firstPaneId(windows);
+  if (terminalId === undefined) return [];
+  return [
+    {
+      id: "focus",
+      label: "Focus First Pane",
+      onClick: () => onFocusPane(terminalId),
+    },
+  ];
 }
 
 function formatPaneLocation(

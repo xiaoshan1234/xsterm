@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ManagerEmptyState,
   ManagerPanelFrame,
@@ -20,6 +21,7 @@ export function TerminalStatusPanel({
   onClose,
 }: TerminalStatusPanelProps) {
   const connectedCount = items.filter((item) => item.status === "connected").length;
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   return (
     <ManagerPanelFrame>
@@ -36,33 +38,27 @@ export function TerminalStatusPanel({
             title={item.title}
             subtitle={formatLocation(item)}
             badge={item.status === "connected" ? "Connected" : "Disconnected"}
-            onClick={() => onFocus(item.terminalId)}
-          >
-            <span className="manager-inline-actions">
-              {item.canReconnect && (
-                <button
-                  type="button"
-                  className="manager-text-action"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onReconnect(item.terminalId);
-                  }}
-                >
-                  Reconnect
-                </button>
-              )}
-              <button
-                type="button"
-                className="manager-text-action manager-text-action--danger"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClose(item.terminalId);
-                }}
-              >
-                Close
-              </button>
-            </span>
-          </ManagerRow>
+            isSelected={selectedId === item.terminalId}
+            onSelect={() => setSelectedId(item.terminalId)}
+            onOpen={() => onFocus(item.terminalId)}
+            contextMenuItems={[
+              ...(item.canReconnect
+                ? [
+                    {
+                      id: "reconnect",
+                      label: "Reconnect",
+                      onClick: () => onReconnect(item.terminalId),
+                    },
+                  ]
+                : []),
+              {
+                id: "close",
+                label: "Close",
+                onClick: () => onClose(item.terminalId),
+                danger: true,
+              },
+            ]}
+          />
         ))
       )}
     </ManagerPanelFrame>

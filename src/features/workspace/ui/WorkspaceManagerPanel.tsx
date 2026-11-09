@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ManagerActionButton,
   ManagerEmptyState,
@@ -21,6 +22,8 @@ export function WorkspaceManagerPanel({
   onRename,
   onDelete,
 }: WorkspaceManagerPanelProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   return (
     <ManagerPanelFrame
       footer={
@@ -36,32 +39,23 @@ export function WorkspaceManagerPanel({
             title={item.name}
             subtitle={`${item.windowCount} windows`}
             badge={item.isLoaded ? "Loaded" : "Saved"}
-            onClick={() => onOpen(item.configId, item.isLoaded)}
-            onDoubleClick={() => onOpen(item.configId, item.isLoaded)}
-          >
-            <span className="manager-inline-actions">
-              <button
-                type="button"
-                className="manager-text-action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRename(item.configId);
-                }}
-              >
-                Rename
-              </button>
-              <button
-                type="button"
-                className="manager-text-action manager-text-action--danger"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDelete(item.configId);
-                }}
-              >
-                Delete
-              </button>
-            </span>
-          </ManagerRow>
+            isSelected={selectedId === item.configId}
+            onSelect={() => setSelectedId(item.configId)}
+            onOpen={() => onOpen(item.configId, item.isLoaded)}
+            contextMenuItems={[
+              {
+                id: "rename",
+                label: "Rename",
+                onClick: () => onRename(item.configId),
+              },
+              {
+                id: "delete",
+                label: "Delete",
+                onClick: () => onDelete(item.configId),
+                danger: true,
+              },
+            ]}
+          />
         ))
       )}
     </ManagerPanelFrame>

@@ -40,6 +40,11 @@
   align-items: center;
 }
 
+.manager-section-context,
+.manager-row-context {
+  width: 100%;
+}
+
 .manager-section-header {
   display: flex;
   align-items: center;
@@ -97,6 +102,7 @@
   padding: var(--space-xs);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
 .manager-row:hover,
@@ -104,6 +110,13 @@
   border-color: var(--hairline);
   outline: none;
   background: var(--bg-hover);
+}
+
+.manager-row--selected,
+.manager-row--selected:hover,
+.manager-row--selected:focus-visible {
+  border-color: var(--hairline-strong);
+  background: var(--accent-soft);
 }
 
 .manager-row-copy {
@@ -138,12 +151,6 @@
   color: var(--muted);
   font-size: 10px;
   white-space: nowrap;
-}
-
-.manager-inline-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
 }
 
 .manager-text-action {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ManagerActionButton,
   ManagerEmptyState,
@@ -23,6 +24,8 @@ export function TmuxManagerPanel({
   onEditConfig,
   onRemoveConfig,
 }: TmuxManagerPanelProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   return (
     <ManagerPanelFrame
       footer={
@@ -49,32 +52,23 @@ export function TmuxManagerPanel({
             title={item.name}
             subtitle={formatTmuxItem(item)}
             badge={item.transport === "ssh" ? "SSH" : "Local"}
-            onClick={() => onOpenConfig(item.configId)}
-            onDoubleClick={() => onOpenConfig(item.configId)}
-          >
-            <span className="manager-inline-actions">
-              <button
-                type="button"
-                className="manager-text-action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onEditConfig(item.configId);
-                }}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                className="manager-text-action manager-text-action--danger"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRemoveConfig(item.configId);
-                }}
-              >
-                Remove
-              </button>
-            </span>
-          </ManagerRow>
+            isSelected={selectedId === item.configId}
+            onSelect={() => setSelectedId(item.configId)}
+            onOpen={() => onOpenConfig(item.configId)}
+            contextMenuItems={[
+              {
+                id: "edit",
+                label: "Edit",
+                onClick: () => onEditConfig(item.configId),
+              },
+              {
+                id: "remove",
+                label: "Remove",
+                onClick: () => onRemoveConfig(item.configId),
+                danger: true,
+              },
+            ]}
+          />
         ))
       )}
     </ManagerPanelFrame>

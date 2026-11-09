@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ManagerActionButton,
   ManagerEmptyState,
@@ -31,6 +32,7 @@ export function TerminalManagerPanel({
   onRemoveConfig,
 }: TerminalManagerPanelProps) {
   const hasConfigs = groups.some((group) => group.items.length > 0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
     <ManagerPanelFrame
@@ -48,25 +50,23 @@ export function TerminalManagerPanel({
           label={group.name}
           isExpanded={!group.isCollapsed}
           onToggle={() => onToggleGroup(group.groupId)}
+          contextMenuItems={[
+            {
+              id: "edit-group",
+              label: "Edit Group",
+              onClick: () => onEditGroup(group.groupId),
+            },
+          ]}
           actions={
-            <>
+            !group.isDefault ? (
               <button
                 type="button"
-                className="manager-text-action"
-                onClick={() => onEditGroup(group.groupId)}
+                className="manager-text-action manager-text-action--danger"
+                onClick={() => onDeleteGroup(group.groupId)}
               >
-                Edit
+                Delete
               </button>
-              {!group.isDefault && (
-                <button
-                  type="button"
-                  className="manager-text-action manager-text-action--danger"
-                  onClick={() => onDeleteGroup(group.groupId)}
-                >
-                  Delete
-                </button>
-              )}
-            </>
+            ) : undefined
           }
         >
           {group.items.length === 0 ? (
@@ -78,32 +78,23 @@ export function TerminalManagerPanel({
                 title={item.name}
                 subtitle={item.detail}
                 badge={item.kind === "ssh" ? "SSH" : "Shell"}
-                onClick={() => onOpenConfig(item.configId)}
-                onDoubleClick={() => onOpenConfig(item.configId)}
-              >
-                <span className="manager-inline-actions">
-                  <button
-                    type="button"
-                    className="manager-text-action"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onEditConfig(item.configId);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="manager-text-action manager-text-action--danger"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onRemoveConfig(item.configId);
-                    }}
-                  >
-                    Remove
-                  </button>
-                </span>
-              </ManagerRow>
+                isSelected={selectedId === item.configId}
+                onSelect={() => setSelectedId(item.configId)}
+                onOpen={() => onOpenConfig(item.configId)}
+                contextMenuItems={[
+                  {
+                    id: "edit",
+                    label: "Edit",
+                    onClick: () => onEditConfig(item.configId),
+                  },
+                  {
+                    id: "remove",
+                    label: "Remove",
+                    onClick: () => onRemoveConfig(item.configId),
+                    danger: true,
+                  },
+                ]}
+              />
             ))
           )}
         </ManagerSection>

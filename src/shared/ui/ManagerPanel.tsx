@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { ChevronIcon, PlusIcon } from "../icons/Icon";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import "./ManagerPanel.css";
 
 export function ManagerPanelFrame({
@@ -22,27 +23,37 @@ export function ManagerSection({
   isExpanded,
   onToggle,
   actions,
+  contextMenuItems,
   children,
 }: {
   label: string;
   isExpanded: boolean;
   onToggle?: () => void;
   actions?: ReactNode;
+  contextMenuItems?: readonly ContextMenuItem[];
   children?: ReactNode;
 }) {
+  const headerRow = (
+    <div className="manager-section-header-row">
+      <button type="button" className="manager-section-header" onClick={onToggle}>
+        <span className={isExpanded ? "manager-chevron manager-chevron--open" : "manager-chevron"}>
+          <ChevronIcon size={12} />
+        </span>
+        <span>{label}</span>
+      </button>
+      {actions && <div className="manager-section-actions">{actions}</div>}
+    </div>
+  );
+
   return (
     <section className="manager-section">
-      <div className="manager-section-header-row">
-        <button type="button" className="manager-section-header" onClick={onToggle}>
-          <span
-            className={isExpanded ? "manager-chevron manager-chevron--open" : "manager-chevron"}
-          >
-            <ChevronIcon size={12} />
-          </span>
-          <span>{label}</span>
-        </button>
-        {actions && <div className="manager-section-actions">{actions}</div>}
-      </div>
+      {contextMenuItems && contextMenuItems.length > 0 ? (
+        <ContextMenu items={[...contextMenuItems]} className="manager-section-context">
+          {headerRow}
+        </ContextMenu>
+      ) : (
+        headerRow
+      )}
       {isExpanded && <div className="manager-section-items">{children}</div>}
     </section>
   );
@@ -52,33 +63,47 @@ export function ManagerRow({
   title,
   subtitle,
   badge,
-  children,
-  onClick,
-  onDoubleClick,
+  isSelected = false,
+  onSelect,
+  onOpen,
+  contextMenuItems,
 }: {
   title: string;
   subtitle: string;
   badge?: string;
-  children?: ReactNode;
-  onClick?: () => void;
-  onDoubleClick?: () => void;
+  isSelected?: boolean;
+  onSelect?: () => void;
+  onOpen?: () => void;
+  contextMenuItems?: readonly ContextMenuItem[];
 }) {
-  return (
+  const row = (
     <div
-      className="manager-row"
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      className={`manager-row${isSelected ? " manager-row--selected" : ""}`}
+      onClick={onSelect}
+      onDoubleClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") onOpen?.();
+      }}
+      role={onSelect ? "option" : undefined}
+      aria-selected={onSelect ? isSelected : undefined}
+      tabIndex={onSelect ? 0 : undefined}
     >
       <div className="manager-row-copy">
         <strong>{title}</strong>
         <span>{subtitle}</span>
       </div>
       {badge && <span className="manager-row-badge">{badge}</span>}
-      {children}
     </div>
   );
+
+  if (contextMenuItems && contextMenuItems.length > 0) {
+    return (
+      <ContextMenu items={[...contextMenuItems]} className="manager-row-context" onOpen={onSelect}>
+        {row}
+      </ContextMenu>
+    );
+  }
+  return row;
 }
 
 export function ManagerActionButton({
