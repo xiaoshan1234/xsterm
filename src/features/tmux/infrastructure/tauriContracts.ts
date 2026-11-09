@@ -41,6 +41,7 @@ export interface TmuxPaneAddedEvent {
   terminalHandle: BackendTerminalHandle;
   tmuxPaneId: string;
   parentTmuxWindowId: string;
+  sessionName?: string;
 }
 
 export interface TmuxPaneRemovedEvent {
@@ -63,6 +64,7 @@ export interface TmuxWindowAddedEvent {
   tmuxWindowId: string;
   backendWindowHandle: BackendWindowHandle;
   name: string;
+  sessionName?: string;
   panes: readonly TmuxWindowPaneDto[];
   layout: string;
 }

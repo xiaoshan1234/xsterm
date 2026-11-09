@@ -78,6 +78,8 @@ export interface Terminal {
    * created via `create_tmux_window` / `create_tmux_pane`.
    */
   tmuxWindowId?: string;
+  /** Real tmux session name (e.g. "work") owning this pane's controller. */
+  tmuxSessionName?: string;
   /**
    * Legacy flag for hiding a tmux bootstrap pane. Attach now treats every
    * window/pane as a real working pane, so new sessions leave this unset.

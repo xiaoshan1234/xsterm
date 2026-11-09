@@ -45,6 +45,10 @@ pub struct TerminalInfo {
     /// `None` for non-tmux terminals.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tmux_window_id: Option<String>,
+    /// Real tmux session name (e.g. `work`) when this terminal belongs to a
+    /// tmux controller. `None` for non-tmux terminals.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tmux_session_name: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub is_hidden: bool,
 }
@@ -340,6 +344,7 @@ pub fn tmux_pane_info(
         is_connected: true,
         capabilities: CapabilityFlags::for_tmux(),
         tmux_window_id: tmux_window_id.map(str::to_string),
+        tmux_session_name: tmux_session_name.map(str::to_string),
         is_hidden,
     }
 }

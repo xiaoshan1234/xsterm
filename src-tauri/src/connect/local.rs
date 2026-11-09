@@ -92,6 +92,7 @@ pub(crate) fn create_local_terminal(
         is_connected: true,
         capabilities: CapabilityFlags::for_local(),
         tmux_window_id: None,
+        tmux_session_name: None,
         is_hidden: false,
     };
 

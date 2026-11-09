@@ -37,6 +37,7 @@ interface RawTmuxPaneAdded {
   tmux_pane_id: string;
   xsterm_session_id: number;
   parent_tmux_window_id: string;
+  session_name?: string;
 }
 
 interface RawTmuxPaneRemoved {
@@ -50,6 +51,7 @@ interface RawTmuxWindowAdded {
   tmux_window_id: string;
   xsterm_window_id: number;
   name: string;
+  session_name?: string;
   panes: Array<{
     tmux_pane_id: string;
     xsterm_session_id: number;
@@ -167,6 +169,7 @@ export function normalizePaneAdded(payload: RawTmuxPaneAdded): TmuxPaneAddedEven
     terminalHandle: toBackendTerminalHandle(payload.xsterm_session_id),
     tmuxPaneId: payload.tmux_pane_id,
     parentTmuxWindowId: payload.parent_tmux_window_id,
+    ...(payload.session_name ? { sessionName: payload.session_name } : {}),
   };
 }
 
@@ -190,6 +193,7 @@ export function normalizeWindowAdded(payload: RawTmuxWindowAdded): TmuxWindowAdd
     tmuxWindowId: payload.tmux_window_id,
     backendWindowHandle: toBackendWindowHandle(payload.xsterm_window_id),
     name: payload.name,
+    ...(payload.session_name ? { sessionName: payload.session_name } : {}),
     panes: (payload.panes ?? []).map((pane) => ({
       terminalHandle: toBackendTerminalHandle(pane.xsterm_session_id),
       tmuxPaneId: pane.tmux_pane_id,

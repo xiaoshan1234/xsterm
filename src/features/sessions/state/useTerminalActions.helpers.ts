@@ -78,6 +78,7 @@ export function buildFrontendTerminal(
     lastActivityAt: now,
     ...tmux,
     ...(info.tmuxWindowId !== undefined ? { tmuxWindowId: info.tmuxWindowId } : {}),
+    ...(info.tmuxSessionName !== undefined ? { tmuxSessionName: info.tmuxSessionName } : {}),
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),
     ...(info.capabilities !== undefined ? { capabilities: info.capabilities } : {}),
   };

@@ -36,6 +36,7 @@ export interface TerminalInfoDto {
   isConnected: boolean;
   capabilities: TerminalCapabilitiesDto;
   tmuxWindowId?: string;
+  tmuxSessionName?: string;
   isHidden?: boolean;
 }
 

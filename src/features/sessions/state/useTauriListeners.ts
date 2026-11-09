@@ -15,6 +15,7 @@ function buildTmuxPaneSession(info: {
   tmuxSessionId: number;
   configId?: string;
   tmuxWindowId?: string;
+  tmuxSessionName?: string;
 }): Terminal {
   return {
     id: info.id,
@@ -30,6 +31,7 @@ function buildTmuxPaneSession(info: {
     tmuxPaneId: info.tmuxPaneId,
     tmuxSessionId: info.tmuxSessionId,
     ...(info.tmuxWindowId ? { tmuxWindowId: info.tmuxWindowId } : {}),
+    ...(info.tmuxSessionName ? { tmuxSessionName: info.tmuxSessionName } : {}),
     isHidden: false,
     capabilities: TMUX_PANE_CAPABILITIES,
     createdAt: Date.now(),
@@ -129,7 +131,13 @@ export function useTauriListeners({
           onPaneContinued: ({ tmuxPaneId }) => {
             console.debug("[xsterm] tmux-continued", { tmuxPaneId });
           },
-          onPaneAdded: ({ terminalHandle, controllerHandle, tmuxPaneId, parentTmuxWindowId }) => {
+          onPaneAdded: ({
+            terminalHandle,
+            controllerHandle,
+            tmuxPaneId,
+            parentTmuxWindowId,
+            sessionName,
+          }) => {
             const terminalId = Number(terminalHandle);
             const controllerId = Number(controllerHandle);
             const existing = terminalsRef.current.find((terminal) => terminal.id === terminalId);
@@ -141,6 +149,7 @@ export function useTauriListeners({
                         ...terminal,
                         tmuxPaneId,
                         tmuxWindowId: parentTmuxWindowId,
+                        tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
                         kind: {
                           type: "tmux-pane",
                           sessionId: controllerId,
@@ -160,6 +169,7 @@ export function useTauriListeners({
               tmuxSessionId: controllerId,
               configId: tmuxControllerConfigIdsRef.current.get(controllerId),
               tmuxWindowId: parentTmuxWindowId,
+              tmuxSessionName: sessionName,
             });
             setSessions((prev) => {
               if (prev.some((candidate) => candidate.id === terminalId)) return prev;
@@ -178,6 +188,7 @@ export function useTauriListeners({
             backendWindowHandle,
             tmuxWindowId,
             name,
+            sessionName,
             panes,
             layout,
           }) => {
@@ -196,6 +207,7 @@ export function useTauriListeners({
                   tmuxSessionId: controllerId,
                   configId,
                   tmuxWindowId,
+                  tmuxSessionName: sessionName,
                 });
                 setSessions((prev) =>
                   prev.some((candidate) => candidate.id === terminalId)
@@ -205,7 +217,13 @@ export function useTauriListeners({
               } else {
                 setSessions((prev) =>
                   prev.map((terminal) =>
-                    terminal.id === terminalId ? { ...terminal, tmuxWindowId } : terminal,
+                    terminal.id === terminalId
+                      ? {
+                          ...terminal,
+                          tmuxWindowId,
+                          tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
+                        }
+                      : terminal,
                   ),
                 );
               }

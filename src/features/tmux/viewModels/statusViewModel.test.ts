@@ -77,6 +77,13 @@ describe("Tmux status view model", () => {
       ],
     });
   });
+
+  it("prefers the session name carried by the terminal", () => {
+    const terminals = [createTmuxTerminal(10, "%1", "@1", true, "", "work")];
+    const result = selectTmuxStatusControllers(terminals, [], []);
+
+    expect(result[0]?.sessionName).toBe("work");
+  });
 });
 
 function createTmuxTerminal(
@@ -85,6 +92,7 @@ function createTmuxTerminal(
   windowId: string,
   isConnected: boolean,
   configId = "",
+  tmuxSessionName?: string,
 ): Terminal {
   return {
     id,
@@ -100,6 +108,7 @@ function createTmuxTerminal(
     tmuxSessionId: 4,
     tmuxPaneId: paneId,
     tmuxWindowId: windowId,
+    ...(tmuxSessionName ? { tmuxSessionName } : {}),
     capabilities: {
       supportsResize: true,
       supportsReconnect: true,

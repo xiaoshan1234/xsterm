@@ -57,7 +57,8 @@ export function selectTmuxStatusControllers(
       .map((pane) => savedConfigById.get(pane.configId))
       .find((candidate) => candidate?.type === "tmux-pane");
     const sessionName =
-      config?.type === "tmux-pane" ? config.config.tmuxSessionName?.trim() : undefined;
+      panes.find((pane) => pane.tmuxSessionName)?.tmuxSessionName ??
+      (config?.type === "tmux-pane" ? config.config.tmuxSessionName?.trim() : undefined);
     const windows = groupWindows(panes, locations);
     const status = panes.some((pane) => pane.isConnected) ? "connected" : "disconnected";
 

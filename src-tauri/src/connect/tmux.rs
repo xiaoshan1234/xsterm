@@ -265,6 +265,7 @@ impl TmuxSession {
                     "tmux_window_id": tmux_window_id,
                     "xsterm_window_id": xsterm_window_id,
                     "name": window.name,
+                    "session_name": session_name.as_str(),
                     "panes": pane_entries,
                     "layout": window.layout,
                 }),
@@ -343,6 +344,7 @@ impl TmuxSession {
         let xsterm_id = self.allocate_xsterm_id();
         self.register_pane(pane.clone(), xsterm_id);
         self.record_pane_window(pane.clone(), window.clone());
+        let session_name = self.session_name.clone().unwrap_or_default();
         let _ = self.app_backend.emit(
             "tmux-pane-added",
             &serde_json::json!({
@@ -350,6 +352,7 @@ impl TmuxSession {
                 "tmux_pane_id": pane,
                 "xsterm_session_id": xsterm_id,
                 "parent_tmux_window_id": window,
+                "session_name": session_name,
             }),
         );
         self.spawn_pane_forwarder(&pane, xsterm_id);
@@ -390,6 +393,7 @@ impl TmuxSession {
         let xsterm_id = self.allocate_xsterm_id();
         self.register_pane(pane.handle.clone(), xsterm_id);
         self.record_pane_window(pane.handle.clone(), window_id.clone());
+        let session_name = self.session_name.clone().unwrap_or_default();
         if let Ok(mut bindings) = self.window_bindings.lock() {
             bindings.insert(window_id.clone(), xsterm_window_id);
         }
@@ -400,6 +404,7 @@ impl TmuxSession {
                 "tmux_window_id": window_id,
                 "xsterm_window_id": xsterm_window_id,
                 "name": name.unwrap_or_default(),
+                "session_name": session_name,
                 "panes": [{
                     "tmux_pane_id": pane.handle,
                     "xsterm_session_id": xsterm_id,

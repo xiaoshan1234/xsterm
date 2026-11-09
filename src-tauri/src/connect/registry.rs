@@ -122,6 +122,7 @@ impl TerminalRegistry {
         self.tmux_sessions
             .insert(controller_id, Arc::clone(controller));
 
+        let session_name = controller.session_name();
         let (bootstrap_xsterm_id, _bootstrap_pane_id) = controller.await_first_pane().await?;
         let mut bootstrap_info = None;
         for (pane_id, xsterm_id) in controller.registered_panes() {
@@ -130,7 +131,9 @@ impl TerminalRegistry {
                 xsterm_id,
                 controller_id,
                 pane_id.clone(),
-                config.tmux_session_name.as_deref(),
+                session_name
+                    .as_deref()
+                    .or(config.tmux_session_name.as_deref()),
                 config.name.as_deref(),
                 false,
                 tmux_window_id.as_deref(),
@@ -242,11 +245,12 @@ impl TerminalRegistry {
         let parent_pane = self.tmux_pane_id(parent_xsterm_session_id, controller_id)?;
         let (xsterm_id, pane_id, window_id) =
             controller.split_pane(&parent_pane, direction).await?;
+        let session_name = controller.session_name();
         let info = tmux_pane_info(
             xsterm_id,
             controller_id,
             pane_id.clone(),
-            None,
+            session_name.as_deref(),
             None,
             false,
             Some(&window_id),
@@ -267,11 +271,12 @@ impl TerminalRegistry {
         let controller = self.tmux_controller(controller_id)?;
         let (_xsterm_window_id, tmux_window_id, xsterm_id, pane_id) =
             controller.new_window(window_name).await?;
+        let session_name = controller.session_name();
         let info = tmux_pane_info(
             xsterm_id,
             controller_id,
             pane_id.clone(),
-            None,
+            session_name.as_deref(),
             window_name,
             false,
             Some(&tmux_window_id),
