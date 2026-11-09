@@ -1,6 +1,6 @@
 [package]
 name = "xsterm"
-version = "0.1.3"
+version = "0.2.1"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
