@@ -212,7 +212,6 @@ impl TerminalRegistry {
         out
     }
 
-    #[allow(dead_code)]
     pub(crate) fn close_tmux_controller(&self, controller_id: u32) -> Result<(), String> {
         let Some((_, controller)) = self.tmux_sessions.remove(&controller_id) else {
             return Ok(());
@@ -230,6 +229,13 @@ impl TerminalRegistry {
         tokio::spawn(async move {
             let _ = controller.close().await;
         });
+        Ok(())
+    }
+
+    pub(crate) async fn kill_all_tmux_windows(&self, controller_id: u32) -> Result<(), String> {
+        let controller = self.tmux_controller(controller_id)?;
+        controller.kill_session().await?;
+        self.close_tmux_controller(controller_id)?;
         Ok(())
     }
 

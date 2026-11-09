@@ -63,6 +63,7 @@ type ListenersState = Pick<
   | "setTmuxControllerErrors"
   | "tmuxControllerConfigsRef"
   | "tmuxControllerConfigIdsRef"
+  | "tmuxControllersClosingRef"
 >;
 
 export function useTauriListeners({
@@ -74,6 +75,7 @@ export function useTauriListeners({
   setTmuxControllerErrors,
   tmuxControllerConfigsRef,
   tmuxControllerConfigIdsRef,
+  tmuxControllersClosingRef,
 }: ListenersState): void {
   useEffect(() => {
     let disposed = false;
@@ -114,6 +116,12 @@ export function useTauriListeners({
               (terminal) => terminal.tmuxSessionId === controllerId,
             );
             const storedConfig = tmuxControllerConfigsRef.current.get(controllerId);
+            const isIntentionalClose = tmuxControllersClosingRef.current.has(controllerId);
+            if (isIntentionalClose) {
+              tmuxControllersClosingRef.current.delete(controllerId);
+              tmuxControllerConfigsRef.current.delete(controllerId);
+              tmuxControllerConfigIdsRef.current.delete(controllerId);
+            }
 
             if (deadTerminals.length > 0) {
               const deadIds = new Set(deadTerminals.map((terminal) => terminal.id));
@@ -127,7 +135,7 @@ export function useTauriListeners({
               setWorkspaces((prev) => removeSessionsFromWorkspaces(prev, deadIds));
             }
 
-            if (!storedConfig) return;
+            if (isIntentionalClose || !storedConfig) return;
             setTmuxControllerErrors((prev) => {
               const next = new Map(prev);
               next.set(controllerId, {
@@ -371,5 +379,6 @@ export function useTauriListeners({
     setTmuxControllerErrors,
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
+    tmuxControllersClosingRef,
   ]);
 }

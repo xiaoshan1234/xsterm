@@ -54,7 +54,9 @@ impl TerminalTransport {
         match self {
             Self::Local(pty) => pty.close().map_err(|e| e.to_string()),
             Self::Ssh(conn) => conn.close().await.map_err(|e| e.to_string()),
-            Self::TmuxPane { control, pane_id } => control.unbind_pane(pane_id),
+            // Closing an xsterm tmux pane must also remove it from the tmux
+            // server, not just stop forwarding its output.
+            Self::TmuxPane { control, pane_id } => control.kill_pane(pane_id),
         }
     }
 }

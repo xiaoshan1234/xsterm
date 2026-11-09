@@ -79,6 +79,8 @@ export function AppShellRuntime() {
     createSshSession,
     createTmuxSession,
     attachTmuxSession,
+    detachTmuxSession,
+    closeAllTmuxWindows,
     applyDisplayConfigToLiveSession,
   } = useTerminalRuntime();
   const {
@@ -191,6 +193,24 @@ export function AppShellRuntime() {
       details: cause instanceof Error ? cause.stack : undefined,
     });
   }, []);
+
+  const detachTmuxWithError = useCallback(
+    (controllerId: number) => {
+      void detachTmuxSession(controllerId).catch((cause) =>
+        showError("Unable to detach tmux session", cause),
+      );
+    },
+    [detachTmuxSession, showError],
+  );
+
+  const closeAllTmuxWindowsWithError = useCallback(
+    (controllerId: number) => {
+      void closeAllTmuxWindows(controllerId).catch((cause) =>
+        showError("Unable to close tmux windows", cause),
+      );
+    },
+    [closeAllTmuxWindows, showError],
+  );
 
   const openConfig = useCallback(
     (configId: string) => {
@@ -342,7 +362,14 @@ export function AppShellRuntime() {
           />
         );
       case "tmux-status-manager":
-        return <TmuxStatusPanel controllers={tmuxStatusControllers} onFocusPane={focusTerminal} />;
+        return (
+          <TmuxStatusPanel
+            controllers={tmuxStatusControllers}
+            onFocusPane={focusTerminal}
+            onDetachSession={detachTmuxWithError}
+            onCloseAllWindows={closeAllTmuxWindowsWithError}
+          />
+        );
       case "window-manager":
         return (
           <WindowManagerPanel
@@ -433,6 +460,8 @@ export function AppShellRuntime() {
     terminalStatusItems,
     tmuxManagerItems,
     tmuxStatusControllers,
+    detachTmuxWithError,
+    closeAllTmuxWindowsWithError,
     toggleGroup,
     windowManagerItems,
     workspaceManagerItems,

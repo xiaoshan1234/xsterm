@@ -49,6 +49,8 @@ export interface TerminalRuntimeContextType {
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
+  detachTmuxSession: (controllerId: number) => Promise<void>;
+  closeAllTmuxWindows: (controllerId: number) => Promise<void>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;
@@ -193,6 +195,8 @@ export interface TerminalState {
    * event-driven tmux panes can be linked back to their saved config.
    */
   tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
+  /** Controllers intentionally detached/closed; suppresses retry banners. */
+  tmuxControllersClosingRef: MutableRefObject<Set<number>>;
 }
 
 export interface SessionPersistence {
@@ -226,6 +230,8 @@ export interface TerminalRuntimeActions {
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
+  detachTmuxSession: (controllerId: number) => Promise<void>;
+  closeAllTmuxWindows: (controllerId: number) => Promise<void>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;

@@ -362,11 +362,6 @@ impl TmuxSession {
         Ok(())
     }
 
-    pub(crate) fn unbind_pane(&self, pane: &str) -> Result<(), String> {
-        self.remove_pane(pane);
-        Ok(())
-    }
-
     pub(crate) async fn split_pane(
         &self,
         parent_pane: &str,
@@ -515,6 +510,25 @@ impl TmuxSession {
                 let _ = control.send(&format!("kill-window -t {window}")).await;
             }
         });
+        Ok(())
+    }
+
+    /// Close every window in this tmux session on the server.
+    pub(crate) async fn kill_session(&self) -> Result<(), String> {
+        let session = self
+            .session_name
+            .clone()
+            .ok_or_else(|| "tmux session name is missing".to_string())?;
+        // `kill-session` tears down this control connection, so the reply may
+        // be lost even though the command was delivered. Treat a lost reply as
+        // success; the subsequent controller cleanup is still valid.
+        if let Err(error) = self
+            .control
+            .send(&format!("kill-session -t {}", shell_quote(&session)))
+            .await
+        {
+            tracing::warn!(%error, session, "tmux control: kill-session reply failed");
+        }
         Ok(())
     }
 
@@ -782,7 +796,20 @@ fn send_keys_command(pane: &str, payload: &[u8]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::send_keys_command;
+    use super::{parse_extended_pane_line, send_keys_command};
+
+    #[test]
+    fn parses_extended_pane_line_with_indices_and_command() {
+        let info = parse_extended_pane_line("0|1|%60|88|1|0|0|bash|1|editor").expect("pane line");
+        assert_eq!(info.window_index, 0);
+        assert_eq!(info.pane_index, 1);
+        assert_eq!(info.handle, "%60");
+        assert_eq!(info.cols, 88);
+        assert_eq!(info.rows, 1);
+        assert_eq!(info.current_command, "bash");
+        assert!(info.is_active);
+        assert_eq!(info.window_name, "editor");
+    }
 
     #[test]
     fn send_keys_command_preserves_spaces() {

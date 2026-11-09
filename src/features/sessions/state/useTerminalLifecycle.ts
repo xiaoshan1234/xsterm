@@ -4,7 +4,7 @@ import {
   toBackendTerminalHandle,
   type TerminalInfoDto,
 } from "../../terminal/infrastructure";
-import { tmuxCommands } from "../../tmux/infrastructure";
+import { tmuxCommands, toBackendControllerHandle } from "../../tmux/infrastructure";
 import type {
   LocalTerminalConfig,
   SavedTerminalConfig,
@@ -29,6 +29,7 @@ import {
   buildFrontendTerminal,
   dispatchByType,
 } from "./useTerminalActions.helpers";
+import { removeSessionsFromWorkspaces } from "./eventTransitions";
 
 interface UseSessionLifecycleDeps {
   savedConfigs: SavedTerminalConfig[];
@@ -53,6 +54,8 @@ interface UseSessionLifecycleDeps {
   /** `controllerId` -> `configId` map for linking event-driven tmux panes
    * back to their saved config. */
   tmuxControllerConfigIdsRef?: React.MutableRefObject<Map<number, string>>;
+  /** Controllers intentionally detached/closed; suppresses retry banners. */
+  tmuxControllersClosingRef?: React.MutableRefObject<Set<number>>;
 }
 
 export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
@@ -69,6 +72,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     createWindowFromSession,
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
+    tmuxControllersClosingRef,
   } = deps;
 
   /**
@@ -328,6 +332,62 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     [updateConfigs, tmuxControllerConfigsRef, tmuxControllerConfigIdsRef],
   );
 
+  const removeTmuxControllerFromState = useCallback(
+    (controllerId: number) => {
+      const deadIds = terminalsRef.current
+        .filter((terminal) => terminal.tmuxSessionId === controllerId)
+        .map((terminal) => terminal.id);
+      if (deadIds.length > 0) {
+        setSessions((prev) => prev.filter((terminal) => terminal.tmuxSessionId !== controllerId));
+        setWorkspaces((prev) => removeSessionsFromWorkspaces(prev, deadIds));
+        for (const terminalId of deadIds) {
+          establishingSessionsRef.current.delete(terminalId);
+          clearTerminalOutput(terminalId);
+        }
+      }
+      tmuxControllerConfigsRef?.current.delete(controllerId);
+      tmuxControllerConfigIdsRef?.current.delete(controllerId);
+      tmuxControllersClosingRef?.current.delete(controllerId);
+    },
+    [
+      terminalsRef,
+      setSessions,
+      setWorkspaces,
+      establishingSessionsRef,
+      tmuxControllerConfigsRef,
+      tmuxControllerConfigIdsRef,
+      tmuxControllersClosingRef,
+    ],
+  );
+
+  const detachTmuxSession = useCallback(
+    async (controllerId: number): Promise<void> => {
+      tmuxControllersClosingRef?.current.add(controllerId);
+      try {
+        await tmuxCommands.detachTmuxSession(toBackendControllerHandle(controllerId));
+      } catch (error) {
+        tmuxControllersClosingRef?.current.delete(controllerId);
+        throw error;
+      }
+      removeTmuxControllerFromState(controllerId);
+    },
+    [removeTmuxControllerFromState, tmuxControllersClosingRef],
+  );
+
+  const closeAllTmuxWindows = useCallback(
+    async (controllerId: number): Promise<void> => {
+      tmuxControllersClosingRef?.current.add(controllerId);
+      try {
+        await tmuxCommands.closeAllTmuxWindows(toBackendControllerHandle(controllerId));
+      } catch (error) {
+        tmuxControllersClosingRef?.current.delete(controllerId);
+        throw error;
+      }
+      removeTmuxControllerFromState(controllerId);
+    },
+    [removeTmuxControllerFromState, tmuxControllersClosingRef],
+  );
+
   /**
    * Persist a terminal configuration WITHOUT creating a backend terminal
    * or auto-opening a window.
@@ -585,6 +645,8 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     createSshSessionOnly,
     attachTmuxSession,
     createTmuxSession,
+    detachTmuxSession,
+    closeAllTmuxWindows,
     saveConfigOnly,
     openFromConfig,
     removeConfig,

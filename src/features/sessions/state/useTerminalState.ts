@@ -35,6 +35,9 @@ export function useTerminalState(): TerminalState {
   // `controllerId` -> `configId` map. Populated by the attach flow so
   // event-driven tmux panes can be linked back to their saved config.
   const tmuxControllerConfigIdsRef = useRef<Map<number, string>>(new Map());
+  // Controllers the user intentionally detached/closed. Used to suppress the
+  // retry banner when the matching `tmux-controller-exit` arrives.
+  const tmuxControllersClosingRef = useRef<Set<number>>(new Set());
 
   const terminalsRef = useRef(terminals);
   const workspacesRef = useRef(workspaces);
@@ -95,5 +98,6 @@ export function useTerminalState(): TerminalState {
     setTmuxControllerErrors,
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
+    tmuxControllersClosingRef,
   };
 }

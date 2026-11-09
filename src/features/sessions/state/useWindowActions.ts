@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { terminalCommands, toBackendTerminalHandle } from "../../terminal/infrastructure";
+import { tmuxCommands, toBackendWindowHandle } from "../../tmux/infrastructure";
 import type {
   PaneNode,
   SavedTerminalConfig,
@@ -182,6 +183,13 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       const window = workspace?.windows.find((w) => w.id === windowId);
       if (!window) return;
+      const tmuxWindowId = window.xstermWindowId;
+      const isTmuxWindow = tmuxWindowId !== undefined;
+      if (tmuxWindowId !== undefined) {
+        tmuxCommands
+          .killTmuxWindow(toBackendWindowHandle(tmuxWindowId))
+          .catch((e) => console.error("Failed to kill tmux window:", e));
+      }
 
       const terminalIdsToClose = new Set<number>();
       forEachPane(window.rootPane, (node) => {
@@ -214,9 +222,11 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
       );
 
       terminalIdsToClose.forEach((terminalId) => {
-        terminalCommands
-          .closeTerminal(toBackendTerminalHandle(terminalId))
-          .catch((e) => console.error("Failed to close terminal:", e));
+        if (!isTmuxWindow) {
+          terminalCommands
+            .closeTerminal(toBackendTerminalHandle(terminalId))
+            .catch((e) => console.error("Failed to close terminal:", e));
+        }
         establishingSessionsRef.current.delete(terminalId);
         clearTerminalOutput(terminalId);
       });

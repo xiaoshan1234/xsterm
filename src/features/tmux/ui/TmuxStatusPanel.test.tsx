@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type TmuxStatusControllerViewData } from "../viewModels/statusViewModel";
 import { TmuxStatusPanel } from "./TmuxStatusPanel";
 
@@ -42,7 +42,14 @@ const controllers: TmuxStatusControllerViewData[] = [
 
 describe("TmuxStatusPanel", () => {
   it("collapses the session level", () => {
-    render(<TmuxStatusPanel controllers={controllers} onFocusPane={() => undefined} />);
+    render(
+      <TmuxStatusPanel
+        controllers={controllers}
+        onFocusPane={() => undefined}
+        onDetachSession={() => undefined}
+        onCloseAllWindows={() => undefined}
+      />,
+    );
     expect(screen.getByText("work:1")).toBeTruthy();
     expect(screen.getByText(/0.*1 panes/)).toBeTruthy();
     expect(screen.getByText(/0\.1.*88x1.*ACTIVE/)).toBeTruthy();
@@ -57,11 +64,59 @@ describe("TmuxStatusPanel", () => {
   });
 
   it("collapses the window level", () => {
-    render(<TmuxStatusPanel controllers={controllers} onFocusPane={() => undefined} />);
+    render(
+      <TmuxStatusPanel
+        controllers={controllers}
+        onFocusPane={() => undefined}
+        onDetachSession={() => undefined}
+        onCloseAllWindows={() => undefined}
+      />,
+    );
     const collapseButtons = screen.getAllByRole("button", { name: "Collapse" });
     fireEvent.click(collapseButtons[1]);
 
     expect(screen.getByText("editor")).toBeTruthy();
     expect(screen.queryByText("bash")).toBeNull();
+  });
+
+  it("focuses the window's first pane on click and the pane itself on click", () => {
+    const onFocusPane = vi.fn();
+    render(
+      <TmuxStatusPanel
+        controllers={controllers}
+        onFocusPane={onFocusPane}
+        onDetachSession={() => undefined}
+        onCloseAllWindows={() => undefined}
+      />,
+    );
+
+    const rows = screen.getAllByRole("option");
+    fireEvent.click(rows[1]);
+    expect(onFocusPane).toHaveBeenCalledWith(8);
+
+    onFocusPane.mockClear();
+    fireEvent.click(rows[2]);
+    expect(onFocusPane).toHaveBeenCalledWith(8);
+  });
+
+  it("exposes detach and close-all actions on the session context menu", () => {
+    const onDetach = vi.fn();
+    const onCloseAll = vi.fn();
+    render(
+      <TmuxStatusPanel
+        controllers={controllers}
+        onFocusPane={() => undefined}
+        onDetachSession={onDetach}
+        onCloseAllWindows={onCloseAll}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getAllByRole("option")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Detach Session" }));
+    expect(onDetach).toHaveBeenCalledWith(1);
+
+    fireEvent.contextMenu(screen.getAllByRole("option")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Close All Windows" }));
+    expect(onCloseAll).toHaveBeenCalledWith(1);
   });
 });

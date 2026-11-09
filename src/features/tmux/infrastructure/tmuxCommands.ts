@@ -18,6 +18,8 @@ type InvokeFunction = <Value>(command: string, args?: Record<string, unknown>) =
 export interface TmuxCommandClient {
   createTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto>;
   attachTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto>;
+  detachTmuxSession(controllerHandle: BackendControllerHandle): Promise<void>;
+  closeAllTmuxWindows(controllerHandle: BackendControllerHandle): Promise<void>;
   createTmuxPane(
     controllerHandle: BackendControllerHandle,
     parentTerminalHandle: BackendTerminalHandle,
@@ -51,6 +53,18 @@ export function createTmuxCommandClient(
         config,
       });
       return normalizeTerminalInfo(terminal);
+    },
+
+    async detachTmuxSession(controllerHandle: BackendControllerHandle): Promise<void> {
+      await invokeFunction<void>("detach_tmux_session", {
+        controllerId: controllerHandle,
+      });
+    },
+
+    async closeAllTmuxWindows(controllerHandle: BackendControllerHandle): Promise<void> {
+      await invokeFunction<void>("close_all_tmux_windows", {
+        controllerId: controllerHandle,
+      });
     },
 
     async createTmuxPane(
