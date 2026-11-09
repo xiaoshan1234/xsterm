@@ -47,7 +47,6 @@ describe("TmuxStatusPanel", () => {
         controllers={controllers}
         onFocusPane={() => undefined}
         onDetachSession={() => undefined}
-        onCloseAllWindows={() => undefined}
       />,
     );
     expect(screen.getByText("work:1")).toBeTruthy();
@@ -69,7 +68,6 @@ describe("TmuxStatusPanel", () => {
         controllers={controllers}
         onFocusPane={() => undefined}
         onDetachSession={() => undefined}
-        onCloseAllWindows={() => undefined}
       />,
     );
     const collapseButtons = screen.getAllByRole("button", { name: "Collapse" });
@@ -86,7 +84,6 @@ describe("TmuxStatusPanel", () => {
         controllers={controllers}
         onFocusPane={onFocusPane}
         onDetachSession={() => undefined}
-        onCloseAllWindows={() => undefined}
       />,
     );
 
@@ -99,24 +96,37 @@ describe("TmuxStatusPanel", () => {
     expect(onFocusPane).toHaveBeenCalledWith(8);
   });
 
-  it("exposes detach and close-all actions on the session context menu", () => {
+  it("exposes only detach on the session context menu", () => {
     const onDetach = vi.fn();
-    const onCloseAll = vi.fn();
     render(
       <TmuxStatusPanel
         controllers={controllers}
         onFocusPane={() => undefined}
         onDetachSession={onDetach}
-        onCloseAllWindows={onCloseAll}
       />,
     );
 
     fireEvent.contextMenu(screen.getAllByRole("option")[0]);
+    expect(screen.queryByRole("button", { name: "Close All Windows" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Focus First Pane" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Detach Session" }));
     expect(onDetach).toHaveBeenCalledWith(1);
+  });
 
-    fireEvent.contextMenu(screen.getAllByRole("option")[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Close All Windows" }));
-    expect(onCloseAll).toHaveBeenCalledWith(1);
+  it("does not expose focus actions in window or pane context menus", () => {
+    render(
+      <TmuxStatusPanel
+        controllers={controllers}
+        onFocusPane={() => undefined}
+        onDetachSession={() => undefined}
+      />,
+    );
+
+    const rows = screen.getAllByRole("option");
+    fireEvent.contextMenu(rows[1]);
+    expect(screen.queryByRole("button", { name: "Focus First Pane" })).toBeNull();
+
+    fireEvent.contextMenu(rows[2]);
+    expect(screen.queryByRole("button", { name: "Focus" })).toBeNull();
   });
 });

@@ -232,13 +232,6 @@ impl TerminalRegistry {
         Ok(())
     }
 
-    pub(crate) async fn kill_all_tmux_windows(&self, controller_id: u32) -> Result<(), String> {
-        let controller = self.tmux_controller(controller_id)?;
-        controller.kill_session().await?;
-        self.close_tmux_controller(controller_id)?;
-        Ok(())
-    }
-
     pub(crate) async fn create_tmux_pane(
         &self,
         controller_id: u32,

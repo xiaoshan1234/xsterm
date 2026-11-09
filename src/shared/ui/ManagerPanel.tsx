@@ -79,11 +79,13 @@ export function ManagerRow({
   reserveChevron?: boolean;
   contextMenuItems?: readonly ContextMenuItem[];
 }) {
+  const hasContextMenu = contextMenuItems !== undefined && contextMenuItems.length > 0;
   const row = (
     <div
       className={`manager-row${isSelected ? " manager-row--selected" : ""}`}
       onClick={onSelect}
       onDoubleClick={onOpen}
+      onContextMenu={hasContextMenu ? undefined : (event) => event.preventDefault()}
       onKeyDown={(event) => {
         if (event.key === "Enter") onOpen?.();
       }}
@@ -116,7 +118,7 @@ export function ManagerRow({
     </div>
   );
 
-  if (contextMenuItems && contextMenuItems.length > 0) {
+  if (hasContextMenu && contextMenuItems) {
     return (
       <ContextMenu items={[...contextMenuItems]} className="manager-row-context" onOpen={onSelect}>
         {row}

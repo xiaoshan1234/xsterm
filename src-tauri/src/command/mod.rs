@@ -19,7 +19,6 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::rename_tmux_window,
         session::attach_tmux_session,
         session::detach_tmux_session,
-        session::close_all_tmux_windows,
         session::capture_tmux_pane,
         session::get_attached_tmux_servers,
         session::auto_attach_tmux_servers,

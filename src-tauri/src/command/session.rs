@@ -172,23 +172,6 @@ pub async fn detach_tmux_session(
     Ok(())
 }
 
-/// Close every window in the tmux session on the server, then drop the
-/// controller.
-#[tauri::command]
-pub async fn close_all_tmux_windows(
-    controller_id: u32,
-    state: State<'_, Arc<TerminalRegistry>>,
-    app: AppHandle,
-) -> Result<(), String> {
-    tracing::info!("close_all_tmux_windows: controller_id={controller_id}");
-    state.kill_all_tmux_windows(controller_id).await?;
-    let servers = state.list_attached_tmux_servers();
-    if let Err(e) = crate::command::persistence::save_attached_tmux_servers_impl(&app, &servers) {
-        tracing::warn!("close_all_tmux_windows: persistence failed: {e}");
-    }
-    Ok(())
-}
-
 /// Split the tmux pane backing an xsterm session via `split-window`.
 ///
 /// Returns a [`TerminalInfo`] for the newly created pane (a fresh

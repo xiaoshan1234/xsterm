@@ -80,7 +80,6 @@ export function AppShellRuntime() {
     createTmuxSession,
     attachTmuxSession,
     detachTmuxSession,
-    closeAllTmuxWindows,
     applyDisplayConfigToLiveSession,
   } = useTerminalRuntime();
   const {
@@ -201,15 +200,6 @@ export function AppShellRuntime() {
       );
     },
     [detachTmuxSession, showError],
-  );
-
-  const closeAllTmuxWindowsWithError = useCallback(
-    (controllerId: number) => {
-      void closeAllTmuxWindows(controllerId).catch((cause) =>
-        showError("Unable to close tmux windows", cause),
-      );
-    },
-    [closeAllTmuxWindows, showError],
   );
 
   const openConfig = useCallback(
@@ -367,7 +357,6 @@ export function AppShellRuntime() {
             controllers={tmuxStatusControllers}
             onFocusPane={focusTerminal}
             onDetachSession={detachTmuxWithError}
-            onCloseAllWindows={closeAllTmuxWindowsWithError}
           />
         );
       case "window-manager":
@@ -461,7 +450,6 @@ export function AppShellRuntime() {
     tmuxManagerItems,
     tmuxStatusControllers,
     detachTmuxWithError,
-    closeAllTmuxWindowsWithError,
     toggleGroup,
     windowManagerItems,
     workspaceManagerItems,

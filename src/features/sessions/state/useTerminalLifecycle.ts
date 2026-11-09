@@ -374,20 +374,6 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     [removeTmuxControllerFromState, tmuxControllersClosingRef],
   );
 
-  const closeAllTmuxWindows = useCallback(
-    async (controllerId: number): Promise<void> => {
-      tmuxControllersClosingRef?.current.add(controllerId);
-      try {
-        await tmuxCommands.closeAllTmuxWindows(toBackendControllerHandle(controllerId));
-      } catch (error) {
-        tmuxControllersClosingRef?.current.delete(controllerId);
-        throw error;
-      }
-      removeTmuxControllerFromState(controllerId);
-    },
-    [removeTmuxControllerFromState, tmuxControllersClosingRef],
-  );
-
   /**
    * Persist a terminal configuration WITHOUT creating a backend terminal
    * or auto-opening a window.
@@ -646,7 +632,6 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     attachTmuxSession,
     createTmuxSession,
     detachTmuxSession,
-    closeAllTmuxWindows,
     saveConfigOnly,
     openFromConfig,
     removeConfig,

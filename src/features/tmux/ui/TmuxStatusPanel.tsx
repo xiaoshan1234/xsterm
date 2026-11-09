@@ -15,14 +15,12 @@ interface TmuxStatusPanelProps {
   controllers: readonly TmuxStatusControllerViewData[];
   onFocusPane: (terminalId: number) => void;
   onDetachSession: (controllerId: number) => void;
-  onCloseAllWindows: (controllerId: number) => void;
 }
 
 export function TmuxStatusPanel({
   controllers,
   onFocusPane,
   onDetachSession,
-  onCloseAllWindows,
 }: TmuxStatusPanelProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(new Set());
@@ -62,7 +60,6 @@ export function TmuxStatusPanel({
               onToggleCollapsed={toggleCollapsed}
               onFocusPane={onFocusPane}
               onDetachSession={onDetachSession}
-              onCloseAllWindows={onCloseAllWindows}
             />
           ))}
         </div>
@@ -79,7 +76,6 @@ interface TmuxSessionTreeProps {
   onToggleCollapsed: (key: string) => void;
   onFocusPane: (terminalId: number) => void;
   onDetachSession: (controllerId: number) => void;
-  onCloseAllWindows: (controllerId: number) => void;
 }
 
 function TmuxSessionTree({
@@ -90,7 +86,6 @@ function TmuxSessionTree({
   onToggleCollapsed,
   onFocusPane,
   onDetachSession,
-  onCloseAllWindows,
 }: TmuxSessionTreeProps) {
   const sessionKey = `session:${controller.controllerId}`;
   const isCollapsed = collapsedKeys.has(sessionKey);
@@ -110,17 +105,10 @@ function TmuxSessionTree({
         isExpanded={!isCollapsed}
         onToggleExpand={() => onToggleCollapsed(sessionKey)}
         contextMenuItems={[
-          ...focusMenuItems(controller.windows, onFocusPane),
           {
             id: "detach-session",
             label: "Detach Session",
             onClick: () => onDetachSession(controller.controllerId),
-          },
-          {
-            id: "close-all-windows",
-            label: "Close All Windows",
-            onClick: () => onCloseAllWindows(controller.controllerId),
-            danger: true,
           },
         ]}
       />
@@ -180,7 +168,6 @@ function TmuxWindowTree({
         onOpen={() => focusFirstPane([window], onFocusPane)}
         isExpanded={!isCollapsed}
         onToggleExpand={() => onToggleCollapsed(windowKey)}
-        contextMenuItems={focusMenuItems([window], onFocusPane)}
       />
       {!isCollapsed && (
         <div className="tmux-status-children">
@@ -199,13 +186,6 @@ function TmuxWindowTree({
                 }}
                 onOpen={() => onFocusPane(pane.terminalId)}
                 reserveChevron
-                contextMenuItems={[
-                  {
-                    id: "focus",
-                    label: "Focus",
-                    onClick: () => onFocusPane(pane.terminalId),
-                  },
-                ]}
               />
             );
           })}
@@ -229,19 +209,4 @@ function focusFirstPane(
 ): void {
   const terminalId = firstPaneId(windows);
   if (terminalId !== undefined) onFocusPane(terminalId);
-}
-
-function focusMenuItems(
-  windows: readonly TmuxStatusWindowViewData[],
-  onFocusPane: (terminalId: number) => void,
-): Array<{ id: string; label: string; onClick: () => void }> {
-  const terminalId = firstPaneId(windows);
-  if (terminalId === undefined) return [];
-  return [
-    {
-      id: "focus",
-      label: "Focus First Pane",
-      onClick: () => onFocusPane(terminalId),
-    },
-  ];
 }

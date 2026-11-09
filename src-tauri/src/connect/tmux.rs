@@ -513,25 +513,6 @@ impl TmuxSession {
         Ok(())
     }
 
-    /// Close every window in this tmux session on the server.
-    pub(crate) async fn kill_session(&self) -> Result<(), String> {
-        let session = self
-            .session_name
-            .clone()
-            .ok_or_else(|| "tmux session name is missing".to_string())?;
-        // `kill-session` tears down this control connection, so the reply may
-        // be lost even though the command was delivered. Treat a lost reply as
-        // success; the subsequent controller cleanup is still valid.
-        if let Err(error) = self
-            .control
-            .send(&format!("kill-session -t {}", shell_quote(&session)))
-            .await
-        {
-            tracing::warn!(%error, session, "tmux control: kill-session reply failed");
-        }
-        Ok(())
-    }
-
     pub(crate) fn rename_window(&self, window: &str, name: &str) -> Result<(), String> {
         tokio::spawn({
             let control = Arc::clone(&self.control);
