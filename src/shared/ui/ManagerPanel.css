@@ -10,6 +10,8 @@
   min-height: 0;
   padding: var(--space-xs);
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .manager-panel-footer {
@@ -110,6 +112,35 @@
 .manager-row--selected:focus-visible {
   border-color: var(--hairline-strong);
   background: var(--accent-soft);
+}
+
+.manager-row-chevron {
+  display: inline-flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.1s,
+    transform 0.15s;
+}
+
+.manager-row-chevron:hover {
+  color: var(--ink);
+}
+
+.manager-row-chevron--open {
+  transform: rotate(90deg);
+}
+
+.manager-row-chevron--spacer {
+  pointer-events: none;
 }
 
 .manager-row-copy {

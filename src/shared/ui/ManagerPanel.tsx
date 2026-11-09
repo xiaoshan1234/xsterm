@@ -63,6 +63,9 @@ export function ManagerRow({
   isSelected = false,
   onSelect,
   onOpen,
+  isExpanded,
+  onToggleExpand,
+  reserveChevron = false,
   contextMenuItems,
 }: {
   title: string;
@@ -71,6 +74,9 @@ export function ManagerRow({
   isSelected?: boolean;
   onSelect?: () => void;
   onOpen?: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  reserveChevron?: boolean;
   contextMenuItems?: readonly ContextMenuItem[];
 }) {
   const row = (
@@ -85,6 +91,23 @@ export function ManagerRow({
       aria-selected={onSelect ? isSelected : undefined}
       tabIndex={onSelect ? 0 : undefined}
     >
+      {onToggleExpand ? (
+        <button
+          type="button"
+          className={`manager-row-chevron${isExpanded ? " manager-row-chevron--open" : ""}`}
+          aria-label={isExpanded ? "Collapse" : "Expand"}
+          aria-expanded={isExpanded}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleExpand();
+          }}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <ChevronIcon size={12} />
+        </button>
+      ) : reserveChevron ? (
+        <span className="manager-row-chevron manager-row-chevron--spacer" aria-hidden="true" />
+      ) : null}
       <div className="manager-row-copy">
         <strong>{title}</strong>
         <span>{subtitle}</span>
