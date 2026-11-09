@@ -29,6 +29,8 @@ export interface TmuxStatusWindowViewData {
 export interface TmuxStatusControllerViewData {
   controllerId: number;
   title: string;
+  /** Real tmux session name (e.g. `work`), when known from the saved config. */
+  sessionName?: string;
   status: TmuxRuntimeStatus;
   transport: "local" | "ssh";
   windows: readonly TmuxStatusWindowViewData[];
@@ -54,12 +56,15 @@ export function selectTmuxStatusControllers(
     const config = panes
       .map((pane) => savedConfigById.get(pane.configId))
       .find((candidate) => candidate?.type === "tmux-pane");
+    const sessionName =
+      config?.type === "tmux-pane" ? config.config.tmuxSessionName?.trim() : undefined;
     const windows = groupWindows(panes, locations);
     const status = panes.some((pane) => pane.isConnected) ? "connected" : "disconnected";
 
     return {
       controllerId,
       title: config?.name ?? `Tmux controller ${controllerId}`,
+      ...(sessionName ? { sessionName } : {}),
       status,
       transport: config?.type === "tmux-pane" && config.config.ssh ? "ssh" : "local",
       windows,

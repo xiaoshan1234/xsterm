@@ -1,5 +1,9 @@
 import { useCallback } from "react";
-import { terminalCommands, toBackendTerminalHandle } from "../../terminal/infrastructure";
+import {
+  terminalCommands,
+  toBackendTerminalHandle,
+  type TerminalInfoDto,
+} from "../../terminal/infrastructure";
 import { tmuxCommands, toBackendControllerHandle } from "../../tmux/infrastructure";
 import type {
   PaneNode,
@@ -17,8 +21,7 @@ import {
   replacePaneNode,
   withRecomputedSessionIds,
 } from "./paneUtils";
-import { assertSessionNotUsedElsewhere } from "./useTerminalActions.helpers";
-import { TMUX_PANE_CAPABILITIES } from "./capabilities";
+import { assertSessionNotUsedElsewhere, buildFrontendTerminal } from "./useTerminalActions.helpers";
 
 interface UsePaneActionsDeps {
   terminalsRef: React.MutableRefObject<Terminal[]>;
@@ -254,39 +257,40 @@ async function splitTmuxPaneInternal(
   const parentTmuxPaneId = parent.tmuxPaneId;
   if (controllerId === undefined || parentTmuxPaneId === undefined) return;
 
-  let newSessionId: number;
+  let info: TerminalInfoDto;
   try {
-    const info = await tmuxCommands.createTmuxPane(
+    info = await tmuxCommands.createTmuxPane(
       toBackendControllerHandle(controllerId),
       toBackendTerminalHandle(xstermTerminalId),
       direction,
     );
-    newSessionId = info.id;
   } catch (e) {
     console.error("splitTmuxPane: backend create_tmux_pane failed:", e);
     return;
   }
+  const newSessionId = info.id;
 
   setSessions((prev) => {
-    if (prev.some((s) => s.id === newSessionId)) return prev;
-    const newSession: Terminal = {
-      id: newSessionId,
-      configId: "",
-      name: `tmux-${controllerId}:${parentTmuxPaneId}`,
-      type: "tmux-pane",
-      isConnected: true,
-      kind: {
-        type: "tmux-pane",
-        sessionId: controllerId,
-        paneId: parentTmuxPaneId,
-      },
-      tmuxPaneId: parentTmuxPaneId,
-      tmuxSessionId: controllerId,
-      isHidden: false,
-      capabilities: TMUX_PANE_CAPABILITIES,
-      createdAt: Date.now(),
-      lastActivityAt: Date.now(),
-    };
+    if (prev.some((s) => s.id === newSessionId)) {
+      // The `tmux-pane-added` event may have created the terminal first.
+      // Make sure it carries the new pane id, window id and config link.
+      return prev.map((session) =>
+        session.id === newSessionId
+          ? {
+              ...session,
+              configId: session.configId || parent.configId,
+              tmuxPaneId: info.kind.type === "tmux-pane" ? info.kind.paneId : session.tmuxPaneId,
+              tmuxWindowId: info.tmuxWindowId ?? session.tmuxWindowId,
+            }
+          : session,
+      );
+    }
+    const newSession = buildFrontendTerminal(
+      info,
+      parent.configId,
+      "tmux-pane",
+      parent.displayConfig,
+    );
     return [...prev, newSession];
   });
 

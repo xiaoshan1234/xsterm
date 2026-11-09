@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { type Terminal, type Workspace } from "../../../models/legacy/terminal";
+import {
+  type SavedTerminalConfig,
+  type Terminal,
+  type Workspace,
+} from "../../../models/legacy/terminal";
 import { selectTmuxStatusControllers } from "./statusViewModel";
 
 describe("Tmux status view model", () => {
   it("groups panes by controller and tmux window", () => {
     const terminals: Terminal[] = [
-      createTmuxTerminal(10, "%1", "@1", true),
-      createTmuxTerminal(11, "%2", "@1", false),
-      createTmuxTerminal(12, "%3", "@2", true),
+      createTmuxTerminal(10, "%1", "@1", true, "cfg-1"),
+      createTmuxTerminal(11, "%2", "@1", false, "cfg-1"),
+      createTmuxTerminal(12, "%3", "@2", true, "cfg-1"),
     ];
     const workspaces: Workspace[] = [
       {
@@ -44,11 +48,22 @@ describe("Tmux status view model", () => {
       },
     ];
 
-    const result = selectTmuxStatusControllers(terminals, workspaces, []);
+    const savedConfigs: SavedTerminalConfig[] = [
+      {
+        id: "cfg-1",
+        name: "Tmux dev",
+        version: 1,
+        type: "tmux-pane",
+        config: { tmuxSessionName: "work" },
+      },
+    ];
+    const result = selectTmuxStatusControllers(terminals, workspaces, savedConfigs);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       controllerId: 4,
+      title: "Tmux dev",
+      sessionName: "work",
       status: "connected",
       windows: [
         {
@@ -69,10 +84,11 @@ function createTmuxTerminal(
   paneId: string,
   windowId: string,
   isConnected: boolean,
+  configId = "",
 ): Terminal {
   return {
     id,
-    configId: "",
+    configId,
     name: `tmux ${paneId}`,
     type: "tmux-pane",
     isConnected,

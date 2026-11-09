@@ -274,6 +274,20 @@ describe("buildFrontendTerminal", () => {
     expect(terminal.type).toBe("ssh");
     expect(terminal.kind.type).toBe("ssh");
   });
+
+  it("forwards the new tmux pane and window ids", () => {
+    const tmuxInfo = {
+      ...info,
+      kind: { type: "tmux-pane" as const, sessionId: 4, paneId: "%2" },
+      tmuxWindowId: "@1",
+    };
+    const terminal = buildFrontendTerminal(tmuxInfo, "cfg", "tmux-pane");
+
+    expect(terminal.tmuxSessionId).toBe(4);
+    expect(terminal.tmuxPaneId).toBe("%2");
+    expect(terminal.tmuxWindowId).toBe("@1");
+    expect(terminal.kind).toEqual({ type: "tmux-pane", sessionId: 4, paneId: "%2" });
+  });
 });
 
 // ---------- assertSessionNotUsedElsewhere ----------------------------------

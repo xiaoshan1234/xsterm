@@ -81,11 +81,14 @@ function TmuxSessionTree({
 }: TmuxSessionTreeProps) {
   const sessionKey = `session:${controller.controllerId}`;
   const isCollapsed = collapsedKeys.has(sessionKey);
+  const sessionTitle = controller.sessionName
+    ? `${controller.sessionName} (#${controller.controllerId})`
+    : controller.title;
 
   return (
     <section className="tmux-status-session">
       <ManagerRow
-        title={controller.title}
+        title={sessionTitle}
         subtitle={`${controller.windows.length} windows · ${controller.transport.toUpperCase()}`}
         badge={controller.status === "connected" ? "Connected" : "Disconnected"}
         isSelected={selectedKey === sessionKey}
