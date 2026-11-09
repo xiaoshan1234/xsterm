@@ -8,6 +8,7 @@ import {
 } from "../../../shared/utils/terminalOutputBuffer";
 import { subscribeTerminalEvents, toBackendTerminalHandle } from "../infrastructure";
 import { tmuxCommands } from "../../tmux/infrastructure";
+import { normalizeCapturedScrollback } from "./scrollback";
 
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
@@ -78,7 +79,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       .then((text) => {
         if (!text) return;
         try {
-          xterm.write(text);
+          xterm.write(normalizeCapturedScrollback(text));
         } catch (e) {
           console.error("[xsterm] Failed to write tmux scrollback to terminal:", e);
         }
