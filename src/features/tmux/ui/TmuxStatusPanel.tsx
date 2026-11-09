@@ -82,7 +82,7 @@ function TmuxSessionTree({
   const sessionKey = `session:${controller.controllerId}`;
   const isCollapsed = collapsedKeys.has(sessionKey);
   const sessionTitle = controller.sessionName
-    ? `${controller.sessionName} (#${controller.controllerId})`
+    ? `${controller.sessionName}:${controller.controllerId}`
     : controller.title;
 
   return (
@@ -144,7 +144,7 @@ function TmuxWindowTree({
     <div className="tmux-status-window">
       <ManagerRow
         title={window.name}
-        subtitle={`${window.tmuxWindowId} · ${window.panes.length} panes`}
+        subtitle={`${window.windowIndex ?? "?"} · ${window.panes.length} panes`}
         badge={window.status === "connected" ? "Connected" : "Disconnected"}
         isSelected={selectedKey === windowKey}
         onSelect={() => onSelect(windowKey)}
@@ -160,8 +160,8 @@ function TmuxWindowTree({
             return (
               <ManagerRow
                 key={pane.terminalId}
-                title={pane.title}
-                subtitle={`${pane.tmuxWindowId}/${pane.tmuxPaneId} · ${formatPaneLocation(pane.location)}`}
+                title={pane.currentCommand ?? pane.title}
+                subtitle={`${pane.windowIndex ?? "?"}.${pane.paneIndex ?? "?"} · ${pane.width ?? "?"}x${pane.height ?? "?"}${pane.isActive ? " · ACTIVE" : ""}`}
                 badge={pane.status === "connected" ? "Live" : "Down"}
                 isSelected={selectedKey === paneKey}
                 onSelect={() => onSelect(paneKey)}
@@ -212,10 +212,4 @@ function focusMenuItems(
       onClick: () => onFocusPane(terminalId),
     },
   ];
-}
-
-function formatPaneLocation(
-  location: { windowName: string; paneNumber: number } | undefined,
-): string {
-  return location ? `${location.windowName} / Pane ${location.paneNumber}` : "unattached";
 }

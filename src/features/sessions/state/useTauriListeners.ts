@@ -16,6 +16,13 @@ function buildTmuxPaneSession(info: {
   configId?: string;
   tmuxWindowId?: string;
   tmuxSessionName?: string;
+  tmuxWindowName?: string;
+  tmuxWindowIndex?: number;
+  tmuxPaneIndex?: number;
+  tmuxPaneWidth?: number;
+  tmuxPaneHeight?: number;
+  tmuxPaneCommand?: string;
+  tmuxPaneActive?: boolean;
 }): Terminal {
   return {
     id: info.id,
@@ -32,6 +39,13 @@ function buildTmuxPaneSession(info: {
     tmuxSessionId: info.tmuxSessionId,
     ...(info.tmuxWindowId ? { tmuxWindowId: info.tmuxWindowId } : {}),
     ...(info.tmuxSessionName ? { tmuxSessionName: info.tmuxSessionName } : {}),
+    ...(info.tmuxWindowName ? { tmuxWindowName: info.tmuxWindowName } : {}),
+    ...(info.tmuxWindowIndex !== undefined ? { tmuxWindowIndex: info.tmuxWindowIndex } : {}),
+    ...(info.tmuxPaneIndex !== undefined ? { tmuxPaneIndex: info.tmuxPaneIndex } : {}),
+    ...(info.tmuxPaneWidth !== undefined ? { tmuxPaneWidth: info.tmuxPaneWidth } : {}),
+    ...(info.tmuxPaneHeight !== undefined ? { tmuxPaneHeight: info.tmuxPaneHeight } : {}),
+    ...(info.tmuxPaneCommand ? { tmuxPaneCommand: info.tmuxPaneCommand } : {}),
+    ...(info.tmuxPaneActive !== undefined ? { tmuxPaneActive: info.tmuxPaneActive } : {}),
     isHidden: false,
     capabilities: TMUX_PANE_CAPABILITIES,
     createdAt: Date.now(),
@@ -137,6 +151,13 @@ export function useTauriListeners({
             tmuxPaneId,
             parentTmuxWindowId,
             sessionName,
+            windowIndex,
+            paneIndex,
+            width,
+            height,
+            currentCommand,
+            isActive,
+            windowName,
           }) => {
             const terminalId = Number(terminalHandle);
             const controllerId = Number(controllerHandle);
@@ -150,6 +171,13 @@ export function useTauriListeners({
                         tmuxPaneId,
                         tmuxWindowId: parentTmuxWindowId,
                         tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
+                        tmuxWindowName: windowName ?? terminal.tmuxWindowName,
+                        tmuxWindowIndex: windowIndex,
+                        tmuxPaneIndex: paneIndex,
+                        tmuxPaneWidth: width,
+                        tmuxPaneHeight: height,
+                        tmuxPaneCommand: currentCommand ?? terminal.tmuxPaneCommand,
+                        tmuxPaneActive: isActive ?? terminal.tmuxPaneActive,
                         kind: {
                           type: "tmux-pane",
                           sessionId: controllerId,
@@ -170,6 +198,13 @@ export function useTauriListeners({
               configId: tmuxControllerConfigIdsRef.current.get(controllerId),
               tmuxWindowId: parentTmuxWindowId,
               tmuxSessionName: sessionName,
+              tmuxWindowName: windowName,
+              tmuxWindowIndex: windowIndex,
+              tmuxPaneIndex: paneIndex,
+              tmuxPaneWidth: width,
+              tmuxPaneHeight: height,
+              tmuxPaneCommand: currentCommand,
+              tmuxPaneActive: isActive,
             });
             setSessions((prev) => {
               if (prev.some((candidate) => candidate.id === terminalId)) return prev;
@@ -208,6 +243,13 @@ export function useTauriListeners({
                   configId,
                   tmuxWindowId,
                   tmuxSessionName: sessionName,
+                  tmuxWindowName: pane.windowName,
+                  tmuxWindowIndex: pane.windowIndex,
+                  tmuxPaneIndex: pane.paneIndex,
+                  tmuxPaneWidth: pane.width,
+                  tmuxPaneHeight: pane.height,
+                  tmuxPaneCommand: pane.currentCommand,
+                  tmuxPaneActive: pane.isActive,
                 });
                 setSessions((prev) =>
                   prev.some((candidate) => candidate.id === terminalId)
@@ -222,6 +264,13 @@ export function useTauriListeners({
                           ...terminal,
                           tmuxWindowId,
                           tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
+                          tmuxWindowName: pane.windowName ?? terminal.tmuxWindowName,
+                          tmuxWindowIndex: pane.windowIndex,
+                          tmuxPaneIndex: pane.paneIndex,
+                          tmuxPaneWidth: pane.width,
+                          tmuxPaneHeight: pane.height,
+                          tmuxPaneCommand: pane.currentCommand ?? terminal.tmuxPaneCommand,
+                          tmuxPaneActive: pane.isActive ?? terminal.tmuxPaneActive,
                         }
                       : terminal,
                   ),

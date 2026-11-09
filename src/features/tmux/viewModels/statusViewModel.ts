@@ -14,6 +14,12 @@ export interface TmuxStatusPaneViewData {
   terminalId: number;
   tmuxPaneId: string;
   tmuxWindowId: string;
+  windowIndex?: number;
+  paneIndex?: number;
+  width?: number;
+  height?: number;
+  currentCommand?: string;
+  isActive?: boolean;
   title: string;
   status: TmuxRuntimeStatus;
   location?: PaneLocationViewData;
@@ -21,6 +27,7 @@ export interface TmuxStatusPaneViewData {
 
 export interface TmuxStatusWindowViewData {
   tmuxWindowId: string;
+  windowIndex?: number;
   name: string;
   status: TmuxRuntimeStatus;
   panes: readonly TmuxStatusPaneViewData[];
@@ -88,14 +95,27 @@ function groupWindows(
 
   return [...windows.entries()].map(([tmuxWindowId, windowPanes]) => {
     const status = windowPanes.some((pane) => pane.isConnected) ? "connected" : "disconnected";
+    const windowIndex = windowPanes.find(
+      (pane) => pane.tmuxWindowIndex !== undefined,
+    )?.tmuxWindowIndex;
     return {
       tmuxWindowId,
-      name: windowPanes[0]?.name ?? `Window ${tmuxWindowId}`,
+      ...(windowIndex !== undefined ? { windowIndex } : {}),
+      name:
+        windowPanes.find((pane) => pane.tmuxWindowName)?.tmuxWindowName ??
+        windowPanes[0]?.name ??
+        `Window ${tmuxWindowId}`,
       status,
       panes: windowPanes.map((pane) => ({
         terminalId: pane.id,
         tmuxPaneId: pane.tmuxPaneId ?? "unknown",
         tmuxWindowId,
+        ...(pane.tmuxWindowIndex !== undefined ? { windowIndex: pane.tmuxWindowIndex } : {}),
+        ...(pane.tmuxPaneIndex !== undefined ? { paneIndex: pane.tmuxPaneIndex } : {}),
+        ...(pane.tmuxPaneWidth !== undefined ? { width: pane.tmuxPaneWidth } : {}),
+        ...(pane.tmuxPaneHeight !== undefined ? { height: pane.tmuxPaneHeight } : {}),
+        ...(pane.tmuxPaneCommand ? { currentCommand: pane.tmuxPaneCommand } : {}),
+        ...(pane.tmuxPaneActive !== undefined ? { isActive: pane.tmuxPaneActive } : {}),
         title: pane.name,
         status: pane.isConnected ? "connected" : "disconnected",
         ...(locations.has(pane.id) ? { location: locations.get(pane.id) } : {}),

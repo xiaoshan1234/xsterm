@@ -32,7 +32,19 @@ interface RawTmuxControllerExited {
   reason?: string;
 }
 
-interface RawTmuxPaneAdded {
+interface RawTmuxPaneMetadata {
+  window_index: number;
+  pane_index: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  current_command?: string;
+  is_active?: boolean;
+  window_name?: string;
+}
+
+interface RawTmuxPaneAdded extends RawTmuxPaneMetadata {
   controller_id: number;
   tmux_pane_id: string;
   xsterm_session_id: number;
@@ -52,14 +64,12 @@ interface RawTmuxWindowAdded {
   xsterm_window_id: number;
   name: string;
   session_name?: string;
-  panes: Array<{
-    tmux_pane_id: string;
-    xsterm_session_id: number;
-    width: number;
-    height: number;
-    x: number;
-    y: number;
-  }>;
+  panes: Array<
+    RawTmuxPaneMetadata & {
+      tmux_pane_id: string;
+      xsterm_session_id: number;
+    }
+  >;
   layout?: string;
 }
 
@@ -170,6 +180,15 @@ export function normalizePaneAdded(payload: RawTmuxPaneAdded): TmuxPaneAddedEven
     tmuxPaneId: payload.tmux_pane_id,
     parentTmuxWindowId: payload.parent_tmux_window_id,
     ...(payload.session_name ? { sessionName: payload.session_name } : {}),
+    windowIndex: payload.window_index,
+    paneIndex: payload.pane_index,
+    width: payload.width,
+    height: payload.height,
+    x: payload.x,
+    y: payload.y,
+    ...(payload.current_command ? { currentCommand: payload.current_command } : {}),
+    ...(payload.is_active !== undefined ? { isActive: payload.is_active } : {}),
+    ...(payload.window_name ? { windowName: payload.window_name } : {}),
   };
 }
 
@@ -197,10 +216,15 @@ export function normalizeWindowAdded(payload: RawTmuxWindowAdded): TmuxWindowAdd
     panes: (payload.panes ?? []).map((pane) => ({
       terminalHandle: toBackendTerminalHandle(pane.xsterm_session_id),
       tmuxPaneId: pane.tmux_pane_id,
+      windowIndex: pane.window_index,
+      paneIndex: pane.pane_index,
       width: pane.width,
       height: pane.height,
       x: pane.x,
       y: pane.y,
+      ...(pane.current_command ? { currentCommand: pane.current_command } : {}),
+      ...(pane.is_active !== undefined ? { isActive: pane.is_active } : {}),
+      ...(pane.window_name ? { windowName: pane.window_name } : {}),
     })),
     layout: payload.layout ?? "",
   };

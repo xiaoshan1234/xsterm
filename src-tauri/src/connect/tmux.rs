@@ -6,14 +6,30 @@ use std::sync::{Arc, Mutex};
 
 use xscore::platform::ssh::SshOptions;
 use xscore::platform::tmux::{
-    list_panes_command, list_windows_command, parse_pane_line, parse_window_line,
-    resize_pane_command, socket_args, TmuxControl, TmuxEvent, TmuxHostConfig, TmuxSocket,
+    list_windows_command, parse_window_line, resize_pane_command, socket_args, TmuxControl,
+    TmuxEvent, TmuxHostConfig, TmuxSocket,
 };
 
 use crate::connect::app_backend::AppBackend;
 use crate::connect::forward::spawn_output_forwarder;
 use crate::connect::ssh_exec::ssh_exec_status;
 use crate::shared::session::{SplitDirection, SshConfig, TmuxSessionConfig};
+
+const EXTENDED_PANE_FORMAT: &str = "#{window_index}|#{pane_index}|#{pane_id}|#{pane_width}|#{pane_height}|#{pane_left}|#{pane_top}|#{pane_current_command}|#{pane_active}|#{window_name}";
+
+#[derive(Debug, Clone)]
+struct ExtendedPaneInfo {
+    window_index: u32,
+    pane_index: u32,
+    handle: String,
+    cols: u16,
+    rows: u16,
+    x: u16,
+    y: u16,
+    current_command: String,
+    is_active: bool,
+    window_name: String,
+}
 
 /// One tmux control connection owning N panes (and therefore N xsterm
 /// sessions). All state is guarded by `std::sync::Mutex` so the shared
@@ -200,6 +216,40 @@ impl TmuxSession {
     /// first pane is also recorded as the bootstrap pane for
     /// [`Self::await_first_pane`], but still emits its window event so
     /// manual attach and startup auto-attach render identically.
+    async fn list_extended_panes(&self, window: &str) -> Result<Vec<ExtendedPaneInfo>, String> {
+        let command = format!(
+            "list-panes -t {} -F {}",
+            shell_quote(window),
+            shell_quote(EXTENDED_PANE_FORMAT)
+        );
+        let lines = self
+            .control
+            .send(&command)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(lines
+            .iter()
+            .filter_map(|line| parse_extended_pane_line(line))
+            .collect())
+    }
+
+    async fn pane_details(&self, pane: &str) -> Result<ExtendedPaneInfo, String> {
+        let command = format!(
+            "display-message -p -t {} {}",
+            pane,
+            shell_quote(EXTENDED_PANE_FORMAT)
+        );
+        let lines = self
+            .control
+            .send(&command)
+            .await
+            .map_err(|e| e.to_string())?;
+        lines
+            .iter()
+            .find_map(|line| parse_extended_pane_line(line))
+            .ok_or_else(|| format!("tmux returned no details for pane {pane}"))
+    }
+
     async fn register_existing_windows(&self) -> Result<(), String> {
         let session_name = self
             .session_name
@@ -217,14 +267,7 @@ impl TmuxSession {
             .filter_map(|line| parse_window_line(line))
         {
             let tmux_window_id = window.handle;
-            let panes = self
-                .control
-                .send(&list_panes_command(&tmux_window_id))
-                .await
-                .map_err(|e| e.to_string())?
-                .iter()
-                .filter_map(|line| parse_pane_line(line))
-                .collect::<Vec<_>>();
+            let panes = self.list_extended_panes(&tmux_window_id).await?;
             if panes.is_empty() {
                 continue;
             }
@@ -251,10 +294,15 @@ impl TmuxSession {
                 pane_entries.push(serde_json::json!({
                     "tmux_pane_id": pane.handle,
                     "xsterm_session_id": xsterm_id,
+                    "window_index": pane.window_index,
+                    "pane_index": pane.pane_index,
                     "width": pane.cols,
                     "height": pane.rows,
                     "x": pane.x,
                     "y": pane.y,
+                    "current_command": pane.current_command,
+                    "is_active": pane.is_active,
+                    "window_name": pane.window_name,
                 }));
             }
 
@@ -341,6 +389,7 @@ impl TmuxSession {
             .find(|line| !line.trim().is_empty())
             .ok_or_else(|| "tmux split-window returned no pane id".to_string())?;
 
+        let details = self.pane_details(&pane).await?;
         let xsterm_id = self.allocate_xsterm_id();
         self.register_pane(pane.clone(), xsterm_id);
         self.record_pane_window(pane.clone(), window.clone());
@@ -353,6 +402,15 @@ impl TmuxSession {
                 "xsterm_session_id": xsterm_id,
                 "parent_tmux_window_id": window,
                 "session_name": session_name,
+                "window_index": details.window_index,
+                "pane_index": details.pane_index,
+                "width": details.cols,
+                "height": details.rows,
+                "x": details.x,
+                "y": details.y,
+                "current_command": details.current_command,
+                "is_active": details.is_active,
+                "window_name": details.window_name,
             }),
         );
         self.spawn_pane_forwarder(&pane, xsterm_id);
@@ -380,12 +438,9 @@ impl TmuxSession {
             .ok_or_else(|| "tmux new-window returned no window id".to_string())?;
 
         let pane = self
-            .control
-            .send(&list_panes_command(&window_id))
-            .await
-            .map_err(|e| e.to_string())?
-            .iter()
-            .filter_map(|line| parse_pane_line(line))
+            .list_extended_panes(&window_id)
+            .await?
+            .into_iter()
             .next()
             .ok_or_else(|| "tmux new-window returned no pane".to_string())?;
 
@@ -408,10 +463,15 @@ impl TmuxSession {
                 "panes": [{
                     "tmux_pane_id": pane.handle,
                     "xsterm_session_id": xsterm_id,
+                    "window_index": pane.window_index,
+                    "pane_index": pane.pane_index,
                     "width": pane.cols,
                     "height": pane.rows,
                     "x": pane.x,
                     "y": pane.y,
+                    "current_command": pane.current_command,
+                    "is_active": pane.is_active,
+                    "window_name": pane.window_name,
                 }],
                 "layout": "",
             }),
@@ -579,6 +639,25 @@ impl TmuxSession {
     fn allocate_xsterm_window_id(&self) -> u32 {
         self.next_xsterm_window_id.fetch_add(1, Ordering::Relaxed)
     }
+}
+
+fn parse_extended_pane_line(line: &str) -> Option<ExtendedPaneInfo> {
+    let fields: Vec<&str> = line.split('|').collect();
+    if fields.len() != 10 || !fields[2].starts_with('%') {
+        return None;
+    }
+    Some(ExtendedPaneInfo {
+        window_index: fields[0].parse().ok()?,
+        pane_index: fields[1].parse().ok()?,
+        handle: fields[2].to_string(),
+        cols: fields[3].parse().ok()?,
+        rows: fields[4].parse().ok()?,
+        x: fields[5].parse().ok()?,
+        y: fields[6].parse().ok()?,
+        current_command: fields[7].to_string(),
+        is_active: fields[8].trim() == "1",
+        window_name: fields[9].to_string(),
+    })
 }
 
 /// Build the xscore tmux target from an xsterm config.

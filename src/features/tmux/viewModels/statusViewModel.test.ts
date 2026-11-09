@@ -84,6 +84,37 @@ describe("Tmux status view model", () => {
 
     expect(result[0]?.sessionName).toBe("work");
   });
+
+  it("maps tmux window/pane indices and command metadata", () => {
+    const terminal: Terminal = {
+      ...createTmuxTerminal(10, "%1", "@0", true),
+      tmuxWindowName: "editor",
+      tmuxWindowIndex: 0,
+      tmuxPaneIndex: 1,
+      tmuxPaneWidth: 88,
+      tmuxPaneHeight: 1,
+      tmuxPaneCommand: "bash",
+      tmuxPaneActive: true,
+    };
+    const result = selectTmuxStatusControllers([terminal], [], []);
+
+    expect(result[0]?.windows[0]).toMatchObject({
+      tmuxWindowId: "@0",
+      windowIndex: 0,
+      name: "editor",
+      panes: [
+        {
+          terminalId: 10,
+          windowIndex: 0,
+          paneIndex: 1,
+          width: 88,
+          height: 1,
+          currentCommand: "bash",
+          isActive: true,
+        },
+      ],
+    });
+  });
 });
 
 function createTmuxTerminal(

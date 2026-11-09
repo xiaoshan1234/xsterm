@@ -36,7 +36,19 @@ export interface TmuxControllerExitedEvent {
   reason?: string;
 }
 
-export interface TmuxPaneAddedEvent {
+export interface TmuxPaneMetadata {
+  windowIndex: number;
+  paneIndex: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  currentCommand?: string;
+  isActive?: boolean;
+  windowName?: string;
+}
+
+export interface TmuxPaneAddedEvent extends TmuxPaneMetadata {
   controllerHandle: BackendControllerHandle;
   terminalHandle: BackendTerminalHandle;
   tmuxPaneId: string;
@@ -50,13 +62,9 @@ export interface TmuxPaneRemovedEvent {
   tmuxPaneId: string;
 }
 
-export interface TmuxWindowPaneDto {
+export interface TmuxWindowPaneDto extends TmuxPaneMetadata {
   terminalHandle: BackendTerminalHandle;
   tmuxPaneId: string;
-  width: number;
-  height: number;
-  x: number;
-  y: number;
 }
 
 export interface TmuxWindowAddedEvent {

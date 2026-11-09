@@ -17,6 +17,7 @@ const controllers: TmuxStatusControllerViewData[] = [
     windows: [
       {
         tmuxWindowId: "@1",
+        windowIndex: 0,
         name: "editor",
         status: "connected",
         panes: [
@@ -24,6 +25,12 @@ const controllers: TmuxStatusControllerViewData[] = [
             terminalId: 8,
             tmuxPaneId: "%1",
             tmuxWindowId: "@1",
+            windowIndex: 0,
+            paneIndex: 1,
+            width: 88,
+            height: 1,
+            currentCommand: "bash",
+            isActive: true,
             title: "bash",
             status: "connected",
           },
@@ -36,7 +43,9 @@ const controllers: TmuxStatusControllerViewData[] = [
 describe("TmuxStatusPanel", () => {
   it("collapses the session level", () => {
     render(<TmuxStatusPanel controllers={controllers} onFocusPane={() => undefined} />);
-    expect(screen.getByText("work (#1)")).toBeTruthy();
+    expect(screen.getByText("work:1")).toBeTruthy();
+    expect(screen.getByText(/0.*1 panes/)).toBeTruthy();
+    expect(screen.getByText(/0\.1.*88x1.*ACTIVE/)).toBeTruthy();
     expect(screen.getByText("bash")).toBeTruthy();
 
     const [sessionCollapse] = screen.getAllByRole("button", { name: "Collapse" });
