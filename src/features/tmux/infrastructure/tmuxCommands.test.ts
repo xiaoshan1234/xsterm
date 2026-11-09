@@ -20,7 +20,6 @@ function createInvokeSpy() {
   ): Promise<Value> => {
     calls.push({ command, args });
     if (
-      command === "create_tmux_session" ||
       command === "attach_tmux_session" ||
       command === "create_tmux_pane" ||
       command === "create_tmux_window"

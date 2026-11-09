@@ -37,7 +37,7 @@ import {
   type EditableTerminalConfig,
 } from "../../features/terminal/ui/dialogs";
 import {
-  CreateTmuxDialog,
+  AttachTmuxDialog,
   EditTmuxDialog,
   type EditableTmuxConfig,
 } from "../../features/tmux/ui/dialogs";
@@ -50,7 +50,7 @@ import { useAppShortcuts } from "../useAppShortcuts";
 
 type RuntimeDialog =
   | { kind: "create-terminal"; initialTab: "local" | "ssh"; groupId: number }
-  | { kind: "create-tmux" }
+  | { kind: "attach-tmux" }
   | { kind: "edit-terminal"; config: EditableTerminalConfig }
   | { kind: "edit-tmux"; config: EditableTmuxConfig }
   | { kind: "new-group" }
@@ -75,7 +75,7 @@ export function AppShellRuntime() {
     writeTerminal,
     createLocalSession,
     createSshSession,
-    createTmuxSession,
+    attachTmuxSession,
     applyDisplayConfigToLiveSession,
   } = useTerminalRuntime();
   const {
@@ -331,7 +331,7 @@ export function AppShellRuntime() {
         return (
           <TmuxManagerPanel
             items={tmuxManagerItems}
-            onNewTmux={() => setDialog({ kind: "create-tmux" })}
+            onNewTmux={() => setDialog({ kind: "attach-tmux" })}
             onOpenConfig={openConfig}
             onEditConfig={openEditTmuxConfig}
             onRemoveConfig={removeConfig}
@@ -446,8 +446,8 @@ export function AppShellRuntime() {
           initialGroupId={dialog.groupId}
         />
       )}
-      {!error && dialog?.kind === "create-tmux" && (
-        <CreateTmuxDialog isOpen onClose={() => setDialog(null)} onCreateTmux={createTmuxSession} />
+      {!error && dialog?.kind === "attach-tmux" && (
+        <AttachTmuxDialog isOpen onClose={() => setDialog(null)} onAttachTmux={attachTmuxSession} />
       )}
       {!error && dialog?.kind === "edit-terminal" && (
         <EditTerminalDialog

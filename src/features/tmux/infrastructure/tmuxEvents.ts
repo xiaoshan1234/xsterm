@@ -51,6 +51,7 @@ interface RawTmuxWindowAdded {
   xsterm_window_id: number;
   xsterm_session_id: number;
   xsterm_pane_id: string;
+  name: string;
 }
 
 interface RawTmuxWindowClosed {
@@ -183,6 +184,7 @@ export function normalizeWindowAdded(payload: RawTmuxWindowAdded): TmuxWindowAdd
     backendWindowHandle: toBackendWindowHandle(payload.xsterm_window_id),
     terminalHandle: toBackendTerminalHandle(payload.xsterm_session_id),
     tmuxPaneId: payload.xsterm_pane_id,
+    name: payload.name,
   };
 }
 

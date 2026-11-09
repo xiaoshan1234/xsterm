@@ -24,7 +24,7 @@ export function TmuxManagerPanel({
   return (
     <ManagerPanelFrame
       footer={
-        <ManagerActionButton label="New Tmux Session" variant="primary" onClick={onNewTmux} />
+        <ManagerActionButton label="Attach Tmux Session" variant="primary" onClick={onNewTmux} />
       }
     >
       {items.length === 0 ? (

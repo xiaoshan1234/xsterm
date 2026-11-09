@@ -19,10 +19,10 @@ import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/te
 import TmuxForm from "./TmuxForm";
 import "../../../terminal/ui/dialogs/CreateTerminalDialog.css";
 
-interface CreateTmuxDialogProps {
+interface AttachTmuxDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateTmux: (
+  onAttachTmux: (
     config: TmuxSessionConfig,
     save: boolean,
     displayConfig?: TerminalDisplayConfig,
@@ -30,12 +30,12 @@ interface CreateTmuxDialogProps {
   initialGroupId?: number;
 }
 
-export function CreateTmuxDialog({
+export function AttachTmuxDialog({
   isOpen,
   onClose,
-  onCreateTmux,
+  onAttachTmux,
   initialGroupId = DEFAULT_GROUP_ID,
-}: CreateTmuxDialogProps) {
+}: AttachTmuxDialogProps) {
   const { addToGroup, saveConfigOnly, savedConfigs } = useSavedLaunchConfigs();
   const [tmuxConfig, setTmuxConfig] = useState<TmuxSessionConfig>({});
   const [shouldSaveConfig, setShouldSaveConfig] = useState(true);
@@ -59,6 +59,12 @@ export function CreateTmuxDialog({
   };
 
   const prepareConfig = (): { config: TmuxSessionConfig; base?: SavedTerminalConfig } | null => {
+    const tmuxSessionName = tmuxConfig.tmuxSessionName?.trim();
+    if (!tmuxSessionName) {
+      form.setError("Please enter the tmux session name to attach to.");
+      form.setSectionId("connection");
+      return null;
+    }
     const baseConfigId = tmuxConfig.baseConfigId;
     if (!baseConfigId) {
       form.setError("Please pick a base SSH or Shell saved config.");
@@ -101,7 +107,7 @@ export function CreateTmuxDialog({
     form.setError("");
 
     try {
-      const terminal = await onCreateTmux(prepared.config, shouldSaveConfig, form.displayConfig);
+      const terminal = await onAttachTmux(prepared.config, shouldSaveConfig, form.displayConfig);
       addToGroup(initialGroupId, terminal.configId);
       onClose();
     } catch (error) {
@@ -170,7 +176,7 @@ export function CreateTmuxDialog({
           disabled={isSubmitting}
           onClick={handleCreate}
         >
-          {isSubmitting ? "Creating…" : "Create Tmux"}
+          {isSubmitting ? "Attaching..." : "Attach"}
         </button>
       </div>
     </div>
@@ -180,7 +186,7 @@ export function CreateTmuxDialog({
     <Dialog
       isOpen={isOpen}
       onClose={closeDialog}
-      title="Create Tmux Session"
+      title="Attach Tmux Session"
       className="create-terminal-dialog"
       footer={footer}
     >

@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 
 use xscore::platform::ssh::SshOptions;
 use xscore::platform::tmux::{
-    list_panes_command, parse_pane_line, resize_pane_command, send_keys_literal, TmuxControl,
-    TmuxEvent, TmuxHostConfig, TmuxSocket, TmuxSpawnMode,
+    list_panes_command, list_windows_command, parse_pane_line, parse_window_line,
+    resize_pane_command, TmuxControl, TmuxEvent, TmuxHostConfig, TmuxSocket,
 };
 
 use crate::connect::app_backend::AppBackend;
@@ -32,31 +32,8 @@ pub(crate) struct TmuxSession {
 }
 
 impl TmuxSession {
-    /// Spawn a control connection that creates a new tmux session.
-    pub(crate) async fn spawn_new(
-        config: &TmuxSessionConfig,
-        app_backend: Arc<dyn AppBackend>,
-        controller_id: u32,
-    ) -> Result<Arc<Self>, String> {
-        let session_name = config
-            .tmux_session_name
-            .clone()
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| format!("xsterm-{controller_id}"));
-        Self::spawn_with_mode(
-            config,
-            app_backend,
-            controller_id,
-            &session_name,
-            TmuxSpawnMode::NewSession {
-                cols: config.initial_cols.unwrap_or(80),
-                rows: config.initial_rows.unwrap_or(24),
-            },
-        )
-        .await
-    }
-
-    /// Spawn a control connection that attaches to an existing session.
+    /// Spawn a control connection that attaches to an existing tmux session
+    /// and registers every window / pane it finds.
     pub(crate) async fn spawn_attach(
         config: &TmuxSessionConfig,
         app_backend: Arc<dyn AppBackend>,
@@ -69,31 +46,11 @@ impl TmuxSession {
             .ok_or_else(|| {
                 "tmux attach requires `tmuxSessionName` in TmuxSessionConfig".to_string()
             })?;
-        Self::spawn_with_mode(
-            config,
-            app_backend,
-            controller_id,
-            session_name,
-            TmuxSpawnMode::Attach,
-        )
-        .await
-    }
 
-    async fn spawn_with_mode(
-        config: &TmuxSessionConfig,
-        app_backend: Arc<dyn AppBackend>,
-        controller_id: u32,
-        session_name: &str,
-        mode: TmuxSpawnMode,
-    ) -> Result<Arc<Self>, String> {
         let (host, socket) = build_tmux_target(config)?;
-        let control = match mode {
-            TmuxSpawnMode::Attach => TmuxControl::spawn(&host, &socket, session_name).await,
-            TmuxSpawnMode::NewSession { cols, rows } => {
-                TmuxControl::spawn_new_session(&host, &socket, session_name, cols, rows).await
-            }
-        }
-        .map_err(|e| e.to_string())?;
+        let control = TmuxControl::spawn(&host, &socket, session_name)
+            .await
+            .map_err(|e| e.to_string())?;
 
         let id_base = controller_id.saturating_mul(1_000_000);
         let session = Arc::new(Self {
@@ -111,7 +68,7 @@ impl TmuxSession {
         });
 
         session.spawn_event_loop();
-        session.bootstrap_window().await?;
+        session.register_existing_windows().await?;
         Ok(session)
     }
 
@@ -195,41 +152,90 @@ impl TmuxSession {
         }
     }
 
-    /// Create the bootstrap window and register its first pane.
-    async fn bootstrap_window(&self) -> Result<(), String> {
-        // `new-window -P -F` prints the new window id deterministically.
-        let reply = self
+    /// Discover every window and pane already present in the attached tmux
+    /// session and register them. Emits `tmux-window-added` for each window
+    /// and `tmux-pane-added` for each additional pane so the frontend can
+    /// reconstruct the complete window list from a single attach call. The
+    /// first pane is also recorded as the bootstrap pane for
+    /// [`Self::await_first_pane`], but still emits its window event so
+    /// manual attach and startup auto-attach render identically.
+    async fn register_existing_windows(&self) -> Result<(), String> {
+        let session_name = self
+            .session_name
+            .clone()
+            .ok_or_else(|| "tmux session name is missing".to_string())?;
+        let window_lines = self
             .control
-            .send("new-window -P -F '#{window_id}'")
+            .send(&list_windows_command(&session_name))
             .await
             .map_err(|e| e.to_string())?;
-        let window_id = reply
-            .into_iter()
-            .find(|line| !line.trim().is_empty())
-            .ok_or_else(|| "tmux new-window returned no window id".to_string())?;
 
-        let pane = self
-            .control
-            .send(&list_panes_command(&window_id))
-            .await
-            .map_err(|e| e.to_string())?
+        let mut bootstrap_recorded = false;
+        for window in window_lines
             .iter()
-            .filter_map(|line| parse_pane_line(line))
-            .map(|pane| pane.handle)
-            .next()
-            .ok_or_else(|| "tmux new-window returned no pane".to_string())?;
+            .filter_map(|line| parse_window_line(line))
+        {
+            let tmux_window_id = window.handle;
+            let panes = self
+                .control
+                .send(&list_panes_command(&tmux_window_id))
+                .await
+                .map_err(|e| e.to_string())?
+                .iter()
+                .filter_map(|line| parse_pane_line(line))
+                .map(|pane| pane.handle)
+                .collect::<Vec<_>>();
+            if panes.is_empty() {
+                continue;
+            }
 
-        let xsterm_window_id = self.allocate_xsterm_window_id();
-        let xsterm_id = self.allocate_xsterm_id();
-        self.register_pane(pane.clone(), xsterm_id);
-        self.record_pane_window(pane.clone(), window_id.clone());
-        if let Ok(mut bindings) = self.window_bindings.lock() {
-            bindings.insert(window_id, xsterm_window_id);
+            let xsterm_window_id = self.allocate_xsterm_window_id();
+            if let Ok(mut bindings) = self.window_bindings.lock() {
+                bindings.insert(tmux_window_id.clone(), xsterm_window_id);
+            }
+
+            for (index, pane) in panes.iter().enumerate() {
+                let xsterm_id = self.allocate_xsterm_id();
+                self.register_pane(pane.clone(), xsterm_id);
+                self.record_pane_window(pane.clone(), tmux_window_id.clone());
+                self.spawn_pane_forwarder(pane, xsterm_id);
+
+                if !bootstrap_recorded {
+                    if let Ok(mut slot) = self.bootstrap_pane.lock() {
+                        *slot = Some((xsterm_id, pane.clone()));
+                    }
+                    bootstrap_recorded = true;
+                }
+
+                if index == 0 {
+                    let _ = self.app_backend.emit(
+                        "tmux-window-added",
+                        &serde_json::json!({
+                            "controller_id": self.controller_id,
+                            "tmux_window_id": tmux_window_id,
+                            "xsterm_window_id": xsterm_window_id,
+                            "xsterm_session_id": xsterm_id,
+                            "xsterm_pane_id": pane,
+                            "name": window.name,
+                        }),
+                    );
+                } else {
+                    let _ = self.app_backend.emit(
+                        "tmux-pane-added",
+                        &serde_json::json!({
+                            "controller_id": self.controller_id,
+                            "tmux_pane_id": pane,
+                            "xsterm_session_id": xsterm_id,
+                            "parent_tmux_window_id": tmux_window_id,
+                        }),
+                    );
+                }
+            }
         }
-        if let Ok(mut slot) = self.bootstrap_pane.lock() {
-            *slot = Some((xsterm_id, pane.clone()));
+
+        if !bootstrap_recorded {
+            return Err(format!("tmux session '{session_name}' has no windows"));
         }
-        self.spawn_pane_forwarder(&pane, xsterm_id);
         Ok(())
     }
 
@@ -241,10 +247,17 @@ impl TmuxSession {
             .ok_or_else(|| "tmux bootstrap pane not registered".to_string())
     }
 
+    /// Return every tmux pane id paired with its allocated xsterm id.
+    pub(crate) fn registered_panes(&self) -> Vec<(String, u32)> {
+        self.pane_bindings
+            .lock()
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), *v)).collect())
+            .unwrap_or_default()
+    }
+
     pub(crate) async fn send_keys(&self, pane: &str, data: &[u8]) -> Result<(), String> {
         self.ensure_pane_bound(pane)?;
-        let text = String::from_utf8_lossy(data);
-        let command = send_keys_literal(pane, &text).map_err(|e| e.to_string())?;
+        let command = send_keys_command(pane, data)?;
         self.control
             .send(&command)
             .await
@@ -360,6 +373,7 @@ impl TmuxSession {
                 "xsterm_window_id": xsterm_window_id,
                 "xsterm_session_id": xsterm_id,
                 "xsterm_pane_id": pane,
+                "name": name.unwrap_or_default(),
             }),
         );
         self.spawn_pane_forwarder(&pane, xsterm_id);
@@ -575,4 +589,65 @@ pub(crate) fn ssh_options_from_config(config: &SshConfig) -> SshOptions {
 fn shell_quote(s: &str) -> String {
     let escaped = s.replace('\'', "'\\''");
     format!("'{escaped}'")
+}
+
+/// Build a `send-keys -l` command that delivers arbitrary bytes to a pane
+/// without letting tmux's command-line tokenizer eat whitespace or treat key
+/// names specially. Control bytes, backslash and non-ASCII bytes are emitted
+/// as `\nnn` octal escapes and the whole payload is wrapped in double quotes;
+/// tmux's `-l` literal mode decodes those escapes back to the original bytes.
+fn send_keys_command(pane: &str, payload: &[u8]) -> Result<String, String> {
+    use std::fmt::Write as _;
+
+    if payload.contains(&0) {
+        return Err("tmux control mode cannot carry a NUL byte".to_string());
+    }
+    let mut escaped = String::with_capacity(payload.len());
+    for &byte in payload {
+        if byte < 0x20 || byte == b'\\' || byte >= 0x80 {
+            let _ = write!(escaped, "\\{byte:03o}");
+        } else {
+            escaped.push(byte as char);
+        }
+    }
+    let safe = escaped.replace('"', "\\\"");
+    Ok(format!("send-keys -l -t {pane} \"{safe}\""))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::send_keys_command;
+
+    #[test]
+    fn send_keys_command_preserves_spaces() {
+        assert_eq!(
+            send_keys_command("%5", b" ").unwrap(),
+            r#"send-keys -l -t %5 " ""#
+        );
+    }
+
+    #[test]
+    fn send_keys_command_octal_escapes_control_backslash_and_utf8() {
+        assert_eq!(
+            send_keys_command("%0", b"hello\nworld").unwrap(),
+            r#"send-keys -l -t %0 "hello\012world""#
+        );
+        assert_eq!(
+            send_keys_command("%0", b"a\\b").unwrap(),
+            r#"send-keys -l -t %0 "a\134b""#
+        );
+        assert_eq!(
+            send_keys_command("%0", "é".as_bytes()).unwrap(),
+            r#"send-keys -l -t %0 "\303\251""#
+        );
+    }
+
+    #[test]
+    fn send_keys_command_escapes_embedded_quote_and_rejects_nul() {
+        assert_eq!(
+            send_keys_command("%0", b"say \"hi\"").unwrap(),
+            r#"send-keys -l -t %0 "say \"hi\"""#
+        );
+        assert!(send_keys_command("%0", b"a\0b").is_err());
+    }
 }

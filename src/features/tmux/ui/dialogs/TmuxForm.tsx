@@ -21,16 +21,16 @@ interface TmuxFormProps {
 }
 
 /**
- * tmux control-mode form for the Create Terminal dialog's "Tmux" top
- * tab. A tmux terminal rides on top of an already-saved SSH or Local
+ * tmux control-mode form for the Attach Tmux dialog. A tmux terminal rides
+ * on top of an already-saved SSH or Local
  * shell config; the form lists those saved configs as a "Base
  * Configuration" dropdown so the user picks the transport by
  * picking the base, not by exposing a separate transport toggle.
  *
  * Submitting the dialog forwards `TmuxSessionConfig` to the backend with
- * `baseConfigId` populated; `CreateTerminalDialog.handleCreate` looks
- * up the base saved config and, when it is an SSH config, copies the
- * SSH sub-config into `TmuxSessionConfig.ssh` before the backend call. The
+ * `baseConfigId` populated; the dialog looks up the base saved config and,
+ * when it is an SSH config, copies the SSH sub-config into
+ * `TmuxSessionConfig.ssh` before the backend call. The
  * backend then routes through the SSH exec channel when the base was
  * an SSH config and through a local `tokio::process::Command` child
  * otherwise.
@@ -81,8 +81,8 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFor
         <div className="terminal-section__title">Tmux Control Mode</div>
 
         <FormTextField
-          label="Tmux Terminal Name"
-          placeholder="leave blank to auto-generate"
+          label="Tmux Session Name"
+          placeholder="existing session name, e.g. work"
           value={config.tmuxSessionName}
           onChange={(tmuxSessionName) =>
             onConfigChange({ ...config, tmuxSessionName: tmuxSessionName ?? undefined })
@@ -95,15 +95,6 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFor
           value={config.socketName}
           onChange={(socketName) =>
             onConfigChange({ ...config, socketName: socketName ?? undefined })
-          }
-        />
-
-        <FormTextField
-          label="Start Command"
-          placeholder="shell command, e.g. /bin/zsh"
-          value={config.startCommand}
-          onChange={(startCommand) =>
-            onConfigChange({ ...config, startCommand: startCommand ?? undefined })
           }
         />
       </div>

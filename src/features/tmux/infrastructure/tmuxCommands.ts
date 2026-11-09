@@ -3,10 +3,7 @@ import {
   toBackendTerminalHandle,
   type BackendTerminalHandle,
 } from "../../terminal/infrastructure/handles";
-import {
-  type TerminalInfoDto,
-  type TerminalLoggingConfigDto,
-} from "../../terminal/infrastructure/tauriContracts";
+import { type TerminalInfoDto } from "../../terminal/infrastructure/tauriContracts";
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
 import {
   type AttachedTmuxServerDto,
@@ -19,10 +16,6 @@ type SplitDirection = "horizontal" | "vertical";
 type InvokeFunction = <Value>(command: string, args?: Record<string, unknown>) => Promise<Value>;
 
 export interface TmuxCommandClient {
-  createTmuxSession(
-    config: TmuxSessionConfigDto,
-    logging?: TerminalLoggingConfigDto,
-  ): Promise<TerminalInfoDto>;
   attachTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto>;
   createTmuxPane(
     controllerHandle: BackendControllerHandle,
@@ -45,17 +38,6 @@ export function createTmuxCommandClient(
   invokeFunction: InvokeFunction = defaultInvoke,
 ): TmuxCommandClient {
   return {
-    async createTmuxSession(
-      config: TmuxSessionConfigDto,
-      logging?: TerminalLoggingConfigDto,
-    ): Promise<TerminalInfoDto> {
-      const terminal = await invokeFunction<TerminalInfoDto>("create_tmux_session", {
-        config,
-        logging,
-      });
-      return normalizeTerminalInfo(terminal);
-    },
-
     async attachTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("attach_tmux_session", {
         config,

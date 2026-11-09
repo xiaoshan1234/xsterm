@@ -61,6 +61,7 @@ describe("tmux event normalization", () => {
         xsterm_window_id: 12,
         xsterm_session_id: 8,
         xsterm_pane_id: "%1",
+        name: "server",
       }),
     ).toEqual({
       controllerHandle: toBackendControllerHandle(3),
@@ -68,6 +69,7 @@ describe("tmux event normalization", () => {
       backendWindowHandle: toBackendWindowHandle(12),
       terminalHandle: toBackendTerminalHandle(8),
       tmuxPaneId: "%1",
+      name: "server",
     });
 
     expect(

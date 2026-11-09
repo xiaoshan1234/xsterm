@@ -47,8 +47,7 @@ export interface TerminalRuntimeContextType {
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
-  createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
-  createTmuxSessionOnly: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
+  attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;
@@ -182,12 +181,17 @@ export interface TerminalState {
   setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
   /**
    * `controllerId → TmuxSessionConfig` map. Populated by
-   * `createTmuxSession` / `attachTmuxSession` so the retry banner
+   * `attachTmuxSession` so the retry banner
    * can re-call the backend with the same config. Survives pane
    * teardown so the banner can still retry after the `Terminal`
    * rows are gone.
    */
   tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
+  /**
+   * `controllerId` -> `configId` map. Populated by `attachTmuxSession` so
+   * event-driven tmux panes can be linked back to their saved config.
+   */
+  tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
 }
 
 export interface SessionPersistence {
@@ -219,8 +223,7 @@ export interface TerminalRuntimeActions {
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
-  createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
-  createTmuxSessionOnly: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
+  attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;

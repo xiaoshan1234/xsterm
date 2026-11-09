@@ -49,6 +49,11 @@ export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDial
       form.setError("Tmux display name is required.");
       return;
     }
+    if (!tmuxConfig.tmuxSessionName?.trim()) {
+      form.setError("Tmux session name is required.");
+      form.setSectionId("connection");
+      return;
+    }
 
     const base = savedConfigs.find((candidate) => candidate.id === tmuxConfig.baseConfigId);
     if (!base || (base.type !== "local" && base.type !== "ssh")) {

@@ -124,66 +124,6 @@ pub fn upload_image_to_ssh_terminal(
     state.upload_image(session_id, &filename, data)
 }
 
-/// Create a new tmux `-CC` controller session.
-///
-/// Spawns a `tmux -CC` child process and waits for the first pane to be
-/// reported before returning. The registered pane is the bootstrap pane
-/// tmux occupies on `tmux -CC new` (D3 in
-/// `doc/requirements/prd-0.1/req-006-tmux.md`) and is marked
-/// `is_hidden = true` so the frontend suppresses it.
-#[tauri::command]
-pub async fn create_tmux_session(
-    config: TmuxSessionConfig,
-    logging: Option<TerminalLoggingConfig>,
-    state: State<'_, Arc<TerminalRegistry>>,
-    backend: State<'_, Arc<RealAppBackend>>,
-    app: AppHandle,
-) -> Result<TerminalInfo, String> {
-    tracing::info!(
-        "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?} base_config_id={:?} has_ssh={}",
-        config.name,
-        config.tmux_session_name,
-        config.socket_name,
-        config.base_config_id,
-        config.ssh.is_some()
-    );
-    let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
-    let inner: Arc<dyn AppBackend> = arc_real;
-    let wrapped: Arc<dyn AppBackend> =
-        Arc::new(TerminalLoggingBackend::new(inner, state.session_logs()));
-    let result = state.create_tmux(&config, wrapped, logging).await;
-    if let Err(ref e) = result {
-        tracing::error!(
-            "create_tmux_session failed: {} (config was: name={:?}, tmux_session={:?}, socket={:?}, base_config_id={:?}, has_ssh={})",
-            e,
-            config.name,
-            config.tmux_session_name,
-            config.socket_name,
-            config.base_config_id,
-            config.ssh.is_some()
-        );
-    }
-    if result.is_ok() {
-        // refresh `attached_tmux.json` with the up-to-date list.
-        // Best-effort: a transient store failure must not mask a successful
-        // create.
-        let servers = state.list_attached_tmux_servers();
-        if let Err(e) = crate::command::persistence::save_attached_tmux_servers_impl(&app, &servers)
-        {
-            tracing::warn!("create_tmux_session: persistence failed: {e}");
-        }
-    }
-    result.inspect(|info| {
-        tracing::info!(
-            "tmux session created: id={} controller_id={} pane={:?} hidden={}",
-            info.id,
-            info.tmux_session_id().unwrap_or(0),
-            info.tmux_pane_id(),
-            info.is_hidden,
-        );
-    })
-}
-
 /// Split the tmux pane backing an xsterm session via `split-window`.
 ///
 /// Returns a [`TerminalInfo`] for the newly created pane (a fresh
@@ -249,11 +189,11 @@ pub async fn kill_tmux_pane(
 
 /// Attach to an existing tmux server (Wave 4 §D4, req-006 §5).
 ///
-/// Spawns `tmux -CC attach-session -t <name>` and waits for the first
-/// pane before returning. The bootstrap pane is registered with
-/// `is_hidden = true` (iTerm2 D3 pattern) so the frontend suppresses it
-/// until the user opens a real working pane via `create_tmux_window` /
-/// `create_tmux_pane`.
+/// Spawns `tmux -CC attach -t <name>`, lists every window and pane, and
+/// registers each pane as a live xsterm session while emitting the
+/// `tmux-window-added` / `tmux-pane-added` events the frontend uses to
+/// reconstruct the window list. Returns the first window's first pane as
+/// the representative [`TerminalInfo`] (visible, not hidden).
 ///
 /// `tmux_session_name` is required; attaching to "the server's current
 /// session" is non-deterministic when several exist on the same socket.
@@ -282,11 +222,10 @@ pub async fn attach_tmux_session(
     }
     result.inspect(|info| {
         tracing::info!(
-            "tmux attach succeeded: id={} controller_id={} pane={:?} hidden={}",
+            "tmux attach succeeded: id={} controller_id={} pane={:?}",
             info.id,
             info.tmux_session_id().unwrap_or(0),
             info.tmux_pane_id(),
-            info.is_hidden,
         );
     })
 }

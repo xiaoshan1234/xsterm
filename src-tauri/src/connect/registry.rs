@@ -91,31 +91,6 @@ impl TerminalRegistry {
         Ok(self.insert_session(id, session))
     }
 
-    pub(crate) async fn create_tmux(
-        &self,
-        config: &TmuxSessionConfig,
-        backend: Arc<dyn AppBackend>,
-        logging: Option<TerminalLoggingConfig>,
-    ) -> Result<TerminalInfo, String> {
-        let controller_id = self.allocate_controller_id();
-        let controller = TmuxSession::spawn_new(config, backend, controller_id).await?;
-        let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
-        let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
-
-        let info = tmux_pane_info(
-            xsterm_id,
-            controller_id,
-            tmux_pane_id.clone(),
-            config.tmux_session_name.as_deref(),
-            config.name.as_deref(),
-            false,
-            tmux_window_id.as_deref(),
-        );
-        self.start_logging(xsterm_id, logging.as_ref(), &info.name);
-        self.tmux_sessions.insert(controller_id, controller);
-        Ok(self.insert_tmux_pane(xsterm_id, controller_id, tmux_pane_id, info))
-    }
-
     pub(crate) async fn attach_tmux(
         &self,
         config: &TmuxSessionConfig,
@@ -123,20 +98,29 @@ impl TerminalRegistry {
     ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
         let controller = TmuxSession::spawn_attach(config, backend, controller_id).await?;
-        let (xsterm_id, tmux_pane_id) = controller.await_first_pane().await?;
-        let tmux_window_id = controller.tmux_window_id_for_pane(&tmux_pane_id);
+        self.tmux_sessions
+            .insert(controller_id, Arc::clone(&controller));
 
-        let info = tmux_pane_info(
-            xsterm_id,
-            controller_id,
-            tmux_pane_id.clone(),
-            config.tmux_session_name.as_deref(),
-            config.name.as_deref(),
-            true,
-            tmux_window_id.as_deref(),
-        );
-        self.tmux_sessions.insert(controller_id, controller);
-        Ok(self.insert_tmux_pane(xsterm_id, controller_id, tmux_pane_id, info))
+        let (bootstrap_xsterm_id, _bootstrap_pane_id) = controller.await_first_pane().await?;
+        let mut bootstrap_info = None;
+        for (pane_id, xsterm_id) in controller.registered_panes() {
+            let tmux_window_id = controller.tmux_window_id_for_pane(&pane_id);
+            let info = tmux_pane_info(
+                xsterm_id,
+                controller_id,
+                pane_id.clone(),
+                config.tmux_session_name.as_deref(),
+                config.name.as_deref(),
+                false,
+                tmux_window_id.as_deref(),
+            );
+            let inserted = self.insert_tmux_pane(xsterm_id, controller_id, pane_id, info);
+            if xsterm_id == bootstrap_xsterm_id {
+                bootstrap_info = Some(inserted);
+            }
+        }
+
+        bootstrap_info.ok_or_else(|| "tmux attach returned no bootstrap pane".to_string())
     }
 
     pub(crate) async fn capture_tmux_pane(

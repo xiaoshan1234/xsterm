@@ -35,7 +35,7 @@ pub(crate) async fn load_attached_tmux_servers(
 /// Synchronous variant shared by the `commands::session` handlers (which
 /// already hold an `AppHandle`). Errors are logged at `warn` level instead
 /// of propagated so a transient store failure does not mask a successful
-/// `create_tmux`/`attach_tmux`.
+/// `attach_tmux`.
 pub(crate) fn save_attached_tmux_servers_impl(
     app: &AppHandle,
     servers: &[AttachedTmuxServer],

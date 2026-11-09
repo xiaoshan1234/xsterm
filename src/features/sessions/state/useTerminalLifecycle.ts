@@ -50,6 +50,9 @@ interface UseSessionLifecycleDeps {
    * can hand the original config back to the backend after a
    * `tmux-controller-exit`. */
   tmuxControllerConfigsRef?: React.MutableRefObject<Map<number, TmuxSessionConfig>>;
+  /** `controllerId` -> `configId` map for linking event-driven tmux panes
+   * back to their saved config. */
+  tmuxControllerConfigIdsRef?: React.MutableRefObject<Map<number, string>>;
 }
 
 export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
@@ -65,6 +68,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     openFromConfigInternal,
     createWindowFromSession,
     tmuxControllerConfigsRef,
+    tmuxControllerConfigIdsRef,
   } = deps;
 
   /**
@@ -158,8 +162,8 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   /**
    * Create a local terminal and automatically create a workspace
    *
-   * Call chain: createLocalSession → createAndActivateSession("local", ...)
-   *  → backend terminalService.createLocal(config) → terminals[] + auto-create workspace
+   * Call chain: createLocalSession 閳?createAndActivateSession("local", ...)
+   *  閳?backend terminalService.createLocal(config) 閳?terminals[] + auto-create workspace
    */
   const createLocalSession = useCallback(
     async (
@@ -182,8 +186,8 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   /**
    * Create an SSH terminal and automatically create a workspace
    *
-   * Call chain: createSshSession → createAndActivateSession("ssh", ...)
-   *  → backend terminalService.createSsh(config) → terminals[] + auto-create workspace
+   * Call chain: createSshSession 閳?createAndActivateSession("ssh", ...)
+   *  閳?backend terminalService.createSsh(config) 閳?terminals[] + auto-create workspace
    */
   const createSshSession = useCallback(
     async (
@@ -240,57 +244,53 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   );
 
   /**
-   * create a local tmux control-mode terminal and a default workspace.
+   * Attach to an existing tmux session.
    *
-   * Call chain: createTmuxSession → createAndActivateSession("tmux-pane", ...)
-   * → backend terminalService.createTmux(config) → terminals[] + auto-create window.
+   * The backend lists every window and pane and emits
+   * `tmux-window-added` / `tmux-pane-added` events; the listeners in
+   * `useTauriListeners` are what actually create the frontend windows and
+   * terminals. This method only invokes the backend and persists the saved
+   * config so the tmux manager can re-attach later.
    */
-  const createTmuxSession = useCallback(
+  const attachTmuxSession = useCallback(
     async (
       config: TmuxSessionConfig,
       save = true,
       displayConfig?: TerminalDisplayConfig,
     ): Promise<Terminal> => {
-      return createAndActivateSession(
-        "tmux-pane",
-        () => tmuxCommands.createTmuxSession(config, displayConfig?.logging),
-        config,
-        save,
-        false,
-        displayConfig,
-      );
-    },
-    [createAndActivateSession],
-  );
+      const configId = crypto.randomUUID();
+      const info = await tmuxCommands.attachTmuxSession(config);
+      const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
 
-  /**
-   * create a tmux terminal without auto-creating a default window.
-   * Used by the PaneInitCard / Split flows where the consumer attaches the
-   * resulting terminal to an existing pane.
-   */
-  const createTmuxSessionOnly = useCallback(
-    async (
-      config: TmuxSessionConfig,
-      save = true,
-      displayConfig?: TerminalDisplayConfig,
-    ): Promise<Terminal> => {
-      return createAndActivateSession(
-        "tmux-pane",
-        () => tmuxCommands.createTmuxSession(config, displayConfig?.logging),
-        config,
-        save,
-        true,
-        displayConfig,
-      );
+      if (tmuxControllerConfigsRef && terminal.tmuxSessionId !== undefined) {
+        tmuxControllerConfigsRef.current.set(terminal.tmuxSessionId, config);
+      }
+      if (tmuxControllerConfigIdsRef && terminal.tmuxSessionId !== undefined) {
+        tmuxControllerConfigIdsRef.current.set(terminal.tmuxSessionId, configId);
+      }
+
+      if (save) {
+        const configName = config.name?.trim() || config.tmuxSessionName?.trim() || info.name;
+        const savedConfig: SavedTerminalConfig = {
+          id: configId,
+          name: configName,
+          version: 1,
+          type: "tmux-pane",
+          config,
+          displayConfig,
+        };
+        updateConfigs((prev) => [...prev, savedConfig]);
+      }
+      return terminal;
     },
-    [createAndActivateSession],
+    [updateConfigs, tmuxControllerConfigsRef, tmuxControllerConfigIdsRef],
   );
 
   /**
    * Persist a terminal configuration WITHOUT creating a backend terminal
    * or auto-opening a window.
    *
-   * Used by the Create Terminal dialog's "Save Only" button — the user
+   * Used by the Create Terminal dialog's "Save Only" button 閳?the user
    * configures the form fields but does not want a live terminal yet;
    * the config is parked in `savedConfigs` so it can be opened later
    * via the Terminal Manager sidebar.
@@ -301,7 +301,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
    *
    * The caller is responsible for SSH/tmux-over-SSH validation
    * (matching `createAndActivateSession`'s expectations) before calling
-   * this method — saving an invalid SSH config would block a future
+   * this method 閳?saving an invalid SSH config would block a future
    * "Open" via `createTerminalFromSavedConfig`.
    *
    * Display config is persisted as-is so the saved entry round-trips
@@ -463,11 +463,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
             config.config as SshConfig,
             config.displayConfig?.logging,
           ),
-        () =>
-          tmuxCommands.createTmuxSession(
-            config.config as TmuxSessionConfig,
-            config.displayConfig?.logging,
-          ),
+        () => tmuxCommands.attachTmuxSession(config.config as TmuxSessionConfig),
       );
       const type: Terminal["type"] = config.type;
 
@@ -523,9 +519,9 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   /**
    * Merge a `displayConfig` patch into a running terminal's in-memory state
    * so the new values (e.g. `sizingMode`, `cols`, `rows`) propagate via
-   * React to Terminal → `useTerminalResize` and apply without restart.
+   * React to Terminal 閳?`useTerminalResize` and apply without restart.
    *
-   * Persistence is the caller's responsibility — callers should
+   * Persistence is the caller's responsibility 閳?callers should
    * `updateConfig(...)` first so the saved config and the running terminal
    * stay in sync.
    */
@@ -545,8 +541,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     createSshSession,
     createLocalSessionOnly,
     createSshSessionOnly,
-    createTmuxSession,
-    createTmuxSessionOnly,
+    attachTmuxSession,
     saveConfigOnly,
     openFromConfig,
     removeConfig,

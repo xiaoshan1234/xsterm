@@ -79,9 +79,8 @@ export interface Terminal {
    */
   tmuxWindowId?: string;
   /**
-   * hidden (bootstrap) tmux panes are not rendered. `tmux -CC new`
-   * panes have `is_hidden = false` so they render normally; tmux
-   * attaches flag the bootstrap pane as hidden.
+   * Legacy flag for hiding a tmux bootstrap pane. Attach now treats every
+   * window/pane as a real working pane, so new sessions leave this unset.
    */
   isHidden?: boolean;
 }
@@ -185,11 +184,11 @@ export interface TmuxSessionConfig {
    * through a local `tokio::process::Command` child otherwise.
    */
   baseConfigId?: string;
-  /** tmux terminal name. Leave blank to auto-generate a new terminal. */
+  /** Existing tmux session name to attach to. Required for attach. */
   tmuxSessionName?: string;
   /** tmux socket name (`-L` flag). Leave blank for tmux's default socket. */
   socketName?: string;
-  /** Initial shell command (passed to `tmux -CC new-terminal -d <cmd>`). */
+  /** Legacy create-only field; unused by the attach flow. */
   startCommand?: string;
   /** Initial environment overrides applied to the tmux pane. */
   envConfig?: TerminalEnvConfig;
@@ -347,8 +346,8 @@ export interface TerminalGroup {
  *
  * The frontend listener in `useTauriListeners.ts` is idempotent: if a
  * `Terminal` with the same `xstermTerminalId` already exists (because
- * the backend's `create_tmux_session` return value populated React
- * state for the bootstrap pane), the listener short-circuits. This
+ * an earlier event already populated React state), the listener
+ * short-circuits. This
  * means the same payload shape covers BOTH the bootstrap pane and
  * user-driven split panes; only the listener's behavior differs.
  *

@@ -12,10 +12,11 @@ function buildTmuxPaneSession(info: {
   name: string;
   tmuxPaneId: string;
   tmuxSessionId: number;
+  configId?: string;
 }): Terminal {
   return {
     id: info.id,
-    configId: "",
+    configId: info.configId ?? "",
     name: info.name,
     type: "tmux-pane",
     isConnected: true,
@@ -42,6 +43,7 @@ type ListenersState = Pick<
   | "establishingSessionsRef"
   | "setTmuxControllerErrors"
   | "tmuxControllerConfigsRef"
+  | "tmuxControllerConfigIdsRef"
 >;
 
 export function useTauriListeners({
@@ -52,6 +54,7 @@ export function useTauriListeners({
   establishingSessionsRef,
   setTmuxControllerErrors,
   tmuxControllerConfigsRef,
+  tmuxControllerConfigIdsRef,
 }: ListenersState): void {
   useEffect(() => {
     let disposed = false;
@@ -133,6 +136,7 @@ export function useTauriListeners({
               name: `tmux-${controllerId}:${tmuxPaneId}`,
               tmuxPaneId,
               tmuxSessionId: controllerId,
+              configId: tmuxControllerConfigIdsRef.current.get(controllerId),
             });
             setSessions((prev) => {
               if (prev.some((candidate) => candidate.id === terminalId)) return prev;
@@ -152,6 +156,7 @@ export function useTauriListeners({
             backendWindowHandle,
             tmuxPaneId,
             tmuxWindowId,
+            name,
           }) => {
             const controllerId = Number(controllerHandle);
             const terminalId = Number(terminalHandle);
@@ -163,6 +168,7 @@ export function useTauriListeners({
                 name: `tmux-${controllerId}:${tmuxPaneId}`,
                 tmuxPaneId,
                 tmuxSessionId: controllerId,
+                configId: tmuxControllerConfigIdsRef.current.get(controllerId),
               });
               terminal.tmuxWindowId = tmuxWindowId;
               setSessions((prev) =>
@@ -194,7 +200,7 @@ export function useTauriListeners({
             if (!targetWorkspaceId) return;
 
             const rootPane = createLeafPane(100, terminalId, "");
-            const windowName = `Window ${tmuxPaneId}`;
+            const windowName = name || `Window ${tmuxPaneId}`;
             setWorkspaces((prev) =>
               prev.map((workspace) => {
                 if (workspace.id !== targetWorkspaceId) return workspace;
@@ -254,5 +260,6 @@ export function useTauriListeners({
     establishingSessionsRef,
     setTmuxControllerErrors,
     tmuxControllerConfigsRef,
+    tmuxControllerConfigIdsRef,
   ]);
 }

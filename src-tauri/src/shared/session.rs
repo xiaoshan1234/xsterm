@@ -225,8 +225,8 @@ impl SplitDirection {
 ///
 /// Mirrors the TypeScript `AttachedTmuxServer` interface exactly. The frontend
 /// reads this list on app startup to know which tmux servers to auto-attach
-/// to; the backend rewrites it on every successful `create_tmux` /
-/// `attach_tmux` and whenever the last pane on a controller is closed.
+/// to; the backend rewrites it on every successful `attach_tmux` and
+/// whenever the last pane on a controller is closed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachedTmuxServer {

@@ -55,6 +55,7 @@ export interface TmuxWindowAddedEvent {
   backendWindowHandle: BackendWindowHandle;
   terminalHandle: BackendTerminalHandle;
   tmuxPaneId: string;
+  name: string;
 }
 
 export interface TmuxWindowClosedEvent {

@@ -1,2 +1,2 @@
-export * from "./CreateTmuxDialog";
+export * from "./AttachTmuxDialog";
 export * from "./EditTmuxDialog";

@@ -39,7 +39,9 @@ export function SelectTerminalDialog({
   }, [workspaces]);
 
   const availableSessions = terminals.filter((s) => !usedSessionIds.has(s.id));
-  const availableConfigs = savedConfigs;
+  // tmux sessions attach to all their windows at once and are opened through
+  // the Tmux manager; they don't make sense as a single-pane attachment.
+  const availableConfigs = savedConfigs.filter((config) => config.type !== "tmux-pane");
 
   return (
     <Dialog

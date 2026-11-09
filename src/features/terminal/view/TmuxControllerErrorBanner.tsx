@@ -37,11 +37,8 @@ export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorB
 
   const handleRetry = useCallback(async () => {
     if (!match) return;
-    const op = match.config.tmuxSessionName
-      ? tmuxCommands.attachTmuxSession
-      : tmuxCommands.createTmuxSession;
     try {
-      await op(match.config);
+      await tmuxCommands.attachTmuxSession(match.config);
     } catch (e) {
       console.error("Failed to retry tmux controller:", e);
       window.alert(

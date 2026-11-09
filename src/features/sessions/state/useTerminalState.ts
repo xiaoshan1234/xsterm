@@ -32,6 +32,9 @@ export function useTerminalState(): TerminalState {
   // `createTmux` / `attachTmux`. Survives pane teardown (which only removes
   // `terminals` entries, not the controller's persistent metadata).
   const tmuxControllerConfigsRef = useRef<Map<number, TmuxSessionConfig>>(new Map());
+  // `controllerId` -> `configId` map. Populated by the attach flow so
+  // event-driven tmux panes can be linked back to their saved config.
+  const tmuxControllerConfigIdsRef = useRef<Map<number, string>>(new Map());
 
   const terminalsRef = useRef(terminals);
   const workspacesRef = useRef(workspaces);
@@ -91,5 +94,6 @@ export function useTerminalState(): TerminalState {
     tmuxControllerErrors,
     setTmuxControllerErrors,
     tmuxControllerConfigsRef,
+    tmuxControllerConfigIdsRef,
   };
 }

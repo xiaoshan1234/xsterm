@@ -42,12 +42,31 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     setActiveWorkspaceId,
     activeWorkspaceId,
     establishingSessionsRef,
+    tmuxControllerConfigsRef,
+    tmuxControllerConfigIdsRef,
   } = opts;
 
   const openFromConfigInternal = useCallback(
     async (configId: string): Promise<Terminal> => {
       const config = savedConfigs.find((c) => c.id === configId);
       if (!config) throw new Error("Config not found");
+
+      if (config.type === "tmux-pane") {
+        // Attach is event-driven: `attach_tmux_session` emits the
+        // `tmux-window-added` / `tmux-pane-added` events that create the
+        // real windows and terminals. Return a representative Terminal for
+        // the caller without adding it to state.
+        const info = await tmuxCommands.attachTmuxSession(config.config as TmuxSessionConfig);
+        const terminal = buildFrontendTerminal(info, configId, "tmux-pane", config.displayConfig);
+        if (terminal.tmuxSessionId !== undefined) {
+          tmuxControllerConfigsRef.current.set(
+            terminal.tmuxSessionId,
+            config.config as TmuxSessionConfig,
+          );
+          tmuxControllerConfigIdsRef.current.set(terminal.tmuxSessionId, configId);
+        }
+        return terminal;
+      }
 
       const info = await dispatchByType(
         config.type,
@@ -61,17 +80,13 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
             config.config as SshConfig,
             config.displayConfig?.logging,
           ),
-        () =>
-          tmuxCommands.createTmuxSession(
-            config.config as TmuxSessionConfig,
-            config.displayConfig?.logging,
-          ),
+        () => tmuxCommands.attachTmuxSession(config.config as TmuxSessionConfig),
       );
       const terminal = buildFrontendTerminal(info, configId, config.type, config.displayConfig);
       setSessions((prev) => [...prev, terminal]);
       return terminal;
     },
-    [savedConfigs, setSessions],
+    [savedConfigs, setSessions, tmuxControllerConfigsRef, tmuxControllerConfigIdsRef],
   );
 
   const createTerminalFromSavedConfig = useCallback(

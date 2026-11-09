@@ -57,6 +57,19 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
       if (!config) throw new Error("Config not found");
 
       const terminal = await createTerminalFromSavedConfig(configId);
+      if (config.type === "tmux-pane") {
+        // tmux attach is event-driven; the listeners create the real
+        // windows. Return a lightweight placeholder for callers that expect
+        // a `Window` without inserting it into workspace state.
+        const rootPane = createLeafPane(100, terminal.id, terminal.configId);
+        return {
+          id: crypto.randomUUID(),
+          name: name ?? config.name,
+          rootPane,
+          activePaneId: rootPane.id,
+          windowType: "terminal" as const,
+        };
+      }
       assertSessionNotUsedElsewhere(workspacesRef.current, null, null, terminal.id);
       return createWindowFromSession(
         terminal.id,
