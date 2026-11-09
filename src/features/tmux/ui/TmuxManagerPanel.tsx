@@ -8,6 +8,7 @@ import { type TmuxManagerItemViewData } from "../viewModels/managerViewModel";
 
 interface TmuxManagerPanelProps {
   items: readonly TmuxManagerItemViewData[];
+  onCreateTmux: () => void;
   onNewTmux: () => void;
   onOpenConfig: (configId: string) => void;
   onEditConfig: (configId: string) => void;
@@ -16,6 +17,7 @@ interface TmuxManagerPanelProps {
 
 export function TmuxManagerPanel({
   items,
+  onCreateTmux,
   onNewTmux,
   onOpenConfig,
   onEditConfig,
@@ -24,7 +26,18 @@ export function TmuxManagerPanel({
   return (
     <ManagerPanelFrame
       footer={
-        <ManagerActionButton label="Attach Tmux Session" variant="primary" onClick={onNewTmux} />
+        <>
+          <ManagerActionButton
+            label="Create Tmux Session"
+            variant="primary"
+            onClick={onCreateTmux}
+          />
+          <ManagerActionButton
+            label="Attach Tmux Session"
+            variant="secondary"
+            onClick={onNewTmux}
+          />
+        </>
       }
     >
       {items.length === 0 ? (

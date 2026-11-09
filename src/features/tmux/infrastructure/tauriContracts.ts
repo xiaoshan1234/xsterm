@@ -49,13 +49,22 @@ export interface TmuxPaneRemovedEvent {
   tmuxPaneId: string;
 }
 
+export interface TmuxWindowPaneDto {
+  terminalHandle: BackendTerminalHandle;
+  tmuxPaneId: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+}
+
 export interface TmuxWindowAddedEvent {
   controllerHandle: BackendControllerHandle;
   tmuxWindowId: string;
   backendWindowHandle: BackendWindowHandle;
-  terminalHandle: BackendTerminalHandle;
-  tmuxPaneId: string;
   name: string;
+  panes: readonly TmuxWindowPaneDto[];
+  layout: string;
 }
 
 export interface TmuxWindowClosedEvent {

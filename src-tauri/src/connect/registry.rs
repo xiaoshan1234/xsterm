@@ -91,6 +91,17 @@ impl TerminalRegistry {
         Ok(self.insert_session(id, session))
     }
 
+    pub(crate) async fn create_tmux(
+        &self,
+        config: &TmuxSessionConfig,
+        backend: Arc<dyn AppBackend>,
+    ) -> Result<TerminalInfo, String> {
+        let controller_id = self.allocate_controller_id();
+        let controller = TmuxSession::spawn_new(config, backend, controller_id).await?;
+        self.register_tmux_controller(config, controller_id, &controller)
+            .await
+    }
+
     pub(crate) async fn attach_tmux(
         &self,
         config: &TmuxSessionConfig,
@@ -98,8 +109,18 @@ impl TerminalRegistry {
     ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
         let controller = TmuxSession::spawn_attach(config, backend, controller_id).await?;
+        self.register_tmux_controller(config, controller_id, &controller)
+            .await
+    }
+
+    async fn register_tmux_controller(
+        &self,
+        config: &TmuxSessionConfig,
+        controller_id: u32,
+        controller: &Arc<TmuxSession>,
+    ) -> Result<TerminalInfo, String> {
         self.tmux_sessions
-            .insert(controller_id, Arc::clone(&controller));
+            .insert(controller_id, Arc::clone(controller));
 
         let (bootstrap_xsterm_id, _bootstrap_pane_id) = controller.await_first_pane().await?;
         let mut bootstrap_info = None;

@@ -7,11 +7,12 @@ use std::sync::{Arc, Mutex};
 use xscore::platform::ssh::SshOptions;
 use xscore::platform::tmux::{
     list_panes_command, list_windows_command, parse_pane_line, parse_window_line,
-    resize_pane_command, TmuxControl, TmuxEvent, TmuxHostConfig, TmuxSocket,
+    resize_pane_command, socket_args, TmuxControl, TmuxEvent, TmuxHostConfig, TmuxSocket,
 };
 
 use crate::connect::app_backend::AppBackend;
 use crate::connect::forward::spawn_output_forwarder;
+use crate::connect::ssh_exec::ssh_exec_status;
 use crate::shared::session::{SplitDirection, SshConfig, TmuxSessionConfig};
 
 /// One tmux control connection owning N panes (and therefore N xsterm
@@ -51,13 +52,53 @@ impl TmuxSession {
         let control = TmuxControl::spawn(&host, &socket, session_name)
             .await
             .map_err(|e| e.to_string())?;
+        Self::build_session(
+            controller_id,
+            control,
+            session_name.to_string(),
+            app_backend,
+        )
+        .await
+    }
 
+    /// Spawn a control connection that creates a new tmux session. Fails when
+    /// a session with the requested name already exists.
+    pub(crate) async fn spawn_new(
+        config: &TmuxSessionConfig,
+        app_backend: Arc<dyn AppBackend>,
+        controller_id: u32,
+    ) -> Result<Arc<Self>, String> {
+        let session_name = config
+            .tmux_session_name
+            .clone()
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| format!("xsterm-{controller_id}"));
+
+        if tmux_session_exists(config, &session_name).await? {
+            return Err(format!("tmux session '{session_name}' already exists"));
+        }
+
+        let (host, socket) = build_tmux_target(config)?;
+        let cols = config.initial_cols.unwrap_or(80);
+        let rows = config.initial_rows.unwrap_or(24);
+        let control = TmuxControl::spawn_new_session(&host, &socket, &session_name, cols, rows)
+            .await
+            .map_err(|e| e.to_string())?;
+        Self::build_session(controller_id, control, session_name, app_backend).await
+    }
+
+    async fn build_session(
+        controller_id: u32,
+        control: TmuxControl,
+        session_name: String,
+        app_backend: Arc<dyn AppBackend>,
+    ) -> Result<Arc<Self>, String> {
         let id_base = controller_id.saturating_mul(1_000_000);
         let session = Arc::new(Self {
             controller_id,
             control: Arc::new(control),
-            session_name: Some(session_name.to_string()),
-            app_backend: app_backend.clone(),
+            session_name: Some(session_name),
+            app_backend,
             pane_bindings: Mutex::new(HashMap::new()),
             pane_window_bindings: Mutex::new(HashMap::new()),
             window_bindings: Mutex::new(HashMap::new()),
@@ -183,7 +224,6 @@ impl TmuxSession {
                 .map_err(|e| e.to_string())?
                 .iter()
                 .filter_map(|line| parse_pane_line(line))
-                .map(|pane| pane.handle)
                 .collect::<Vec<_>>();
             if panes.is_empty() {
                 continue;
@@ -194,43 +234,41 @@ impl TmuxSession {
                 bindings.insert(tmux_window_id.clone(), xsterm_window_id);
             }
 
-            for (index, pane) in panes.iter().enumerate() {
+            let mut pane_entries = Vec::with_capacity(panes.len());
+            for pane in &panes {
                 let xsterm_id = self.allocate_xsterm_id();
-                self.register_pane(pane.clone(), xsterm_id);
-                self.record_pane_window(pane.clone(), tmux_window_id.clone());
-                self.spawn_pane_forwarder(pane, xsterm_id);
+                self.register_pane(pane.handle.clone(), xsterm_id);
+                self.record_pane_window(pane.handle.clone(), tmux_window_id.clone());
+                self.spawn_pane_forwarder(&pane.handle, xsterm_id);
 
                 if !bootstrap_recorded {
                     if let Ok(mut slot) = self.bootstrap_pane.lock() {
-                        *slot = Some((xsterm_id, pane.clone()));
+                        *slot = Some((xsterm_id, pane.handle.clone()));
                     }
                     bootstrap_recorded = true;
                 }
 
-                if index == 0 {
-                    let _ = self.app_backend.emit(
-                        "tmux-window-added",
-                        &serde_json::json!({
-                            "controller_id": self.controller_id,
-                            "tmux_window_id": tmux_window_id,
-                            "xsterm_window_id": xsterm_window_id,
-                            "xsterm_session_id": xsterm_id,
-                            "xsterm_pane_id": pane,
-                            "name": window.name,
-                        }),
-                    );
-                } else {
-                    let _ = self.app_backend.emit(
-                        "tmux-pane-added",
-                        &serde_json::json!({
-                            "controller_id": self.controller_id,
-                            "tmux_pane_id": pane,
-                            "xsterm_session_id": xsterm_id,
-                            "parent_tmux_window_id": tmux_window_id,
-                        }),
-                    );
-                }
+                pane_entries.push(serde_json::json!({
+                    "tmux_pane_id": pane.handle,
+                    "xsterm_session_id": xsterm_id,
+                    "width": pane.cols,
+                    "height": pane.rows,
+                    "x": pane.x,
+                    "y": pane.y,
+                }));
             }
+
+            let _ = self.app_backend.emit(
+                "tmux-window-added",
+                &serde_json::json!({
+                    "controller_id": self.controller_id,
+                    "tmux_window_id": tmux_window_id,
+                    "xsterm_window_id": xsterm_window_id,
+                    "name": window.name,
+                    "panes": pane_entries,
+                    "layout": window.layout,
+                }),
+            );
         }
 
         if !bootstrap_recorded {
@@ -345,39 +383,36 @@ impl TmuxSession {
             .map_err(|e| e.to_string())?
             .iter()
             .filter_map(|line| parse_pane_line(line))
-            .map(|pane| pane.handle)
             .next()
             .ok_or_else(|| "tmux new-window returned no pane".to_string())?;
 
         let xsterm_window_id = self.allocate_xsterm_window_id();
         let xsterm_id = self.allocate_xsterm_id();
-        self.register_pane(pane.clone(), xsterm_id);
-        self.record_pane_window(pane.clone(), window_id.clone());
+        self.register_pane(pane.handle.clone(), xsterm_id);
+        self.record_pane_window(pane.handle.clone(), window_id.clone());
         if let Ok(mut bindings) = self.window_bindings.lock() {
             bindings.insert(window_id.clone(), xsterm_window_id);
         }
-        let _ = self.app_backend.emit(
-            "tmux-pane-added",
-            &serde_json::json!({
-                "controller_id": self.controller_id,
-                "tmux_pane_id": pane,
-                "xsterm_session_id": xsterm_id,
-                "parent_tmux_window_id": window_id,
-            }),
-        );
         let _ = self.app_backend.emit(
             "tmux-window-added",
             &serde_json::json!({
                 "controller_id": self.controller_id,
                 "tmux_window_id": window_id,
                 "xsterm_window_id": xsterm_window_id,
-                "xsterm_session_id": xsterm_id,
-                "xsterm_pane_id": pane,
                 "name": name.unwrap_or_default(),
+                "panes": [{
+                    "tmux_pane_id": pane.handle,
+                    "xsterm_session_id": xsterm_id,
+                    "width": pane.cols,
+                    "height": pane.rows,
+                    "x": pane.x,
+                    "y": pane.y,
+                }],
+                "layout": "",
             }),
         );
-        self.spawn_pane_forwarder(&pane, xsterm_id);
-        Ok((xsterm_window_id, window_id, xsterm_id, pane))
+        self.spawn_pane_forwarder(&pane.handle, xsterm_id);
+        Ok((xsterm_window_id, window_id, xsterm_id, pane.handle))
     }
 
     pub(crate) async fn capture_pane(&self, pane: &str, lines: i32) -> Result<String, String> {
@@ -565,6 +600,53 @@ fn build_tmux_target(config: &TmuxSessionConfig) -> Result<(TmuxHostConfig, Tmux
         _ => TmuxSocket::Default,
     };
     Ok((host, socket))
+}
+
+/// Check whether a tmux session with `session_name` already exists on the
+/// configured target. Uses `tmux has-session` locally or over SSH.
+async fn tmux_session_exists(
+    config: &TmuxSessionConfig,
+    session_name: &str,
+) -> Result<bool, String> {
+    let (host, socket) = build_tmux_target(config)?;
+    let socket = socket_args(&socket);
+    match host {
+        TmuxHostConfig::Local => {
+            let mut command = tokio::process::Command::new("tmux");
+            command
+                .args(&socket)
+                .arg("has-session")
+                .arg("-t")
+                .arg(session_name);
+            let status = command
+                .status()
+                .await
+                .map_err(|e| format!("failed to run tmux has-session: {e}"))?;
+            Ok(status.code() == Some(0))
+        }
+        TmuxHostConfig::Ssh { .. } => {
+            let ssh = config
+                .ssh
+                .as_ref()
+                .ok_or_else(|| "tmux SSH target is missing ssh config".to_string())?;
+            let mut args = socket;
+            args.extend([
+                "has-session".to_string(),
+                "-t".to_string(),
+                session_name.to_string(),
+            ]);
+            let command = std::iter::once("tmux".to_string())
+                .chain(args)
+                .map(|arg| shell_quote(&arg))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let status = ssh_exec_status(ssh, &command).await?;
+            Ok(status == 0)
+        }
+        TmuxHostConfig::Wsl { .. } => {
+            Err("tmux session existence checks over WSL are not supported".to_string())
+        }
+    }
 }
 
 /// Map an xsterm SSH config onto xscore's `SshOptions`.

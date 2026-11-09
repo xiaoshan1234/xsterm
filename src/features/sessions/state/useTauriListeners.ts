@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { type Terminal } from "../../../models/legacy/terminal";
 import { subscribeTerminalEvents } from "../../terminal/infrastructure";
 import { subscribeTmuxEvents } from "../../tmux/infrastructure";
-import { createLeafPane, withRecomputedSessionIds } from "./paneUtils";
+import { createLeafPane, forEachPane, getLeafPaneIds, withRecomputedSessionIds } from "./paneUtils";
 import { closeWindow, removeSessionsFromWorkspaces, renameWindow } from "./eventTransitions";
 import { TMUX_PANE_CAPABILITIES } from "./capabilities";
+import { buildTmuxPaneTree, type TmuxPaneGeometry } from "./tmuxPaneTree";
 import { type TerminalState } from "./types";
 
 function buildTmuxPaneSession(info: {
@@ -152,55 +153,75 @@ export function useTauriListeners({
           },
           onWindowAdded: ({
             controllerHandle,
-            terminalHandle,
             backendWindowHandle,
-            tmuxPaneId,
             tmuxWindowId,
             name,
+            panes,
+            layout,
           }) => {
             const controllerId = Number(controllerHandle);
-            const terminalId = Number(terminalHandle);
             const xstermWindowId = Number(backendWindowHandle);
+            const configId = tmuxControllerConfigIdsRef.current.get(controllerId) ?? "";
 
-            if (!terminalsRef.current.some((terminal) => terminal.id === terminalId)) {
-              const terminal = buildTmuxPaneSession({
-                id: terminalId,
-                name: `tmux-${controllerId}:${tmuxPaneId}`,
-                tmuxPaneId,
-                tmuxSessionId: controllerId,
-                configId: tmuxControllerConfigIdsRef.current.get(controllerId),
-              });
-              terminal.tmuxWindowId = tmuxWindowId;
-              setSessions((prev) =>
-                prev.some((candidate) => candidate.id === terminalId) ? prev : [...prev, terminal],
-              );
-            } else {
-              setSessions((prev) =>
-                prev.map((terminal) =>
-                  terminal.id === terminalId ? { ...terminal, tmuxWindowId } : terminal,
-                ),
-              );
-            }
+            const paneGeometries: TmuxPaneGeometry[] = panes.map((pane) => {
+              const terminalId = Number(pane.terminalHandle);
+              const tmuxPaneId = pane.tmuxPaneId;
+              if (!terminalsRef.current.some((terminal) => terminal.id === terminalId)) {
+                const terminal = buildTmuxPaneSession({
+                  id: terminalId,
+                  name: `tmux-${controllerId}:${tmuxPaneId}`,
+                  tmuxPaneId,
+                  tmuxSessionId: controllerId,
+                  configId,
+                });
+                terminal.tmuxWindowId = tmuxWindowId;
+                setSessions((prev) =>
+                  prev.some((candidate) => candidate.id === terminalId)
+                    ? prev
+                    : [...prev, terminal],
+                );
+              } else {
+                setSessions((prev) =>
+                  prev.map((terminal) =>
+                    terminal.id === terminalId ? { ...terminal, tmuxWindowId } : terminal,
+                  ),
+                );
+              }
+              return {
+                terminalId,
+                width: pane.width,
+                height: pane.height,
+                x: pane.x,
+                y: pane.y,
+              };
+            });
 
             const targetWorkspaceId = (() => {
               const withController = workspacesRef.current.find((workspace) =>
-                workspace.windows.some(
-                  (window) =>
-                    window.rootPane.terminalId !== undefined &&
-                    terminalsRef.current.some(
-                      (terminal) =>
-                        terminal.id === window.rootPane.terminalId &&
-                        terminal.tmuxSessionId === controllerId,
-                    ),
-                ),
+                workspace.windows.some((window) => {
+                  let belongsToController = false;
+                  forEachPane(window.rootPane, (node) => {
+                    if (node.type !== "leaf" || node.terminalId === undefined) return;
+                    const terminal = terminalsRef.current.find(
+                      (candidate) => candidate.id === node.terminalId,
+                    );
+                    if (terminal?.tmuxSessionId === controllerId) {
+                      belongsToController = true;
+                    }
+                  });
+                  return belongsToController;
+                }),
               );
               if (withController) return withController.id;
               return workspacesRef.current[0]?.id ?? null;
             })();
             if (!targetWorkspaceId) return;
 
-            const rootPane = createLeafPane(100, terminalId, "");
-            const windowName = name || `Window ${tmuxPaneId}`;
+            const rootPane =
+              buildTmuxPaneTree(layout, paneGeometries, configId) ??
+              createLeafPane(100, paneGeometries[0]?.terminalId, "");
+            const leafIds = getLeafPaneIds(rootPane);
+            const windowName = name || `Window ${tmuxWindowId}`;
             setWorkspaces((prev) =>
               prev.map((workspace) => {
                 if (workspace.id !== targetWorkspaceId) return workspace;
@@ -208,7 +229,7 @@ export function useTauriListeners({
                   id: crypto.randomUUID(),
                   name: windowName,
                   rootPane,
-                  activePaneId: rootPane.id,
+                  activePaneId: leafIds[0] ?? null,
                   windowType: "terminal" as const,
                   xstermWindowId,
                 };

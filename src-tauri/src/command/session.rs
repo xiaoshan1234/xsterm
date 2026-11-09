@@ -124,6 +124,37 @@ pub fn upload_image_to_ssh_terminal(
     state.upload_image(session_id, &filename, data)
 }
 
+/// Create a new tmux `-CC` controller session.
+///
+/// Spawns `tmux -CC new-session` and waits for the first pane before
+/// returning. Returns an error when a session with the requested name already
+/// exists.
+#[tauri::command]
+pub async fn create_tmux_session(
+    config: TmuxSessionConfig,
+    state: State<'_, Arc<TerminalRegistry>>,
+    backend: State<'_, Arc<RealAppBackend>>,
+    app: AppHandle,
+) -> Result<TerminalInfo, String> {
+    tracing::info!(
+        "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?}",
+        config.name,
+        config.tmux_session_name,
+        config.socket_name,
+    );
+    let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
+    let dyn_backend: Arc<dyn AppBackend> = arc_real;
+    let result = state.create_tmux(&config, dyn_backend).await;
+    if result.is_ok() {
+        let servers = state.list_attached_tmux_servers();
+        if let Err(e) = crate::command::persistence::save_attached_tmux_servers_impl(&app, &servers)
+        {
+            tracing::warn!("create_tmux_session: persistence failed: {e}");
+        }
+    }
+    result
+}
+
 /// Split the tmux pane backing an xsterm session via `split-window`.
 ///
 /// Returns a [`TerminalInfo`] for the newly created pane (a fresh

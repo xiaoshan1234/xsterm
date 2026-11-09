@@ -59,17 +59,35 @@ describe("tmux event normalization", () => {
         controller_id: 3,
         tmux_window_id: "@1",
         xsterm_window_id: 12,
-        xsterm_session_id: 8,
-        xsterm_pane_id: "%1",
         name: "server",
+        panes: [
+          {
+            tmux_pane_id: "%1",
+            xsterm_session_id: 8,
+            width: 80,
+            height: 24,
+            x: 0,
+            y: 0,
+          },
+        ],
+        layout: "abcd,80x24,0,0,0",
       }),
     ).toEqual({
       controllerHandle: toBackendControllerHandle(3),
       tmuxWindowId: "@1",
       backendWindowHandle: toBackendWindowHandle(12),
-      terminalHandle: toBackendTerminalHandle(8),
-      tmuxPaneId: "%1",
       name: "server",
+      panes: [
+        {
+          terminalHandle: toBackendTerminalHandle(8),
+          tmuxPaneId: "%1",
+          width: 80,
+          height: 24,
+          x: 0,
+          y: 0,
+        },
+      ],
+      layout: "abcd,80x24,0,0,0",
     });
 
     expect(

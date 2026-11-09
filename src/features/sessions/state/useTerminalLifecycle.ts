@@ -287,6 +287,48 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   );
 
   /**
+   * Create a new tmux session.
+   *
+   * The backend creates the session (erroring when the name already exists)
+   * and emits a single `tmux-window-added` event; the listener in
+   * `useTauriListeners` creates the frontend window. This method persists the
+   * saved config so it can be re-attached later.
+   */
+  const createTmuxSession = useCallback(
+    async (
+      config: TmuxSessionConfig,
+      save = true,
+      displayConfig?: TerminalDisplayConfig,
+    ): Promise<Terminal> => {
+      const configId = crypto.randomUUID();
+      const info = await tmuxCommands.createTmuxSession(config);
+      const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
+
+      if (tmuxControllerConfigsRef && terminal.tmuxSessionId !== undefined) {
+        tmuxControllerConfigsRef.current.set(terminal.tmuxSessionId, config);
+      }
+      if (tmuxControllerConfigIdsRef && terminal.tmuxSessionId !== undefined) {
+        tmuxControllerConfigIdsRef.current.set(terminal.tmuxSessionId, configId);
+      }
+
+      if (save) {
+        const configName = config.name?.trim() || config.tmuxSessionName?.trim() || info.name;
+        const savedConfig: SavedTerminalConfig = {
+          id: configId,
+          name: configName,
+          version: 1,
+          type: "tmux-pane",
+          config,
+          displayConfig,
+        };
+        updateConfigs((prev) => [...prev, savedConfig]);
+      }
+      return terminal;
+    },
+    [updateConfigs, tmuxControllerConfigsRef, tmuxControllerConfigIdsRef],
+  );
+
+  /**
    * Persist a terminal configuration WITHOUT creating a backend terminal
    * or auto-opening a window.
    *
@@ -542,6 +584,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     createLocalSessionOnly,
     createSshSessionOnly,
     attachTmuxSession,
+    createTmuxSession,
     saveConfigOnly,
     openFromConfig,
     removeConfig,

@@ -117,7 +117,7 @@ async fn exec_ssh_command(
     config: &SshConfig,
     command: &str,
     stdin_data: Vec<u8>,
-) -> Result<(), String> {
+) -> Result<i32, String> {
     let mut ssh_config = russh::client::Config::default();
     if let Some(secs) = config.keepalive_interval {
         ssh_config.keepalive_interval = Some(Duration::from_secs(secs as u64));
@@ -158,21 +158,20 @@ async fn exec_ssh_command(
         .await
         .map_err(|e| format!("failed to close stdin: {e}"))?;
 
-    loop {
+    let exit_status = loop {
         match channel.wait().await {
             Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
-                if exit_status != 0 {
-                    return Err(format!("remote command exited with status {exit_status}"));
-                }
-                break;
+                break exit_status;
             }
-            Some(russh::ChannelMsg::Close) | Some(russh::ChannelMsg::Eof) | None => break,
+            Some(russh::ChannelMsg::Close) | Some(russh::ChannelMsg::Eof) | None => {
+                return Err("remote command closed without an exit status".to_string());
+            }
             _ => {}
         }
-    }
+    };
 
     let _ = channel.close().await;
-    Ok(())
+    Ok(exit_status as i32)
 }
 
 /// Upload `data` to `remote_path` via a fresh SSH exec channel (`cat > path`).
@@ -182,5 +181,15 @@ pub async fn upload_file_via_ssh(
     data: Vec<u8>,
 ) -> Result<(), String> {
     let command = format!("cat > {remote_path}");
-    exec_ssh_command(config, &command, data).await
+    let status = exec_ssh_command(config, &command, data).await?;
+    if status != 0 {
+        return Err(format!("remote command exited with status {status}"));
+    }
+    Ok(())
+}
+
+/// Run a command over SSH and return its exit status without interpreting
+/// non-zero statuses as hard failures. Used by tmux session existence checks.
+pub async fn ssh_exec_status(config: &SshConfig, command: &str) -> Result<i32, String> {
+    exec_ssh_command(config, command, Vec::new()).await
 }

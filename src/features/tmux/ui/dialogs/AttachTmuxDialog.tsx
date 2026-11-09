@@ -200,6 +200,7 @@ export function AttachTmuxDialog({
               onNameChange={form.setName}
               config={tmuxConfig}
               onConfigChange={setTmuxConfig}
+              mode="attach"
             />
           )}
         />

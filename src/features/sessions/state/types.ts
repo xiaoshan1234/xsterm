@@ -47,6 +47,7 @@ export interface TerminalRuntimeContextType {
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
+  createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
@@ -223,6 +224,7 @@ export interface TerminalRuntimeActions {
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
+  createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;

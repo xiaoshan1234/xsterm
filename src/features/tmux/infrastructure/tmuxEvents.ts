@@ -49,9 +49,16 @@ interface RawTmuxWindowAdded {
   controller_id: number;
   tmux_window_id: string;
   xsterm_window_id: number;
-  xsterm_session_id: number;
-  xsterm_pane_id: string;
   name: string;
+  panes: Array<{
+    tmux_pane_id: string;
+    xsterm_session_id: number;
+    width: number;
+    height: number;
+    x: number;
+    y: number;
+  }>;
+  layout?: string;
 }
 
 interface RawTmuxWindowClosed {
@@ -182,9 +189,16 @@ export function normalizeWindowAdded(payload: RawTmuxWindowAdded): TmuxWindowAdd
     controllerHandle: toBackendControllerHandle(payload.controller_id),
     tmuxWindowId: payload.tmux_window_id,
     backendWindowHandle: toBackendWindowHandle(payload.xsterm_window_id),
-    terminalHandle: toBackendTerminalHandle(payload.xsterm_session_id),
-    tmuxPaneId: payload.xsterm_pane_id,
     name: payload.name,
+    panes: (payload.panes ?? []).map((pane) => ({
+      terminalHandle: toBackendTerminalHandle(pane.xsterm_session_id),
+      tmuxPaneId: pane.tmux_pane_id,
+      width: pane.width,
+      height: pane.height,
+      x: pane.x,
+      y: pane.y,
+    })),
+    layout: payload.layout ?? "",
   };
 }
 

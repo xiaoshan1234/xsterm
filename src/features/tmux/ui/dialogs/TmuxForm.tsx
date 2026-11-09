@@ -18,6 +18,7 @@ interface TmuxFormProps {
    * piece of state. */
   config: TmuxSessionConfig;
   onConfigChange: (config: TmuxSessionConfig) => void;
+  mode: "attach" | "create";
 }
 
 /**
@@ -35,7 +36,7 @@ interface TmuxFormProps {
  * an SSH config and through a local `tokio::process::Command` child
  * otherwise.
  */
-export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFormProps) {
+export function TmuxForm({ name, onNameChange, config, onConfigChange, mode }: TmuxFormProps) {
   const { savedConfigs } = useSavedLaunchConfigs();
 
   // Only SSH + Local saved configs are valid bases for a tmux terminal.
@@ -82,7 +83,9 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFor
 
         <FormTextField
           label="Tmux Session Name"
-          placeholder="existing session name, e.g. work"
+          placeholder={
+            mode === "attach" ? "existing session name, e.g. work" : "leave blank to auto-generate"
+          }
           value={config.tmuxSessionName}
           onChange={(tmuxSessionName) =>
             onConfigChange({ ...config, tmuxSessionName: tmuxSessionName ?? undefined })
@@ -97,6 +100,17 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange }: TmuxFor
             onConfigChange({ ...config, socketName: socketName ?? undefined })
           }
         />
+
+        {mode === "create" && (
+          <FormTextField
+            label="Start Command"
+            placeholder="shell command, e.g. /bin/zsh"
+            value={config.startCommand}
+            onChange={(startCommand) =>
+              onConfigChange({ ...config, startCommand: startCommand ?? undefined })
+            }
+          />
+        )}
       </div>
     </div>
   );

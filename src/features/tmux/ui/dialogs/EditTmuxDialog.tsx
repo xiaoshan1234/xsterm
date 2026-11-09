@@ -123,6 +123,7 @@ export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDial
               onNameChange={form.setName}
               config={tmuxConfig}
               onConfigChange={setTmuxConfig}
+              mode="attach"
             />
           )}
         />
