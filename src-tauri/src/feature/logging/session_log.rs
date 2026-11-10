@@ -1,9 +1,9 @@
 //! Per-session output logging.
 //!
-//! Writes the terminal's `terminal-output` byte stream to per-session files
-//! under `session-logs/`. The fan-out happens centrally in
+//! Writes each terminal's raw output byte stream to per-session files under
+//! `session-logs/`. The fan-out happens centrally in
 //! [`TerminalLoggingBackend`], which wraps any [`AppBackend`] and taps the
-//! `terminal-output` event before forwarding it. Session logging defaults to
+//! `emit_bytes` path before forwarding it. Session logging defaults to
 //! disabled; only sessions whose [`TerminalLoggingConfig::enabled`] is `true`
 //! get a writer, so the tap is a single `DashMap` lookup for everyone else.
 
@@ -321,43 +321,19 @@ impl TerminalLoggingBackend {
     pub fn new(inner: Arc<dyn AppBackend>, logs: Arc<TerminalLogRegistry>) -> Self {
         Self { inner, logs }
     }
-
-    fn tap_terminal_output(&self, payload: &serde_json::Value) {
-        let Some(session_id) = payload.get(0).and_then(|value| value.as_u64()) else {
-            return;
-        };
-        let session_id = session_id as u32;
-        if !self.logs.is_enabled(session_id) {
-            return;
-        }
-        let Some(data) = extract_output_bytes(payload.get(1)) else {
-            return;
-        };
-        self.logs.write(session_id, &data);
-    }
 }
 
 impl AppBackend for TerminalLoggingBackend {
     fn emit(&self, event: &str, payload: &serde_json::Value) -> Result<(), String> {
-        if event == "terminal-output" {
-            self.tap_terminal_output(payload);
-        }
         self.inner.emit(event, payload)
     }
-}
 
-/// Parse `[u8, u8, ...]` back out of a `terminal-output` JSON payload.
-fn extract_output_bytes(value: Option<&serde_json::Value>) -> Option<Vec<u8>> {
-    let bytes = value?.as_array()?;
-    let mut output = Vec::with_capacity(bytes.len());
-    for item in bytes {
-        let byte = item.as_u64()?;
-        if byte > 255 {
-            return None;
+    fn emit_bytes(&self, session_id: u32, bytes: Vec<u8>) -> Result<(), String> {
+        if self.logs.is_enabled(session_id) {
+            self.logs.write(session_id, &bytes);
         }
-        output.push(byte as u8);
+        self.inner.emit_bytes(session_id, bytes)
     }
-    Some(output)
 }
 
 #[cfg(test)]

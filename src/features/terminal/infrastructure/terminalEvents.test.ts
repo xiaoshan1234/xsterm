@@ -1,16 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
+import { type Channel } from "@tauri-apps/api/core";
 import { toBackendTerminalHandle } from "./handles";
-import { normalizeTerminalOutput, subscribeTerminalEvents } from "./terminalEvents";
+import {
+  subscribeTerminalEvents,
+  subscribeTerminalOutput,
+  type InvokeFunction,
+} from "./terminalEvents";
 
 describe("terminal events", () => {
-  it("normalizes stdout JSON byte arrays into Uint8Array", () => {
-    const event = normalizeTerminalOutput([7, [65, 66]]);
-
-    expect(event.terminalHandle).toBe(toBackendTerminalHandle(7));
-    expect([...event.data]).toEqual([65, 66]);
-  });
-
-  it("subscribes with the backend event names and cleans up", async () => {
+  it("subscribes to lifecycle events and cleans up", async () => {
     const unlisteners = new Map<string, ReturnType<typeof vi.fn>>();
     const listenFunction = async <Payload>(
       eventName: string,
@@ -31,5 +29,39 @@ describe("terminal events", () => {
     });
     cleanup();
     expect(unlisteners.get("terminal-disconnected")).toHaveBeenCalledOnce();
+  });
+
+  it("subscribes a raw output channel and converts ArrayBuffer to Uint8Array", async () => {
+    const fakeChannel = {
+      onmessage: null as ((message: ArrayBuffer) => void) | null,
+    };
+    const invokeFunction = vi.fn(async (command: string) =>
+      command === "subscribe_terminal_output" ? 42 : undefined,
+    ) as unknown as InvokeFunction;
+    const onOutput = vi.fn();
+
+    const cleanup = await subscribeTerminalOutput(
+      7,
+      onOutput,
+      invokeFunction,
+      () => fakeChannel as unknown as Channel<ArrayBuffer>,
+    );
+
+    expect(invokeFunction).toHaveBeenCalledWith("subscribe_terminal_output", {
+      sessionId: 7,
+      channel: fakeChannel,
+    });
+
+    const buffer = new Uint8Array([65, 66, 67]).buffer;
+    fakeChannel.onmessage?.(buffer);
+    expect(onOutput).toHaveBeenCalledOnce();
+    expect([...(onOutput.mock.calls[0][0] as Uint8Array)]).toEqual([65, 66, 67]);
+
+    cleanup();
+    await Promise.resolve();
+    expect(invokeFunction).toHaveBeenCalledWith("unsubscribe_terminal_output", {
+      sessionId: 7,
+      subscriptionId: 42,
+    });
   });
 });

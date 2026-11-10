@@ -1,7 +1,9 @@
 use std::sync::Arc;
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, State};
 
 use crate::connect::app_backend::{AppBackend, RealAppBackend};
+use crate::connect::output::OutputRouter;
 use crate::connect::registry::{AutoAttachOutcome, TerminalRegistry};
 use crate::feature::logging::session_log::TerminalLoggingBackend;
 use crate::shared::session::{
@@ -81,6 +83,33 @@ pub async fn write_terminal(
         ));
     }
     state.write(session_id, &data).await
+}
+
+/// Bind a frontend channel to a session's raw output stream.
+///
+/// The frontend creates a Tauri `Channel` and passes it here; the output
+/// forwarder then pushes raw bytes through it instead of emitting a JSON
+/// byte-array event. A subsequent subscribe for the same session replaces the
+/// previous channel. Returns a subscription id the frontend passes back when
+/// unsubscribing so a stale unsubscribe cannot evict a newer subscription.
+#[tauri::command]
+pub fn subscribe_terminal_output(
+    session_id: u32,
+    channel: Channel<InvokeResponseBody>,
+    state: State<'_, Arc<OutputRouter>>,
+) -> Result<u64, String> {
+    Ok(state.subscribe(session_id, channel))
+}
+
+/// Forget the channel bound to a session (frontend unmount / session close).
+#[tauri::command]
+pub fn unsubscribe_terminal_output(
+    session_id: u32,
+    subscription_id: u64,
+    state: State<'_, Arc<OutputRouter>>,
+) -> Result<(), String> {
+    state.unsubscribe(session_id, subscription_id);
+    Ok(())
 }
 
 /// Resize the PTY of an existing session.

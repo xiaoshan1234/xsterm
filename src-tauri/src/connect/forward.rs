@@ -63,11 +63,7 @@ pub(crate) fn spawn_output_forwarder(
                 accumulated[..safe_len].to_vec()
             };
 
-            if !to_emit.is_empty()
-                && backend
-                    .emit("terminal-output", &serde_json::json!([session_id, to_emit]))
-                    .is_err()
-            {
+            if !to_emit.is_empty() && backend.emit_bytes(session_id, to_emit).is_err() {
                 break;
             }
         }

@@ -9,6 +9,7 @@
 pub(crate) mod app_backend;
 pub(crate) mod forward;
 pub(crate) mod local;
+pub(crate) mod output;
 pub(crate) mod registry;
 pub(crate) mod session;
 pub(crate) mod ssh;

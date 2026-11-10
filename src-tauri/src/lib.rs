@@ -53,8 +53,10 @@ pub fn run() {
             let session_logs = Arc::new(TerminalLogRegistry::new(session_log_dir));
             app.manage(Arc::new(TerminalRegistry::new(session_logs)));
 
-            // --- event emitter backend ---
+            // --- raw output router + event emitter backend ---
             use connect::app_backend::RealAppBackend;
+            use connect::output::OutputRouter;
+            app.manage(Arc::new(OutputRouter::default()));
             app.manage(Arc::new(RealAppBackend::new(app.handle().clone())));
 
             Ok(())

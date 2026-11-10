@@ -6,7 +6,7 @@ import {
   appendTerminalOutput,
   getTerminalOutput,
 } from "../../../shared/utils/terminalOutputBuffer";
-import { subscribeTerminalEvents, toBackendTerminalHandle } from "../infrastructure";
+import { subscribeTerminalOutput, toBackendTerminalHandle } from "../infrastructure";
 import { tmuxCommands } from "../../tmux/infrastructure";
 import { normalizeCapturedScrollback } from "./scrollback";
 
@@ -89,25 +89,12 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       });
   }, [isTmuxPane, terminalId, termRef]);
 
-  // TEMPORARY REVERT (Perf 001 follow-up): reverted from binary
-  // Channel<Vec<u8>> path back to listen<[number, number[]]>. The
-  // Tauri-2 production-binary path for `Channel` returned from a Tauri
-  // command could not be unwrapped to a JS-side `Channel<Uint8Array>`
-  // cleanly, which caused `useTauriTerminalOutput` to break and prevented
-  // the Terminal component from setting up its `xterm.onData` input
-  // listener — making the user unable to type. The binary wire format
-  // (binary_frame.rs and sessionOutputFrame.ts) were removed during the
-  // backend reorg; output now flows exclusively through the JSON
-  // `terminal-output` event.
-  //
-  // ALSO: removed the rAF queueing that caused a 1-frame (~16 ms) display
-  // delay for each typed character. Before Perf 005 the rAF was useful
-  // because the Rust reader emitted one event per 8 KB read, so coalescing
-  // JS-side events amortised xterm.write cost. With Perf 005 the Rust side
-  // already coalesces into 64 KiB chunks (drain budget) and emits those
-  // ~125 Hz, so the JS-side rAF was adding 16 ms latency on every single
-  // keystroke echo with no remaining perf benefit. Each event now goes
-  // straight to xterm.write.
+  // Raw-byte output path: the frontend hands the backend a Tauri `Channel`,
+  // and the Rust forwarder pushes coalesced bytes through it as raw binary.
+  // Each chunk arrives here as an `ArrayBuffer`, avoiding the historical JSON
+  // number-array (`[104,105,...]`) blow-up. The Rust side already coalesces
+  // reads into 64 KiB / 8 ms bursts, so each chunk goes straight to
+  // xterm.write with no JS-side rAF batching.
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;
@@ -132,12 +119,9 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       }
     };
 
-    subscribeTerminalEvents({
-      onOutput: ({ terminalHandle, data }) => {
-        if (Number(terminalHandle) === terminalId) {
-          handleOutput(extractAndCopyOsc52(decodeOutput(data)));
-        }
-      },
+    subscribeTerminalOutput(terminalId, (data) => {
+      if (!listenerActive) return;
+      handleOutput(extractAndCopyOsc52(decodeOutput(data)));
     })
       .then((fn) => {
         if (!listenerActive) {
@@ -145,10 +129,9 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
           return;
         }
         unlisten = fn;
-        // Replay any history buffered before the listener was attached
-        // (e.g. shell prompt that arrived during the listen() Promise
-        // resolution window). The listener registers synchronously inside
-        // listen() so this is best-effort, not a strict race-free path.
+        // Replay any history buffered before this subscription attached
+        // (e.g. shell prompt that arrived during the subscribe() Promise
+        // resolution window). Best-effort, not a strict race-free path.
         const buffer = getTerminalOutput(terminalId);
         if (buffer) {
           try {
