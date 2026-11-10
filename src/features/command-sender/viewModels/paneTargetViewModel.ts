@@ -104,5 +104,7 @@ export function selectPaneTargetOptions(
 
 function toBreadcrumb(location: PaneLocationViewData, configName: string | undefined): string {
   const title = configName ?? location.windowName;
-  return `${location.workspaceName} / ${title} / Pane ${location.paneNumber}`;
+  return `${location.workspaceName} / ${location.windowIndex + 1}. ${title} / Pane ${
+    location.paneNumber
+  }`;
 }

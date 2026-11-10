@@ -83,7 +83,7 @@ describe("pane target view model", () => {
       },
       displayId: "P1",
       title: "Local PowerShell",
-      breadcrumb: "Default / PowerShell / Pane 1",
+      breadcrumb: "Default / 1. PowerShell / Pane 1",
       isAvailable: true,
     });
     expect(result[1]).toMatchObject({
@@ -94,6 +94,7 @@ describe("pane target view model", () => {
         tmuxPaneId: "%2",
       },
       technicalId: "@1/%2",
+      breadcrumb: "Default / 1. Main / Pane 2",
     });
   });
 });

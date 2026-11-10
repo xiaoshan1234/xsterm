@@ -350,8 +350,10 @@ pub async fn kill_tmux_window(
 /// capture scrollback text from a tmux pane (req-006 §D4).
 ///
 /// Frontend wrapper: `sessionService.captureTmuxPane(sessionId, lines)`.
-/// The returned text is the body of tmux's `%begin..%end` reply block for
-/// `capture-pane -p -e -J -S -<lines> -t %<pane>`, joined with `\n`.
+/// The returned text is a replay-ready body: the main-screen scrollback
+/// (joined with `\n`) for plain panes, or a normal-screen-plus-alternate
+/// -screen script for panes running a full-screen TUI so the TUI renders
+/// inside xterm's alternate buffer on attach.
 /// Returns `Err` if the session is unknown / not a tmux pane / tmux
 /// itself reports `%error` / the call times out after 5 s.
 #[tauri::command]

@@ -571,18 +571,78 @@ impl TmuxSession {
         Ok((xsterm_window_id, window_id, xsterm_id, pane.handle))
     }
 
+    /// Capture a pane's contents for the one-shot scrollback replay the
+    /// frontend performs when a tmux pane is first mounted.
+    ///
+    /// Plain panes keep the historical behaviour: the main-screen scrollback
+    /// (`capture-pane -p -e -J -S -<lines>`). When the pane is running a
+    /// full-screen TUI inside the alternate screen (vim, less, htop, ...),
+    /// tmux does not resend the alternate-screen state on attach, so writing
+    /// only that screen would either leave xterm on the main buffer or paint
+    /// the TUI into the wrong buffer. For those panes the reply is an ordered
+    /// replay script:
+    ///
+    /// 1. the saved main screen (so quitting the TUI restores the shell),
+    /// 2. `ESC[?1049h` to switch xterm into the alternate screen,
+    /// 3. the TUI's visible alternate-screen content.
+    ///
+    /// The frontend keeps applying `normalizeCapturedScrollback` to the whole
+    /// payload; the escape sequences carry no newlines, so they pass through
+    /// untouched.
     pub(crate) async fn capture_pane(&self, pane: &str, lines: i32) -> Result<String, String> {
         self.ensure_pane_bound(pane)?;
-        let start = if lines >= 0 {
-            format!("-{lines}")
-        } else {
-            lines.to_string()
+
+        let in_alternate = match self.pane_in_alternate_screen(pane).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(
+                    pane,
+                    error,
+                    "tmux alternate-screen probe failed; assuming main screen"
+                );
+                false
+            }
         };
-        let command = format!("capture-pane -p -e -J -S {start} -t {pane}");
+
+        if !in_alternate {
+            return self.capture_pane_raw(pane, Some(lines), false).await;
+        }
+
+        let normal = self.capture_pane_raw(pane, Some(lines), true).await?;
+        let alternate = self.capture_pane_raw(pane, None, false).await?;
+        Ok(alternate_screen_replay(&normal, &alternate))
+    }
+
+    /// Ask tmux whether `pane` currently has an active alternate screen.
+    async fn pane_in_alternate_screen(&self, pane: &str) -> Result<bool, String> {
+        let command = format!(
+            "display-message -p -t {pane} {}",
+            shell_quote("#{alternate_on}")
+        );
+        let reply = self
+            .control
+            .send(&command)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(reply.iter().any(|line| line.trim() == "1"))
+    }
+
+    /// Run one `capture-pane` and join the returned rows with `\n`.
+    ///
+    /// `alternate` flips tmux's `-a` flag so the saved main screen can be
+    /// captured while a TUI occupies the alternate screen. `lines = None`
+    /// captures only the visible screen, which is what a TUI replay needs.
+    async fn capture_pane_raw(
+        &self,
+        pane: &str,
+        lines: Option<i32>,
+        alternate: bool,
+    ) -> Result<String, String> {
+        let command = capture_pane_command(pane, lines, alternate);
         self.control
             .send(&command)
             .await
-            .map(|lines| lines.join("\n"))
+            .map(|reply| reply.join("\n"))
             .map_err(|e| e.to_string())
     }
 
@@ -852,6 +912,38 @@ fn shell_quote(s: &str) -> String {
     format!("'{escaped}'")
 }
 
+/// Build a `capture-pane` command for a single pane.
+///
+/// `alternate` selects tmux's `-a` flag (the saved main screen while a TUI
+/// occupies the alternate screen). `lines = None` omits `-S` so only the
+/// visible screen is captured.
+fn capture_pane_command(pane: &str, lines: Option<i32>, alternate: bool) -> String {
+    let mut command = String::from("capture-pane -p -e -J");
+    if alternate {
+        command.push_str(" -a");
+    }
+    if let Some(lines) = lines {
+        let start = if lines >= 0 {
+            format!("-{lines}")
+        } else {
+            lines.to_string()
+        };
+        command.push_str(&format!(" -S {start}"));
+    }
+    command.push_str(&format!(" -t {pane}"));
+    command
+}
+
+/// Compose an alternate-screen replay payload.
+///
+/// `normal` is the saved main screen (what should be visible once the TUI
+/// exits), `alternate` the TUI's current screen. The `?1049h` sequence flips
+/// xterm into the alternate buffer after `normal` has populated the main
+/// buffer; `2J`/`H` then give the TUI a clean, deterministic canvas.
+fn alternate_screen_replay(normal: &str, alternate: &str) -> String {
+    format!("{normal}\u{1b}[?1049h\u{1b}[2J\u{1b}[H{alternate}")
+}
+
 /// Build a `send-keys -l` command that delivers arbitrary bytes to a pane
 /// without letting tmux's command-line tokenizer eat whitespace or treat key
 /// names specially. Control bytes, backslash and non-ASCII bytes are emitted
@@ -877,7 +969,9 @@ fn send_keys_command(pane: &str, payload: &[u8]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_extended_pane_line, send_keys_command};
+    use super::{
+        alternate_screen_replay, capture_pane_command, parse_extended_pane_line, send_keys_command,
+    };
 
     #[test]
     fn parses_extended_pane_line_with_indices_and_command() {
@@ -923,5 +1017,33 @@ mod tests {
             r#"send-keys -l -t %0 "say \"hi\"""#
         );
         assert!(send_keys_command("%0", b"a\0b").is_err());
+    }
+
+    #[test]
+    fn capture_pane_command_shapes_main_screen_with_scrollback() {
+        assert_eq!(
+            capture_pane_command("%7", Some(2000), false),
+            "capture-pane -p -e -J -S -2000 -t %7"
+        );
+    }
+
+    #[test]
+    fn capture_pane_command_shapes_visible_alternate_screen() {
+        assert_eq!(
+            capture_pane_command("%7", None, false),
+            "capture-pane -p -e -J -t %7"
+        );
+        assert_eq!(
+            capture_pane_command("%7", Some(2000), true),
+            "capture-pane -p -e -J -a -S -2000 -t %7"
+        );
+    }
+
+    #[test]
+    fn alternate_screen_replay_switches_buffers_in_order() {
+        assert_eq!(
+            alternate_screen_replay("shell\nprompt", "TUI row 1\nTUI row 2"),
+            "shell\nprompt\u{1b}[?1049h\u{1b}[2J\u{1b}[HTUI row 1\nTUI row 2"
+        );
     }
 }

@@ -516,6 +516,7 @@ Header 不显示产品名或工具名标签，所有目标、模式和发送操�
 - 必须显式选择目标 Pane。
 - 支持 Raw Pane 与 tmux Pane。
 - 主显示使用标题、breadcrumb 和可用状态。
+- breadcrumb 中的 Window 名称使用与 tab bar 一致的一基序号，例如 `1. Main`。
 - 原始后端 Terminal ID 不作为主标识。
 - tmux `@window`、`%pane` 可以作为辅助技术 ID 显示。
 
