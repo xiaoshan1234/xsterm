@@ -690,7 +690,7 @@
   align-items: center;
   flex-shrink: 0;
   height: 30px;
-  padding: 0 var(--space-xs);
+  padding: 0 0 0 var(--space-xs);
   border-top: 1px solid var(--hairline);
   background: var(--canvas-soft);
 }
@@ -734,7 +734,7 @@
 .shell-workspace-menu {
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 0;
+  right: 0;
   z-index: 50;
   width: 240px;
   padding: var(--space-xs);

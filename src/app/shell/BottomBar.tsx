@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronIcon, WorkspaceIcon } from "../../shared/icons/Icon";
 
 interface BottomBarProps {
   workspaceName: string;
@@ -41,17 +40,25 @@ export function BottomBar({
 
   return (
     <footer className="shell-bottom-bar">
+      <button
+        type="button"
+        className={`shell-bottom-button ${isTextSenderOpen ? "shell-bottom-button--active" : ""}`}
+        aria-pressed={isTextSenderOpen}
+        onClick={onToggleTextSender}
+      >
+        Sender
+      </button>
+      <div className="shell-bottom-spacer" />
       <div className="shell-bottom-workspace" ref={menuRef}>
         <button
           type="button"
           className="shell-bottom-button"
           aria-haspopup="menu"
           aria-expanded={isWorkspaceMenuOpen}
+          aria-label={`Switch workspace: ${workspaceName}`}
           onClick={() => setIsWorkspaceMenuOpen((current) => !current)}
         >
-          <WorkspaceIcon size={14} />
-          <span>{workspaceName}</span>
-          <ChevronIcon size={12} />
+          Workspace
         </button>
         {isWorkspaceMenuOpen && (
           <div className="shell-workspace-menu" role="menu">
@@ -64,6 +71,7 @@ export function BottomBar({
                 className={`shell-workspace-menu-item ${
                   workspace === workspaceName ? "shell-workspace-menu-item--active" : ""
                 }`}
+                aria-current={workspace === workspaceName ? "true" : undefined}
                 onClick={() => {
                   onSelectWorkspace(workspace);
                   setIsWorkspaceMenuOpen(false);
@@ -80,15 +88,6 @@ export function BottomBar({
           </div>
         )}
       </div>
-      <div className="shell-bottom-spacer" />
-      <button
-        type="button"
-        className={`shell-bottom-button ${isTextSenderOpen ? "shell-bottom-button--active" : ""}`}
-        aria-pressed={isTextSenderOpen}
-        onClick={onToggleTextSender}
-      >
-        Text Sender
-      </button>
     </footer>
   );
 }

@@ -23,7 +23,7 @@ describe("AppShellPreview", () => {
       screen.getByRole("region", { name: "Terminal Manager" }).getAttribute("style"),
     ).toContain("width: 208px");
 
-    fireEvent.click(screen.getByRole("button", { name: "Text Sender" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sender" }));
     expect(screen.getByRole("region", { name: "Global text sender" })).toBeTruthy();
     expect(container.querySelector(".shell-text-sender-slot")).toBeTruthy();
   });
