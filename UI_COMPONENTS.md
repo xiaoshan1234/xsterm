@@ -498,13 +498,18 @@ MainArea
 
 ```text
 GlobalTextSender
-├─ TextSenderHeader
-├─ PaneTargetSelector
+├─ SenderControlHeader
+│  ├─ PaneTargetSelector
+│  ├─ SendModeSelector
+│  ├─ RateControl
+│  ├─ SendStatus
+│  └─ ExecutionControls
+├─ SenderTabBar
 ├─ CommandEditor
-├─ ExecutionControls
-├─ ScheduleControls
-└─ TargetExecutionStatus
+└─ SendProgress
 ```
+
+Header 不显示产品名或工具名标签，所有目标、模式和发送操作集中在单行；空间不足时允许换行。
 
 ### 8.3 Target 选择
 
@@ -521,23 +526,26 @@ interface TextSenderViewData {
   targets: PaneTargetDisplayInfo[];
   selectedTarget: PaneTargetRef | null;
   resolvedTarget: ResolvedPaneTarget | null;
-  draft: string;
+  tabs: TextSenderTab[];
+  activeTabId: string;
+  mode: "line" | "character";
+  rates: Record<"line" | "character", number>;
   executionState: CommandExecutionState;
 }
 ```
 
 ### 8.4 状态归属
 
-TextSender 全局只有一个 UI 实例，但每个 Target 独立保存：
+TextSender 全局只有一个 UI 实例，并保留：
 
-- 草稿；
-- 发送模式；
-- 次数；
-- 间隔；
-- 断点；
-- 队列；
+- 多标签输入内容和当前标签；
+- 按行 / 按字符发送模式；
+- 两种模式各自的发送速率；
+- 队列进度和暂停、取消状态；
 - 当前执行状态；
 - 错误信息。
+
+按行模式逐行发送并补齐换行；按字符模式按 Unicode code point 逐字符发送。暂停在发送单元之间生效，取消后不再发送剩余单元。
 
 Target 失效时：
 
@@ -549,8 +557,10 @@ Target 失效时：
 ### 8.5 显示位置
 
 - 只占 MainArea 底部。
-- 高度可拖动调整。
-- 打开状态和高度持久化。
+- 展开高度可通过顶部横向分隔条上下拖拽，默认 400px，最小 180px，最大 720px。
+- 高度写入 `ui-shell.json`，静默持久化；拖拽和键盘调整期间保持响应。
+- 编辑器占满面板剩余宽度和高度。
+- 折叠时只隐藏面板，不销毁输入标签和发送状态。
 - 与 MainArea 之间使用 `--hairline` 分隔。
 - 不把 TextSender 建模为新的 PaneNode。
 
@@ -756,12 +766,12 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
 新代码不得继续依赖大而全的 `useSession()`。按实际职责使用：
 
-| Hook                   | 职责                                             |
-| ---------------------- | ------------------------------------------------ |
-| `useSavedLaunchConfigs` | 保存的 Terminal/tmux 配置、分组及配置管理动作   |
-| `useTerminalRuntime`    | Live Terminal 列表、运行状态、输入、关闭和重连  |
-| `useWorkspaceLayout`    | Workspace、Window、Pane 布局及快照管理          |
-| `useSessionPreferences` | 终端相关全局偏好                                |
+| Hook                    | 职责                                           |
+| ----------------------- | ---------------------------------------------- |
+| `useSavedLaunchConfigs` | 保存的 Terminal/tmux 配置、分组及配置管理动作  |
+| `useTerminalRuntime`    | Live Terminal 列表、运行状态、输入、关闭和重连 |
+| `useWorkspaceLayout`    | Workspace、Window、Pane 布局及快照管理         |
+| `useSessionPreferences` | 终端相关全局偏好                               |
 
 `useSession()` 仅作为 legacy 兼容聚合入口保留，不得在新增组件中继续使用。
 
@@ -801,7 +811,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 用户点击 BottomBar TextSenderToggle
   → AppShell 更新 isTextSenderOpen
   → MainArea 底部展开 GlobalTextSender
-  → 保留上次 Target 和每个 Target 的状态
+  → 保留输入标签、模式、速率和当前执行状态
 ```
 
 ### 13.3 指定 Pane
@@ -811,7 +821,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
   → 按 Workspace / Window / Pane 展示
   → 用户选择 PaneTargetRef
   → Application Resolver 解析当前 TerminalStreamRef
-  → TextSender 显示该 Target 的草稿和执行状态
+  → TextSender 更新 Target 信息和发送可用状态
 ```
 
 ### 13.4 Workspace 快速切换
@@ -828,7 +838,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 - Toolbar 保持固定宽度，不随 ToolPanel 变化。
 - ToolPanel 默认 200px，最小 140px，最大 400px。
 - LeftSidebar 总宽度 = Toolbar + 已展开 ToolPanel。
-- GlobalTextSender 默认高度建议 220px，最小 120px，最大不超过 MainArea 的 50%。
+- GlobalTextSender 默认高度 400px，可垂直拖拽并限制在 180–720px。
 - TextSender 折叠后不占高度。
 - 所有尺寸使用 DESIGN.md token 或文档化常量。
 - 窗口宽度不足时优先压缩 MainArea，不压缩 Toolbar。

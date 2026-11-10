@@ -4,6 +4,11 @@ import { Toolbar } from "./Toolbar";
 import { ToolPanel } from "./ToolPanel";
 import { type ToolId } from "./types";
 import { useToolPanelWidth } from "./useToolPanelWidth";
+import {
+  MAX_TEXT_SENDER_HEIGHT,
+  MIN_TEXT_SENDER_HEIGHT,
+  useTextSenderHeight,
+} from "./useTextSenderHeight";
 import "./AppShell.css";
 
 interface AppShellProps {
@@ -20,6 +25,7 @@ interface AppShellProps {
   isInteractionBlocked?: boolean;
   onSelectTool: (tool: ToolId) => void;
   onSelectWorkspace: (workspaceName: string) => void;
+  onCloseWorkspace: (workspaceName: string) => void;
   onToggleTextSender: () => void;
 }
 
@@ -37,9 +43,15 @@ export function AppShell({
   isInteractionBlocked = false,
   onSelectTool,
   onSelectWorkspace,
+  onCloseWorkspace,
   onToggleTextSender,
 }: AppShellProps) {
   const { width: toolPanelWidth, startResize, nudgeWidth } = useToolPanelWidth();
+  const {
+    height: textSenderHeight,
+    startResize: startTextSenderResize,
+    nudgeHeight: nudgeTextSenderHeight,
+  } = useTextSenderHeight();
 
   return (
     <div className="shell-root">
@@ -64,7 +76,37 @@ export function AppShell({
           </aside>
           <main className="shell-main-area">
             <div className="shell-main-content">{mainArea}</div>
-            {isTextSenderOpen && <div className="shell-text-sender-slot">{textSender}</div>}
+            <div
+              className={`shell-text-sender-slot ${
+                isTextSenderOpen ? "" : "shell-text-sender-slot--closed"
+              }`}
+              aria-hidden={!isTextSenderOpen}
+              style={isTextSenderOpen ? { height: `${textSenderHeight}px` } : undefined}
+            >
+              {isTextSenderOpen && (
+                <div
+                  className="shell-text-sender-resizer"
+                  role="separator"
+                  aria-label="Resize Sender"
+                  aria-orientation="horizontal"
+                  aria-valuemin={MIN_TEXT_SENDER_HEIGHT}
+                  aria-valuemax={MAX_TEXT_SENDER_HEIGHT}
+                  aria-valuenow={textSenderHeight}
+                  tabIndex={0}
+                  onMouseDown={startTextSenderResize}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      nudgeTextSenderHeight(8);
+                    } else if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      nudgeTextSenderHeight(-8);
+                    }
+                  }}
+                />
+              )}
+              {textSender}
+            </div>
           </main>
         </div>
         <BottomBar
@@ -73,6 +115,7 @@ export function AppShell({
           isTextSenderOpen={isTextSenderOpen}
           onToggleTextSender={onToggleTextSender}
           onSelectWorkspace={onSelectWorkspace}
+          onCloseWorkspace={onCloseWorkspace}
         />
       </div>
       {overlay}

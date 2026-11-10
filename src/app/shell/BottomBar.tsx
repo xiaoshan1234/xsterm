@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CloseIcon } from "../../shared/icons/Icon";
 
 interface BottomBarProps {
   workspaceName: string;
@@ -6,6 +7,7 @@ interface BottomBarProps {
   isTextSenderOpen: boolean;
   onToggleTextSender: () => void;
   onSelectWorkspace: (workspaceName: string) => void;
+  onCloseWorkspace: (workspaceName: string) => void;
 }
 
 export function BottomBar({
@@ -14,6 +16,7 @@ export function BottomBar({
   isTextSenderOpen,
   onToggleTextSender,
   onSelectWorkspace,
+  onCloseWorkspace,
 }: BottomBarProps) {
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -63,24 +66,50 @@ export function BottomBar({
         {isWorkspaceMenuOpen && (
           <div className="shell-workspace-menu" role="menu">
             <div className="shell-menu-label">Switch workspace</div>
-            {workspaces.map((workspace) => (
-              <button
-                key={workspace}
-                type="button"
-                role="menuitem"
-                className={`shell-workspace-menu-item ${
-                  workspace === workspaceName ? "shell-workspace-menu-item--active" : ""
-                }`}
-                aria-current={workspace === workspaceName ? "true" : undefined}
-                onClick={() => {
-                  onSelectWorkspace(workspace);
-                  setIsWorkspaceMenuOpen(false);
-                }}
-              >
-                <span>{workspace}</span>
-                {workspace === workspaceName && <span aria-hidden="true">Current</span>}
-              </button>
-            ))}
+            {workspaces.map((workspace) => {
+              const isCurrent = workspace === workspaceName;
+              const canClose = workspace.toLowerCase() !== "default";
+
+              return (
+                <div
+                  key={workspace}
+                  className={`shell-workspace-menu-row ${
+                    isCurrent ? "shell-workspace-menu-row--active" : ""
+                  }`}
+                  role="none"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="shell-workspace-menu-item shell-workspace-menu-item--select"
+                    aria-current={isCurrent ? "true" : undefined}
+                    onClick={() => {
+                      onSelectWorkspace(workspace);
+                      setIsWorkspaceMenuOpen(false);
+                    }}
+                  >
+                    <span>{workspace}</span>
+                    {isCurrent && (
+                      <span className="shell-workspace-current-label" aria-hidden="true">
+                        Current
+                      </span>
+                    )}
+                  </button>
+                  {canClose && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="shell-workspace-close-button"
+                      aria-label={`Close workspace ${workspace}`}
+                      title={`Close ${workspace}`}
+                      onClick={() => onCloseWorkspace(workspace)}
+                    >
+                      <CloseIcon size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
             <div className="shell-menu-separator" />
             <button type="button" role="menuitem" className="shell-workspace-menu-item">
               Manage workspaces

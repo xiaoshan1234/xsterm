@@ -37,11 +37,9 @@ const TEXT_SENDER_TARGETS = [
 export function AppShellPreview() {
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState("Default");
+  const [workspaces, setWorkspaces] = useState<string[]>([...WORKSPACES]);
   const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(TEXT_SENDER_TARGETS[0].id);
-  const [textSenderDraft, setTextSenderDraft] = useState(
-    "echo \"preview target\"\nprintf 'ready\\n'",
-  );
   const [activeDialog, setActiveDialog] = useState<PreviewDialogId | null>(null);
 
   const toolPanelContent = useMemo(
@@ -49,6 +47,16 @@ export function AppShellPreview() {
       activeTool ? <ManagerPreview activeTool={activeTool} onOpenDialog={setActiveDialog} /> : null,
     [activeTool],
   );
+
+  const handleCloseWorkspace = (workspaceName: string) => {
+    if (workspaceName.toLowerCase() === "default") return;
+
+    const remainingWorkspaces = workspaces.filter((workspace) => workspace !== workspaceName);
+    setWorkspaces(remainingWorkspaces);
+    if (activeWorkspace === workspaceName) {
+      setActiveWorkspace(remainingWorkspaces[0] ?? "Default");
+    }
+  };
 
   return (
     <AppShell
@@ -61,10 +69,8 @@ export function AppShellPreview() {
         <GlobalTextSender
           targets={TEXT_SENDER_TARGETS}
           selectedTargetId={selectedTargetId}
-          text={textSenderDraft}
           onSelectTarget={setSelectedTargetId}
-          onTextChange={setTextSenderDraft}
-          onSend={() => undefined}
+          onSend={async () => undefined}
         />
       }
       overlay={
@@ -73,11 +79,12 @@ export function AppShellPreview() {
         </GlobalOverlayHost>
       }
       workspaceName={activeWorkspace}
-      workspaces={WORKSPACES}
+      workspaces={workspaces}
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={activeDialog === "error"}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}
       onSelectWorkspace={setActiveWorkspace}
+      onCloseWorkspace={handleCloseWorkspace}
       onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
     />
   );

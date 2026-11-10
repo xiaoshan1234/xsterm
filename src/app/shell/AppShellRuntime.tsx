@@ -22,10 +22,7 @@ import {
   selectWorkspaceManagerItems,
 } from "../../features/workspace/viewModels/managerViewModel";
 import { selectPaneLocations } from "../../features/workspace/viewModels/paneLocationViewModel";
-import {
-  selectPaneTargetOptions,
-  type PaneTargetOptionViewData,
-} from "../../features/command-sender/viewModels/paneTargetViewModel";
+import { selectPaneTargetOptions } from "../../features/command-sender/viewModels/paneTargetViewModel";
 import { AppShell } from "./AppShell";
 import { ErrorDialog, type ErrorDialogData } from "./ErrorDialog";
 import { GlobalOverlayHost } from "./GlobalOverlayHost";
@@ -106,6 +103,7 @@ export function AppShellRuntime() {
     loadWorkspace,
     createDefaultWorkspace,
     createEmptyWorkspace,
+    closeWorkspace,
     deleteSavedWindow,
     renameSavedWindow,
     deleteSavedWorkspace,
@@ -118,8 +116,6 @@ export function AppShellRuntime() {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [error, setError] = useState<ErrorDialogData | null>(null);
   const [selectedTargetKey, setSelectedTargetKey] = useState("");
-  const [textSenderDraft, setTextSenderDraft] = useState("");
-  const [textSenderStatus, setTextSenderStatus] = useState("Ready");
   const initializedRef = useRef(false);
 
   useAppShortcuts({
@@ -286,16 +282,16 @@ export function AppShellRuntime() {
     isAvailable: option.displayInfo.isAvailable,
   }));
 
-  const sendTextToTarget = useCallback(() => {
-    if (!selectTextSenderTarget || !textSenderDraft) return;
-    setTextSenderStatus("Sending…");
-    void writeTerminal(selectTextSenderTarget.terminalId, textSenderDraft)
-      .then(() => setTextSenderStatus(`Sent to ${selectTextSenderTarget.displayInfo.title}`))
-      .catch((cause) => {
-        setTextSenderStatus("Send failed");
+  const sendTextToTarget = useCallback(
+    async (text: string) => {
+      if (!selectTextSenderTarget || !text) return;
+      await writeTerminal(selectTextSenderTarget.terminalId, text).catch((cause) => {
         showError("Unable to send command", cause);
+        throw cause;
       });
-  }, [selectTextSenderTarget, showError, textSenderDraft, writeTerminal]);
+    },
+    [selectTextSenderTarget, showError, writeTerminal],
+  );
 
   const editingGroup =
     dialog?.kind === "edit-group"
@@ -593,16 +589,7 @@ export function AppShellRuntime() {
         <GlobalTextSender
           targets={textSenderTargets}
           selectedTargetId={selectedTargetKey}
-          text={textSenderDraft}
-          statusMessage={textSenderStatus}
-          onSelectTarget={(targetKey) => {
-            setSelectedTargetKey(targetKey);
-            const target = paneTargetOptions.find(
-              (option: PaneTargetOptionViewData) => option.targetKey === targetKey,
-            );
-            setTextSenderStatus(target ? `Ready for ${target.displayInfo.title}` : "No target");
-          }}
-          onTextChange={setTextSenderDraft}
+          onSelectTarget={setSelectedTargetKey}
           onSend={sendTextToTarget}
         />
       }
@@ -615,6 +602,10 @@ export function AppShellRuntime() {
       onSelectWorkspace={(workspaceName) => {
         const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
         if (workspace) setActiveWorkspace(workspace.id);
+      }}
+      onCloseWorkspace={(workspaceName) => {
+        const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
+        if (workspace) closeWorkspace(workspace.id);
       }}
       onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
     />

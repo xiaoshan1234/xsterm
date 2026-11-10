@@ -40,6 +40,32 @@ describe("AppShellPreview", () => {
     expect(screen.queryByRole("button", { name: "New Tmux Session" })).toBeNull();
   });
 
+  it("closes a specific non-default workspace from the workspace menu", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch workspace: Default" }));
+
+    expect(screen.queryByRole("menuitem", { name: "Close workspace Default" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Close workspace Project X" }));
+
+    expect(screen.queryByRole("menuitem", { name: "Project X" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Infrastructure" })).toBeTruthy();
+  });
+
+  it("resizes the Sender panel with the keyboard", () => {
+    const { container } = render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sender" }));
+    const slot = container.querySelector(".shell-text-sender-slot") as HTMLDivElement;
+    const resizer = screen.getByRole("separator", { name: "Resize Sender" });
+
+    expect(slot.style.height).toBe("400px");
+    fireEvent.keyDown(resizer, { key: "ArrowUp" });
+    expect(slot.style.height).toBe("408px");
+    fireEvent.keyDown(resizer, { key: "ArrowDown" });
+    expect(slot.style.height).toBe("400px");
+  });
+
   it("blocks the app shell while an error dialog is open", () => {
     const { container } = render(<AppShellPreview />);
 
