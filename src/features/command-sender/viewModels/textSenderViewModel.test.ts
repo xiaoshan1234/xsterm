@@ -6,13 +6,14 @@ import {
 } from "./textSenderViewModel";
 
 describe("textSenderViewModel", () => {
-  it("splits line mode into newline-terminated chunks", () => {
-    expect(splitTextForSender("first\nsecond\n", "line")).toEqual(["first\n", "second\n"]);
-    expect(splitTextForSender("first\n\nsecond", "line")).toEqual(["first\n", "\n", "second\n"]);
+  it("terminates line-mode chunks with a terminal Enter carriage return", () => {
+    expect(splitTextForSender("first\nsecond\n", "line")).toEqual(["first\r", "second\r"]);
+    expect(splitTextForSender("first\n\nsecond", "line")).toEqual(["first\r", "\r", "second\r"]);
+    expect(splitTextForSender("first\r\nsecond", "line")).toEqual(["first\r", "second\r"]);
   });
 
-  it("splits character mode by Unicode code point", () => {
-    expect(splitTextForSender("a😀\n", "character")).toEqual(["a", "😀", "\n"]);
+  it("splits character mode by Unicode code point and converts newlines to Enter", () => {
+    expect(splitTextForSender("a😀\r\n", "character")).toEqual(["a", "😀", "\r"]);
   });
 
   it("normalizes sender rates and derives the interval", () => {

@@ -25,15 +25,17 @@ export function createTextSenderTab(tabNumber: number): TextSenderTab {
 export function splitTextForSender(text: string, mode: TextSenderMode): string[] {
   if (text.length === 0) return [];
 
+  const normalizedText = text.replace(/\r\n?/g, "\n");
+
   if (mode === "character") {
-    return Array.from(text);
+    return Array.from(normalizedText, (character) => (character === "\n" ? "\r" : character));
   }
 
-  const inputLines = text.replace(/\r\n?/g, "\n").split("\n");
+  const inputLines = normalizedText.split("\n");
   if (inputLines[inputLines.length - 1] === "") {
     inputLines.pop();
   }
-  return inputLines.map((line) => `${line}\n`);
+  return inputLines.map((line) => `${line}\r`);
 }
 
 export function normalizeSenderRate(rate: number): number {

@@ -166,11 +166,6 @@
   color: var(--muted);
 }
 
-.shell-text-sender-editor textarea:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
-}
-
 .shell-text-sender-editor textarea:disabled {
   opacity: 0.7;
 }
