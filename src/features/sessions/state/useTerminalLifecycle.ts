@@ -29,7 +29,7 @@ import {
   buildFrontendTerminal,
   dispatchByType,
 } from "./useTerminalActions.helpers";
-import { removeSessionsFromWorkspaces } from "./eventTransitions";
+import { removeControllerFromWorkspaces } from "./eventTransitions";
 
 interface UseSessionLifecycleDeps {
   savedConfigs: SavedTerminalConfig[];
@@ -339,7 +339,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
         .map((terminal) => terminal.id);
       if (deadIds.length > 0) {
         setSessions((prev) => prev.filter((terminal) => terminal.tmuxSessionId !== controllerId));
-        setWorkspaces((prev) => removeSessionsFromWorkspaces(prev, deadIds));
+        setWorkspaces((prev) => removeControllerFromWorkspaces(prev, deadIds));
         for (const terminalId of deadIds) {
           establishingSessionsRef.current.delete(terminalId);
           clearTerminalOutput(terminalId);
@@ -372,6 +372,78 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       removeTmuxControllerFromState(controllerId);
     },
     [removeTmuxControllerFromState, tmuxControllersClosingRef],
+  );
+
+  const reconnectTmuxSession = useCallback(
+    async (controllerId: number): Promise<Terminal> => {
+      const controlledTerminals = terminalsRef.current.filter(
+        (terminal) => terminal.tmuxSessionId === controllerId,
+      );
+      if (controlledTerminals.length === 0) {
+        throw new Error("Tmux session not found");
+      }
+
+      const sessionName = controlledTerminals
+        .find((terminal) => terminal.tmuxSessionName)
+        ?.tmuxSessionName?.trim();
+      const terminalConfigId = controlledTerminals.find((terminal) => terminal.configId)?.configId;
+      const savedConfig =
+        savedConfigs.find(
+          (config) => config.id === terminalConfigId && config.type === "tmux-pane",
+        ) ??
+        savedConfigs.find(
+          (config) =>
+            config.type === "tmux-pane" &&
+            sessionName !== undefined &&
+            config.config.tmuxSessionName?.trim() === sessionName,
+        );
+      const configId = savedConfig?.id ?? terminalConfigId ?? "";
+      const config =
+        tmuxControllerConfigsRef?.current.get(controllerId) ??
+        (savedConfig?.type === "tmux-pane" ? savedConfig.config : undefined);
+      if (!config) {
+        throw new Error("Saved config not found for tmux session");
+      }
+
+      const displayConfig = savedConfig?.displayConfig ?? controlledTerminals[0]?.displayConfig;
+      const info = await tmuxCommands.attachTmuxSession(config);
+      const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
+      const newControllerId = terminal.tmuxSessionId;
+      if (newControllerId === undefined) {
+        throw new Error("Tmux reconnect returned no controller");
+      }
+
+      tmuxControllerConfigsRef?.current.set(newControllerId, config);
+      if (configId) {
+        tmuxControllerConfigIdsRef?.current.set(newControllerId, configId);
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.tmuxSessionId === newControllerId
+              ? { ...session, configId, displayConfig }
+              : session,
+          ),
+        );
+      }
+
+      tmuxControllersClosingRef?.current.add(controllerId);
+      try {
+        await tmuxCommands.detachTmuxSession(toBackendControllerHandle(controllerId));
+      } catch (error) {
+        tmuxControllersClosingRef?.current.delete(controllerId);
+        throw error;
+      }
+      removeTmuxControllerFromState(controllerId);
+      return terminal;
+    },
+    [
+      savedConfigs,
+      terminalsRef,
+      setSessions,
+      tmuxControllerConfigsRef,
+      tmuxControllerConfigIdsRef,
+      tmuxControllersClosingRef,
+      removeTmuxControllerFromState,
+    ],
   );
 
   /**
@@ -632,6 +704,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     attachTmuxSession,
     createTmuxSession,
     detachTmuxSession,
+    reconnectTmuxSession,
     saveConfigOnly,
     openFromConfig,
     removeConfig,

@@ -52,6 +52,7 @@ export interface TerminalRuntimeContextType {
   createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   detachTmuxSession: (controllerId: number) => Promise<void>;
+  reconnectTmuxSession: (controllerId: number) => Promise<Terminal>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;
@@ -238,6 +239,7 @@ export interface TerminalRuntimeActions {
   createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   detachTmuxSession: (controllerId: number) => Promise<void>;
+  reconnectTmuxSession: (controllerId: number) => Promise<Terminal>;
   openFromConfig: (configId: string) => Promise<Terminal>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;

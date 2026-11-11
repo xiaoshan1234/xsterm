@@ -77,6 +77,7 @@ export function AppShellRuntime() {
     createTmuxSession,
     attachTmuxSession,
     detachTmuxSession,
+    reconnectTmuxSession,
     applyDisplayConfigToLiveSession,
   } = useTerminalRuntime();
   const {
@@ -238,6 +239,15 @@ export function AppShellRuntime() {
     [paneLocations, setActivePane, setActiveWindow, setActiveWorkspace],
   );
 
+  const reconnectTmuxWithError = useCallback(
+    (controllerId: number) => {
+      void reconnectTmuxSession(controllerId)
+        .then((terminal) => focusTerminal(terminal.id))
+        .catch((cause) => showError("Unable to reconnect tmux session", cause));
+    },
+    [focusTerminal, reconnectTmuxSession, showError],
+  );
+
   const closeTerminalWithError = useCallback(
     (terminalId: number) => {
       void closeTerminal(terminalId).catch((cause) => showError("Unable to close terminal", cause));
@@ -352,6 +362,7 @@ export function AppShellRuntime() {
           <TmuxStatusPanel
             controllers={tmuxStatusControllers}
             onFocusPane={focusTerminal}
+            onReconnectSession={reconnectTmuxWithError}
             onDetachSession={detachTmuxWithError}
           />
         );
@@ -436,6 +447,7 @@ export function AppShellRuntime() {
     openEditTerminalConfig,
     openEditTmuxConfig,
     openWorkspace,
+    reconnectTmuxWithError,
     reconnectTerminalWithError,
     removeConfig,
     savedWindowConfigs,

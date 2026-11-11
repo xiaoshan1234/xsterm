@@ -14,12 +14,14 @@ import "./TmuxStatusPanel.css";
 interface TmuxStatusPanelProps {
   controllers: readonly TmuxStatusControllerViewData[];
   onFocusPane: (terminalId: number) => void;
+  onReconnectSession: (controllerId: number) => void;
   onDetachSession: (controllerId: number) => void;
 }
 
 export function TmuxStatusPanel({
   controllers,
   onFocusPane,
+  onReconnectSession,
   onDetachSession,
 }: TmuxStatusPanelProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export function TmuxStatusPanel({
               onSelect={setSelectedKey}
               onToggleCollapsed={toggleCollapsed}
               onFocusPane={onFocusPane}
+              onReconnectSession={onReconnectSession}
               onDetachSession={onDetachSession}
             />
           ))}
@@ -75,6 +78,7 @@ interface TmuxSessionTreeProps {
   onSelect: (key: string) => void;
   onToggleCollapsed: (key: string) => void;
   onFocusPane: (terminalId: number) => void;
+  onReconnectSession: (controllerId: number) => void;
   onDetachSession: (controllerId: number) => void;
 }
 
@@ -85,6 +89,7 @@ function TmuxSessionTree({
   onSelect,
   onToggleCollapsed,
   onFocusPane,
+  onReconnectSession,
   onDetachSession,
 }: TmuxSessionTreeProps) {
   const sessionKey = `session:${controller.controllerId}`;
@@ -105,6 +110,11 @@ function TmuxSessionTree({
         isExpanded={!isCollapsed}
         onToggleExpand={() => onToggleCollapsed(sessionKey)}
         contextMenuItems={[
+          {
+            id: "reconnect-session",
+            label: "Reconnect Session",
+            onClick: () => onReconnectSession(controller.controllerId),
+          },
           {
             id: "detach-session",
             label: "Detach Session",

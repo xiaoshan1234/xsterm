@@ -1,5 +1,7 @@
 import type { Window, Workspace } from "../../../models/legacy/terminal";
 import {
+  collectSessionIdsFromPaneTree,
+  findFirstLeafWithSession,
   findPaneNode,
   getLeafPaneIds,
   removeSessionAndCollapse,
@@ -35,6 +37,64 @@ export function removeSessionsFromWorkspaces(
       }),
     }),
   );
+}
+
+/**
+ * Remove every window that belonged to a tmux controller and detach its
+ * terminals from any mixed pane trees. Empty workspaces receive an init
+ * window so a controller reconnect never leaves an unusable workspace.
+ */
+export function removeControllerFromWorkspaces(
+  workspaces: Workspace[],
+  terminalIds: Iterable<number>,
+): Workspace[] {
+  const controlledIds = new Set(terminalIds);
+
+  return workspaces.map((workspace) => {
+    let nextActiveId = workspace.activeWindowId;
+    const windows = workspace.windows.flatMap((window) => {
+      const windowTerminalIds = collectSessionIdsFromPaneTree(window.rootPane);
+      const containedControlledTerminal = windowTerminalIds.some((id) => controlledIds.has(id));
+      if (!containedControlledTerminal) return [window];
+
+      let rootPane = window.rootPane;
+      for (const terminalId of controlledIds) {
+        rootPane = removeSessionAndCollapse(rootPane, terminalId);
+      }
+      if (collectSessionIdsFromPaneTree(rootPane).length === 0) {
+        if (nextActiveId === window.id) nextActiveId = null;
+        return [];
+      }
+
+      const activePane = findPaneNode(rootPane, window.activePaneId ?? "");
+      const activePaneId =
+        activePane?.type === "leaf" && activePane.terminalId !== undefined
+          ? window.activePaneId
+          : (findFirstLeafWithSession(rootPane)?.id ?? getLeafPaneIds(rootPane)[0] ?? null);
+      return [{ ...window, rootPane, activePaneId }];
+    });
+
+    if (windows.length === 0) {
+      const initPaneId = crypto.randomUUID();
+      const initWindow: Window = {
+        id: crypto.randomUUID(),
+        name: "New Terminal",
+        activePaneId: initPaneId,
+        windowType: "init",
+        rootPane: { id: initPaneId, type: "leaf", size: 100 },
+      };
+      return withRecomputedSessionIds({
+        ...workspace,
+        windows: [initWindow],
+        activeWindowId: initWindow.id,
+      });
+    }
+
+    if (nextActiveId === null) {
+      nextActiveId = windows[0]?.id ?? null;
+    }
+    return withRecomputedSessionIds({ ...workspace, windows, activeWindowId: nextActiveId });
+  });
 }
 
 /**

@@ -46,6 +46,7 @@ describe("TmuxStatusPanel", () => {
       <TmuxStatusPanel
         controllers={controllers}
         onFocusPane={() => undefined}
+        onReconnectSession={() => undefined}
         onDetachSession={() => undefined}
       />,
     );
@@ -67,6 +68,7 @@ describe("TmuxStatusPanel", () => {
       <TmuxStatusPanel
         controllers={controllers}
         onFocusPane={() => undefined}
+        onReconnectSession={() => undefined}
         onDetachSession={() => undefined}
       />,
     );
@@ -83,6 +85,7 @@ describe("TmuxStatusPanel", () => {
       <TmuxStatusPanel
         controllers={controllers}
         onFocusPane={onFocusPane}
+        onReconnectSession={() => undefined}
         onDetachSession={() => undefined}
       />,
     );
@@ -96,12 +99,14 @@ describe("TmuxStatusPanel", () => {
     expect(onFocusPane).toHaveBeenCalledWith(8);
   });
 
-  it("exposes only detach on the session context menu", () => {
+  it("reconnects and detaches from the session context menu", () => {
+    const onReconnect = vi.fn();
     const onDetach = vi.fn();
     render(
       <TmuxStatusPanel
         controllers={controllers}
         onFocusPane={() => undefined}
+        onReconnectSession={onReconnect}
         onDetachSession={onDetach}
       />,
     );
@@ -109,6 +114,10 @@ describe("TmuxStatusPanel", () => {
     fireEvent.contextMenu(screen.getAllByRole("option")[0]);
     expect(screen.queryByRole("button", { name: "Close All Windows" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Focus First Pane" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect Session" }));
+    expect(onReconnect).toHaveBeenCalledWith(1);
+
+    fireEvent.contextMenu(screen.getAllByRole("option")[0]);
     fireEvent.click(screen.getByRole("button", { name: "Detach Session" }));
     expect(onDetach).toHaveBeenCalledWith(1);
   });
@@ -118,6 +127,7 @@ describe("TmuxStatusPanel", () => {
       <TmuxStatusPanel
         controllers={controllers}
         onFocusPane={() => undefined}
+        onReconnectSession={() => undefined}
         onDetachSession={() => undefined}
       />,
     );
