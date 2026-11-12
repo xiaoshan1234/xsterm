@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PaneNode, Window, Workspace } from "../../../models/legacy/terminal";
 import {
+  appendOrReplaceInitWindow,
   closeWindow,
   removeControllerFromWorkspaces,
   removeSessionsFromWorkspaces,
@@ -89,13 +90,44 @@ describe("removeControllerFromWorkspaces", () => {
     expect(next.terminalIds).toEqual([20]);
   });
 
-  it("replaces an emptied workspace with an init window", () => {
+  it("keeps the workspace empty after its last controlled window closes", () => {
     const ws = workspaceWith(terminalWindow("w1", 1, 10));
     const [next] = removeControllerFromWorkspaces([ws], [10]);
 
-    expect(next.windows).toHaveLength(1);
-    expect(next.windows[0].windowType).toBe("init");
+    expect(next.windows).toEqual([]);
+    expect(next.activeWindowId).toBeNull();
     expect(next.terminalIds).toEqual([]);
+  });
+});
+
+describe("appendOrReplaceInitWindow", () => {
+  it("replaces the placeholder init window when it is the only window", () => {
+    const initPane = leaf("init-pane");
+    const workspace = workspaceWith({
+      id: "init",
+      name: "New Terminal",
+      rootPane: initPane,
+      activePaneId: initPane.id,
+      windowType: "init",
+    });
+    const terminal = terminalWindow("tmux-1", 1, 10);
+
+    const next = appendOrReplaceInitWindow(workspace, terminal);
+
+    expect(next.windows).toEqual([terminal]);
+    expect(next.activeWindowId).toBe("tmux-1");
+    expect(next.terminalIds).toEqual([10]);
+  });
+
+  it("appends when the workspace already contains a terminal window", () => {
+    const workspace = workspaceWith(terminalWindow("w1", 1, 10));
+    const nextWindow = terminalWindow("w2", 2, 11);
+
+    const next = appendOrReplaceInitWindow(workspace, nextWindow);
+
+    expect(next.windows.map((window) => window.id)).toEqual(["w1", "w2"]);
+    expect(next.activeWindowId).toBe("w2");
+    expect(next.terminalIds).toEqual([10, 11]);
   });
 });
 

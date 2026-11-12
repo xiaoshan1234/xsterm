@@ -2,8 +2,14 @@ import { useEffect } from "react";
 import { type Terminal } from "../../../models/legacy/terminal";
 import { subscribeTerminalEvents } from "../../terminal/infrastructure";
 import { subscribeTmuxEvents } from "../../tmux/infrastructure";
-import { createLeafPane, forEachPane, getLeafPaneIds, withRecomputedSessionIds } from "./paneUtils";
-import { closeWindow, removeSessionsFromWorkspaces, renameWindow } from "./eventTransitions";
+import { createLeafPane, forEachPane, getLeafPaneIds } from "./paneUtils";
+import {
+  appendOrReplaceInitWindow,
+  closeWindow,
+  removeControllerFromWorkspaces,
+  removeSessionsFromWorkspaces,
+  renameWindow,
+} from "./eventTransitions";
 import { TMUX_PANE_CAPABILITIES } from "./capabilities";
 import { buildTmuxPaneTree, type TmuxPaneGeometry } from "./tmuxPaneTree";
 import { type TerminalState } from "./types";
@@ -132,7 +138,7 @@ export function useTauriListeners({
                 establishingSessionsRef.current.delete(terminalId);
               }
               setSessions((prev) => prev.filter((terminal) => !deadIds.has(terminal.id)));
-              setWorkspaces((prev) => removeSessionsFromWorkspaces(prev, deadIds));
+              setWorkspaces((prev) => removeControllerFromWorkspaces(prev, deadIds));
             }
 
             if (isIntentionalClose || !storedConfig) return;
@@ -330,11 +336,7 @@ export function useTauriListeners({
                   windowType: "terminal" as const,
                   xstermWindowId,
                 };
-                return withRecomputedSessionIds({
-                  ...workspace,
-                  windows: [...workspace.windows, newWindow],
-                  activeWindowId: newWindow.id,
-                });
+                return appendOrReplaceInitWindow(workspace, newWindow);
               }),
             );
           },
