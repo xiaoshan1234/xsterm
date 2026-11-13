@@ -28,16 +28,16 @@ describe("AppShellPreview", () => {
     expect(container.querySelector(".shell-text-sender-slot")).toBeTruthy();
   });
 
-  it("renders status managers without create footers", () => {
-    render(<AppShellPreview />);
+  it("shows the focused pane details in the bottom bar", () => {
+    const { container } = render(<AppShellPreview />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Terminal Status" }));
-    expect(screen.getByRole("heading", { name: "Terminal Status" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "New Terminal" })).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Tmux Status" }));
-    expect(screen.getByRole("heading", { name: "Tmux Status" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "New Tmux Session" })).toBeNull();
+    const runtimeStatus = container.querySelector(".shell-bottom-runtime");
+    expect(runtimeStatus?.textContent).toContain("Local PowerShell");
+    expect(runtimeStatus?.textContent).toContain("Local");
+    expect(runtimeStatus?.textContent).toContain("pwsh / Main");
+    expect(runtimeStatus?.textContent).toContain("120×36");
+    expect(runtimeStatus?.textContent).toContain("Pane 1/2");
+    expect(screen.queryByRole("button", { name: /Runtime status/ })).toBeNull();
   });
 
   it("closes a specific non-default workspace from the workspace menu", () => {

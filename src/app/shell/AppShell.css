@@ -131,13 +131,6 @@
   align-items: center;
 }
 
-.shell-toolbar-divider {
-  width: 24px;
-  height: 1px;
-  margin: var(--space-xs) 0;
-  background: var(--hairline);
-}
-
 .shell-toolbar-spacer {
   flex: 1;
 }
@@ -354,23 +347,6 @@
   white-space: nowrap;
 }
 
-.shell-manager-item-copy span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-badge {
-  padding: 2px 6px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-pill);
-  color: var(--muted);
-  font-size: 10px;
-  white-space: nowrap;
-}
-
 .shell-text-button {
   padding: 3px 5px;
   border: none;
@@ -389,7 +365,6 @@
   color: var(--error);
 }
 
-.shell-status-header,
 .shell-settings-row {
   display: flex;
   align-items: center;
@@ -405,18 +380,6 @@
   color: var(--ink);
   font-size: 13px;
   font-weight: 500;
-}
-
-.shell-status-tree {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px var(--space-sm);
-  margin: var(--space-xs) 0 var(--space-sm) var(--space-lg);
-  padding: var(--space-xs);
-  border-left: 1px solid var(--hairline-strong);
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
 }
 
 .shell-main-area {
@@ -607,6 +570,22 @@
   position: relative;
 }
 
+.shell-bottom-runtime {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(72vw, 760px);
+  min-width: 0;
+  margin-left: var(--space-xs);
+  padding-left: var(--space-xs);
+  overflow: hidden;
+  border-left: 1px solid var(--hairline);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .shell-bottom-spacer {
   flex: 1;
 }
@@ -637,6 +616,62 @@
   color: var(--ink);
   border-color: var(--hairline-strong);
   background: var(--accent-soft);
+}
+
+.shell-bottom-runtime-status {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+}
+
+.shell-bottom-runtime-status--connected {
+  background: var(--success);
+}
+
+.shell-bottom-runtime-status--disconnected {
+  background: var(--error);
+}
+
+.shell-bottom-runtime-status--empty {
+  background: var(--muted-soft);
+}
+
+.shell-bottom-runtime-name {
+  flex: 0 1 auto;
+  max-width: 180px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.shell-bottom-runtime-kind,
+.shell-bottom-runtime-size,
+.shell-bottom-runtime-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.shell-bottom-runtime-detail {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--body);
+  text-overflow: ellipsis;
+}
+
+.shell-bottom-runtime-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 10px;
+  background: var(--hairline-strong);
+}
+
+.shell-bottom-runtime-size {
+  font-variant-numeric: tabular-nums;
 }
 
 .shell-workspace-menu {

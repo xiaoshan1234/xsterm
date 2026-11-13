@@ -177,8 +177,6 @@ LeftSidebar
 - tmux Manager
 - Window Manager
 - Workspace Manager
-- Terminal Status Manager
-- tmux Status Manager
 - Settings
 
 约束：
@@ -187,7 +185,7 @@ LeftSidebar
 - 同一时间只有一个 Active Tool。
 - 所有按钮必须有 `aria-label` 和 tooltip。
 - 焦点不会因 ToolPanel 开关而丢失。
-- Toolbar 按“配置管理 / 运行状态 / 设置”分组，使用 hairline 分隔。
+- Toolbar 按“配置管理 / 设置”分组，运行状态统一位于 BottomBar。
 
 分组建议：
 
@@ -197,10 +195,6 @@ Configuration
 ├─ TmuxManager
 ├─ WindowManager
 └─ WorkspaceManager
-
-Runtime Status
-├─ TerminalStatusManager
-└─ TmuxStatusManager
 
 Settings
 └─ SettingsPanel
@@ -218,28 +212,20 @@ Settings
 
 ```ts
 type ToolId =
-  | "terminal-manager"
-  | "terminal-status-manager"
-  | "tmux-manager"
-  | "tmux-status-manager"
-  | "window-manager"
-  | "workspace-manager"
-  | "settings";
+  "terminal-manager" | "tmux-manager" | "window-manager" | "workspace-manager" | "settings";
 ```
 
 ### 6.6 Manager 组件
 
 Managers 都是 feature UI，不直接挂在 MainArea。
 
-| 组件                  | Model 来源                       | 主要动作                              |
-| --------------------- | -------------------------------- | ------------------------------------- |
-| TerminalManager       | `SavedLaunchConfig[]` View Model | 创建、编辑、删除、打开 Terminal 配置  |
-| TerminalStatusManager | `Terminal[]` View Model          | 查看 Local/SSH Terminal 运行状态      |
-| TmuxManager           | `SavedLaunchConfig[]` View Model | 创建、编辑、attach、打开 tmux 配置    |
-| TmuxStatusManager     | `TmuxController[]` View Model    | 查看 tmux Controller/Window/Pane 状态 |
-| WindowManager         | `SavedWindowSnapshot[]`          | 加载、重命名、删除 Window 配置        |
-| WorkspaceManager      | `WorkspaceSnapshot[]`            | 加载、重命名、删除 Workspace 配置     |
-| SettingsPanel         | Settings View Model              | 修改全局设置                          |
+| 组件             | Model 来源                       | 主要动作                             |
+| ---------------- | -------------------------------- | ------------------------------------ |
+| TerminalManager  | `SavedLaunchConfig[]` View Model | 创建、编辑、删除、打开 Terminal 配置 |
+| TmuxManager      | `SavedLaunchConfig[]` View Model | 创建、编辑、attach、打开 tmux 配置   |
+| WindowManager    | `SavedWindowSnapshot[]`          | 加载、重命名、删除 Window 配置       |
+| WorkspaceManager | `WorkspaceSnapshot[]`            | 加载、重命名、删除 Workspace 配置    |
+| SettingsPanel    | Settings View Model              | 修改全局设置                         |
 
 Manager 不得直接操作 Tauri，也不得持有其他 Manager 的内部状态。
 
@@ -276,7 +262,7 @@ ManagerPanel
 - 每个 Group 内的 `SavedLaunchConfig`
 
 TerminalManager 只显示保存配置，不显示 Live Terminal 状态列表。运行状态统一由
-TerminalStatusManager 展示。
+BottomBar RuntimeStatus 展示。
 
 行为：
 
@@ -298,7 +284,7 @@ TerminalStatusManager 展示。
 - Saved tmux launch configs
 
 TmuxManager 只显示保存配置，不显示 Live TmuxController 状态列表。运行状态统一由
-TmuxStatusManager 展示。
+BottomBar RuntimeStatus 展示。
 
 约束：
 
@@ -306,74 +292,16 @@ TmuxStatusManager 展示。
 - 不显示 New Group。
 - New tmux Session 打开 `CreateTmuxDialog`。
 
-#### TerminalStatusManager
+#### BottomBar RuntimeStatus
 
-用途：
+BottomBar 是运行状态的唯一常驻入口：
 
-- 显示当前所有 Live `Terminal`。
-- 不显示保存配置。
-- 不提供创建操作。
-
-列表字段：
-
-- Terminal title
-- Local/SSH 类型
-- Connected / Connecting / Disconnected / Failed
-- 所在 Workspace / Window / Pane
-- 关联的 `SavedLaunchConfig` 名称（如有）
-- 最近活动时间
-
-行操作：
-
-- Focus：切换到对应 Pane。
-- Reconnect：仅当 capability 支持时显示。
-- Close：关闭运行实例。
-
-Footer：
-
-- 默认不显示创建按钮。
-- 状态统计和筛选可以放在 Header。
-
-#### TmuxStatusManager
-
-用途：
-
-- 显示当前所有 Live `TmuxController`。
-- 展开后显示其 Window 和 Pane。
-- 不显示保存配置。
-
-Controller 字段：
-
-- tmux session / socket 或配置名称
-- Connected / Connecting / Exited / Failed
-- Local/SSH 启动方式
-- Window 数量
-- Pane 数量
-
-Window/Pane 字段：
-
-- `@window` / `%pane`
-- Window name
-- Active Pane
-- 对应 Workspace / Window
-
-行操作：
-
-- Focus：切换到对应 tmux Window/Pane。
-- Retry：Controller exited 时可重试。
-- Dismiss Error：清理错误状态。
-
-Footer：
-
-- 默认不显示创建按钮。
-
-#### 状态 Manager 布局例外
-
-TerminalStatusManager 和 TmuxStatusManager 属于只读状态面板：
-
-- 保留 Header 和可滚动列表。
-- 不显示创建型 Footer。
-- 行级操作通过 Context Menu 或紧凑 Action Button 提供。
+- 显示当前 Active Workspace / Active Window 中聚焦 Pane 的终端名称。
+- 显示终端类型、目标或 tmux `session / window / pane` 层级。
+- 显示当前 Pane 的 `cols × rows` 尺寸和 Pane 序号。
+- 正常连接显示状态点；断开状态使用 Error 语义。
+- RuntimeStatus 是纯展示信息，不实现按钮或 popover。
+- Toolbar 不再提供独立的 Terminal Status 或 Tmux Status 工具。
 
 #### WindowManager
 
@@ -572,10 +500,19 @@ Target 失效时：
 ```text
 BottomBar
 ├─ WorkspaceQuickSwitch
+├─ RuntimeStatus
 └─ TextSenderToggle
 ```
 
-### 9.1 WorkspaceQuickSwitch
+### 9.1 RuntimeStatus
+
+- 显示当前聚焦 Pane 的名称、类型、连接状态和目标/层级信息。
+- 显示 Pane 尺寸与 Pane 序号。
+- 正常连接只显示状态点；断开状态使用红色状态点。
+- tmux 层级使用 `session / window / pane`。
+- 该区域只读，不承担导航、重连或关闭操作。
+
+### 9.2 WorkspaceQuickSwitch
 
 - 打开 Workspace 快速切换菜单。
 - 显示当前 Workspace 名称。
@@ -583,7 +520,7 @@ BottomBar
 - 菜单包含 Manage Workspaces 入口，跳转到 WorkspaceManager。
 - 不直接展开 LeftSidebar，除非用户选择 Manage。
 
-### 9.2 TextSenderToggle
+### 9.3 TextSenderToggle
 
 - Toggle GlobalTextSender。
 - 显示打开状态。
@@ -778,22 +715,21 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
 ## 12. 组件与 Model 映射
 
-| UI 组件               | 主要 Model                            | 派生 View Model          |
-| --------------------- | ------------------------------------- | ------------------------ |
-| NavBar                | 无业务 Model                          | Window UI State          |
-| Toolbar               | 无业务 Model                          | Active Tool              |
-| TerminalManager       | `SavedLaunchConfig`                   | TerminalManagerItem      |
-| TerminalStatusManager | `Terminal[]`                          | TerminalStatusItem       |
-| TmuxManager           | `SavedLaunchConfig`                   | TmuxManagerItem          |
-| TmuxStatusManager     | `TmuxController[]`                    | TmuxStatusItem           |
-| WindowManager         | `SavedWindowSnapshot`                 | SavedWindowItem          |
-| WorkspaceManager      | `WorkspaceSnapshot`                   | SavedWorkspaceItem       |
-| WindowTabBar          | `WorkspaceWindow[]`                   | WindowTabItem            |
-| WindowPaneArea        | `RawWindow`、`TmuxWindowReference`    | WindowPaneViewData       |
-| Pane                  | `RawPaneNode`、`TmuxPane`、`Terminal` | PaneViewData             |
-| TerminalView          | `Terminal`                            | TerminalViewData         |
-| GlobalTextSender      | `PaneTargetRef`、`TerminalStreamRef`  | TextSenderViewData       |
-| BottomBar             | `Workspace[]`                         | WorkspaceQuickSwitchData |
+| UI 组件                 | 主要 Model                                | 派生 View Model          |
+| ----------------------- | ----------------------------------------- | ------------------------ |
+| NavBar                  | 无业务 Model                              | Window UI State          |
+| Toolbar                 | 无业务 Model                              | Active Tool              |
+| TerminalManager         | `SavedLaunchConfig`                       | TerminalManagerItem      |
+| TmuxManager             | `SavedLaunchConfig`                       | TmuxManagerItem          |
+| WindowManager           | `SavedWindowSnapshot`                     | SavedWindowItem          |
+| WorkspaceManager        | `WorkspaceSnapshot`                       | SavedWorkspaceItem       |
+| WindowTabBar            | `WorkspaceWindow[]`                       | WindowTabItem            |
+| WindowPaneArea          | `RawWindow`、`TmuxWindowReference`        | WindowPaneViewData       |
+| Pane                    | `RawPaneNode`、`TmuxPane`、`Terminal`     | PaneViewData             |
+| TerminalView            | `Terminal`                                | TerminalViewData         |
+| GlobalTextSender        | `PaneTargetRef`、`TerminalStreamRef`      | TextSenderViewData       |
+| BottomBar RuntimeStatus | `Workspace`、`Terminal`、`TmuxController` | RuntimeStatusViewData    |
+| BottomBar               | `Workspace[]`                             | WorkspaceQuickSwitchData |
 
 ## 13. 交互流程
 
@@ -943,7 +879,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 - TerminalManager 底部固定显示 New Terminal 和 New Group。
 - Tmux/Window/Workspace 配置 Manager 底部固定操作且不使用 Group。
 - TerminalManager 和 TmuxManager 只显示保存配置。
-- TerminalStatusManager 和 TmuxStatusManager 分别显示 Live Terminal 和 TmuxController 状态。
+- BottomBar RuntimeStatus 只显示当前聚焦 Pane 的名称、类型、目标/层级、尺寸和 Pane 序号。
 - 四个创建/编辑 Dialog 独立存在。
 - ErrorDialog 关闭前阻止其他操作。
 - 所有 Pane 可以通过 `PaneTargetRef` 被选中。

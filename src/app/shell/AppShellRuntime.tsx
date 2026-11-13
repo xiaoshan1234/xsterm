@@ -8,20 +8,16 @@ import {
 import NavBar from "../NavBar";
 import { WorkspaceContainer } from "../../features/workspace/WorkspaceContainer";
 import { TerminalManagerPanel } from "../../features/terminal/ui/TerminalManagerPanel";
-import { TerminalStatusPanel } from "../../features/terminal/ui/TerminalStatusPanel";
 import { TmuxManagerPanel } from "../../features/tmux/ui/TmuxManagerPanel";
-import { TmuxStatusPanel } from "../../features/tmux/ui/TmuxStatusPanel";
 import { WindowManagerPanel, WorkspaceManagerPanel } from "../../features/workspace/ui";
 import { SettingsPanel } from "../../features/settings/ui";
 import { selectTerminalManagerGroups } from "../../features/terminal/viewModels/managerViewModel";
-import { selectTerminalStatusItems } from "../../features/terminal/viewModels/statusViewModel";
 import { selectTmuxManagerItems } from "../../features/tmux/viewModels/managerViewModel";
 import { selectTmuxStatusControllers } from "../../features/tmux/viewModels/statusViewModel";
 import {
   selectWindowManagerItems,
   selectWorkspaceManagerItems,
 } from "../../features/workspace/viewModels/managerViewModel";
-import { selectPaneLocations } from "../../features/workspace/viewModels/paneLocationViewModel";
 import { selectPaneTargetOptions } from "../../features/command-sender/viewModels/paneTargetViewModel";
 import { AppShell } from "./AppShell";
 import { ErrorDialog, type ErrorDialogData } from "./ErrorDialog";
@@ -45,6 +41,7 @@ import { SaveDialog } from "../../features/workspace/dialogs/SaveDialog";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { useTmuxAutoAttach } from "../../features/tmux/application/useTmuxAutoAttach";
 import { useAppShortcuts } from "../useAppShortcuts";
+import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 
 type RuntimeDialog =
   | { kind: "create-terminal"; initialTab: "local" | "ssh"; groupId: number }
@@ -69,16 +66,13 @@ export function AppShellRuntime() {
   useTmuxAutoAttach();
   const {
     terminals,
-    closeTerminal,
-    reconnectSession,
     writeTerminal,
     createLocalSession,
     createSshSession,
     createTmuxSession,
     attachTmuxSession,
-    detachTmuxSession,
-    reconnectTmuxSession,
     applyDisplayConfigToLiveSession,
+    terminalSizesRef,
   } = useTerminalRuntime();
   const {
     savedConfigs,
@@ -96,8 +90,6 @@ export function AppShellRuntime() {
     savedWorkspaces,
     savedWindowConfigs,
     setActiveWorkspace,
-    setActiveWindow,
-    setActivePane,
     createWindowFromSavedConfig,
     createWindow,
     loadWindow,
@@ -144,14 +136,16 @@ export function AppShellRuntime() {
     () => selectTerminalManagerGroups(savedConfigs, groups),
     [groups, savedConfigs],
   );
-  const terminalStatusItems = useMemo(
-    () => selectTerminalStatusItems(terminals, workspaces, savedConfigs),
-    [savedConfigs, terminals, workspaces],
-  );
   const tmuxManagerItems = useMemo(() => selectTmuxManagerItems(savedConfigs), [savedConfigs]);
   const tmuxStatusControllers = useMemo(
     () => selectTmuxStatusControllers(terminals, workspaces, savedConfigs),
     [savedConfigs, terminals, workspaces],
+  );
+  const runtimeStatus = selectRuntimeStatus(
+    activeWorkspace,
+    terminals,
+    tmuxStatusControllers,
+    terminalSizesRef.current,
   );
   const windowManagerItems = useMemo(
     () => selectWindowManagerItems(savedWindowConfigs),
@@ -160,10 +154,6 @@ export function AppShellRuntime() {
   const workspaceManagerItems = useMemo(
     () => selectWorkspaceManagerItems(savedWorkspaces, workspaces),
     [savedWorkspaces, workspaces],
-  );
-  const paneLocations = useMemo(
-    () => selectPaneLocations(workspaces, terminals),
-    [terminals, workspaces],
   );
   const paneTargetOptions = useMemo(
     () => selectPaneTargetOptions(workspaces, terminals, savedConfigs),
@@ -189,15 +179,6 @@ export function AppShellRuntime() {
       details: cause instanceof Error ? cause.stack : undefined,
     });
   }, []);
-
-  const detachTmuxWithError = useCallback(
-    (controllerId: number) => {
-      void detachTmuxSession(controllerId).catch((cause) =>
-        showError("Unable to detach tmux session", cause),
-      );
-    },
-    [detachTmuxSession, showError],
-  );
 
   const openConfig = useCallback(
     (configId: string) => {
@@ -226,42 +207,6 @@ export function AppShellRuntime() {
       }
     },
     [savedConfigs],
-  );
-
-  const focusTerminal = useCallback(
-    (terminalId: number) => {
-      const location = paneLocations.get(terminalId);
-      if (!location) return;
-      setActiveWorkspace(location.workspaceId);
-      setActiveWindow(location.workspaceId, location.windowId);
-      setActivePane(location.workspaceId, location.windowId, location.paneId);
-    },
-    [paneLocations, setActivePane, setActiveWindow, setActiveWorkspace],
-  );
-
-  const reconnectTmuxWithError = useCallback(
-    (controllerId: number) => {
-      void reconnectTmuxSession(controllerId)
-        .then((terminal) => focusTerminal(terminal.id))
-        .catch((cause) => showError("Unable to reconnect tmux session", cause));
-    },
-    [focusTerminal, reconnectTmuxSession, showError],
-  );
-
-  const closeTerminalWithError = useCallback(
-    (terminalId: number) => {
-      void closeTerminal(terminalId).catch((cause) => showError("Unable to close terminal", cause));
-    },
-    [closeTerminal, showError],
-  );
-
-  const reconnectTerminalWithError = useCallback(
-    (terminalId: number) => {
-      void reconnectSession(terminalId)
-        .then((terminal) => focusTerminal(terminal.id))
-        .catch((cause) => showError("Unable to reconnect terminal", cause));
-    },
-    [focusTerminal, reconnectSession, showError],
   );
 
   const openWorkspace = useCallback(
@@ -337,15 +282,6 @@ export function AppShellRuntime() {
             onRemoveConfig={removeConfig}
           />
         );
-      case "terminal-status-manager":
-        return (
-          <TerminalStatusPanel
-            items={terminalStatusItems}
-            onFocus={focusTerminal}
-            onReconnect={reconnectTerminalWithError}
-            onClose={closeTerminalWithError}
-          />
-        );
       case "tmux-manager":
         return (
           <TmuxManagerPanel
@@ -355,15 +291,6 @@ export function AppShellRuntime() {
             onOpenConfig={openConfig}
             onEditConfig={openEditTmuxConfig}
             onRemoveConfig={removeConfig}
-          />
-        );
-      case "tmux-status-manager":
-        return (
-          <TmuxStatusPanel
-            controllers={tmuxStatusControllers}
-            onFocusPane={focusTerminal}
-            onReconnectSession={reconnectTmuxWithError}
-            onDetachSession={detachTmuxWithError}
           />
         );
       case "window-manager":
@@ -435,29 +362,22 @@ export function AppShellRuntime() {
   }, [
     activeTool,
     activeWorkspace,
-    closeTerminalWithError,
     createEmptyWorkspace,
     createWindow,
     deleteGroup,
     deleteSavedWindow,
     deleteSavedWorkspace,
-    focusTerminal,
     loadWindow,
     openConfig,
     openEditTerminalConfig,
     openEditTmuxConfig,
     openWorkspace,
-    reconnectTmuxWithError,
-    reconnectTerminalWithError,
     removeConfig,
     savedWindowConfigs,
     savedWorkspaces,
     showError,
     terminalManagerGroups,
-    terminalStatusItems,
     tmuxManagerItems,
-    tmuxStatusControllers,
-    detachTmuxWithError,
     toggleGroup,
     windowManagerItems,
     workspaceManagerItems,
@@ -608,6 +528,7 @@ export function AppShellRuntime() {
       overlay={overlay}
       workspaceName={activeWorkspace?.name ?? "No workspace"}
       workspaces={workspaces.map((workspace) => workspace.name)}
+      runtimeStatus={runtimeStatus}
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={error !== null}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}

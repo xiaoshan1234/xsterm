@@ -7,7 +7,6 @@ import {
   ManagerSection,
 } from "../../../shared/ui/ManagerPanel";
 import { type TerminalManagerGroupViewData } from "../viewModels/managerViewModel";
-import "./TerminalManagerPanel.css";
 
 interface TerminalManagerPanelProps {
   groups: readonly TerminalManagerGroupViewData[];
@@ -45,7 +44,7 @@ export function TerminalManagerPanel({
       }
     >
       {!hasConfigs && <ManagerEmptyState>No saved terminal configurations.</ManagerEmptyState>}
-      <div className="terminal-manager-groups">
+      <div className="manager-group-list">
         {groups.map((group) => (
           <ManagerSection
             key={group.groupId}

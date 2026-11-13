@@ -29,29 +29,10 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
           }
         >
           <ManagerGroup label="Ungrouped" isOpen>
-            <ManagerItem
-              title="Local PowerShell"
-              subtitle="Local · powershell.exe"
-              badge="Shell"
-              onEdit={() => onOpenDialog("edit-terminal")}
-            />
-            <ManagerItem
-              title="Production SSH"
-              subtitle="SSH · deploy@example.com"
-              badge="SSH"
-              onEdit={() => onOpenDialog("edit-terminal")}
-            />
+            <ManagerItem title="Local PowerShell" onEdit={() => onOpenDialog("edit-terminal")} />
+            <ManagerItem title="Production SSH" onEdit={() => onOpenDialog("edit-terminal")} />
           </ManagerGroup>
           <ManagerGroup label="Work" isOpen={false} />
-        </PreviewManagerFrame>
-      );
-
-    case "terminal-status-manager":
-      return (
-        <PreviewManagerFrame>
-          <StatusHeader count="2 live terminals" />
-          <ManagerItem title="Production SSH" subtitle="Pane 2 · Window 1" badge="Connected" />
-          <ManagerItem title="Local PowerShell" subtitle="Pane 1 · Window 1" badge="Connected" />
         </PreviewManagerFrame>
       );
 
@@ -69,33 +50,8 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
             </button>
           }
         >
-          <ManagerItem
-            title="Tmux dev"
-            subtitle="Local · socket work"
-            badge="Tmux"
-            onEdit={() => onOpenDialog("edit-tmux")}
-          />
-          <ManagerItem
-            title="Remote Tmux"
-            subtitle="SSH · build@example.com"
-            badge="Tmux"
-            onEdit={() => onOpenDialog("edit-tmux")}
-          />
-        </PreviewManagerFrame>
-      );
-
-    case "tmux-status-manager":
-      return (
-        <PreviewManagerFrame>
-          <StatusHeader count="1 controller · 3 windows · 7 panes" />
-          <ManagerItem title="Tmux dev" subtitle="Socket work · 3 windows" badge="Connected" />
-          <div className="shell-status-tree">
-            <span>@1 editor</span>
-            <span>%1</span>
-            <span>%2</span>
-            <span>@2 server</span>
-            <span>%3</span>
-          </div>
+          <ManagerItem title="Tmux dev" onEdit={() => onOpenDialog("edit-tmux")} />
+          <ManagerItem title="Remote Tmux" onEdit={() => onOpenDialog("edit-tmux")} />
         </PreviewManagerFrame>
       );
 
@@ -109,8 +65,8 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
             </button>
           }
         >
-          <ManagerItem title="Editor" subtitle="2 panes · saved" badge="Window" />
-          <ManagerItem title="Server Logs" subtitle="3 panes · saved" badge="Window" />
+          <ManagerItem title="Editor" />
+          <ManagerItem title="Server Logs" />
         </PreviewManagerFrame>
       );
 
@@ -124,8 +80,8 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
             </button>
           }
         >
-          <ManagerItem title="default" subtitle="Current workspace" badge="Live" />
-          <ManagerItem title="Project X" subtitle="2 windows · saved" badge="Saved" />
+          <ManagerItem title="default" />
+          <ManagerItem title="Project X" />
         </PreviewManagerFrame>
       );
 
@@ -178,38 +134,17 @@ function ManagerGroup({
   );
 }
 
-function ManagerItem({
-  title,
-  subtitle,
-  badge,
-  onEdit,
-}: {
-  title: string;
-  subtitle: string;
-  badge: string;
-  onEdit?: () => void;
-}) {
+function ManagerItem({ title, onEdit }: { title: string; onEdit?: () => void }) {
   return (
     <div className="shell-manager-item">
       <div className="shell-manager-item-copy">
         <strong>{title}</strong>
-        <span>{subtitle}</span>
       </div>
-      <span className="shell-badge">{badge}</span>
       {onEdit && (
         <button type="button" className="shell-text-button" onClick={onEdit}>
           Edit
         </button>
       )}
-    </div>
-  );
-}
-
-function StatusHeader({ count }: { count: string }) {
-  return (
-    <div className="shell-status-header">
-      <span>Runtime status</span>
-      <span>{count}</span>
     </div>
   );
 }

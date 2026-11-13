@@ -9,6 +9,7 @@ import {
   MIN_TEXT_SENDER_HEIGHT,
   useTextSenderHeight,
 } from "./useTextSenderHeight";
+import { type RuntimeStatusViewData } from "./runtimeStatusViewModel";
 import "./AppShell.css";
 
 interface AppShellProps {
@@ -21,6 +22,7 @@ interface AppShellProps {
   overlay: ReactNode;
   workspaceName: string;
   workspaces: readonly string[];
+  runtimeStatus: RuntimeStatusViewData | null;
   isTextSenderOpen: boolean;
   isInteractionBlocked?: boolean;
   onSelectTool: (tool: ToolId) => void;
@@ -39,6 +41,7 @@ export function AppShell({
   overlay,
   workspaceName,
   workspaces,
+  runtimeStatus,
   isTextSenderOpen,
   isInteractionBlocked = false,
   onSelectTool,
@@ -112,6 +115,7 @@ export function AppShell({
         <BottomBar
           workspaceName={workspaceName}
           workspaces={workspaces}
+          runtimeStatus={runtimeStatus}
           isTextSenderOpen={isTextSenderOpen}
           onToggleTextSender={onToggleTextSender}
           onSelectWorkspace={onSelectWorkspace}

@@ -7,6 +7,7 @@ import { PreviewDialogs } from "./PreviewDialogs";
 import { AppShell } from "./AppShell";
 import { PreviewNavBar } from "./PreviewNavBar";
 import { TOOL_TITLES, type PreviewDialogId, type ToolId } from "./types";
+import { type RuntimeStatusViewData } from "./runtimeStatusViewModel";
 
 const WORKSPACES = ["Default", "Project X", "Infrastructure"];
 
@@ -33,6 +34,17 @@ const TEXT_SENDER_TARGETS = [
     isAvailable: true,
   },
 ];
+
+const PREVIEW_RUNTIME_STATUS: RuntimeStatusViewData = {
+  terminalId: 1,
+  status: "connected",
+  name: "Local PowerShell",
+  kind: "Local",
+  detail: "pwsh / Main",
+  size: { cols: 120, rows: 36 },
+  paneNumber: 1,
+  paneCount: 2,
+};
 
 export function AppShellPreview() {
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
@@ -80,6 +92,7 @@ export function AppShellPreview() {
       }
       workspaceName={activeWorkspace}
       workspaces={workspaces}
+      runtimeStatus={PREVIEW_RUNTIME_STATUS}
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={activeDialog === "error"}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}

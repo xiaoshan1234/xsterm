@@ -59,6 +59,7 @@ export function ManagerSection({
 export function ManagerRow({
   title,
   badge,
+  status,
   isSelected = false,
   onSelect,
   onOpen,
@@ -69,6 +70,7 @@ export function ManagerRow({
 }: {
   title: string;
   badge?: string;
+  status?: "connected" | "disconnected";
   isSelected?: boolean;
   onSelect?: () => void;
   onOpen?: () => void;
@@ -111,6 +113,14 @@ export function ManagerRow({
       <div className="manager-row-copy">
         <strong>{title}</strong>
       </div>
+      {status && (
+        <span
+          className={`manager-row-status manager-row-status--${status}`}
+          role="img"
+          aria-label={status === "connected" ? "Connected" : "Disconnected"}
+          title={status === "connected" ? "Connected" : "Disconnected"}
+        />
+      )}
       {badge && <span className="manager-row-badge">{badge}</span>}
     </div>
   );

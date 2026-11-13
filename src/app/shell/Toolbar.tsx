@@ -1,9 +1,7 @@
 import {
   ChatIcon,
-  LayoutIcon,
   SessionIcon,
   SettingsIcon,
-  TerminalIcon,
   WindowIcon,
   WorkspaceIcon,
 } from "../../shared/icons/Icon";
@@ -21,29 +19,11 @@ const CONFIGURATION_TOOLS = [
   { id: "workspace-manager", label: "Workspace Manager", icon: WorkspaceIcon },
 ] as const;
 
-const STATUS_TOOLS = [
-  { id: "terminal-status-manager", label: "Terminal Status", icon: TerminalIcon },
-  { id: "tmux-status-manager", label: "Tmux Status", icon: LayoutIcon },
-] as const;
-
 export function Toolbar({ activeTool, onSelectTool }: ToolbarProps) {
   return (
     <nav className="shell-toolbar" aria-label="Application tools">
       <div className="shell-toolbar-group">
         {CONFIGURATION_TOOLS.map((tool) => (
-          <ToolbarButton
-            key={tool.id}
-            id={tool.id}
-            label={tool.label}
-            activeTool={activeTool}
-            onSelectTool={onSelectTool}
-            icon={<tool.icon size={18} />}
-          />
-        ))}
-      </div>
-      <div className="shell-toolbar-divider" aria-hidden="true" />
-      <div className="shell-toolbar-group">
-        {STATUS_TOOLS.map((tool) => (
           <ToolbarButton
             key={tool.id}
             id={tool.id}
