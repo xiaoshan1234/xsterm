@@ -12,7 +12,7 @@ use xscore::platform::tmux::{
 
 use crate::connect::app_backend::AppBackend;
 use crate::connect::forward::spawn_output_forwarder;
-use crate::connect::ssh_exec::ssh_exec_status;
+use crate::connect::ssh_exec::{ssh_exec_capture, ssh_exec_status};
 use crate::shared::session::{SplitDirection, SshConfig, TmuxSessionConfig};
 
 const EXTENDED_PANE_FORMAT: &str = "#{window_index}|#{pane_index}|#{pane_id}|#{pane_width}|#{pane_height}|#{pane_left}|#{pane_top}|#{pane_current_command}|#{pane_active}|#{window_name}";
@@ -31,6 +31,43 @@ struct ExtendedPaneInfo {
     window_name: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PaneTerminalModes {
+    alternate: bool,
+    cursor: bool,
+    insert: bool,
+    origin: bool,
+    wrap: bool,
+    keypad_cursor: bool,
+    keypad: bool,
+    mouse_standard: bool,
+    mouse_button: bool,
+    mouse_all: bool,
+    mouse_sgr: bool,
+    cursor_x: Option<u16>,
+    cursor_y: Option<u16>,
+}
+
+impl Default for PaneTerminalModes {
+    fn default() -> Self {
+        Self {
+            alternate: false,
+            cursor: true,
+            insert: false,
+            origin: false,
+            wrap: true,
+            keypad_cursor: false,
+            keypad: false,
+            mouse_standard: false,
+            mouse_button: false,
+            mouse_all: false,
+            mouse_sgr: false,
+            cursor_x: None,
+            cursor_y: None,
+        }
+    }
+}
+
 /// One tmux control connection owning N panes (and therefore N xsterm
 /// sessions). All state is guarded by `std::sync::Mutex` so the shared
 /// adapter can be stored in an `Arc` and used from Tauri IPC threads.
@@ -39,6 +76,8 @@ pub(crate) struct TmuxSession {
     control: Arc<TmuxControl>,
     session_name: Option<String>,
     ssh_config: Option<SshConfig>,
+    host_config: TmuxHostConfig,
+    socket: TmuxSocket,
     app_backend: Arc<dyn AppBackend>,
     pane_bindings: Mutex<HashMap<String, u32>>,
     pane_window_bindings: Mutex<HashMap<String, String>>,
@@ -76,6 +115,8 @@ impl TmuxSession {
             control,
             session_name.to_string(),
             config.ssh.clone(),
+            host,
+            socket,
             app_backend,
         )
         .await
@@ -109,6 +150,8 @@ impl TmuxSession {
             control,
             session_name,
             config.ssh.clone(),
+            host,
+            socket,
             app_backend,
         )
         .await
@@ -119,6 +162,8 @@ impl TmuxSession {
         control: TmuxControl,
         session_name: String,
         ssh_config: Option<SshConfig>,
+        host_config: TmuxHostConfig,
+        socket: TmuxSocket,
         app_backend: Arc<dyn AppBackend>,
     ) -> Result<Arc<Self>, String> {
         let id_base = controller_id.saturating_mul(1_000_000);
@@ -127,6 +172,8 @@ impl TmuxSession {
             control: Arc::new(control),
             session_name: Some(session_name),
             ssh_config,
+            host_config,
+            socket,
             app_backend,
             pane_bindings: Mutex::new(HashMap::new()),
             pane_window_bindings: Mutex::new(HashMap::new()),
@@ -584,7 +631,8 @@ impl TmuxSession {
     ///
     /// 1. the saved main screen (so quitting the TUI restores the shell),
     /// 2. `ESC[?1049h` to switch xterm into the alternate screen,
-    /// 3. the TUI's visible alternate-screen content.
+    /// 3. the TUI's visible alternate-screen content on its exact row grid,
+    /// 4. DEC modes for cursor/wrap/keypad/mouse tracking plus cursor position.
     ///
     /// The frontend keeps applying `normalizeCapturedScrollback` to the whole
     /// payload; the escape sequences carry no newlines, so they pass through
@@ -592,25 +640,60 @@ impl TmuxSession {
     pub(crate) async fn capture_pane(&self, pane: &str, lines: i32) -> Result<String, String> {
         self.ensure_pane_bound(pane)?;
 
-        let in_alternate = match self.pane_in_alternate_screen(pane).await {
-            Ok(value) => value,
+        let modes = match self.pane_terminal_modes(pane).await {
+            Ok(modes) => modes,
             Err(error) => {
                 tracing::warn!(
                     pane,
                     error,
-                    "tmux alternate-screen probe failed; assuming main screen"
+                    "tmux terminal-mode probe failed; falling back to alternate-screen probe"
                 );
-                false
+                let alternate = self.pane_in_alternate_screen(pane).await.unwrap_or(false);
+                PaneTerminalModes {
+                    alternate,
+                    ..PaneTerminalModes::default()
+                }
             }
         };
 
-        if !in_alternate {
-            return self.capture_pane_raw(pane, Some(lines), false).await;
+        if !modes.alternate {
+            let normal = self
+                .capture_pane_raw(pane, Some(lines), false, false)
+                .await?;
+            return Ok(format!("{normal}{}", terminal_modes_replay(&modes)));
         }
 
-        let normal = self.capture_pane_raw(pane, Some(lines), true).await?;
-        let alternate = self.capture_pane_raw(pane, None, false).await?;
-        Ok(alternate_screen_replay(&normal, &alternate))
+        let normal = self
+            .capture_pane_raw(pane, Some(lines), true, false)
+            .await?;
+        let alternate = self.capture_pane_raw(pane, None, false, false).await?;
+        Ok(format!(
+            "{}{}",
+            alternate_screen_replay(&normal, &alternate),
+            terminal_modes_replay(&modes)
+        ))
+    }
+
+    /// Query the terminal modes tmux preserved for this pane. tmux does not
+    /// replay these DECSET/DECRST sequences when a new control client attaches,
+    /// so snapshots must carry them explicitly for TUIs to keep rendering and
+    /// receiving wheel/mouse reports correctly.
+    async fn pane_terminal_modes(&self, pane: &str) -> Result<PaneTerminalModes, String> {
+        let command = format!(
+            "display-message -p -t {pane} {}",
+            shell_quote(
+                "#{alternate_on}|#{cursor_flag}|#{insert_flag}|#{origin_flag}|#{wrap_flag}|#{keypad_cursor_flag}|#{keypad_flag}|#{mouse_standard_flag}|#{mouse_button_flag}|#{mouse_all_flag}|#{mouse_sgr_flag}|#{cursor_x}|#{cursor_y}"
+            )
+        );
+        let reply = self
+            .control
+            .send(&command)
+            .await
+            .map_err(|e| e.to_string())?;
+        reply
+            .iter()
+            .find_map(|line| parse_pane_terminal_modes(line))
+            .ok_or_else(|| "tmux returned an invalid terminal-mode snapshot".to_string())
     }
 
     /// Ask tmux whether `pane` currently has an active alternate screen.
@@ -631,19 +714,72 @@ impl TmuxSession {
     ///
     /// `alternate` flips tmux's `-a` flag so the saved main screen can be
     /// captured while a TUI occupies the alternate screen. `lines = None`
-    /// captures only the visible screen, which is what a TUI replay needs.
+    /// captures only the visible screen. `exact_screen` selects `-N` instead
+    /// of `-J` for callers that explicitly need that capture shape.
     async fn capture_pane_raw(
         &self,
         pane: &str,
         lines: Option<i32>,
         alternate: bool,
+        exact_screen: bool,
     ) -> Result<String, String> {
-        let command = capture_pane_command(pane, lines, alternate);
-        self.control
-            .send(&command)
-            .await
-            .map(|reply| reply.join("\n"))
-            .map_err(|e| e.to_string())
+        let command = capture_pane_command(pane, lines, alternate, exact_screen);
+        match &self.host_config {
+            TmuxHostConfig::Local => {
+                let output = tokio::process::Command::new("tmux")
+                    .args(socket_args(&self.socket))
+                    .args(command.split_whitespace())
+                    .output()
+                    .await
+                    .map_err(|e| format!("failed to run tmux capture-pane: {e}"))?;
+                if !output.status.success() {
+                    return Err(format!(
+                        "tmux capture-pane failed: {}",
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    ));
+                }
+                Ok(String::from_utf8_lossy(&output.stdout)
+                    .replace("\r\n", "\n")
+                    .trim_end_matches('\n')
+                    .to_string())
+            }
+            TmuxHostConfig::Wsl { args } => {
+                let output = tokio::process::Command::new("wsl.exe")
+                    .args(args)
+                    .arg("--exec")
+                    .arg("tmux")
+                    .args(socket_args(&self.socket))
+                    .args(command.split_whitespace())
+                    .output()
+                    .await
+                    .map_err(|e| format!("failed to run WSL tmux capture-pane: {e}"))?;
+                if !output.status.success() {
+                    return Err(format!(
+                        "WSL tmux capture-pane failed: {}",
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    ));
+                }
+                Ok(String::from_utf8_lossy(&output.stdout)
+                    .replace("\r\n", "\n")
+                    .trim_end_matches('\n')
+                    .to_string())
+            }
+            TmuxHostConfig::Ssh { .. } => {
+                let ssh = self
+                    .ssh_config
+                    .as_ref()
+                    .ok_or_else(|| "tmux SSH capture is missing ssh config".to_string())?;
+                let remote_command = std::iter::once("tmux".to_string())
+                    .chain(socket_args(&self.socket))
+                    .chain(command.split_whitespace().map(str::to_string))
+                    .map(|arg| shell_quote(&arg))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                ssh_exec_capture(ssh, &remote_command)
+                    .await
+                    .map(|stdout| String::from_utf8_lossy(&stdout).replace("\r\n", "\n"))
+            }
+        }
     }
 
     pub(crate) fn kill_pane(&self, pane: &str) -> Result<(), String> {
@@ -916,9 +1052,17 @@ fn shell_quote(s: &str) -> String {
 ///
 /// `alternate` selects tmux's `-a` flag (the saved main screen while a TUI
 /// occupies the alternate screen). `lines = None` omits `-S` so only the
-/// visible screen is captured.
-fn capture_pane_command(pane: &str, lines: Option<i32>, alternate: bool) -> String {
-    let mut command = String::from("capture-pane -p -e -J");
+/// visible screen is captured. `exact_screen` uses `-N` instead of `-J`;
+/// `-J` remains the default because it preserves trailing cells and avoids
+/// a control-mode reply stall observed with dense full-screen UIs.
+fn capture_pane_command(
+    pane: &str,
+    lines: Option<i32>,
+    alternate: bool,
+    exact_screen: bool,
+) -> String {
+    let mut command = String::from("capture-pane -p -e");
+    command.push_str(if exact_screen { " -N" } else { " -J" });
     if alternate {
         command.push_str(" -a");
     }
@@ -942,6 +1086,85 @@ fn capture_pane_command(pane: &str, lines: Option<i32>, alternate: bool) -> Stri
 /// buffer; `2J`/`H` then give the TUI a clean, deterministic canvas.
 fn alternate_screen_replay(normal: &str, alternate: &str) -> String {
     format!("{normal}\u{1b}[?1049h\u{1b}[2J\u{1b}[H{alternate}")
+}
+
+fn parse_pane_terminal_modes(line: &str) -> Option<PaneTerminalModes> {
+    let values: Vec<&str> = line.trim().split('|').collect();
+    if values.len() != 13 {
+        return None;
+    }
+    let is_set = |index: usize| values[index].trim() == "1";
+    let cursor_x = values[11].trim().parse::<u16>().ok();
+    let cursor_y = values[12].trim().parse::<u16>().ok();
+    Some(PaneTerminalModes {
+        alternate: is_set(0),
+        cursor: is_set(1),
+        insert: is_set(2),
+        origin: is_set(3),
+        wrap: is_set(4),
+        keypad_cursor: is_set(5),
+        keypad: is_set(6),
+        mouse_standard: is_set(7),
+        mouse_button: is_set(8),
+        mouse_all: is_set(9),
+        mouse_sgr: is_set(10),
+        cursor_x,
+        cursor_y,
+    })
+}
+
+fn terminal_modes_replay(modes: &PaneTerminalModes) -> String {
+    let mut replay = String::new();
+    replay.push_str(if modes.insert {
+        "\u{1b}[4h"
+    } else {
+        "\u{1b}[4l"
+    });
+    replay.push_str(if modes.origin {
+        "\u{1b}[?6h"
+    } else {
+        "\u{1b}[?6l"
+    });
+    replay.push_str(if modes.wrap {
+        "\u{1b}[?7h"
+    } else {
+        "\u{1b}[?7l"
+    });
+    replay.push_str(if modes.cursor {
+        "\u{1b}[?25h"
+    } else {
+        "\u{1b}[?25l"
+    });
+    replay.push_str(if modes.keypad_cursor {
+        "\u{1b}[?1h"
+    } else {
+        "\u{1b}[?1l"
+    });
+    replay.push_str(if modes.keypad {
+        "\u{1b}[?66h"
+    } else {
+        "\u{1b}[?66l"
+    });
+
+    if modes.mouse_all {
+        replay.push_str("\u{1b}[?1003h");
+    } else if modes.mouse_button {
+        replay.push_str("\u{1b}[?1002h");
+    } else if modes.mouse_standard {
+        replay.push_str("\u{1b}[?1000h");
+    }
+    if modes.mouse_sgr {
+        replay.push_str("\u{1b}[?1006h");
+    }
+
+    if let (Some(x), Some(y)) = (modes.cursor_x, modes.cursor_y) {
+        replay.push_str(&format!(
+            "\u{1b}[{};{}H",
+            u32::from(y) + 1,
+            u32::from(x) + 1
+        ));
+    }
+    replay
 }
 
 /// Build a `send-keys -l` command that delivers arbitrary bytes to a pane
@@ -969,9 +1192,15 @@ fn send_keys_command(pane: &str, payload: &[u8]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
     use super::{
-        alternate_screen_replay, capture_pane_command, parse_extended_pane_line, send_keys_command,
+        alternate_screen_replay, capture_pane_command, parse_extended_pane_line,
+        parse_pane_terminal_modes, send_keys_command, terminal_modes_replay, PaneTerminalModes,
+        TmuxControl, TmuxHostConfig, TmuxSession, TmuxSocket,
     };
+    use crate::connect::app_backend::AppBackend;
 
     #[test]
     fn parses_extended_pane_line_with_indices_and_command() {
@@ -1022,7 +1251,7 @@ mod tests {
     #[test]
     fn capture_pane_command_shapes_main_screen_with_scrollback() {
         assert_eq!(
-            capture_pane_command("%7", Some(2000), false),
+            capture_pane_command("%7", Some(2000), false, false),
             "capture-pane -p -e -J -S -2000 -t %7"
         );
     }
@@ -1030,11 +1259,15 @@ mod tests {
     #[test]
     fn capture_pane_command_shapes_visible_alternate_screen() {
         assert_eq!(
-            capture_pane_command("%7", None, false),
+            capture_pane_command("%7", None, false, true),
+            "capture-pane -p -e -N -t %7"
+        );
+        assert_eq!(
+            capture_pane_command("%7", None, false, false),
             "capture-pane -p -e -J -t %7"
         );
         assert_eq!(
-            capture_pane_command("%7", Some(2000), true),
+            capture_pane_command("%7", Some(2000), true, false),
             "capture-pane -p -e -J -a -S -2000 -t %7"
         );
     }
@@ -1045,5 +1278,271 @@ mod tests {
             alternate_screen_replay("shell\nprompt", "TUI row 1\nTUI row 2"),
             "shell\nprompt\u{1b}[?1049h\u{1b}[2J\u{1b}[HTUI row 1\nTUI row 2"
         );
+    }
+
+    #[test]
+    fn parses_tui_terminal_modes_and_cursor_position() {
+        let modes =
+            parse_pane_terminal_modes("1|1|0|0|1|1|1|0|0|1|1|12|7").expect("terminal modes");
+        assert_eq!(
+            modes,
+            PaneTerminalModes {
+                alternate: true,
+                cursor: true,
+                insert: false,
+                origin: false,
+                wrap: true,
+                keypad_cursor: true,
+                keypad: true,
+                mouse_standard: false,
+                mouse_button: false,
+                mouse_all: true,
+                mouse_sgr: true,
+                cursor_x: Some(12),
+                cursor_y: Some(7),
+            }
+        );
+    }
+
+    #[test]
+    fn terminal_mode_replay_restores_tui_render_and_mouse_modes() {
+        let modes = PaneTerminalModes {
+            alternate: true,
+            cursor: true,
+            insert: false,
+            origin: false,
+            wrap: true,
+            keypad_cursor: true,
+            keypad: true,
+            mouse_standard: false,
+            mouse_button: false,
+            mouse_all: true,
+            mouse_sgr: true,
+            cursor_x: Some(3),
+            cursor_y: Some(5),
+        };
+
+        assert_eq!(
+            terminal_modes_replay(&modes),
+            "\u{1b}[4l\u{1b}[?6l\u{1b}[?7h\u{1b}[?25h\u{1b}[?1h\u{1b}[?66h\u{1b}[?1003h\u{1b}[?1006h\u{1b}[6;4H"
+        );
+    }
+
+    struct TestAppBackend;
+
+    impl AppBackend for TestAppBackend {
+        fn emit(&self, _event: &str, _payload: &serde_json::Value) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn emit_bytes(&self, _session_id: u32, _bytes: Vec<u8>) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    struct WslTmuxFixture {
+        socket_name: String,
+        session_name: String,
+        script_path: String,
+    }
+
+    impl WslTmuxFixture {
+        fn start() -> Self {
+            let fixture_id = format!(
+                "{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("system clock")
+                    .as_nanos()
+            );
+            let fixture = Self {
+                socket_name: format!("xsterm-tui-{fixture_id}"),
+                session_name: format!("session-{fixture_id}"),
+                script_path: format!("/tmp/xsterm-fake-tui-{fixture_id}.py"),
+            };
+            let setup_script = r#"
+set -e
+cat > "__SCRIPT_PATH__" <<'PY'
+import os
+import sys
+import termios
+import tty
+
+fd = sys.stdin.fileno()
+old_settings = termios.tcgetattr(fd)
+try:
+    tty.setraw(fd)
+    sys.stdout.write(
+        "\x1b[?1049h"
+        "\x1b[?1003h"
+        "\x1b[?1006h"
+        "\x1b[2J\x1b[H"
+        "XSTERM_FAKE_TUI_READY\r\n"
+        "WHEEL_EVENTS=0"
+    )
+    sys.stdout.flush()
+    wheel_count = 0
+    while True:
+        chunk = os.read(fd, 1024)
+        if b"<64;" in chunk or b"<65;" in chunk:
+            wheel_count += 1
+            sys.stdout.write(
+                f"\x1b[2;1H\x1b[2KWHEEL_EVENTS={wheel_count}\x1b[4;1H"
+            )
+            sys.stdout.flush()
+except OSError:
+    pass
+finally:
+    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+PY
+tmux -L "__SOCKET_NAME__" kill-server >/dev/null 2>&1 || true
+tmux -L "__SOCKET_NAME__" new-session -d -s "__SESSION_NAME__" \
+  "python3 -- __SCRIPT_PATH__"
+"#
+            .replace("__SCRIPT_PATH__", &fixture.script_path)
+            .replace("__SOCKET_NAME__", &fixture.socket_name)
+            .replace("__SESSION_NAME__", &fixture.session_name);
+            let status = Command::new("wsl.exe")
+                .args(["--exec", "bash", "-lc", &setup_script])
+                .status()
+                .expect("start WSL tmux fixture");
+            assert!(status.success(), "failed to start WSL tmux fixture");
+            fixture
+        }
+
+        fn host_config(&self) -> TmuxHostConfig {
+            TmuxHostConfig::Wsl { args: Vec::new() }
+        }
+
+        fn socket(&self) -> TmuxSocket {
+            TmuxSocket::Named(self.socket_name.clone())
+        }
+    }
+
+    impl Drop for WslTmuxFixture {
+        fn drop(&mut self) {
+            let cleanup_script = format!(
+                "tmux -L '{}' kill-server >/dev/null 2>&1 || true; rm -f '{}'",
+                self.socket_name, self.script_path
+            );
+            let _ = Command::new("wsl.exe")
+                .args(["--exec", "bash", "-lc", &cleanup_script])
+                .status();
+        }
+    }
+
+    async fn wait_for_capture(
+        session: &TmuxSession,
+        pane: &str,
+        expected_fragment: &str,
+    ) -> String {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut latest_capture = String::new();
+        while Instant::now() < deadline {
+            latest_capture = session
+                .capture_pane(pane, 2000)
+                .await
+                .expect("capture tmux pane");
+            if latest_capture.contains(expected_fragment) {
+                return latest_capture;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("tmux pane did not contain {expected_fragment:?}: {latest_capture:?}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WSL2 with tmux/python3; run npm run test:tmux:tui"]
+    async fn tmux_tui_detach_reconnect_restores_modes_and_mouse() {
+        let fixture = WslTmuxFixture::start();
+
+        let first_control = TmuxControl::spawn(
+            &fixture.host_config(),
+            &fixture.socket(),
+            &fixture.session_name,
+        )
+        .await
+        .expect("spawn first tmux control client");
+        let first_session = TmuxSession::build_session(
+            1,
+            first_control,
+            fixture.session_name.clone(),
+            None,
+            fixture.host_config(),
+            fixture.socket(),
+            std::sync::Arc::new(TestAppBackend),
+        )
+        .await
+        .expect("build first tmux session");
+        let pane = first_session
+            .registered_panes()
+            .into_iter()
+            .next()
+            .expect("registered tmux pane")
+            .0;
+
+        let first_capture = wait_for_capture(&first_session, &pane, "XSTERM_FAKE_TUI_READY").await;
+        assert!(first_capture.contains("\u{1b}[?1049h"));
+        assert!(first_capture.contains("\u{1b}[?1003h"));
+        assert!(first_capture.contains("\u{1b}[?1006h"));
+
+        first_session
+            .control
+            .close()
+            .await
+            .expect("detach first tmux control client");
+
+        let second_control = TmuxControl::spawn(
+            &fixture.host_config(),
+            &fixture.socket(),
+            &fixture.session_name,
+        )
+        .await
+        .expect("spawn reconnected tmux control client");
+        let second_session = TmuxSession::build_session(
+            2,
+            second_control,
+            fixture.session_name.clone(),
+            None,
+            fixture.host_config(),
+            fixture.socket(),
+            std::sync::Arc::new(TestAppBackend),
+        )
+        .await
+        .expect("build reconnected tmux session");
+        let reconnected_pane = second_session
+            .registered_panes()
+            .into_iter()
+            .next()
+            .expect("reconnected tmux pane")
+            .0;
+
+        let reconnected_capture =
+            wait_for_capture(&second_session, &reconnected_pane, "XSTERM_FAKE_TUI_READY").await;
+        let modes = second_session
+            .pane_terminal_modes(&reconnected_pane)
+            .await
+            .expect("query reconnected terminal modes");
+        assert!(modes.alternate);
+        assert!(modes.mouse_all);
+        assert!(modes.mouse_sgr);
+        assert!(reconnected_capture.contains("\u{1b}[?1049h"));
+        assert!(reconnected_capture.contains("\u{1b}[?1003h"));
+        assert!(reconnected_capture.contains("\u{1b}[?1006h"));
+
+        second_session
+            .send_keys(&reconnected_pane, b"\x1b[<64;5;5M")
+            .await
+            .expect("send mouse wheel input");
+        let wheel_capture =
+            wait_for_capture(&second_session, &reconnected_pane, "WHEEL_EVENTS=1").await;
+        assert!(wheel_capture.contains("WHEEL_EVENTS=1"));
+
+        second_session
+            .control
+            .close()
+            .await
+            .expect("close reconnected tmux control client");
     }
 }

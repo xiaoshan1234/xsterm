@@ -382,7 +382,8 @@ pub async fn kill_tmux_window(
 /// The returned text is a replay-ready body: the main-screen scrollback
 /// (joined with `\n`) for plain panes, or a normal-screen-plus-alternate
 /// -screen script for panes running a full-screen TUI so the TUI renders
-/// inside xterm's alternate buffer on attach.
+/// inside xterm's alternate buffer on attach. TUI snapshots also restore the
+/// pane's cursor, wrapping, keypad and mouse-tracking modes.
 /// Returns `Err` if the session is unknown / not a tmux pane / tmux
 /// itself reports `%error` / the call times out after 5 s.
 #[tauri::command]

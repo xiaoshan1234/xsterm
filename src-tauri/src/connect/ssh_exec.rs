@@ -113,11 +113,11 @@ async fn authenticate(
     Ok(())
 }
 
-async fn exec_ssh_command(
+async fn exec_ssh_command_capture(
     config: &SshConfig,
     command: &str,
     stdin_data: Vec<u8>,
-) -> Result<Option<i32>, String> {
+) -> Result<(Vec<u8>, Option<i32>), String> {
     let mut ssh_config = russh::client::Config::default();
     if let Some(secs) = config.keepalive_interval {
         ssh_config.keepalive_interval = Some(Duration::from_secs(secs as u64));
@@ -158,9 +158,11 @@ async fn exec_ssh_command(
         .await
         .map_err(|e| format!("failed to close stdin: {e}"))?;
 
+    let mut stdout = Vec::new();
     let mut status = None;
     loop {
         match channel.wait().await {
+            Some(russh::ChannelMsg::Data { data }) => stdout.extend_from_slice(&data),
             Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
                 status = Some(exit_status as i32);
                 break;
@@ -174,7 +176,17 @@ async fn exec_ssh_command(
     }
 
     let _ = channel.close().await;
-    Ok(status)
+    Ok((stdout, status))
+}
+
+async fn exec_ssh_command(
+    config: &SshConfig,
+    command: &str,
+    stdin_data: Vec<u8>,
+) -> Result<Option<i32>, String> {
+    exec_ssh_command_capture(config, command, stdin_data)
+        .await
+        .map(|(_, status)| status)
 }
 
 /// Upload `data` to `remote_path` via a fresh SSH exec channel (`cat > path`).
@@ -198,4 +210,14 @@ pub async fn ssh_exec_status(config: &SshConfig, command: &str) -> Result<i32, S
     exec_ssh_command(config, command, Vec::new())
         .await?
         .ok_or_else(|| "remote command closed without an exit status".to_string())
+}
+
+/// Run a command over SSH and return its stdout bytes.
+pub async fn ssh_exec_capture(config: &SshConfig, command: &str) -> Result<Vec<u8>, String> {
+    let (stdout, status) = exec_ssh_command_capture(config, command, Vec::new()).await?;
+    match status {
+        Some(0) => Ok(stdout),
+        Some(status) => Err(format!("remote command exited with status {status}")),
+        None => Err("remote command closed without an exit status".to_string()),
+    }
 }
