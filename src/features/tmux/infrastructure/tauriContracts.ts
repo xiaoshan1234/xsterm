@@ -15,6 +15,8 @@ export interface TmuxSessionConfigDto {
   };
   initialRows?: number;
   initialCols?: number;
+  transport?: "local" | "wsl";
+  wslDistribution?: string;
   ssh?: SshConfigDto;
   baseConfigId?: string;
 }
@@ -22,6 +24,8 @@ export interface TmuxSessionConfigDto {
 export interface AttachedTmuxServerDto {
   sessionName: string;
   socketName?: string;
+  transport?: "local" | "wsl";
+  wslDistribution?: string;
   attachedAt: number;
 }
 

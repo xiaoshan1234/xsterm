@@ -32,6 +32,8 @@ export interface TerminalCommandClient {
 export function createTerminalCommandClient(
   invokeFunction: InvokeFunction = defaultInvoke,
 ): TerminalCommandClient {
+  const writeQueues = new Map<BackendTerminalHandle, Promise<void>>();
+
   return {
     async listTerminals(): Promise<TerminalInfoDto[]> {
       const terminals = await invokeFunction<TerminalInfoDto[]>("list_terminals");
@@ -61,10 +63,29 @@ export function createTerminalCommandClient(
     },
 
     async writeTerminal(terminalHandle: BackendTerminalHandle, data: Uint8Array): Promise<void> {
-      await invokeFunction<void>("write_terminal", {
-        sessionId: terminalHandle,
-        data,
-      });
+      const previous = writeQueues.get(terminalHandle) ?? Promise.resolve();
+      const operation = previous
+        .catch(() => undefined)
+        .then(() =>
+          invokeFunction<void>("write_terminal", {
+            sessionId: terminalHandle,
+            data,
+          }),
+        );
+      writeQueues.set(terminalHandle, operation);
+      void operation.then(
+        () => {
+          if (writeQueues.get(terminalHandle) === operation) {
+            writeQueues.delete(terminalHandle);
+          }
+        },
+        () => {
+          if (writeQueues.get(terminalHandle) === operation) {
+            writeQueues.delete(terminalHandle);
+          }
+        },
+      );
+      await operation;
     },
 
     async resizeTerminal(

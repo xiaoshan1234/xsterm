@@ -6,7 +6,8 @@ export interface TmuxManagerItemViewData {
   tmuxSessionName?: string;
   socketName?: string;
   baseConfigName?: string;
-  transport: "local" | "ssh";
+  wslDistribution?: string;
+  transport: "local" | "wsl" | "ssh";
 }
 
 export function selectTmuxManagerItems(
@@ -24,6 +25,7 @@ export function selectTmuxManagerItems(
       ...(config.config.baseConfigId && configNames.has(config.config.baseConfigId)
         ? { baseConfigName: configNames.get(config.config.baseConfigId) }
         : {}),
-      transport: config.config.ssh ? "ssh" : "local",
+      ...(config.config.wslDistribution ? { wslDistribution: config.config.wslDistribution } : {}),
+      transport: config.config.ssh ? "ssh" : config.config.transport === "wsl" ? "wsl" : "local",
     }));
 }

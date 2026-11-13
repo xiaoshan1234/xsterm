@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useSavedLaunchConfigs } from "../../../sessions";
 import {
   type SavedTerminalConfig,
+  type SshConfig,
   type TmuxSessionConfig,
 } from "../../../../models/legacy/terminal";
 import { FormSelectField, type FormSelectOption } from "../../../../shared/ui/FormSelectField";
@@ -23,8 +24,8 @@ interface TmuxFormProps {
 
 /**
  * tmux control-mode form for the Attach Tmux dialog. A tmux terminal rides
- * on top of an already-saved SSH or Local
- * shell config; the form lists those saved configs as a "Base
+ * on top of an already-saved SSH, WSL, or Local shell config; the form lists
+ * those saved configs as a "Base
  * Configuration" dropdown so the user picks the transport by
  * picking the base, not by exposing a separate transport toggle.
  *
@@ -32,12 +33,13 @@ interface TmuxFormProps {
  * `baseConfigId` populated; the dialog looks up the base saved config and,
  * when it is an SSH config, copies the SSH sub-config into
  * `TmuxSessionConfig.ssh` before the backend call. The
- * backend then routes through the SSH exec channel when the base was
- * an SSH config and through a local `tokio::process::Command` child
- * otherwise.
+ * backend then routes through SSH, `wsl.exe --exec tmux`, or a local tmux
+ * process according to the selected base.
  */
 export function TmuxForm({ name, onNameChange, config, onConfigChange, mode }: TmuxFormProps) {
   const { savedConfigs } = useSavedLaunchConfigs();
+  const selectedBase = savedConfigs.find((candidate) => candidate.id === config.baseConfigId);
+  const isWslBase = isTmuxWslBaseConfig(selectedBase);
 
   // Only SSH + Local saved configs are valid bases for a tmux terminal.
   // (tmux-pane configs are excluded — nesting tmux inside tmux is not
@@ -48,7 +50,7 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange, mode }: T
     );
     const options: FormSelectOption[] = [{ value: "", label: "Select a saved config…" }];
     for (const c of eligible) {
-      const transportLabel = c.type === "ssh" ? "SSH" : "Shell";
+      const transportLabel = c.type === "ssh" ? "SSH" : isTmuxWslBaseConfig(c) ? "WSL" : "Shell";
       options.push({
         value: c.id,
         label: `${c.name}  ·  ${transportLabel}`,
@@ -73,9 +75,31 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange, mode }: T
         <FormSelectField
           label="Rides on"
           value={config.baseConfigId ?? ""}
-          onChange={(v) => onConfigChange({ ...config, baseConfigId: v || undefined })}
+          onChange={(v) =>
+            onConfigChange({
+              ...config,
+              baseConfigId: v || undefined,
+              transport: undefined,
+              wslDistribution: undefined,
+            })
+          }
           options={baseOptions}
         />
+        {isWslBase && (
+          <>
+            <div className="terminal-tab__hint">
+              tmux runs through wsl.exe and keeps its windows and panes inside xsterm.
+            </div>
+            <FormTextField
+              label="WSL Distribution"
+              placeholder="default distribution"
+              value={config.wslDistribution}
+              onChange={(wslDistribution) =>
+                onConfigChange({ ...config, wslDistribution: wslDistribution ?? undefined })
+              }
+            />
+          </>
+        )}
       </div>
 
       <div className="terminal-section">
@@ -114,6 +138,34 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange, mode }: T
       </div>
     </div>
   );
+}
+
+export function isTmuxWslBaseConfig(config: SavedTerminalConfig | undefined): boolean {
+  return config?.type === "local" && config.config.shellTemplate === "wsl";
+}
+
+export function buildTmuxConfigForBase(
+  config: TmuxSessionConfig,
+  base: SavedTerminalConfig,
+): TmuxSessionConfig {
+  const baseConfigFields: TmuxSessionConfig = {
+    ...config,
+    transport: undefined,
+    wslDistribution: undefined,
+    ssh: undefined,
+  };
+  if (base.type === "ssh") {
+    return { ...baseConfigFields, ssh: base.config as SshConfig };
+  }
+  if (isTmuxWslBaseConfig(base)) {
+    const wslDistribution = config.wslDistribution?.trim();
+    return {
+      ...baseConfigFields,
+      transport: "wsl",
+      ...(wslDistribution ? { wslDistribution } : {}),
+    };
+  }
+  return { ...baseConfigFields, transport: "local" };
 }
 
 export default TmuxForm;

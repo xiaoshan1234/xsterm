@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 
 use xscore::platform::ssh::SshOptions;
 use xscore::platform::tmux::{
-    list_windows_command, parse_window_line, resize_pane_command, socket_args, TmuxControl,
-    TmuxEvent, TmuxHostConfig, TmuxSocket,
+    list_windows_command, parse_window_line, remote_tmux_shell_command, resize_pane_command,
+    socket_args, TmuxControl, TmuxEvent, TmuxHostConfig, TmuxSocket,
 };
 
 use crate::connect::app_backend::AppBackend;
@@ -800,12 +800,11 @@ impl TmuxSession {
                     .ssh_config
                     .as_ref()
                     .ok_or_else(|| "tmux SSH capture is missing ssh config".to_string())?;
-                let remote_command = std::iter::once("tmux".to_string())
+                let args = std::iter::once("tmux".to_string())
                     .chain(socket_args(&self.socket))
                     .chain(command.split_whitespace().map(str::to_string))
-                    .map(|arg| shell_quote(&arg))
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                    .collect::<Vec<_>>();
+                let remote_command = remote_tmux_shell_command(&args);
                 ssh_exec_capture(ssh, &remote_command)
                     .await
                     .map(|stdout| String::from_utf8_lossy(&stdout).replace("\r\n", "\n"))
@@ -1064,11 +1063,10 @@ async fn tmux_session_exists(
                 "-t".to_string(),
                 session_name.to_string(),
             ]);
-            let command = std::iter::once("tmux".to_string())
+            let args = std::iter::once("tmux".to_string())
                 .chain(args)
-                .map(|arg| shell_quote(&arg))
-                .collect::<Vec<_>>()
-                .join(" ");
+                .collect::<Vec<_>>();
+            let command = remote_tmux_shell_command(&args);
             let status = ssh_exec_status(ssh, &command).await?;
             Ok(status == 0)
         }

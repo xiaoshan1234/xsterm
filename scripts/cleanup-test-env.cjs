@@ -128,7 +128,7 @@ function main() {
       isProjectOwned(processInfo) &&
       (/vite(?:\.js)?/i.test(processInfo.CommandLine ?? "") ||
         /target[\\/]+debug[\\/]+xsterm\.exe/i.test(processInfo.CommandLine ?? "") ||
-        /test[\\/]+e2e/i.test(processInfo.CommandLine ?? ""));
+        /tmuxTuiWebview\.(?:ts|js)/i.test(processInfo.CommandLine ?? ""));
     const isTestDriverProcess =
       isTestDriver(processInfo) &&
       /--(?:native-)?port(?:=|\s+)(?:4444|4454|4455)\b/i.test(processInfo.CommandLine ?? "");

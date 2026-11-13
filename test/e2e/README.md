@@ -14,7 +14,7 @@ inside a WSL tmux session and verifies detach/reconnect behavior.
 The runner automatically:
 
 - starts Vite if port 1420 is free;
-- builds `xsterm.exe` and the test-only WSL `tmux.exe` bridge;
+- builds `xsterm.exe`; tmux uses xsterm's native WSL transport;
 - downloads a version-matched `msedgedriver` when needed;
 - starts tauri-driver on an isolated port;
 - creates temporary saved configs and removes the tmux servers afterward.
@@ -36,8 +36,8 @@ Failure screenshots are written to `test/e2e/artifacts/`.
 
 ## Clean residual processes
 
-If a test is interrupted, release ports 1420/4444/4454/4455 and remove the
-temporary WSL tmux bridge with:
+If a test is interrupted, release ports 1420/4444/4454/4455 and clean test
+tmux servers with:
 
 ```powershell
 npm run test:cleanup

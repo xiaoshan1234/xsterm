@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   type SavedTerminalConfig,
-  type SshConfig,
   type TmuxSessionConfig,
 } from "../../../../models/legacy/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
@@ -14,7 +13,7 @@ import {
 import { SessionFormPanels } from "../../../terminal/ui/dialogs/TerminalFormPanels";
 import { useTerminalForm } from "../../../terminal/ui/dialogs/useTerminalForm";
 import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/terminalDialogItems";
-import TmuxForm from "./TmuxForm";
+import TmuxForm, { buildTmuxConfigForBase } from "./TmuxForm";
 import "../../../terminal/ui/dialogs/EditTerminalDialog.css";
 
 export type EditableTmuxConfig = Extract<SavedTerminalConfig, { type: "tmux-pane" }>;
@@ -70,14 +69,10 @@ export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDial
       }
     }
 
-    const baseConfigFields: TmuxSessionConfig = { ...tmuxConfig, ssh: undefined };
     const updatedConfig: EditableTmuxConfig = {
       ...config,
       name,
-      config: {
-        ...baseConfigFields,
-        ...(base.type === "ssh" ? { ssh: base.config as SshConfig } : {}),
-      },
+      config: buildTmuxConfigForBase(tmuxConfig, base),
       displayConfig: form.displayConfig,
     };
     updateConfig(updatedConfig);

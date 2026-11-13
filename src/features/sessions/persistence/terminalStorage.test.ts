@@ -84,6 +84,27 @@ describe("migrateSavedConfig — legacy v0 → v1", () => {
 });
 
 describe("migrateSavedConfig — new v1 pass-through", () => {
+  it("preserves native WSL tmux transport fields", () => {
+    const result = migrateSavedConfig({
+      id: "cfg-wsl-tmux",
+      name: "WSL work",
+      version: 1,
+      type: "tmux-pane",
+      config: {
+        tmuxSessionName: "work",
+        transport: "wsl",
+        wslDistribution: "Debian",
+      },
+    });
+
+    expect(result?.type).toBe("tmux-pane");
+    expect(result?.config).toMatchObject({
+      tmuxSessionName: "work",
+      transport: "wsl",
+      wslDistribution: "Debian",
+    });
+  });
+
   it("accepts a v1 local config unchanged", () => {
     const raw = {
       id: "cfg-5",

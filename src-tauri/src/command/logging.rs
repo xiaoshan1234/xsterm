@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_store::StoreExt;
 use tracing_subscriber::{reload, EnvFilter, Registry};
 
-use crate::feature::logging::LogConfig;
+use crate::feature::logging::{setup::build_env_filter, LogConfig};
 use crate::shared::error::StringError;
 
 /// Log a message from the frontend at the requested level.
@@ -47,7 +47,7 @@ pub async fn set_log_config(
     store.set("config", serde_json::to_value(&config).map_err_string()?);
     store.save().map_err_string()?;
 
-    let new_filter = EnvFilter::new(&config.log_level);
+    let new_filter = build_env_filter(&config.log_level);
     let handle = state.lock().map_err(|e| e.to_string())?;
     handle.reload(new_filter).map_err_string()?;
 

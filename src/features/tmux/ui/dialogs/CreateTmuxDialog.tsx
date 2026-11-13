@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   type SavedTerminalConfig,
-  type SshConfig,
   type Terminal,
   type TerminalDisplayConfig,
   type TmuxSessionConfig,
@@ -16,7 +15,7 @@ import {
 import { SessionFormPanels } from "../../../terminal/ui/dialogs/TerminalFormPanels";
 import { useTerminalForm } from "../../../terminal/ui/dialogs/useTerminalForm";
 import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/terminalDialogItems";
-import TmuxForm from "./TmuxForm";
+import TmuxForm, { buildTmuxConfigForBase } from "./TmuxForm";
 import "../../../terminal/ui/dialogs/CreateTerminalDialog.css";
 
 interface CreateTmuxDialogProps {
@@ -81,14 +80,13 @@ export function CreateTmuxDialog({
     }
 
     const name = form.name.trim();
-    const baseConfigFields: TmuxSessionConfig = { ...tmuxConfig, ssh: undefined };
+    const draftConfig: TmuxSessionConfig = {
+      ...tmuxConfig,
+      ...(name ? { name } : {}),
+    };
     return {
       base,
-      config: {
-        ...baseConfigFields,
-        ...(base.type === "ssh" ? { ssh: base.config as SshConfig } : {}),
-        ...(name ? { name } : {}),
-      },
+      config: buildTmuxConfigForBase(draftConfig, base),
     };
   };
 

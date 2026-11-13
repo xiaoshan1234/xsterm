@@ -85,6 +85,27 @@ describe("Tmux status view model", () => {
     expect(result[0]?.sessionName).toBe("work");
   });
 
+  it("reports WSL as the controller transport", () => {
+    const terminals = [createTmuxTerminal(10, "%1", "@1", true, "cfg-wsl")];
+    const savedConfigs: SavedTerminalConfig[] = [
+      {
+        id: "cfg-wsl",
+        name: "WSL tmux",
+        version: 1,
+        type: "tmux-pane",
+        config: {
+          tmuxSessionName: "work",
+          transport: "wsl",
+          wslDistribution: "Debian",
+        },
+      },
+    ];
+
+    const result = selectTmuxStatusControllers(terminals, [], savedConfigs);
+
+    expect(result[0]?.transport).toBe("wsl");
+  });
+
   it("maps tmux window/pane indices and command metadata", () => {
     const terminal: Terminal = {
       ...createTmuxTerminal(10, "%1", "@0", true),

@@ -76,4 +76,34 @@ describe("terminalCommands", () => {
       },
     ]);
   });
+
+  it("serializes writes for the same terminal to preserve keystroke order", async () => {
+    const writes: number[][] = [];
+    let releaseFirstWrite: (() => void) | undefined;
+    const firstWriteGate = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    const invokeFunction = async <Value>(
+      command: string,
+      args?: Record<string, unknown>,
+    ): Promise<Value> => {
+      if (command === "write_terminal") {
+        const data = args?.data as Uint8Array;
+        writes.push([...data]);
+        if (writes.length === 1) await firstWriteGate;
+      }
+      return undefined as Value;
+    };
+    const client = createTerminalCommandClient(invokeFunction);
+    const handle = toBackendTerminalHandle(7);
+
+    const first = client.writeTerminal(handle, new Uint8Array([65]));
+    const second = client.writeTerminal(handle, new Uint8Array([32]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(writes).toEqual([[65]]);
+    releaseFirstWrite?.();
+    await Promise.all([first, second]);
+    expect(writes).toEqual([[65], [32]]);
+  });
 });

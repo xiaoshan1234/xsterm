@@ -1,17 +1,24 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { Builder, By, Capabilities, Key, Select, until, type WebDriver } from "selenium-webdriver";
+import {
+  Builder,
+  By,
+  Capabilities,
+  Key,
+  Select,
+  until,
+  type WebDriver,
+  type WebElement,
+} from "selenium-webdriver";
 
 const projectRoot = path.resolve(import.meta.dirname, "..", "..");
 const e2eRoot = path.join(projectRoot, "test", "e2e");
 const cacheRoot = path.join(e2eRoot, ".cache");
 const artifactsRoot = path.join(e2eRoot, "artifacts");
 const appPath = path.join(projectRoot, "src-tauri", "target", "debug", "xsterm.exe");
-const appDirectoryTmuxPath = path.join(path.dirname(appPath), "tmux.exe");
-let temporarySystemPathTmux: string | null = null;
 const webdriverPort = 4454;
 const nativeDriverPort = 4455;
 const viteUrl = "http://localhost:1420";
@@ -25,7 +32,7 @@ interface ManagedProcess {
 }
 
 interface TmuxFixture {
-  name: "codex" | "opencode";
+  name: "codex" | "opencode" | "probe" | "shell";
   socketName: string;
   sessionName: string;
   configName: string;
@@ -105,7 +112,12 @@ async function ensureVite(): Promise<ManagedProcess | null> {
     return null;
   } catch {
     console.log("  starting Windows Vite server on :1420");
-    const vite = startProcess("vite", "npm.cmd", ["run", "dev"]);
+    const vite = startProcess("vite", process.env.ComSpec ?? "cmd.exe", [
+      "/d",
+      "/s",
+      "/c",
+      "npm run dev",
+    ]);
     await waitForHttp(viteUrl, 30_000);
     return vite;
   }
@@ -162,40 +174,7 @@ async function buildApplication(): Promise<void> {
   await mkdir(path.dirname(appPath), { recursive: true });
 }
 
-async function buildTmuxShim(): Promise<string> {
-  const targetDir = path.join(cacheRoot, "tmux-shim-target");
-  console.log("  building WSL tmux bridge");
-  run("cargo", [
-    "build",
-    "--manifest-path",
-    "test/e2e/tmux-shim/Cargo.toml",
-    "--target-dir",
-    targetDir,
-  ]);
-  const shimPath = path.join(targetDir, "debug", "tmux.exe");
-  await readFile(shimPath);
-  await copyFile(shimPath, appDirectoryTmuxPath);
-
-  const tauriDriverPath = run("where.exe", ["tauri-driver.exe"]).split(/\r?\n/)[0];
-  if (!tauriDriverPath) throw new Error("tauri-driver.exe was not found in PATH");
-  const pathTmux = path.join(path.dirname(tauriDriverPath), "tmux.exe");
-  try {
-    await readFile(pathTmux);
-  } catch {
-    await copyFile(shimPath, pathTmux);
-    await writeFile(`${pathTmux}.xsterm-e2e`, "temporary xsterm E2E tmux bridge\n");
-    temporarySystemPathTmux = pathTmux;
-  }
-  return path.dirname(shimPath);
-}
-
-async function startWebdriver(nativeDriverPath: string, shimDirectory: string): Promise<ManagedProcess> {
-  const childEnvironment = { ...process.env };
-  const pathValue = `${shimDirectory};${process.env.Path ?? process.env.PATH ?? ""}`;
-  for (const key of Object.keys(childEnvironment)) {
-    if (key.toLowerCase() === "path") delete childEnvironment[key];
-  }
-  childEnvironment.Path = pathValue;
+async function startWebdriver(nativeDriverPath: string): Promise<ManagedProcess> {
   const driver = startProcess(
     "tauri-driver",
     "tauri-driver.exe",
@@ -207,7 +186,6 @@ async function startWebdriver(nativeDriverPath: string, shimDirectory: string): 
       "--native-driver",
       nativeDriverPath,
     ],
-    { env: childEnvironment },
   );
   await waitForHttp(`${webdriverUrl}/sessions`, 20_000);
   return driver;
@@ -304,6 +282,7 @@ async function createSavedBaseConfig(driver: WebDriver): Promise<void> {
   await ensureToolPanel(driver, "Terminal Manager");
   await clickButtonByText(driver, "New Terminal");
   await waitForElement(driver, ".dialog");
+  await selectFieldByLabel(driver, "Shell Template", "WSL");
   await fillFieldByLabel(driver, "Terminal Name", baseConfigName);
   await clickButtonByText(driver, "Save Only");
   await waitForDialogToClose(driver);
@@ -370,6 +349,7 @@ async function attachTmuxSession(driver: WebDriver, fixture: TmuxFixture): Promi
   await waitForElement(driver, ".dialog");
   await fillFieldByLabel(driver, "Display Name", fixture.configName);
   await selectFieldByLabel(driver, "Rides on", baseConfigName);
+  await fillFieldByLabel(driver, "WSL Distribution", "Debian");
   await fillFieldByLabel(driver, "Tmux Session Name", fixture.sessionName);
   await fillFieldByLabel(driver, "Socket Name", fixture.socketName);
   await clickButtonByText(driver, "Attach");
@@ -420,20 +400,44 @@ async function waitForTuiRestored(
 
 async function detachThroughStatus(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
   console.log("  detaching through Tmux Status context menu");
+  const terminalCountBeforeDetach = (await driver.findElements(By.css(".xterm"))).length;
   await ensureToolPanel(driver, "Tmux Status");
-  const sessionRow = await driver.wait(
-    until.elementLocated(
-      By.xpath(`//*[@role="option"][contains(normalize-space(.), "${fixture.sessionName}")]`),
-    ),
-    10_000,
-  );
+  let sessionRow: WebElement;
+  try {
+    sessionRow = await driver.wait(
+      until.elementLocated(
+        By.xpath(`//*[@role="option"][contains(normalize-space(.), "${fixture.sessionName}")]`),
+      ),
+      20_000,
+    );
+  } catch (error) {
+    const panelText = await driver.executeScript<string>(
+      "return document.querySelector('.shell-tool-panel')?.innerText ?? '(no panel)'",
+    );
+    throw new Error(`Tmux Status row ${fixture.sessionName} not found: ${panelText}`, {
+      cause: error,
+    });
+  }
   await driver.actions().contextClick(sessionRow).perform();
   const detachButton = await driver.wait(
     until.elementLocated(By.xpath('//button[normalize-space(.)="Detach Session"]')),
     5_000,
   );
   await detachButton.click();
-  await driver.wait(async () => (await driver.findElements(By.css(".xterm"))).length === 0, 10_000);
+  try {
+    await driver.wait(
+      async () =>
+        (await driver.findElements(By.css(".xterm"))).length < terminalCountBeforeDetach,
+      20_000,
+    );
+  } catch (error) {
+    const snapshot = await readActiveTerminal(driver);
+    const terminalCountAfterDetach = (await driver.findElements(By.css(".xterm"))).length;
+    throw new Error(
+      `Detach did not remove a tmux terminal (before=${terminalCountBeforeDetach}, after=${terminalCountAfterDetach}): ${JSON.stringify(snapshot)}`,
+      { cause: error },
+    );
+  }
 }
 
 async function reconnectThroughSavedConfig(
@@ -442,12 +446,22 @@ async function reconnectThroughSavedConfig(
 ): Promise<void> {
   console.log("  reconnecting through saved Tmux Manager entry");
   await ensureToolPanel(driver, "Tmux Manager");
-  const savedRow = await driver.wait(
-    until.elementLocated(
-      By.xpath(`//*[@role="option"][.//strong[normalize-space(.)="${fixture.configName}"]]`),
-    ),
-    10_000,
-  );
+  let savedRow: WebElement;
+  try {
+    savedRow = await driver.wait(
+      until.elementLocated(
+        By.xpath(`//*[@role="option"][.//strong[normalize-space(.)="${fixture.configName}"]]`),
+      ),
+      10_000,
+    );
+  } catch (error) {
+    const panelText = await driver.executeScript<string>(
+      "return document.querySelector('.shell-tool-panel')?.innerText ?? '(no panel)'",
+    );
+    throw new Error(`Saved tmux row ${fixture.configName} not found: ${panelText}`, {
+      cause: error,
+    });
+  }
   await driver.actions().doubleClick(savedRow).perform();
   await waitForTuiRestored(driver, fixture);
 }
@@ -475,6 +489,58 @@ async function sendWheelToTerminal(driver: WebDriver): Promise<void> {
     screen,
   );
   await sleep(500);
+}
+
+async function focusActiveTerminal(driver: WebDriver): Promise<void> {
+  await driver.wait(
+    async () =>
+      driver.executeScript<boolean>(`
+        const hosts = Array.from(document.querySelectorAll('.terminal-host'));
+        const host = hosts.reverse().find((candidate) => {
+          const rect = candidate.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+        if (!host) return false;
+        host.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        const input = host.querySelector('.xterm-helper-textarea');
+        if (!input) return false;
+        input.focus();
+        return true;
+      `),
+    10_000,
+  );
+}
+
+async function typeInActiveTerminal(driver: WebDriver, text: string): Promise<void> {
+  await focusActiveTerminal(driver);
+  for (const character of text) {
+    await driver.actions().sendKeys(character).perform();
+    await sleep(20);
+  }
+}
+
+async function typeCommandInActiveTerminal(driver: WebDriver, text: string): Promise<void> {
+  await typeInActiveTerminal(driver, text);
+  await driver.actions().sendKeys(Key.ENTER).perform();
+}
+
+async function typeSpaceInActiveTerminal(driver: WebDriver): Promise<void> {
+  await typeInActiveTerminal(driver, " ");
+}
+
+async function waitForTerminalText(
+  driver: WebDriver,
+  expectedText: string,
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let currentText = "";
+  while (Date.now() < deadline) {
+    currentText = (await readActiveTerminal(driver))?.text ?? "";
+    if (currentText.includes(expectedText)) return;
+    await sleep(200);
+  }
+  throw new Error(`Terminal text did not contain ${expectedText}: ${currentText}`);
 }
 
 async function saveArtifact(driver: WebDriver, name: string): Promise<void> {
@@ -508,6 +574,10 @@ async function diagnoseTuiFailure(driver: WebDriver, fixture: TmuxFixture): Prom
       "-t",
       `${fixture.sessionName}:0.0`,
     ]);
+    await writeFile(
+      path.join(artifactsRoot, `${fixture.name}-${testId}-tmux.txt`),
+      paneCapture,
+    );
     console.error(`  tmux capture:\n${paneCapture.slice(0, 2000)}`);
     await saveArtifact(driver, `${fixture.name}-${testId}-failure.png`);
   } catch (error) {
@@ -596,9 +666,85 @@ function startTmuxFixture(name: "codex" | "opencode", executablePath: string): T
   return fixture;
 }
 
+async function startProbeTmuxFixture(): Promise<TmuxFixture> {
+  const fixture: TmuxFixture = {
+    name: "probe",
+    socketName: `xsterm-e2e-${testId}-probe`,
+    sessionName: `session-${testId}-probe`,
+    configName: `e2e-probe-${testId}`,
+  };
+  await mkdir(cacheRoot, { recursive: true });
+  const scriptPath = path.join(cacheRoot, `probe-${testId}.py`);
+  await writeFile(
+    scriptPath,
+    [
+      "import os",
+      "import sys",
+      "import termios",
+      "import tty",
+      "",
+      "fd = sys.stdin.fileno()",
+      "old_settings = termios.tcgetattr(fd)",
+      "try:",
+      "    tty.setraw(fd)",
+      '    sys.stdout.write("\\x1b[?1049h\\x1b[?1003h\\x1b[?1006h\\x1b[2J\\x1b[H")',
+      '    sys.stdout.write("XSTERM_INPUT_PROBE_READY\\r\\nSPACE_EVENTS=0")',
+      "    sys.stdout.flush()",
+      "    space_count = 0",
+      "    while True:",
+      "        chunk = os.read(fd, 1024)",
+      '        if b" " in chunk:',
+      "            space_count += 1",
+      '            sys.stdout.write(f"\\x1b[2;1H\\x1b[2KSPACE_EVENTS={space_count}\\x1b[4;1H")',
+      "            sys.stdout.flush()",
+      "except OSError:",
+      "    pass",
+      "finally:",
+      "    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)",
+      "",
+    ].join("\n"),
+  );
+  const executableInWsl = resolveWslPath(scriptPath);
+  const script = [
+    `tmux -L '${fixture.socketName}' kill-server >/dev/null 2>&1 || true`,
+    `tmux -L '${fixture.socketName}' new-session -d -s '${fixture.sessionName}' "cd /tmp && exec python3 '${executableInWsl}'"`,
+  ].join("\n");
+  run("wsl.exe", ["--exec", "bash", "-lc", script], {
+    env: { ...process.env, TERM: "xterm-256color" },
+  });
+  tmuxFixtures.push(fixture);
+  return fixture;
+}
+
+function startShellTmuxFixture(): TmuxFixture {
+  const fixture: TmuxFixture = {
+    name: "shell",
+    socketName: `xsterm-e2e-${testId}-shell`,
+    sessionName: `session-${testId}-shell`,
+    configName: `e2e-shell-${testId}`,
+  };
+  const script = [
+    `tmux -L '${fixture.socketName}' kill-server >/dev/null 2>&1 || true`,
+    `tmux -L '${fixture.socketName}' new-session -d -s '${fixture.sessionName}' "cd /tmp && exec bash -i"`,
+  ].join("\n");
+  run("wsl.exe", ["--exec", "bash", "-lc", script], {
+    env: { ...process.env, TERM: "xterm-256color" },
+  });
+  tmuxFixtures.push(fixture);
+  return fixture;
+}
+
 async function testTui(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
   console.log(`\n[${fixture.name}] ${fixture.sessionName}`);
   await attachTmuxSession(driver, fixture);
+  if (fixture.name === "shell") {
+    await waitForElement(driver, ".xterm", 30_000);
+    await typeCommandInActiveTerminal(driver, "printf 'XSTERM SPACE OK\\n'");
+    await waitForTerminalText(driver, "XSTERM SPACE OK");
+    console.log("  WSL tmux shell rendered spaced command output");
+    await detachThroughStatus(driver, fixture);
+    return;
+  }
   let initial: TerminalSnapshot;
   try {
     initial = await waitForTuiRestored(driver, fixture);
@@ -609,6 +755,14 @@ async function testTui(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
   console.log(
     `  restored: alternate=${initial.isAlternateScreen} mouse=${initial.hasMouseMode} chars=${initial.text.trim().length}`,
   );
+
+  if (fixture.name === "probe") {
+    await typeSpaceInActiveTerminal(driver);
+    await waitForTerminalText(driver, "SPACE_EVENTS=1");
+    console.log("  WebView space input reached the WSL tmux pane");
+    await saveArtifact(driver, `${fixture.name}-${testId}.png`);
+    return;
+  }
 
   await detachThroughStatus(driver, fixture);
   console.log("  detach removed tmux terminal from WebView");
@@ -625,11 +779,22 @@ async function testTui(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
     `  reconnected: alternate=${reconnected.isAlternateScreen} mouse=${reconnected.hasMouseMode} chars=${reconnected.text.trim().length}`,
   );
 
+  const inputProbe = process.env.XSTERM_E2E_INPUT ?? `space ${fixture.name}`;
+  await typeInActiveTerminal(driver, inputProbe);
+  try {
+    await waitForTerminalText(driver, inputProbe);
+  } catch (error) {
+    await diagnoseTuiFailure(driver, fixture);
+    throw error;
+  }
+  console.log(`  WebView input "${inputProbe}" reached the real TUI`);
+
   await sendWheelToTerminal(driver);
   const afterWheel = await waitForTuiRestored(driver, fixture);
   if (!afterWheel.hasMouseMode) {
     throw new Error("Mouse tracking mode disappeared after wheel input");
   }
+
   await saveArtifact(driver, `${fixture.name}-${testId}.png`);
 
   await detachThroughStatus(driver, fixture);
@@ -657,7 +822,6 @@ async function main(): Promise<void> {
     await ensureVite();
     await buildApplication();
     const nativeDriverPath = await ensureEdgeDriver();
-    const shimDirectory = await buildTmuxShim();
 
     const requestedTuis = (process.env.XSTERM_E2E_TUIS ?? "codex,opencode")
       .split(",")
@@ -668,6 +832,8 @@ async function main(): Promise<void> {
         if (name === "codex") fixtures.push(startTmuxFixture("codex", resolveCodexExecutable()));
         else if (name === "opencode")
           fixtures.push(startTmuxFixture("opencode", resolveOpenCodeExecutable()));
+        else if (name === "probe") fixtures.push(await startProbeTmuxFixture());
+        else if (name === "shell") fixtures.push(startShellTmuxFixture());
         else throw new Error(`Unknown XSTERM_E2E_TUIS value: ${name}`);
       } catch (error) {
         console.warn(`  skip ${name}: ${error instanceof Error ? error.message : String(error)}`);
@@ -677,7 +843,7 @@ async function main(): Promise<void> {
       throw new Error("No requested real TUI executable is available");
     }
 
-    await startWebdriver(nativeDriverPath, shimDirectory);
+    await startWebdriver(nativeDriverPath);
     driver = await createDriver();
     await waitForElement(driver, ".shell-root", 30_000);
     await cleanupE2eConfigs(driver);
@@ -696,11 +862,6 @@ async function main(): Promise<void> {
     await cleanupFixtures();
     for (const managed of managedProcesses.reverse()) {
       await stopProcessTree(managed);
-    }
-    await rm(appDirectoryTmuxPath, { force: true }).catch(() => {});
-    if (temporarySystemPathTmux) {
-      await rm(temporarySystemPathTmux, { force: true }).catch(() => {});
-      await rm(`${temporarySystemPathTmux}.xsterm-e2e`, { force: true }).catch(() => {});
     }
   }
 }

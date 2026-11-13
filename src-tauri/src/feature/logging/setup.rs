@@ -15,6 +15,7 @@ const DEFAULT_LOG_LEVEL: &str = "debug";
 #[cfg(not(debug_assertions))]
 const DEFAULT_LOG_LEVEL: &str = "warn";
 const BYTES_PER_MB: u64 = 1024 * 1024;
+const SENSITIVE_LOG_FILTERS: &str = ",russh=info,russh_cryptovec=warn";
 
 /// User-configurable logging settings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -33,6 +34,14 @@ impl Default for LogConfig {
             log_level: DEFAULT_LOG_LEVEL.to_string(),
         }
     }
+}
+
+fn log_filter_spec(log_level: &str) -> String {
+    format!("{log_level}{SENSITIVE_LOG_FILTERS}")
+}
+
+pub(crate) fn build_env_filter(log_level: &str) -> EnvFilter {
+    EnvFilter::new(log_filter_spec(log_level))
 }
 
 /// Remove oldest `.log` files in `log_dir` until the total size is below the
@@ -88,7 +97,7 @@ pub fn init_logging(
 
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
-    let env_filter = EnvFilter::new(&config.log_level);
+    let env_filter = build_env_filter(&config.log_level);
     let (reload_layer, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
 
     tracing_subscriber::registry()
@@ -115,6 +124,19 @@ pub fn init_logging(
     // the appender prematurely.
     std::mem::forget(_guard);
     reload_handle
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn log_filter_suppresses_ssh_auth_debug_output() {
+        assert_eq!(
+            log_filter_spec("debug"),
+            "debug,russh=info,russh_cryptovec=warn"
+        );
+    }
 }
 
 /// Load the log configuration from the application store.

@@ -176,12 +176,9 @@ export interface SshConfig {
  * produces a `tmux -CC new-terminal` with default socket and auto-generated name.
  *
  * **Transport is derived from `baseConfigId`** — a tmux terminal must be
- * created on top of an already-saved SSH or Local shell config; the
- * transport (local PTY vs SSH exec channel) follows the base config's
- * type. The user never picks a transport explicitly when creating a
- * tmux terminal. The frontend `TmuxForm` lists the user's saved configs
- * filtered to `local` / `ssh` and copies the SSH sub-config (when the
- * base is an SSH config) into the request that reaches the backend.
+ * created on top of an already-saved SSH, WSL, or Local shell config. The
+ * frontend copies the SSH sub-config when the base is SSH and sets
+ * `transport: "wsl"` when the base uses `shellTemplate: "wsl"`.
  *
  * Mirrors `doc/requirements/prd-0.1/req-006-tmux.md` §4.4 D5 + §4.7.
  */
@@ -210,6 +207,14 @@ export interface TmuxSessionConfig {
   initialRows?: number;
   /** initial terminal columns advertised to tmux. @default 80 */
   initialCols?: number;
+  /**
+   * Non-SSH tmux transport. Omit for the Windows-local tmux executable, or set
+   * to `"wsl"` to run tmux through `wsl.exe`. SSH remains selected by the `ssh`
+   * field for backwards compatibility.
+   */
+  transport?: "local" | "wsl";
+  /** Optional WSL distribution name. Empty means the default distribution. */
+  wslDistribution?: string;
   /**
    * SSH connection config. When set, the controller runs
    * `tmux -CC` on the remote host via an SSH exec channel. When
@@ -448,6 +453,10 @@ export interface AttachedTmuxServer {
   sessionName: string;
   /** Optional tmux socket name (the `-L <socket>` arg). */
   socketName?: string;
+  /** Non-SSH transport used to re-attach. */
+  transport?: "local" | "wsl";
+  /** WSL distribution selected when re-attaching through WSL. */
+  wslDistribution?: string;
   /** ms epoch when the user last attached / created this server. */
   attachedAt: number;
 }

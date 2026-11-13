@@ -39,7 +39,7 @@ export interface TmuxStatusControllerViewData {
   /** Real tmux session name (e.g. `work`), when known from the saved config. */
   sessionName?: string;
   status: TmuxRuntimeStatus;
-  transport: "local" | "ssh";
+  transport: "local" | "wsl" | "ssh";
   windows: readonly TmuxStatusWindowViewData[];
 }
 
@@ -74,7 +74,12 @@ export function selectTmuxStatusControllers(
       title: config?.name ?? `Tmux controller ${controllerId}`,
       ...(sessionName ? { sessionName } : {}),
       status,
-      transport: config?.type === "tmux-pane" && config.config.ssh ? "ssh" : "local",
+      transport:
+        config?.type === "tmux-pane" && config.config.ssh
+          ? "ssh"
+          : config?.type === "tmux-pane" && config.config.transport === "wsl"
+            ? "wsl"
+            : "local",
       windows,
     };
   });

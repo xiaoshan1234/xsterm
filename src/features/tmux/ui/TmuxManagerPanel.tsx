@@ -51,7 +51,7 @@ export function TmuxManagerPanel({
             key={item.configId}
             title={item.name}
             subtitle={formatTmuxItem(item)}
-            badge={item.transport === "ssh" ? "SSH" : "Local"}
+            badge={formatTransport(item.transport)}
             isSelected={selectedId === item.configId}
             onSelect={() => setSelectedId(item.configId)}
             onOpen={() => onOpenConfig(item.configId)}
@@ -79,7 +79,14 @@ function formatTmuxItem(item: TmuxManagerItemViewData): string {
   const parts = [
     item.tmuxSessionName ?? item.name,
     item.socketName ? `socket ${item.socketName}` : null,
+    item.wslDistribution ? `WSL ${item.wslDistribution}` : null,
     item.baseConfigName ? `base ${item.baseConfigName}` : null,
   ];
   return parts.filter(Boolean).join(" · ");
+}
+
+function formatTransport(transport: TmuxManagerItemViewData["transport"]): string {
+  if (transport === "ssh") return "SSH";
+  if (transport === "wsl") return "WSL";
+  return "Local";
 }
