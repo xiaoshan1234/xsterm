@@ -102,7 +102,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  min-height: 46px;
+  min-height: 36px;
   padding: var(--space-xs);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -155,9 +155,8 @@
 .manager-row-copy {
   display: flex;
   flex: 1;
+  align-items: center;
   min-width: 0;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .manager-row-copy strong {
@@ -165,14 +164,6 @@
   color: var(--ink);
   font-size: 13px;
   font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.manager-row-copy span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

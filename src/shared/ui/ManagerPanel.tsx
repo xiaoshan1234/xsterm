@@ -58,7 +58,6 @@ export function ManagerSection({
 
 export function ManagerRow({
   title,
-  subtitle,
   badge,
   isSelected = false,
   onSelect,
@@ -69,7 +68,6 @@ export function ManagerRow({
   contextMenuItems,
 }: {
   title: string;
-  subtitle: string;
   badge?: string;
   isSelected?: boolean;
   onSelect?: () => void;
@@ -112,7 +110,6 @@ export function ManagerRow({
       ) : null}
       <div className="manager-row-copy">
         <strong>{title}</strong>
-        <span>{subtitle}</span>
       </div>
       {badge && <span className="manager-row-badge">{badge}</span>}
     </div>

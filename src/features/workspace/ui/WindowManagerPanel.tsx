@@ -35,7 +35,6 @@ export function WindowManagerPanel({
           <ManagerRow
             key={item.configId}
             title={item.name}
-            subtitle={`${item.paneCount} panes`}
             isSelected={selectedId === item.configId}
             onSelect={() => setSelectedId(item.configId)}
             onOpen={() => onLoad(item.configId)}

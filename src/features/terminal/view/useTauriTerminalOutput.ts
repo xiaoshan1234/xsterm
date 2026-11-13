@@ -101,6 +101,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
 
     let listenerActive = true;
     let unlisten: (() => void) | null = null;
+    let bufferBeforeSubscribe: string | undefined;
 
     const handleOutput = (text: string) => {
       appendTerminalOutput(terminalId, text);
@@ -127,6 +128,9 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
     void replayPromise
       .then(() => {
         if (!listenerActive) return undefined;
+        // Snapshot history before subscribing. Anything arriving during the
+        // subscription call is delivered live and must not be replayed again.
+        bufferBeforeSubscribe = getTerminalOutput(terminalId);
         return subscribeTerminalOutput(terminalId, (data) => {
           if (!listenerActive) return;
           handleOutput(extractAndCopyOsc52(decodeOutput(data)));
@@ -139,8 +143,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
           return;
         }
         unlisten = fn;
-        // Replay output buffered while the subscription was being created.
-        const buffer = getTerminalOutput(terminalId);
+        const buffer = bufferBeforeSubscribe;
         if (buffer) {
           try {
             xterm.write(buffer);

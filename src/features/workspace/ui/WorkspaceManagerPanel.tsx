@@ -37,7 +37,6 @@ export function WorkspaceManagerPanel({
           <ManagerRow
             key={item.configId}
             title={item.name}
-            subtitle={`${item.windowCount} windows`}
             badge={item.isLoaded ? "Loaded" : "Saved"}
             isSelected={selectedId === item.configId}
             onSelect={() => setSelectedId(item.configId)}

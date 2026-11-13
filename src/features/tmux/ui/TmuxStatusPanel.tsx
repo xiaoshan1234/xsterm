@@ -87,7 +87,6 @@ function TmuxSessionTree({
     <section className="tmux-status-session">
       <ManagerRow
         title={sessionTitle}
-        subtitle={`${controller.windows.length} windows · ${controller.transport.toUpperCase()}`}
         badge={controller.status === "connected" ? "Connected" : "Disconnected"}
         isSelected={selectedKey === sessionKey}
         onSelect={() => onSelect(sessionKey)}
@@ -153,7 +152,6 @@ function TmuxWindowTree({
     <div className="tmux-status-window">
       <ManagerRow
         title={window.name}
-        subtitle={`${window.windowIndex ?? "?"} · ${window.panes.length} panes`}
         badge={window.status === "connected" ? "Connected" : "Disconnected"}
         isSelected={selectedKey === windowKey}
         onSelect={() => {
@@ -172,7 +170,6 @@ function TmuxWindowTree({
               <ManagerRow
                 key={pane.terminalId}
                 title={pane.currentCommand ?? pane.title}
-                subtitle={`${pane.windowIndex ?? "?"}.${pane.paneIndex ?? "?"} · ${pane.width ?? "?"}x${pane.height ?? "?"}${pane.isActive ? " · ACTIVE" : ""}`}
                 badge={pane.status === "connected" ? "Live" : "Down"}
                 isSelected={selectedKey === paneKey}
                 onSelect={() => {

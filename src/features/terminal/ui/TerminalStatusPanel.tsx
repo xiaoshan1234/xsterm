@@ -26,7 +26,6 @@ export function TerminalStatusPanel({
           <ManagerRow
             key={item.terminalId}
             title={item.title}
-            subtitle={formatLocation(item)}
             badge={item.status === "connected" ? "Connected" : "Disconnected"}
             isSelected={selectedId === item.terminalId}
             onSelect={() => setSelectedId(item.terminalId)}
@@ -53,11 +52,4 @@ export function TerminalStatusPanel({
       )}
     </ManagerPanelFrame>
   );
-}
-
-function formatLocation(item: TerminalStatusItemViewData): string {
-  if (!item.location) {
-    return `${item.transport.toUpperCase()} · unattached`;
-  }
-  return `${item.location.workspaceName} / ${item.location.windowName} / Pane ${item.location.paneNumber}`;
 }

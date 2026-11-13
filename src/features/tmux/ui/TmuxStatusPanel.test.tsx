@@ -51,8 +51,8 @@ describe("TmuxStatusPanel", () => {
       />,
     );
     expect(screen.getByText("work:1")).toBeTruthy();
-    expect(screen.getByText(/0.*1 panes/)).toBeTruthy();
-    expect(screen.getByText(/0\.1.*88x1.*ACTIVE/)).toBeTruthy();
+    expect(screen.queryByText(/panes/)).toBeNull();
+    expect(screen.queryByText(/88x1/)).toBeNull();
     expect(screen.getByText("bash")).toBeTruthy();
 
     const [sessionCollapse] = screen.getAllByRole("button", { name: "Collapse" });

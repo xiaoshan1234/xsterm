@@ -77,7 +77,6 @@ export function TerminalManagerPanel({
                 <ManagerRow
                   key={item.configId}
                   title={item.name}
-                  subtitle={item.detail}
                   badge={item.kind === "ssh" ? "SSH" : "Shell"}
                   isSelected={selectedId === item.configId}
                   onSelect={() => setSelectedId(item.configId)}

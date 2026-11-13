@@ -50,7 +50,6 @@ export function TmuxManagerPanel({
           <ManagerRow
             key={item.configId}
             title={item.name}
-            subtitle={formatTmuxItem(item)}
             badge={formatTransport(item.transport)}
             isSelected={selectedId === item.configId}
             onSelect={() => setSelectedId(item.configId)}
@@ -73,16 +72,6 @@ export function TmuxManagerPanel({
       )}
     </ManagerPanelFrame>
   );
-}
-
-function formatTmuxItem(item: TmuxManagerItemViewData): string {
-  const parts = [
-    item.tmuxSessionName ?? item.name,
-    item.socketName ? `socket ${item.socketName}` : null,
-    item.wslDistribution ? `WSL ${item.wslDistribution}` : null,
-    item.baseConfigName ? `base ${item.baseConfigName}` : null,
-  ];
-  return parts.filter(Boolean).join(" · ");
 }
 
 function formatTransport(transport: TmuxManagerItemViewData["transport"]): string {
