@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useTerminalRuntime } from "../../sessions";
@@ -13,12 +13,11 @@ import { normalizeCapturedScrollback } from "./scrollback";
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
 /**
- * scrollback replay happens **once per tmux pane per mount**.
- * Keyed by the live xterm instance so React strict-mode double-mounts (which
- * dispose the first instance and create a second one) still replay on the
- * instance that actually survives.
+ * Scrollback replay happens once per tmux terminal binding. A reconnect keeps
+ * the same xterm instance but replaces its terminal id, so the map must allow
+ * the new id to replay while still suppressing React strict-mode duplicates.
  */
-const replayedXterms = new WeakSet<XTerm>();
+const replayedTerminalByXterm = new WeakMap<XTerm, number>();
 
 const SCROLLBACK_LINES = 2000;
 
@@ -60,24 +59,24 @@ function extractAndCopyOsc52(text: string): string {
 
 export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, terminalId: number): void {
   const { touchTerminalActivity, terminals } = useTerminalRuntime();
+  const replayStateRef = useRef<{ terminalId: number; promise: Promise<void> } | null>(null);
   // tmux scrollback replay applies only to tmux-backed panes.
   const isTmuxPane = !!terminals.find((s) => s.id === terminalId && !!s.tmuxPaneId);
 
-  // replay tmux scrollback once per pane per app terminal. The
-  // replay happens BEFORE the live listener attaches so the user sees
-  // historical content first, then live output streams on top. The
-  // `scrollbackReplayedRef` Set gates re-runs so a terminals-list update
-  // that re-fires this effect does not double-replay. Errors are
-  // non-fatal (the pane still works without replay).
+  // Replay tmux snapshot/modes before the live listener attaches. This lets a
+  // reconnect restore alternate-screen TUI state without a concurrent live
+  // frame overwriting the snapshot.
   useEffect(() => {
     if (!isTmuxPane) return;
     const xterm = termRef.current;
-    if (!xterm || replayedXterms.has(xterm)) return;
-    replayedXterms.add(xterm);
-    tmuxCommands
+    if (!xterm || replayedTerminalByXterm.get(xterm) === terminalId) return;
+    replayedTerminalByXterm.set(xterm, terminalId);
+
+    const replayTerminalId = terminalId;
+    const replayPromise = tmuxCommands
       .captureTmuxPane(toBackendTerminalHandle(terminalId), SCROLLBACK_LINES)
       .then((text) => {
-        if (!text) return;
+        if (!text || replayedTerminalByXterm.get(xterm) !== replayTerminalId) return;
         try {
           xterm.write(normalizeCapturedScrollback(text));
         } catch (e) {
@@ -87,6 +86,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       .catch((err) => {
         console.error("[xsterm] captureTmuxPane failed:", err);
       });
+    replayStateRef.current = { terminalId, promise: replayPromise };
   }, [isTmuxPane, terminalId, termRef]);
 
   // Raw-byte output path: the frontend hands the backend a Tauri `Channel`,
@@ -119,19 +119,27 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       }
     };
 
-    subscribeTerminalOutput(terminalId, (data) => {
-      if (!listenerActive) return;
-      handleOutput(extractAndCopyOsc52(decodeOutput(data)));
-    })
+    const replayState = replayStateRef.current;
+    const replayPromise =
+      isTmuxPane && replayState?.terminalId === terminalId
+        ? replayState.promise
+        : Promise.resolve();
+    void replayPromise
+      .then(() => {
+        if (!listenerActive) return undefined;
+        return subscribeTerminalOutput(terminalId, (data) => {
+          if (!listenerActive) return;
+          handleOutput(extractAndCopyOsc52(decodeOutput(data)));
+        });
+      })
       .then((fn) => {
+        if (!fn) return;
         if (!listenerActive) {
           fn();
           return;
         }
         unlisten = fn;
-        // Replay any history buffered before this subscription attached
-        // (e.g. shell prompt that arrived during the subscribe() Promise
-        // resolution window). Best-effort, not a strict race-free path.
+        // Replay output buffered while the subscription was being created.
         const buffer = getTerminalOutput(terminalId);
         if (buffer) {
           try {
@@ -151,5 +159,5 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       listenerActive = false;
       unlisten?.();
     };
-  }, [termRef, terminalId, touchTerminalActivity]);
+  }, [isTmuxPane, termRef, terminalId, touchTerminalActivity]);
 }

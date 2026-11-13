@@ -32,6 +32,12 @@ test/sys-test/artifacts/
 # SSH credentials — never commit
 test/sys-test/ssh-config.json
 
+# Local E2E runtime, downloaded drivers, and failure artifacts
+test/e2e/.cache/
+test/e2e/.runtime/
+test/e2e/artifacts/
+msedgedriver.exe
+
 # Local reference repos (oxideterm, etc.) — read-only dev aids
 ref/
 doc/.obsidian/*
