@@ -1,10 +1,5 @@
 import { useState } from "react";
-import {
-  ManagerEmptyState,
-  ManagerPanelFrame,
-  ManagerRow,
-  ManagerStatusHeader,
-} from "../../../shared/ui/ManagerPanel";
+import { ManagerEmptyState, ManagerPanelFrame, ManagerRow } from "../../../shared/ui/ManagerPanel";
 import {
   type TmuxStatusControllerViewData,
   type TmuxStatusWindowViewData,
@@ -26,12 +21,6 @@ export function TmuxStatusPanel({
 }: TmuxStatusPanelProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(new Set());
-  const paneCount = controllers.reduce(
-    (total, controller) =>
-      total +
-      controller.windows.reduce((windowTotal, window) => windowTotal + window.panes.length, 0),
-    0,
-  );
 
   const toggleCollapsed = (key: string) => {
     setCollapsedKeys((previous) => {
@@ -44,10 +33,6 @@ export function TmuxStatusPanel({
 
   return (
     <ManagerPanelFrame>
-      <ManagerStatusHeader
-        label="Runtime status"
-        value={`${controllers.length} controllers · ${paneCount} panes`}
-      />
       {controllers.length === 0 ? (
         <ManagerEmptyState>No live Tmux controllers.</ManagerEmptyState>
       ) : (

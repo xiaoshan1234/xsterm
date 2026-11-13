@@ -1,10 +1,5 @@
 import { useState } from "react";
-import {
-  ManagerEmptyState,
-  ManagerPanelFrame,
-  ManagerRow,
-  ManagerStatusHeader,
-} from "../../../shared/ui/ManagerPanel";
+import { ManagerEmptyState, ManagerPanelFrame, ManagerRow } from "../../../shared/ui/ManagerPanel";
 import { type TerminalStatusItemViewData } from "../viewModels/statusViewModel";
 
 interface TerminalStatusPanelProps {
@@ -20,15 +15,10 @@ export function TerminalStatusPanel({
   onReconnect,
   onClose,
 }: TerminalStatusPanelProps) {
-  const connectedCount = items.filter((item) => item.status === "connected").length;
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   return (
     <ManagerPanelFrame>
-      <ManagerStatusHeader
-        label="Runtime status"
-        value={`${connectedCount}/${items.length} connected`}
-      />
       {items.length === 0 ? (
         <ManagerEmptyState>No live terminals.</ManagerEmptyState>
       ) : (

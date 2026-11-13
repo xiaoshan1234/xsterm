@@ -5,7 +5,6 @@ import {
   ManagerPanelFrame,
   ManagerRow,
   ManagerSection,
-  ManagerStatusHeader,
 } from "../../../shared/ui/ManagerPanel";
 import { type TerminalManagerGroupViewData } from "../viewModels/managerViewModel";
 import "./TerminalManagerPanel.css";
@@ -34,7 +33,6 @@ export function TerminalManagerPanel({
   onRemoveConfig,
 }: TerminalManagerPanelProps) {
   const hasConfigs = groups.some((group) => group.items.length > 0);
-  const totalConfigs = groups.reduce((total, group) => total + group.items.length, 0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
@@ -46,17 +44,12 @@ export function TerminalManagerPanel({
         </>
       }
     >
-      <ManagerStatusHeader
-        label="Saved terminals"
-        value={`${totalConfigs} configs · ${groups.length} groups`}
-      />
       {!hasConfigs && <ManagerEmptyState>No saved terminal configurations.</ManagerEmptyState>}
       <div className="terminal-manager-groups">
         {groups.map((group) => (
           <ManagerSection
             key={group.groupId}
             label={group.name}
-            badge={String(group.items.length)}
             isExpanded={!group.isCollapsed}
             onToggle={() => onToggleGroup(group.groupId)}
             contextMenuItems={[
