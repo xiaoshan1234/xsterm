@@ -240,6 +240,12 @@ pub struct AttachedTmuxServer {
     /// back to tmux's default socket.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub socket_name: Option<String>,
+    /// Non-SSH transport used to re-attach: `"local"` or `"wsl"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    /// WSL distribution selected when re-attaching through WSL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wsl_distribution: Option<String>,
     /// ms epoch when the user last attached (or created) this server. Used
     /// to order re-attach: most-recent first.
     pub attached_at: u64,
@@ -258,8 +264,9 @@ pub struct AttachedTmuxServer {
 /// remote host via an SSH exec channel — the SSH session opens
 /// `tmux -CC` on the remote side and its byte stream is bridged into the
 /// controller's I/O task the same way a local child process would be.
-/// When `ssh` is `None`, the controller spawns a local
-/// `tokio::process::Command` child.
+/// When `transport` is `"wsl"`, the controller runs
+/// `wsl.exe --exec tmux -CC` in the selected WSL distribution. Otherwise a
+/// local `tokio::process::Command` child is used.
 ///
 /// The frontend mirrors this shape with `TmuxSessionConfig.ssh?: SshConfig`
 /// in `src/types/session.ts`; the Create Session dialog exposes a
@@ -281,6 +288,13 @@ pub struct TmuxSessionConfig {
     pub initial_rows: Option<u16>,
     #[serde(default)]
     pub initial_cols: Option<u16>,
+    /// Non-SSH transport selection. `None` and `"local"` use the Windows tmux
+    /// executable; `"wsl"` runs tmux inside `wsl.exe`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    /// Optional WSL distribution. Empty uses the default distribution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wsl_distribution: Option<String>,
     /// SSH connection config. When `Some(_)`, the controller runs
     /// `tmux -CC` on the remote host via an SSH exec channel. When
     /// `None` (the default), the controller spawns a local `tmux -CC`
@@ -1116,6 +1130,8 @@ mod tests {
             }),
             initial_rows: Some(40),
             initial_cols: Some(132),
+            transport: Some("wsl".to_string()),
+            wsl_distribution: Some("Ubuntu".to_string()),
             ssh: None,
             base_config_id: None,
         };
@@ -1126,6 +1142,8 @@ mod tests {
         assert!(json.contains("\"startCommand\":\"clear\\n\""));
         assert!(json.contains("\"initialRows\":40"));
         assert!(json.contains("\"initialCols\":132"));
+        assert!(json.contains("\"transport\":\"wsl\""));
+        assert!(json.contains("\"wslDistribution\":\"Ubuntu\""));
 
         let roundtrip: TmuxSessionConfig =
             serde_json::from_str(&json).expect("deserialize TmuxSessionConfig");
@@ -1135,6 +1153,8 @@ mod tests {
         assert_eq!(roundtrip.start_command.as_deref(), Some("clear\n"));
         assert_eq!(roundtrip.initial_rows, Some(40));
         assert_eq!(roundtrip.initial_cols, Some(132));
+        assert_eq!(roundtrip.transport.as_deref(), Some("wsl"));
+        assert_eq!(roundtrip.wsl_distribution.as_deref(), Some("Ubuntu"));
     }
 
     #[test]
@@ -1149,6 +1169,27 @@ mod tests {
         assert!(config.env_config.is_none());
         assert!(config.initial_rows.is_none());
         assert!(config.initial_cols.is_none());
+        assert!(config.transport.is_none());
+        assert!(config.wsl_distribution.is_none());
+    }
+
+    #[test]
+    fn attached_tmux_server_preserves_wsl_reattach_metadata() {
+        let server = AttachedTmuxServer {
+            session_name: "work".to_string(),
+            socket_name: Some("dev".to_string()),
+            transport: Some("wsl".to_string()),
+            wsl_distribution: Some("Debian".to_string()),
+            attached_at: 42,
+        };
+
+        let json = serde_json::to_string(&server).expect("serialize attached tmux server");
+        let roundtrip: AttachedTmuxServer =
+            serde_json::from_str(&json).expect("deserialize attached tmux server");
+
+        assert_eq!(roundtrip, server);
+        assert!(json.contains("\"transport\":\"wsl\""));
+        assert!(json.contains("\"wslDistribution\":\"Debian\""));
     }
 
     #[test]

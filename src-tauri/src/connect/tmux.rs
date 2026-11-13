@@ -13,7 +13,7 @@ use xscore::platform::tmux::{
 use crate::connect::app_backend::AppBackend;
 use crate::connect::forward::spawn_output_forwarder;
 use crate::connect::ssh_exec::{ssh_exec_capture, ssh_exec_status};
-use crate::shared::session::{SplitDirection, SshConfig, TmuxSessionConfig};
+use crate::shared::session::{AttachedTmuxServer, SplitDirection, SshConfig, TmuxSessionConfig};
 
 const EXTENDED_PANE_FORMAT: &str = "#{window_index}|#{pane_index}|#{pane_id}|#{pane_width}|#{pane_height}|#{pane_left}|#{pane_top}|#{pane_current_command}|#{pane_active}|#{window_name}";
 
@@ -474,6 +474,37 @@ impl TmuxSession {
             .unwrap_or_default()
     }
 
+    pub(crate) fn attached_tmux_server(&self, attached_at: u64) -> Option<AttachedTmuxServer> {
+        let session_name = self.session_name.clone()?;
+        let socket_name = match &self.socket {
+            TmuxSocket::Named(name) => Some(name.clone()),
+            TmuxSocket::Default | TmuxSocket::Path(_) => None,
+        };
+        let (transport, wsl_distribution) = match &self.host_config {
+            TmuxHostConfig::Wsl { args } => {
+                let distribution = args
+                    .windows(2)
+                    .find(|pair| {
+                        matches!(
+                            pair[0].as_str(),
+                            "--distribution" | "-d" | "--distribution-id"
+                        )
+                    })
+                    .map(|pair| pair[1].clone());
+                (Some("wsl".to_string()), distribution)
+            }
+            TmuxHostConfig::Local => (Some("local".to_string()), None),
+            TmuxHostConfig::Ssh { .. } => (None, None),
+        };
+        Some(AttachedTmuxServer {
+            session_name,
+            socket_name,
+            transport,
+            wsl_distribution,
+            attached_at,
+        })
+    }
+
     pub(crate) async fn send_keys(&self, pane: &str, data: &[u8]) -> Result<(), String> {
         self.ensure_pane_bound(pane)?;
         let command = send_keys_command(pane, data)?;
@@ -666,7 +697,7 @@ impl TmuxSession {
         let normal = self
             .capture_pane_raw(pane, Some(lines), true, false)
             .await?;
-        let alternate = self.capture_pane_raw(pane, None, false, false).await?;
+        let alternate = self.capture_pane_raw(pane, None, false, true).await?;
         Ok(format!(
             "{}{}",
             alternate_screen_replay(&normal, &alternate),
@@ -954,21 +985,43 @@ fn parse_extended_pane_line(line: &str) -> Option<ExtendedPaneInfo> {
 /// Build the xscore tmux target from an xsterm config.
 fn build_tmux_target(config: &TmuxSessionConfig) -> Result<(TmuxHostConfig, TmuxSocket), String> {
     let host = match config.ssh.as_ref() {
-        Some(ssh) => TmuxHostConfig::Ssh {
-            user: ssh.username.clone(),
-            host: ssh.host.clone(),
-            port: ssh.port,
-            identity: match ssh.auth_type.as_str() {
-                "key" => ssh.key_file.clone(),
-                _ => None,
-            },
-            password: match ssh.auth_type.as_str() {
-                "password" => ssh.password.clone(),
-                _ => None,
-            },
-            options: ssh_options_from_config(ssh),
+        Some(ssh) => {
+            if config.transport.as_deref() == Some("wsl") {
+                return Err("tmux transport cannot be both SSH and WSL".to_string());
+            }
+            TmuxHostConfig::Ssh {
+                user: ssh.username.clone(),
+                host: ssh.host.clone(),
+                port: ssh.port,
+                identity: match ssh.auth_type.as_str() {
+                    "key" => ssh.key_file.clone(),
+                    _ => None,
+                },
+                password: match ssh.auth_type.as_str() {
+                    "password" => ssh.password.clone(),
+                    _ => None,
+                },
+                options: ssh_options_from_config(ssh),
+            }
+        }
+        None => match config.transport.as_deref() {
+            None | Some("local") => TmuxHostConfig::Local,
+            Some("wsl") => {
+                let distribution = config
+                    .wsl_distribution
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                TmuxHostConfig::Wsl {
+                    args: distribution
+                        .map(|value| vec!["--distribution".to_string(), value.to_string()])
+                        .unwrap_or_default(),
+                }
+            }
+            Some(transport) => {
+                return Err(format!("unsupported tmux transport: {transport}"));
+            }
         },
-        None => TmuxHostConfig::Local,
     };
     let socket = match config.socket_name.as_deref() {
         Some(name) if !name.is_empty() => TmuxSocket::Named(name.to_string()),
@@ -992,7 +1045,8 @@ async fn tmux_session_exists(
                 .args(&socket)
                 .arg("has-session")
                 .arg("-t")
-                .arg(session_name);
+                .arg(session_name)
+                .stderr(std::process::Stdio::null());
             let status = command
                 .status()
                 .await
@@ -1018,8 +1072,20 @@ async fn tmux_session_exists(
             let status = ssh_exec_status(ssh, &command).await?;
             Ok(status == 0)
         }
-        TmuxHostConfig::Wsl { .. } => {
-            Err("tmux session existence checks over WSL are not supported".to_string())
+        TmuxHostConfig::Wsl { args } => {
+            let status = tokio::process::Command::new("wsl.exe")
+                .args(args)
+                .arg("--exec")
+                .arg("tmux")
+                .args(socket)
+                .arg("has-session")
+                .arg("-t")
+                .arg(session_name)
+                .stderr(std::process::Stdio::null())
+                .status()
+                .await
+                .map_err(|e| format!("failed to run WSL tmux has-session: {e}"))?;
+            Ok(status.success())
         }
     }
 }
@@ -1167,17 +1233,29 @@ fn terminal_modes_replay(modes: &PaneTerminalModes) -> String {
     replay
 }
 
-/// Build a `send-keys -l` command that delivers arbitrary bytes to a pane
-/// without letting tmux's command-line tokenizer eat whitespace or treat key
-/// names specially. Control bytes, backslash and non-ASCII bytes are emitted
-/// as `\nnn` octal escapes and the whole payload is wrapped in double quotes;
-/// tmux's `-l` literal mode decodes those escapes back to the original bytes.
+/// Build a `send-keys` command for arbitrary bytes. Short payloads containing
+/// whitespace, control bytes, or non-ASCII use `-H` hex encoding so tmux's
+/// command tokenizer cannot discard spaces or reinterpret key names. Other
+/// payloads use `-l` with octal escapes to avoid hex expansion on large pastes.
 fn send_keys_command(pane: &str, payload: &[u8]) -> Result<String, String> {
     use std::fmt::Write as _;
 
     if payload.contains(&0) {
         return Err("tmux control mode cannot carry a NUL byte".to_string());
     }
+    const HEX_ENCODING_MAX_BYTES: usize = 4096;
+    let needs_unambiguous_bytes = payload.len() <= HEX_ENCODING_MAX_BYTES
+        && payload
+            .iter()
+            .any(|byte| byte.is_ascii_whitespace() || *byte < 0x20 || *byte >= 0x80);
+    if needs_unambiguous_bytes {
+        let mut command = format!("send-keys -H -t {pane}");
+        for byte in payload {
+            let _ = write!(command, " {byte:02x}");
+        }
+        return Ok(command);
+    }
+
     let mut escaped = String::with_capacity(payload.len());
     for &byte in payload {
         if byte < 0x20 || byte == b'\\' || byte >= 0x80 {
@@ -1196,11 +1274,12 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{
-        alternate_screen_replay, capture_pane_command, parse_extended_pane_line,
+        alternate_screen_replay, build_tmux_target, capture_pane_command, parse_extended_pane_line,
         parse_pane_terminal_modes, send_keys_command, terminal_modes_replay, PaneTerminalModes,
         TmuxControl, TmuxHostConfig, TmuxSession, TmuxSocket,
     };
     use crate::connect::app_backend::AppBackend;
+    use crate::shared::session::{SshConfig, TmuxSessionConfig};
 
     #[test]
     fn parses_extended_pane_line_with_indices_and_command() {
@@ -1219,15 +1298,15 @@ mod tests {
     fn send_keys_command_preserves_spaces() {
         assert_eq!(
             send_keys_command("%5", b" ").unwrap(),
-            r#"send-keys -l -t %5 " ""#
+            "send-keys -H -t %5 20"
         );
     }
 
     #[test]
-    fn send_keys_command_octal_escapes_control_backslash_and_utf8() {
+    fn send_keys_command_hex_encodes_control_and_utf8() {
         assert_eq!(
             send_keys_command("%0", b"hello\nworld").unwrap(),
-            r#"send-keys -l -t %0 "hello\012world""#
+            "send-keys -H -t %0 68 65 6c 6c 6f 0a 77 6f 72 6c 64"
         );
         assert_eq!(
             send_keys_command("%0", b"a\\b").unwrap(),
@@ -1235,7 +1314,7 @@ mod tests {
         );
         assert_eq!(
             send_keys_command("%0", "é".as_bytes()).unwrap(),
-            r#"send-keys -l -t %0 "\303\251""#
+            "send-keys -H -t %0 c3 a9"
         );
     }
 
@@ -1243,7 +1322,7 @@ mod tests {
     fn send_keys_command_escapes_embedded_quote_and_rejects_nul() {
         assert_eq!(
             send_keys_command("%0", b"say \"hi\"").unwrap(),
-            r#"send-keys -l -t %0 "say \"hi\"""#
+            "send-keys -H -t %0 73 61 79 20 22 68 69 22"
         );
         assert!(send_keys_command("%0", b"a\0b").is_err());
     }
@@ -1328,6 +1407,42 @@ mod tests {
         );
     }
 
+    #[test]
+    fn build_tmux_target_maps_wsl_transport_and_distribution() {
+        let config = TmuxSessionConfig {
+            transport: Some("wsl".to_string()),
+            wsl_distribution: Some("Debian".to_string()),
+            socket_name: Some("dev".to_string()),
+            ..TmuxSessionConfig::default()
+        };
+
+        let (host, socket) = build_tmux_target(&config).expect("WSL tmux target");
+        assert_eq!(
+            host,
+            TmuxHostConfig::Wsl {
+                args: vec!["--distribution".to_string(), "Debian".to_string()],
+            }
+        );
+        assert_eq!(socket, TmuxSocket::Named("dev".to_string()));
+    }
+
+    #[test]
+    fn build_tmux_target_rejects_ssh_and_wsl_conflict() {
+        let config = TmuxSessionConfig {
+            transport: Some("wsl".to_string()),
+            ssh: Some(SshConfig {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "dev".to_string(),
+                auth_type: "password".to_string(),
+                ..SshConfig::default()
+            }),
+            ..TmuxSessionConfig::default()
+        };
+
+        assert!(build_tmux_target(&config).is_err());
+    }
+
     struct TestAppBackend;
 
     impl AppBackend for TestAppBackend {
@@ -1383,12 +1498,19 @@ try:
     )
     sys.stdout.flush()
     wheel_count = 0
+    space_count = 0
     while True:
         chunk = os.read(fd, 1024)
         if b"<64;" in chunk or b"<65;" in chunk:
             wheel_count += 1
             sys.stdout.write(
                 f"\x1b[2;1H\x1b[2KWHEEL_EVENTS={wheel_count}\x1b[4;1H"
+            )
+            sys.stdout.flush()
+        if b" " in chunk:
+            space_count += 1
+            sys.stdout.write(
+                f"\x1b[3;1H\x1b[2KSPACE_EVENTS={space_count}\x1b[4;1H"
             )
             sys.stdout.flush()
 except OSError:
@@ -1540,9 +1662,52 @@ tmux -L "__SOCKET_NAME__" new-session -d -s "__SESSION_NAME__" \
         assert!(wheel_capture.contains("WHEEL_EVENTS=1"));
 
         second_session
+            .send_keys(&reconnected_pane, b" ")
+            .await
+            .expect("send space input");
+        let space_capture =
+            wait_for_capture(&second_session, &reconnected_pane, "SPACE_EVENTS=1").await;
+        assert!(space_capture.contains("SPACE_EVENTS=1"));
+
+        second_session
             .control
             .close()
             .await
             .expect("close reconnected tmux control client");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires WSL2 with tmux; run npm run test:tmux:tui"]
+    async fn tmux_wsl_create_opens_control_session() {
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        );
+        let socket_name = format!("xsterm-create-{suffix}");
+        let session_name = format!("create-{suffix}");
+        let config = TmuxSessionConfig {
+            tmux_session_name: Some(session_name.clone()),
+            socket_name: Some(socket_name.clone()),
+            transport: Some("wsl".to_string()),
+            ..TmuxSessionConfig::default()
+        };
+
+        let session = TmuxSession::spawn_new(&config, std::sync::Arc::new(TestAppBackend), 3)
+            .await
+            .expect("create native WSL tmux session");
+        assert!(!session.registered_panes().is_empty());
+
+        session
+            .control
+            .close()
+            .await
+            .expect("close WSL tmux control client");
+        let _ = Command::new("wsl.exe")
+            .args(["--exec", "tmux", "-L", &socket_name, "kill-server"])
+            .status();
     }
 }

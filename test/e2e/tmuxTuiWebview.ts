@@ -183,6 +183,7 @@ async function buildTmuxShim(): Promise<string> {
     await readFile(pathTmux);
   } catch {
     await copyFile(shimPath, pathTmux);
+    await writeFile(`${pathTmux}.xsterm-e2e`, "temporary xsterm E2E tmux bridge\n");
     temporarySystemPathTmux = pathTmux;
   }
   return path.dirname(shimPath);
@@ -699,6 +700,7 @@ async function main(): Promise<void> {
     await rm(appDirectoryTmuxPath, { force: true }).catch(() => {});
     if (temporarySystemPathTmux) {
       await rm(temporarySystemPathTmux, { force: true }).catch(() => {});
+      await rm(`${temporarySystemPathTmux}.xsterm-e2e`, { force: true }).catch(() => {});
     }
   }
 }

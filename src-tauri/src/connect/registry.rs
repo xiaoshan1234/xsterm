@@ -163,13 +163,7 @@ impl TerminalRegistry {
             .unwrap_or(0);
         self.tmux_sessions
             .iter()
-            .filter_map(|entry| {
-                entry.value().session_name().map(|name| AttachedTmuxServer {
-                    session_name: name,
-                    socket_name: None,
-                    attached_at: now_ms,
-                })
-            })
+            .filter_map(|entry| entry.value().attached_tmux_server(now_ms))
             .collect()
     }
 
@@ -189,6 +183,8 @@ impl TerminalRegistry {
                 env_config: None,
                 initial_rows: None,
                 initial_cols: None,
+                transport: server.transport.clone(),
+                wsl_distribution: server.wsl_distribution.clone(),
                 ssh: None,
             };
             let key = format!(

@@ -33,3 +33,18 @@ npm run test:e2e:tmux
 ```
 
 Failure screenshots are written to `test/e2e/artifacts/`.
+
+## Clean residual processes
+
+If a test is interrupted, release ports 1420/4444/4454/4455 and remove the
+temporary WSL tmux bridge with:
+
+```powershell
+npm run test:cleanup
+```
+
+Preview the processes that would be terminated:
+
+```powershell
+npm run test:cleanup -- --dry-run
+```
