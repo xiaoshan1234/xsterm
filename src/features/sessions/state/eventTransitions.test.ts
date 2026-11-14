@@ -90,12 +90,14 @@ describe("removeControllerFromWorkspaces", () => {
     expect(next.terminalIds).toEqual([20]);
   });
 
-  it("keeps the workspace empty after its last controlled window closes", () => {
+  it("adds an init window after its last controlled window closes", () => {
     const ws = workspaceWith(terminalWindow("w1", 1, 10));
     const [next] = removeControllerFromWorkspaces([ws], [10]);
 
-    expect(next.windows).toEqual([]);
-    expect(next.activeWindowId).toBeNull();
+    expect(next.windows).toHaveLength(1);
+    expect(next.windows[0].windowType).toBe("init");
+    expect(next.windows[0].name).toBe("New Terminal");
+    expect(next.activeWindowId).toBe(next.windows[0].id);
     expect(next.terminalIds).toEqual([]);
   });
 });

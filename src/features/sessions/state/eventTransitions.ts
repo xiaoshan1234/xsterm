@@ -41,9 +41,8 @@ export function removeSessionsFromWorkspaces(
 
 /**
  * Remove every window that belonged to a tmux controller and detach its
- * terminals from any mixed pane trees. The workspace itself is kept even
- * when no windows remain, matching detach semantics: tmux-owned tabs must
- * disappear rather than being replaced by placeholder init tabs.
+ * terminals from any mixed pane trees. If the workspace has no windows left,
+ * insert an init window so detach always leaves a usable workspace.
  */
 export function removeControllerFromWorkspaces(
   workspaces: Workspace[],
@@ -75,17 +74,21 @@ export function removeControllerFromWorkspaces(
       return [{ ...window, rootPane, activePaneId }];
     });
 
+    const nextWindows = windows.length === 0 ? [buildInitWindow()] : windows;
     if (nextActiveId === null) {
-      nextActiveId = windows[0]?.id ?? null;
+      nextActiveId = nextWindows[0]?.id ?? null;
     }
-    return withRecomputedSessionIds({ ...workspace, windows, activeWindowId: nextActiveId });
+    return withRecomputedSessionIds({
+      ...workspace,
+      windows: nextWindows,
+      activeWindowId: nextActiveId,
+    });
   });
 }
 
 /**
  * Add a terminal window to a workspace. A workspace containing only its
- * placeholder init window reuses that slot so an attached tmux session does
- * not leave an unrelated init tab behind after detach.
+ * placeholder init window reuses that slot when attaching a tmux session.
  */
 export function appendOrReplaceInitWindow(workspace: Workspace, window: Window): Workspace {
   const hasTerminalWindow = workspace.windows.some((candidate) => candidate.windowType !== "init");
@@ -137,14 +140,7 @@ export function closeWindow(workspaces: Workspace[], xstermWindowId: number): Wo
     let nextActiveId = workspace.activeWindowId;
 
     if (remaining.length === 0) {
-      const initPaneId = crypto.randomUUID();
-      const initWindow: Window = {
-        id: crypto.randomUUID(),
-        name: "New Terminal",
-        activePaneId: initPaneId,
-        windowType: "init",
-        rootPane: { id: initPaneId, type: "leaf", size: 100 },
-      };
+      const initWindow = buildInitWindow();
       nextWindows = [initWindow];
       nextActiveId = initWindow.id;
     } else if (nextActiveId === targetWindow.id) {
@@ -160,4 +156,15 @@ export function closeWindow(workspaces: Workspace[], xstermWindowId: number): Wo
       activeWindowId: nextActiveId,
     });
   });
+}
+
+function buildInitWindow(): Window {
+  const paneId = crypto.randomUUID();
+  return {
+    id: crypto.randomUUID(),
+    name: "New Terminal",
+    activePaneId: paneId,
+    windowType: "init",
+    rootPane: { id: paneId, type: "leaf", size: 100 },
+  };
 }
