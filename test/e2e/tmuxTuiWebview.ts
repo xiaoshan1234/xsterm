@@ -36,6 +36,7 @@ interface TmuxFixture {
   socketName: string;
   sessionName: string;
   configName: string;
+  startCommand?: string;
 }
 
 interface TerminalSnapshot {
@@ -398,36 +399,75 @@ async function waitForTuiRestored(
   );
 }
 
-async function detachThroughStatus(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
-  console.log("  detaching through Tmux Status context menu");
+async function findTmuxManagerRow(
+  driver: WebDriver,
+  fixture: TmuxFixture,
+): Promise<WebElement> {
+  await ensureToolPanel(driver, "Tmux Manager");
+  return driver.wait(
+    until.elementLocated(
+      By.xpath(`//*[@role="option"][.//strong[normalize-space(.)="${fixture.configName}"]]`),
+    ),
+    10_000,
+  );
+}
+
+async function assertSingleTmuxInstance(
+  driver: WebDriver,
+  fixture: TmuxFixture,
+): Promise<void> {
+  const row = await findTmuxManagerRow(driver, fixture);
+  const isConnected = await driver.executeScript<boolean>(
+    "return arguments[0].classList.contains('manager-row--connected');",
+    row,
+  );
+  if (!isConnected) {
+    throw new Error(`Tmux Manager row ${fixture.configName} was not marked connected`);
+  }
+
+  const terminalCountBefore = (await driver.findElements(By.css(".xterm"))).length;
+  await driver.actions().doubleClick(row).perform();
+  await sleep(1_000);
+  const terminalCountAfter = (await driver.findElements(By.css(".xterm"))).length;
+  if (terminalCountAfter !== terminalCountBefore) {
+    throw new Error(
+      `Opening the same tmux config created another instance: before=${terminalCountBefore}, after=${terminalCountAfter}`,
+    );
+  }
+  console.log("  reopening the saved config focused the existing tmux instance");
+}
+
+async function detachThroughManager(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
+  console.log("  detaching through Tmux Manager context menu");
   const terminalCountBeforeDetach = (await driver.findElements(By.css(".xterm"))).length;
-  await ensureToolPanel(driver, "Tmux Status");
   let sessionRow: WebElement;
   try {
-    sessionRow = await driver.wait(
-      until.elementLocated(
-        By.xpath(`//*[@role="option"][contains(normalize-space(.), "${fixture.sessionName}")]`),
-      ),
-      20_000,
-    );
+    sessionRow = await findTmuxManagerRow(driver, fixture);
   } catch (error) {
     const panelText = await driver.executeScript<string>(
       "return document.querySelector('.shell-tool-panel')?.innerText ?? '(no panel)'",
     );
-    throw new Error(`Tmux Status row ${fixture.sessionName} not found: ${panelText}`, {
+    throw new Error(`Tmux Manager row ${fixture.configName} not found: ${panelText}`, {
       cause: error,
     });
   }
   await driver.actions().contextClick(sessionRow).perform();
   const detachButton = await driver.wait(
-    until.elementLocated(By.xpath('//button[normalize-space(.)="Detach Session"]')),
+    until.elementLocated(By.xpath('//button[normalize-space(.)="Detach"]')),
     5_000,
   );
+  const isDisabled = await detachButton.getAttribute("disabled");
+  if (isDisabled !== null) {
+    throw new Error(`Detach was disabled for connected tmux config ${fixture.configName}`);
+  }
   await detachButton.click();
   try {
     await driver.wait(
-      async () =>
-        (await driver.findElements(By.css(".xterm"))).length < terminalCountBeforeDetach,
+      async () => {
+        const terminalCount = (await driver.findElements(By.css(".xterm"))).length;
+        const initWindowCount = (await driver.findElements(By.css(".init-window-view"))).length;
+        return terminalCount < terminalCountBeforeDetach && initWindowCount === 1;
+      },
       20_000,
     );
   } catch (error) {
@@ -437,6 +477,10 @@ async function detachThroughStatus(driver: WebDriver, fixture: TmuxFixture): Pro
       `Detach did not remove a tmux terminal (before=${terminalCountBeforeDetach}, after=${terminalCountAfterDetach}): ${JSON.stringify(snapshot)}`,
       { cause: error },
     );
+  }
+  const initWindowCount = (await driver.findElements(By.css(".init-window-view"))).length;
+  if (initWindowCount !== 1) {
+    throw new Error(`Detach should leave exactly one init window, found ${initWindowCount}`);
   }
 }
 
@@ -524,6 +568,19 @@ async function typeCommandInActiveTerminal(driver: WebDriver, text: string): Pro
   await driver.actions().sendKeys(Key.ENTER).perform();
 }
 
+async function assertTmuxPassthroughDaReplyIsNotEchoed(driver: WebDriver): Promise<void> {
+  const queryCommand = String.raw`printf '\033Ptmux;\033\033[c\033\\'; printf 'XSTERM_DA_QUERY_SENT\n'`;
+  await typeCommandInActiveTerminal(driver, queryCommand);
+  await waitForTerminalText(driver, "XSTERM_DA_QUERY_SENT");
+  await sleep(1_000);
+  await typeCommandInActiveTerminal(driver, "echo XSTERM_AFTER_DA_QUERY");
+  await waitForTerminalText(driver, "XSTERM_AFTER_DA_QUERY");
+  const text = (await readActiveTerminal(driver))?.text ?? "";
+  if (text.includes("1;2c")) {
+    throw new Error(`tmux passthrough echoed a terminal device-attributes reply: ${text}`);
+  }
+}
+
 async function typeSpaceInActiveTerminal(driver: WebDriver): Promise<void> {
   await typeInActiveTerminal(driver, " ");
 }
@@ -541,6 +598,35 @@ async function waitForTerminalText(
     await sleep(200);
   }
   throw new Error(`Terminal text did not contain ${expectedText}: ${currentText}`);
+}
+
+async function waitForTerminalMatch(
+  driver: WebDriver,
+  expectedPattern: RegExp,
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let currentText = "";
+  while (Date.now() < deadline) {
+    currentText = (await readActiveTerminal(driver))?.text ?? "";
+    if (expectedPattern.test(currentText)) return;
+    await sleep(200);
+  }
+  throw new Error(`Terminal text did not match ${expectedPattern}: ${currentText}`);
+}
+
+async function exitCodexAndAssertNoDeviceAttributesEcho(driver: WebDriver): Promise<void> {
+  await focusActiveTerminal(driver);
+  await driver.actions().keyDown(Key.CONTROL).sendKeys("u").keyUp(Key.CONTROL).perform();
+  await driver.actions().keyDown(Key.CONTROL).sendKeys("c").keyUp(Key.CONTROL).perform();
+  await sleep(500);
+  await driver.actions().keyDown(Key.CONTROL).sendKeys("c").keyUp(Key.CONTROL).perform();
+  await driver.wait(async () => (await readActiveTerminal(driver))?.isAlternateScreen === false, 15_000);
+  await sleep(1_000);
+  const text = (await readActiveTerminal(driver))?.text ?? "";
+  if (text.includes("1;2c")) {
+    throw new Error(`Exiting Codex echoed a terminal device-attributes reply: ${text}`);
+  }
 }
 
 async function saveArtifact(driver: WebDriver, name: string): Promise<void> {
@@ -648,16 +734,19 @@ function resolveWslPath(windowsPath: string): string {
 }
 
 function startTmuxFixture(name: "codex" | "opencode", executablePath: string): TmuxFixture {
+  const executableInWsl = resolveWslPath(executablePath);
   const fixture = {
     name,
     socketName: `xsterm-e2e-${testId}-${name}`,
     sessionName: `session-${testId}-${name}`,
     configName: `e2e-${name}-${testId}`,
+    ...(name === "codex" ? { startCommand: executableInWsl } : {}),
   };
-  const executableInWsl = resolveWslPath(executablePath);
   const script = [
     `tmux -L '${fixture.socketName}' kill-server >/dev/null 2>&1 || true`,
-    `tmux -L '${fixture.socketName}' new-session -d -s '${fixture.sessionName}' "cd /tmp && exec '${executableInWsl}'"`,
+    name === "codex"
+      ? `tmux -L '${fixture.socketName}' new-session -d -s '${fixture.sessionName}' "cd /tmp && exec bash -i"`
+      : `tmux -L '${fixture.socketName}' new-session -d -s '${fixture.sessionName}' "cd /tmp && exec '${executableInWsl}'"`,
   ].join("\n");
   run("wsl.exe", ["--exec", "bash", "-lc", script], {
     env: { ...process.env, TERM: "xterm-256color" },
@@ -679,6 +768,7 @@ async function startProbeTmuxFixture(): Promise<TmuxFixture> {
     scriptPath,
     [
       "import os",
+      "import re",
       "import sys",
       "import termios",
       "import tty",
@@ -688,14 +778,21 @@ async function startProbeTmuxFixture(): Promise<TmuxFixture> {
       "try:",
       "    tty.setraw(fd)",
       '    sys.stdout.write("\\x1b[?1049h\\x1b[?1003h\\x1b[?1006h\\x1b[2J\\x1b[H")',
-      '    sys.stdout.write("XSTERM_INPUT_PROBE_READY\\r\\nSPACE_EVENTS=0")',
+      '    sys.stdout.write("XSTERM_INPUT_PROBE_READY\\r\\nSPACE_EVENTS=0\\r\\nMOUSE_EVENTS=0")',
       "    sys.stdout.flush()",
       "    space_count = 0",
+      "    mouse_count = 0",
       "    while True:",
       "        chunk = os.read(fd, 1024)",
+      "        has_update = False",
       '        if b" " in chunk:',
       "            space_count += 1",
-      '            sys.stdout.write(f"\\x1b[2;1H\\x1b[2KSPACE_EVENTS={space_count}\\x1b[4;1H")',
+      "            has_update = True",
+      '        mouse_count += len(re.findall(rb"\\x1b\\[<(?:64|65|66|67);", chunk))',
+      "        if mouse_count:",
+      "            has_update = True",
+      "        if has_update:",
+      '            sys.stdout.write(f"\\x1b[2;1H\\x1b[2KSPACE_EVENTS={space_count}\\r\\nMOUSE_EVENTS={mouse_count}\\x1b[4;1H")',
       "            sys.stdout.flush()",
       "except OSError:",
       "    pass",
@@ -737,12 +834,19 @@ function startShellTmuxFixture(): TmuxFixture {
 async function testTui(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
   console.log(`\n[${fixture.name}] ${fixture.sessionName}`);
   await attachTmuxSession(driver, fixture);
+  if (fixture.startCommand) {
+    await waitForElement(driver, ".xterm", 30_000);
+    await typeCommandInActiveTerminal(driver, `'${fixture.startCommand}'`);
+  }
   if (fixture.name === "shell") {
     await waitForElement(driver, ".xterm", 30_000);
     await typeCommandInActiveTerminal(driver, "printf 'XSTERM SPACE OK\\n'");
     await waitForTerminalText(driver, "XSTERM SPACE OK");
     console.log("  WSL tmux shell rendered spaced command output");
-    await detachThroughStatus(driver, fixture);
+    await assertTmuxPassthroughDaReplyIsNotEchoed(driver);
+    console.log("  tmux passthrough device-attributes query left no characters");
+    await assertSingleTmuxInstance(driver, fixture);
+    await detachThroughManager(driver, fixture);
     return;
   }
   let initial: TerminalSnapshot;
@@ -760,11 +864,10 @@ async function testTui(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
     await typeSpaceInActiveTerminal(driver);
     await waitForTerminalText(driver, "SPACE_EVENTS=1");
     console.log("  WebView space input reached the WSL tmux pane");
-    await saveArtifact(driver, `${fixture.name}-${testId}.png`);
-    return;
   }
 
-  await detachThroughStatus(driver, fixture);
+  await assertSingleTmuxInstance(driver, fixture);
+  await detachThroughManager(driver, fixture);
   console.log("  detach removed tmux terminal from WebView");
 
   await reconnectThroughSavedConfig(driver, fixture);
@@ -779,25 +882,51 @@ async function testTui(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
     `  reconnected: alternate=${reconnected.isAlternateScreen} mouse=${reconnected.hasMouseMode} chars=${reconnected.text.trim().length}`,
   );
 
-  const inputProbe = process.env.XSTERM_E2E_INPUT ?? `space ${fixture.name}`;
-  await typeInActiveTerminal(driver, inputProbe);
-  try {
-    await waitForTerminalText(driver, inputProbe);
-  } catch (error) {
-    await diagnoseTuiFailure(driver, fixture);
-    throw error;
+  if (fixture.name === "probe") {
+    await typeSpaceInActiveTerminal(driver);
+    try {
+      await waitForTerminalText(driver, "SPACE_EVENTS=2");
+    } catch (error) {
+      await diagnoseTuiFailure(driver, fixture);
+      throw error;
+    }
+    console.log("  WebView space input reached the WSL tmux pane after reconnect");
+  } else {
+    const inputProbe = process.env.XSTERM_E2E_INPUT ?? `space ${fixture.name}`;
+    await typeInActiveTerminal(driver, inputProbe);
+    try {
+      await waitForTerminalText(driver, inputProbe);
+    } catch (error) {
+      await diagnoseTuiFailure(driver, fixture);
+      throw error;
+    }
+    console.log(`  WebView input "${inputProbe}" reached the real TUI`);
   }
-  console.log(`  WebView input "${inputProbe}" reached the real TUI`);
 
   await sendWheelToTerminal(driver);
-  const afterWheel = await waitForTuiRestored(driver, fixture);
-  if (!afterWheel.hasMouseMode) {
-    throw new Error("Mouse tracking mode disappeared after wheel input");
+  if (fixture.name === "probe") {
+    try {
+      await waitForTerminalMatch(driver, /MOUSE_EVENTS=[1-9]\d*/);
+    } catch (error) {
+      await diagnoseTuiFailure(driver, fixture);
+      throw error;
+    }
+    console.log("  WebView mouse wheel reached the WSL tmux pane after reconnect");
+  } else {
+    const afterWheel = await waitForTuiRestored(driver, fixture);
+    if (!afterWheel.hasMouseMode) {
+      throw new Error("Mouse tracking mode disappeared after wheel input");
+    }
   }
 
   await saveArtifact(driver, `${fixture.name}-${testId}.png`);
 
-  await detachThroughStatus(driver, fixture);
+  if (fixture.name === "codex") {
+    await exitCodexAndAssertNoDeviceAttributesEcho(driver);
+    console.log("  Codex exited without echoing terminal device-attributes");
+  }
+
+  await detachThroughManager(driver, fixture);
 }
 
 async function cleanupFixtures(): Promise<void> {
