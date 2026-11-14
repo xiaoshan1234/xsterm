@@ -14,6 +14,7 @@ export interface ContextMenuItem {
   label: string;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }
 
 export interface ContextMenuRef {
@@ -106,6 +107,7 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
             <button
               key={item.id ?? item.label ?? index}
               className={`context-menu-item ${item.danger ? "context-menu-item--danger" : ""}`}
+              disabled={item.disabled}
               onClick={() => handleItemClick(item)}
             >
               {item.label}

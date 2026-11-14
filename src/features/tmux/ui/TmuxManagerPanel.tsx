@@ -18,6 +18,7 @@ interface TmuxManagerPanelProps {
   onOpenConfig: (configId: string) => void;
   onEditConfig: (configId: string) => void;
   onRemoveConfig: (configId: string) => void;
+  onDetachConfig: (configId: string) => void;
 }
 
 export function TmuxManagerPanel({
@@ -27,6 +28,7 @@ export function TmuxManagerPanel({
   onOpenConfig,
   onEditConfig,
   onRemoveConfig,
+  onDetachConfig,
 }: TmuxManagerPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
@@ -72,11 +74,18 @@ export function TmuxManagerPanel({
                 <ManagerRow
                   key={item.configId}
                   title={item.name}
+                  status={item.isOpen ? "connected" : undefined}
                   badge={formatTransport(item.transport)}
                   isSelected={selectedId === item.configId}
                   onSelect={() => setSelectedId(item.configId)}
                   onOpen={() => onOpenConfig(item.configId)}
                   contextMenuItems={[
+                    {
+                      id: "detach",
+                      label: "Detach",
+                      onClick: () => onDetachConfig(item.configId),
+                      disabled: !item.isOpen,
+                    },
                     {
                       id: "edit",
                       label: "Edit",

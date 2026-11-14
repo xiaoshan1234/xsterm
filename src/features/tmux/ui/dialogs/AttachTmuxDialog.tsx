@@ -17,6 +17,11 @@ import { useTerminalForm } from "../../../terminal/ui/dialogs/useTerminalForm";
 import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/terminalDialogItems";
 import TmuxForm, { buildTmuxConfigForBase } from "./TmuxForm";
 import "../../../terminal/ui/dialogs/CreateTerminalDialog.css";
+import {
+  defaultTmuxDisplayName,
+  isTmuxDisplayNameAvailable,
+  uniqueTmuxDisplayName,
+} from "../../viewModels/sessionIdentity";
 
 interface AttachTmuxDialogProps {
   isOpen: boolean;
@@ -85,10 +90,24 @@ export function AttachTmuxDialog({
       }
     }
 
-    const name = form.name.trim();
+    const requestedName = form.name.trim();
+    if (
+      requestedName &&
+      !isTmuxDisplayNameAvailable(requestedName, savedConfigs, {
+        baseConfigId: base.id,
+      })
+    ) {
+      form.setError("A tmux session with this display name already exists.");
+      form.setSectionId("connection");
+      return null;
+    }
     const draftConfig: TmuxSessionConfig = {
       ...tmuxConfig,
-      ...(name ? { name } : {}),
+      name:
+        requestedName ||
+        uniqueTmuxDisplayName(defaultTmuxDisplayName(tmuxConfig), savedConfigs, {
+          baseConfigId: base.id,
+        }),
     };
     return {
       base,

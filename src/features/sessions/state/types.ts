@@ -41,6 +41,7 @@ export interface SavedLaunchConfigsContextType {
 
 export interface TerminalRuntimeContextType {
   terminals: Terminal[];
+  openTmuxSessions: readonly OpenTmuxSession[];
   terminalSizesRef: MutableRefObject<Map<number, { rows: number; cols: number }>>;
   terminalSizesVersion: number;
   getEffectiveLocalEcho: (terminalId: number) => boolean;
@@ -154,6 +155,12 @@ export interface TmuxControllerError {
   timestamp: number;
 }
 
+export interface OpenTmuxSession {
+  controllerId: number;
+  configId?: string;
+  config: TmuxSessionConfig;
+}
+
 export interface TerminalState {
   savedConfigs: SavedTerminalConfig[];
   setSavedConfigs: SetSavedConfigs;
@@ -193,11 +200,16 @@ export interface TerminalState {
    * rows are gone.
    */
   tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
+  /** tmux session identities with an attach/create request currently in flight. */
+  pendingTmuxSessionKeysRef: MutableRefObject<Set<string>>;
   /**
    * `controllerId` -> `configId` map. Populated by `attachTmuxSession` so
    * event-driven tmux panes can be linked back to their saved config.
    */
   tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
+  /** React-visible snapshot of the controller maps used by the tmux Manager. */
+  openTmuxSessions: OpenTmuxSession[];
+  syncOpenTmuxSessions: () => void;
   /** Controllers intentionally detached/closed; suppresses retry banners. */
   tmuxControllersClosingRef: MutableRefObject<Set<number>>;
   /** Last fitted xterm dimensions per terminal. */

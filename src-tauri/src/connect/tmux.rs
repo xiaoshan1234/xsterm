@@ -86,11 +86,16 @@ pub(crate) struct TmuxSession {
     pane_tasks: Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
     layout_refresh_pending: Mutex<HashSet<String>>,
     layout_refresh_scheduled: AtomicBool,
+    has_exited: AtomicBool,
     next_xsterm_id: AtomicU32,
     next_xsterm_window_id: AtomicU32,
 }
 
 impl TmuxSession {
+    pub(crate) fn has_exited(&self) -> bool {
+        self.has_exited.load(Ordering::SeqCst)
+    }
+
     /// Spawn a control connection that attaches to an existing tmux session
     /// and registers every window / pane it finds.
     pub(crate) async fn spawn_attach(
@@ -182,6 +187,7 @@ impl TmuxSession {
             pane_tasks: Mutex::new(HashMap::new()),
             layout_refresh_pending: Mutex::new(HashSet::new()),
             layout_refresh_scheduled: AtomicBool::new(false),
+            has_exited: AtomicBool::new(false),
             next_xsterm_id: AtomicU32::new(id_base + 1),
             next_xsterm_window_id: AtomicU32::new(id_base + 1),
         });
@@ -251,6 +257,7 @@ impl TmuxSession {
             }
             TmuxEvent::LayoutChange { handle, .. } => self.schedule_layout_refresh(handle),
             TmuxEvent::Exit { reason } => {
+                self.has_exited.store(true, Ordering::SeqCst);
                 let _ = backend.emit(
                     "tmux-controller-exit",
                     &serde_json::json!({
@@ -347,7 +354,7 @@ impl TmuxSession {
     /// reconstruct the complete window list from a single attach call. The
     /// first pane is also recorded as the bootstrap pane for
     /// [`Self::await_first_pane`], but still emits its window event so
-    /// manual attach and startup auto-attach render identically.
+    /// bootstrap and user-initiated attach render identically.
     async fn list_extended_panes(&self, window: &str) -> Result<Vec<ExtendedPaneInfo>, String> {
         let command = format!(
             "list-panes -t {} -F {}",

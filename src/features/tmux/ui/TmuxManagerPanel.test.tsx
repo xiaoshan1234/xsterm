@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type TmuxManagerGroupViewData } from "../viewModels/managerViewModel";
 import { TmuxManagerPanel } from "./TmuxManagerPanel";
 
@@ -18,6 +18,7 @@ const groups: readonly TmuxManagerGroupViewData[] = [
         baseConfigId: "wsl-base",
         baseConfigName: "WSL",
         transport: "wsl",
+        isOpen: true,
       },
       {
         configId: "codex",
@@ -25,6 +26,7 @@ const groups: readonly TmuxManagerGroupViewData[] = [
         baseConfigId: "wsl-base",
         baseConfigName: "WSL",
         transport: "wsl",
+        isOpen: false,
       },
     ],
   },
@@ -36,6 +38,7 @@ const groups: readonly TmuxManagerGroupViewData[] = [
         configId: "legacy",
         name: "Legacy",
         transport: "local",
+        isOpen: false,
       },
     ],
   },
@@ -43,6 +46,7 @@ const groups: readonly TmuxManagerGroupViewData[] = [
 
 describe("TmuxManagerPanel", () => {
   it("groups sessions by base configuration and collapses a directory", () => {
+    const onDetachConfig = vi.fn();
     render(
       <TmuxManagerPanel
         groups={groups}
@@ -51,12 +55,22 @@ describe("TmuxManagerPanel", () => {
         onOpenConfig={() => undefined}
         onEditConfig={() => undefined}
         onRemoveConfig={() => undefined}
+        onDetachConfig={onDetachConfig}
       />,
     );
 
     expect(screen.getByText("WSL work")).toBeTruthy();
     expect(screen.getByText("WSL codex")).toBeTruthy();
     expect(screen.getByText("Legacy")).toBeTruthy();
+
+    const openRow = screen.getByRole("option", { name: /^WSL work/ });
+    fireEvent.contextMenu(openRow);
+    fireEvent.click(screen.getByRole("button", { name: "Detach" }));
+    expect(onDetachConfig).toHaveBeenCalledWith("work");
+
+    const closedRow = screen.getByRole("option", { name: /^WSL codex/ });
+    fireEvent.contextMenu(closedRow);
+    expect(screen.getByRole("button", { name: "Detach" })).toHaveProperty("disabled", true);
 
     fireEvent.click(screen.getByRole("button", { name: "WSL" }));
     expect(screen.queryByText("WSL work")).toBeNull();

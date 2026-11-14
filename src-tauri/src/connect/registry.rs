@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-use dashmap::DashMap;
+use dashmap::{mapref::entry::Entry, DashMap};
 
 use crate::connect::app_backend::AppBackend;
 use crate::connect::local::create_local_terminal;
@@ -19,21 +19,12 @@ use crate::shared::session::{
     TerminalLoggingConfig, TmuxSessionConfig,
 };
 
-/// Per-server outcome from `auto_attach_on_startup`.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct AutoAttachOutcome {
-    pub session_key: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub info: Option<TerminalInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
 /// Manages the lifecycle of all terminal sessions.
 pub(crate) struct TerminalRegistry {
     sessions: DashMap<u32, Arc<BoundTerminal>>,
     next_id: AtomicU32,
     tmux_sessions: DashMap<u32, Arc<TmuxSession>>,
+    tmux_identities: DashMap<String, u32>,
     next_controller_id: AtomicU32,
     session_logs: Arc<TerminalLogRegistry>,
 }
@@ -44,6 +35,7 @@ impl TerminalRegistry {
             sessions: DashMap::new(),
             next_id: AtomicU32::new(1),
             tmux_sessions: DashMap::new(),
+            tmux_identities: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
             session_logs,
         }
@@ -97,9 +89,24 @@ impl TerminalRegistry {
         backend: Arc<dyn AppBackend>,
     ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
-        let controller = TmuxSession::spawn_new(config, backend, controller_id).await?;
-        self.register_tmux_controller(config, controller_id, &controller)
+        self.reserve_tmux_identity(config, controller_id)?;
+        let controller = match TmuxSession::spawn_new(config, backend, controller_id).await {
+            Ok(controller) => controller,
+            Err(error) => {
+                self.release_tmux_identity(controller_id);
+                return Err(error);
+            }
+        };
+        match self
+            .register_tmux_controller(config, controller_id, &controller)
             .await
+        {
+            Ok(info) => Ok(info),
+            Err(error) => {
+                self.close_tmux_controller(controller_id)?;
+                Err(error)
+            }
+        }
     }
 
     pub(crate) async fn attach_tmux(
@@ -108,9 +115,60 @@ impl TerminalRegistry {
         backend: Arc<dyn AppBackend>,
     ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
-        let controller = TmuxSession::spawn_attach(config, backend, controller_id).await?;
-        self.register_tmux_controller(config, controller_id, &controller)
+        self.reserve_tmux_identity(config, controller_id)?;
+        let controller = match TmuxSession::spawn_attach(config, backend, controller_id).await {
+            Ok(controller) => controller,
+            Err(error) => {
+                self.release_tmux_identity(controller_id);
+                return Err(error);
+            }
+        };
+        match self
+            .register_tmux_controller(config, controller_id, &controller)
             .await
+        {
+            Ok(info) => Ok(info),
+            Err(error) => {
+                self.close_tmux_controller(controller_id)?;
+                Err(error)
+            }
+        }
+    }
+
+    fn reserve_tmux_identity(
+        &self,
+        config: &TmuxSessionConfig,
+        controller_id: u32,
+    ) -> Result<(), String> {
+        let Some(identity_key) = config.get_active_session_identity() else {
+            return Ok(());
+        };
+        match self.tmux_identities.entry(identity_key.clone()) {
+            Entry::Vacant(entry) => {
+                entry.insert(controller_id);
+                Ok(())
+            }
+            Entry::Occupied(mut entry) => {
+                let existing_controller_id = *entry.get();
+                let is_existing_controller_exited = self
+                    .tmux_sessions
+                    .get(&existing_controller_id)
+                    .is_some_and(|controller| controller.has_exited());
+                if !is_existing_controller_exited {
+                    return Err(format!(
+                        "tmux session {identity_key} is already open (controller {existing_controller_id})"
+                    ));
+                }
+                self.remove_tmux_controller_records(existing_controller_id);
+                entry.insert(controller_id);
+                Ok(())
+            }
+        }
+    }
+
+    fn release_tmux_identity(&self, controller_id: u32) {
+        self.tmux_identities
+            .retain(|_, reserved_controller_id| *reserved_controller_id != controller_id);
     }
 
     async fn register_tmux_controller(
@@ -167,51 +225,22 @@ impl TerminalRegistry {
             .collect()
     }
 
-    pub(crate) async fn auto_attach_on_startup(
-        &self,
-        servers: &[AttachedTmuxServer],
-        backend: Arc<dyn AppBackend>,
-    ) -> Vec<AutoAttachOutcome> {
-        let mut out = Vec::with_capacity(servers.len());
-        for server in servers {
-            let cfg = TmuxSessionConfig {
-                name: None,
-                tmux_session_name: Some(server.session_name.clone()),
-                socket_name: server.socket_name.clone(),
-                base_config_id: None,
-                start_command: None,
-                env_config: None,
-                initial_rows: None,
-                initial_cols: None,
-                transport: server.transport.clone(),
-                wsl_distribution: server.wsl_distribution.clone(),
-                ssh: None,
-            };
-            let key = format!(
-                "{}::{}",
-                server.session_name,
-                server.socket_name.as_deref().unwrap_or("")
-            );
-            match self.attach_tmux(&cfg, backend.clone()).await {
-                Ok(info) => out.push(AutoAttachOutcome {
-                    session_key: key,
-                    info: Some(info),
-                    error: None,
-                }),
-                Err(e) => out.push(AutoAttachOutcome {
-                    session_key: key,
-                    info: None,
-                    error: Some(e),
-                }),
-            }
-        }
-        out
-    }
-
     pub(crate) fn close_tmux_controller(&self, controller_id: u32) -> Result<(), String> {
-        let Some((_, controller)) = self.tmux_sessions.remove(&controller_id) else {
+        self.release_tmux_identity(controller_id);
+        let Some(controller) = self.remove_tmux_controller_records(controller_id) else {
             return Ok(());
         };
+        tokio::spawn(async move {
+            let _ = controller.close().await;
+        });
+        Ok(())
+    }
+
+    fn remove_tmux_controller_records(&self, controller_id: u32) -> Option<Arc<TmuxSession>> {
+        let controller = self
+            .tmux_sessions
+            .remove(&controller_id)
+            .map(|(_, controller)| controller)?;
         let pane_ids: Vec<u32> = self
             .sessions
             .iter()
@@ -222,10 +251,7 @@ impl TerminalRegistry {
         for pane_id in pane_ids {
             self.sessions.remove(&pane_id);
         }
-        tokio::spawn(async move {
-            let _ = controller.close().await;
-        });
-        Ok(())
+        Some(controller)
     }
 
     pub(crate) async fn create_tmux_pane(
@@ -478,5 +504,44 @@ impl TerminalRegistry {
 
     fn allocate_controller_id(&self) -> u32 {
         self.next_controller_id.fetch_add(1, Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn registry() -> TerminalRegistry {
+        let log_dir = std::env::temp_dir().join(format!("xsterm-registry-{}", std::process::id()));
+        TerminalRegistry::new(Arc::new(TerminalLogRegistry::new(log_dir)))
+    }
+
+    fn wsl_config() -> TmuxSessionConfig {
+        TmuxSessionConfig {
+            tmux_session_name: Some("work".to_string()),
+            transport: Some("wsl".to_string()),
+            wsl_distribution: Some("Debian".to_string()),
+            ..TmuxSessionConfig::default()
+        }
+    }
+
+    #[test]
+    fn reserve_tmux_identity_with_same_session_returns_err() {
+        let registry = registry();
+        let config = wsl_config();
+
+        assert!(registry.reserve_tmux_identity(&config, 1).is_ok());
+        assert!(registry.reserve_tmux_identity(&config, 2).is_err());
+    }
+
+    #[test]
+    fn close_tmux_controller_releases_reserved_identity() {
+        let registry = registry();
+        let config = wsl_config();
+
+        registry.reserve_tmux_identity(&config, 1).unwrap();
+        registry.close_tmux_controller(1).unwrap();
+
+        assert!(registry.reserve_tmux_identity(&config, 2).is_ok());
     }
 }

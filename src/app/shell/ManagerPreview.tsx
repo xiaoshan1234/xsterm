@@ -1,4 +1,5 @@
 import { ChevronIcon, PlusIcon } from "../../shared/icons/Icon";
+import { ManagerRow } from "../../shared/ui/ManagerPanel";
 import { type PreviewDialogId, type ToolId } from "./types";
 
 interface ManagerPreviewProps {
@@ -51,8 +52,33 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
           }
         >
           <ManagerGroup label="WSL" isOpen>
-            <ManagerItem title="WSL work" onEdit={() => onOpenDialog("edit-tmux")} />
-            <ManagerItem title="WSL codex" onEdit={() => onOpenDialog("edit-tmux")} />
+            <ManagerRow
+              title="WSL work"
+              status="connected"
+              badge="WSL"
+              onOpen={() => onOpenDialog("edit-tmux")}
+              contextMenuItems={[
+                { id: "detach", label: "Detach", onClick: () => undefined },
+                {
+                  id: "edit",
+                  label: "Edit",
+                  onClick: () => onOpenDialog("edit-tmux"),
+                },
+              ]}
+            />
+            <ManagerRow
+              title="WSL codex"
+              badge="WSL"
+              onOpen={() => onOpenDialog("edit-tmux")}
+              contextMenuItems={[
+                { id: "detach", label: "Detach", onClick: () => undefined, disabled: true },
+                {
+                  id: "edit",
+                  label: "Edit",
+                  onClick: () => onOpenDialog("edit-tmux"),
+                },
+              ]}
+            />
           </ManagerGroup>
           <ManagerGroup label="Mac" isOpen={false} />
         </PreviewManagerFrame>

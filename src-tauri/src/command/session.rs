@@ -4,7 +4,7 @@ use tauri::{AppHandle, State};
 
 use crate::connect::app_backend::{AppBackend, RealAppBackend};
 use crate::connect::output::OutputRouter;
-use crate::connect::registry::{AutoAttachOutcome, TerminalRegistry};
+use crate::connect::registry::TerminalRegistry;
 use crate::feature::logging::session_log::TerminalLoggingBackend;
 use crate::shared::session::{
     AttachedTmuxServer, LocalTerminalConfig, SshConfig, TerminalInfo, TerminalLoggingConfig,
@@ -410,37 +410,6 @@ pub async fn get_attached_tmux_servers(
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<Vec<AttachedTmuxServer>, String> {
     Ok(state.list_attached_tmux_servers())
-}
-
-/// re-attach every tmux server from the persisted
-/// `attached_tmux.json` store.
-///
-/// Frontend wrapper: `sessionService.autoAttachTmuxServers()`. Called
-/// once on app startup to restore previous tmux sessions. The returned
-/// list carries one entry per previously-attached server — successful
-/// re-attachs expose the new `TerminalInfo`; failures surface the error
-/// string so the frontend can show partial-failure UI.
-///
-/// Note: This is NOT full state restore — attach merely reconnects the
-/// controller to the tmux server; the user opens new panes/windows
-/// afterwards. See Wave 4 spec §D4 / req-006 §5 for the rationale.
-#[tauri::command]
-pub async fn auto_attach_tmux_servers(
-    state: State<'_, Arc<TerminalRegistry>>,
-    backend: State<'_, Arc<RealAppBackend>>,
-    app: AppHandle,
-) -> Result<Vec<AutoAttachOutcome>, String> {
-    let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
-    let dyn_backend: Arc<dyn AppBackend> = arc_real;
-    let stored = crate::command::persistence::load_attached_tmux_servers(app.clone()).await?;
-    let results = state.auto_attach_on_startup(&stored, dyn_backend).await;
-    // Persist the (possibly reduced) live list so a failed server that
-    // got dropped does not keep haunting subsequent startups.
-    let live = state.list_attached_tmux_servers();
-    if let Err(e) = crate::command::persistence::save_attached_tmux_servers_impl(&app, &live) {
-        tracing::warn!("auto_attach_tmux_servers: persistence failed: {e}");
-    }
-    Ok(results)
 }
 
 #[tauri::command]

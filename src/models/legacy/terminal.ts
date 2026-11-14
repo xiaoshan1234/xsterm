@@ -442,11 +442,9 @@ export interface TmuxWindowRenamedEvent {
 }
 
 /**
- * record of a tmux server the user has attached to (or
- * `create_tmux`'d). Persisted by the backend in `attached_tmux.json`;
- * the frontend reads it at startup to drive the auto-attach flow and
- * `terminalService.getAttachedTmuxServers` projects the live
- * `TmuxController` registry into the same shape.
+ * Record of a tmux server the user has attached to (or `create_tmux`'d).
+ * Persisted by the backend in `attached_tmux.json` for diagnostics and future
+ * explicit reconnect flows; automatic startup reattachment is not performed.
  */
 export interface AttachedTmuxServer {
   /** tmux terminal name (the `-s <name>` arg) — required to re-attach. */

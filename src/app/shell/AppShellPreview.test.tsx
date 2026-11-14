@@ -48,6 +48,9 @@ describe("AppShellPreview", () => {
     expect(screen.getByText("WSL work")).toBeTruthy();
     expect(screen.getByText("WSL codex")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Mac" })).toBeTruthy();
+
+    fireEvent.contextMenu(screen.getByText("WSL work"));
+    expect(screen.getByRole("button", { name: "Detach" })).toBeTruthy();
   });
 
   it("closes a specific non-default workspace from the workspace menu", () => {

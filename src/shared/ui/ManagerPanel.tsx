@@ -82,7 +82,9 @@ export function ManagerRow({
   const hasContextMenu = contextMenuItems !== undefined && contextMenuItems.length > 0;
   const row = (
     <div
-      className={`manager-row${isSelected ? " manager-row--selected" : ""}`}
+      className={`manager-row${isSelected ? " manager-row--selected" : ""}${
+        status ? ` manager-row--${status}` : ""
+      }`}
       onClick={onSelect}
       onDoubleClick={onOpen}
       onContextMenu={hasContextMenu ? undefined : (event) => event.preventDefault()}

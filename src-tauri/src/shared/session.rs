@@ -5,7 +5,11 @@ use crate::shared::capabilities::CapabilityFlags;
 
 /// Supported terminal kinds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum TerminalKind {
     /// A local shell terminal running on the host machine.
     #[serde(rename = "local")]
@@ -227,10 +231,10 @@ impl SplitDirection {
 
 /// Result of a successful tmux attach (Wave 4 `attachedTmuxServers`).
 ///
-/// Mirrors the TypeScript `AttachedTmuxServer` interface exactly. The frontend
-/// reads this list on app startup to know which tmux servers to auto-attach
-/// to; the backend rewrites it on every successful `attach_tmux` and
-/// whenever the last pane on a controller is closed.
+/// Mirrors the TypeScript `AttachedTmuxServer` interface exactly. The backend
+/// rewrites it on every successful `attach_tmux` and whenever the last pane on
+/// a controller is closed. Automatic startup reattachment is intentionally not
+/// performed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachedTmuxServer {
@@ -310,6 +314,34 @@ pub struct TmuxSessionConfig {
     // transport is determined by whether `ssh` is set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_config_id: Option<String>,
+}
+
+impl TmuxSessionConfig {
+    /// Stable identity of the tmux server/session pair. `None` means the
+    /// session name is not known yet and the backend must allocate one.
+    pub(crate) fn get_active_session_identity(&self) -> Option<String> {
+        let session_name = self.tmux_session_name.as_deref()?.trim();
+        if session_name.is_empty() {
+            return None;
+        }
+        let transport = if let Some(ssh) = self.ssh.as_ref() {
+            format!("ssh:{}@{}:{}", ssh.username, ssh.host, ssh.port)
+        } else if self.transport.as_deref() == Some("wsl") {
+            format!(
+                "wsl:{}",
+                self.wsl_distribution.as_deref().unwrap_or("").trim()
+            )
+        } else {
+            "local".to_string()
+        };
+        let socket_name = self.socket_name.as_deref().unwrap_or("").trim();
+        let socket_name = if socket_name.is_empty() {
+            "default"
+        } else {
+            socket_name
+        };
+        Some(format!("{transport}|{socket_name}|{session_name}"))
+    }
 }
 
 /// Build a [`TerminalInfo`] for a tmux pane freshly registered with
@@ -1174,6 +1206,51 @@ mod tests {
     }
 
     #[test]
+    fn tmux_session_identity_uses_wsl_transport_and_default_socket() {
+        let config = TmuxSessionConfig {
+            tmux_session_name: Some(" work ".to_string()),
+            transport: Some("wsl".to_string()),
+            wsl_distribution: Some("Debian".to_string()),
+            ..TmuxSessionConfig::default()
+        };
+
+        assert_eq!(
+            config.get_active_session_identity().as_deref(),
+            Some("wsl:Debian|default|work")
+        );
+    }
+
+    #[test]
+    fn tmux_session_identity_uses_ssh_target() {
+        let config = TmuxSessionConfig {
+            tmux_session_name: Some("work".to_string()),
+            socket_name: Some("dev".to_string()),
+            ssh: Some(SshConfig {
+                username: "loner".to_string(),
+                host: "10.0.100.123".to_string(),
+                port: 22,
+                ..SshConfig::default()
+            }),
+            ..TmuxSessionConfig::default()
+        };
+
+        assert_eq!(
+            config.get_active_session_identity().as_deref(),
+            Some("ssh:loner@10.0.100.123:22|dev|work")
+        );
+    }
+
+    #[test]
+    fn tmux_session_identity_is_absent_without_session_name() {
+        let config = TmuxSessionConfig {
+            tmux_session_name: Some("   ".to_string()),
+            ..TmuxSessionConfig::default()
+        };
+
+        assert!(config.get_active_session_identity().is_none());
+    }
+
+    #[test]
     fn attached_tmux_server_preserves_wsl_reattach_metadata() {
         let server = AttachedTmuxServer {
             session_name: "work".to_string(),
@@ -1221,6 +1298,18 @@ mod tests {
             }
             other => panic!("expected TerminalKind::TmuxPane, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn terminal_kind_serializes_tmux_pane_fields_as_camel_case() {
+        let info = tmux_pane_info(42, 7, "%13", Some("main"), None, false, Some("@3"));
+        let value = serde_json::to_value(info).expect("TerminalInfo should serialize");
+
+        assert_eq!(value["kind"]["type"], "tmux-pane");
+        assert_eq!(value["kind"]["sessionId"], 7);
+        assert_eq!(value["kind"]["paneId"], "%13");
+        assert!(value["kind"].get("session_id").is_none());
+        assert!(value["kind"].get("pane_id").is_none());
     }
 
     #[test]

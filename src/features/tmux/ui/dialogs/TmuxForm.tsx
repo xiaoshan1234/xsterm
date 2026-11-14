@@ -64,7 +64,7 @@ export function TmuxForm({ name, onNameChange, config, onConfigChange, mode }: T
       <div className="terminal-tab__common">
         <FormTextField
           label="Display Name"
-          placeholder="Auto-generated if empty"
+          placeholder="Defaults to <session>:<socket>"
           value={name || undefined}
           onChange={(v) => onNameChange(v ?? "")}
         />

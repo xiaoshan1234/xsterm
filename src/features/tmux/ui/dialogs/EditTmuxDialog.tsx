@@ -15,6 +15,11 @@ import { useTerminalForm } from "../../../terminal/ui/dialogs/useTerminalForm";
 import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/terminalDialogItems";
 import TmuxForm, { buildTmuxConfigForBase } from "./TmuxForm";
 import "../../../terminal/ui/dialogs/EditTerminalDialog.css";
+import {
+  defaultTmuxDisplayName,
+  isTmuxDisplayNameAvailable,
+  uniqueTmuxDisplayName,
+} from "../../viewModels/sessionIdentity";
 
 export type EditableTmuxConfig = Extract<SavedTerminalConfig, { type: "tmux-pane" }>;
 
@@ -43,11 +48,6 @@ export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDial
   }, [config, isOpen]);
 
   const handleSave = () => {
-    const name = form.name.trim();
-    if (!name) {
-      form.setError("Tmux display name is required.");
-      return;
-    }
     if (!tmuxConfig.tmuxSessionName?.trim()) {
       form.setError("Tmux session name is required.");
       form.setSectionId("connection");
@@ -69,6 +69,25 @@ export function EditTmuxDialog({ isOpen, onClose, config, onSave }: EditTmuxDial
       }
     }
 
+    const requestedName = form.name.trim();
+    if (
+      requestedName &&
+      !isTmuxDisplayNameAvailable(requestedName, savedConfigs, {
+        baseConfigId: tmuxConfig.baseConfigId,
+        excludeConfigId: config.id,
+      })
+    ) {
+      form.setError("A tmux session with this display name already exists.");
+      return;
+    }
+    const name = uniqueTmuxDisplayName(
+      requestedName || defaultTmuxDisplayName(tmuxConfig),
+      savedConfigs,
+      {
+        baseConfigId: tmuxConfig.baseConfigId,
+        excludeConfigId: config.id,
+      },
+    );
     const updatedConfig: EditableTmuxConfig = {
       ...config,
       name,

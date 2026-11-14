@@ -45,7 +45,7 @@ describe("Tmux manager view model", () => {
       },
     ];
 
-    const groups = selectTmuxManagerGroups(savedConfigs);
+    const groups = selectTmuxManagerGroups(savedConfigs, new Set(["wsl:Debian|default|work"]));
     expect(groups).toHaveLength(2);
     expect(groups[0]).toMatchObject({
       key: "base:wsl-base",
@@ -56,11 +56,13 @@ describe("Tmux manager view model", () => {
           baseConfigId: "wsl-base",
           wslDistribution: "Debian",
           transport: "wsl",
+          isOpen: true,
         },
         {
           configId: "tmux-wsl-codex",
           baseConfigId: "wsl-base",
           transport: "wsl",
+          isOpen: false,
         },
       ],
     });
@@ -69,5 +71,42 @@ describe("Tmux manager view model", () => {
       name: "Unassigned",
       items: [{ configId: "tmux-unassigned" }],
     });
+  });
+
+  it("keeps display names unique", () => {
+    const savedConfigs: SavedTerminalConfig[] = [
+      {
+        id: "tmux-1",
+        name: "work:dev",
+        version: 1,
+        type: "tmux-pane",
+        config: { tmuxSessionName: "work", socketName: "dev" },
+      },
+      {
+        id: "tmux-2",
+        name: "work:dev",
+        version: 1,
+        type: "tmux-pane",
+        config: { tmuxSessionName: "work", socketName: "dev" },
+      },
+    ];
+
+    const [group] = selectTmuxManagerGroups(savedConfigs);
+    expect(group.items.map((item) => item.name)).toEqual(["work:dev", "work:dev (2)"]);
+  });
+
+  it("uses session:socket when the saved display name is empty", () => {
+    const savedConfigs: SavedTerminalConfig[] = [
+      {
+        id: "tmux-1",
+        name: "",
+        version: 1,
+        type: "tmux-pane",
+        config: { tmuxSessionName: "codex", socketName: "dev" },
+      },
+    ];
+
+    const [group] = selectTmuxManagerGroups(savedConfigs);
+    expect(group.items[0].name).toBe("codex:dev");
   });
 });

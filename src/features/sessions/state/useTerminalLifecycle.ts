@@ -30,6 +30,12 @@ import {
   dispatchByType,
 } from "./useTerminalActions.helpers";
 import { removeControllerFromWorkspaces } from "./eventTransitions";
+import {
+  defaultTmuxDisplayName,
+  findOpenTmuxControllerId,
+  tmuxSessionKey,
+  uniqueTmuxDisplayName,
+} from "../../tmux/viewModels/sessionIdentity";
 
 interface UseSessionLifecycleDeps {
   savedConfigs: SavedTerminalConfig[];
@@ -54,6 +60,8 @@ interface UseSessionLifecycleDeps {
   /** `controllerId` -> `configId` map for linking event-driven tmux panes
    * back to their saved config. */
   tmuxControllerConfigIdsRef?: React.MutableRefObject<Map<number, string>>;
+  syncOpenTmuxSessions: () => void;
+  pendingTmuxSessionKeysRef: React.MutableRefObject<Set<string>>;
   /** Controllers intentionally detached/closed; suppresses retry banners. */
   tmuxControllersClosingRef?: React.MutableRefObject<Set<number>>;
 }
@@ -72,8 +80,26 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
     createWindowFromSession,
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
+    syncOpenTmuxSessions,
+    pendingTmuxSessionKeysRef,
     tmuxControllersClosingRef,
   } = deps;
+
+  const withPendingTmuxSession = useCallback(
+    async <Value>(config: TmuxSessionConfig, operation: () => Promise<Value>): Promise<Value> => {
+      const key = tmuxSessionKey(config);
+      if (pendingTmuxSessionKeysRef.current.has(key)) {
+        throw new Error("This tmux session is already opening.");
+      }
+      pendingTmuxSessionKeysRef.current.add(key);
+      try {
+        return await operation();
+      } finally {
+        pendingTmuxSessionKeysRef.current.delete(key);
+      }
+    },
+    [pendingTmuxSessionKeysRef],
+  );
 
   /**
    * Core internal method for creating and activating a terminal
@@ -108,6 +134,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
         terminal.tmuxSessionId !== undefined
       ) {
         tmuxControllerConfigsRef.current.set(terminal.tmuxSessionId, config as TmuxSessionConfig);
+        syncOpenTmuxSessions();
       }
 
       setSessions((prev) => [...prev, terminal]);
@@ -160,7 +187,14 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       }
       return terminal;
     },
-    [updateConfigs, createWindowFromSession, setSessions, activeWorkspaceId],
+    [
+      updateConfigs,
+      createWindowFromSession,
+      setSessions,
+      activeWorkspaceId,
+      tmuxControllerConfigsRef,
+      syncOpenTmuxSessions,
+    ],
   );
 
   /**
@@ -262,8 +296,23 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       save = true,
       displayConfig?: TerminalDisplayConfig,
     ): Promise<Terminal> => {
+      const openControllerId =
+        tmuxControllerConfigIdsRef && tmuxControllerConfigsRef
+          ? findOpenTmuxControllerId(
+              config,
+              savedConfigs,
+              tmuxControllerConfigIdsRef.current,
+              tmuxControllerConfigsRef.current,
+              terminalsRef.current,
+            )
+          : undefined;
+      if (openControllerId !== undefined) {
+        throw new Error("This tmux session is already open. Detach it before attaching again.");
+      }
       const configId = crypto.randomUUID();
-      const info = await tmuxCommands.attachTmuxSession(config);
+      const info = await withPendingTmuxSession(config, () =>
+        tmuxCommands.attachTmuxSession(config),
+      );
       const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
 
       if (tmuxControllerConfigsRef && terminal.tmuxSessionId !== undefined) {
@@ -271,10 +320,22 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       }
       if (tmuxControllerConfigIdsRef && terminal.tmuxSessionId !== undefined) {
         tmuxControllerConfigIdsRef.current.set(terminal.tmuxSessionId, configId);
+        syncOpenTmuxSessions();
+        setSessions((previous) =>
+          previous.map((session) =>
+            session.tmuxSessionId === terminal.tmuxSessionId
+              ? { ...session, configId, displayConfig }
+              : session,
+          ),
+        );
       }
 
       if (save) {
-        const configName = config.name?.trim() || config.tmuxSessionName?.trim() || info.name;
+        const configName = uniqueTmuxDisplayName(
+          config.name?.trim() || defaultTmuxDisplayName(config, info.name),
+          savedConfigs,
+          { baseConfigId: config.baseConfigId },
+        );
         const savedConfig: SavedTerminalConfig = {
           id: configId,
           name: configName,
@@ -287,7 +348,16 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       }
       return terminal;
     },
-    [updateConfigs, tmuxControllerConfigsRef, tmuxControllerConfigIdsRef],
+    [
+      savedConfigs,
+      terminalsRef,
+      updateConfigs,
+      setSessions,
+      tmuxControllerConfigsRef,
+      tmuxControllerConfigIdsRef,
+      syncOpenTmuxSessions,
+      withPendingTmuxSession,
+    ],
   );
 
   /**
@@ -304,8 +374,23 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       save = true,
       displayConfig?: TerminalDisplayConfig,
     ): Promise<Terminal> => {
+      const openControllerId =
+        tmuxControllerConfigIdsRef && tmuxControllerConfigsRef
+          ? findOpenTmuxControllerId(
+              config,
+              savedConfigs,
+              tmuxControllerConfigIdsRef.current,
+              tmuxControllerConfigsRef.current,
+              terminalsRef.current,
+            )
+          : undefined;
+      if (openControllerId !== undefined) {
+        throw new Error("This tmux session is already open. Detach it before creating it again.");
+      }
       const configId = crypto.randomUUID();
-      const info = await tmuxCommands.createTmuxSession(config);
+      const info = await withPendingTmuxSession(config, () =>
+        tmuxCommands.createTmuxSession(config),
+      );
       const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
 
       if (tmuxControllerConfigsRef && terminal.tmuxSessionId !== undefined) {
@@ -313,10 +398,22 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       }
       if (tmuxControllerConfigIdsRef && terminal.tmuxSessionId !== undefined) {
         tmuxControllerConfigIdsRef.current.set(terminal.tmuxSessionId, configId);
+        syncOpenTmuxSessions();
+        setSessions((previous) =>
+          previous.map((session) =>
+            session.tmuxSessionId === terminal.tmuxSessionId
+              ? { ...session, configId, displayConfig }
+              : session,
+          ),
+        );
       }
 
       if (save) {
-        const configName = config.name?.trim() || config.tmuxSessionName?.trim() || info.name;
+        const configName = uniqueTmuxDisplayName(
+          config.name?.trim() || defaultTmuxDisplayName(config, info.name),
+          savedConfigs,
+          { baseConfigId: config.baseConfigId },
+        );
         const savedConfig: SavedTerminalConfig = {
           id: configId,
           name: configName,
@@ -329,7 +426,16 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       }
       return terminal;
     },
-    [updateConfigs, tmuxControllerConfigsRef, tmuxControllerConfigIdsRef],
+    [
+      savedConfigs,
+      terminalsRef,
+      updateConfigs,
+      setSessions,
+      tmuxControllerConfigsRef,
+      tmuxControllerConfigIdsRef,
+      syncOpenTmuxSessions,
+      withPendingTmuxSession,
+    ],
   );
 
   const removeTmuxControllerFromState = useCallback(
@@ -347,6 +453,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       }
       tmuxControllerConfigsRef?.current.delete(controllerId);
       tmuxControllerConfigIdsRef?.current.delete(controllerId);
+      syncOpenTmuxSessions();
       tmuxControllersClosingRef?.current.delete(controllerId);
     },
     [
@@ -357,6 +464,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       tmuxControllerConfigsRef,
       tmuxControllerConfigIdsRef,
       tmuxControllersClosingRef,
+      syncOpenTmuxSessions,
     ],
   );
 
@@ -416,6 +524,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       tmuxControllerConfigsRef?.current.set(newControllerId, config);
       if (configId) {
         tmuxControllerConfigIdsRef?.current.set(newControllerId, configId);
+        syncOpenTmuxSessions();
         setSessions((prev) =>
           prev.map((session) =>
             session.tmuxSessionId === newControllerId
@@ -443,6 +552,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       tmuxControllerConfigIdsRef,
       tmuxControllersClosingRef,
       removeTmuxControllerFromState,
+      syncOpenTmuxSessions,
     ],
   );
 
@@ -504,7 +614,11 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
         const tmuxConfig = config as TmuxSessionConfig;
         savedConfig = {
           ...idAndVersion,
-          name: configName || tmuxConfig.tmuxSessionName?.trim() || "Tmux",
+          name: uniqueTmuxDisplayName(
+            configName || defaultTmuxDisplayName(tmuxConfig),
+            savedConfigs,
+            { baseConfigId: tmuxConfig.baseConfigId },
+          ),
           type: "tmux-pane",
           config: tmuxConfig,
           displayConfig,
@@ -514,7 +628,7 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
       updateConfigs((prev) => [...prev, savedConfig]);
       return savedConfig;
     },
-    [updateConfigs],
+    [savedConfigs, updateConfigs],
   );
 
   /**
@@ -526,7 +640,9 @@ export function useTerminalLifecycle(deps: UseSessionLifecycleDeps) {
   const openFromConfig = useCallback(
     async (configId: string): Promise<Terminal> => {
       const terminal = await openFromConfigInternal(configId);
-      createWindowFromSession(terminal.id, terminal.name, activeWorkspaceId ?? undefined);
+      if (terminal.type !== "tmux-pane") {
+        createWindowFromSession(terminal.id, terminal.name, activeWorkspaceId ?? undefined);
+      }
       return terminal;
     },
     [openFromConfigInternal, createWindowFromSession, activeWorkspaceId],

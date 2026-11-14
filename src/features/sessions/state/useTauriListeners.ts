@@ -69,6 +69,7 @@ type ListenersState = Pick<
   | "setTmuxControllerErrors"
   | "tmuxControllerConfigsRef"
   | "tmuxControllerConfigIdsRef"
+  | "syncOpenTmuxSessions"
   | "tmuxControllersClosingRef"
 >;
 
@@ -81,6 +82,7 @@ export function useTauriListeners({
   setTmuxControllerErrors,
   tmuxControllerConfigsRef,
   tmuxControllerConfigIdsRef,
+  syncOpenTmuxSessions,
   tmuxControllersClosingRef,
 }: ListenersState): void {
   useEffect(() => {
@@ -127,6 +129,7 @@ export function useTauriListeners({
               tmuxControllersClosingRef.current.delete(controllerId);
               tmuxControllerConfigsRef.current.delete(controllerId);
               tmuxControllerConfigIdsRef.current.delete(controllerId);
+              syncOpenTmuxSessions();
             }
 
             if (deadTerminals.length > 0) {
@@ -152,6 +155,7 @@ export function useTauriListeners({
               return next;
             });
             tmuxControllerConfigsRef.current.delete(controllerId);
+            syncOpenTmuxSessions();
           },
           onPanePaused: ({ tmuxPaneId }) => {
             console.debug("[xsterm] tmux-paused", { tmuxPaneId });
@@ -416,6 +420,7 @@ export function useTauriListeners({
     setTmuxControllerErrors,
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
+    syncOpenTmuxSessions,
     tmuxControllersClosingRef,
   ]);
 }

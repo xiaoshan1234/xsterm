@@ -30,6 +30,12 @@
   color: var(--ink);
 }
 
+.context-menu-item:disabled {
+  color: var(--muted-soft);
+  cursor: default;
+  background: transparent;
+}
+
 .context-menu-item--danger {
   color: var(--error);
 }

@@ -8,7 +8,7 @@ import {
   type TmuxSessionConfig,
   type Workspace,
 } from "../../../models/legacy/terminal";
-import { type TerminalState, type TmuxControllerError } from "./types";
+import { type OpenTmuxSession, type TerminalState, type TmuxControllerError } from "./types";
 
 export function useTerminalState(): TerminalState {
   const [savedConfigs, setSavedConfigs] = useState<SavedTerminalConfig[]>([]);
@@ -35,6 +35,8 @@ export function useTerminalState(): TerminalState {
   // `controllerId` -> `configId` map. Populated by the attach flow so
   // event-driven tmux panes can be linked back to their saved config.
   const tmuxControllerConfigIdsRef = useRef<Map<number, string>>(new Map());
+  const [openTmuxSessions, setOpenTmuxSessions] = useState<OpenTmuxSession[]>([]);
+  const pendingTmuxSessionKeysRef = useRef<Set<string>>(new Set());
   // Controllers the user intentionally detached/closed. Used to suppress the
   // retry banner when the matching `tmux-controller-exit` arrives.
   const tmuxControllersClosingRef = useRef<Set<number>>(new Set());
@@ -42,6 +44,16 @@ export function useTerminalState(): TerminalState {
   // resize bridge to derive the total frontend window size.
   const terminalSizesRef = useRef<Map<number, { rows: number; cols: number }>>(new Map());
   const [terminalSizesVersion, setTerminalSizesVersion] = useState(0);
+  const syncOpenTmuxSessions = useCallback(() => {
+    const configIds = tmuxControllerConfigIdsRef.current;
+    setOpenTmuxSessions(
+      [...tmuxControllerConfigsRef.current.entries()].map(([controllerId, config]) => ({
+        controllerId,
+        ...(configIds.has(controllerId) ? { configId: configIds.get(controllerId) } : {}),
+        config,
+      })),
+    );
+  }, []);
   const reportTerminalSize = useCallback((terminalId: number, rows: number, cols: number) => {
     const previous = terminalSizesRef.current.get(terminalId);
     if (previous?.rows === rows && previous?.cols === cols) return;
@@ -108,6 +120,9 @@ export function useTerminalState(): TerminalState {
     setTmuxControllerErrors,
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
+    openTmuxSessions,
+    syncOpenTmuxSessions,
+    pendingTmuxSessionKeysRef,
     tmuxControllersClosingRef,
     terminalSizesRef,
     terminalSizesVersion,

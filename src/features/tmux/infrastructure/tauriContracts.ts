@@ -1,7 +1,4 @@
-import {
-  type SshConfigDto,
-  type TerminalInfoDto,
-} from "../../terminal/infrastructure/tauriContracts";
+import { type SshConfigDto } from "../../terminal/infrastructure/tauriContracts";
 import { type BackendTerminalHandle } from "../../terminal/infrastructure/handles";
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
 
@@ -27,12 +24,6 @@ export interface AttachedTmuxServerDto {
   transport?: "local" | "wsl";
   wslDistribution?: string;
   attachedAt: number;
-}
-
-export interface AutoAttachOutcomeDto {
-  sessionKey: string;
-  info?: TerminalInfoDto;
-  error?: string;
 }
 
 export interface TmuxControllerExitedEvent {

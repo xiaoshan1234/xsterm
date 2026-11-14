@@ -290,6 +290,12 @@ BottomBar RuntimeStatus 展示。
 
 - 按 `baseConfigId` 自动分组，相同 Base Configuration 的 tmux session 位于同一目录。
 - 自动分组可折叠，但不提供用户新建、编辑或删除目录。
+- 同一个 tmux session 只能存在一个运行实例；再次打开时聚焦已有实例。
+- tmux entry 的右键菜单始终提供 Detach；未运行时禁用，运行时可点击。
+- Detach 后若 Workspace 不再包含任何 Window，自动构造一个 init window。
+- 已连接的 tmux entry 使用 Success 色圆角边框和状态点。
+- 同一个 Base Configuration 分组内 tmux display name 不得重复；不同分组允许同名。
+- 默认名称为 `<session>:<socket>`，socket 为空时使用 `default`。
 - 不显示 New Group。
 - New tmux Session 打开 `CreateTmuxDialog`。
 

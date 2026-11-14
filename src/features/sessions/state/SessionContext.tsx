@@ -65,6 +65,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const terminalRuntime = useMemo<TerminalRuntimeContextType>(
     () => ({
       terminals: state.terminals,
+      openTmuxSessions: state.openTmuxSessions,
       terminalSizesRef: state.terminalSizesRef,
       terminalSizesVersion: state.terminalSizesVersion,
       getEffectiveLocalEcho: state.getEffectiveLocalEcho,
@@ -91,6 +92,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }),
     [
       state.terminals,
+      state.openTmuxSessions,
       state.terminalSizesRef,
       state.terminalSizesVersion,
       state.getEffectiveLocalEcho,

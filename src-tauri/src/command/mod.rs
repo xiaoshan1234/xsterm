@@ -24,7 +24,6 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::detach_tmux_session,
         session::capture_tmux_pane,
         session::get_attached_tmux_servers,
-        session::auto_attach_tmux_servers,
         logging::log_message,
         logging::get_log_config,
         logging::set_log_config,

@@ -39,7 +39,7 @@ import { NewGroupDialog } from "../../features/terminal/ui/dialogs/NewGroupDialo
 import { EditGroupDialog } from "../../features/terminal/ui/dialogs/EditGroupDialog";
 import { SaveDialog } from "../../features/workspace/dialogs/SaveDialog";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
-import { useTmuxAutoAttach } from "../../features/tmux/application/useTmuxAutoAttach";
+import { tmuxSessionBaseKey, tmuxSessionKey } from "../../features/tmux/viewModels/sessionIdentity";
 import { useAppShortcuts } from "../useAppShortcuts";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 
@@ -63,7 +63,6 @@ interface ConfirmState {
 }
 
 export function AppShellRuntime() {
-  useTmuxAutoAttach();
   const {
     terminals,
     writeTerminal,
@@ -71,7 +70,9 @@ export function AppShellRuntime() {
     createSshSession,
     createTmuxSession,
     attachTmuxSession,
+    detachTmuxSession,
     applyDisplayConfigToLiveSession,
+    openTmuxSessions,
     terminalSizesRef,
   } = useTerminalRuntime();
   const {
@@ -136,7 +137,23 @@ export function AppShellRuntime() {
     () => selectTerminalManagerGroups(savedConfigs, groups),
     [groups, savedConfigs],
   );
-  const tmuxManagerGroups = useMemo(() => selectTmuxManagerGroups(savedConfigs), [savedConfigs]);
+  const openTmuxSessionKeys = new Set(
+    openTmuxSessions.map((session) => tmuxSessionKey(session.config)),
+  );
+  const openTmuxConfigIds = new Set(
+    openTmuxSessions
+      .map((session) => session.configId)
+      .filter((configId): configId is string => configId !== undefined),
+  );
+  const openTmuxBaseKeys = new Set(
+    openTmuxSessions.map((session) => tmuxSessionBaseKey(session.config)),
+  );
+  const tmuxManagerGroups = selectTmuxManagerGroups(
+    savedConfigs,
+    openTmuxSessionKeys,
+    openTmuxConfigIds,
+    openTmuxBaseKeys,
+  );
   const tmuxStatusControllers = useMemo(
     () => selectTmuxStatusControllers(terminals, workspaces, savedConfigs),
     [savedConfigs, terminals, workspaces],
@@ -225,6 +242,22 @@ export function AppShellRuntime() {
     [loadWorkspace, setActiveWorkspace, showError, workspaces],
   );
 
+  const detachTmuxConfig = useCallback(
+    (configId: string) => {
+      const target = savedConfigs.find((config) => config.id === configId);
+      if (target?.type !== "tmux-pane") return;
+      const targetKey = tmuxSessionKey(target.config);
+      const openSession = openTmuxSessions.find(
+        (session) => session.configId === configId || tmuxSessionKey(session.config) === targetKey,
+      );
+      if (!openSession) return;
+      void detachTmuxSession(openSession.controllerId).catch((cause) =>
+        showError("Unable to detach tmux session", cause),
+      );
+    },
+    [detachTmuxSession, openTmuxSessions, savedConfigs, showError],
+  );
+
   const selectTextSenderTarget = paneTargetOptions.find(
     (option) => option.targetKey === selectedTargetKey,
   );
@@ -291,6 +324,7 @@ export function AppShellRuntime() {
             onOpenConfig={openConfig}
             onEditConfig={openEditTmuxConfig}
             onRemoveConfig={removeConfig}
+            onDetachConfig={detachTmuxConfig}
           />
         );
       case "window-manager":
@@ -367,6 +401,7 @@ export function AppShellRuntime() {
     deleteGroup,
     deleteSavedWindow,
     deleteSavedWorkspace,
+    detachTmuxConfig,
     loadWindow,
     openConfig,
     openEditTerminalConfig,
