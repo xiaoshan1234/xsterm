@@ -229,32 +229,6 @@ impl SplitDirection {
     }
 }
 
-/// Result of a successful tmux attach (Wave 4 `attachedTmuxServers`).
-///
-/// Mirrors the TypeScript `AttachedTmuxServer` interface exactly. The backend
-/// rewrites it on every successful `attach_tmux` and whenever the last pane on
-/// a controller is closed. Automatic startup reattachment is intentionally not
-/// performed.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AttachedTmuxServer {
-    /// tmux session name (the `-s <name>` arg). Required to re-attach.
-    pub session_name: String,
-    /// tmux socket name (the `-L <socket>` arg). When `None`, callers fall
-    /// back to tmux's default socket.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub socket_name: Option<String>,
-    /// Non-SSH transport used to re-attach: `"local"` or `"wsl"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transport: Option<String>,
-    /// WSL distribution selected when re-attaching through WSL.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wsl_distribution: Option<String>,
-    /// ms epoch when the user last attached (or created) this server. Used
-    /// to order re-attach: most-recent first.
-    pub attached_at: u64,
-}
-
 /// Configuration for creating a tmux `-CC` controller session.
 ///
 /// Spawns a `tmux -CC` child process which then creates and owns one or
@@ -1248,25 +1222,6 @@ mod tests {
         };
 
         assert!(config.get_active_session_identity().is_none());
-    }
-
-    #[test]
-    fn attached_tmux_server_preserves_wsl_reattach_metadata() {
-        let server = AttachedTmuxServer {
-            session_name: "work".to_string(),
-            socket_name: Some("dev".to_string()),
-            transport: Some("wsl".to_string()),
-            wsl_distribution: Some("Debian".to_string()),
-            attached_at: 42,
-        };
-
-        let json = serde_json::to_string(&server).expect("serialize attached tmux server");
-        let roundtrip: AttachedTmuxServer =
-            serde_json::from_str(&json).expect("deserialize attached tmux server");
-
-        assert_eq!(roundtrip, server);
-        assert!(json.contains("\"transport\":\"wsl\""));
-        assert!(json.contains("\"wslDistribution\":\"Debian\""));
     }
 
     #[test]

@@ -18,14 +18,6 @@ export interface TmuxSessionConfigDto {
   baseConfigId?: string;
 }
 
-export interface AttachedTmuxServerDto {
-  sessionName: string;
-  socketName?: string;
-  transport?: "local" | "wsl";
-  wslDistribution?: string;
-  attachedAt: number;
-}
-
 export interface TmuxControllerExitedEvent {
   controllerHandle: BackendControllerHandle;
   reason?: string;

@@ -13,7 +13,7 @@ use xscore::platform::tmux::{
 use crate::connect::app_backend::AppBackend;
 use crate::connect::forward::spawn_output_forwarder;
 use crate::connect::ssh_exec::{ssh_exec_capture, ssh_exec_status};
-use crate::shared::session::{AttachedTmuxServer, SplitDirection, SshConfig, TmuxSessionConfig};
+use crate::shared::session::{SplitDirection, SshConfig, TmuxSessionConfig};
 
 const EXTENDED_PANE_FORMAT: &str = "#{window_index}|#{pane_index}|#{pane_id}|#{pane_width}|#{pane_height}|#{pane_left}|#{pane_top}|#{pane_current_command}|#{pane_active}|#{window_name}";
 
@@ -481,37 +481,6 @@ impl TmuxSession {
             .unwrap_or_default()
     }
 
-    pub(crate) fn attached_tmux_server(&self, attached_at: u64) -> Option<AttachedTmuxServer> {
-        let session_name = self.session_name.clone()?;
-        let socket_name = match &self.socket {
-            TmuxSocket::Named(name) => Some(name.clone()),
-            TmuxSocket::Default | TmuxSocket::Path(_) => None,
-        };
-        let (transport, wsl_distribution) = match &self.host_config {
-            TmuxHostConfig::Wsl { args } => {
-                let distribution = args
-                    .windows(2)
-                    .find(|pair| {
-                        matches!(
-                            pair[0].as_str(),
-                            "--distribution" | "-d" | "--distribution-id"
-                        )
-                    })
-                    .map(|pair| pair[1].clone());
-                (Some("wsl".to_string()), distribution)
-            }
-            TmuxHostConfig::Local => (Some("local".to_string()), None),
-            TmuxHostConfig::Ssh { .. } => (None, None),
-        };
-        Some(AttachedTmuxServer {
-            session_name,
-            socket_name,
-            transport,
-            wsl_distribution,
-            attached_at,
-        })
-    }
-
     pub(crate) async fn send_keys(&self, pane: &str, data: &[u8]) -> Result<(), String> {
         self.ensure_pane_bound(pane)?;
         let command = send_keys_command(pane, data)?;
@@ -776,10 +745,7 @@ impl TmuxSession {
                         String::from_utf8_lossy(&output.stderr).trim()
                     ));
                 }
-                Ok(String::from_utf8_lossy(&output.stdout)
-                    .replace("\r\n", "\n")
-                    .trim_end_matches('\n')
-                    .to_string())
+                Ok(normalize_capture_output(&output.stdout))
             }
             TmuxHostConfig::Wsl { args } => {
                 let output = tokio::process::Command::new("wsl.exe")
@@ -797,10 +763,7 @@ impl TmuxSession {
                         String::from_utf8_lossy(&output.stderr).trim()
                     ));
                 }
-                Ok(String::from_utf8_lossy(&output.stdout)
-                    .replace("\r\n", "\n")
-                    .trim_end_matches('\n')
-                    .to_string())
+                Ok(normalize_capture_output(&output.stdout))
             }
             TmuxHostConfig::Ssh { .. } => {
                 let ssh = self
@@ -814,7 +777,7 @@ impl TmuxSession {
                 let remote_command = remote_tmux_shell_command(&args);
                 ssh_exec_capture(ssh, &remote_command)
                     .await
-                    .map(|stdout| String::from_utf8_lossy(&stdout).replace("\r\n", "\n"))
+                    .map(|stdout| normalize_capture_output(&stdout))
             }
         }
     }
@@ -1149,6 +1112,16 @@ fn capture_pane_command(
     command
 }
 
+/// Normalize `capture-pane` output consistently across local, WSL and SSH
+/// tmux hosts. `capture-pane` includes the empty rows below the cursor; keeping
+/// their trailing line feeds would move the replayed cursor down the screen.
+fn normalize_capture_output(output: &[u8]) -> String {
+    String::from_utf8_lossy(output)
+        .replace("\r\n", "\n")
+        .trim_end_matches('\n')
+        .to_string()
+}
+
 /// Compose an alternate-screen replay payload.
 ///
 /// `normal` is the saved main screen (what should be visible once the TUI
@@ -1279,9 +1252,10 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{
-        alternate_screen_replay, build_tmux_target, capture_pane_command, parse_extended_pane_line,
-        parse_pane_terminal_modes, send_keys_command, terminal_modes_replay, PaneTerminalModes,
-        TmuxControl, TmuxHostConfig, TmuxSession, TmuxSocket,
+        alternate_screen_replay, build_tmux_target, capture_pane_command, normalize_capture_output,
+        parse_extended_pane_line, parse_pane_terminal_modes, send_keys_command,
+        terminal_modes_replay, PaneTerminalModes, TmuxControl, TmuxHostConfig, TmuxSession,
+        TmuxSocket,
     };
     use crate::connect::app_backend::AppBackend;
     use crate::shared::session::{SshConfig, TmuxSessionConfig};
@@ -1353,6 +1327,22 @@ mod tests {
         assert_eq!(
             capture_pane_command("%7", Some(2000), true, false),
             "capture-pane -p -e -J -a -S -2000 -t %7"
+        );
+    }
+
+    #[test]
+    fn normalize_capture_output_removes_trailing_blank_rows() {
+        assert_eq!(
+            normalize_capture_output(b"prompt\r\nnext command\n\n\n"),
+            "prompt\nnext command"
+        );
+    }
+
+    #[test]
+    fn normalize_capture_output_preserves_internal_blank_lines() {
+        assert_eq!(
+            normalize_capture_output(b"prompt\n\ncommand"),
+            "prompt\n\ncommand"
         );
     }
 

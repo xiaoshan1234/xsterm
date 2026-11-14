@@ -75,7 +75,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ## 6. 持久化与日志
 
-- 用 `tauri-plugin-store` 把配置存为 JSON（app data 目录）：sessions / groups / attached_tmux / log_config。
+- 用 `tauri-plugin-store` 把配置存为 JSON（app data 目录）：sessions / groups / log_config。
 - `src/infra/storage/JsonStore.ts` 只提供通用 key/value 持久化；领域 schema、迁移、校验归属对应 feature 的 `persistence/`。
 - 前端日志经 `src/infra/logging/` 的 `log_message` adapter 转后端，由 tracing 写滚动日志。
 

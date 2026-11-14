@@ -7,8 +7,7 @@ use crate::connect::output::OutputRouter;
 use crate::connect::registry::TerminalRegistry;
 use crate::feature::logging::session_log::TerminalLoggingBackend;
 use crate::shared::session::{
-    AttachedTmuxServer, LocalTerminalConfig, SshConfig, TerminalInfo, TerminalLoggingConfig,
-    TmuxSessionConfig,
+    LocalTerminalConfig, SshConfig, TerminalInfo, TerminalLoggingConfig, TmuxSessionConfig,
 };
 
 /// Hard ceiling on a single `write_terminal` payload. The frontend sends one
@@ -175,7 +174,6 @@ pub async fn create_tmux_session(
     config: TmuxSessionConfig,
     state: State<'_, Arc<TerminalRegistry>>,
     backend: State<'_, Arc<RealAppBackend>>,
-    app: AppHandle,
 ) -> Result<TerminalInfo, String> {
     tracing::info!(
         "Creating tmux -CC session: name={:?} tmux_session={:?} socket={:?}",
@@ -185,15 +183,7 @@ pub async fn create_tmux_session(
     );
     let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
     let dyn_backend: Arc<dyn AppBackend> = arc_real;
-    let result = state.create_tmux(&config, dyn_backend).await;
-    if result.is_ok() {
-        let servers = state.list_attached_tmux_servers();
-        if let Err(e) = crate::command::persistence::save_attached_tmux_servers_impl(&app, &servers)
-        {
-            tracing::warn!("create_tmux_session: persistence failed: {e}");
-        }
-    }
-    result
+    state.create_tmux(&config, dyn_backend).await
 }
 
 /// Detach the control client from a tmux session while leaving the tmux
@@ -202,15 +192,9 @@ pub async fn create_tmux_session(
 pub async fn detach_tmux_session(
     controller_id: u32,
     state: State<'_, Arc<TerminalRegistry>>,
-    app: AppHandle,
 ) -> Result<(), String> {
     tracing::info!("detach_tmux_session: controller_id={controller_id}");
-    state.close_tmux_controller(controller_id)?;
-    let servers = state.list_attached_tmux_servers();
-    if let Err(e) = crate::command::persistence::save_attached_tmux_servers_impl(&app, &servers) {
-        tracing::warn!("detach_tmux_session: persistence failed: {e}");
-    }
-    Ok(())
+    state.close_tmux_controller(controller_id)
 }
 
 /// Split the tmux pane backing an xsterm session via `split-window`.
@@ -291,7 +275,6 @@ pub async fn attach_tmux_session(
     config: TmuxSessionConfig,
     state: State<'_, Arc<TerminalRegistry>>,
     backend: State<'_, Arc<RealAppBackend>>,
-    app: AppHandle,
 ) -> Result<TerminalInfo, String> {
     tracing::info!(
         "Attaching to tmux server: name={:?} tmux_session={:?} socket={:?}",
@@ -301,22 +284,17 @@ pub async fn attach_tmux_session(
     );
     let arc_real: Arc<RealAppBackend> = Arc::clone(backend.inner());
     let dyn_backend: Arc<dyn AppBackend> = arc_real;
-    let result = state.attach_tmux(&config, dyn_backend).await;
-    if result.is_ok() {
-        let servers = state.list_attached_tmux_servers();
-        if let Err(e) = crate::command::persistence::save_attached_tmux_servers_impl(&app, &servers)
-        {
-            tracing::warn!("attach_tmux_session: persistence failed: {e}");
-        }
-    }
-    result.inspect(|info| {
-        tracing::info!(
-            "tmux attach succeeded: id={} controller_id={} pane={:?}",
-            info.id,
-            info.tmux_session_id().unwrap_or(0),
-            info.tmux_pane_id(),
-        );
-    })
+    state
+        .attach_tmux(&config, dyn_backend)
+        .await
+        .inspect(|info| {
+            tracing::info!(
+                "tmux attach succeeded: id={} controller_id={} pane={:?}",
+                info.id,
+                info.tmux_session_id().unwrap_or(0),
+                info.tmux_pane_id(),
+            );
+        })
 }
 
 /// open a new tmux window on the given controller.
@@ -398,18 +376,6 @@ pub async fn capture_tmux_pane(
         lines
     );
     state.capture_tmux_pane(xsterm_session_id, lines).await
-}
-
-/// list every tmux server currently attached via this manager.
-///
-/// Frontend wrapper: `sessionService.getAttachedTmuxServers()`. Returns
-/// the same shape as the on-disk `attached_tmux.json` store so the
-/// frontend can render the persisted list.
-#[tauri::command]
-pub async fn get_attached_tmux_servers(
-    state: State<'_, Arc<TerminalRegistry>>,
-) -> Result<Vec<AttachedTmuxServer>, String> {
-    Ok(state.list_attached_tmux_servers())
 }
 
 #[tauri::command]

@@ -440,21 +440,3 @@ export interface TmuxWindowRenamedEvent {
   xstermWindowId: number;
   name: string;
 }
-
-/**
- * Record of a tmux server the user has attached to (or `create_tmux`'d).
- * Persisted by the backend in `attached_tmux.json` for diagnostics and future
- * explicit reconnect flows; automatic startup reattachment is not performed.
- */
-export interface AttachedTmuxServer {
-  /** tmux terminal name (the `-s <name>` arg) — required to re-attach. */
-  sessionName: string;
-  /** Optional tmux socket name (the `-L <socket>` arg). */
-  socketName?: string;
-  /** Non-SSH transport used to re-attach. */
-  transport?: "local" | "wsl";
-  /** WSL distribution selected when re-attaching through WSL. */
-  wslDistribution?: string;
-  /** ms epoch when the user last attached / created this server. */
-  attachedAt: number;
-}

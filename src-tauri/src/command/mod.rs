@@ -1,5 +1,4 @@
 pub(crate) mod logging;
-pub(crate) mod persistence;
 pub(crate) mod session;
 
 pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
@@ -23,7 +22,6 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'st
         session::attach_tmux_session,
         session::detach_tmux_session,
         session::capture_tmux_pane,
-        session::get_attached_tmux_servers,
         logging::log_message,
         logging::get_log_config,
         logging::set_log_config,

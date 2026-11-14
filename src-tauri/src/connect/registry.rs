@@ -14,9 +14,9 @@ use crate::connect::tmux::TmuxSession;
 use crate::feature::logging::session_log::TerminalLogRegistry;
 use crate::shared::capabilities::CapabilityFlags;
 use crate::shared::session::{
-    build_local_image_path, build_remote_image_path, tmux_pane_info, AttachedTmuxServer,
-    LocalTerminalConfig, SplitDirection, SshConfig, TerminalInfo, TerminalKind,
-    TerminalLoggingConfig, TmuxSessionConfig,
+    build_local_image_path, build_remote_image_path, tmux_pane_info, LocalTerminalConfig,
+    SplitDirection, SshConfig, TerminalInfo, TerminalKind, TerminalLoggingConfig,
+    TmuxSessionConfig,
 };
 
 /// Manages the lifecycle of all terminal sessions.
@@ -212,17 +212,6 @@ impl TerminalRegistry {
     ) -> Result<String, String> {
         let (controller, pane) = self.tmux_pane_for(xsterm_session_id)?;
         controller.capture_pane(&pane, lines).await
-    }
-
-    pub(crate) fn list_attached_tmux_servers(&self) -> Vec<AttachedTmuxServer> {
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
-        self.tmux_sessions
-            .iter()
-            .filter_map(|entry| entry.value().attached_tmux_server(now_ms))
-            .collect()
     }
 
     pub(crate) fn close_tmux_controller(&self, controller_id: u32) -> Result<(), String> {

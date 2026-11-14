@@ -5,7 +5,7 @@ import {
 } from "../../terminal/infrastructure/handles";
 import { type TerminalInfoDto } from "../../terminal/infrastructure/tauriContracts";
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
-import { type AttachedTmuxServerDto, type TmuxSessionConfigDto } from "./tauriContracts";
+import { type TmuxSessionConfigDto } from "./tauriContracts";
 
 type SplitDirection = "horizontal" | "vertical";
 
@@ -33,7 +33,6 @@ export interface TmuxCommandClient {
   ): Promise<TerminalInfoDto>;
   killTmuxWindow(windowHandle: BackendWindowHandle): Promise<void>;
   renameTmuxWindow(windowHandle: BackendWindowHandle, name: string): Promise<void>;
-  getAttachedTmuxServers(): Promise<AttachedTmuxServerDto[]>;
 }
 
 export function createTmuxCommandClient(
@@ -120,10 +119,6 @@ export function createTmuxCommandClient(
         xstermWindowId: windowHandle,
         name,
       });
-    },
-
-    getAttachedTmuxServers(): Promise<AttachedTmuxServerDto[]> {
-      return invokeFunction<AttachedTmuxServerDto[]>("get_attached_tmux_servers");
     },
   };
 }
