@@ -12,7 +12,7 @@ import { TmuxManagerPanel } from "../../features/tmux/ui/TmuxManagerPanel";
 import { WindowManagerPanel, WorkspaceManagerPanel } from "../../features/workspace/ui";
 import { SettingsPanel } from "../../features/settings/ui";
 import { selectTerminalManagerGroups } from "../../features/terminal/viewModels/managerViewModel";
-import { selectTmuxManagerItems } from "../../features/tmux/viewModels/managerViewModel";
+import { selectTmuxManagerGroups } from "../../features/tmux/viewModels/managerViewModel";
 import { selectTmuxStatusControllers } from "../../features/tmux/viewModels/statusViewModel";
 import {
   selectWindowManagerItems,
@@ -136,7 +136,7 @@ export function AppShellRuntime() {
     () => selectTerminalManagerGroups(savedConfigs, groups),
     [groups, savedConfigs],
   );
-  const tmuxManagerItems = useMemo(() => selectTmuxManagerItems(savedConfigs), [savedConfigs]);
+  const tmuxManagerGroups = useMemo(() => selectTmuxManagerGroups(savedConfigs), [savedConfigs]);
   const tmuxStatusControllers = useMemo(
     () => selectTmuxStatusControllers(terminals, workspaces, savedConfigs),
     [savedConfigs, terminals, workspaces],
@@ -285,7 +285,7 @@ export function AppShellRuntime() {
       case "tmux-manager":
         return (
           <TmuxManagerPanel
-            items={tmuxManagerItems}
+            groups={tmuxManagerGroups}
             onCreateTmux={() => setDialog({ kind: "create-tmux" })}
             onNewTmux={() => setDialog({ kind: "attach-tmux" })}
             onOpenConfig={openConfig}
@@ -377,7 +377,7 @@ export function AppShellRuntime() {
     savedWorkspaces,
     showError,
     terminalManagerGroups,
-    tmuxManagerItems,
+    tmuxManagerGroups,
     toggleGroup,
     windowManagerItems,
     workspaceManagerItems,

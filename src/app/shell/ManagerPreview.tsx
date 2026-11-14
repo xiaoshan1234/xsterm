@@ -50,8 +50,11 @@ export function ManagerPreview({ activeTool, onOpenDialog }: ManagerPreviewProps
             </button>
           }
         >
-          <ManagerItem title="Tmux dev" onEdit={() => onOpenDialog("edit-tmux")} />
-          <ManagerItem title="Remote Tmux" onEdit={() => onOpenDialog("edit-tmux")} />
+          <ManagerGroup label="WSL" isOpen>
+            <ManagerItem title="WSL work" onEdit={() => onOpenDialog("edit-tmux")} />
+            <ManagerItem title="WSL codex" onEdit={() => onOpenDialog("edit-tmux")} />
+          </ManagerGroup>
+          <ManagerGroup label="Mac" isOpen={false} />
         </PreviewManagerFrame>
       );
 

@@ -40,6 +40,16 @@ describe("AppShellPreview", () => {
     expect(screen.queryByRole("button", { name: /Runtime status/ })).toBeNull();
   });
 
+  it("shows saved tmux sessions grouped by their base configuration", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Tmux Manager" }));
+    expect(screen.getByRole("button", { name: "WSL" })).toBeTruthy();
+    expect(screen.getByText("WSL work")).toBeTruthy();
+    expect(screen.getByText("WSL codex")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mac" })).toBeTruthy();
+  });
+
   it("closes a specific non-default workspace from the workspace menu", () => {
     render(<AppShellPreview />);
 

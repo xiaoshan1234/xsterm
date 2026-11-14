@@ -4,11 +4,15 @@ import {
   ManagerEmptyState,
   ManagerPanelFrame,
   ManagerRow,
+  ManagerSection,
 } from "../../../shared/ui/ManagerPanel";
-import { type TmuxManagerItemViewData } from "../viewModels/managerViewModel";
+import {
+  type TmuxManagerGroupViewData,
+  type TmuxManagerItemViewData,
+} from "../viewModels/managerViewModel";
 
 interface TmuxManagerPanelProps {
-  items: readonly TmuxManagerItemViewData[];
+  groups: readonly TmuxManagerGroupViewData[];
   onCreateTmux: () => void;
   onNewTmux: () => void;
   onOpenConfig: (configId: string) => void;
@@ -17,7 +21,7 @@ interface TmuxManagerPanelProps {
 }
 
 export function TmuxManagerPanel({
-  items,
+  groups,
   onCreateTmux,
   onNewTmux,
   onOpenConfig,
@@ -25,6 +29,16 @@ export function TmuxManagerPanel({
   onRemoveConfig,
 }: TmuxManagerPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   return (
     <ManagerPanelFrame
@@ -43,32 +57,43 @@ export function TmuxManagerPanel({
         </>
       }
     >
-      {items.length === 0 ? (
+      {groups.length === 0 ? (
         <ManagerEmptyState>No saved Tmux configurations.</ManagerEmptyState>
       ) : (
-        items.map((item) => (
-          <ManagerRow
-            key={item.configId}
-            title={item.name}
-            badge={formatTransport(item.transport)}
-            isSelected={selectedId === item.configId}
-            onSelect={() => setSelectedId(item.configId)}
-            onOpen={() => onOpenConfig(item.configId)}
-            contextMenuItems={[
-              {
-                id: "edit",
-                label: "Edit",
-                onClick: () => onEditConfig(item.configId),
-              },
-              {
-                id: "remove",
-                label: "Remove",
-                onClick: () => onRemoveConfig(item.configId),
-                danger: true,
-              },
-            ]}
-          />
-        ))
+        <div className="manager-group-list">
+          {groups.map((group) => (
+            <ManagerSection
+              key={group.key}
+              label={group.name}
+              isExpanded={!collapsedGroups.has(group.key)}
+              onToggle={() => toggleGroup(group.key)}
+            >
+              {group.items.map((item) => (
+                <ManagerRow
+                  key={item.configId}
+                  title={item.name}
+                  badge={formatTransport(item.transport)}
+                  isSelected={selectedId === item.configId}
+                  onSelect={() => setSelectedId(item.configId)}
+                  onOpen={() => onOpenConfig(item.configId)}
+                  contextMenuItems={[
+                    {
+                      id: "edit",
+                      label: "Edit",
+                      onClick: () => onEditConfig(item.configId),
+                    },
+                    {
+                      id: "remove",
+                      label: "Remove",
+                      onClick: () => onRemoveConfig(item.configId),
+                      danger: true,
+                    },
+                  ]}
+                />
+              ))}
+            </ManagerSection>
+          ))}
+        </div>
       )}
     </ManagerPanelFrame>
   );

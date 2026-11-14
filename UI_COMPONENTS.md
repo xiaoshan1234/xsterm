@@ -288,7 +288,8 @@ BottomBar RuntimeStatus 展示。
 
 约束：
 
-- 不使用 Group。
+- 按 `baseConfigId` 自动分组，相同 Base Configuration 的 tmux session 位于同一目录。
+- 自动分组可折叠，但不提供用户新建、编辑或删除目录。
 - 不显示 New Group。
 - New tmux Session 打开 `CreateTmuxDialog`。
 
@@ -720,7 +721,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 | NavBar                  | 无业务 Model                              | Window UI State          |
 | Toolbar                 | 无业务 Model                              | Active Tool              |
 | TerminalManager         | `SavedLaunchConfig`                       | TerminalManagerItem      |
-| TmuxManager             | `SavedLaunchConfig`                       | TmuxManagerItem          |
+| TmuxManager             | `SavedLaunchConfig`                       | TmuxManagerGroup         |
 | WindowManager           | `SavedWindowSnapshot`                     | SavedWindowItem          |
 | WorkspaceManager        | `WorkspaceSnapshot`                       | SavedWorkspaceItem       |
 | WindowTabBar            | `WorkspaceWindow[]`                       | WindowTabItem            |
@@ -877,7 +878,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 - TextSender 只存在于 MainArea 底部。
 - BottomBar Workspace 按钮打开快速切换菜单。
 - TerminalManager 底部固定显示 New Terminal 和 New Group。
-- Tmux/Window/Workspace 配置 Manager 底部固定操作且不使用 Group。
+- Tmux Manager 按 Base Configuration 自动分组；Window/Workspace Manager 不使用 Group。
 - TerminalManager 和 TmuxManager 只显示保存配置。
 - BottomBar RuntimeStatus 只显示当前聚焦 Pane 的名称、类型、目标/层级、尺寸和 Pane 序号。
 - 四个创建/编辑 Dialog 独立存在。
