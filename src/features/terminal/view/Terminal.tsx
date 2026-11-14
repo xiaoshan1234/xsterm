@@ -10,6 +10,7 @@ import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
 import { useTerminalResize } from "./useTerminalResize";
 import { useLineNumberOverlay } from "./useLineNumberOverlay";
 import { usePasteBatcher } from "./usePasteBatcher";
+import { filterTerminalInput } from "./terminalInput";
 import { countLines } from "./textTransform";
 import { PasteConfirmDialog } from "./PasteConfirmDialog";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -285,8 +286,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         return;
       }
 
+      const forwardedData = filterTerminalInput(kind, data);
+      if (!forwardedData) return;
+
       if (localEchoEnabledRef.current) {
-        xterm.write(data);
+        xterm.write(forwardedData);
       }
       // Send the keystroke straight to the PTY. There used to be a
       // requestAnimationFrame batch here (Perf 003) that coalesced
@@ -295,7 +299,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       // showing up only on the *next* keystroke. With the Rust side
       // already coalescing reads into 64 KiB chunks (Perf 005), the
       // JS-side input batching buys nothing and only hurts latency.
-      writeTerminalRef.current(terminalId, data).catch((err) => {
+      writeTerminalRef.current(terminalId, forwardedData).catch((err) => {
         logger.error("terminal", "writeTerminal:keystroke", err);
       });
     });
@@ -313,7 +317,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       dataDisposer.dispose();
       selectionDisposer.dispose();
     };
-  }, [terminalId]);
+  }, [kind, terminalId]);
 
   useEffect(() => {
     document.addEventListener("paste", handlePaste, true);
