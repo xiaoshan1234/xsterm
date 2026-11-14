@@ -145,19 +145,6 @@
   background: var(--accent-soft);
 }
 
-.manager-row--connected,
-.manager-row--connected:hover,
-.manager-row--connected:focus-visible {
-  border-color: var(--success);
-}
-
-.manager-row--connected.manager-row--selected,
-.manager-row--connected.manager-row--selected:hover,
-.manager-row--connected.manager-row--selected:focus-visible {
-  border-color: var(--success);
-  background: var(--success-bg);
-}
-
 .manager-row--disconnected,
 .manager-row--disconnected:hover,
 .manager-row--disconnected:focus-visible {

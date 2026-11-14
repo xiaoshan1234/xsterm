@@ -42,7 +42,7 @@ describe("ManagerRow", () => {
     expect(container.querySelector(".manager-row--selected")).toBeTruthy();
   });
 
-  it("marks connected rows for the success border", () => {
+  it("marks connected rows for the success status indicator", () => {
     const { container } = render(<ManagerRow title="Row" status="connected" />);
     expect(container.querySelector(".manager-row--connected")).toBeTruthy();
   });

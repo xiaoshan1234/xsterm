@@ -206,6 +206,16 @@ impl TmuxSession {
             while let Some(event) = events.recv().await {
                 session.handle_event(event);
             }
+            if !session.has_exited() {
+                session.has_exited.store(true, Ordering::SeqCst);
+                let _ = session.app_backend.emit(
+                    "tmux-controller-exit",
+                    &serde_json::json!({
+                        "controller_id": session.controller_id,
+                        "reason": "tmux control connection closed",
+                    }),
+                );
+            }
         });
     }
 

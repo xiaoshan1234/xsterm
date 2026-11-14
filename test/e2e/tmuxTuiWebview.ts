@@ -484,6 +484,41 @@ async function detachThroughManager(driver: WebDriver, fixture: TmuxFixture): Pr
   }
 }
 
+async function disconnectTmuxServer(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
+  console.log("  disconnecting the tmux server to exercise connection-state cleanup");
+  const terminalCountBeforeDisconnect = (await driver.findElements(By.css(".xterm"))).length;
+  run("wsl.exe", ["--exec", "tmux", "-L", fixture.socketName, "kill-server"]);
+  try {
+    await driver.wait(async () => {
+      const rows = await driver.findElements(
+        By.xpath(`//*[@role="option"][.//strong[normalize-space(.)="${fixture.configName}"]]`),
+      );
+      if (rows.length === 0) return false;
+      return !(await driver.executeScript<boolean>(
+        "return arguments[0].classList.contains('manager-row--connected');",
+        rows[0],
+      ));
+    }, 20_000);
+    await driver.wait(async () => {
+      const terminalCount = (await driver.findElements(By.css(".xterm"))).length;
+      const initWindowCount = (await driver.findElements(By.css(".init-window-view"))).length;
+      return terminalCount < terminalCountBeforeDisconnect && initWindowCount === 1;
+    }, 20_000);
+  } catch (error) {
+    const rowState = await driver.executeScript<Array<{ text: string; className: string }>>(`
+      return Array.from(document.querySelectorAll('.manager-row'))
+        .map((row) => ({
+          text: row.textContent ?? '',
+          className: row.className,
+        }));
+    `);
+    throw new Error(
+      `Tmux connection state did not update after server loss: ${JSON.stringify(rowState)}`,
+      { cause: error },
+    );
+  }
+}
+
 async function reconnectThroughSavedConfig(
   driver: WebDriver,
   fixture: TmuxFixture,
@@ -924,6 +959,12 @@ async function testTui(driver: WebDriver, fixture: TmuxFixture): Promise<void> {
   if (fixture.name === "codex") {
     await exitCodexAndAssertNoDeviceAttributesEcho(driver);
     console.log("  Codex exited without echoing terminal device-attributes");
+  }
+
+  if (fixture.name === "probe") {
+    await disconnectTmuxServer(driver, fixture);
+    console.log("  tmux Manager cleared its connected state after server loss");
+    return;
   }
 
   await detachThroughManager(driver, fixture);
