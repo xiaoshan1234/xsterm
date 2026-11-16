@@ -13,88 +13,6 @@
   height: 100%;
 }
 
-.shell-preview-navbar {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  height: 30px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--canvas);
-  user-select: none;
-}
-
-.shell-preview-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 0 var(--space-sm);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.shell-preview-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-xs);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.shell-preview-menu {
-  display: flex;
-  align-items: stretch;
-  height: 100%;
-}
-
-.shell-preview-menu button,
-.shell-preview-window-controls button {
-  border: none;
-  background: transparent;
-  color: var(--body);
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.shell-preview-menu button {
-  padding: 0 var(--space-xs);
-}
-
-.shell-preview-menu button:hover,
-.shell-preview-window-controls button:hover {
-  color: var(--ink);
-  background: var(--bg-hover);
-}
-
-.shell-preview-drag-region {
-  flex: 1;
-  min-width: 0;
-}
-
-.shell-preview-window-controls {
-  display: flex;
-  height: 100%;
-}
-
-.shell-preview-window-controls button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 100%;
-}
-
-.shell-preview-window-controls button:last-child:hover {
-  background: var(--close-hover);
-  color: var(--text-on-accent);
-}
-
 .shell-body {
   display: flex;
   flex: 1;
@@ -561,61 +479,24 @@
   align-items: center;
   flex-shrink: 0;
   height: 30px;
-  padding: 0 0 0 var(--space-xs);
+  padding: 0;
   border-top: 1px solid var(--hairline);
   background: var(--canvas-soft);
 }
 
-.shell-bottom-workspace {
-  position: relative;
-}
-
 .shell-bottom-runtime {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 7px;
-  max-width: min(72vw, 760px);
+  max-width: 100%;
   min-width: 0;
-  margin-left: var(--space-xs);
-  padding-left: var(--space-xs);
+  padding: 0 var(--space-sm);
   overflow: hidden;
-  border-left: 1px solid var(--hairline);
   color: var(--muted);
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;
-}
-
-.shell-bottom-spacer {
-  flex: 1;
-}
-
-.shell-bottom-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 var(--space-xs);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--body);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.shell-bottom-button:hover {
-  color: var(--ink);
-  background: var(--bg-hover);
-}
-
-.shell-bottom-button--active {
-  color: var(--ink);
-  border-color: var(--hairline-strong);
-  background: var(--accent-soft);
 }
 
 .shell-bottom-runtime-status {
@@ -674,118 +555,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.shell-workspace-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  z-index: 50;
-  width: 240px;
-  padding: var(--space-xs);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-}
-
-.shell-menu-label {
-  padding: 4px 6px 6px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.shell-workspace-menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 32px;
-  padding: 0 var(--space-xs);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--body);
-  font-family: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.shell-workspace-menu-item:hover,
-.shell-workspace-menu-item--active {
-  color: var(--ink);
-  background: var(--bg-hover);
-}
-
-.shell-workspace-menu-row {
-  display: flex;
-  align-items: center;
-  border-radius: var(--radius-sm);
-}
-
-.shell-workspace-menu-row:hover,
-.shell-workspace-menu-row--active {
-  background: var(--bg-hover);
-}
-
-.shell-workspace-menu-row > .shell-workspace-menu-item {
-  flex: 1;
-  min-width: 0;
-  border-color: transparent;
-  background: transparent;
-}
-
-.shell-workspace-menu-row > .shell-workspace-menu-item:hover {
-  color: var(--ink);
-  background: transparent;
-}
-
-.shell-workspace-menu-row > .shell-workspace-menu-item > span:first-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-workspace-close-button {
-  display: inline-grid;
-  flex: 0 0 24px;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-right: var(--space-xxs);
-  border: 1px solid transparent;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.shell-workspace-close-button:hover {
-  border-color: var(--error);
-  background: var(--error-bg);
-  color: var(--error);
-}
-
-.shell-workspace-close-button:focus-visible {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 1px;
-}
-
-.shell-workspace-current-label {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.shell-menu-separator {
-  height: 1px;
-  margin: var(--space-xxs) 0;
-  background: var(--hairline);
-}
-
 .shell-overlay-host {
   position: relative;
   z-index: 1000;
@@ -827,6 +596,35 @@
   color: var(--body);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.shell-help-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  color: var(--body);
+  font-size: 13px;
+}
+
+.shell-help-summary strong {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.shell-help-license {
+  max-height: 360px;
+  margin: 0;
+  padding: var(--space-sm);
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  color: var(--body);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .shell-dialog-footer {

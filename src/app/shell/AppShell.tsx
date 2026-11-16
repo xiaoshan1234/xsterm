@@ -20,15 +20,10 @@ interface AppShellProps {
   mainArea: ReactNode;
   textSender: ReactNode;
   overlay: ReactNode;
-  workspaceName: string;
-  workspaces: readonly string[];
   runtimeStatus: RuntimeStatusViewData | null;
   isTextSenderOpen: boolean;
   isInteractionBlocked?: boolean;
   onSelectTool: (tool: ToolId) => void;
-  onSelectWorkspace: (workspaceName: string) => void;
-  onCloseWorkspace: (workspaceName: string) => void;
-  onToggleTextSender: () => void;
 }
 
 export function AppShell({
@@ -39,15 +34,10 @@ export function AppShell({
   mainArea,
   textSender,
   overlay,
-  workspaceName,
-  workspaces,
   runtimeStatus,
   isTextSenderOpen,
   isInteractionBlocked = false,
   onSelectTool,
-  onSelectWorkspace,
-  onCloseWorkspace,
-  onToggleTextSender,
 }: AppShellProps) {
   const { width: toolPanelWidth, startResize, nudgeWidth } = useToolPanelWidth();
   const {
@@ -112,15 +102,7 @@ export function AppShell({
             </div>
           </main>
         </div>
-        <BottomBar
-          workspaceName={workspaceName}
-          workspaces={workspaces}
-          runtimeStatus={runtimeStatus}
-          isTextSenderOpen={isTextSenderOpen}
-          onToggleTextSender={onToggleTextSender}
-          onSelectWorkspace={onSelectWorkspace}
-          onCloseWorkspace={onCloseWorkspace}
-        />
+        <BottomBar runtimeStatus={runtimeStatus} />
       </div>
       {overlay}
     </div>

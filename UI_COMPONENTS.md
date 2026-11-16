@@ -74,6 +74,9 @@ Domain Model
 ```text
 AppShell
 ├─ NavBar
+│  ├─ ApplicationMenu
+│  │  └─ View > Sender
+│  └─ WorkspaceQuickSwitch
 ├─ Body
 │  ├─ LeftSidebar
 │  │  ├─ Toolbar               固定窄栏，常驻
@@ -89,8 +92,7 @@ AppShell
 │     │  └─ WindowPaneArea
 │     └─ GlobalTextSender      默认隐藏，仅占 MainArea 底部
 ├─ BottomBar
-│  ├─ WorkspaceQuickSwitch
-│  └─ TextSenderToggle
+│  └─ RuntimeStatus
 └─ GlobalOverlayHost
 ```
 
@@ -100,7 +102,8 @@ AppShell
 - `Toolbar` 始终显示。
 - `ToolPanel` 展开后位于 Toolbar 右侧，同一时间只显示一个面板。
 - `GlobalTextSender` 只横跨 `MainArea`，不覆盖 LeftSidebar。
-- `BottomBar` 中的 Workspace 按钮打开快速切换菜单，不直接打开 WorkspaceManager。
+- `NavBar` 中的 Workspace 按钮打开快速切换菜单，不直接打开 WorkspaceManager。
+- `NavBar > View > Sender` 控制 GlobalTextSender 的展开状态。
 - Dialog、ContextMenu、Toast 统一由 `GlobalOverlayHost` 承载。
 
 ## 5. 全局单实例与可见性
@@ -145,10 +148,13 @@ interface AppShellUiState {
 - 自定义窗口标题栏和拖拽区。
 - 窗口最小化、最大化、恢复和关闭。
 - 应用级菜单入口。
+- 在 `View` 一级下拉菜单中控制 GlobalTextSender 开关。
+- Sender 对应 GlobalTextSender 打开时，菜单项文字前显示对勾。
+- 提供 Workspace 快速切换和关闭入口。
+- `Help` 提供 Version、Update、License 三个弹窗入口。
 
 不负责：
 
-- Workspace 切换；
 - Terminal 创建；
 - TextSender 目标选择。
 
@@ -502,13 +508,11 @@ Target 失效时：
 
 ## 9. BottomBar
 
-常驻应用底部，主要入口：
+常驻应用底部，只承载 RuntimeStatus：
 
 ```text
 BottomBar
-├─ WorkspaceQuickSwitch
-├─ RuntimeStatus
-└─ TextSenderToggle
+└─ RuntimeStatus
 ```
 
 ### 9.1 RuntimeStatus
@@ -519,19 +523,12 @@ BottomBar
 - tmux 层级使用 `session / window / pane`。
 - 该区域只读，不承担导航、重连或关闭操作。
 
-### 9.2 WorkspaceQuickSwitch
+### 9.2 NavBar WorkspaceQuickSwitch
 
-- 打开 Workspace 快速切换菜单。
-- 显示当前 Workspace 名称。
-- 支持切换和关闭 Workspace。
-- 菜单包含 Manage Workspaces 入口，跳转到 WorkspaceManager。
-- 不直接展开 LeftSidebar，除非用户选择 Manage。
-
-### 9.3 TextSenderToggle
-
-- Toggle GlobalTextSender。
-- 显示打开状态。
-- 不改变当前 Target。
+- 使用应用菜单式下拉入口，入口显示 Workspace 标签。
+- 展开后以菜单项列出 Workspace，当前项使用勾选状态。
+- 支持切换 Workspace。
+- 非 Default Workspace 行提供关闭图标。
 
 ## 10. GlobalOverlayHost
 
@@ -580,6 +577,7 @@ BottomBar
 | CreateTmuxDialog     | tmux         | 创建或 attach tmux       |
 | EditTerminalDialog   | terminal     | 编辑已保存 Terminal 配置 |
 | EditTmuxDialog       | tmux         | 编辑已保存 tmux 配置     |
+| HelpDialog           | app          | 版本、更新和许可证信息   |
 
 #### CreateTerminalDialog
 
@@ -722,21 +720,20 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
 ## 12. 组件与 Model 映射
 
-| UI 组件                 | 主要 Model                                | 派生 View Model          |
-| ----------------------- | ----------------------------------------- | ------------------------ |
-| NavBar                  | 无业务 Model                              | Window UI State          |
-| Toolbar                 | 无业务 Model                              | Active Tool              |
-| TerminalManager         | `SavedLaunchConfig`                       | TerminalManagerItem      |
-| TmuxManager             | `SavedLaunchConfig`                       | TmuxManagerGroup         |
-| WindowManager           | `SavedWindowSnapshot`                     | SavedWindowItem          |
-| WorkspaceManager        | `WorkspaceSnapshot`                       | SavedWorkspaceItem       |
-| WindowTabBar            | `WorkspaceWindow[]`                       | WindowTabItem            |
-| WindowPaneArea          | `RawWindow`、`TmuxWindowReference`        | WindowPaneViewData       |
-| Pane                    | `RawPaneNode`、`TmuxPane`、`Terminal`     | PaneViewData             |
-| TerminalView            | `Terminal`                                | TerminalViewData         |
-| GlobalTextSender        | `PaneTargetRef`、`TerminalStreamRef`      | TextSenderViewData       |
-| BottomBar RuntimeStatus | `Workspace`、`Terminal`、`TmuxController` | RuntimeStatusViewData    |
-| BottomBar               | `Workspace[]`                             | WorkspaceQuickSwitchData |
+| UI 组件                 | 主要 Model                                | 派生 View Model                       |
+| ----------------------- | ----------------------------------------- | ------------------------------------- |
+| NavBar                  | `Workspace[]`、TextSender visibility      | ApplicationMenu、WorkspaceQuickSwitch |
+| Toolbar                 | 无业务 Model                              | Active Tool                           |
+| TerminalManager         | `SavedLaunchConfig`                       | TerminalManagerItem                   |
+| TmuxManager             | `SavedLaunchConfig`                       | TmuxManagerGroup                      |
+| WindowManager           | `SavedWindowSnapshot`                     | SavedWindowItem                       |
+| WorkspaceManager        | `WorkspaceSnapshot`                       | SavedWorkspaceItem                    |
+| WindowTabBar            | `WorkspaceWindow[]`                       | WindowTabItem                         |
+| WindowPaneArea          | `RawWindow`、`TmuxWindowReference`        | WindowPaneViewData                    |
+| Pane                    | `RawPaneNode`、`TmuxPane`、`Terminal`     | PaneViewData                          |
+| TerminalView            | `Terminal`                                | TerminalViewData                      |
+| GlobalTextSender        | `PaneTargetRef`、`TerminalStreamRef`      | TextSenderViewData                    |
+| BottomBar RuntimeStatus | `Workspace`、`Terminal`、`TmuxController` | RuntimeStatusViewData                 |
 
 ## 13. 交互流程
 
@@ -752,7 +749,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 ### 13.2 打开 TextSender
 
 ```text
-用户点击 BottomBar TextSenderToggle
+用户点击 NavBar > View > Sender
   → AppShell 更新 isTextSenderOpen
   → MainArea 底部展开 GlobalTextSender
   → 保留输入标签、模式、速率和当前执行状态
@@ -771,8 +768,8 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 ### 13.4 Workspace 快速切换
 
 ```text
-用户点击 BottomBar WorkspaceQuickSwitch
-  → 打开切换菜单
+用户点击 NavBar WorkspaceQuickSwitch
+  → 展开 Workspace 下拉菜单
   → 选择 Workspace
   → 更新 Active Workspace
 ```
@@ -789,7 +786,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
 ## 15. 可访问性
 
-- Toolbar 和 BottomBar 按钮必须有可访问名称。
+- Toolbar、NavBar 菜单和 Workspace 切换按钮必须有可访问名称。
 - 当前 Tool、Workspace、Target 和 TextSender 开关状态必须通过 ARIA 暴露。
 - 关闭 ToolPanel 后焦点回到对应工具按钮。
 - TextSender 打开时不会强制抢占 Terminal 焦点。
@@ -882,7 +879,9 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 - 应用级区域只有一个实例。
 - ToolPanel 同一时间只显示一个工具。
 - TextSender 只存在于 MainArea 底部。
-- BottomBar Workspace 按钮打开快速切换菜单。
+- NavBar Workspace 下拉菜单提供快速切换。
+- NavBar `View > Sender` 控制 GlobalTextSender。
+- BottomBar 不包含 Sender 或 Workspace 按钮。
 - TerminalManager 底部固定显示 New Terminal 和 New Group。
 - Tmux Manager 按 Base Configuration 自动分组；Window/Workspace Manager 不使用 Group。
 - TerminalManager 和 TmuxManager 只显示保存配置。

@@ -6,7 +6,74 @@ import { AppShellPreview } from "./AppShellPreview";
 
 afterEach(cleanup);
 
+function toggleSenderFromViewMenu(): void {
+  fireEvent.click(screen.getByRole("button", { name: "View" }));
+  const sender = screen.getByRole("menuitemcheckbox", { name: "Sender" });
+  expect(sender.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(sender);
+}
+
 describe("AppShellPreview", () => {
+  it("keeps Help as the last primary navigation entry", () => {
+    const { container } = render(<AppShellPreview />);
+
+    const entries = Array.from(
+      container.querySelectorAll(
+        ".navbar-menu > .navbar-item, .navbar-menu > .navbar-menu-root > .navbar-item",
+      ),
+    );
+    const labels = entries.map((element) =>
+      element.querySelector(".navbar-primary-label")?.textContent?.trim(),
+    );
+
+    expect(labels).toEqual(["View", "Workspace", "Help"]);
+    expect(
+      entries.every((element) => element.querySelector(".navbar-primary-label") !== null),
+    ).toBe(true);
+  });
+
+  it("shows a check mark beside Sender while the sender panel is open", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Sender" }));
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
+
+    const sender = screen.getByRole("menuitemcheckbox", { name: "Sender" });
+    expect(sender.getAttribute("aria-checked")).toBe("true");
+    expect(sender.textContent).toContain("✓");
+  });
+
+  it("opens the version dialog from Help", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Version" }));
+
+    expect(screen.getByRole("heading", { name: "Version" })).toBeTruthy();
+    expect(screen.getByText("Version 0.2.2")).toBeTruthy();
+  });
+
+  it("opens the update dialog from Help", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Update" }));
+
+    expect(screen.getByRole("heading", { name: "Update" })).toBeTruthy();
+    expect(screen.getByText("Current version: 0.2.2")).toBeTruthy();
+  });
+
+  it("opens the license dialog from Help", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "License" }));
+
+    expect(screen.getByRole("heading", { name: "License" })).toBeTruthy();
+    expect(screen.getByText(/xscore is distributed under the following MIT license/)).toBeTruthy();
+  });
+
   it("opens managers and the global text sender", () => {
     const { container } = render(<AppShellPreview />);
 
@@ -23,7 +90,7 @@ describe("AppShellPreview", () => {
       screen.getByRole("region", { name: "Terminal Manager" }).getAttribute("style"),
     ).toContain("width: 208px");
 
-    fireEvent.click(screen.getByRole("button", { name: "Sender" }));
+    toggleSenderFromViewMenu();
     expect(screen.getByRole("region", { name: "Global text sender" })).toBeTruthy();
     expect(container.querySelector(".shell-text-sender-slot")).toBeTruthy();
   });
@@ -38,6 +105,9 @@ describe("AppShellPreview", () => {
     expect(runtimeStatus?.textContent).toContain("120×36");
     expect(runtimeStatus?.textContent).toContain("Pane 1/2");
     expect(screen.queryByRole("button", { name: /Runtime status/ })).toBeNull();
+    expect(container.querySelector(".shell-bottom-bar")?.querySelectorAll("button")).toHaveLength(
+      0,
+    );
   });
 
   it("shows saved tmux sessions grouped by their base configuration", () => {
@@ -57,18 +127,27 @@ describe("AppShellPreview", () => {
     render(<AppShellPreview />);
 
     fireEvent.click(screen.getByRole("button", { name: "Switch workspace: Default" }));
+    expect(screen.queryByRole("button", { name: "Close workspace Default" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace Project X" }));
 
-    expect(screen.queryByRole("menuitem", { name: "Close workspace Default" })).toBeNull();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Close workspace Project X" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch workspace: Default" }));
+    expect(screen.queryByRole("menuitemradio", { name: "Project X" })).toBeNull();
+    expect(screen.getByRole("menuitemradio", { name: "Infrastructure" })).toBeTruthy();
+  });
 
-    expect(screen.queryByRole("menuitem", { name: "Project X" })).toBeNull();
-    expect(screen.getByRole("menuitem", { name: "Infrastructure" })).toBeTruthy();
+  it("switches the active workspace from the nav bar", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch workspace: Default" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Project X" }));
+
+    expect(screen.getByRole("button", { name: "Switch workspace: Project X" })).toBeTruthy();
   });
 
   it("resizes the Sender panel with the keyboard", () => {
     const { container } = render(<AppShellPreview />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Sender" }));
+    toggleSenderFromViewMenu();
     const slot = container.querySelector(".shell-text-sender-slot") as HTMLDivElement;
     const resizer = screen.getByRole("separator", { name: "Resize Sender" });
 

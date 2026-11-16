@@ -39,6 +39,7 @@ import { NewGroupDialog } from "../../features/terminal/ui/dialogs/NewGroupDialo
 import { EditGroupDialog } from "../../features/terminal/ui/dialogs/EditGroupDialog";
 import { SaveDialog } from "../../features/workspace/dialogs/SaveDialog";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
+import { HelpDialog, type HelpDialogId } from "./HelpDialog";
 import { tmuxSessionBaseKey, tmuxSessionKey } from "../../features/tmux/viewModels/sessionIdentity";
 import { useAppShortcuts } from "../useAppShortcuts";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
@@ -109,6 +110,7 @@ export function AppShellRuntime() {
   const [dialog, setDialog] = useState<RuntimeDialog>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [error, setError] = useState<ErrorDialogData | null>(null);
+  const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
   const [selectedTargetKey, setSelectedTargetKey] = useState("");
   const initializedRef = useRef(false);
 
@@ -518,6 +520,7 @@ export function AppShellRuntime() {
           setConfirm(null);
         }}
       />
+      <HelpDialog activeDialog={helpDialog} onClose={() => setHelpDialog(null)} />
       {error && <ErrorDialog error={error} onAcknowledge={() => setError(null)} />}
     </GlobalOverlayHost>
   );
@@ -525,7 +528,23 @@ export function AppShellRuntime() {
   return (
     <AppShell
       activeTool={activeTool}
-      navBar={<NavBar />}
+      navBar={
+        <NavBar
+          workspaces={workspaces.map((workspace) => workspace.name)}
+          workspaceName={activeWorkspace?.name ?? "No workspace"}
+          isTextSenderOpen={isTextSenderOpen}
+          onSelectWorkspace={(workspaceName) => {
+            const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
+            if (workspace) setActiveWorkspace(workspace.id);
+          }}
+          onCloseWorkspace={(workspaceName) => {
+            const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
+            if (workspace) closeWorkspace(workspace.id);
+          }}
+          onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
+          onHelpAction={setHelpDialog}
+        />
+      }
       toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}
       toolPanelContent={toolPanelContent}
       mainArea={
@@ -561,21 +580,10 @@ export function AppShellRuntime() {
         />
       }
       overlay={overlay}
-      workspaceName={activeWorkspace?.name ?? "No workspace"}
-      workspaces={workspaces.map((workspace) => workspace.name)}
       runtimeStatus={runtimeStatus}
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={error !== null}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}
-      onSelectWorkspace={(workspaceName) => {
-        const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
-        if (workspace) setActiveWorkspace(workspace.id);
-      }}
-      onCloseWorkspace={(workspaceName) => {
-        const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
-        if (workspace) closeWorkspace(workspace.id);
-      }}
-      onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
     />
   );
 }

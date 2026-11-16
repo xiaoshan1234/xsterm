@@ -5,7 +5,8 @@ import { MainAreaPreview } from "./MainAreaPreview";
 import { ManagerPreview } from "./ManagerPreview";
 import { PreviewDialogs } from "./PreviewDialogs";
 import { AppShell } from "./AppShell";
-import { PreviewNavBar } from "./PreviewNavBar";
+import { NavBarView } from "../NavBar";
+import { HelpDialog, type HelpDialogId } from "./HelpDialog";
 import { TOOL_TITLES, type PreviewDialogId, type ToolId } from "./types";
 import { type RuntimeStatusViewData } from "./runtimeStatusViewModel";
 
@@ -53,6 +54,7 @@ export function AppShellPreview() {
   const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(TEXT_SENDER_TARGETS[0].id);
   const [activeDialog, setActiveDialog] = useState<PreviewDialogId | null>(null);
+  const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
 
   const toolPanelContent = useMemo(
     () =>
@@ -73,7 +75,21 @@ export function AppShellPreview() {
   return (
     <AppShell
       activeTool={activeTool}
-      navBar={<PreviewNavBar />}
+      navBar={
+        <NavBarView
+          workspaces={workspaces}
+          workspaceName={activeWorkspace}
+          isTextSenderOpen={isTextSenderOpen}
+          isMaximized={false}
+          onMinimize={() => undefined}
+          onMaximize={() => undefined}
+          onClose={() => undefined}
+          onSelectWorkspace={setActiveWorkspace}
+          onCloseWorkspace={handleCloseWorkspace}
+          onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
+          onHelpAction={setHelpDialog}
+        />
+      }
       toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}
       toolPanelContent={toolPanelContent}
       mainArea={<MainAreaPreview onOpenDialog={setActiveDialog} />}
@@ -88,17 +104,13 @@ export function AppShellPreview() {
       overlay={
         <GlobalOverlayHost>
           <PreviewDialogs activeDialog={activeDialog} onClose={() => setActiveDialog(null)} />
+          <HelpDialog activeDialog={helpDialog} onClose={() => setHelpDialog(null)} />
         </GlobalOverlayHost>
       }
-      workspaceName={activeWorkspace}
-      workspaces={workspaces}
       runtimeStatus={PREVIEW_RUNTIME_STATUS}
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={activeDialog === "error"}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}
-      onSelectWorkspace={setActiveWorkspace}
-      onCloseWorkspace={handleCloseWorkspace}
-      onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
     />
   );
 }
