@@ -1,6 +1,6 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import packageInfo from "../../../package.json";
 import { Dialog } from "../../shared/ui/Dialog";
+import { openExternalUrl } from "../application/openExternalUrl";
 
 export type HelpDialogId = "version" | "update" | "license";
 
@@ -59,7 +59,7 @@ export function HelpDialog({ activeDialog, onClose }: HelpDialogProps) {
               type="button"
               className="btn btn--primary"
               onClick={() => {
-                void openUrl(RELEASES_URL);
+                void openExternalUrl(RELEASES_URL);
               }}
             >
               Open Releases

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TerminalGroup } from "../../../models/launch/SavedTerminalConfig";
+import type { TerminalGroup } from "../../../features/launch-config";
 import {
   addConfigToGroup,
   addGroup,

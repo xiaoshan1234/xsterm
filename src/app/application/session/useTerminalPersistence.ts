@@ -1,20 +1,14 @@
 import { useCallback, useEffect } from "react";
-import { useLaunchConfigPersistence } from "../../../features/launch-config";
+import { useLaunchConfigPersistence } from "../../../features/launch-config/composition";
 import { getSettingsStore } from "../../../features/settings";
 import {
   loadSavedWindowConfigs,
   loadSavedWorkspaces,
   persistWindowConfigs,
   persistWorkspaces,
-} from "../../../features/workspace";
-import type {
-  SavedTerminalConfig,
-  TerminalGroup,
-} from "../../../models/launch/SavedTerminalConfig";
-import type {
-  SavedWindowConfig,
-  SavedWorkspace,
-} from "../../../models/workspace/EditableWorkspace";
+} from "../../../features/workspace/composition";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../features/launch-config";
+import type { SavedWindowConfig, SavedWorkspace } from "../../../features/workspace";
 import { type SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {

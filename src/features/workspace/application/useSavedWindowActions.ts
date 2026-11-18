@@ -1,11 +1,7 @@
 import { useCallback } from "react";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import type {
-  SavedWindowConfig,
-  Window,
-  Workspace,
-} from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { EditablePaneNode } from "../../../features/workspace";
+import type { SavedWindowConfig, Window, Workspace } from "../../../features/workspace";
 import {
   createLeafPane,
   getDefaultWindowName,
@@ -26,6 +22,7 @@ interface UseSavedWindowActionsDeps {
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
   persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;
+  closeTerminal: (terminalId: number) => Promise<void>;
 }
 
 export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
@@ -39,6 +36,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
     establishingSessionsRef,
     persistSavedWindowConfigs,
     openFromConfigInternal,
+    closeTerminal,
   } = deps;
 
   const saveWindow = useCallback(
@@ -90,6 +88,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
       const configIdToSession = new Map<string, Terminal>();
 
       const rollback = createRollback({
+        closeTerminal,
         setSessions,
         establishingSessionsRef,
         logTag: "window",
@@ -159,6 +158,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
       setSessions,
       setWorkspaces,
       establishingSessionsRef,
+      closeTerminal,
     ],
   );
 

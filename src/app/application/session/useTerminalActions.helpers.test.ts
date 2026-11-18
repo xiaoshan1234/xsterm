@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
-import type { Terminal, TerminalDisplayConfig } from "../../../models/terminal/runtimeContracts";
-import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
+import type { Terminal, TerminalDisplayConfig } from "../../../features/terminal";
+import type { Window, Workspace } from "../../../features/workspace";
 import {
   assertSessionNotUsedElsewhere,
   getUniqueWindowName,

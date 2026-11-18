@@ -12,6 +12,10 @@ import {
   type TerminalRuntimeContextType,
 } from "../features/terminal";
 import {
+  TmuxRuntimeProvider,
+  type TmuxRuntimeContextType,
+} from "../features/tmux";
+import {
   PaneIntentProvider,
   WorkspaceProvider,
   type PaneIntentActions,
@@ -22,6 +26,7 @@ interface CreateTestApplicationOptions {
   launchConfig?: Partial<SavedLaunchConfigsContextType>;
   preferences?: Partial<SessionPreferencesContextType>;
   terminal?: Partial<TerminalRuntimeContextType>;
+  tmux?: Partial<TmuxRuntimeContextType>;
   workspace?: Partial<WorkspaceLayoutContextType>;
   paneIntents?: Partial<PaneIntentActions>;
 }
@@ -59,21 +64,13 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
 
   const terminal: TerminalRuntimeContextType = {
     terminals: [],
-    openTmuxSessions: [],
-    terminalSizesRef: { current: new Map() },
     terminalSizesVersion: 0,
+    getTerminalSize: () => undefined,
     getEffectiveLocalEcho: () => false,
-    tmuxControllerErrors: new Map(),
     createLocalSession: unsupportedAsync,
     createSshSession: unsupportedAsync,
     createLocalSessionOnly: unsupportedAsync,
     createSshSessionOnly: unsupportedAsync,
-    createTmuxSession: unsupportedAsync,
-    attachTmuxSession: unsupportedAsync,
-    detachTmuxSession: unsupportedAsync,
-    reconnectTmuxSession: unsupportedAsync,
-    openFromConfig: unsupportedAsync,
-    createTerminalFromSavedConfig: unsupportedAsync,
     closeTerminal: unsupportedAsync,
     reconnectSession: unsupportedAsync,
     renameSession: unsupported,
@@ -83,8 +80,19 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     reportTerminalSize: () => undefined,
     applyDisplayConfigToLiveSession: unsupported,
     touchTerminalActivity: () => undefined,
-    dismissTmuxControllerError: () => undefined,
     ...options.terminal,
+  };
+
+  const tmux: TmuxRuntimeContextType = {
+    openTmuxSessions: [],
+    tmuxControllerErrors: new Map(),
+    createTmuxSession: unsupportedAsync,
+    attachTmuxSession: unsupportedAsync,
+    detachTmuxSession: unsupportedAsync,
+    reconnectTmuxSession: unsupportedAsync,
+    resizeTmuxWindow: unsupportedAsync,
+    dismissTmuxControllerError: () => undefined,
+    ...options.tmux,
   };
 
   const workspace: WorkspaceLayoutContextType = {
@@ -127,6 +135,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     splitPaneWithTerminal: unsupportedAsync,
     splitPaneWithSavedConfig: unsupportedAsync,
     attachSavedConfigToPane: unsupportedAsync,
+    createSavedConfigForWindow: unsupportedAsync,
     closePane: unsupportedAsync,
     closeTerminal: unsupportedAsync,
     createTmuxWindow: unsupportedAsync,
@@ -140,9 +149,11 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
       <SessionPreferencesProvider value={preferences}>
         <LaunchConfigProvider value={launchConfig}>
           <TerminalRuntimeProvider value={terminal}>
-            <WorkspaceProvider value={workspace}>
-              <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
-            </WorkspaceProvider>
+            <TmuxRuntimeProvider value={tmux}>
+              <WorkspaceProvider value={workspace}>
+                <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
+              </WorkspaceProvider>
+            </TmuxRuntimeProvider>
           </TerminalRuntimeProvider>
         </LaunchConfigProvider>
       </SessionPreferencesProvider>
@@ -154,6 +165,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     launchConfig,
     preferences,
     terminal,
+    tmux,
     workspace,
     paneIntents,
   };

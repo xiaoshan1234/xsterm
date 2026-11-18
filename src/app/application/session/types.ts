@@ -2,28 +2,22 @@ import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from "reac
 import type { SavedLaunchConfigsContextType } from "../../../features/launch-config";
 import type { SessionPreferencesContextType } from "../../../features/settings";
 import type { TerminalRuntimeContextType } from "../../../features/terminal";
-import type { WorkspaceLayoutContextType } from "../../../features/workspace";
+import type { PaneTerminalRef, WorkspaceLayoutContextType } from "../../../features/workspace";
 import type {
   LocalTerminalConfig,
   SshConfig,
   Terminal,
   TerminalDisplayConfig,
-} from "../../../models/terminal/runtimeContracts";
-import type {
-  EditablePaneNode,
-  PaneSplitDirection,
-} from "../../../models/workspace/EditablePaneTree";
-import type {
-  SavedTerminalConfig,
-  TerminalGroup,
-} from "../../../models/launch/SavedTerminalConfig";
-import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
+} from "../../../features/terminal";
+import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../features/launch-config";
+import type { TmuxSessionConfig } from "../../../features/launch-config";
 import type {
   SavedWindowConfig,
   SavedWorkspace,
   Window,
   Workspace,
-} from "../../../models/workspace/EditableWorkspace";
+} from "../../../features/workspace";
 import type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
 
 export type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
@@ -172,7 +166,7 @@ export interface WorkspaceLayoutActions {
   replaceInitWindowWithTerminal: (
     workspaceId: string,
     windowId: string,
-    terminal: Terminal,
+    terminal: PaneTerminalRef,
   ) => void;
   closeWindow: (workspaceId: string, windowId: string) => void;
   setActiveWindow: (workspaceId: string, windowId: string) => void;

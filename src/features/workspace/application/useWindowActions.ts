@@ -1,10 +1,9 @@
 import { useCallback } from "react";
-import { terminalSessionActions } from "../../terminal";
-import { tmuxWindowActions } from "../../tmux";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
-import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { PaneTerminalRef } from "../contracts";
+import type { EditablePaneNode } from "../../../features/workspace";
+import type { SavedTerminalConfig } from "../../../features/launch-config";
+import type { Window, Workspace } from "../../../features/workspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 function findPaneSessionId(pane: EditablePaneNode, paneId: string): number | undefined {
@@ -29,6 +28,8 @@ interface UseWindowActionsDeps {
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
+  closeTerminal: (terminalId: number) => Promise<void>;
+  killTmuxWindow: (xstermWindowId: number) => Promise<void>;
   createWindowFromSession: (
     terminalId: number,
     configId: string,
@@ -47,6 +48,8 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
     setWorkspaces,
     establishingSessionsRef,
     createTerminalFromSavedConfig,
+    closeTerminal,
+    killTmuxWindow,
     createWindowFromSession,
   } = deps;
 
@@ -148,7 +151,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   }, []);
 
   const replaceInitWindowWithTerminal = useCallback(
-    (workspaceId: string, windowId: string, terminal: Terminal) => {
+    (workspaceId: string, windowId: string, terminal: PaneTerminalRef) => {
       assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, terminal.id);
       const rootPane = createLeafPane(100, terminal.id, terminal.configId);
       const baseName = terminal.name;
@@ -184,9 +187,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
       const tmuxWindowId = window.xstermWindowId;
       const isTmuxWindow = tmuxWindowId !== undefined;
       if (tmuxWindowId !== undefined) {
-        tmuxWindowActions
-          .killWindow(tmuxWindowId)
-          .catch((e) => console.error("Failed to kill tmux window:", e));
+        killTmuxWindow(tmuxWindowId).catch((e) => console.error("Failed to kill tmux window:", e));
       }
 
       const terminalIdsToClose = new Set<number>();
@@ -221,9 +222,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
 
       terminalIdsToClose.forEach((terminalId) => {
         if (!isTmuxWindow) {
-          terminalSessionActions
-            .closeTerminal(terminalId)
-            .catch((e) => console.error("Failed to close terminal:", e));
+          closeTerminal(terminalId).catch((e) => console.error("Failed to close terminal:", e));
         }
         establishingSessionsRef.current.delete(terminalId);
         clearTerminalOutput(terminalId);
@@ -232,7 +231,15 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
         setSessions((prev) => prev.filter((s) => !terminalIdsToClose.has(s.id)));
       }
     },
-    [workspacesRef, setWorkspaces, setSessions, establishingSessionsRef, createInitWindow],
+    [
+      workspacesRef,
+      setWorkspaces,
+      setSessions,
+      establishingSessionsRef,
+      createInitWindow,
+      closeTerminal,
+      killTmuxWindow,
+    ],
   );
 
   const reorderWindows = useCallback(

@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useTerminalRuntime } from "../../terminal";
-import { tmuxControllerActions } from "../../tmux";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import type { Workspace } from "../../../models/workspace/EditableWorkspace";
+import { useTmuxRuntime } from "../../tmux";
+import type { Terminal } from "../../../features/terminal";
+import type { EditablePaneNode } from "../../../features/workspace";
+import type { Workspace } from "../../../features/workspace";
 import { computeTmuxWindowSize, type WindowSize } from "./tmuxWindowSize";
 
 /**
@@ -15,7 +15,8 @@ import { computeTmuxWindowSize, type WindowSize } from "./tmuxWindowSize";
  * instead of being stuck at the control client's spawn-time PTY size.
  */
 export function useTmuxWindowResize(workspace: Workspace): void {
-  const { terminals, terminalSizesRef, terminalSizesVersion } = useTerminalRuntime();
+  const { terminals, getTerminalSize, terminalSizesVersion } = useTerminalRuntime();
+  const { resizeTmuxWindow } = useTmuxRuntime();
   const sentSizesRef = useRef<Map<string, WindowSize>>(new Map());
 
   useEffect(() => {
@@ -23,10 +24,16 @@ export function useTmuxWindowResize(workspace: Workspace): void {
     // final window size instead of a sequence of intermediate sizes.
     const timer = window.setTimeout(() => {
       const terminalsById = new Map(terminals.map((terminal) => [terminal.id, terminal]));
+      const terminalSizes = new Map(
+        terminals.flatMap((terminal) => {
+          const size = getTerminalSize(terminal.id);
+          return size ? ([[terminal.id, size]] as const) : [];
+        }),
+      );
 
       for (const window of workspace.windows) {
         if (window.xstermWindowId === undefined) continue;
-        const size = computeTmuxWindowSize(window.rootPane, terminalSizesRef.current);
+        const size = computeTmuxWindowSize(window.rootPane, terminalSizes);
         if (!size) continue;
         const controllerId = findControllerId(window.rootPane, terminalsById);
         if (controllerId === undefined) continue;
@@ -36,14 +43,14 @@ export function useTmuxWindowResize(workspace: Workspace): void {
         if (previous?.cols === size.cols && previous?.rows === size.rows) continue;
         sentSizesRef.current.set(key, size);
 
-        void tmuxControllerActions
-          .resizeWindow(controllerId, size.cols, size.rows)
-          .catch((error) => console.error("Failed to resize tmux window:", error));
+        void resizeTmuxWindow(controllerId, size.cols, size.rows).catch((error) =>
+          console.error("Failed to resize tmux window:", error),
+        );
       }
     }, 100);
 
     return () => window.clearTimeout(timer);
-  }, [workspace, terminals, terminalSizesRef, terminalSizesVersion]);
+  }, [workspace, terminals, getTerminalSize, terminalSizesVersion, resizeTmuxWindow]);
 }
 
 function findControllerId(

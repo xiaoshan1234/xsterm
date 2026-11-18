@@ -1,9 +1,5 @@
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type {
-  SavedWindowConfig,
-  SavedWorkspace,
-  Workspace,
-} from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../../../features/workspace";
 import { useSavedWindowActions } from "./useSavedWindowActions";
 import { useSavedWorkspaceActions } from "./useSavedWorkspaceActions";
 
@@ -21,6 +17,7 @@ interface UsePersistenceActionsDeps {
   persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
   persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;
+  closeTerminal: (terminalId: number) => Promise<void>;
 }
 
 export function usePersistenceActions(deps: UsePersistenceActionsDeps) {

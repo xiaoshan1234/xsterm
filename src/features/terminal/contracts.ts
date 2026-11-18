@@ -1,32 +1,65 @@
-import { type MutableRefObject } from "react";
 import type {
   LocalTerminalConfig,
   SshConfig,
-  Terminal,
   TerminalDisplayConfig,
-} from "../../models/terminal/runtimeContracts";
-import type { TmuxSessionConfig } from "../../models/tmux/TmuxSessionConfig";
-import { type OpenTmuxSession, type TmuxControllerError } from "../tmux";
+} from "../launch-config/contracts";
+
+export type {
+  LocalTerminalConfig,
+  SshConfig,
+  TerminalDisplayConfig,
+  TerminalLoggingConfig,
+} from "../launch-config/contracts";
+
+export interface CapabilityFlags {
+  supportsResize: boolean;
+  supportsReconnect: boolean;
+  supportsLocalEcho: boolean;
+  supportsMultiplex: boolean;
+}
+
+export type TerminalKind =
+  | { type: "local"; shell: string; cwd: string }
+  | { type: "ssh"; host: string; port: number; user: string }
+  | { type: "wsl"; distribution?: string }
+  | { type: "tmux-pane"; sessionId: number; paneId: string };
+
+export interface Terminal {
+  id: number;
+  configId: string;
+  name: string;
+  type: "local" | "ssh" | "wsl" | "tmux-pane";
+  isConnected: boolean;
+  kind: TerminalKind;
+  displayConfig?: TerminalDisplayConfig;
+  capabilities?: CapabilityFlags;
+  createdAt?: number;
+  lastActivityAt?: number;
+  tmuxPaneId?: string;
+  tmuxSessionId?: number;
+  tmuxWindowId?: string;
+  tmuxSessionName?: string;
+  tmuxWindowName?: string;
+  tmuxWindowIndex?: number;
+  tmuxPaneIndex?: number;
+  tmuxPaneWidth?: number;
+  tmuxPaneHeight?: number;
+  tmuxPaneCommand?: string;
+  tmuxPaneActive?: boolean;
+  isHidden?: boolean;
+}
 
 export type { TerminalConnectionInfo } from "../terminal-stream";
 
 export interface TerminalRuntimeContextType {
   terminals: Terminal[];
-  openTmuxSessions: readonly OpenTmuxSession[];
-  terminalSizesRef: MutableRefObject<Map<number, { rows: number; cols: number }>>;
   terminalSizesVersion: number;
+  getTerminalSize: (terminalId: number) => { rows: number; cols: number } | undefined;
   getEffectiveLocalEcho: (terminalId: number) => boolean;
-  tmuxControllerErrors: Map<number, TmuxControllerError>;
   createLocalSession: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
-  createTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
-  attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
-  detachTmuxSession: (controllerId: number) => Promise<void>;
-  reconnectTmuxSession: (controllerId: number) => Promise<Terminal>;
-  openFromConfig: (configId: string) => Promise<Terminal>;
-  createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (id: number) => Promise<void>;
   reconnectSession: (id: number) => Promise<Terminal>;
   renameSession: (id: number, name: string) => void;
@@ -40,5 +73,4 @@ export interface TerminalRuntimeContextType {
   reportTerminalSize: (terminalId: number, rows: number, cols: number) => void;
   applyDisplayConfigToLiveSession: (id: number, patch: Partial<TerminalDisplayConfig>) => void;
   touchTerminalActivity: (id: number) => void;
-  dismissTmuxControllerError: (controllerId: number) => void;
 }

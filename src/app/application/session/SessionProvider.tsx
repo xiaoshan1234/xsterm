@@ -1,8 +1,10 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { LaunchConfigProvider } from "../../../features/launch-config";
 import { SessionPreferencesProvider } from "../../../features/settings";
 import { TerminalRuntimeProvider } from "../../../features/terminal";
 import { PaneIntentProvider, WorkspaceProvider } from "../../../features/workspace";
+import { TmuxRuntimeProvider, type TmuxRuntimeContextType } from "../../../features/tmux";
+import { tmuxControllerActions } from "../../../features/tmux/ports";
 import {
   type SavedLaunchConfigsContextType,
   type SessionPreferencesContextType,
@@ -21,6 +23,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const actions = useTerminalActions({ ...state, ...persistence });
   const paneIntents = usePaneIntentActions({ state, actions });
   useTauriListeners(state);
+  const getTerminalSize = useCallback(
+    (terminalId: number) => state.terminalSizesRef.current.get(terminalId),
+    [state.terminalSizesRef],
+  );
 
   const preferences = useMemo<SessionPreferencesContextType>(
     () => ({
@@ -64,21 +70,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const terminalRuntime = useMemo<TerminalRuntimeContextType>(
     () => ({
       terminals: state.terminals,
-      openTmuxSessions: state.openTmuxSessions,
-      terminalSizesRef: state.terminalSizesRef,
       terminalSizesVersion: state.terminalSizesVersion,
+      getTerminalSize,
       getEffectiveLocalEcho: state.getEffectiveLocalEcho,
-      tmuxControllerErrors: state.tmuxControllerErrors,
       createLocalSession: actions.createLocalSession,
       createSshSession: actions.createSshSession,
       createLocalSessionOnly: actions.createLocalSessionOnly,
       createSshSessionOnly: actions.createSshSessionOnly,
-      createTmuxSession: actions.createTmuxSession,
-      attachTmuxSession: actions.attachTmuxSession,
-      detachTmuxSession: actions.detachTmuxSession,
-      reconnectTmuxSession: actions.reconnectTmuxSession,
-      openFromConfig: actions.openFromConfig,
-      createTerminalFromSavedConfig: actions.createTerminalFromSavedConfig,
       closeTerminal: actions.closeTerminal,
       reconnectSession: actions.reconnectSession,
       renameSession: actions.renameSession,
@@ -88,25 +86,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       reportTerminalSize: actions.reportTerminalSize,
       applyDisplayConfigToLiveSession: actions.applyDisplayConfigToLiveSession,
       touchTerminalActivity: actions.touchTerminalActivity,
-      dismissTmuxControllerError: actions.dismissTmuxControllerError,
     }),
     [
       state.terminals,
-      state.openTmuxSessions,
-      state.terminalSizesRef,
       state.terminalSizesVersion,
+      getTerminalSize,
       state.getEffectiveLocalEcho,
-      state.tmuxControllerErrors,
       actions.createLocalSession,
       actions.createSshSession,
       actions.createLocalSessionOnly,
       actions.createSshSessionOnly,
-      actions.createTmuxSession,
-      actions.attachTmuxSession,
-      actions.detachTmuxSession,
-      actions.reconnectTmuxSession,
-      actions.openFromConfig,
-      actions.createTerminalFromSavedConfig,
       actions.closeTerminal,
       actions.reconnectSession,
       actions.renameSession,
@@ -116,6 +105,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       actions.reportTerminalSize,
       actions.applyDisplayConfigToLiveSession,
       actions.touchTerminalActivity,
+    ],
+  );
+
+  const tmuxRuntime = useMemo<TmuxRuntimeContextType>(
+    () => ({
+      openTmuxSessions: state.openTmuxSessions,
+      tmuxControllerErrors: state.tmuxControllerErrors,
+      createTmuxSession: actions.createTmuxSession,
+      attachTmuxSession: actions.attachTmuxSession,
+      detachTmuxSession: actions.detachTmuxSession,
+      reconnectTmuxSession: actions.reconnectTmuxSession,
+      resizeTmuxWindow: tmuxControllerActions.resizeWindow,
+      dismissTmuxControllerError: actions.dismissTmuxControllerError,
+    }),
+    [
+      state.openTmuxSessions,
+      state.tmuxControllerErrors,
+      actions.createTmuxSession,
+      actions.attachTmuxSession,
+      actions.detachTmuxSession,
+      actions.reconnectTmuxSession,
       actions.dismissTmuxControllerError,
     ],
   );
@@ -193,9 +203,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <SessionPreferencesProvider value={preferences}>
       <LaunchConfigProvider value={savedLaunchConfigs}>
         <TerminalRuntimeProvider value={terminalRuntime}>
-          <WorkspaceProvider value={workspaceLayout}>
-            <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
-          </WorkspaceProvider>
+          <TmuxRuntimeProvider value={tmuxRuntime}>
+            <WorkspaceProvider value={workspaceLayout}>
+              <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
+            </WorkspaceProvider>
+          </TmuxRuntimeProvider>
         </TerminalRuntimeProvider>
       </LaunchConfigProvider>
     </SessionPreferencesProvider>

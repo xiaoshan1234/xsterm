@@ -1,17 +1,10 @@
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type {
-  EditablePaneNode,
-  PaneSplitDirection,
-} from "../../../models/workspace/EditablePaneTree";
-import type { Workspace } from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
+import { createEditableLeafPane, createEditableSplitNode } from "../contracts";
+import type { Workspace } from "../../../features/workspace";
 
 /** Pure PaneTree operations owned by the workspace feature. */
-import {
-  findPaneNode,
-  getLeafPaneIds,
-  mapPaneTree,
-  replacePaneNode,
-} from "../../../models/workspace/runtimePaneTreeOperations";
+import { findPaneNode, getLeafPaneIds, mapPaneTree, replacePaneNode } from "./paneTreeAccess";
 
 export { findPaneNode, getLeafPaneIds, mapPaneTree, replacePaneNode };
 
@@ -24,13 +17,7 @@ export function createLeafPane(
   terminalId?: number,
   configId?: string,
 ): EditablePaneNode {
-  return {
-    id: generateId(),
-    type: "leaf",
-    size,
-    terminalId,
-    configId,
-  };
+  return createEditableLeafPane(generateId(), size, terminalId, configId);
 }
 
 export function createSplitNode(
@@ -38,13 +25,7 @@ export function createSplitNode(
   first: EditablePaneNode,
   second: EditablePaneNode,
 ): EditablePaneNode {
-  return {
-    id: generateId(),
-    type: "split",
-    direction,
-    size: first.size + second.size,
-    children: [first, second],
-  };
+  return createEditableSplitNode(generateId(), direction, first, second);
 }
 
 export function forEachPane(

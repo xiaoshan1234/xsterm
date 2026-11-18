@@ -1,5 +1,4 @@
 import {
-  useSavedLaunchConfigs,
   CreateTerminalDialog,
   EditGroupDialog,
   EditTerminalDialog,
@@ -8,8 +7,7 @@ import {
   CreateTmuxDialog,
   EditTmuxDialog,
 } from "../../features/launch-config";
-import { useTerminalRuntime } from "../../features/terminal";
-import { useWorkspaceLayout, SaveDialog } from "../../features/workspace";
+import { SaveDialog } from "../../features/workspace";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { ErrorDialog } from "./ErrorDialog";
 import { GlobalOverlayHost } from "./GlobalOverlayHost";
@@ -19,6 +17,7 @@ import {
   type RuntimeDialog,
   type RuntimeErrorState,
 } from "./runtimeOverlayTypes";
+import { useRuntimeOverlayActions } from "../application/runtimeOverlays/useRuntimeOverlayActions";
 
 interface RuntimeOverlaysProps {
   dialog: RuntimeDialog;
@@ -42,15 +41,18 @@ export function RuntimeOverlays({
   onCloseHelp,
 }: RuntimeOverlaysProps) {
   const {
+    groups,
     createLocalSession,
     createSshSession,
     createTmuxSession,
     attachTmuxSession,
-    applyDisplayConfigToLiveSession,
-    terminals,
-  } = useTerminalRuntime();
-  const { groups, createGroup, moveConfigToGroup, renameGroup } = useSavedLaunchConfigs();
-  const { renameSavedWindow, renameSavedWorkspace } = useWorkspaceLayout();
+    createGroup,
+    renameGroup,
+    renameSavedWindow,
+    renameSavedWorkspace,
+    saveTerminalConfig,
+    saveTmuxConfig,
+  } = useRuntimeOverlayActions();
 
   const editingGroup =
     dialog?.kind === "edit-group"
@@ -82,13 +84,7 @@ export function RuntimeOverlays({
           config={dialog.config}
           groups={groups}
           groupId={findConfigGroupId(groups, dialog.config.id)}
-          onSave={(config, groupId) => {
-            moveConfigToGroup(config.id, groupId);
-            const liveTerminal = terminals.find((terminal) => terminal.configId === config.id);
-            if (liveTerminal && config.displayConfig) {
-              applyDisplayConfigToLiveSession(liveTerminal.id, config.displayConfig);
-            }
-          }}
+          onSave={saveTerminalConfig}
         />
       )}
       {!error && dialog?.kind === "edit-tmux" && (
@@ -96,12 +92,7 @@ export function RuntimeOverlays({
           isOpen
           onClose={onCloseDialog}
           config={dialog.config}
-          onSave={(config) => {
-            const liveTerminal = terminals.find((terminal) => terminal.configId === config.id);
-            if (liveTerminal && config.displayConfig) {
-              applyDisplayConfigToLiveSession(liveTerminal.id, config.displayConfig);
-            }
-          }}
+          onSave={saveTmuxConfig}
         />
       )}
       <NewGroupDialog

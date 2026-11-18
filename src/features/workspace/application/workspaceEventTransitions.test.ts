@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
+import type { EditablePaneNode } from "../../../features/workspace";
+import type { Window, Workspace } from "../../../features/workspace";
 import {
   appendOrReplaceInitWindow,
   closeWindow,

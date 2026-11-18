@@ -7,11 +7,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import type {
-  SavedWindowConfig,
-  SavedWorkspace,
-  Workspace,
-} from "../../../models/workspace/EditableWorkspace";
+import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../../../features/workspace";
 
 export interface WorkspaceState {
   workspaces: Workspace[];

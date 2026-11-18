@@ -1,7 +1,7 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
-import type { Workspace } from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { TmuxSessionConfig } from "../../../features/launch-config";
+import type { Workspace } from "../../../features/workspace";
 import {
   appendOrReplaceInitWindow,
   closeWindow,
@@ -16,9 +16,9 @@ import {
   buildTmuxPaneTree,
   TMUX_PANE_CAPABILITIES,
   tmuxEventStream,
-  type TmuxControllerError,
   type TmuxPaneGeometry,
-} from "../../../features/tmux";
+} from "../../../features/tmux/ports";
+import { type TmuxControllerError } from "../../../features/tmux";
 
 interface TmuxEventBridgeOptions {
   setTerminals: Dispatch<SetStateAction<Terminal[]>>;

@@ -1,10 +1,7 @@
 import { useCallback } from "react";
-import { terminalSessionActions } from "../../../features/terminal";
-import {
-  defaultTmuxDisplayName,
-  tmuxControllerActions,
-  uniqueTmuxDisplayName,
-} from "../../../features/tmux";
+import { terminalSessionActions } from "../../../features/terminal/ports";
+import { defaultTmuxDisplayName, uniqueTmuxDisplayName } from "../../../features/tmux";
+import { tmuxControllerActions } from "../../../features/tmux/ports";
 import {
   findPaneNode,
   getLeafPaneIds,
@@ -17,9 +14,9 @@ import type {
   SshConfig,
   Terminal,
   TerminalDisplayConfig,
-} from "../../../models/terminal/runtimeContracts";
-import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
-import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
+} from "../../../features/terminal";
+import type { SavedTerminalConfig } from "../../../features/launch-config";
+import type { TmuxSessionConfig } from "../../../features/launch-config";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";

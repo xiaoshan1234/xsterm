@@ -713,12 +713,13 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 
 新代码不得继续依赖大而全的 `useSession()`。按实际职责使用：
 
-| Hook                    | 职责                                           |
-| ----------------------- | ---------------------------------------------- |
-| `useSavedLaunchConfigs` | 保存的 Terminal/tmux 配置、分组及配置管理动作  |
-| `useTerminalRuntime`    | Live Terminal 列表、运行状态、输入、关闭和重连 |
-| `useWorkspaceLayout`    | Workspace、Window、Pane 布局及快照管理         |
-| `useSessionPreferences` | 终端相关全局偏好                               |
+| Hook                    | 职责                                            |
+| ----------------------- | ----------------------------------------------- |
+| `useSavedLaunchConfigs` | 保存的 Terminal/tmux 配置、分组及配置管理动作   |
+| `useTerminalRuntime`    | Live Terminal 列表、运行状态、输入、关闭和重连  |
+| `useTmuxRuntime`        | tmux controller、attach/detach/reconnect 和错误 |
+| `useWorkspaceLayout`    | Workspace、Window、Pane 布局及快照管理          |
+| `useSessionPreferences` | 终端相关全局偏好                                |
 
 `useSession()` 已移除；跨聚合动作只能由 `app/application/session`
 协调器编排，并通过窄 Context 或 intent port 暴露给 UI。

@@ -3,14 +3,11 @@ import {
   terminalSessionActions,
   terminalStreamActions,
   type TerminalConnectionInfo,
-} from "../../../features/terminal";
-import { tmuxControllerActions } from "../../../features/tmux";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type {
-  EditablePaneNode,
-  PaneSplitDirection,
-} from "../../../models/workspace/EditablePaneTree";
-import type { Workspace } from "../../../models/workspace/EditableWorkspace";
+} from "../../../features/terminal/ports";
+import { tmuxControllerActions } from "../../../features/tmux/ports";
+import type { Terminal } from "../../../features/terminal";
+import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
+import type { Workspace } from "../../../features/workspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import {
   createLeafPane,

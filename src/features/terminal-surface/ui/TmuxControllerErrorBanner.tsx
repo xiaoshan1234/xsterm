@@ -1,8 +1,8 @@
 import { useCallback } from "react";
-import { useTerminalRuntime } from "../../terminal";
-import { tmuxControllerActions } from "../../tmux";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
+import { useTmuxRuntime } from "../../tmux";
+import { tmuxControllerActions } from "../../tmux/ports";
+import type { Terminal } from "../../../features/terminal";
+import type { TmuxSessionConfig } from "../../../features/launch-config";
 import "./TmuxControllerErrorBanner.css";
 
 interface TmuxControllerErrorBannerProps {
@@ -18,7 +18,7 @@ interface TmuxControllerErrorBannerProps {
  * `TmuxSessionConfig` captured at create / attach time.
  */
 export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorBannerProps) {
-  const { tmuxControllerErrors, dismissTmuxControllerError } = useTerminalRuntime();
+  const { tmuxControllerErrors, dismissTmuxControllerError } = useTmuxRuntime();
 
   const match: { controllerId: number; config: TmuxSessionConfig; reason?: string } | null =
     (() => {

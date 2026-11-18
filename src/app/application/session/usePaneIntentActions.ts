@@ -1,12 +1,13 @@
 import { useCallback, useMemo } from "react";
 import { createApplicationError } from "../../../models/applicationError";
-import { tmuxWindowActions } from "../../../features/tmux";
+import { tmuxWindowActions } from "../../../features/tmux/ports";
 import {
   findPaneNode,
   isSessionUsedInOtherWindow,
   replacePaneNode,
   type AttachExistingTerminalRequest,
   type AttachSavedConfigToPaneRequest,
+  type CreateSavedConfigForWindowRequest,
   type PaneIntentActions,
   type PaneTarget,
   type SplitPaneWithSavedConfigRequest,
@@ -20,6 +21,7 @@ type PaneIntentActionPorts = Pick<
   | "closePane"
   | "closeTerminal"
   | "createTerminalFromSavedConfig"
+  | "replaceInitWindowWithTerminal"
   | "setActivePane"
   | "setActiveWorkspace"
   | "splitPane"
@@ -126,6 +128,19 @@ export function usePaneIntentActions({
     [attachExistingTerminal, createAndUseTerminal],
   );
 
+  const createSavedConfigForWindow = useCallback(
+    async ({ workspaceId, windowId, configId }: CreateSavedConfigForWindowRequest) => {
+      const terminal = await actions.createTerminalFromSavedConfig(configId);
+      try {
+        actions.replaceInitWindowWithTerminal(workspaceId, windowId, terminal);
+      } catch (error) {
+        await actions.closeTerminal(terminal.id).catch(() => undefined);
+        throw error;
+      }
+    },
+    [actions],
+  );
+
   const closePane = useCallback(
     async ({ workspaceId, windowId, paneId }: PaneTarget) => {
       await actions.closePane(workspaceId, windowId, paneId);
@@ -165,6 +180,7 @@ export function usePaneIntentActions({
       splitPaneWithTerminal,
       splitPaneWithSavedConfig,
       attachSavedConfigToPane,
+      createSavedConfigForWindow,
       closePane,
       closeTerminal,
       createTmuxWindow,
@@ -174,6 +190,7 @@ export function usePaneIntentActions({
     [
       attachExistingTerminal,
       attachSavedConfigToPane,
+      createSavedConfigForWindow,
       closePane,
       closeTerminal,
       createTmuxWindow,

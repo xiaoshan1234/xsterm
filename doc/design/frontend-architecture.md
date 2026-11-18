@@ -54,6 +54,7 @@ multiple reducers directly.
 src/
   app/
     application/
+    infrastructure/
     shell/
   features/
     launch-config/
@@ -148,7 +149,9 @@ Tauri event compatibility.
 ## Migration status
 
 - Completed: typed application errors and code-based UI handling.
-- Completed: pure runtime PaneTree operations now live under `models/workspace`.
+- Completed: editable PaneTree operations live under
+  `features/workspace/application`, while canonical workspace invariants stay
+  in `models/workspace`.
 - Completed: saved launch configs, groups, defaults, schema migration, and
   persistence now live under `features/launch-config`.
 - Completed: launch-config group operations are pure functions, and launch
@@ -192,23 +195,25 @@ Tauri event compatibility.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
 - Completed: the `models/runtime` compatibility namespace has been retired.
-- Completed: frontend terminal projections and capability flags are isolated
-  under `models/terminal`, with `runtimeContracts.ts` providing the stable
-  feature-scoped entry.
-- Completed: the editable pane tree is owned by
-  `models/workspace/EditablePaneTree.ts`; `models/runtime/pane.ts` has been
-  removed and all consumers use the explicit `EditablePaneNode` model.
-- Completed: editable window/workspace state is owned by
-  `models/workspace/EditableWorkspace.ts`; the old
-  `models/runtime/workspace.ts` module has been removed.
-- Completed: `TmuxSessionConfig` now lives in the tmux model layer; the old
-  `models/runtime/tmux.ts` module has been removed.
-- Completed: saved terminal configurations and groups now live in
-  `models/launch/SavedTerminalConfig.ts`; unused runtime event and saved-config
-  compatibility modules have been removed.
-- Completed: local/SSH connection inputs and environment settings now live in
-  `models/launch/TerminalConnectionConfig.ts`.
-- Completed: all internal runtime model imports target concrete modules; the
-  former `runtime/terminal` compatibility barrel has been removed.
-- Next: converge the frontend terminal projection with the canonical terminal
-  aggregate when the transport mapping can preserve current tmux behavior.
+- Completed: frontend terminal projections and capability flags are owned by
+  `features/terminal/contracts.ts`; `models/terminal` contains canonical domain
+  types only.
+- Completed: editable pane/window/workspace projections live in
+  `features/workspace/contracts.ts`; canonical aggregates remain isolated in
+  `models/workspace`.
+- Completed: `TmuxSessionConfig`, saved terminal configurations, local/SSH
+  connection inputs, and display settings live in
+  `features/launch-config/contracts.ts`.
+- Completed: terminal and tmux runtime contexts are separate; tmux lifecycle
+  and controller errors are no longer exposed through terminal contracts.
+- Completed: terminal close/workspace removal coordination and tmux resize
+  effects are injected from the app layer rather than imported from other
+  feature actions.
+- Completed: terminal events are normalized by the terminal feature and
+  coordinated into terminal/workspace state by `app/application/session`.
+- Completed: shell Dialog submission orchestration is isolated in the app
+  application layer; `RuntimeOverlays` only renders overlays.
+- Completed: launch-config dialogs are grouped under `terminal/`, `tmux/`, and
+  `groups/`.
+- Completed: AppShell manager composition and workspace main area are split into
+  app runtime components.

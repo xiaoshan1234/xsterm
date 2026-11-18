@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
+import type { EditablePaneNode } from "../../../features/workspace";
 import { computeTmuxWindowSize, type TerminalSize } from "./tmuxWindowSize";
 
 function leaf(id: string, terminalId: number): EditablePaneNode {

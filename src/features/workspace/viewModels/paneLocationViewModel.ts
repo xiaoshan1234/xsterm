@@ -1,6 +1,6 @@
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import type { Workspace } from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { EditablePaneNode } from "../../../features/workspace";
+import type { Workspace } from "../../../features/workspace";
 
 export interface PaneLocationViewData {
   workspaceId: string;

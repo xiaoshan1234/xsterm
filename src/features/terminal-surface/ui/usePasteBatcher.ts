@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { frontendLogger as logger } from "../../../infra";
-import { terminalStreamActions } from "../../terminal";
+import { terminalStreamActions } from "../../terminal/ports";
 import { convertLineEndings } from "./textTransform";
 
 /**

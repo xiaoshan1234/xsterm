@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { useSavedLaunchConfigs } from "../features/launch-config";
 import { useSessionPreferences } from "../features/settings";
 import { useTerminalRuntime } from "../features/terminal";
+import { useTmuxRuntime } from "../features/tmux";
 import { usePaneIntents, useWorkspaceLayout } from "../features/workspace";
 import { createTestApplication } from "./createTestApplication";
 
@@ -12,13 +13,14 @@ function ContextProbe() {
   const launchConfig = useSavedLaunchConfigs();
   const preferences = useSessionPreferences();
   const terminal = useTerminalRuntime();
+  const tmux = useTmuxRuntime();
   const workspace = useWorkspaceLayout();
   const paneIntents = usePaneIntents();
 
   return (
     <div>
       {launchConfig.groups.length}:{preferences.globalLocalEcho ? "echo" : "silent"}:
-      {terminal.terminals.length}:{workspace.workspaces.length}:
+      {terminal.terminals.length}:{workspace.workspaces.length}:{tmux.openTmuxSessions.length}:
       {typeof paneIntents.closePane === "function" ? "intents" : "missing"}
     </div>
   );
@@ -34,7 +36,7 @@ describe("createTestApplication", () => {
       </app.Application>,
     );
 
-    expect(screen.getByText("0:silent:0:0:intents")).toBeTruthy();
+    expect(screen.getByText("0:silent:0:0:0:intents")).toBeTruthy();
   });
 
   it("allows focused context overrides", () => {
@@ -51,6 +53,6 @@ describe("createTestApplication", () => {
       </app.Application>,
     );
 
-    expect(screen.getByText("1:echo:0:0:intents")).toBeTruthy();
+    expect(screen.getByText("1:echo:0:0:0:intents")).toBeTruthy();
   });
 });

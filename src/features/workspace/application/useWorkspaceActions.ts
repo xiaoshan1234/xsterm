@@ -1,7 +1,6 @@
 import { useCallback } from "react";
-import { terminalSessionActions } from "../../terminal";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { Workspace } from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { Workspace } from "../../../features/workspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface UseWorkspaceActionsDeps {
@@ -10,6 +9,7 @@ interface UseWorkspaceActionsDeps {
   setActiveWorkspaceId: React.Dispatch<React.SetStateAction<string | null>>;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
+  closeTerminal: (terminalId: number) => Promise<void>;
 }
 
 export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
@@ -19,6 +19,7 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
     setActiveWorkspaceId,
     setSessions,
     establishingSessionsRef,
+    closeTerminal,
   } = deps;
 
   const createDefaultWorkspace = useCallback((): Workspace => {
@@ -109,9 +110,7 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
       if (workspace.terminalIds.length > 0) {
         const idsToClose = new Set(workspace.terminalIds);
         idsToClose.forEach((terminalId) => {
-          terminalSessionActions
-            .closeTerminal(terminalId)
-            .catch((e) => console.error("Failed to close terminal:", e));
+          closeTerminal(terminalId).catch((e) => console.error("Failed to close terminal:", e));
           establishingSessionsRef.current.delete(terminalId);
           clearTerminalOutput(terminalId);
         });
@@ -131,7 +130,14 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
         return fallback?.id ?? null;
       });
     },
-    [setWorkspaces, setActiveWorkspaceId, workspacesRef, setSessions, establishingSessionsRef],
+    [
+      setWorkspaces,
+      setActiveWorkspaceId,
+      workspacesRef,
+      setSessions,
+      establishingSessionsRef,
+      closeTerminal,
+    ],
   );
 
   return {

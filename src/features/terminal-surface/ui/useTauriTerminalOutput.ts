@@ -1,11 +1,12 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
-import { terminalClipboard, terminalStreamActions, useTerminalRuntime } from "../../terminal";
+import { useTerminalRuntime } from "../../terminal";
+import { terminalClipboard, terminalStreamActions } from "../../terminal/ports";
 import {
   appendTerminalOutput,
   getTerminalOutput,
 } from "../../../shared/utils/terminalOutputBuffer";
-import { tmuxControllerActions } from "../../tmux";
+import { tmuxControllerActions } from "../../tmux/ports";
 import { normalizeCapturedScrollback } from "./scrollback";
 
 const lastTouchRef = new Map<number, number>();

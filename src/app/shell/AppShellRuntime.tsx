@@ -3,25 +3,18 @@ import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../features/launch-c
 import { useTerminalRuntime } from "../../features/terminal";
 import { useWorkspaceLayout } from "../../features/workspace";
 import NavBar from "../NavBar";
-import {
-  selectWindowManagerItems,
-  selectWorkspaceManagerItems,
-  WorkspaceContainer,
-  WindowManagerPanel,
-  WorkspaceManagerPanel,
-} from "../../features/workspace";
-import { selectTerminalManagerGroups, TerminalManagerPanel } from "../../features/terminal";
+import { selectWindowManagerItems, selectWorkspaceManagerItems } from "../../features/workspace";
+import { selectTerminalManagerGroups } from "../../features/terminal";
 import {
   selectTmuxManagerGroups,
   selectTmuxStatusControllers,
-  TmuxManagerPanel,
   tmuxSessionBaseKey,
   tmuxSessionKey,
+  useTmuxRuntime,
 } from "../../features/tmux";
 import { selectPaneTargetOptions } from "../../features/command-sender";
 import { AppShell } from "./AppShell";
 import { GlobalTextSender } from "../../features/command-sender";
-import { SettingsPanel } from "../../features/settings";
 import { TOOL_TITLES, type ToolId } from "./types";
 import { type HelpDialogId } from "./HelpDialog";
 import { RuntimeOverlays } from "./RuntimeOverlays";
@@ -32,10 +25,13 @@ import {
 } from "./runtimeOverlayTypes";
 import { useAppShortcuts } from "../useAppShortcuts";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
+import { RuntimeToolPanel } from "./RuntimeToolPanel";
+import { RuntimeMainArea } from "./RuntimeMainArea";
+import { useRuntimeTextSender } from "./useRuntimeTextSender";
 
 export function AppShellRuntime() {
-  const { terminals, writeTerminal, detachTmuxSession, openTmuxSessions, terminalSizesRef } =
-    useTerminalRuntime();
+  const { terminals, writeTerminal, getTerminalSize } = useTerminalRuntime();
+  const { detachTmuxSession, openTmuxSessions } = useTmuxRuntime();
   const { savedConfigs, groups, removeConfig, toggleGroup, deleteGroup } = useSavedLaunchConfigs();
   const {
     workspaces,
@@ -113,7 +109,7 @@ export function AppShellRuntime() {
     activeWorkspace,
     terminals,
     tmuxStatusControllers,
-    terminalSizesRef.current,
+    getTerminalSize,
   );
   const windowManagerItems = useMemo(
     () => selectWindowManagerItems(savedWindowConfigs),
@@ -209,160 +205,97 @@ export function AppShellRuntime() {
     [detachTmuxSession, openTmuxSessions, savedConfigs, showError],
   );
 
-  const selectTextSenderTarget = paneTargetOptions.find(
-    (option) => option.targetKey === selectedTargetKey,
+  const { targets: textSenderTargets, sendText: sendTextToTarget } = useRuntimeTextSender({
+    paneTargetOptions,
+    selectedTargetKey,
+    writeTerminal,
+    onError: showError,
+  });
+
+  const toolPanelContent = (
+    <RuntimeToolPanel
+      activeTool={activeTool}
+      terminalManagerGroups={terminalManagerGroups}
+      tmuxManagerGroups={tmuxManagerGroups}
+      windowManagerItems={windowManagerItems}
+      workspaceManagerItems={workspaceManagerItems}
+      onCreateTerminal={() =>
+        setDialog({
+          kind: "create-terminal",
+          initialTab: "local",
+          groupId: DEFAULT_GROUP_ID,
+        })
+      }
+      onCreateTmux={() => setDialog({ kind: "create-tmux" })}
+      onAttachTmux={() => setDialog({ kind: "attach-tmux" })}
+      onNewGroup={() => setDialog({ kind: "new-group" })}
+      onToggleGroup={toggleGroup}
+      onEditGroup={(groupId) => setDialog({ kind: "edit-group", groupId })}
+      onDeleteGroup={(groupId) =>
+        setConfirm({
+          title: "Delete terminal group?",
+          message: "The group will be removed. Saved terminal configurations are kept.",
+          confirmLabel: "Delete",
+          action: () => deleteGroup(groupId),
+        })
+      }
+      onOpenConfig={openConfig}
+      onEditTerminalConfig={openEditTerminalConfig}
+      onEditTmuxConfig={openEditTmuxConfig}
+      onRemoveConfig={removeConfig}
+      onDetachTmuxConfig={detachTmuxConfig}
+      onCreateWindow={() => {
+        if (activeWorkspace) {
+          createWindow(activeWorkspace.id, undefined, undefined, undefined, "init");
+        }
+      }}
+      onLoadWindow={(configId) => {
+        if (activeWorkspace) {
+          void loadWindow(configId, activeWorkspace.id).catch((cause) =>
+            showError("Unable to load window", cause),
+          );
+        }
+      }}
+      onRenameWindow={(configId) => {
+        const config = savedWindowConfigs.find((candidate) => candidate.id === configId);
+        if (config) {
+          setDialog({
+            kind: "rename-window",
+            configId,
+            defaultName: config.name,
+          });
+        }
+      }}
+      onDeleteWindow={(configId) =>
+        setConfirm({
+          title: "Delete saved window?",
+          message: "The saved window snapshot will be removed. Running panes stay open.",
+          confirmLabel: "Delete",
+          action: () => deleteSavedWindow(configId),
+        })
+      }
+      onCreateWorkspace={() => createEmptyWorkspace()}
+      onOpenWorkspace={openWorkspace}
+      onRenameWorkspace={(configId) => {
+        const config = savedWorkspaces.find((candidate) => candidate.id === configId);
+        if (config) {
+          setDialog({
+            kind: "rename-workspace",
+            configId,
+            defaultName: config.name,
+          });
+        }
+      }}
+      onDeleteWorkspace={(configId) =>
+        setConfirm({
+          title: "Delete saved workspace?",
+          message: "The saved workspace snapshot will be removed.",
+          confirmLabel: "Delete",
+          action: () => deleteSavedWorkspace(configId),
+        })
+      }
+    />
   );
-
-  const textSenderTargets = paneTargetOptions.map((option) => ({
-    id: option.targetKey,
-    label: option.displayInfo.title,
-    breadcrumb: option.displayInfo.breadcrumb,
-    status: option.displayInfo.isAvailable ? "Connected" : "Unavailable",
-    isAvailable: option.displayInfo.isAvailable,
-  }));
-
-  const sendTextToTarget = useCallback(
-    async (text: string) => {
-      if (!selectTextSenderTarget || !text) return;
-      await writeTerminal(selectTextSenderTarget.terminalId, text).catch((cause) => {
-        showError("Unable to send command", cause);
-        throw cause;
-      });
-    },
-    [selectTextSenderTarget, showError, writeTerminal],
-  );
-
-  const toolPanelContent = useMemo(() => {
-    switch (activeTool) {
-      case "terminal-manager":
-        return (
-          <TerminalManagerPanel
-            groups={terminalManagerGroups}
-            onNewTerminal={() =>
-              setDialog({
-                kind: "create-terminal",
-                initialTab: "local",
-                groupId: DEFAULT_GROUP_ID,
-              })
-            }
-            onNewGroup={() => setDialog({ kind: "new-group" })}
-            onToggleGroup={toggleGroup}
-            onEditGroup={(groupId) => setDialog({ kind: "edit-group", groupId })}
-            onDeleteGroup={(groupId) =>
-              setConfirm({
-                title: "Delete terminal group?",
-                message: "The group will be removed. Saved terminal configurations are kept.",
-                confirmLabel: "Delete",
-                action: () => deleteGroup(groupId),
-              })
-            }
-            onOpenConfig={openConfig}
-            onEditConfig={openEditTerminalConfig}
-            onRemoveConfig={removeConfig}
-          />
-        );
-      case "tmux-manager":
-        return (
-          <TmuxManagerPanel
-            groups={tmuxManagerGroups}
-            onCreateTmux={() => setDialog({ kind: "create-tmux" })}
-            onNewTmux={() => setDialog({ kind: "attach-tmux" })}
-            onOpenConfig={openConfig}
-            onEditConfig={openEditTmuxConfig}
-            onRemoveConfig={removeConfig}
-            onDetachConfig={detachTmuxConfig}
-          />
-        );
-      case "window-manager":
-        return (
-          <WindowManagerPanel
-            items={windowManagerItems}
-            onNewWindow={() => {
-              if (activeWorkspace)
-                createWindow(activeWorkspace.id, undefined, undefined, undefined, "init");
-            }}
-            onLoad={(configId) => {
-              if (activeWorkspace) {
-                void loadWindow(configId, activeWorkspace.id).catch((cause) =>
-                  showError("Unable to load window", cause),
-                );
-              }
-            }}
-            onRename={(configId) => {
-              const config = savedWindowConfigs.find((candidate) => candidate.id === configId);
-              if (config) {
-                setDialog({
-                  kind: "rename-window",
-                  configId,
-                  defaultName: config.name,
-                });
-              }
-            }}
-            onDelete={(configId) =>
-              setConfirm({
-                title: "Delete saved window?",
-                message: "The saved window snapshot will be removed. Running panes stay open.",
-                confirmLabel: "Delete",
-                action: () => deleteSavedWindow(configId),
-              })
-            }
-          />
-        );
-      case "workspace-manager":
-        return (
-          <WorkspaceManagerPanel
-            items={workspaceManagerItems}
-            onNewWorkspace={() => createEmptyWorkspace()}
-            onOpen={openWorkspace}
-            onRename={(configId) => {
-              const config = savedWorkspaces.find((candidate) => candidate.id === configId);
-              if (config) {
-                setDialog({
-                  kind: "rename-workspace",
-                  configId,
-                  defaultName: config.name,
-                });
-              }
-            }}
-            onDelete={(configId) =>
-              setConfirm({
-                title: "Delete saved workspace?",
-                message: "The saved workspace snapshot will be removed.",
-                confirmLabel: "Delete",
-                action: () => deleteSavedWorkspace(configId),
-              })
-            }
-          />
-        );
-      case "settings":
-        return <SettingsPanel />;
-      default:
-        return null;
-    }
-  }, [
-    activeTool,
-    activeWorkspace,
-    createEmptyWorkspace,
-    createWindow,
-    deleteGroup,
-    deleteSavedWindow,
-    deleteSavedWorkspace,
-    detachTmuxConfig,
-    loadWindow,
-    openConfig,
-    openEditTerminalConfig,
-    openEditTmuxConfig,
-    openWorkspace,
-    removeConfig,
-    savedWindowConfigs,
-    savedWorkspaces,
-    showError,
-    terminalManagerGroups,
-    tmuxManagerGroups,
-    toggleGroup,
-    windowManagerItems,
-    workspaceManagerItems,
-  ]);
 
   const overlay = (
     <RuntimeOverlays
@@ -405,28 +338,11 @@ export function AppShellRuntime() {
       toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}
       toolPanelContent={toolPanelContent}
       mainArea={
-        activeWorkspace ? (
-          <div className="shell-runtime-workspaces">
-            {workspaces.map((workspace) => (
-              <div
-                key={workspace.id}
-                className={`workspace-view ${
-                  workspace.id === activeWorkspace.id ? "workspace-view--active" : ""
-                }`}
-              >
-                <WorkspaceContainer workspace={workspace} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="shell-empty-main">
-            <h2>No workspace</h2>
-            <p>Create a workspace to start using terminals.</p>
-            <button type="button" className="btn btn--primary" onClick={createDefaultWorkspace}>
-              Create Workspace
-            </button>
-          </div>
-        )
+        <RuntimeMainArea
+          workspaces={workspaces}
+          activeWorkspace={activeWorkspace}
+          onCreateWorkspace={createDefaultWorkspace}
+        />
       }
       textSender={
         <GlobalTextSender

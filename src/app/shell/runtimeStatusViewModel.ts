@@ -1,7 +1,7 @@
-import type { Terminal } from "../../models/terminal/runtimeContracts";
-import type { Workspace } from "../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../features/terminal";
+import type { Workspace } from "../../features/workspace";
 import { type TmuxStatusControllerViewData } from "../../features/tmux";
-import { findPaneNode, getLeafPaneIds } from "../../models/workspace/runtimePaneTreeOperations";
+import { findPaneNode, getLeafPaneIds } from "../../features/workspace";
 
 export type RuntimeStatusTransport = "local" | "ssh" | "wsl";
 
@@ -20,7 +20,9 @@ export function selectRuntimeStatus(
   activeWorkspace: Workspace | null,
   terminals: readonly Terminal[],
   tmuxControllers: readonly TmuxStatusControllerViewData[],
-  terminalSizes: ReadonlyMap<number, { rows: number; cols: number }>,
+  terminalSizes:
+    | ReadonlyMap<number, { rows: number; cols: number }>
+    | ((terminalId: number) => { rows: number; cols: number } | undefined),
 ): RuntimeStatusViewData | null {
   if (!activeWorkspace) return null;
 
@@ -39,7 +41,10 @@ export function selectRuntimeStatus(
   const paneCount = paneIds.length;
   const paneIndex = paneIds.indexOf(activePane.id);
   const paneNumber = paneIndex >= 0 ? paneIndex + 1 : undefined;
-  const measuredSize = terminalSizes.get(terminal.id);
+  const measuredSize =
+    typeof terminalSizes === "function"
+      ? terminalSizes(terminal.id)
+      : terminalSizes.get(terminal.id);
   const size =
     measuredSize ??
     (terminal.tmuxPaneWidth !== undefined && terminal.tmuxPaneHeight !== undefined

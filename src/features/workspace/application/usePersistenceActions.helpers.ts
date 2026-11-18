@@ -1,8 +1,8 @@
-import { terminalSessionActions } from "../../terminal";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
+import type { Terminal } from "../../../features/terminal";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface RollbackDeps {
+  closeTerminal: (terminalId: number) => Promise<void>;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
   /** Log prefix used when reporting close failures during rollback. */
@@ -17,15 +17,20 @@ interface RollbackDeps {
  * from `establishingSessionsRef`, clears their output buffers, and removes
  * them from `terminals`.
  */
-export function createRollback({ setSessions, establishingSessionsRef, logTag }: RollbackDeps) {
+export function createRollback({
+  closeTerminal,
+  setSessions,
+  establishingSessionsRef,
+  logTag,
+}: RollbackDeps) {
   return async (configIdToSession: Map<string, Terminal>): Promise<void> => {
     const terminalsToClose = [...configIdToSession.values()];
     const idsToClose = new Set(terminalsToClose.map((s) => s.id));
     await Promise.all(
       terminalsToClose.map((terminal) =>
-        terminalSessionActions
-          .closeTerminal(terminal.id)
-          .catch((e) => console.error(`Failed to close terminal during ${logTag} rollback:`, e)),
+        closeTerminal(terminal.id).catch((e) =>
+          console.error(`Failed to close terminal during ${logTag} rollback:`, e),
+        ),
       ),
     );
     for (const id of idsToClose) {

@@ -1,8 +1,5 @@
 import { useCallback, useEffect } from "react";
-import type {
-  SavedTerminalConfig,
-  TerminalGroup,
-} from "../../../models/launch/SavedTerminalConfig";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../features/launch-config";
 import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "../constants";
 import {
   loadSavedConfigs,

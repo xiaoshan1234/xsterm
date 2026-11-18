@@ -1,11 +1,11 @@
-import { type BackendTerminalHandle } from "../../terminal-stream";
+import { type BackendTerminalHandle } from "../../terminal-stream/adapterContracts";
 
 export type {
   SshConfigDto,
   TerminalCapabilitiesDto,
   TerminalInfoDto,
   TerminalKindDto,
-} from "../../terminal-stream";
+} from "../../terminal-stream/adapterContracts";
 
 export interface LocalTerminalConfigDto {
   name?: string;

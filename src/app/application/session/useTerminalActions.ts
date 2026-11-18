@@ -1,26 +1,24 @@
 import { useCallback } from "react";
-import { terminalSessionActions } from "../../../features/terminal";
-import { tmuxControllerActions } from "../../../features/tmux";
-import type {
-  LocalTerminalConfig,
-  SshConfig,
-  Terminal,
-} from "../../../models/terminal/runtimeContracts";
-import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
-import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
+import { terminalSessionActions } from "../../../features/terminal/ports";
+import { tmuxControllerActions, tmuxWindowActions } from "../../../features/tmux/ports";
+import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
+import type { TmuxSessionConfig } from "../../../features/launch-config";
+import type { Window, Workspace } from "../../../features/workspace";
 import {
   assertSessionNotUsedElsewhere,
   createLeafPane,
   forEachPane,
   generateId,
   getUniqueWindowName,
+  withRecomputedSessionIds,
+} from "../../../features/workspace";
+import {
   usePersistenceActions,
   useWindowActions,
   useWorkspaceActions,
-  withRecomputedSessionIds,
-} from "../../../features/workspace";
+} from "../../../features/workspace/composition";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
-import { useGroupActions } from "../../../features/launch-config";
+import { useGroupActions } from "../../../features/launch-config/composition";
 import { usePaneActions } from "./usePaneActions";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
 import type { SessionActions, SessionPersistence, TerminalState } from "./types";
@@ -273,6 +271,8 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     establishingSessionsRef,
     createTerminalFromSavedConfig,
     createWindowFromSession,
+    closeTerminal: terminalSessionActions.closeTerminal,
+    killTmuxWindow: tmuxWindowActions.killWindow,
   });
 
   const workspaceActions = useWorkspaceActions({
@@ -281,11 +281,13 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     setActiveWorkspaceId,
     setSessions,
     establishingSessionsRef,
+    closeTerminal: terminalSessionActions.closeTerminal,
   });
 
   const persistence = usePersistenceActions({
     ...opts,
     openFromConfigInternal,
+    closeTerminal: terminalSessionActions.closeTerminal,
   });
 
   const group = useGroupActions(opts);

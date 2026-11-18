@@ -1,11 +1,7 @@
 import { useCallback } from "react";
-import type { Terminal } from "../../../models/terminal/runtimeContracts";
-import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import type {
-  SavedWorkspace,
-  Window,
-  Workspace,
-} from "../../../models/workspace/EditableWorkspace";
+import type { Terminal } from "../../../features/terminal";
+import type { EditablePaneNode } from "../../../features/workspace";
+import type { SavedWorkspace, Window, Workspace } from "../../../features/workspace";
 import { createApplicationError } from "../../../models/applicationError";
 import {
   collectSessionIdsFromWorkspace,
@@ -25,6 +21,7 @@ interface UseSavedWorkspaceActionsDeps {
   establishingSessionsRef: React.MutableRefObject<Set<number>>;
   persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;
+  closeTerminal: (terminalId: number) => Promise<void>;
 }
 
 export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
@@ -38,6 +35,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
     establishingSessionsRef,
     persistSavedWorkspaces,
     openFromConfigInternal,
+    closeTerminal,
   } = deps;
 
   /**
@@ -128,6 +126,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
       const configIdToSession = new Map<string, Terminal>();
 
       const rollback = createRollback({
+        closeTerminal,
         setSessions,
         establishingSessionsRef,
         logTag: "workspace",
@@ -223,6 +222,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
       setWorkspaces,
       setActiveWorkspaceId,
       establishingSessionsRef,
+      closeTerminal,
     ],
   );
 

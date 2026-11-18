@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
-import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
+import type { SavedTerminalConfig } from "../../../features/launch-config";
+import type { TmuxSessionConfig } from "../../../features/launch-config";
 import {
   defaultTmuxDisplayName,
   findOpenTmuxControllerId,

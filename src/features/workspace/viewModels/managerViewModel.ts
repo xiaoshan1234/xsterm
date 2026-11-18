@@ -1,8 +1,4 @@
-import type {
-  SavedWindowConfig,
-  SavedWorkspace,
-  Workspace,
-} from "../../../models/workspace/EditableWorkspace";
+import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../../../features/workspace";
 
 export interface WindowManagerItemViewData {
   configId: string;

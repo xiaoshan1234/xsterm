@@ -10,7 +10,7 @@ import {
   normalizeWindowRenamed,
 } from "./tmuxEvents";
 import { toBackendControllerHandle, toBackendWindowHandle } from "./handles";
-import { toBackendTerminalHandle } from "../../terminal-stream";
+import { toBackendTerminalHandle } from "../../terminal-stream/adapterContracts";
 
 describe("tmux event normalization", () => {
   it("converts snake_case pane and controller payloads", () => {

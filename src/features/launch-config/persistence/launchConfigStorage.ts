@@ -1,11 +1,8 @@
 import { getJsonStore } from "../../../infra/storage";
 import { frontendLogger as logger } from "../../../infra";
-import type { LocalTerminalConfig, SshConfig } from "../../../models/terminal/runtimeContracts";
-import type {
-  SavedTerminalConfig,
-  TerminalGroup,
-} from "../../../models/launch/SavedTerminalConfig";
-import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
+import type { LocalTerminalConfig, SshConfig } from "../../../features/terminal";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../features/launch-config";
+import type { TmuxSessionConfig } from "../../../features/launch-config";
 
 export interface LaunchConfigGroupStore {
   groups: TerminalGroup[];

@@ -3,9 +3,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { isApplicationError } from "../../../models/applicationError";
-import { type Terminal } from "../../../models/terminal/runtimeContracts";
-import { type EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import { type Workspace } from "../../../models/workspace/EditableWorkspace";
+import { type Terminal } from "../../../features/terminal";
+import { type EditablePaneNode } from "../../../features/workspace";
+import { type Workspace } from "../../../features/workspace";
 import { type SessionActions, type TerminalState } from "./types";
 import { usePaneIntentActions } from "./usePaneIntentActions";
 
@@ -59,6 +59,7 @@ function createActionPorts() {
     closePane: vi.fn(async () => undefined),
     closeTerminal: vi.fn(async () => undefined),
     createTerminalFromSavedConfig: vi.fn(async () => createTerminal()),
+    replaceInitWindowWithTerminal: vi.fn(),
     setActivePane: vi.fn(),
     setActiveWorkspace: vi.fn(),
     splitPane: vi.fn(),
@@ -68,6 +69,7 @@ function createActionPorts() {
     | "closePane"
     | "closeTerminal"
     | "createTerminalFromSavedConfig"
+    | "replaceInitWindowWithTerminal"
     | "setActivePane"
     | "setActiveWorkspace"
     | "splitPane"

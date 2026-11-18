@@ -1,10 +1,6 @@
 import { useRef, useState } from "react";
 import { useTerminalRuntime } from "../../terminal";
-import type {
-  LocalTerminalConfig,
-  SshConfig,
-  Terminal,
-} from "../../../models/terminal/runtimeContracts";
+import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
 import { isApplicationError } from "../../../models/applicationError";
 import { PlusIcon, FolderOpenIcon } from "../../../shared/icons/Icon";
 import { CreateTerminalDialog } from "../../launch-config";
@@ -13,17 +9,18 @@ import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {
   onTerminalCreated: (terminal: Terminal) => void | Promise<void>;
+  onCreateFromSavedConfig: (configId: string) => Promise<void>;
   title?: string;
   subtitle?: string;
 }
 
 export function PaneInitCard({
   onTerminalCreated,
+  onCreateFromSavedConfig,
   title = "Create a terminal",
   subtitle = "Create new or open a saved terminal",
 }: PaneInitCardProps) {
-  const { terminals, createLocalSessionOnly, createSshSessionOnly, createTerminalFromSavedConfig } =
-    useTerminalRuntime();
+  const { terminals, createLocalSessionOnly, createSshSessionOnly } = useTerminalRuntime();
   const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,8 +83,7 @@ export function PaneInitCard({
   const handleSelectConfig = async (configId: string) => {
     if (!startSubmitting()) return;
     try {
-      const terminal = await createTerminalFromSavedConfig(configId);
-      await onTerminalCreated(terminal);
+      await onCreateFromSavedConfig(configId);
       setShowSelectDialog(false);
     } catch (e) {
       if (isApplicationError(e, "terminal-already-attached")) {

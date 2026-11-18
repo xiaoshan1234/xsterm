@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useTerminalRuntime } from "../../terminal";
+import { terminalClipboard } from "../../terminal/ports";
 import { useTheme } from "../../../shared/theme/ThemeContext";
-import type { TerminalDisplayConfig } from "../../../models/terminal/runtimeContracts";
+import type { TerminalDisplayConfig } from "../../../features/terminal";
 import { frontendLogger as logger } from "../../../infra";
 import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
@@ -11,7 +12,6 @@ import { usePasteBatcher } from "./usePasteBatcher";
 import { filterTerminalInput } from "./terminalInput";
 import { countLines } from "./textTransform";
 import { PasteConfirmDialog } from "./PasteConfirmDialog";
-import { terminalClipboard } from "../../terminal";
 import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";
 

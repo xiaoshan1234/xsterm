@@ -1,4 +1,4 @@
-import type { TerminalKind } from "../../../models/terminal/runtimeContracts";
+import type { TerminalKind } from "../../../features/terminal";
 
 const ESC = String.fromCharCode(0x1b);
 const TMUX_DEVICE_ATTRIBUTES_REPLY = new RegExp(`${ESC}\\[\\?1;2c`, "g");

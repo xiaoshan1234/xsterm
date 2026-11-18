@@ -1,7 +1,7 @@
 import { useShortcuts } from "../shared/hooks/useShortcut";
 import { useTerminalRuntime } from "../features/terminal";
 import { useWorkspaceLayout } from "../features/workspace";
-import type { EditablePaneNode, PaneSplitDirection } from "../models/workspace/EditablePaneTree";
+import type { EditablePaneNode, PaneSplitDirection } from "../features/workspace";
 
 export function useAppShortcuts({
   onCreateSession,
