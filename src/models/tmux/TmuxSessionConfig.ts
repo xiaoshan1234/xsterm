@@ -1,4 +1,4 @@
-import { type SshConfig, type TerminalEnvConfig } from "./config";
+import { type SshConfig, type TerminalEnvConfig } from "../runtime/config";
 
 export interface TmuxSessionConfig {
   name?: string;

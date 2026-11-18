@@ -6,7 +6,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import { type OpenTmuxSession, type TmuxControllerError } from "./types";
 
 export interface TmuxRuntimeState {

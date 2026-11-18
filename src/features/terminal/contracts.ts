@@ -5,7 +5,7 @@ import type {
   Terminal,
   TerminalDisplayConfig,
 } from "../../models/runtime/config";
-import type { TmuxSessionConfig } from "../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../models/tmux/TmuxSessionConfig";
 import { type OpenTmuxSession, type TmuxControllerError } from "../tmux";
 
 export type { TerminalConnectionInfo } from "../terminal-stream";

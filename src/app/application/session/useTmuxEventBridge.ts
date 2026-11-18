@@ -1,6 +1,6 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { Terminal } from "../../../models/runtime/config";
-import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import {
   appendOrReplaceInitWindow,

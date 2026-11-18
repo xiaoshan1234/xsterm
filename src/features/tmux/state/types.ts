@@ -1,4 +1,4 @@
-import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 
 export interface TmuxControllerError {
   config: TmuxSessionConfig;

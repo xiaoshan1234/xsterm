@@ -1,5 +1,5 @@
 import type { PaneSplitDirection } from "../../../models/workspace/EditablePaneTree";
-import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import {
   toBackendTerminalHandle,
   toTerminalConnectionInfo,

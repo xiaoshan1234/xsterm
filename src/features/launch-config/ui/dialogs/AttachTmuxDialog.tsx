@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Terminal, TerminalDisplayConfig } from "../../../../models/runtime/config";
 import type { SavedTerminalConfig } from "../../../../models/runtime/savedConfig";
-import type { TmuxSessionConfig } from "../../../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../../../models/tmux/TmuxSessionConfig";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { DEFAULT_GROUP_ID } from "../../constants";
 import { useSavedLaunchConfigs } from "../../state/LaunchConfigContext";

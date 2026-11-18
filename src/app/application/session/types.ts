@@ -14,7 +14,7 @@ import type {
   PaneSplitDirection,
 } from "../../../models/workspace/EditablePaneTree";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
-import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import type {
   SavedWindowConfig,
   SavedWorkspace,

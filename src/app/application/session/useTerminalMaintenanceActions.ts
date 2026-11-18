@@ -19,7 +19,7 @@ import type {
   TerminalDisplayConfig,
 } from "../../../models/runtime/config";
 import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
-import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
