@@ -1,11 +1,11 @@
 import { type MutableRefObject } from "react";
-import {
-  type LocalTerminalConfig,
-  type SshConfig,
-  type Terminal,
-  type TerminalDisplayConfig,
-  type TmuxSessionConfig,
-} from "../../models/runtime/terminal";
+import type {
+  LocalTerminalConfig,
+  SshConfig,
+  Terminal,
+  TerminalDisplayConfig,
+} from "../../models/runtime/config";
+import type { TmuxSessionConfig } from "../../models/runtime/tmux";
 import { type OpenTmuxSession, type TmuxControllerError } from "../tmux/state/types";
 
 export interface TerminalRuntimeContextType {

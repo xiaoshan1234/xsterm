@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { type LocalTerminalConfig, type SshConfig } from "../../../../models/runtime/terminal";
+import type { LocalTerminalConfig, SshConfig } from "../../../../models/runtime/config";
 import { FormNumberField } from "../../../../shared/ui/FormNumberField";
 import { FormSelectField } from "../../../../shared/ui/FormSelectField";
 import { FormTextField } from "../../../../shared/ui/FormTextField";

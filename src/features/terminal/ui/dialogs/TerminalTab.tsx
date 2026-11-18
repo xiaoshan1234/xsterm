@@ -1,8 +1,8 @@
-import {
-  type LocalTerminalConfig,
-  type SshConfig,
-  type TerminalDisplayConfig,
-} from "../../../../models/runtime/terminal";
+import type {
+  LocalTerminalConfig,
+  SshConfig,
+  TerminalDisplayConfig,
+} from "../../../../models/runtime/config";
 import { FormNumberField } from "../../../../shared/ui/FormNumberField";
 import { FormRadioGroup } from "../../../../shared/ui/FormRadioGroup";
 import { FormSelectField } from "../../../../shared/ui/FormSelectField";

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { type SavedTerminalConfig, type TerminalGroup } from "../../../../models/runtime/terminal";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../../models/runtime/savedConfig";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { FormField } from "../../../../shared/ui/FormField";
 import { DEFAULT_GROUP_ID } from "../../../launch-config";

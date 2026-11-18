@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  type LocalTerminalConfig,
-  type SshConfig,
-  type Terminal,
-  type TerminalDisplayConfig,
-} from "../../../../models/runtime/terminal";
+import type {
+  LocalTerminalConfig,
+  SshConfig,
+  Terminal,
+  TerminalDisplayConfig,
+} from "../../../../models/runtime/config";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { DEFAULT_GROUP_ID } from "../../../launch-config";
 import { useSavedLaunchConfigs } from "../../../launch-config";

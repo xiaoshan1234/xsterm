@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useTerminalRuntime } from "../../terminal";
 import { useTheme } from "../../../shared/theme/ThemeContext";
-import { type TerminalDisplayConfig } from "../../../models/runtime/terminal";
+import type { TerminalDisplayConfig } from "../../../models/runtime/config";
 import { frontendLogger as logger } from "../../../infra";
 import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";

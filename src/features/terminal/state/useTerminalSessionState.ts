@@ -7,7 +7,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import { type Terminal } from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
 
 export interface TerminalSessionState {
   terminals: Terminal[];

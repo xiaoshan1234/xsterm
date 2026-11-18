@@ -1,7 +1,8 @@
 import { useCallback } from "react";
 import { useTerminalRuntime } from "../../terminal";
 import { tmuxControllerActions } from "../../tmux";
-import type { Terminal, TmuxSessionConfig } from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
 import "./TmuxControllerErrorBanner.css";
 
 interface TmuxControllerErrorBannerProps {

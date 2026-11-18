@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { type TerminalGroup } from "../../../../models/runtime/terminal";
+import type { TerminalGroup } from "../../../../models/runtime/savedConfig";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { FormField } from "../../../../shared/ui/FormField";
 
