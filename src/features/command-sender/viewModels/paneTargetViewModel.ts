@@ -9,11 +9,8 @@ import {
   type SavedTerminalConfig,
   type Terminal,
   type Workspace,
-} from "../../../models/legacy/terminal";
-import {
-  selectPaneLocations,
-  type PaneLocationViewData,
-} from "../../workspace/viewModels/paneLocationViewModel";
+} from "../../../models/runtime/terminal";
+import { selectPaneLocations, type PaneLocationViewData } from "../../workspace";
 
 export function selectPaneTargetDisplayInfos(
   workspaces: readonly Workspace[],

@@ -139,6 +139,36 @@ export default tseslint.config(
     },
   },
 
+  // Feature UI consumes application contracts, never adapters or Tauri plugins.
+  {
+    files: ["src/features/**/ui/**/*.{ts,tsx}", "src/features/**/view/**/*.{ts,tsx}"],
+    ignores: ["src/features/**/infrastructure/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@tauri-apps/api/core",
+              message: "Use a feature application contract instead of Tauri core.",
+            },
+            {
+              name: "@tauri-apps/api/event",
+              message: "Use a feature-local event bridge instead of Tauri events.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["**/infrastructure/**", "@tauri-apps/plugin-*"],
+              message:
+                "Feature UI must call an application action, not an infrastructure adapter or Tauri plugin.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Test files get a more relaxed set (they often use any / globals).
   {
     files: ["**/*.test.ts", "**/*.test.tsx"],

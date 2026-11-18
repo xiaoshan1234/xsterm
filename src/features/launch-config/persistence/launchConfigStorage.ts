@@ -6,7 +6,7 @@ import {
   type SshConfig,
   type TerminalGroup,
   type TmuxSessionConfig,
-} from "../../../models/legacy/terminal";
+} from "../../../models/runtime/terminal";
 
 export interface LaunchConfigGroupStore {
   groups: TerminalGroup[];

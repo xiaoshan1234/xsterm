@@ -1,7 +1,7 @@
 import { useTheme } from "../../../shared/theme/ThemeContext";
 import { FormCheckboxField } from "../../../shared/ui/FormCheckboxField";
 import { FormSelectField } from "../../../shared/ui/FormSelectField";
-import { useSessionPreferences } from "../../sessions";
+import { useSessionPreferences } from "../state/SessionPreferencesContext";
 
 export function SettingsPanel() {
   const { currentThemeKey, setTheme, themeKeys } = useTheme();

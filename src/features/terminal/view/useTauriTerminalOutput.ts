@@ -1,13 +1,13 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { useTerminalRuntime } from "../../sessions";
+import { useTerminalRuntime } from "../state/TerminalRuntimeContext";
 import {
   appendTerminalOutput,
   getTerminalOutput,
 } from "../../../shared/utils/terminalOutputBuffer";
-import { subscribeTerminalOutput, toBackendTerminalHandle } from "../infrastructure";
-import { tmuxCommands } from "../../tmux/infrastructure";
+import { terminalClipboard } from "../application/terminalClipboard";
+import { terminalStreamActions } from "../application/terminalStreamActions";
+import { tmuxControllerActions } from "../../tmux";
 import { normalizeCapturedScrollback } from "./scrollback";
 
 const lastTouchRef = new Map<number, number>();
@@ -47,7 +47,7 @@ function extractAndCopyOsc52(text: string): string {
     if (!encoded || encoded.length === 0) continue;
     try {
       const decoded = decodeBase64Utf8(encoded);
-      writeText(decoded).catch((err) => {
+      void terminalClipboard.writeText(decoded).catch((err) => {
         console.error("[xsterm] Failed to write OSC52 selection to clipboard:", err);
       });
     } catch (err) {
@@ -73,8 +73,8 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
     replayedTerminalByXterm.set(xterm, terminalId);
 
     const replayTerminalId = terminalId;
-    const replayPromise = tmuxCommands
-      .captureTmuxPane(toBackendTerminalHandle(terminalId), SCROLLBACK_LINES)
+    const replayPromise = tmuxControllerActions
+      .capturePane(terminalId, SCROLLBACK_LINES)
       .then((text) => {
         if (!text || replayedTerminalByXterm.get(xterm) !== replayTerminalId) return;
         try {
@@ -131,7 +131,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
         // Snapshot history before subscribing. Anything arriving during the
         // subscription call is delivered live and must not be replayed again.
         bufferBeforeSubscribe = getTerminalOutput(terminalId);
-        return subscribeTerminalOutput(terminalId, (data) => {
+        return terminalStreamActions.subscribeOutput(terminalId, (data) => {
           if (!listenerActive) return;
           handleOutput(extractAndCopyOsc52(decodeOutput(data)));
         });

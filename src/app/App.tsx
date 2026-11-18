@@ -1,4 +1,4 @@
-import { SessionProvider } from "../features/sessions";
+import { SessionProvider } from "./application/session";
 import { ThemeProvider } from "../shared/theme/ThemeContext";
 import { AppShellPreview } from "./shell/AppShellPreview";
 import { AppShellRuntime } from "./shell/AppShellRuntime";

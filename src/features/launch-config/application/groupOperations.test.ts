@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type TerminalGroup } from "../../../models/legacy/terminal";
+import { type TerminalGroup } from "../../../models/runtime/terminal";
 import {
   addConfigToGroup,
   addGroup,

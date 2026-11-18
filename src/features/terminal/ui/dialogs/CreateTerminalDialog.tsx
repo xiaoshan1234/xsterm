@@ -4,10 +4,10 @@ import {
   type SshConfig,
   type Terminal,
   type TerminalDisplayConfig,
-} from "../../../../models/legacy/terminal";
+} from "../../../../models/runtime/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { DEFAULT_GROUP_ID } from "../../../launch-config";
-import { useSavedLaunchConfigs } from "../../../sessions";
+import { useSavedLaunchConfigs } from "../../../launch-config";
 import SessionTab from "./ConnectionTab";
 import { validateSshConfig } from "./SshTerminalForm";
 import { SessionFormLayout, type SessionFormSidebarItem } from "./TerminalFormLayout";

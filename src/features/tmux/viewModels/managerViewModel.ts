@@ -1,4 +1,4 @@
-import { type SavedTerminalConfig } from "../../../models/legacy/terminal";
+import { type SavedTerminalConfig } from "../../../models/runtime/terminal";
 import { defaultTmuxDisplayName, tmuxSessionBaseKey, tmuxSessionKey } from "./sessionIdentity";
 
 export interface TmuxManagerItemViewData {

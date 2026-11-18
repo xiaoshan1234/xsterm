@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type SavedTerminalConfig } from "../../../../models/legacy/terminal";
+import { type SavedTerminalConfig } from "../../../../models/runtime/terminal";
 import { buildTmuxConfigForBase, isTmuxWslBaseConfig } from "./TmuxForm";
 
 describe("tmux base transport", () => {

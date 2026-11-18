@@ -1,8 +1,8 @@
 # Frontend Architecture
 
-This document defines the target frontend architecture for xsterm. It is the
-migration contract for existing code under `src/features/sessions`; it does not
-describe the completed state of every directory yet.
+This document defines the target frontend architecture for xsterm. It records
+the migration from the former aggregate `src/features/sessions` boundary and
+the remaining compatibility work.
 
 ## Core boundaries
 
@@ -137,7 +137,8 @@ small port that the use case or component consumes.
 5. Move tmux controller topology into `tmux`.
 6. Move Workspace and Window/Pane snapshots into `workspace`.
 7. Convert xterm integration to the `TerminalStreamPort` contract.
-8. Remove `features/sessions`, `useSession()`, and `models/legacy`.
+8. Keep `features/sessions` and `useSession()` removed, then migrate the
+   `models/runtime` compatibility types to the canonical models.
 
 Each step should be independently testable and must preserve persisted data and
 Tauri event compatibility.
@@ -145,11 +146,21 @@ Tauri event compatibility.
 ## Migration status
 
 - Completed: typed application errors and code-based UI handling.
-- Completed: pure legacy PaneTree operations now live under `models/workspace`.
+- Completed: pure runtime PaneTree operations now live under `models/workspace`.
 - Completed: saved launch configs, groups, defaults, schema migration, and
   persistence now live under `features/launch-config`.
 - Completed: launch-config group operations are pure functions, and launch
   config loading/persistence is owned by a `launch-config` application hook.
-- Next: move the launch-config state provider and public context out of
-  `features/sessions`.
-- Next: extract terminal and tmux event routing from the aggregate listener.
+- Completed: launch-config, terminal-runtime, workspace, and preference
+  contexts are owned by their features and expose only narrow hooks.
+- Completed: cross-aggregate session orchestration lives in
+  `app/application/session`; `features/sessions` has been removed.
+- Completed: terminal and tmux events are subscribed by feature-local bridges.
+- Completed: PaneTree/workspace transitions and tmux layout parsing live in
+  their owning features.
+- Completed: feature UI is lint-restricted from infrastructure adapters and
+  Tauri plugins.
+- Completed: the compatibility namespace was renamed from `models/legacy` to
+  `models/runtime`.
+- Next: replace remaining runtime compatibility types with the canonical
+  models.

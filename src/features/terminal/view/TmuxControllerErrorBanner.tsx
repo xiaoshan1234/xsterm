@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { useTerminalRuntime } from "../../sessions";
-import { tmuxCommands } from "../../tmux/infrastructure";
-import type { Terminal, TmuxSessionConfig } from "../../../models/legacy/terminal";
+import { useTerminalRuntime } from "../state/TerminalRuntimeContext";
+import { tmuxControllerActions } from "../../tmux";
+import type { Terminal, TmuxSessionConfig } from "../../../models/runtime/terminal";
 import "./TmuxControllerErrorBanner.css";
 
 interface TmuxControllerErrorBannerProps {
@@ -38,7 +38,7 @@ export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorB
   const handleRetry = useCallback(async () => {
     if (!match) return;
     try {
-      await tmuxCommands.attachTmuxSession(match.config);
+      await tmuxControllerActions.attachSession(match.config);
     } catch (e) {
       console.error("Failed to retry tmux controller:", e);
       window.alert(

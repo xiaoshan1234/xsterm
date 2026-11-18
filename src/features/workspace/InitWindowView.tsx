@@ -1,5 +1,5 @@
-import { useWorkspaceLayout } from "../sessions";
-import { type Workspace } from "../../models/legacy/terminal";
+import { useWorkspaceLayout } from "./state/WorkspaceContext";
+import { type Workspace } from "../../models/runtime/terminal";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
 

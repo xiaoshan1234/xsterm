@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import type { Window } from "../../models/legacy/terminal";
-import { useWorkspaceLayout } from "../sessions";
+import type { Window } from "../../models/runtime/terminal";
+import { useWorkspaceLayout } from "./state/WorkspaceContext";
 import { ContextMenu, type ContextMenuItem } from "../../shared/ui/ContextMenu";
 import { PlusIcon, SaveIcon, CloseIcon } from "../../shared/icons/Icon";
 import "./TabBar.css";

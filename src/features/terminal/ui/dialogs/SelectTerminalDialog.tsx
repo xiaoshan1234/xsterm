@@ -1,5 +1,7 @@
 import { useMemo } from "react";
-import { useSavedLaunchConfigs, useTerminalRuntime, useWorkspaceLayout } from "../../../sessions";
+import { useSavedLaunchConfigs } from "../../../launch-config";
+import { useTerminalRuntime } from "../../state/TerminalRuntimeContext";
+import { useWorkspaceLayout } from "../../../workspace";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import "./SelectTerminalDialog.css";
 

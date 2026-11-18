@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { useTerminalRuntime } from "../sessions";
-import { tmuxCommands, toBackendControllerHandle } from "../tmux/infrastructure";
-import { type PaneNode, type Terminal, type Workspace } from "../../models/legacy/terminal";
+import { useTerminalRuntime } from "../terminal";
+import { tmuxControllerActions } from "../tmux";
+import { type PaneNode, type Terminal, type Workspace } from "../../models/runtime/terminal";
 import { computeTmuxWindowSize, type WindowSize } from "./tmuxWindowSize";
 
 /**
@@ -34,8 +34,8 @@ export function useTmuxWindowResize(workspace: Workspace): void {
         if (previous?.cols === size.cols && previous?.rows === size.rows) continue;
         sentSizesRef.current.set(key, size);
 
-        void tmuxCommands
-          .resizeTmuxWindow(toBackendControllerHandle(controllerId), size.cols, size.rows)
+        void tmuxControllerActions
+          .resizeWindow(controllerId, size.cols, size.rows)
           .catch((error) => console.error("Failed to resize tmux window:", error));
       }
     }, 100);

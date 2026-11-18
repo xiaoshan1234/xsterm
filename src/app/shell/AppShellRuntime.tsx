@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  useSavedLaunchConfigs,
-  useTerminalRuntime,
-  useWorkspaceLayout,
-} from "../../features/sessions";
-import { DEFAULT_GROUP_ID } from "../../features/launch-config";
+import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../features/launch-config";
+import { useTerminalRuntime } from "../../features/terminal";
+import { useWorkspaceLayout } from "../../features/workspace";
 import NavBar from "../NavBar";
 import { WorkspaceContainer } from "../../features/workspace/WorkspaceContainer";
 import { TerminalManagerPanel } from "../../features/terminal/ui/TerminalManagerPanel";

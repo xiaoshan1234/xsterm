@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { type Workspace, type PaneNode } from "../../models/legacy/terminal";
+import { type Workspace, type PaneNode } from "../../models/runtime/terminal";
 import { isApplicationError } from "../../models/applicationError";
-import { useWorkspaceLayout } from "../sessions";
+import { useWorkspaceLayout } from "./state/WorkspaceContext";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
 import { WindowTabBar } from "./WindowTabBar";

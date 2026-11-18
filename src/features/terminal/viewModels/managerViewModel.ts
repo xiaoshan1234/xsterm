@@ -1,4 +1,4 @@
-import { type SavedTerminalConfig, type TerminalGroup } from "../../../models/legacy/terminal";
+import { type SavedTerminalConfig, type TerminalGroup } from "../../../models/runtime/terminal";
 import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "../../launch-config";
 
 export type RawTerminalKind = "local" | "ssh";

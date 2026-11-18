@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import { useTerminalRuntime } from "../../sessions";
+import { useTerminalRuntime } from "../state/TerminalRuntimeContext";
 import { useTheme } from "../../../shared/theme/ThemeContext";
-import { type TerminalDisplayConfig } from "../../../models/legacy/terminal";
-import { terminalCommands, toBackendTerminalHandle } from "../infrastructure";
+import { type TerminalDisplayConfig } from "../../../models/runtime/terminal";
 import { frontendLogger as logger } from "../../../infra";
-import { getClipboardImages } from "./clipboard";
 import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
 import { useTerminalResize } from "./useTerminalResize";
@@ -13,7 +11,7 @@ import { usePasteBatcher } from "./usePasteBatcher";
 import { filterTerminalInput } from "./terminalInput";
 import { countLines } from "./textTransform";
 import { PasteConfirmDialog } from "./PasteConfirmDialog";
-import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { terminalClipboard } from "../application/terminalClipboard";
 import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";
 
@@ -74,7 +72,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
-  const { writeTerminal, getEffectiveLocalEcho, reconnectSession } = useTerminalRuntime();
+  const { writeTerminal, getEffectiveLocalEcho, reconnectSession, uploadImageToSshTerminal } =
+    useTerminalRuntime();
   const localEchoEnabled = getEffectiveLocalEcho(terminalId);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
@@ -181,15 +180,15 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       // Tauri clipboard fallback, and preventDefault must run before that.
       e.preventDefault();
       e.stopPropagation();
-      const imageItems = await getClipboardImages(e);
+      const imageItems = await terminalClipboard.readImages(e);
       if (imageItems.length === 0) return;
 
       for (const file of imageItems) {
         try {
           const buffer = await file.arrayBuffer();
           const bytes = Array.from(new Uint8Array(buffer));
-          const remotePath = await terminalCommands.uploadImageToSshTerminal(
-            toBackendTerminalHandle(terminalId),
+          const remotePath = await uploadImageToSshTerminal(
+            terminalId,
             file.name,
             new Uint8Array(bytes),
           );
@@ -201,7 +200,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       }
     },
-    [terminalId, kind, requestPaste],
+    [terminalId, kind, requestPaste, uploadImageToSshTerminal],
   );
 
   useEffect(() => {
@@ -228,7 +227,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       if (copyShortcut) {
         const selection = xterm.getSelection();
         if (selection && selection.length > 0) {
-          writeText(selection).catch((err) => {
+          terminalClipboard.writeText(selection).catch((err) => {
             console.error("[xsterm] Failed to copy selection via keyboard:", err);
           });
         }
@@ -243,7 +242,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
       if (isTerminalPasteShortcut && isConnectedRef.current) {
         event.preventDefault();
-        readText()
+        terminalClipboard
+          .readText()
           .then((text) => {
             if (text && isConnectedRef.current) {
               requestPaste(text);
@@ -307,7 +307,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     const selectionDisposer = xterm.onSelectionChange(() => {
       const selection = xterm.getSelection();
       if (selection && selection.length > 0) {
-        writeText(selection).catch((err) => {
+        terminalClipboard.writeText(selection).catch((err) => {
           console.error("[xsterm] Failed to copy selection on change:", err);
         });
       }
@@ -348,7 +348,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         const selection = termRef.current?.getSelection();
         if (selection) {
           try {
-            await writeText(selection);
+            await terminalClipboard.writeText(selection);
           } catch (err) {
             console.error("[xsterm] Failed to copy selection to clipboard:", err);
           }
@@ -359,7 +359,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       },
       pasteFromClipboard: async () => {
         try {
-          const text = await readText();
+          const text = await terminalClipboard.readText();
           if (text && isConnectedRef.current) {
             requestPaste(text);
           }

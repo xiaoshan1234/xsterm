@@ -43,7 +43,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 - 目标顶层：`src/app/`（应用装配与 shell）、`src/features/`（纵向功能切片）、`src/models/`（纯领域模型）、`src/infra/`（仅公共日志与通用配置持久化）、`src/shared/`（无业务依赖的 UI、hooks、utils）。
 - `src/models/` 不得依赖 React、Tauri、DOM、Store 或任何上层目录；`src/infra/` 不得依赖 `app/`、`features/`、`models/`。
 - Feature 内按 `ui/`、`application/`、`state/`、`selectors/`、`viewModels/`、`infrastructure/`、`persistence/` 组织。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。
-- 全局状态走 feature 内 React Context / reducers / selectors。`SessionContext` 位于 `src/features/sessions/state/`，已拆成配置、终端运行时、工作区布局和偏好切片；新代码必须使用对应窄 Hook，不得继续扩展 `useSession()` 大而全 API。
+- 全局状态走 feature 内 React Context / reducers / selectors。配置、终端运行时、工作区布局和偏好分别由 `launch-config`、`terminal`、`workspace`、`settings` 提供窄 Context / Hook；跨聚合动作与 Provider 组合位于 `src/app/application/session/`。不得恢复 `features/sessions` 或 `useSession()` 大而全 API。
 - Tauri IPC 必须收敛在 feature-local infrastructure adapter；组件不得直接 `invoke()` 或 `listen()` 原始后端事件。
 - 样式只用纯 CSS：全局 token 在 `src/styles/global.css` 的 `:root`，组件样式与组件同目录（`<Component>.css`）。禁止 Tailwind / CSS-in-JS / CSS Modules
 - 无路由，视图和全局面板切换由 AppShell 内部状态驱动。

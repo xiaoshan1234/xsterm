@@ -1,8 +1,8 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { type FitAddon } from "@xterm/addon-fit";
-import { useTerminalRuntime } from "../../sessions";
-import { type TerminalDisplayConfig } from "../../../models/legacy/terminal";
+import { useTerminalRuntime } from "../state/TerminalRuntimeContext";
+import { type TerminalDisplayConfig } from "../../../models/runtime/terminal";
 
 export function useTerminalResize(
   containerRef: RefObject<HTMLDivElement | null>,

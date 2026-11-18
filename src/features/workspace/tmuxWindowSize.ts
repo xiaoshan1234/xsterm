@@ -1,4 +1,4 @@
-import { type PaneNode } from "../../models/legacy/terminal";
+import { type PaneNode } from "../../models/runtime/terminal";
 
 export interface TerminalSize {
   rows: number;

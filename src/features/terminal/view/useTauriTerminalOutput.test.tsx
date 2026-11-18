@@ -10,16 +10,29 @@ const mocks = vi.hoisted(() => ({
   subscribeTerminalOutput: vi.fn(),
 }));
 
-vi.mock("../../sessions", () => ({
+vi.mock("../state/TerminalRuntimeContext", () => ({
   useTerminalRuntime: () => ({
     touchTerminalActivity: vi.fn(),
     terminals: [],
   }),
 }));
 
-vi.mock("../infrastructure", () => ({
-  subscribeTerminalOutput: mocks.subscribeTerminalOutput,
-  toBackendTerminalHandle: (value: number) => value,
+vi.mock("../application/terminalStreamActions", () => ({
+  terminalStreamActions: {
+    subscribeOutput: mocks.subscribeTerminalOutput,
+  },
+}));
+
+vi.mock("../application/terminalClipboard", () => ({
+  terminalClipboard: {
+    writeText: vi.fn(async () => undefined),
+  },
+}));
+
+vi.mock("../../tmux", () => ({
+  tmuxControllerActions: {
+    capturePane: vi.fn(async () => ""),
+  },
 }));
 
 afterEach(() => {

@@ -1,6 +1,7 @@
 import { useShortcuts } from "../shared/hooks/useShortcut";
-import { useTerminalRuntime, useWorkspaceLayout } from "../features/sessions";
-import type { PaneNode, SplitDirection } from "../models/legacy/terminal";
+import { useTerminalRuntime } from "../features/terminal";
+import { useWorkspaceLayout } from "../features/workspace";
+import type { PaneNode, SplitDirection } from "../models/runtime/terminal";
 
 export function useAppShortcuts({
   onCreateSession,

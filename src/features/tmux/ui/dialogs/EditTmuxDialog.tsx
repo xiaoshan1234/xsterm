@@ -2,18 +2,18 @@ import { useEffect, useState } from "react";
 import {
   type SavedTerminalConfig,
   type TmuxSessionConfig,
-} from "../../../../models/legacy/terminal";
+} from "../../../../models/runtime/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID } from "../../../launch-config";
-import { useSavedLaunchConfigs } from "../../../sessions";
-import { validateSshConfig } from "../../../terminal/ui/dialogs/SshTerminalForm";
+import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../launch-config";
 import {
+  DEFAULT_SSH,
+  SessionFormPanels,
   SessionFormLayout,
+  TMUX_SIDEBAR_ITEMS,
+  useTerminalForm,
+  validateSshConfig,
   type SessionFormSidebarItem,
-} from "../../../terminal/ui/dialogs/TerminalFormLayout";
-import { SessionFormPanels } from "../../../terminal/ui/dialogs/TerminalFormPanels";
-import { useTerminalForm } from "../../../terminal/ui/dialogs/useTerminalForm";
-import { DEFAULT_SSH, TMUX_SIDEBAR_ITEMS } from "../../../terminal/ui/dialogs/terminalDialogItems";
+} from "../../../terminal/ui/dialogs";
 import TmuxForm, { buildTmuxConfigForBase } from "./TmuxForm";
 import "../../../terminal/ui/dialogs/EditTerminalDialog.css";
 import {

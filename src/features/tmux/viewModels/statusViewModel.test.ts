@@ -3,7 +3,7 @@ import {
   type SavedTerminalConfig,
   type Terminal,
   type Workspace,
-} from "../../../models/legacy/terminal";
+} from "../../../models/runtime/terminal";
 import { selectTmuxStatusControllers } from "./statusViewModel";
 
 describe("Tmux status view model", () => {

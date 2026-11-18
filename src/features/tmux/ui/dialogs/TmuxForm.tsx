@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { useSavedLaunchConfigs } from "../../../sessions";
+import { useSavedLaunchConfigs } from "../../../launch-config";
 import {
   type SavedTerminalConfig,
   type SshConfig,
   type TmuxSessionConfig,
-} from "../../../../models/legacy/terminal";
+} from "../../../../models/runtime/terminal";
 import { FormSelectField, type FormSelectOption } from "../../../../shared/ui/FormSelectField";
 import { FormTextField } from "../../../../shared/ui/FormTextField";
 
