@@ -7,7 +7,10 @@ import {
   persistWindowConfigs,
   persistWorkspaces,
 } from "../../../features/workspace";
-import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type {
+  SavedTerminalConfig,
+  TerminalGroup,
+} from "../../../models/launch/SavedTerminalConfig";
 import type {
   SavedWindowConfig,
   SavedWorkspace,

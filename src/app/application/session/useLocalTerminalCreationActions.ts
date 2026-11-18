@@ -6,7 +6,7 @@ import type {
   Terminal,
   TerminalDisplayConfig,
 } from "../../../models/runtime/config";
-import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
+import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
 import { buildFrontendTerminal } from "./useTerminalActions.helpers";
 import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";
 

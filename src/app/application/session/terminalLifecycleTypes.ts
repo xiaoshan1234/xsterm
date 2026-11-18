@@ -1,6 +1,9 @@
 import { type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { Terminal } from "../../../models/runtime/config";
-import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type {
+  SavedTerminalConfig,
+  TerminalGroup,
+} from "../../../models/launch/SavedTerminalConfig";
 import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
 

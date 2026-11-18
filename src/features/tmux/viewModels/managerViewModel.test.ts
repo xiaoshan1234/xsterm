@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
+import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
 import { selectTmuxManagerGroups } from "./managerViewModel";
 
 describe("Tmux manager view model", () => {

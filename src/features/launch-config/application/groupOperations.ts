@@ -1,4 +1,4 @@
-import type { TerminalGroup } from "../../../models/runtime/savedConfig";
+import type { TerminalGroup } from "../../../models/launch/SavedTerminalConfig";
 import { DEFAULT_GROUP_ID } from "../constants";
 
 export function addGroup(

@@ -1,3 +1,4 @@
+export * from "./SavedTerminalConfig";
 export * from "./ShellEnvironmentConfig";
 export * from "./SavedLaunchConfig";
 export * from "./TerminalLaunchConfig";

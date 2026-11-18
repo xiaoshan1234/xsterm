@@ -13,7 +13,10 @@ import type {
   EditablePaneNode,
   PaneSplitDirection,
 } from "../../../models/workspace/EditablePaneTree";
-import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type {
+  SavedTerminalConfig,
+  TerminalGroup,
+} from "../../../models/launch/SavedTerminalConfig";
 import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import type {
   SavedWindowConfig,

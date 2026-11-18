@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type {
+  SavedTerminalConfig,
+  TerminalGroup,
+} from "../../../models/launch/SavedTerminalConfig";
 import { selectTerminalManagerGroups } from "./managerViewModel";
 
 const savedConfigs: SavedTerminalConfig[] = [

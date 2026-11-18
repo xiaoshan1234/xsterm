@@ -1,5 +1,8 @@
 import { useCallback } from "react";
-import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type {
+  SavedTerminalConfig,
+  TerminalGroup,
+} from "../../../models/launch/SavedTerminalConfig";
 import {
   addConfigToGroup,
   addGroup,

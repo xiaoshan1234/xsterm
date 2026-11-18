@@ -1,5 +1,5 @@
 import type { Terminal } from "../../../models/runtime/config";
-import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
+import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
 import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 
 export function tmuxSessionKey(config: TmuxSessionConfig): string {
