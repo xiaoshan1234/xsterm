@@ -75,7 +75,9 @@ Domain Model
 AppShell
 ├─ NavBar
 │  ├─ ApplicationMenu
-│  │  └─ View > Sender
+│  │  ├─ Terminal
+│  │  ├─ View > Sender
+│  │  └─ Help
 │  └─ WorkspaceQuickSwitch
 ├─ Body
 │  ├─ LeftSidebar
@@ -148,6 +150,8 @@ interface AppShellUiState {
 - 自定义窗口标题栏和拖拽区。
 - 窗口最小化、最大化、恢复和关闭。
 - 应用级菜单入口。
+- Logo 右侧第一个菜单为 `Terminal`，列出 Default Group 下的 Local/SSH Terminal。
+- 点击 Terminal 下拉项时复用保存配置的打开动作。
 - 在 `View` 一级下拉菜单中控制 GlobalTextSender 开关。
 - Sender 对应 GlobalTextSender 打开时，菜单项文字前显示对勾。
 - 提供 Workspace 快速切换和关闭入口。
@@ -881,6 +885,7 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 - TextSender 只存在于 MainArea 底部。
 - NavBar Workspace 下拉菜单提供快速切换。
 - NavBar `View > Sender` 控制 GlobalTextSender。
+- NavBar `Terminal` 下拉显示 Default Group 下的 Terminal。
 - BottomBar 不包含 Sender 或 Workspace 按钮。
 - TerminalManager 底部固定显示 New Terminal 和 New Group。
 - Tmux Manager 按 Base Configuration 自动分组；Window/Workspace Manager 不使用 Group。

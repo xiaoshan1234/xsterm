@@ -116,6 +116,10 @@
   width: 204px;
 }
 
+.navbar-popover--terminal {
+  width: 184px;
+}
+
 .navbar-menu-group + .navbar-menu-group {
   margin-top: var(--space-xxs);
   padding-top: var(--space-xxs);
@@ -150,6 +154,14 @@
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
   outline-offset: 1px;
+}
+
+.navbar-menu-empty {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 26px;
+  white-space: nowrap;
 }
 
 .navbar-menu-check {

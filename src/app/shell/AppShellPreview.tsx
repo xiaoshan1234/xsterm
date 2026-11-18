@@ -11,6 +11,10 @@ import { TOOL_TITLES, type PreviewDialogId, type ToolId } from "./types";
 import { type RuntimeStatusViewData } from "./runtimeStatusViewModel";
 
 const WORKSPACES = ["Default", "Project X", "Infrastructure"];
+const PREVIEW_TERMINAL_ITEMS = [
+  { configId: "local-powershell", name: "Local PowerShell" },
+  { configId: "production-ssh", name: "Production SSH" },
+];
 
 const TEXT_SENDER_TARGETS = [
   {
@@ -77,6 +81,7 @@ export function AppShellPreview() {
       activeTool={activeTool}
       navBar={
         <NavBarView
+          terminalItems={PREVIEW_TERMINAL_ITEMS}
           workspaces={workspaces}
           workspaceName={activeWorkspace}
           isTextSenderOpen={isTextSenderOpen}
@@ -88,6 +93,7 @@ export function AppShellPreview() {
           onCloseWorkspace={handleCloseWorkspace}
           onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
           onHelpAction={setHelpDialog}
+          onOpenTerminal={() => undefined}
         />
       }
       toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}

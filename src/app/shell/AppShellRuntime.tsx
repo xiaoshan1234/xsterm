@@ -530,6 +530,10 @@ export function AppShellRuntime() {
       activeTool={activeTool}
       navBar={
         <NavBar
+          terminalItems={(terminalManagerGroups[0]?.items ?? []).map((terminal) => ({
+            configId: terminal.configId,
+            name: terminal.name,
+          }))}
           workspaces={workspaces.map((workspace) => workspace.name)}
           workspaceName={activeWorkspace?.name ?? "No workspace"}
           isTextSenderOpen={isTextSenderOpen}
@@ -543,6 +547,7 @@ export function AppShellRuntime() {
           }}
           onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
           onHelpAction={setHelpDialog}
+          onOpenTerminal={openConfig}
         />
       }
       toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}

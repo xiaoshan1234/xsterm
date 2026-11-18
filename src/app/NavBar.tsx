@@ -7,7 +7,13 @@ import logo from "../assets/logo.svg";
 
 const NAV_MENU_ITEMS = ["View"] as const;
 
+export interface NavBarTerminalItem {
+  configId: string;
+  name: string;
+}
+
 export interface NavBarViewProps {
+  terminalItems: readonly NavBarTerminalItem[];
   workspaces: readonly string[];
   workspaceName: string;
   isTextSenderOpen: boolean;
@@ -20,11 +26,13 @@ export interface NavBarViewProps {
   onCloseWorkspace: (workspaceName: string) => void;
   onToggleTextSender: () => void;
   onHelpAction: (dialog: HelpDialogId) => void;
+  onOpenTerminal: (configId: string) => void;
 }
 
-type OpenMenu = "view" | "workspace" | "help" | null;
+type OpenMenu = "terminal" | "view" | "workspace" | "help" | null;
 
 export function NavBarView({
+  terminalItems,
   workspaces,
   workspaceName,
   isTextSenderOpen,
@@ -37,6 +45,7 @@ export function NavBarView({
   onCloseWorkspace,
   onToggleTextSender,
   onHelpAction,
+  onOpenTerminal,
 }: NavBarViewProps) {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const navigationRef = useRef<HTMLDivElement>(null);
@@ -72,6 +81,10 @@ export function NavBarView({
     onMenuAction?.("View");
   };
 
+  const toggleTerminalMenu = () => {
+    setOpenMenu((current) => (current === "terminal" ? null : "terminal"));
+  };
+
   const toggleWorkspaceMenu = () => {
     setOpenMenu((current) => (current === "workspace" ? null : "workspace"));
   };
@@ -86,6 +99,43 @@ export function NavBarView({
         <img className="navbar-logo-img" src={logo} alt="XSTerm" />
       </div>
       <div className="navbar-menu" ref={navigationRef}>
+        <div className="navbar-menu-root">
+          <button
+            type="button"
+            className={`navbar-item ${openMenu === "terminal" ? "navbar-item--open" : ""}`}
+            aria-haspopup="menu"
+            aria-expanded={openMenu === "terminal"}
+            onClick={toggleTerminalMenu}
+          >
+            <span className="navbar-primary-label">Terminal</span>
+          </button>
+          {openMenu === "terminal" && (
+            <div
+              className="navbar-popover navbar-popover--terminal"
+              role="menu"
+              aria-label="Terminal"
+            >
+              {terminalItems.length === 0 ? (
+                <div className="navbar-menu-empty">No terminals in default group</div>
+              ) : (
+                terminalItems.map((terminal) => (
+                  <button
+                    key={terminal.configId}
+                    type="button"
+                    className="navbar-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      onOpenTerminal(terminal.configId);
+                      closeMenus();
+                    }}
+                  >
+                    {terminal.name}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
         {NAV_MENU_ITEMS.map((item) => {
           if (item === "View") {
             const isViewOpen = openMenu === "view";

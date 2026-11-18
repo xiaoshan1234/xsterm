@@ -26,7 +26,7 @@ describe("AppShellPreview", () => {
       element.querySelector(".navbar-primary-label")?.textContent?.trim(),
     );
 
-    expect(labels).toEqual(["View", "Workspace", "Help"]);
+    expect(labels).toEqual(["Terminal", "View", "Workspace", "Help"]);
     expect(
       entries.every((element) => element.querySelector(".navbar-primary-label") !== null),
     ).toBe(true);
@@ -42,6 +42,15 @@ describe("AppShellPreview", () => {
     const sender = screen.getByRole("menuitemcheckbox", { name: "Sender" });
     expect(sender.getAttribute("aria-checked")).toBe("true");
     expect(sender.textContent).toContain("✓");
+  });
+
+  it("lists default-group terminals from the Terminal menu", () => {
+    render(<AppShellPreview />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Terminal" }));
+
+    expect(screen.getByRole("menuitem", { name: "Local PowerShell" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Production SSH" })).toBeTruthy();
   });
 
   it("opens the version dialog from Help", () => {
