@@ -69,6 +69,7 @@ src/
     logging/
     storage/
   shared/
+  test/
   styles/
 ```
 
@@ -170,12 +171,13 @@ Tauri event compatibility.
   organized under `features/workspace/{ui,application,persistence,state}`.
 - Completed: AppShell modal rendering is isolated in `RuntimeOverlays`, leaving
   `AppShellRuntime` responsible for shell state and feature composition.
+- Completed: `createTestApplication()` provides the feature Provider stack and
+  allows per-context fake overrides for UI tests.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
 - Completed: the compatibility namespace was renamed from `models/legacy` to
   `models/runtime`.
 - Next: replace remaining runtime compatibility types with the canonical
   models.
-- Next: add the shared `createTestApplication()` fixture promised by the test
-  contract and continue splitting the remaining terminal lifecycle
-  coordinator.
+- Next: replace the remaining runtime compatibility model and consolidate
+  launch-config dialogs under `launch-config/ui`.
