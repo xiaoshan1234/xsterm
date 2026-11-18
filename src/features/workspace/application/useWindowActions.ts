@@ -4,7 +4,7 @@ import { tmuxWindowActions } from "../../tmux";
 import type { Terminal } from "../../../models/runtime/config";
 import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
-import type { Window, Workspace } from "../../../models/runtime/workspace";
+import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 function findPaneSessionId(pane: EditablePaneNode, paneId: string): number | undefined {

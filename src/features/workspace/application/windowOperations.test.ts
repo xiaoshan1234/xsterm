@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Window, Workspace } from "../../../models/runtime/workspace";
+import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
 import { isApplicationError } from "../../../models/applicationError";
 import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "./windowOperations";
 

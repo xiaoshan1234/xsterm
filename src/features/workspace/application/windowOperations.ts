@@ -1,4 +1,4 @@
-import type { Workspace } from "../../../models/runtime/workspace";
+import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { createApplicationError } from "../../../models/applicationError";
 import { isSessionUsedInOtherWindow } from "./paneTreeOperations";
 

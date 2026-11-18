@@ -20,7 +20,7 @@ import type {
   SavedWorkspace,
   Window,
   Workspace,
-} from "../../../models/runtime/workspace";
+} from "../../../models/workspace/EditableWorkspace";
 import type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
 
 export type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";

@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
-import type { Workspace } from "../../../models/runtime/workspace";
+import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { isApplicationError } from "../../../models/applicationError";
 import { useWorkspaceLayout } from "../state/WorkspaceContext";
 import { PaneTree } from "./PaneTree";

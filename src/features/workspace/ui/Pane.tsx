@@ -3,7 +3,7 @@ import type {
   EditablePaneNode,
   PaneSplitDirection,
 } from "../../../models/workspace/EditablePaneTree";
-import type { Workspace } from "../../../models/runtime/workspace";
+import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { isApplicationError } from "../../../models/applicationError";
 import { useTerminalRuntime } from "../../terminal";
 import { getPaneNumber } from "../application/paneTreeOperations";

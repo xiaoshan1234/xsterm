@@ -1,6 +1,6 @@
 import type { Terminal } from "../../../models/runtime/config";
 import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
-import type { Workspace } from "../../../models/runtime/workspace";
+import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { selectPaneLocations, type PaneLocationViewData } from "../../workspace";
 
 export type TmuxRuntimeStatus = "connected" | "disconnected";

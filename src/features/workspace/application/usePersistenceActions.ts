@@ -3,7 +3,7 @@ import type {
   SavedWindowConfig,
   SavedWorkspace,
   Workspace,
-} from "../../../models/runtime/workspace";
+} from "../../../models/workspace/EditableWorkspace";
 import { useSavedWindowActions } from "./useSavedWindowActions";
 import { useSavedWorkspaceActions } from "./useSavedWorkspaceActions";
 

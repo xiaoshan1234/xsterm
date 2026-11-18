@@ -5,7 +5,7 @@ import type {
   SavedWorkspace,
   Window,
   Workspace,
-} from "../../models/runtime/workspace";
+} from "../../models/workspace/EditableWorkspace";
 
 export interface WorkspaceLayoutContextType {
   workspaces: Workspace[];

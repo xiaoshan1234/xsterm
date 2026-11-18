@@ -1,4 +1,4 @@
-import { type EditablePaneNode } from "../workspace/EditablePaneTree";
+import { type EditablePaneNode } from "./EditablePaneTree";
 
 export interface SavedWindow {
   id: string;

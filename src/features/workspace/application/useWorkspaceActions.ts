@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { terminalSessionActions } from "../../terminal";
 import type { Terminal } from "../../../models/runtime/config";
-import type { Workspace } from "../../../models/runtime/workspace";
+import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface UseWorkspaceActionsDeps {

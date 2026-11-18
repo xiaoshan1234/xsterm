@@ -1,5 +1,5 @@
 import { useWorkspaceLayout } from "../state/WorkspaceContext";
-import type { Workspace } from "../../../models/runtime/workspace";
+import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
 

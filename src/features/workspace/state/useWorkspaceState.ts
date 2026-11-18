@@ -11,7 +11,7 @@ import type {
   SavedWindowConfig,
   SavedWorkspace,
   Workspace,
-} from "../../../models/runtime/workspace";
+} from "../../../models/workspace/EditableWorkspace";
 
 export interface WorkspaceState {
   workspaces: Workspace[];

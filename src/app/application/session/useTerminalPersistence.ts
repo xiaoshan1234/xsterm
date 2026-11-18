@@ -8,7 +8,10 @@ import {
   persistWorkspaces,
 } from "../../../features/workspace";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
-import type { SavedWindowConfig, SavedWorkspace } from "../../../models/runtime/workspace";
+import type {
+  SavedWindowConfig,
+  SavedWorkspace,
+} from "../../../models/workspace/EditableWorkspace";
 import { type SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {

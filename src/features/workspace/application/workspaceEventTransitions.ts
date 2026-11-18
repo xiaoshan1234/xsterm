@@ -1,4 +1,4 @@
-import type { Window, Workspace } from "../../../models/runtime/workspace";
+import type { Window, Workspace } from "../../../models/workspace/EditableWorkspace";
 import {
   collectSessionIdsFromPaneTree,
   findFirstLeafWithSession,
