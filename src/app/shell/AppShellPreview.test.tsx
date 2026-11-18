@@ -60,7 +60,7 @@ describe("AppShellPreview", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Version" }));
 
     expect(screen.getByRole("heading", { name: "Version" })).toBeTruthy();
-    expect(screen.getByText("Version 0.2.2")).toBeTruthy();
+    expect(screen.getByText("Version 0.2.3")).toBeTruthy();
   });
 
   it("opens the update dialog from Help", () => {
@@ -70,7 +70,7 @@ describe("AppShellPreview", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Update" }));
 
     expect(screen.getByRole("heading", { name: "Update" })).toBeTruthy();
-    expect(screen.getByText("Current version: 0.2.2")).toBeTruthy();
+    expect(screen.getByText("Current version: 0.2.3")).toBeTruthy();
   });
 
   it("opens the license dialog from Help", () => {
