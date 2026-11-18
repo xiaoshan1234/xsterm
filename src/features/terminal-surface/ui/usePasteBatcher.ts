@@ -113,7 +113,12 @@ export function appendToPasteQueue(
  * layer and survives future changes (e.g. introducing async encoding for
  * non-UTF-8 terminals).
  */
-export function usePasteBatcher(terminalId: number) {
+export type PasteWritePort = (terminalId: number, data: Uint8Array) => Promise<void>;
+
+export function usePasteBatcher(
+  terminalId: number,
+  writeBytes: PasteWritePort = terminalStreamActions.writeBytes,
+) {
   const terminalIdRef = useRef(terminalId);
   const inputQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -121,19 +126,22 @@ export function usePasteBatcher(terminalId: number) {
     terminalIdRef.current = terminalId;
   }, [terminalId]);
 
-  const enqueuePaste = useCallback((text: string, bracketedPasteMode: boolean) => {
-    if (text.length === 0) return;
-    const wrapped = formatPasteForBracketedMode(text, bracketedPasteMode);
-    const bytes = new TextEncoder().encode(wrapped);
+  const enqueuePaste = useCallback(
+    (text: string, bracketedPasteMode: boolean) => {
+      if (text.length === 0) return;
+      const wrapped = formatPasteForBracketedMode(text, bracketedPasteMode);
+      const bytes = new TextEncoder().encode(wrapped);
 
-    // Append to the queue. `.catch(() => {})` isolates failures so one
-    // rejection doesn't poison every subsequent paste.
-    appendToPasteQueue(inputQueueRef, () =>
-      terminalStreamActions.writeBytes(terminalIdRef.current, bytes).catch((err) => {
-        logger.error("usePasteBatcher", "writeTerminal", err);
-      }),
-    );
-  }, []);
+      // Append to the queue. `.catch(() => {})` isolates failures so one
+      // rejection doesn't poison every subsequent paste.
+      appendToPasteQueue(inputQueueRef, () =>
+        writeBytes(terminalIdRef.current, bytes).catch((err) => {
+          logger.error("usePasteBatcher", "writeTerminal", err);
+        }),
+      );
+    },
+    [writeBytes],
+  );
 
   // On unmount, do NOT cancel the queue — pending bytes should still reach
   // the PTY. If the component remounts with the same terminalId the queue

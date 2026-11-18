@@ -175,6 +175,8 @@ Tauri event compatibility.
   allows per-context fake overrides for UI tests.
 - Completed: all existing React Hook dependency warnings are resolved without
   suppressing rules.
+- Completed: terminal-surface output, clipboard, and paste write services are
+  injectable ports with production defaults.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
 - Completed: the compatibility namespace was renamed from `models/legacy` to

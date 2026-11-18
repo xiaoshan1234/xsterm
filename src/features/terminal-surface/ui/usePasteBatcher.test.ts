@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+/** @vitest-environment jsdom */
+
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   appendToPasteQueue,
   chunkBytes,
   formatPasteForBracketedMode,
+  usePasteBatcher,
 } from "./usePasteBatcher";
 
 function bytes(s: string): Uint8Array {
@@ -190,5 +194,21 @@ describe("appendToPasteQueue", () => {
     });
     await queue.current.catch(() => undefined);
     expect(ran).toEqual(["after-boom"]);
+  });
+});
+
+describe("usePasteBatcher", () => {
+  it("writes formatted paste data through the injected port", async () => {
+    const writeBytes = vi.fn(async (_terminalId: number, _data: Uint8Array) => {});
+    const { result } = renderHook(() => usePasteBatcher(42, writeBytes));
+
+    act(() => {
+      result.current.enqueuePaste("a\nb", false);
+    });
+
+    await waitFor(() => expect(writeBytes).toHaveBeenCalledTimes(1));
+    const [terminalId, data] = writeBytes.mock.calls[0];
+    expect(terminalId).toBe(42);
+    expect(new TextDecoder().decode(data)).toBe("a\rb");
   });
 });
