@@ -1,4 +1,5 @@
-import { type Terminal, type Workspace } from "../../models/runtime/terminal";
+import type { Terminal } from "../../models/runtime/config";
+import type { Workspace } from "../../models/runtime/workspace";
 import { type TmuxStatusControllerViewData } from "../../features/tmux";
 import { findPaneNode, getLeafPaneIds } from "../../models/workspace/runtimePaneTreeOperations";
 

@@ -3,21 +3,21 @@ import type { SavedLaunchConfigsContextType } from "../../../features/launch-con
 import type { SessionPreferencesContextType } from "../../../features/settings";
 import type { TerminalRuntimeContextType } from "../../../features/terminal";
 import type { WorkspaceLayoutContextType } from "../../../features/workspace";
-import {
-  type LocalTerminalConfig,
-  type PaneNode,
-  type SshConfig,
-  type SavedTerminalConfig,
-  type SavedWindowConfig,
-  type SavedWorkspace,
-  type Terminal,
-  type TerminalDisplayConfig,
-  type TerminalGroup,
-  type SplitDirection,
-  type TmuxSessionConfig,
-  type Window,
-  type Workspace,
-} from "../../../models/runtime/terminal";
+import type {
+  LocalTerminalConfig,
+  SshConfig,
+  Terminal,
+  TerminalDisplayConfig,
+} from "../../../models/runtime/config";
+import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type {
+  SavedWindowConfig,
+  SavedWorkspace,
+  Window,
+  Workspace,
+} from "../../../models/runtime/workspace";
 import type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
 
 export type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";

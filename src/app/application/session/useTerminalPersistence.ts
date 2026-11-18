@@ -7,12 +7,8 @@ import {
   persistWindowConfigs,
   persistWorkspaces,
 } from "../../../features/workspace";
-import {
-  type SavedTerminalConfig,
-  type SavedWindowConfig,
-  type SavedWorkspace,
-  type TerminalGroup,
-} from "../../../models/runtime/terminal";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type { SavedWindowConfig, SavedWorkspace } from "../../../models/runtime/workspace";
 import { type SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {

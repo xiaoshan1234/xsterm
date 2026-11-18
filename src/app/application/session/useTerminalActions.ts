@@ -1,14 +1,9 @@
 import { useCallback } from "react";
 import { terminalSessionActions } from "../../../features/terminal";
 import { tmuxControllerActions } from "../../../features/tmux";
-import type {
-  LocalTerminalConfig,
-  SshConfig,
-  Terminal,
-  TmuxSessionConfig,
-  Window,
-  Workspace,
-} from "../../../models/runtime/terminal";
+import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../models/runtime/config";
+import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { Window, Workspace } from "../../../models/runtime/workspace";
 import {
   assertSessionNotUsedElsewhere,
   createLeafPane,

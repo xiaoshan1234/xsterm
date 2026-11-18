@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 import { terminalSessionActions, type TerminalConnectionInfo } from "../../../features/terminal";
-import {
-  type LocalTerminalConfig,
-  type SavedTerminalConfig,
-  type SshConfig,
-  type Terminal,
-  type TerminalDisplayConfig,
-} from "../../../models/runtime/terminal";
+import type {
+  LocalTerminalConfig,
+  SshConfig,
+  Terminal,
+  TerminalDisplayConfig,
+} from "../../../models/runtime/config";
+import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
 import { buildFrontendTerminal } from "./useTerminalActions.helpers";
 import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";
 

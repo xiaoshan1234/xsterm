@@ -5,12 +5,9 @@ import {
   type TerminalConnectionInfo,
 } from "../../../features/terminal";
 import { tmuxControllerActions } from "../../../features/tmux";
-import type {
-  PaneNode,
-  Terminal,
-  SplitDirection,
-  Workspace,
-} from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type { Workspace } from "../../../models/runtime/workspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import {
   createLeafPane,

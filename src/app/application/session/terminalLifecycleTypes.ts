@@ -1,12 +1,8 @@
 import { type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import {
-  type SavedTerminalConfig,
-  type Terminal,
-  type TerminalGroup,
-  type TmuxSessionConfig,
-  type Window,
-  type Workspace,
-} from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
+import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
+import type { Window, Workspace } from "../../../models/runtime/workspace";
 
 export interface UseSessionLifecycleDeps {
   savedConfigs: SavedTerminalConfig[];
