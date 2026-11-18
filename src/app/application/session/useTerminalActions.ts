@@ -12,17 +12,15 @@ import {
   getUniqueWindowName,
   withRecomputedSessionIds,
 } from "../../../features/workspace";
-import {
-  usePersistenceActions,
-  useWindowActions,
-  useWorkspaceActions,
-} from "../../../features/workspace/composition";
+import { usePersistenceActions } from "../../../features/workspace/composition";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
 import { useGroupActions } from "../../../features/launch-config/composition";
 import { usePaneActions } from "./usePaneActions";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
 import type { SessionActions, SessionPersistence, TerminalState } from "./types";
 import { findOpenTmuxControllerId, tmuxSessionKey } from "../../../features/tmux";
+import { useWindowActions } from "./useWindowActions";
+import { useWorkspaceActions } from "./useWorkspaceActions";
 
 interface UseSessionActionsOptions extends TerminalState, SessionPersistence {}
 

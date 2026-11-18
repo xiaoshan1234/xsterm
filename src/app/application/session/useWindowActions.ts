@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Terminal } from "../../../features/terminal";
-import type { PaneTerminalRef } from "../contracts";
+import type { PaneTerminalRef } from "../../../features/workspace";
 import type { EditablePaneNode } from "../../../features/workspace";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { Window, Workspace } from "../../../features/workspace";
@@ -17,7 +17,7 @@ import {
   getDefaultWindowName,
   getUniqueWindowName,
   withRecomputedSessionIds,
-} from "..";
+} from "../../../features/workspace";
 
 interface UseWindowActionsDeps {
   savedConfigs: SavedTerminalConfig[];

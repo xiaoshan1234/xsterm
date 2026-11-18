@@ -1,8 +1,8 @@
 # Frontend Architecture
 
-This document defines the target frontend architecture for xsterm. It records
-the migration from the former aggregate `src/features/sessions` boundary and
-the remaining compatibility work.
+This document defines the current frontend architecture for xsterm. It also
+records the migration from the former aggregate `src/features/sessions`
+boundary.
 
 ## Core boundaries
 
