@@ -1,9 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import {
-  type PaneNode,
-  type SplitDirection,
-  type Workspace,
-} from "../../../models/runtime/terminal";
+import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type { Workspace } from "../../../models/runtime/workspace";
 import { isApplicationError } from "../../../models/applicationError";
 import { useTerminalRuntime } from "../../terminal";
 import { useWorkspaceLayout } from "../state/WorkspaceContext";

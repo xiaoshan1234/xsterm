@@ -1,4 +1,4 @@
-import { type Workspace } from "../../../models/runtime/terminal";
+import type { Workspace } from "../../../models/runtime/workspace";
 import { createApplicationError } from "../../../models/applicationError";
 import { isSessionUsedInOtherWindow } from "./paneTreeOperations";
 

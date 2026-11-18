@@ -1,11 +1,7 @@
 import { useCallback } from "react";
-import type {
-  PaneNode,
-  SavedWorkspace,
-  Terminal,
-  Window,
-  Workspace,
-} from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { PaneNode } from "../../../models/runtime/pane";
+import type { SavedWorkspace, Window, Workspace } from "../../../models/runtime/workspace";
 import { createApplicationError } from "../../../models/applicationError";
 import {
   collectSessionIdsFromWorkspace,

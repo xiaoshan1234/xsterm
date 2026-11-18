@@ -1,4 +1,4 @@
-import type { Window, Workspace } from "../../../models/runtime/terminal";
+import type { Window, Workspace } from "../../../models/runtime/workspace";
 import {
   collectSessionIdsFromPaneTree,
   findFirstLeafWithSession,

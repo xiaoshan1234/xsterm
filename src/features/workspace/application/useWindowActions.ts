@@ -1,13 +1,10 @@
 import { useCallback } from "react";
 import { terminalSessionActions } from "../../terminal";
 import { tmuxWindowActions } from "../../tmux";
-import type {
-  PaneNode,
-  SavedTerminalConfig,
-  Terminal,
-  Window,
-  Workspace,
-} from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { PaneNode } from "../../../models/runtime/pane";
+import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
+import type { Window, Workspace } from "../../../models/runtime/workspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 function findPaneSessionId(pane: PaneNode, paneId: string): number | undefined {

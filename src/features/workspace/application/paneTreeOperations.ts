@@ -1,9 +1,6 @@
-import {
-  type PaneNode,
-  type Terminal,
-  type SplitDirection,
-  type Workspace,
-} from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type { Workspace } from "../../../models/runtime/workspace";
 
 /** Pure PaneTree operations owned by the workspace feature. */
 import {

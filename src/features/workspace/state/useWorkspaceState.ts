@@ -7,11 +7,11 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import {
-  type SavedWindowConfig,
-  type SavedWorkspace,
-  type Workspace,
-} from "../../../models/runtime/terminal";
+import type {
+  SavedWindowConfig,
+  SavedWorkspace,
+  Workspace,
+} from "../../../models/runtime/workspace";
 
 export interface WorkspaceState {
   workspaces: Workspace[];

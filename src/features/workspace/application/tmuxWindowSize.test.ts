@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type PaneNode } from "../../../models/runtime/terminal";
+import type { PaneNode } from "../../../models/runtime/pane";
 import { computeTmuxWindowSize, type TerminalSize } from "./tmuxWindowSize";
 
 function leaf(id: string, terminalId: number): PaneNode {

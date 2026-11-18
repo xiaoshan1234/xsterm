@@ -1,12 +1,11 @@
-import {
-  type PaneNode,
-  type SavedWindowConfig,
-  type SavedWorkspace,
-  type SplitDirection,
-  type Terminal,
-  type Window,
-  type Workspace,
-} from "../../models/runtime/terminal";
+import type { Terminal } from "../../models/runtime/config";
+import type { PaneNode, SplitDirection } from "../../models/runtime/pane";
+import type {
+  SavedWindowConfig,
+  SavedWorkspace,
+  Window,
+  Workspace,
+} from "../../models/runtime/workspace";
 
 export interface WorkspaceLayoutContextType {
   workspaces: Workspace[];

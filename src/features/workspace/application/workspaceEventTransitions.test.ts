@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PaneNode, Window, Workspace } from "../../../models/runtime/terminal";
+import type { PaneNode } from "../../../models/runtime/pane";
+import type { Window, Workspace } from "../../../models/runtime/workspace";
 import {
   appendOrReplaceInitWindow,
   closeWindow,

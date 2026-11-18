@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { type PaneNode, type Terminal, type Workspace } from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { PaneNode } from "../../../models/runtime/pane";
+import type { Workspace } from "../../../models/runtime/workspace";
 import {
   collapseEmptySplits,
   collectSessionIdsFromPaneTree,

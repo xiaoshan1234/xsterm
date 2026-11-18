@@ -1,9 +1,9 @@
+import type { Terminal } from "../../../models/runtime/config";
 import type {
   SavedWindowConfig,
   SavedWorkspace,
-  Terminal,
   Workspace,
-} from "../../../models/runtime/terminal";
+} from "../../../models/runtime/workspace";
 import { useSavedWindowActions } from "./useSavedWindowActions";
 import { useSavedWorkspaceActions } from "./useSavedWorkspaceActions";
 
