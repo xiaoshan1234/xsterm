@@ -1,4 +1,4 @@
-import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import type { PaneNode } from "../../../models/runtime/pane";
 import type { Workspace } from "../../../models/runtime/workspace";
 import { useDragResize } from "../../../shared/hooks/useDragResize";
@@ -75,7 +75,7 @@ function SplitNode({
   onUpdateNode,
 }: SplitNodeProps) {
   const direction = node.direction ?? "horizontal";
-  const children = node.children ?? [];
+  const children = useMemo(() => node.children ?? [], [node.children]);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeIndexRef = useRef(0);
 

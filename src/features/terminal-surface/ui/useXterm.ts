@@ -65,6 +65,17 @@ export function useXterm(
   const fitAddonRef = useRef<FitAddon | null>(null);
   const optionsRef = useRef(options);
   const themeRef = useRef(theme);
+  const {
+    fontSize,
+    fontFamily,
+    cursorBlink,
+    cursorStyle,
+    cursorWidth,
+    scrollback,
+    lineHeight,
+    letterSpacing,
+  } = options;
+  const autoWrap = (options as Record<string, unknown>).autoWrap;
 
   useEffect(() => {
     optionsRef.current = options;
@@ -114,8 +125,19 @@ export function useXterm(
   useEffect(() => {
     const xterm = termRef.current;
     if (!xterm) return;
+    const settableValues: Record<string, unknown> = {
+      fontSize,
+      fontFamily,
+      cursorBlink,
+      cursorStyle,
+      cursorWidth,
+      scrollback,
+      lineHeight,
+      letterSpacing,
+      autoWrap,
+    };
     for (const key of SETTABLE_KEYS) {
-      const value = (options as Record<string, unknown>)[key];
+      const value = settableValues[key];
       if (value !== undefined) {
         const xtermKey = XTERM_OPTION_MAP[key] ?? key;
         (xterm.options as Record<string, unknown>)[xtermKey] = value;
@@ -123,18 +145,15 @@ export function useXterm(
     }
     xterm.refresh(0, xterm.rows - 1);
   }, [
-    options.fontSize,
-    options.fontFamily,
-    options.cursorBlink,
-    options.cursorStyle,
-    options.cursorWidth,
-    options.scrollback,
-    options.lineHeight,
-    options.letterSpacing,
-    // autoWrap is not part of xterm.js ITerminalOptions (it maps to
-    // `convertEol`), so we read it off the options bag as an untyped key to
-    // include it in the dependency list.
-    (options as Record<string, unknown>).autoWrap,
+    autoWrap,
+    cursorBlink,
+    cursorStyle,
+    cursorWidth,
+    fontFamily,
+    fontSize,
+    letterSpacing,
+    lineHeight,
+    scrollback,
   ]);
 
   return { termRef, fitAddonRef };

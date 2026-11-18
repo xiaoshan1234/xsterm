@@ -18,20 +18,20 @@ function matchesShortcut(event: KeyboardEvent, config: ShortcutConfig): boolean 
 }
 
 export function useShortcut(config: ShortcutConfig) {
-  const handlerRef = useRef(config.handler);
-  handlerRef.current = config.handler;
+  const configRef = useRef(config);
+  configRef.current = config;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (matchesShortcut(event, config)) {
+      if (matchesShortcut(event, configRef.current)) {
         event.preventDefault();
-        handlerRef.current();
+        configRef.current.handler();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [config.key, config.ctrl, config.shift, config.alt]);
+  }, []);
 }
 
 export function useShortcuts(configs: ShortcutConfig[]) {

@@ -195,6 +195,7 @@ export function useLineNumberOverlay({
 
     // Pane resize changes both the row count and the overlay's origin.
     const host = hostRef.current;
+    const overlay = overlayRef.current;
     const resizeObserver = new ResizeObserver(schedule);
     if (host) resizeObserver.observe(host);
 
@@ -205,7 +206,6 @@ export function useLineNumberOverlay({
       for (const disposable of disposables) disposable.dispose();
       viewportEl?.removeEventListener("scroll", schedule);
       resizeObserver.disconnect();
-      const overlay = overlayRef.current;
       if (overlay) {
         overlay.replaceChildren();
         overlay.style.display = "none";

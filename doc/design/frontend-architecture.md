@@ -173,6 +173,8 @@ Tauri event compatibility.
   `AppShellRuntime` responsible for shell state and feature composition.
 - Completed: `createTestApplication()` provides the feature Provider stack and
   allows per-context fake overrides for UI tests.
+- Completed: all existing React Hook dependency warnings are resolved without
+  suppressing rules.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
 - Completed: the compatibility namespace was renamed from `models/legacy` to

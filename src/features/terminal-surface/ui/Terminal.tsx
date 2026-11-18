@@ -116,7 +116,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
 
   const readBracketedPasteMode = useCallback((): boolean => {
     return termRef.current?.modes.bracketedPasteMode === true;
-  }, []);
+  }, [termRef]);
 
   // Threshold for showing the dialog (matches oxideterm):
   // any paste containing a newline that spans more than 1 line OR more than
@@ -317,7 +317,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       dataDisposer.dispose();
       selectionDisposer.dispose();
     };
-  }, [kind, terminalId]);
+  }, [kind, requestPaste, terminalId, termRef]);
 
   useEffect(() => {
     document.addEventListener("paste", handlePaste, true);
@@ -368,7 +368,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       },
     }),
-    [terminalId, requestPaste],
+    [requestPaste, termRef],
   );
 
   useEffect(() => {
@@ -379,7 +379,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     } else {
       xterm.blur();
     }
-  }, [isActive]);
+  }, [isActive, termRef]);
 
   return (
     <div ref={hostRef} className="terminal-host" onMouseDown={onFocus}>
