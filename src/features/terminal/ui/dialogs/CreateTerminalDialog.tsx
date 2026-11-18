@@ -6,7 +6,8 @@ import {
   type TerminalDisplayConfig,
 } from "../../../../models/legacy/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../sessions";
+import { DEFAULT_GROUP_ID } from "../../../launch-config";
+import { useSavedLaunchConfigs } from "../../../sessions";
 import SessionTab from "./ConnectionTab";
 import { validateSshConfig } from "./SshTerminalForm";
 import { SessionFormLayout, type SessionFormSidebarItem } from "./TerminalFormLayout";

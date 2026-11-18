@@ -6,6 +6,7 @@ import type {
   Window,
   Workspace,
 } from "../../../models/legacy/terminal";
+import { createApplicationError } from "../../../models/applicationError";
 import {
   collectSessionIdsFromWorkspace,
   createLeafPane,
@@ -58,7 +59,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
       const isDefault = workspace.name === "default";
 
       if (finalName === "default") {
-        throw new Error("Workspace name is reserved");
+        throw createApplicationError("workspace-name-reserved", "Workspace name is reserved");
       }
 
       const buildSavedWorkspace = (id: string): SavedWorkspace => ({
@@ -73,7 +74,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
 
       if (isDefault) {
         if (savedWorkspaces.some((w) => w.name.trim() === finalName)) {
-          throw new Error("Workspace name already exists");
+          throw createApplicationError("workspace-name-conflict", "Workspace name already exists");
         }
         const savedWorkspaceData = buildSavedWorkspace(crypto.randomUUID());
         setSavedWorkspaces((prev) => {
@@ -240,10 +241,10 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
     (id: string, name: string) => {
       const trimmedName = name.trim();
       if (trimmedName === "default") {
-        throw new Error("Workspace name is reserved");
+        throw createApplicationError("workspace-name-reserved", "Workspace name is reserved");
       }
       if (savedWorkspaces.some((w) => w.id !== id && w.name.trim() === trimmedName)) {
-        throw new Error("Workspace name already exists");
+        throw createApplicationError("workspace-name-conflict", "Workspace name already exists");
       }
 
       setSavedWorkspaces((prev) => {

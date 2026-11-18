@@ -1,6 +1,6 @@
 import { type Terminal, type Workspace } from "../../models/legacy/terminal";
 import { type TmuxStatusControllerViewData } from "../../features/tmux/viewModels/statusViewModel";
-import { findPaneNode, getLeafPaneIds } from "../../shared/utils/paneTreeUtils";
+import { findPaneNode, getLeafPaneIds } from "../../models/workspace/legacyPaneTreeOperations";
 
 export type RuntimeStatusTransport = "local" | "ssh" | "wsl";
 

@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { type PaneNode, type SplitDirection, type Workspace } from "../../models/legacy/terminal";
+import { isApplicationError } from "../../models/applicationError";
 import { useTerminalRuntime, useWorkspaceLayout } from "../sessions";
-import * as paneTree from "../../shared/utils/paneTreeUtils";
+import * as paneTree from "../../models/workspace/legacyPaneTreeOperations";
 import { getPaneNumber, isSessionUsedInOtherWindow } from "../sessions";
 import { useTheme } from "../../shared/theme/ThemeContext";
 import Terminal, { type TerminalRef } from "../terminal/view/Terminal";
@@ -127,7 +128,7 @@ export function Pane({
         setDialogMode(null);
         setShowSessionDialog(false);
       } catch (e) {
-        if (e instanceof Error && e.message === "Terminal is already used in another window") {
+        if (isApplicationError(e, "terminal-already-attached")) {
           window.alert("Terminal is already used in another window");
         } else {
           window.alert(`Failed to attach terminal: ${e instanceof Error ? e.message : String(e)}`);
@@ -162,7 +163,7 @@ export function Pane({
         setDialogMode(null);
         setShowSessionDialog(false);
       } catch (e) {
-        if (e instanceof Error && e.message === "Terminal is already used in another window") {
+        if (isApplicationError(e, "terminal-already-attached")) {
           window.alert("Terminal is already used in another window");
         } else {
           window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);

@@ -5,6 +5,7 @@ import type {
   TerminalKind,
   Workspace,
 } from "../../../models/legacy/terminal";
+import { createApplicationError } from "../../../models/applicationError";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
 
 /**
@@ -95,6 +96,9 @@ export function assertSessionNotUsedElsewhere(
   terminalId: number,
 ): void {
   if (isSessionUsedInOtherWindow(workspaces, workspaceId, windowId, terminalId)) {
-    throw new Error("Terminal is already used in another window");
+    throw createApplicationError(
+      "terminal-already-attached",
+      "Terminal is already used in another window",
+    );
   }
 }

@@ -1,4 +1,4 @@
-/** Session-wide defaults shared by saved terminal configs and managers. */
+/** Launch-config defaults shared by saved configs and manager views. */
 export const DEFAULT_GROUP_ID = 0;
 export const DEFAULT_GROUP_NAME = "default";
 

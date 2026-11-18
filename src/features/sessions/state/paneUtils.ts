@@ -9,7 +9,7 @@ import {
   getLeafPaneIds,
   mapPaneTree,
   replacePaneNode,
-} from "../../../shared/utils/paneTreeUtils";
+} from "../../../models/workspace/legacyPaneTreeOperations";
 
 export { findPaneNode, getLeafPaneIds, mapPaneTree, replacePaneNode };
 

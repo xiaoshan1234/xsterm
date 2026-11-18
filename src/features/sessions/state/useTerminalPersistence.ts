@@ -1,4 +1,12 @@
 import { useCallback, useEffect } from "react";
+import {
+  DEFAULT_GROUP_ID,
+  DEFAULT_GROUP_NAME,
+  loadSavedConfigs,
+  loadSavedGroups,
+  persistConfigs,
+  persistGroups,
+} from "../../launch-config";
 import * as terminalStorage from "../persistence/terminalStorage";
 import {
   type SavedTerminalConfig,
@@ -6,7 +14,6 @@ import {
   type SavedWorkspace,
   type TerminalGroup,
 } from "../../../models/legacy/terminal";
-import { DEFAULT_GROUP_ID, DEFAULT_GROUP_NAME } from "./constants";
 import { type SessionPersistence } from "./types";
 
 interface UseSessionPersistenceOptions {
@@ -48,7 +55,7 @@ export function useTerminalPersistence({
     (updater: (prev: SavedTerminalConfig[]) => SavedTerminalConfig[]) => {
       setSavedConfigs((prev) => {
         const updated = updater(prev);
-        terminalStorage.persistConfigs(updated);
+        persistConfigs(updated);
         return updated;
       });
     },
@@ -59,7 +66,7 @@ export function useTerminalPersistence({
     (updater: (prev: TerminalGroup[]) => TerminalGroup[], nextId?: number) => {
       setGroups((prev) => {
         const updated = updater(prev);
-        terminalStorage.persistGroups({ groups: updated, nextGroupId: nextId ?? nextGroupId });
+        persistGroups({ groups: updated, nextGroupId: nextId ?? nextGroupId });
         return updated;
       });
     },
@@ -69,8 +76,8 @@ export function useTerminalPersistence({
   useEffect(() => {
     const init = async () => {
       const [configs, savedGroups, workspacesData, windowConfigs] = await Promise.all([
-        terminalStorage.loadSavedConfigs(),
-        terminalStorage.loadSavedGroups(),
+        loadSavedConfigs(),
+        loadSavedGroups(),
         terminalStorage.loadSavedWorkspaces(),
         terminalStorage.loadSavedWindowConfigs(),
       ]);

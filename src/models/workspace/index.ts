@@ -4,3 +4,4 @@ export * from "./Workspace";
 export * from "./WorkspaceOperations";
 export * from "./WorkspaceSnapshot";
 export * from "./WorkspaceWindow";
+export * from "./legacyPaneTreeOperations";

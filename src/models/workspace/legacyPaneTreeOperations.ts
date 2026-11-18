@@ -1,4 +1,4 @@
-import { type PaneNode } from "../../models/legacy/terminal";
+import { type PaneNode } from "../legacy/terminal";
 
 export function findPaneNode<T extends { id: string; children?: T[] }>(
   node: T,
@@ -16,13 +16,13 @@ export function findPaneNode<T extends { id: string; children?: T[] }>(
 
 export function getLeafPaneIds(node: PaneNode): string[] {
   const ids: string[] = [];
-  function collect(n: PaneNode): void {
-    if (n.type === "leaf") {
-      ids.push(n.id);
+  function collect(candidate: PaneNode): void {
+    if (candidate.type === "leaf") {
+      ids.push(candidate.id);
       return;
     }
-    if (n.children) {
-      for (const child of n.children) {
+    if (candidate.children) {
+      for (const child of candidate.children) {
         collect(child);
       }
     }

@@ -14,7 +14,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 1. **UI 必须遵循 `DESIGN.md`**（根目录）。任何组件 / 对话框 / 面板 / 按钮 / 表面的改动，先读 DESIGN.md 并逐字套用 token 与模式，禁止 ad-hoc 样式。
 2. **代码命名必须遵循 `rules/`**：TS/TSX 看 `rules/ts-name-rules.md`，Rust 看 `rules/rust-name-rules.md`。
-3. **分层边界**（见 §4）。禁止跨层违规 import：组件不得直接 `import { invoke } from "@tauri-apps/api"`，必须走 `src/services/sessionService.ts`。
+3. **分层边界**（见 §4）。禁止跨层违规 import：组件不得直接 `invoke()` / `listen()` Tauri 原始接口，也不得导入对应 feature 的 `infrastructure/`；必须通过该 feature 的 application 接口。IPC 统一收敛在 feature-local infrastructure adapter，不存在全局 `sessionService.ts`。
 4. **提交前必须**：`npm run format` + `cargo fmt`，并跑通相关测试（`npm test` / `cargo test`）。
 
 ## 3. 构建命令
@@ -87,9 +87,10 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ## 8. 文档地图
 
-| 文档                       | 作用                                                          |
-| -------------------------- | ------------------------------------------------------------- |
-| `DESIGN.md`                | 前端设计系统（权威），所有 UI 改动前必读                      |
-| `UI_COMPONENTS.md`         | AppShell、全局组件、Manager、Dialog、View Model 与 Model 契约 |
-| `rules/ts-name-rules.md`   | TS/TSX 命名规范                                               |
-| `rules/rust-name-rules.md` | Rust 命名规范                                                 |
+| 文档                                  | 作用                                                          |
+| ------------------------------------- | ------------------------------------------------------------- |
+| `DESIGN.md`                           | 前端设计系统（权威），所有 UI 改动前必读                      |
+| `UI_COMPONENTS.md`                    | AppShell、全局组件、Manager、Dialog、View Model 与 Model 契约 |
+| `doc/design/frontend-architecture.md` | 前端目标分层、稳定接口、测试契约与重构顺序                    |
+| `rules/ts-name-rules.md`              | TS/TSX 命名规范                                               |
+| `rules/rust-name-rules.md`            | Rust 命名规范                                                 |

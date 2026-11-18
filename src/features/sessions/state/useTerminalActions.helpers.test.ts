@@ -13,6 +13,7 @@ import type {
 } from "../../../models/legacy/terminal";
 import { toBackendTerminalHandle } from "../../terminal/infrastructure";
 import { isSessionUsedInOtherWindow } from "./paneUtils";
+import { isApplicationError } from "../../../models/applicationError";
 
 // ---------- Fixtures --------------------------------------------------------
 
@@ -292,6 +293,15 @@ describe("buildFrontendTerminal", () => {
 
 // ---------- assertSessionNotUsedElsewhere ----------------------------------
 
+function expectTerminalAlreadyAttached(action: () => void): void {
+  try {
+    action();
+    throw new Error("Expected terminal-already-attached");
+  } catch (error) {
+    expect(isApplicationError(error, "terminal-already-attached")).toBe(true);
+  }
+}
+
 describe("assertSessionNotUsedElsewhere", () => {
   it("does not throw when the terminal is not used in any other window", () => {
     const ws = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
@@ -306,9 +316,7 @@ describe("assertSessionNotUsedElsewhere", () => {
   it("throws when the terminal is used in a different workspace", () => {
     const ws1 = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
     const ws2 = workspace("ws2", "default", [leafWindow("w2", "Window", [42])]);
-    expect(() => assertSessionNotUsedElsewhere([ws1, ws2], "ws2", "w2", 42)).toThrow(
-      /already used/,
-    );
+    expectTerminalAlreadyAttached(() => assertSessionNotUsedElsewhere([ws1, ws2], "ws2", "w2", 42));
   });
 
   it("throws when the terminal is used in a different window of the same workspace", () => {
@@ -316,12 +324,12 @@ describe("assertSessionNotUsedElsewhere", () => {
       leafWindow("w1", "Window", [42]),
       leafWindow("w2", "Window-2", [42]),
     ]);
-    expect(() => assertSessionNotUsedElsewhere([ws], "ws1", "w2", 42)).toThrow(/already used/);
+    expectTerminalAlreadyAttached(() => assertSessionNotUsedElsewhere([ws], "ws1", "w2", 42));
   });
 
   it("throws when currentWindowId is null and the terminal exists anywhere", () => {
     const ws = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
-    expect(() => assertSessionNotUsedElsewhere([ws], null, null, 42)).toThrow(/already used/);
+    expectTerminalAlreadyAttached(() => assertSessionNotUsedElsewhere([ws], null, null, 42));
   });
 
   it("delegates the existence check to isSessionUsedInOtherWindow", () => {

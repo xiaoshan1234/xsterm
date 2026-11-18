@@ -69,6 +69,76 @@ export default tseslint.config(
     },
   },
 
+  // Domain models are pure and must stay independent from every upper layer.
+  {
+    files: ["src/models/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "react",
+                "react-dom",
+                "@tauri-apps/**",
+                "**/app/**",
+                "**/features/**",
+                "**/infra/**",
+                "**/shared/**",
+              ],
+              message:
+                "Domain models must not depend on React, Tauri, app, features, infra, or shared.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Shared primitives must not depend on application or domain-specific layers.
+  {
+    files: ["src/shared/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/app/**", "**/features/**", "**/models/**", "**/infra/**"],
+              message: "Shared code must not depend on app, features, models, or infra.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Raw Tauri commands and events may only be imported by infrastructure adapters.
+  {
+    files: ["src/app/**/*.{ts,tsx}", "src/features/**/*.{ts,tsx}"],
+    ignores: ["src/**/infrastructure/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@tauri-apps/api/core",
+              message:
+                "Use a feature-local infrastructure adapter instead of importing Tauri core.",
+            },
+            {
+              name: "@tauri-apps/api/event",
+              message:
+                "Use a feature-local infrastructure adapter instead of importing Tauri events.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Test files get a more relaxed set (they often use any / globals).
   {
     files: ["**/*.test.ts", "**/*.test.tsx"],

@@ -4,7 +4,8 @@ import {
   type TmuxSessionConfig,
 } from "../../../../models/legacy/terminal";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../sessions";
+import { DEFAULT_GROUP_ID } from "../../../launch-config";
+import { useSavedLaunchConfigs } from "../../../sessions";
 import { validateSshConfig } from "../../../terminal/ui/dialogs/SshTerminalForm";
 import {
   SessionFormLayout,

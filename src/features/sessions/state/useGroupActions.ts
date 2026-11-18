@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../models/legacy/terminal";
-import { DEFAULT_GROUP_ID } from "./constants";
+import { DEFAULT_GROUP_ID } from "../../launch-config";
 
 interface UseGroupActionsDeps {
   nextGroupId: number;

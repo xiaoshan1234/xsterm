@@ -5,6 +5,7 @@ import {
   type SshConfig,
   type Terminal,
 } from "../../models/legacy/terminal";
+import { isApplicationError } from "../../models/applicationError";
 import { PlusIcon, FolderOpenIcon } from "../../shared/icons/Icon";
 import { CreateTerminalDialog, SelectTerminalDialog } from "../terminal/ui/dialogs";
 import "./PaneInitCard.css";
@@ -44,7 +45,7 @@ export function PaneInitCard({
     try {
       onTerminalCreated(terminal);
     } catch (e) {
-      if (e instanceof Error && e.message === "Terminal is already used in another window") {
+      if (isApplicationError(e, "terminal-already-attached")) {
         window.alert("Terminal is already used in another window");
       } else {
         throw e;
@@ -71,7 +72,7 @@ export function PaneInitCard({
       onTerminalCreated(terminal);
       setShowSelectDialog(false);
     } catch (e) {
-      if (e instanceof Error && e.message === "Terminal is already used in another window") {
+      if (isApplicationError(e, "terminal-already-attached")) {
         window.alert("Terminal is already used in another window");
       } else {
         window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);
@@ -88,7 +89,7 @@ export function PaneInitCard({
       onTerminalCreated(terminal);
       setShowSelectDialog(false);
     } catch (e) {
-      if (e instanceof Error && e.message === "Terminal is already used in another window") {
+      if (isApplicationError(e, "terminal-already-attached")) {
         window.alert("Terminal is already used in another window");
       } else {
         window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);

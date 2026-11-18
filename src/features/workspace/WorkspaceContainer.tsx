@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { type Workspace, type PaneNode } from "../../models/legacy/terminal";
+import { isApplicationError } from "../../models/applicationError";
 import { useWorkspaceLayout } from "../sessions";
 import { PaneTree } from "./PaneTree";
 import { InitWindowView } from "./InitWindowView";
@@ -80,13 +81,11 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
       try {
         saveWorkspace(workspace.id, workspace.name);
       } catch (e) {
-        if (e instanceof Error) {
-          if (
-            e.message === "Workspace name already exists" ||
-            e.message === "Workspace name is reserved"
-          ) {
-            window.alert(e.message);
-          }
+        if (
+          isApplicationError(e, "workspace-name-conflict") ||
+          isApplicationError(e, "workspace-name-reserved")
+        ) {
+          window.alert(e.message);
         }
       }
     }
