@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { type SavedTerminalConfig, type TerminalGroup } from "../../../models/runtime/terminal";
+import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
 
 export interface LaunchConfigState {
   savedConfigs: SavedTerminalConfig[];

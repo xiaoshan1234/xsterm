@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  type SavedTerminalConfig,
-  type Terminal,
-  type Workspace,
-} from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
+import type { Workspace } from "../../../models/runtime/workspace";
 import { selectTmuxStatusControllers } from "./statusViewModel";
 
 describe("Tmux status view model", () => {

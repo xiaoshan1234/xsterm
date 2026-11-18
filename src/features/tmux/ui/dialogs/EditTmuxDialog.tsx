@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import {
-  type SavedTerminalConfig,
-  type TmuxSessionConfig,
-} from "../../../../models/runtime/terminal";
+import type { SavedTerminalConfig } from "../../../../models/runtime/savedConfig";
+import type { TmuxSessionConfig } from "../../../../models/runtime/tmux";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../launch-config";
 import {

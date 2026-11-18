@@ -1,12 +1,11 @@
-import {
-  type LocalTerminalConfig,
-  type SavedTerminalConfig,
-  type SshConfig,
-  type Terminal,
-  type TerminalDisplayConfig,
-  type TerminalGroup,
-  type TmuxSessionConfig,
-} from "../../models/runtime/terminal";
+import type {
+  LocalTerminalConfig,
+  SshConfig,
+  Terminal,
+  TerminalDisplayConfig,
+} from "../../models/runtime/config";
+import type { SavedTerminalConfig, TerminalGroup } from "../../models/runtime/savedConfig";
+import type { TmuxSessionConfig } from "../../models/runtime/tmux";
 
 export interface SavedLaunchConfigsContextType {
   savedConfigs: SavedTerminalConfig[];

@@ -1,8 +1,6 @@
-import {
-  type SavedTerminalConfig,
-  type Terminal,
-  type TmuxSessionConfig,
-} from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
+import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
 
 export function tmuxSessionKey(config: TmuxSessionConfig): string {
   const transport = config.ssh

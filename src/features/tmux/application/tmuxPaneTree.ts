@@ -1,4 +1,4 @@
-import { type PaneNode, type SplitDirection } from "../../../models/runtime/terminal";
+import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
 import { createLeafPane, createSplitNode } from "../../workspace";
 
 interface TmuxGeometryLeaf {

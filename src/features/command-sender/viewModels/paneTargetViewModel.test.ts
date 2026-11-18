@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type Terminal, type Workspace } from "../../../models/runtime/terminal";
+import type { Terminal } from "../../../models/runtime/config";
+import type { Workspace } from "../../../models/runtime/workspace";
 import { selectPaneTargetDisplayInfos } from "./paneTargetViewModel";
 
 describe("pane target view model", () => {
