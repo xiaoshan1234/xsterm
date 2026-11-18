@@ -168,6 +168,8 @@ Tauri event compatibility.
   `terminal-surface` feature.
 - Completed: workspace UI, dialogs, window actions, and persistence hooks are
   organized under `features/workspace/{ui,application,persistence,state}`.
+- Completed: AppShell modal rendering is isolated in `RuntimeOverlays`, leaving
+  `AppShellRuntime` responsible for shell state and feature composition.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
 - Completed: the compatibility namespace was renamed from `models/legacy` to

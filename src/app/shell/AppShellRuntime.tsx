@@ -24,71 +24,22 @@ import {
 } from "../../features/workspace/viewModels";
 import { selectPaneTargetOptions } from "../../features/command-sender";
 import { AppShell } from "./AppShell";
-import { ErrorDialog, type ErrorDialogData } from "./ErrorDialog";
-import { GlobalOverlayHost } from "./GlobalOverlayHost";
 import { GlobalTextSender } from "../../features/command-sender";
 import { TOOL_TITLES, type ToolId } from "./types";
+import { type HelpDialogId } from "./HelpDialog";
+import { RuntimeOverlays } from "./RuntimeOverlays";
 import {
-  CreateTerminalDialog,
-  EditTerminalDialog,
-  NewGroupDialog,
-  EditGroupDialog,
-  type EditableTerminalConfig,
-} from "../../features/terminal/ui";
-import {
-  AttachTmuxDialog,
-  CreateTmuxDialog,
-  EditTmuxDialog,
-  type EditableTmuxConfig,
-} from "../../features/tmux/ui";
-import { SaveDialog } from "../../features/workspace/ui";
-import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
-import { HelpDialog, type HelpDialogId } from "./HelpDialog";
+  type RuntimeConfirmState,
+  type RuntimeDialog,
+  type RuntimeErrorState,
+} from "./runtimeOverlayTypes";
 import { useAppShortcuts } from "../useAppShortcuts";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 
-type RuntimeDialog =
-  | { kind: "create-terminal"; initialTab: "local" | "ssh"; groupId: number }
-  | { kind: "create-tmux" }
-  | { kind: "attach-tmux" }
-  | { kind: "edit-terminal"; config: EditableTerminalConfig }
-  | { kind: "edit-tmux"; config: EditableTmuxConfig }
-  | { kind: "new-group" }
-  | { kind: "edit-group"; groupId: number }
-  | { kind: "rename-window"; configId: string; defaultName: string }
-  | { kind: "rename-workspace"; configId: string; defaultName: string }
-  | null;
-
-interface ConfirmState {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  action: () => void;
-}
-
 export function AppShellRuntime() {
-  const {
-    terminals,
-    writeTerminal,
-    createLocalSession,
-    createSshSession,
-    createTmuxSession,
-    attachTmuxSession,
-    detachTmuxSession,
-    applyDisplayConfigToLiveSession,
-    openTmuxSessions,
-    terminalSizesRef,
-  } = useTerminalRuntime();
-  const {
-    savedConfigs,
-    groups,
-    removeConfig,
-    toggleGroup,
-    createGroup,
-    deleteGroup,
-    moveConfigToGroup,
-    renameGroup,
-  } = useSavedLaunchConfigs();
+  const { terminals, writeTerminal, detachTmuxSession, openTmuxSessions, terminalSizesRef } =
+    useTerminalRuntime();
+  const { savedConfigs, groups, removeConfig, toggleGroup, deleteGroup } = useSavedLaunchConfigs();
   const {
     workspaces,
     activeWorkspaceId,
@@ -103,16 +54,14 @@ export function AppShellRuntime() {
     createEmptyWorkspace,
     closeWorkspace,
     deleteSavedWindow,
-    renameSavedWindow,
     deleteSavedWorkspace,
-    renameSavedWorkspace,
   } = useWorkspaceLayout();
 
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
   const [dialog, setDialog] = useState<RuntimeDialog>(null);
-  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
-  const [error, setError] = useState<ErrorDialogData | null>(null);
+  const [confirm, setConfirm] = useState<RuntimeConfirmState | null>(null);
+  const [error, setError] = useState<RuntimeErrorState | null>(null);
   const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
   const [selectedTargetKey, setSelectedTargetKey] = useState("");
   const initializedRef = useRef(false);
@@ -286,11 +235,6 @@ export function AppShellRuntime() {
     [selectTextSenderTarget, showError, writeTerminal],
   );
 
-  const editingGroup =
-    dialog?.kind === "edit-group"
-      ? (groups.find((group) => group.id === dialog.groupId) ?? groups[0])
-      : undefined;
-
   const toolPanelContent = useMemo(() => {
     switch (activeTool) {
       case "terminal-manager":
@@ -424,108 +368,16 @@ export function AppShellRuntime() {
   ]);
 
   const overlay = (
-    <GlobalOverlayHost>
-      {!error && dialog?.kind === "create-terminal" && (
-        <CreateTerminalDialog
-          isOpen
-          onClose={() => setDialog(null)}
-          onCreateLocal={createLocalSession}
-          onCreateSsh={createSshSession}
-          initialTab={dialog.initialTab}
-          initialGroupId={dialog.groupId}
-        />
-      )}
-      {!error && dialog?.kind === "attach-tmux" && (
-        <AttachTmuxDialog isOpen onClose={() => setDialog(null)} onAttachTmux={attachTmuxSession} />
-      )}
-      {!error && dialog?.kind === "create-tmux" && (
-        <CreateTmuxDialog isOpen onClose={() => setDialog(null)} onCreateTmux={createTmuxSession} />
-      )}
-      {!error && dialog?.kind === "edit-terminal" && (
-        <EditTerminalDialog
-          isOpen
-          onClose={() => setDialog(null)}
-          config={dialog.config}
-          groups={groups}
-          groupId={findConfigGroupId(groups, dialog.config.id)}
-          onSave={(config, groupId) => {
-            moveConfigToGroup(config.id, groupId);
-            const liveTerminal = terminals.find((terminal) => terminal.configId === config.id);
-            if (liveTerminal && config.displayConfig) {
-              applyDisplayConfigToLiveSession(liveTerminal.id, config.displayConfig);
-            }
-          }}
-        />
-      )}
-      {!error && dialog?.kind === "edit-tmux" && (
-        <EditTmuxDialog
-          isOpen
-          onClose={() => setDialog(null)}
-          config={dialog.config}
-          onSave={(config) => {
-            const liveTerminal = terminals.find((terminal) => terminal.configId === config.id);
-            if (liveTerminal && config.displayConfig) {
-              applyDisplayConfigToLiveSession(liveTerminal.id, config.displayConfig);
-            }
-          }}
-        />
-      )}
-      <NewGroupDialog
-        isOpen={!error && dialog?.kind === "new-group"}
-        onClose={() => setDialog(null)}
-        existingGroupNames={groups.map((group) => group.name)}
-        onCreate={(name) => {
-          createGroup(name);
-          setDialog(null);
-        }}
-      />
-      {!error && editingGroup && (
-        <EditGroupDialog
-          isOpen
-          group={editingGroup}
-          groups={groups}
-          onClose={() => setDialog(null)}
-          onSave={(groupId, name) => {
-            renameGroup(groupId, name);
-            setDialog(null);
-          }}
-        />
-      )}
-      {!error && dialog?.kind === "rename-window" && (
-        <SaveDialog
-          isOpen
-          onClose={() => setDialog(null)}
-          onSave={(name) => renameSavedWindow(dialog.configId, name)}
-          defaultName={dialog.defaultName}
-          title="Rename Window"
-          label="Window Name"
-        />
-      )}
-      {!error && dialog?.kind === "rename-workspace" && (
-        <SaveDialog
-          isOpen
-          onClose={() => setDialog(null)}
-          onSave={(name) => renameSavedWorkspace(dialog.configId, name)}
-          defaultName={dialog.defaultName}
-          title="Rename Workspace"
-          label="Workspace Name"
-        />
-      )}
-      <ConfirmDialog
-        isOpen={!error && confirm !== null}
-        title={confirm?.title ?? ""}
-        message={confirm?.message ?? ""}
-        confirmLabel={confirm?.confirmLabel}
-        isDanger
-        onCancel={() => setConfirm(null)}
-        onConfirm={() => {
-          confirm?.action();
-          setConfirm(null);
-        }}
-      />
-      <HelpDialog activeDialog={helpDialog} onClose={() => setHelpDialog(null)} />
-      {error && <ErrorDialog error={error} onAcknowledge={() => setError(null)} />}
-    </GlobalOverlayHost>
+    <RuntimeOverlays
+      dialog={dialog}
+      error={error}
+      confirm={confirm}
+      helpDialog={helpDialog}
+      onCloseDialog={() => setDialog(null)}
+      onDismissConfirm={() => setConfirm(null)}
+      onAcknowledgeError={() => setError(null)}
+      onCloseHelp={() => setHelpDialog(null)}
+    />
   );
 
   return (
@@ -594,11 +446,4 @@ export function AppShellRuntime() {
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}
     />
   );
-}
-
-function findConfigGroupId(
-  groups: readonly { id: number; configIds: string[] }[],
-  configId: string,
-): number | null {
-  return groups.find((group) => group.configIds.includes(configId))?.id ?? null;
 }
