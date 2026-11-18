@@ -1,8 +1,8 @@
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from "react";
-import type { SavedLaunchConfigsContextType } from "../../../features/launch-config/contracts";
-import type { SessionPreferencesContextType } from "../../../features/settings/contracts";
-import type { TerminalRuntimeContextType } from "../../../features/terminal/contracts";
-import type { WorkspaceLayoutContextType } from "../../../features/workspace/contracts";
+import type { SavedLaunchConfigsContextType } from "../../../features/launch-config";
+import type { SessionPreferencesContextType } from "../../../features/settings";
+import type { TerminalRuntimeContextType } from "../../../features/terminal";
+import type { WorkspaceLayoutContextType } from "../../../features/workspace";
 import {
   type LocalTerminalConfig,
   type PaneNode,
@@ -18,9 +18,9 @@ import {
   type Window,
   type Workspace,
 } from "../../../models/runtime/terminal";
-import type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux/state/types";
+import type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
 
-export type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux/state/types";
+export type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
 export type {
   SavedLaunchConfigsContextType,
   SessionPreferencesContextType,

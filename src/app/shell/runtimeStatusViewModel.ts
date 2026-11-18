@@ -1,5 +1,5 @@
 import { type Terminal, type Workspace } from "../../models/runtime/terminal";
-import { type TmuxStatusControllerViewData } from "../../features/tmux/viewModels/statusViewModel";
+import { type TmuxStatusControllerViewData } from "../../features/tmux";
 import { findPaneNode, getLeafPaneIds } from "../../models/workspace/runtimePaneTreeOperations";
 
 export type RuntimeStatusTransport = "local" | "ssh" | "wsl";

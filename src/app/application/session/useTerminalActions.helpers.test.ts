@@ -1,18 +1,16 @@
 import { describe, expect, it } from "vitest";
-import {
-  assertSessionNotUsedElsewhere,
-  buildFrontendTerminal,
-  dispatchByType,
-  getUniqueWindowName,
-} from "./useTerminalActions.helpers";
+import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
 import type {
   Terminal,
   TerminalDisplayConfig,
   Window,
   Workspace,
 } from "../../../models/runtime/terminal";
-import { toBackendTerminalHandle } from "../../../features/terminal/infrastructure";
-import { isSessionUsedInOtherWindow } from "../../../features/workspace";
+import {
+  assertSessionNotUsedElsewhere,
+  getUniqueWindowName,
+  isSessionUsedInOtherWindow,
+} from "../../../features/workspace";
 import { isApplicationError } from "../../../models/applicationError";
 
 // ---------- Fixtures --------------------------------------------------------
@@ -59,7 +57,7 @@ const capabilities = {
 describe("dispatchByType", () => {
   const tmux = async () =>
     ({
-      id: toBackendTerminalHandle(3),
+      id: 3,
       name: "T",
       isConnected: true,
       kind: { type: "tmux-pane", sessionId: 1, paneId: "%1" },
@@ -69,7 +67,7 @@ describe("dispatchByType", () => {
   it("invokes the local creator for type 'local'", async () => {
     const local = async () =>
       ({
-        id: toBackendTerminalHandle(1),
+        id: 1,
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
@@ -77,7 +75,7 @@ describe("dispatchByType", () => {
       }) as const;
     const ssh = async () =>
       ({
-        id: toBackendTerminalHandle(2),
+        id: 2,
         name: "S",
         isConnected: true,
         kind: {
@@ -96,7 +94,7 @@ describe("dispatchByType", () => {
   it("invokes the ssh creator for type 'ssh'", async () => {
     const local = async () =>
       ({
-        id: toBackendTerminalHandle(1),
+        id: 1,
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
@@ -104,7 +102,7 @@ describe("dispatchByType", () => {
       }) as const;
     const ssh = async () =>
       ({
-        id: toBackendTerminalHandle(2),
+        id: 2,
         name: "S",
         isConnected: true,
         kind: {
@@ -123,7 +121,7 @@ describe("dispatchByType", () => {
   it("invokes the tmux creator for type 'tmux-pane'", async () => {
     const local = async () =>
       ({
-        id: toBackendTerminalHandle(1),
+        id: 1,
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
@@ -131,7 +129,7 @@ describe("dispatchByType", () => {
       }) as const;
     const ssh = async () =>
       ({
-        id: toBackendTerminalHandle(2),
+        id: 2,
         name: "S",
         isConnected: true,
         kind: {
@@ -153,7 +151,7 @@ describe("dispatchByType", () => {
         "weird" as never,
         async () =>
           ({
-            id: toBackendTerminalHandle(1),
+            id: 1,
             name: "L",
             isConnected: true,
             kind: { type: "local", shell: "", cwd: "" },
@@ -161,7 +159,7 @@ describe("dispatchByType", () => {
           }) as const,
         async () =>
           ({
-            id: toBackendTerminalHandle(2),
+            id: 2,
             name: "S",
             isConnected: true,
             kind: {
@@ -174,7 +172,7 @@ describe("dispatchByType", () => {
           }) as const,
         async () =>
           ({
-            id: toBackendTerminalHandle(3),
+            id: 3,
             name: "T",
             isConnected: true,
             kind: { type: "tmux-pane", sessionId: 1, paneId: "%1" },
@@ -222,7 +220,7 @@ describe("getUniqueWindowName", () => {
 
 describe("buildFrontendTerminal", () => {
   const info = {
-    id: toBackendTerminalHandle(7),
+    id: 7,
     name: "terminal-7",
     isConnected: true,
     kind: { type: "local", shell: "/bin/zsh", cwd: "/" } as const,

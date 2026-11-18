@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { terminalCommands } from "../../../features/terminal/infrastructure";
-import { tmuxCommands } from "../../../features/tmux/infrastructure";
+import { terminalSessionActions } from "../../../features/terminal";
+import { tmuxControllerActions } from "../../../features/tmux";
 import type {
   LocalTerminalConfig,
   SshConfig,
@@ -10,28 +10,22 @@ import type {
   Workspace,
 } from "../../../models/runtime/terminal";
 import {
+  assertSessionNotUsedElsewhere,
   createLeafPane,
   forEachPane,
   generateId,
+  getUniqueWindowName,
+  usePersistenceActions,
+  useWindowActions,
+  useWorkspaceActions,
   withRecomputedSessionIds,
 } from "../../../features/workspace";
-import {
-  assertSessionNotUsedElsewhere,
-  buildFrontendTerminal,
-  dispatchByType,
-  getUniqueWindowName,
-} from "./useTerminalActions.helpers";
+import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
 import { useGroupActions } from "../../../features/launch-config";
 import { usePaneActions } from "./usePaneActions";
-import { usePersistenceActions } from "./usePersistenceActions";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
-import { useWindowActions } from "./useWindowActions";
-import { useWorkspaceActions } from "./useWorkspaceActions";
 import type { SessionActions, SessionPersistence, TerminalState } from "./types";
-import {
-  findOpenTmuxControllerId,
-  tmuxSessionKey,
-} from "../../../features/tmux/viewModels/sessionIdentity";
+import { findOpenTmuxControllerId, tmuxSessionKey } from "../../../features/tmux";
 
 interface UseSessionActionsOptions extends TerminalState, SessionPersistence {}
 
@@ -131,7 +125,7 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
         // real windows and terminals. Return a representative Terminal for
         // the caller without adding it to state.
         try {
-          const info = await tmuxCommands.attachTmuxSession(tmuxConfig);
+          const info = await tmuxControllerActions.attachSession(tmuxConfig);
           const terminal = buildFrontendTerminal(info, configId, "tmux-pane", config.displayConfig);
           if (terminal.tmuxSessionId !== undefined) {
             tmuxControllerConfigsRef.current.set(terminal.tmuxSessionId, tmuxConfig);
@@ -154,16 +148,16 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
       const info = await dispatchByType(
         config.type,
         () =>
-          terminalCommands.createLocalTerminal(
+          terminalSessionActions.createLocal(
             config.config as LocalTerminalConfig,
             config.displayConfig?.logging,
           ),
         () =>
-          terminalCommands.createSshTerminal(
+          terminalSessionActions.createSsh(
             config.config as SshConfig,
             config.displayConfig?.logging,
           ),
-        () => tmuxCommands.attachTmuxSession(config.config as TmuxSessionConfig),
+        () => tmuxControllerActions.attachSession(config.config as TmuxSessionConfig),
       );
       const terminal = buildFrontendTerminal(info, configId, config.type, config.displayConfig);
       setSessions((prev) => [...prev, terminal]);

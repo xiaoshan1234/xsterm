@@ -1,12 +1,9 @@
-import type { TerminalInfoDto } from "../../../features/terminal/infrastructure";
+import type { TerminalConnectionInfo } from "../../../features/terminal";
 import type {
   Terminal,
   TerminalDisplayConfig,
   TerminalKind,
-  Workspace,
 } from "../../../models/runtime/terminal";
-import { createApplicationError } from "../../../models/applicationError";
-import { isSessionUsedInOtherWindow } from "../../../features/workspace";
 
 /**
  * Dispatches to the appropriate backend terminal creator based on terminal type.
@@ -15,10 +12,10 @@ import { isSessionUsedInOtherWindow } from "../../../features/workspace";
  */
 export async function dispatchByType(
   type: TerminalKind["type"],
-  local: () => Promise<TerminalInfoDto>,
-  ssh: () => Promise<TerminalInfoDto>,
-  tmux: () => Promise<TerminalInfoDto>,
-): Promise<TerminalInfoDto> {
+  local: () => Promise<TerminalConnectionInfo>,
+  ssh: () => Promise<TerminalConnectionInfo>,
+  tmux: () => Promise<TerminalConnectionInfo>,
+): Promise<TerminalConnectionInfo> {
   switch (type) {
     case "local":
       return local();
@@ -41,15 +38,6 @@ export async function dispatchByType(
  * WindowTabBar (`1.`, `2.`, `3.`). The signature is preserved so existing
  * callers in `useWindowActions.ts` keep working.
  */
-export function getUniqueWindowName(
-  _workspaces: Workspace[],
-  _workspaceId: string,
-  baseName: string,
-  _excludeWindowId?: string,
-): string {
-  return baseName;
-}
-
 /**
  * Builds the frontend `Terminal` object from a backend `TerminalInfo` returned
  * by `terminalService.createLocal` / `createSsh` / `createTmux`. The tmux
@@ -57,7 +45,7 @@ export function getUniqueWindowName(
  * `xstermWindowId`) are forwarded when present.
  */
 export function buildFrontendTerminal(
-  info: TerminalInfoDto,
+  info: TerminalConnectionInfo,
   configId: string,
   _type: Terminal["type"],
   displayConfig?: TerminalDisplayConfig,
@@ -89,16 +77,3 @@ export function buildFrontendTerminal(
  * Throws when the terminal is already attached to a pane in a different window.
  * Used to prevent the same terminal from being shown in two places at once.
  */
-export function assertSessionNotUsedElsewhere(
-  workspaces: Workspace[],
-  workspaceId: string | null,
-  windowId: string | null,
-  terminalId: number,
-): void {
-  if (isSessionUsedInOtherWindow(workspaces, workspaceId, windowId, terminalId)) {
-    throw createApplicationError(
-      "terminal-already-attached",
-      "Terminal is already used in another window",
-    );
-  }
-}

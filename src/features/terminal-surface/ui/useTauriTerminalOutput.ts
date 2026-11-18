@@ -1,0 +1,164 @@
+import { useEffect, useRef, type RefObject } from "react";
+import { type Terminal as XTerm } from "@xterm/xterm";
+import { terminalClipboard, terminalStreamActions, useTerminalRuntime } from "../../terminal";
+import {
+  appendTerminalOutput,
+  getTerminalOutput,
+} from "../../../shared/utils/terminalOutputBuffer";
+import { tmuxControllerActions } from "../../tmux";
+import { normalizeCapturedScrollback } from "./scrollback";
+
+const lastTouchRef = new Map<number, number>();
+const TOUCH_DEBOUNCE_MS = 500;
+/**
+ * Scrollback replay happens once per tmux terminal binding. A reconnect keeps
+ * the same xterm instance but replaces its terminal id, so the map must allow
+ * the new id to replay while still suppressing React strict-mode duplicates.
+ */
+const replayedTerminalByXterm = new WeakMap<XTerm, number>();
+
+const SCROLLBACK_LINES = 2000;
+
+function decodeOutput(data: Uint8Array): string {
+  return new TextDecoder().decode(data);
+}
+
+// OSC52: ESC ] 52 ; [clipboard] ; <base64-data> ; terminated by BEL or ESC \
+// eslint-disable-next-line no-control-regex -- ANSI escape sequences are required to detect OSC52.
+const OSC52_REGEX = /\x1b\]52;[^;\x07\x1b]*;([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)/g;
+
+function decodeBase64Utf8(encoded: string): string {
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function extractAndCopyOsc52(text: string): string {
+  // Fast skip: most PTY output has no OSC52; avoid regex alloc. See Perf 007.
+  if (text.indexOf("\x1b]52;") === -1) return text;
+  const matches = text.matchAll(OSC52_REGEX);
+  for (const match of matches) {
+    const encoded = match[1];
+    if (!encoded || encoded.length === 0) continue;
+    try {
+      const decoded = decodeBase64Utf8(encoded);
+      void terminalClipboard.writeText(decoded).catch((err) => {
+        console.error("[xsterm] Failed to write OSC52 selection to clipboard:", err);
+      });
+    } catch (err) {
+      console.error("[xsterm] Failed to decode OSC52 selection:", err);
+    }
+  }
+  return text.replace(OSC52_REGEX, "");
+}
+
+export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, terminalId: number): void {
+  const { touchTerminalActivity, terminals } = useTerminalRuntime();
+  const replayStateRef = useRef<{ terminalId: number; promise: Promise<void> } | null>(null);
+  // tmux scrollback replay applies only to tmux-backed panes.
+  const isTmuxPane = !!terminals.find((s) => s.id === terminalId && !!s.tmuxPaneId);
+
+  // Replay tmux snapshot/modes before the live listener attaches. This lets a
+  // reconnect restore alternate-screen TUI state without a concurrent live
+  // frame overwriting the snapshot.
+  useEffect(() => {
+    if (!isTmuxPane) return;
+    const xterm = termRef.current;
+    if (!xterm || replayedTerminalByXterm.get(xterm) === terminalId) return;
+    replayedTerminalByXterm.set(xterm, terminalId);
+
+    const replayTerminalId = terminalId;
+    const replayPromise = tmuxControllerActions
+      .capturePane(terminalId, SCROLLBACK_LINES)
+      .then((text) => {
+        if (!text || replayedTerminalByXterm.get(xterm) !== replayTerminalId) return;
+        try {
+          xterm.write(normalizeCapturedScrollback(text));
+        } catch (e) {
+          console.error("[xsterm] Failed to write tmux scrollback to terminal:", e);
+        }
+      })
+      .catch((err) => {
+        console.error("[xsterm] captureTmuxPane failed:", err);
+      });
+    replayStateRef.current = { terminalId, promise: replayPromise };
+  }, [isTmuxPane, terminalId, termRef]);
+
+  // Raw-byte output path: the frontend hands the backend a Tauri `Channel`,
+  // and the Rust forwarder pushes coalesced bytes through it as raw binary.
+  // Each chunk arrives here as an `ArrayBuffer`, avoiding the historical JSON
+  // number-array (`[104,105,...]`) blow-up. The Rust side already coalesces
+  // reads into 64 KiB / 8 ms bursts, so each chunk goes straight to
+  // xterm.write with no JS-side rAF batching.
+  useEffect(() => {
+    const xterm = termRef.current;
+    if (!xterm) return;
+
+    let listenerActive = true;
+    let unlisten: (() => void) | null = null;
+    let bufferBeforeSubscribe: string | undefined;
+
+    const handleOutput = (text: string) => {
+      appendTerminalOutput(terminalId, text);
+
+      const now = Date.now();
+      const last = lastTouchRef.get(terminalId) ?? 0;
+      if (now - last >= TOUCH_DEBOUNCE_MS) {
+        lastTouchRef.set(terminalId, now);
+        touchTerminalActivity(terminalId);
+      }
+
+      try {
+        xterm.write(text);
+      } catch (e) {
+        console.error("[xsterm] Failed to write to terminal:", e);
+      }
+    };
+
+    const replayState = replayStateRef.current;
+    const replayPromise =
+      isTmuxPane && replayState?.terminalId === terminalId
+        ? replayState.promise
+        : Promise.resolve();
+    void replayPromise
+      .then(() => {
+        if (!listenerActive) return undefined;
+        // Snapshot history before subscribing. Anything arriving during the
+        // subscription call is delivered live and must not be replayed again.
+        bufferBeforeSubscribe = getTerminalOutput(terminalId);
+        return terminalStreamActions.subscribeOutput(terminalId, (data) => {
+          if (!listenerActive) return;
+          handleOutput(extractAndCopyOsc52(decodeOutput(data)));
+        });
+      })
+      .then((fn) => {
+        if (!fn) return;
+        if (!listenerActive) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+        const buffer = bufferBeforeSubscribe;
+        if (buffer) {
+          try {
+            xterm.write(buffer);
+          } catch (e) {
+            console.error("[xsterm] Failed to replay terminal output buffer:", e);
+          }
+        }
+      })
+      .catch((err) => {
+        if (listenerActive) {
+          console.error("[xsterm] Failed to listen terminal-output:", err);
+        }
+      });
+
+    return () => {
+      listenerActive = false;
+      unlisten?.();
+    };
+  }, [isTmuxPane, termRef, terminalId, touchTerminalActivity]);
+}

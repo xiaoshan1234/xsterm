@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { GlobalOverlayHost } from "./GlobalOverlayHost";
-import { GlobalTextSender } from "./GlobalTextSender";
+import { GlobalTextSender } from "../../features/command-sender";
 import { MainAreaPreview } from "./MainAreaPreview";
 import { ManagerPreview } from "./ManagerPreview";
 import { PreviewDialogs } from "./PreviewDialogs";

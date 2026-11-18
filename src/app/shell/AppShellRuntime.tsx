@@ -3,41 +3,47 @@ import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../features/launch-c
 import { useTerminalRuntime } from "../../features/terminal";
 import { useWorkspaceLayout } from "../../features/workspace";
 import NavBar from "../NavBar";
-import { WorkspaceContainer } from "../../features/workspace/WorkspaceContainer";
-import { TerminalManagerPanel } from "../../features/terminal/ui/TerminalManagerPanel";
-import { TmuxManagerPanel } from "../../features/tmux/ui/TmuxManagerPanel";
-import { WindowManagerPanel, WorkspaceManagerPanel } from "../../features/workspace/ui";
+import {
+  WorkspaceContainer,
+  WindowManagerPanel,
+  WorkspaceManagerPanel,
+} from "../../features/workspace/ui";
+import { TerminalManagerPanel } from "../../features/terminal/ui";
+import { TmuxManagerPanel } from "../../features/tmux/ui";
 import { SettingsPanel } from "../../features/settings/ui";
-import { selectTerminalManagerGroups } from "../../features/terminal/viewModels/managerViewModel";
-import { selectTmuxManagerGroups } from "../../features/tmux/viewModels/managerViewModel";
-import { selectTmuxStatusControllers } from "../../features/tmux/viewModels/statusViewModel";
+import { selectTerminalManagerGroups } from "../../features/terminal/viewModels";
+import {
+  selectTmuxManagerGroups,
+  selectTmuxStatusControllers,
+  tmuxSessionBaseKey,
+  tmuxSessionKey,
+} from "../../features/tmux/viewModels";
 import {
   selectWindowManagerItems,
   selectWorkspaceManagerItems,
-} from "../../features/workspace/viewModels/managerViewModel";
-import { selectPaneTargetOptions } from "../../features/command-sender/viewModels/paneTargetViewModel";
+} from "../../features/workspace/viewModels";
+import { selectPaneTargetOptions } from "../../features/command-sender";
 import { AppShell } from "./AppShell";
 import { ErrorDialog, type ErrorDialogData } from "./ErrorDialog";
 import { GlobalOverlayHost } from "./GlobalOverlayHost";
-import { GlobalTextSender } from "./GlobalTextSender";
+import { GlobalTextSender } from "../../features/command-sender";
 import { TOOL_TITLES, type ToolId } from "./types";
 import {
   CreateTerminalDialog,
   EditTerminalDialog,
+  NewGroupDialog,
+  EditGroupDialog,
   type EditableTerminalConfig,
-} from "../../features/terminal/ui/dialogs";
+} from "../../features/terminal/ui";
 import {
   AttachTmuxDialog,
   CreateTmuxDialog,
   EditTmuxDialog,
   type EditableTmuxConfig,
-} from "../../features/tmux/ui/dialogs";
-import { NewGroupDialog } from "../../features/terminal/ui/dialogs/NewGroupDialog";
-import { EditGroupDialog } from "../../features/terminal/ui/dialogs/EditGroupDialog";
-import { SaveDialog } from "../../features/workspace/dialogs/SaveDialog";
+} from "../../features/tmux/ui";
+import { SaveDialog } from "../../features/workspace/ui";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { HelpDialog, type HelpDialogId } from "./HelpDialog";
-import { tmuxSessionBaseKey, tmuxSessionKey } from "../../features/tmux/viewModels/sessionIdentity";
 import { useAppShortcuts } from "../useAppShortcuts";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 

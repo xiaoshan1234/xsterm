@@ -1,5 +1,7 @@
 export * from "./CreateTerminalDialog";
 export * from "./EditTerminalDialog";
+export * from "./EditGroupDialog";
+export * from "./NewGroupDialog";
 export * from "./SelectTerminalDialog";
 export * from "./SshTerminalForm";
 export * from "./TerminalFormLayout";

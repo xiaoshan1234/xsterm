@@ -2,6 +2,7 @@ export * from "./viewModels/managerViewModel";
 export * from "./viewModels/paneLocationViewModel";
 export * from "./application/paneTreeOperations";
 export * from "./application/workspaceEventTransitions";
+export * from "./application/windowOperations";
 export { WorkspaceProvider, useWorkspaceLayout } from "./state/WorkspaceContext";
 export type { WorkspaceLayoutContextType } from "./contracts";
 export {
@@ -13,3 +14,6 @@ export {
   persistWorkspaces,
 } from "./persistence/workspaceStorage";
 export { useWorkspaceState, type WorkspaceState } from "./state/useWorkspaceState";
+export { usePersistenceActions } from "./application/usePersistenceActions";
+export { useWindowActions } from "./application/useWindowActions";
+export { useWorkspaceActions } from "./application/useWorkspaceActions";

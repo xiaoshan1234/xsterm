@@ -1,10 +1,10 @@
 import { useCallback } from "react";
 import {
-  terminalCommands,
-  toBackendTerminalHandle,
-  type TerminalInfoDto,
-} from "../../../features/terminal/infrastructure";
-import { tmuxCommands, toBackendControllerHandle } from "../../../features/tmux/infrastructure";
+  terminalSessionActions,
+  terminalStreamActions,
+  type TerminalConnectionInfo,
+} from "../../../features/terminal";
+import { tmuxControllerActions } from "../../../features/tmux";
 import type {
   PaneNode,
   Terminal,
@@ -20,8 +20,9 @@ import {
   removePaneFromTree,
   replacePaneNode,
   withRecomputedSessionIds,
+  assertSessionNotUsedElsewhere,
 } from "../../../features/workspace";
-import { assertSessionNotUsedElsewhere, buildFrontendTerminal } from "./useTerminalActions.helpers";
+import { buildFrontendTerminal } from "./useTerminalActions.helpers";
 
 interface UsePaneActionsDeps {
   terminalsRef: React.MutableRefObject<Terminal[]>;
@@ -123,7 +124,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
    * React state and collapse the pane tree.
    */
   const killTmuxPane = useCallback(async (xstermTerminalId: number): Promise<void> => {
-    await tmuxCommands.killTmuxPane(toBackendTerminalHandle(xstermTerminalId));
+    await tmuxControllerActions.killPane(xstermTerminalId);
   }, []);
 
   const updateWindowPaneTree = useCallback(
@@ -156,7 +157,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
       const terminalId = pane.terminalId;
       if (terminalId !== undefined) {
         try {
-          await terminalCommands.closeTerminal(toBackendTerminalHandle(terminalId));
+          await terminalSessionActions.closeTerminal(terminalId);
         } catch (e) {
           console.error("Failed to close terminal backend:", e);
         } finally {
@@ -188,26 +189,19 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
   );
 
   const writeTerminal = useCallback(async (id: number, data: string): Promise<void> => {
-    await terminalCommands.writeTerminal(
-      toBackendTerminalHandle(id),
-      new TextEncoder().encode(data),
-    );
+    await terminalStreamActions.writeBytes(id, new TextEncoder().encode(data));
   }, []);
 
   const resizeTerminal = useCallback(
     async (id: number, rows: number, cols: number): Promise<void> => {
-      await terminalCommands.resizeTerminal(toBackendTerminalHandle(id), rows, cols);
+      await terminalSessionActions.resizeTerminal(id, rows, cols);
     },
     [],
   );
 
   const uploadImageToSshTerminal = useCallback(
     async (terminalId: number, filename: string, data: Uint8Array): Promise<string> => {
-      return terminalCommands.uploadImageToSshTerminal(
-        toBackendTerminalHandle(terminalId),
-        filename,
-        data,
-      );
+      return terminalSessionActions.uploadImageToSshTerminal(terminalId, filename, data);
     },
     [],
   );
@@ -269,13 +263,9 @@ async function splitTmuxPaneInternal(
   const parentTmuxPaneId = parent.tmuxPaneId;
   if (controllerId === undefined || parentTmuxPaneId === undefined) return;
 
-  let info: TerminalInfoDto;
+  let info: TerminalConnectionInfo;
   try {
-    info = await tmuxCommands.createTmuxPane(
-      toBackendControllerHandle(controllerId),
-      toBackendTerminalHandle(xstermTerminalId),
-      direction,
-    );
+    info = await tmuxControllerActions.createPane(controllerId, xstermTerminalId, direction);
   } catch (e) {
     console.error("splitTmuxPane: backend create_tmux_pane failed:", e);
     return;

@@ -1,5 +1,5 @@
 import { useTerminalEventBridge } from "../../../features/terminal";
-import { useTmuxEventBridge } from "../../../features/tmux";
+import { useTmuxEventBridge } from "./useTmuxEventBridge";
 import { type TerminalState } from "./types";
 
 type EventBridgeState = Pick<

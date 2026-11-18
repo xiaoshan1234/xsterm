@@ -58,7 +58,7 @@ src/
     shell/
   features/
     launch-config/
-    terminal-runtime/
+    terminal/
     terminal-surface/
     tmux/
     workspace/
@@ -156,11 +156,24 @@ Tauri event compatibility.
 - Completed: cross-aggregate session orchestration lives in
   `app/application/session`; `features/sessions` has been removed.
 - Completed: terminal and tmux events are subscribed by feature-local bridges.
+- Completed: cross-aggregate tmux event coordination lives in
+  `app/application/session`; tmux feature provides the event stream adapter.
 - Completed: PaneTree/workspace transitions and tmux layout parsing live in
   their owning features.
+- Completed: terminal session/stream actions are feature application
+  contracts; `app/application/session` no longer imports feature infrastructure.
+- Completed: terminal lifecycle orchestration is split into local/SSH creation,
+  tmux lifecycle, and terminal maintenance application hooks.
+- Completed: xterm rendering and interaction live in the independent
+  `terminal-surface` feature.
+- Completed: workspace UI, dialogs, window actions, and persistence hooks are
+  organized under `features/workspace/{ui,application,persistence,state}`.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
 - Completed: the compatibility namespace was renamed from `models/legacy` to
   `models/runtime`.
 - Next: replace remaining runtime compatibility types with the canonical
   models.
+- Next: add the shared `createTestApplication()` fixture promised by the test
+  contract and continue splitting the remaining terminal lifecycle
+  coordinator.

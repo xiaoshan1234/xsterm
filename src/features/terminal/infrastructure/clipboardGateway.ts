@@ -1,4 +1,6 @@
-import { readImage } from "@tauri-apps/plugin-clipboard-manager";
+import { readImage, readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+
+export { readText, writeText };
 
 /**
  * Collects image files from clipboardData items and files list.

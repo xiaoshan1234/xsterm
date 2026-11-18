@@ -40,3 +40,14 @@ export interface TerminalRuntimeContextType {
   touchTerminalActivity: (id: number) => void;
   dismissTmuxControllerError: (controllerId: number) => void;
 }
+
+export interface TerminalConnectionInfo {
+  id: number;
+  name: string;
+  kind: Terminal["kind"];
+  isConnected: boolean;
+  capabilities: NonNullable<Terminal["capabilities"]>;
+  tmuxWindowId?: string;
+  tmuxSessionName?: string;
+  isHidden?: boolean;
+}
