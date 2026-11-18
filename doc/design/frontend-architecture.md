@@ -177,7 +177,8 @@ Tauri event compatibility.
   Tauri plugins.
 - Completed: the compatibility namespace was renamed from `models/legacy` to
   `models/runtime`.
-- Next: replace remaining runtime compatibility types with the canonical
-  models.
+- Completed: runtime compatibility definitions are split into pane, workspace,
+  config, tmux, saved-config, and event modules behind a stable barrel.
+- Next: replace these runtime compatibility types with the canonical models.
 - Next: replace the remaining runtime compatibility model and consolidate
   launch-config dialogs under `launch-config/ui`.
