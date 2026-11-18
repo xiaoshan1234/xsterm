@@ -54,11 +54,11 @@ multiple reducers directly.
 src/
   app/
     application/
-    composition/
     shell/
   features/
     launch-config/
     terminal/
+    terminal-stream/
     terminal-surface/
     tmux/
     workspace/
@@ -109,7 +109,7 @@ or a feature reducer. For example:
 ```text
 open saved config
   -> launch-config application
-  -> terminal-runtime or tmux application
+  -> terminal or tmux application
   -> workspace application
   -> coordinator updates the owning feature states
 ```
@@ -169,6 +169,17 @@ Tauri event compatibility.
   `terminal-surface` feature.
 - Completed: workspace UI, dialogs, window actions, and persistence hooks are
   organized under `features/workspace/{ui,application,persistence,state}`.
+- Completed: Terminal and tmux configuration dialogs now live under
+  `features/launch-config/ui`; runtime-only terminal selection lives with the
+  workspace Pane UI that consumes it.
+- Completed: both terminal and tmux adapters consume the shared
+  `terminal-stream` wire contracts instead of depending on terminal
+  infrastructure internals.
+- Completed: feature root indexes expose their cross-feature UI and view-model
+  API, and ESLint rejects app or feature imports that bypass those entries.
+- Completed: Pane attach, split, close, and tmux-window actions are intent ports
+  implemented by the app coordinator; Pane UI no longer mutates multiple
+  feature reducers.
 - Completed: AppShell modal rendering is isolated in `RuntimeOverlays`, leaving
   `AppShellRuntime` responsible for shell state and feature composition.
 - Completed: `createTestApplication()` provides the feature Provider stack and
@@ -186,5 +197,5 @@ Tauri event compatibility.
 - Completed: all internal runtime model imports target concrete modules; the
   former `runtime/terminal` compatibility barrel has been removed.
 - Next: replace these runtime compatibility types with the canonical models.
-- Next: replace the remaining runtime compatibility model and consolidate
-  launch-config dialogs under `launch-config/ui`.
+- Next: retire the remaining runtime compatibility models in favor of the
+  canonical model modules.

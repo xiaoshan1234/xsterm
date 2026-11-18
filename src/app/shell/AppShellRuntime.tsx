@@ -4,27 +4,24 @@ import { useTerminalRuntime } from "../../features/terminal";
 import { useWorkspaceLayout } from "../../features/workspace";
 import NavBar from "../NavBar";
 import {
+  selectWindowManagerItems,
+  selectWorkspaceManagerItems,
   WorkspaceContainer,
   WindowManagerPanel,
   WorkspaceManagerPanel,
-} from "../../features/workspace/ui";
-import { TerminalManagerPanel } from "../../features/terminal/ui";
-import { TmuxManagerPanel } from "../../features/tmux/ui";
-import { SettingsPanel } from "../../features/settings/ui";
-import { selectTerminalManagerGroups } from "../../features/terminal/viewModels";
+} from "../../features/workspace";
+import { selectTerminalManagerGroups, TerminalManagerPanel } from "../../features/terminal";
 import {
   selectTmuxManagerGroups,
   selectTmuxStatusControllers,
+  TmuxManagerPanel,
   tmuxSessionBaseKey,
   tmuxSessionKey,
-} from "../../features/tmux/viewModels";
-import {
-  selectWindowManagerItems,
-  selectWorkspaceManagerItems,
-} from "../../features/workspace/viewModels";
+} from "../../features/tmux";
 import { selectPaneTargetOptions } from "../../features/command-sender";
 import { AppShell } from "./AppShell";
 import { GlobalTextSender } from "../../features/command-sender";
+import { SettingsPanel } from "../../features/settings";
 import { TOOL_TITLES, type ToolId } from "./types";
 import { type HelpDialogId } from "./HelpDialog";
 import { RuntimeOverlays } from "./RuntimeOverlays";

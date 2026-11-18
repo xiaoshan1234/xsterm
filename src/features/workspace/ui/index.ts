@@ -7,3 +7,4 @@ export * from "./Pane";
 export * from "./PaneTree";
 export * from "./dialogs/SaveDialog";
 export * from "./dialogs/SaveWorkspaceDialog";
+export * from "./dialogs/SelectTerminalDialog";

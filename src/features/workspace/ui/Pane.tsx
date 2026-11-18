@@ -3,16 +3,14 @@ import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
 import type { Workspace } from "../../../models/runtime/workspace";
 import { isApplicationError } from "../../../models/applicationError";
 import { useTerminalRuntime } from "../../terminal";
-import { useWorkspaceLayout } from "../state/WorkspaceContext";
-import * as paneTree from "../../../models/workspace/runtimePaneTreeOperations";
-import { getPaneNumber, isSessionUsedInOtherWindow } from "../application/paneTreeOperations";
+import { getPaneNumber } from "../application/paneTreeOperations";
 import { useTheme } from "../../../shared/theme/ThemeContext";
 import { Terminal, TmuxControllerErrorBanner, type TerminalRef } from "../../terminal-surface";
 import { ContextMenu, type ContextMenuRef } from "../../../shared/ui/ContextMenu";
-import { SelectTerminalDialog } from "../../terminal/ui";
+import { usePaneIntents } from "../state/PaneIntentContext";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
-import { tmuxWindowActions } from "../../tmux";
+import { SelectTerminalDialog } from "./dialogs/SelectTerminalDialog";
 import "./Pane.css";
 
 interface PaneProps {
@@ -34,8 +32,8 @@ export function Pane({
   isWindowActive,
   onActivate,
 }: PaneProps) {
-  const { terminals, closeTerminal, createTerminalFromSavedConfig } = useTerminalRuntime();
-  const { workspaces, splitPane, closePane, updateWindowPaneTree } = useWorkspaceLayout();
+  const { terminals } = useTerminalRuntime();
+  const paneIntents = usePaneIntents();
   const { currentTheme } = useTheme();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
@@ -74,7 +72,20 @@ export function Pane({
         terminal.id !== undefined &&
         pane.terminalId !== undefined
       ) {
-        splitPane(workspace.id, windowId, pane.id, direction, pane.terminalId);
+        void paneIntents
+          .splitPaneWithTerminal({
+            workspaceId: workspace.id,
+            windowId,
+            paneId: pane.id,
+            direction,
+            terminalId: pane.terminalId,
+            configId: pane.configId,
+          })
+          .catch((error) => {
+            window.alert(
+              `Failed to split terminal: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          });
         return;
       }
       // Non-multiplex path: open the dialog so the user picks what
@@ -83,7 +94,7 @@ export function Pane({
       setDialogMode("split");
       setShowSessionDialog(true);
     },
-    [terminal, pane.terminalId, splitPane, workspace.id, windowId, pane.id],
+    [terminal, pane.terminalId, pane.configId, paneIntents, workspace.id, windowId, pane.id],
   );
 
   const handleStartAttach = useCallback(() => {
@@ -93,33 +104,32 @@ export function Pane({
   }, []);
 
   const attachTerminalToPane = useCallback(
-    (terminalId: number) => {
-      if (isSessionUsedInOtherWindow(workspaces, workspace.id, windowId, terminalId)) {
-        window.alert("Terminal is already used in another window");
-        return;
-      }
-      const attachedSession = terminals.find((s) => s.id === terminalId);
-      updateWindowPaneTree(workspace.id, windowId, (root) =>
-        paneTree.replacePaneNode(root, pane.id, {
-          ...pane,
-          terminalId,
-          configId: attachedSession?.configId,
-        }),
-      );
-      onActivate();
-    },
-    [workspaces, workspace.id, windowId, pane, terminals, updateWindowPaneTree, onActivate],
+    (terminalId: number) =>
+      paneIntents.attachExistingTerminal({
+        workspaceId: workspace.id,
+        windowId,
+        paneId: pane.id,
+        terminalId,
+      }),
+    [paneIntents, workspace.id, windowId, pane.id],
   );
 
   const handleSelectSession = useCallback(
-    (terminalId: number) => {
+    async (terminalId: number) => {
       if (!startSubmitting()) return;
       try {
         if (dialogMode === "split" && pendingSplit) {
-          const sessionConfigId = terminals.find((s) => s.id === terminalId)?.configId;
-          splitPane(workspace.id, windowId, pane.id, pendingSplit, terminalId, sessionConfigId);
+          const terminalConfigId = terminals.find((s) => s.id === terminalId)?.configId;
+          await paneIntents.splitPaneWithTerminal({
+            workspaceId: workspace.id,
+            windowId,
+            paneId: pane.id,
+            direction: pendingSplit,
+            terminalId,
+            configId: terminalConfigId,
+          });
         } else if (dialogMode === "attach") {
-          attachTerminalToPane(terminalId);
+          await attachTerminalToPane(terminalId);
         }
         setPendingSplit(null);
         setDialogMode(null);
@@ -140,7 +150,7 @@ export function Pane({
       workspace.id,
       windowId,
       pane.id,
-      splitPane,
+      paneIntents,
       attachTerminalToPane,
       terminals,
     ],
@@ -150,11 +160,21 @@ export function Pane({
     async (configId: string) => {
       if (!startSubmitting()) return;
       try {
-        const terminal = await createTerminalFromSavedConfig(configId);
         if (dialogMode === "split" && pendingSplit) {
-          splitPane(workspace.id, windowId, pane.id, pendingSplit, terminal.id, terminal.configId);
+          await paneIntents.splitPaneWithSavedConfig({
+            workspaceId: workspace.id,
+            windowId,
+            paneId: pane.id,
+            direction: pendingSplit,
+            configId,
+          });
         } else if (dialogMode === "attach") {
-          attachTerminalToPane(terminal.id);
+          await paneIntents.attachSavedConfigToPane({
+            workspaceId: workspace.id,
+            windowId,
+            paneId: pane.id,
+            configId,
+          });
         }
         setPendingSplit(null);
         setDialogMode(null);
@@ -169,23 +189,18 @@ export function Pane({
         endSubmitting();
       }
     },
-    [
-      dialogMode,
-      pendingSplit,
-      workspace.id,
-      windowId,
-      pane.id,
-      splitPane,
-      createTerminalFromSavedConfig,
-      attachTerminalToPane,
-    ],
+    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, paneIntents],
   );
 
   const handleCloseSession = useCallback(() => {
     if (pane.terminalId !== undefined) {
-      closeTerminal(pane.terminalId);
+      void paneIntents.closeTerminal(pane.terminalId).catch((error) => {
+        window.alert(
+          `Failed to close terminal: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
     }
-  }, [pane.terminalId, closeTerminal]);
+  }, [pane.terminalId, paneIntents]);
 
   const handleClear = useCallback(() => {
     terminalRef.current?.clear();
@@ -210,29 +225,39 @@ export function Pane({
   }, []);
 
   const handleClosePane = useCallback(() => {
-    closePane(workspace.id, windowId, pane.id);
-  }, [closePane, workspace.id, windowId, pane.id]);
+    void paneIntents
+      .closePane({
+        workspaceId: workspace.id,
+        windowId,
+        paneId: pane.id,
+      })
+      .catch((error) => {
+        window.alert(
+          `Failed to close pane: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+  }, [paneIntents, workspace.id, windowId, pane.id]);
 
   const handleCreateTmuxWindow = useCallback(async () => {
     if (terminal?.tmuxSessionId === undefined) return;
     try {
-      await tmuxWindowActions.createWindow(terminal.tmuxSessionId);
+      await paneIntents.createTmuxWindow(terminal.id);
     } catch (e) {
       console.error("Failed to create tmux window:", e);
       window.alert(`Failed to create Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [terminal?.tmuxSessionId]);
+  }, [paneIntents, terminal]);
 
   const handleKillTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
     if (xid === undefined) return;
     try {
-      await tmuxWindowActions.killWindow(xid);
+      await paneIntents.killTmuxWindow(xid);
     } catch (e) {
       console.error("Failed to kill tmux window:", e);
       window.alert(`Failed to kill Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [selectedWindow?.xstermWindowId]);
+  }, [paneIntents, selectedWindow?.xstermWindowId]);
 
   const handleRenameTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
@@ -240,12 +265,12 @@ export function Pane({
     const name = window.prompt("Rename Tmux window:");
     if (name === null || name.trim() === "") return;
     try {
-      await tmuxWindowActions.renameWindow(xid, name.trim());
+      await paneIntents.renameTmuxWindow(xid, name.trim());
     } catch (e) {
       console.error("Failed to rename tmux window:", e);
       window.alert(`Failed to rename Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [selectedWindow?.xstermWindowId]);
+  }, [paneIntents, selectedWindow?.xstermWindowId]);
 
   const contextMenuItems = buildPaneContextMenu(
     terminal,

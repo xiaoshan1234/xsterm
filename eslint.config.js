@@ -139,6 +139,100 @@ export default tseslint.config(
     },
   },
 
+  // The app layer consumes feature public entries, never feature implementation paths.
+  {
+    files: ["src/app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "**/features/*/application",
+                "**/features/*/application/**",
+                "**/features/*/infrastructure",
+                "**/features/*/infrastructure/**",
+                "**/features/*/persistence",
+                "**/features/*/persistence/**",
+                "**/features/*/selectors",
+                "**/features/*/selectors/**",
+                "**/features/*/state",
+                "**/features/*/state/**",
+                "**/features/*/ui",
+                "**/features/*/ui/**",
+                "**/features/*/viewModels",
+                "**/features/*/viewModels/**",
+              ],
+              message: "Import feature capabilities through the feature root index.ts.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Features may call another feature's public entry, not its internal layers.
+  {
+    files: ["src/features/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "../*/application",
+                "../*/application/**",
+                "../*/infrastructure",
+                "../*/infrastructure/**",
+                "../*/persistence",
+                "../*/persistence/**",
+                "../*/selectors",
+                "../*/selectors/**",
+                "../*/state",
+                "../*/state/**",
+                "../*/ui",
+                "../*/ui/**",
+                "../*/viewModels",
+                "../*/viewModels/**",
+                "../../*/application",
+                "../../*/application/**",
+                "../../*/infrastructure",
+                "../../*/infrastructure/**",
+                "../../*/persistence",
+                "../../*/persistence/**",
+                "../../*/selectors",
+                "../../*/selectors/**",
+                "../../*/state",
+                "../../*/state/**",
+                "../../*/ui",
+                "../../*/ui/**",
+                "../../*/viewModels",
+                "../../*/viewModels/**",
+                "../../../*/application",
+                "../../../*/application/**",
+                "../../../*/infrastructure",
+                "../../../*/infrastructure/**",
+                "../../../*/persistence",
+                "../../../*/persistence/**",
+                "../../../*/selectors",
+                "../../../*/selectors/**",
+                "../../../*/state",
+                "../../../*/state/**",
+                "../../../*/ui",
+                "../../../*/ui/**",
+                "../../../*/viewModels",
+                "../../../*/viewModels/**",
+              ],
+              message: "Import another feature through its root index.ts.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Feature UI consumes application contracts, never adapters or Tauri plugins.
   {
     files: ["src/features/**/ui/**/*.{ts,tsx}", "src/features/**/view/**/*.{ts,tsx}"],

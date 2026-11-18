@@ -3,7 +3,8 @@ import type { Terminal, TerminalDisplayConfig } from "../../../../models/runtime
 import type { SavedTerminalConfig } from "../../../../models/runtime/savedConfig";
 import type { TmuxSessionConfig } from "../../../../models/runtime/tmux";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../launch-config";
+import { DEFAULT_GROUP_ID } from "../../constants";
+import { useSavedLaunchConfigs } from "../../state/LaunchConfigContext";
 import {
   DEFAULT_SSH,
   SessionFormPanels,
@@ -12,19 +13,20 @@ import {
   useTerminalForm,
   validateSshConfig,
   type SessionFormSidebarItem,
-} from "../../../terminal/ui/dialogs";
+} from ".";
 import TmuxForm, { buildTmuxConfigForBase } from "./TmuxForm";
-import "../../../terminal/ui/dialogs/CreateTerminalDialog.css";
+import "./CreateTerminalDialog.css";
 import {
   defaultTmuxDisplayName,
+  generatedTmuxSessionName,
   isTmuxDisplayNameAvailable,
   uniqueTmuxDisplayName,
-} from "../../viewModels/sessionIdentity";
+} from "../../../tmux";
 
-interface AttachTmuxDialogProps {
+interface CreateTmuxDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onAttachTmux: (
+  onCreateTmux: (
     config: TmuxSessionConfig,
     save: boolean,
     displayConfig?: TerminalDisplayConfig,
@@ -32,12 +34,12 @@ interface AttachTmuxDialogProps {
   initialGroupId?: number;
 }
 
-export function AttachTmuxDialog({
+export function CreateTmuxDialog({
   isOpen,
   onClose,
-  onAttachTmux,
+  onCreateTmux,
   initialGroupId = DEFAULT_GROUP_ID,
-}: AttachTmuxDialogProps) {
+}: CreateTmuxDialogProps) {
   const { addToGroup, saveConfigOnly, savedConfigs } = useSavedLaunchConfigs();
   const [tmuxConfig, setTmuxConfig] = useState<TmuxSessionConfig>({});
   const [shouldSaveConfig, setShouldSaveConfig] = useState(true);
@@ -61,12 +63,6 @@ export function AttachTmuxDialog({
   };
 
   const prepareConfig = (): { config: TmuxSessionConfig; base?: SavedTerminalConfig } | null => {
-    const tmuxSessionName = tmuxConfig.tmuxSessionName?.trim();
-    if (!tmuxSessionName) {
-      form.setError("Please enter the tmux session name to attach to.");
-      form.setSectionId("connection");
-      return null;
-    }
     const baseConfigId = tmuxConfig.baseConfigId;
     if (!baseConfigId) {
       form.setError("Please pick a base SSH or Shell saved config.");
@@ -99,13 +95,17 @@ export function AttachTmuxDialog({
       form.setSectionId("connection");
       return null;
     }
+    const tmuxSessionName = tmuxConfig.tmuxSessionName?.trim() || generatedTmuxSessionName();
     const draftConfig: TmuxSessionConfig = {
       ...tmuxConfig,
+      tmuxSessionName,
       name:
         requestedName ||
-        uniqueTmuxDisplayName(defaultTmuxDisplayName(tmuxConfig), savedConfigs, {
-          baseConfigId: base.id,
-        }),
+        uniqueTmuxDisplayName(
+          defaultTmuxDisplayName({ ...tmuxConfig, tmuxSessionName }),
+          savedConfigs,
+          { baseConfigId: base.id },
+        ),
     };
     return {
       base,
@@ -122,7 +122,7 @@ export function AttachTmuxDialog({
     form.setError("");
 
     try {
-      const terminal = await onAttachTmux(prepared.config, shouldSaveConfig, form.displayConfig);
+      const terminal = await onCreateTmux(prepared.config, shouldSaveConfig, form.displayConfig);
       addToGroup(initialGroupId, terminal.configId);
       onClose();
     } catch (error) {
@@ -191,7 +191,7 @@ export function AttachTmuxDialog({
           disabled={isSubmitting}
           onClick={handleCreate}
         >
-          {isSubmitting ? "Attaching..." : "Attach"}
+          {isSubmitting ? "Creating..." : "Create Tmux"}
         </button>
       </div>
     </div>
@@ -201,7 +201,7 @@ export function AttachTmuxDialog({
     <Dialog
       isOpen={isOpen}
       onClose={closeDialog}
-      title="Attach Tmux Session"
+      title="Create Tmux Session"
       className="create-terminal-dialog"
       footer={footer}
     >
@@ -215,7 +215,7 @@ export function AttachTmuxDialog({
               onNameChange={form.setName}
               config={tmuxConfig}
               onConfigChange={setTmuxConfig}
-              mode="attach"
+              mode="create"
             />
           )}
         />

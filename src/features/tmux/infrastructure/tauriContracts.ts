@@ -1,5 +1,4 @@
-import { type SshConfigDto } from "../../terminal/infrastructure/tauriContracts";
-import { type BackendTerminalHandle } from "../../terminal/infrastructure/handles";
+import { type BackendTerminalHandle, type SshConfigDto } from "../../terminal-stream";
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
 
 export interface TmuxSessionConfigDto {

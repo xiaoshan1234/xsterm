@@ -1,4 +1,6 @@
 export { useTerminalEventBridge } from "./application/useTerminalEventBridge";
+export * from "./ui";
+export * from "./viewModels";
 export { TerminalRuntimeProvider, useTerminalRuntime } from "./state/TerminalRuntimeContext";
 export type { TerminalConnectionInfo, TerminalRuntimeContextType } from "./contracts";
 export { terminalStreamActions } from "./application/terminalStreamActions";

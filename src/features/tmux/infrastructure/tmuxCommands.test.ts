@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   toBackendTerminalHandle,
   type BackendTerminalHandle,
-} from "../../terminal/infrastructure/handles";
-import { type TerminalInfoDto } from "../../terminal/infrastructure/tauriContracts";
+  type TerminalInfoDto,
+} from "../../terminal-stream";
 import { toBackendControllerHandle, toBackendWindowHandle } from "./handles";
 import { createTmuxCommandClient } from "./tmuxCommands";
 

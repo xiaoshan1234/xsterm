@@ -12,7 +12,9 @@ import {
   type TerminalRuntimeContextType,
 } from "../features/terminal";
 import {
+  PaneIntentProvider,
   WorkspaceProvider,
+  type PaneIntentActions,
   type WorkspaceLayoutContextType,
 } from "../features/workspace";
 
@@ -21,6 +23,7 @@ interface CreateTestApplicationOptions {
   preferences?: Partial<SessionPreferencesContextType>;
   terminal?: Partial<TerminalRuntimeContextType>;
   workspace?: Partial<WorkspaceLayoutContextType>;
+  paneIntents?: Partial<PaneIntentActions>;
 }
 
 function unsupported(): never {
@@ -119,12 +122,27 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     ...options.workspace,
   };
 
+  const paneIntents: PaneIntentActions = {
+    attachExistingTerminal: unsupportedAsync,
+    splitPaneWithTerminal: unsupportedAsync,
+    splitPaneWithSavedConfig: unsupportedAsync,
+    attachSavedConfigToPane: unsupportedAsync,
+    closePane: unsupportedAsync,
+    closeTerminal: unsupportedAsync,
+    createTmuxWindow: unsupportedAsync,
+    killTmuxWindow: unsupportedAsync,
+    renameTmuxWindow: unsupportedAsync,
+    ...options.paneIntents,
+  };
+
   function Application({ children }: { children: ReactNode }) {
     return (
       <SessionPreferencesProvider value={preferences}>
         <LaunchConfigProvider value={launchConfig}>
           <TerminalRuntimeProvider value={terminal}>
-            <WorkspaceProvider value={workspace}>{children}</WorkspaceProvider>
+            <WorkspaceProvider value={workspace}>
+              <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
+            </WorkspaceProvider>
           </TerminalRuntimeProvider>
         </LaunchConfigProvider>
       </SessionPreferencesProvider>
@@ -137,5 +155,6 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     preferences,
     terminal,
     workspace,
+    paneIntents,
   };
 }

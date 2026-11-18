@@ -575,13 +575,13 @@ BottomBar
 
 第一批固定为四个业务 Dialog：
 
-| Dialog               | 所属 feature | 用途                     |
-| -------------------- | ------------ | ------------------------ |
-| CreateTerminalDialog | terminal     | 创建 Local/SSH Terminal  |
-| CreateTmuxDialog     | tmux         | 创建或 attach tmux       |
-| EditTerminalDialog   | terminal     | 编辑已保存 Terminal 配置 |
-| EditTmuxDialog       | tmux         | 编辑已保存 tmux 配置     |
-| HelpDialog           | app          | 版本、更新和许可证信息   |
+| Dialog               | 所属 feature  | 用途                     |
+| -------------------- | ------------- | ------------------------ |
+| CreateTerminalDialog | launch-config | 创建 Local/SSH Terminal  |
+| CreateTmuxDialog     | launch-config | 创建或 attach tmux       |
+| EditTerminalDialog   | launch-config | 编辑已保存 Terminal 配置 |
+| EditTmuxDialog       | launch-config | 编辑已保存 tmux 配置     |
+| HelpDialog           | app           | 版本、更新和许可证信息   |
 
 #### CreateTerminalDialog
 
@@ -720,7 +720,8 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 | `useWorkspaceLayout`    | Workspace、Window、Pane 布局及快照管理         |
 | `useSessionPreferences` | 终端相关全局偏好                               |
 
-`useSession()` 仅作为 legacy 兼容聚合入口保留，不得在新增组件中继续使用。
+`useSession()` 已移除；跨聚合动作只能由 `app/application/session`
+协调器编排，并通过窄 Context 或 intent port 暴露给 UI。
 
 ## 12. 组件与 Model 映射
 
@@ -872,10 +873,11 @@ View Model 必须在 feature 内生成，不得放入 `shared/ui`。
 - 新 Shell 已接入配置/状态 Manager
 - 新 Shell 已接入 WorkspaceView、BottomBar 和 TextSender
 - 四个 Dialog 已拆分并接入运行时新 Shell
-- 会话/workspace/pane 状态内核已迁移到 `features/sessions/state`
+- 会话/workspace/pane 状态内核已迁移到对应 feature 的 `state/`
 - 全局状态已拆为配置、运行时、布局和偏好四个切片
 - 旧 Sidebar / BottomBar / CommandSendPanel 已移除
-- Terminal/tmux 命令与事件统一经过 feature-local infrastructure adapter
+- Terminal/tmux 命令与事件统一经过 feature-local infrastructure adapter，
+  共享 wire contract 位于 `features/terminal-stream`
 - AGENTS.md 和目录规则已同步
 
 ## 18. 验收标准

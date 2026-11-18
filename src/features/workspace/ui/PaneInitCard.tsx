@@ -3,11 +3,12 @@ import { useTerminalRuntime } from "../../terminal";
 import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../models/runtime/config";
 import { isApplicationError } from "../../../models/applicationError";
 import { PlusIcon, FolderOpenIcon } from "../../../shared/icons/Icon";
-import { CreateTerminalDialog, SelectTerminalDialog } from "../../terminal/ui";
+import { CreateTerminalDialog } from "../../launch-config";
+import { SelectTerminalDialog } from "./dialogs/SelectTerminalDialog";
 import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {
-  onTerminalCreated: (terminal: Terminal) => void;
+  onTerminalCreated: (terminal: Terminal) => void | Promise<void>;
   title?: string;
   subtitle?: string;
 }
@@ -39,7 +40,7 @@ export function PaneInitCard({
   const handleCreate = async (create: () => Promise<Terminal>): Promise<Terminal> => {
     const terminal = await create();
     try {
-      onTerminalCreated(terminal);
+      await onTerminalCreated(terminal);
     } catch (e) {
       if (isApplicationError(e, "terminal-already-attached")) {
         window.alert("Terminal is already used in another window");
@@ -56,7 +57,7 @@ export function PaneInitCard({
   const handleCreateSsh = (config: SshConfig, save: boolean) =>
     handleCreate(() => createSshSessionOnly(config, save));
 
-  const handleSelectSession = (terminalId: number) => {
+  const handleSelectSession = async (terminalId: number) => {
     if (!startSubmitting()) return;
     const terminal = terminals.find((s) => s.id === terminalId);
     if (!terminal) {
@@ -65,7 +66,7 @@ export function PaneInitCard({
     }
 
     try {
-      onTerminalCreated(terminal);
+      await onTerminalCreated(terminal);
       setShowSelectDialog(false);
     } catch (e) {
       if (isApplicationError(e, "terminal-already-attached")) {
@@ -82,7 +83,7 @@ export function PaneInitCard({
     if (!startSubmitting()) return;
     try {
       const terminal = await createTerminalFromSavedConfig(configId);
-      onTerminalCreated(terminal);
+      await onTerminalCreated(terminal);
       setShowSelectDialog(false);
     } catch (e) {
       if (isApplicationError(e, "terminal-already-attached")) {

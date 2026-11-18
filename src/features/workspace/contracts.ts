@@ -66,3 +66,40 @@ export interface WorkspaceLayoutContextType {
   reorderWindows: (workspaceId: string, fromIndex: number, toIndex: number) => void;
   closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
 }
+
+export interface PaneTarget {
+  workspaceId: string;
+  windowId: string;
+  paneId: string;
+}
+
+export interface AttachExistingTerminalRequest extends PaneTarget {
+  terminalId: number;
+}
+
+export interface SplitPaneWithTerminalRequest extends PaneTarget {
+  direction: SplitDirection;
+  terminalId: number;
+  configId?: string;
+}
+
+export interface SplitPaneWithSavedConfigRequest extends PaneTarget {
+  direction: SplitDirection;
+  configId: string;
+}
+
+export interface AttachSavedConfigToPaneRequest extends PaneTarget {
+  configId: string;
+}
+
+export interface PaneIntentActions {
+  attachExistingTerminal: (request: AttachExistingTerminalRequest) => Promise<void>;
+  splitPaneWithTerminal: (request: SplitPaneWithTerminalRequest) => Promise<void>;
+  splitPaneWithSavedConfig: (request: SplitPaneWithSavedConfigRequest) => Promise<void>;
+  attachSavedConfigToPane: (request: AttachSavedConfigToPaneRequest) => Promise<void>;
+  closePane: (target: PaneTarget) => Promise<void>;
+  closeTerminal: (terminalId: number) => Promise<void>;
+  createTmuxWindow: (terminalId: number) => Promise<void>;
+  killTmuxWindow: (xstermWindowId: number) => Promise<void>;
+  renameTmuxWindow: (xstermWindowId: number, name: string) => Promise<void>;
+}

@@ -1,7 +1,10 @@
 import type { SplitDirection } from "../../../models/runtime/pane";
 import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
-import { toTerminalConnectionInfo, type TerminalConnectionInfo } from "../../terminal";
-import { toBackendTerminalHandle } from "../../terminal/infrastructure/handles";
+import {
+  toBackendTerminalHandle,
+  toTerminalConnectionInfo,
+  type TerminalConnectionInfo,
+} from "../../terminal-stream";
 import { tmuxCommands, toBackendControllerHandle } from "../infrastructure";
 
 export const tmuxControllerActions = {

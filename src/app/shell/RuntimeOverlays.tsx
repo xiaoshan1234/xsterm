@@ -1,14 +1,15 @@
-import { useSavedLaunchConfigs } from "../../features/launch-config";
-import { useTerminalRuntime } from "../../features/terminal";
 import {
+  useSavedLaunchConfigs,
   CreateTerminalDialog,
   EditGroupDialog,
   EditTerminalDialog,
   NewGroupDialog,
-} from "../../features/terminal/ui";
-import { AttachTmuxDialog, CreateTmuxDialog, EditTmuxDialog } from "../../features/tmux/ui";
-import { useWorkspaceLayout } from "../../features/workspace";
-import { SaveDialog } from "../../features/workspace/ui";
+  AttachTmuxDialog,
+  CreateTmuxDialog,
+  EditTmuxDialog,
+} from "../../features/launch-config";
+import { useTerminalRuntime } from "../../features/terminal";
+import { useWorkspaceLayout, SaveDialog } from "../../features/workspace";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { ErrorDialog } from "./ErrorDialog";
 import { GlobalOverlayHost } from "./GlobalOverlayHost";

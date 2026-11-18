@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { SavedTerminalConfig } from "../../../../models/runtime/savedConfig";
 import type { TmuxSessionConfig } from "../../../../models/runtime/tmux";
 import { Dialog } from "../../../../shared/ui/Dialog";
-import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../../launch-config";
+import { DEFAULT_GROUP_ID } from "../../constants";
+import { useSavedLaunchConfigs } from "../../state/LaunchConfigContext";
 import {
   DEFAULT_SSH,
   SessionFormPanels,
@@ -11,14 +12,14 @@ import {
   useTerminalForm,
   validateSshConfig,
   type SessionFormSidebarItem,
-} from "../../../terminal/ui/dialogs";
+} from ".";
 import TmuxForm, { buildTmuxConfigForBase } from "./TmuxForm";
-import "../../../terminal/ui/dialogs/EditTerminalDialog.css";
+import "./EditTerminalDialog.css";
 import {
   defaultTmuxDisplayName,
   isTmuxDisplayNameAvailable,
   uniqueTmuxDisplayName,
-} from "../../viewModels/sessionIdentity";
+} from "../../../tmux";
 
 export type EditableTmuxConfig = Extract<SavedTerminalConfig, { type: "tmux-pane" }>;
 

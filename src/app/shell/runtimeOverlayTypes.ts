@@ -1,5 +1,4 @@
-import { type EditableTerminalConfig } from "../../features/terminal/ui";
-import { type EditableTmuxConfig } from "../../features/tmux/ui";
+import { type EditableTerminalConfig, type EditableTmuxConfig } from "../../features/launch-config";
 import { type ErrorDialogData } from "./ErrorDialog";
 
 export type RuntimeDialog =

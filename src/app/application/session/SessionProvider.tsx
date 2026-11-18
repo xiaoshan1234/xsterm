@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { LaunchConfigProvider } from "../../../features/launch-config";
 import { SessionPreferencesProvider } from "../../../features/settings";
 import { TerminalRuntimeProvider } from "../../../features/terminal";
-import { WorkspaceProvider } from "../../../features/workspace";
+import { PaneIntentProvider, WorkspaceProvider } from "../../../features/workspace";
 import {
   type SavedLaunchConfigsContextType,
   type SessionPreferencesContextType,
@@ -13,11 +13,13 @@ import { useTerminalState } from "./useTerminalState";
 import { useTerminalPersistence } from "./useTerminalPersistence";
 import { useTerminalActions } from "./useTerminalActions";
 import { useTauriListeners } from "./useTauriListeners";
+import { usePaneIntentActions } from "./usePaneIntentActions";
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const state = useTerminalState();
   const persistence = useTerminalPersistence(state);
   const actions = useTerminalActions({ ...state, ...persistence });
+  const paneIntents = usePaneIntentActions({ state, actions });
   useTauriListeners(state);
 
   const preferences = useMemo<SessionPreferencesContextType>(
@@ -191,7 +193,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <SessionPreferencesProvider value={preferences}>
       <LaunchConfigProvider value={savedLaunchConfigs}>
         <TerminalRuntimeProvider value={terminalRuntime}>
-          <WorkspaceProvider value={workspaceLayout}>{children}</WorkspaceProvider>
+          <WorkspaceProvider value={workspaceLayout}>
+            <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
+          </WorkspaceProvider>
         </TerminalRuntimeProvider>
       </LaunchConfigProvider>
     </SessionPreferencesProvider>

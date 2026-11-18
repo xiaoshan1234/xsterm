@@ -1,4 +1,5 @@
 export * from "./viewModels";
+export * from "./ui";
 export * from "./application/tmuxPaneTree";
 export { tmuxEventStream } from "./application/tmuxEventStream";
 export { useTmuxRuntimeState, type TmuxRuntimeState } from "./state/useTmuxRuntimeState";

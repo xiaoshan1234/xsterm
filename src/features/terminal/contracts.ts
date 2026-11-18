@@ -6,7 +6,9 @@ import type {
   TerminalDisplayConfig,
 } from "../../models/runtime/config";
 import type { TmuxSessionConfig } from "../../models/runtime/tmux";
-import { type OpenTmuxSession, type TmuxControllerError } from "../tmux/state/types";
+import { type OpenTmuxSession, type TmuxControllerError } from "../tmux";
+
+export type { TerminalConnectionInfo } from "../terminal-stream";
 
 export interface TerminalRuntimeContextType {
   terminals: Terminal[];
@@ -39,15 +41,4 @@ export interface TerminalRuntimeContextType {
   applyDisplayConfigToLiveSession: (id: number, patch: Partial<TerminalDisplayConfig>) => void;
   touchTerminalActivity: (id: number) => void;
   dismissTmuxControllerError: (controllerId: number) => void;
-}
-
-export interface TerminalConnectionInfo {
-  id: number;
-  name: string;
-  kind: Terminal["kind"];
-  isConnected: boolean;
-  capabilities: NonNullable<Terminal["capabilities"]>;
-  tmuxWindowId?: string;
-  tmuxSessionName?: string;
-  isHidden?: boolean;
 }

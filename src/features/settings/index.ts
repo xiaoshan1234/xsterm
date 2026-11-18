@@ -1,4 +1,5 @@
 export { getSettingsStore } from "./persistence/settingsStorage";
+export * from "./ui";
 export {
   SessionPreferencesProvider,
   useSessionPreferences,

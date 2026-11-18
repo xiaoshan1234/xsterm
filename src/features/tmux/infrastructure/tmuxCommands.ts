@@ -2,8 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   toBackendTerminalHandle,
   type BackendTerminalHandle,
-} from "../../terminal/infrastructure/handles";
-import { type TerminalInfoDto } from "../../terminal/infrastructure/tauriContracts";
+  type TerminalInfoDto,
+} from "../../terminal-stream";
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
 import { type TmuxSessionConfigDto } from "./tauriContracts";
 
