@@ -8,7 +8,7 @@ import {
   KeyboardIcon,
   LogIcon,
 } from "../../../../shared/icons/Icon";
-import type { SshConfig } from "../../../../models/runtime/config";
+import type { SshConfig } from "../../../../models/terminal/runtimeContracts";
 
 /**
  * Shared sidebar config for the Create / Edit terminal dialogs.

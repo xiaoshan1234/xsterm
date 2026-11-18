@@ -3,7 +3,7 @@ import type {
   SshConfig,
   Terminal,
   TerminalDisplayConfig,
-} from "../../models/runtime/config";
+} from "../../models/terminal/runtimeContracts";
 import type { SavedTerminalConfig, TerminalGroup } from "../../models/launch/SavedTerminalConfig";
 import type { TmuxSessionConfig } from "../../models/tmux/TmuxSessionConfig";
 

@@ -1,6 +1,6 @@
 import { getJsonStore } from "../../../infra/storage";
 import { frontendLogger as logger } from "../../../infra";
-import type { LocalTerminalConfig, SshConfig } from "../../../models/runtime/config";
+import type { LocalTerminalConfig, SshConfig } from "../../../models/terminal/runtimeContracts";
 import type {
   SavedTerminalConfig,
   TerminalGroup,

@@ -1,7 +1,7 @@
 import type {
   TerminalDisplayConfig,
   TerminalLoggingConfig,
-} from "../../../../models/runtime/config";
+} from "../../../../models/terminal/runtimeContracts";
 import { FormCheckboxField } from "../../../../shared/ui/FormCheckboxField";
 import { FormNumberField } from "../../../../shared/ui/FormNumberField";
 import { FormTextField } from "../../../../shared/ui/FormTextField";

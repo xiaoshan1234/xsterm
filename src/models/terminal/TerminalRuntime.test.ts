@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LocalTerminalConfig, SshConfig } from "./config";
+import type { LocalTerminalConfig, SshConfig } from "./runtimeContracts";
 import type { SavedTerminalConfig } from "../launch/SavedTerminalConfig";
 
 describe("LocalTerminalConfig — name field", () => {

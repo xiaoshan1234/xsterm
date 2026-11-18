@@ -1,4 +1,4 @@
-import type { SshConfig } from "../../../../models/runtime/config";
+import type { SshConfig } from "../../../../models/terminal/runtimeContracts";
 import { FormCheckboxField } from "../../../../shared/ui/FormCheckboxField";
 import { FormNumberField } from "../../../../shared/ui/FormNumberField";
 import { FormTextField } from "../../../../shared/ui/FormTextField";

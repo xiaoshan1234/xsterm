@@ -4,7 +4,7 @@ import type {
   SshConfig,
   Terminal,
   TerminalDisplayConfig,
-} from "../../../../models/runtime/config";
+} from "../../../../models/terminal/runtimeContracts";
 import { Dialog } from "../../../../shared/ui/Dialog";
 import { DEFAULT_GROUP_ID } from "../../constants";
 import { useSavedLaunchConfigs } from "../../state/LaunchConfigContext";

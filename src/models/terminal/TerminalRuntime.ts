@@ -1,5 +1,9 @@
-import { type CapabilityFlags } from "./capabilities";
+import { type CapabilityFlags } from "./TerminalCapabilityFlags";
 
+/**
+ * Frontend terminal projection used by feature state and commands. This is a
+ * normalized adapter contract, not the canonical terminal aggregate.
+ */
 export interface Terminal {
   id: number;
   configId: string;
@@ -32,44 +36,6 @@ export type TerminalInfoKind =
   | { type: "tmux-pane"; sessionId: number; paneId: string };
 
 export type TerminalKind = TerminalInfoKind;
-
-export interface LocalTerminalConfig {
-  name?: string;
-  shellTemplate?: "powershell" | "cmd" | "git-bash" | "wsl" | "custom";
-  shell?: string;
-  cwd?: string;
-  args?: string[];
-  termType?: string;
-  charset?: string;
-  startupCommand?: string;
-  startupDelayMs?: number;
-  envConfig?: TerminalEnvConfig;
-  initialCols?: number;
-  initialRows?: number;
-}
-
-export interface SshConfig {
-  name?: string;
-  host: string;
-  port: number;
-  username: string;
-  auth_type: "password" | "key";
-  password?: string;
-  key_file?: string;
-  passphrase?: string;
-  termType?: string;
-  initialRows?: number;
-  initialCols?: number;
-  keepaliveInterval?: number;
-  connectionTimeout?: number;
-  tcpNoDelay?: boolean;
-  soKeepalive?: boolean;
-  nullPacketKeepalive?: boolean;
-  charset?: string;
-  enableCompression?: boolean;
-  knownHostsPath?: string;
-  proxyJump?: string;
-}
 
 export interface TerminalDisplayConfig {
   fontSize?: number;
@@ -112,8 +78,4 @@ export interface TerminalLoggingConfig {
   fileNameTemplate?: string;
   maxSizeMb?: number;
   lineFormat?: string;
-}
-
-export interface TerminalEnvConfig {
-  env?: Record<string, string>;
 }

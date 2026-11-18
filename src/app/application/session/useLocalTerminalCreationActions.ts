@@ -5,7 +5,7 @@ import type {
   SshConfig,
   Terminal,
   TerminalDisplayConfig,
-} from "../../../models/runtime/config";
+} from "../../../models/terminal/runtimeContracts";
 import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
 import { buildFrontendTerminal } from "./useTerminalActions.helpers";
 import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";

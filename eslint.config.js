@@ -56,6 +56,14 @@ export default tseslint.config(
       "no-new": "off",
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportDeclaration[source.value=/models\\/runtime/]",
+          message:
+            "The models/runtime compatibility namespace has been retired; use the owning terminal, launch, tmux, or workspace model.",
+        },
+      ],
 
       // react-hooks v5 flags three React idioms that this codebase uses heavily:
       // the "latest-value ref" pattern, setState inside useEffect to reset dialog

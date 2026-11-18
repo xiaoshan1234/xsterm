@@ -1,5 +1,5 @@
 import type { ContextMenuItem } from "../../../shared/ui/ContextMenu";
-import type { Terminal } from "../../../models/runtime/config";
+import type { Terminal } from "../../../models/terminal/runtimeContracts";
 import type { PaneSplitDirection } from "../../../models/workspace/EditablePaneTree";
 import type { Window } from "../../../models/workspace/EditableWorkspace";
 

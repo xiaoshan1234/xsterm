@@ -16,7 +16,7 @@ import type { RefObject } from "react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { useTerminalResize } from "./useTerminalResize";
-import type { TerminalDisplayConfig } from "../../../models/runtime/config";
+import type { TerminalDisplayConfig } from "../../../models/terminal/runtimeContracts";
 import { createTestApplication } from "../../../test/createTestApplication";
 
 const resizeTerminalMock = vi.fn(async (_id: number, _rows: number, _cols: number) => {});

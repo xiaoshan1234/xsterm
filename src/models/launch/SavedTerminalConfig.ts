@@ -1,9 +1,6 @@
 import { type TmuxSessionConfig } from "../tmux/TmuxSessionConfig";
-import {
-  type LocalTerminalConfig,
-  type SshConfig,
-  type TerminalDisplayConfig,
-} from "../runtime/config";
+import { type TerminalDisplayConfig } from "../terminal/TerminalRuntime";
+import { type LocalTerminalConfig, type SshConfig } from "./TerminalConnectionConfig";
 
 export type SavedTerminalKind =
   | { type: "local"; config: LocalTerminalConfig }

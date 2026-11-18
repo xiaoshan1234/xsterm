@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { LocalTerminalConfig } from "../../../../models/runtime/config";
+import type { LocalTerminalConfig } from "../../../../models/terminal/runtimeContracts";
 import { FormTextField } from "../../../../shared/ui/FormTextField";
 import "./ShellSettingsPanel.css";
 

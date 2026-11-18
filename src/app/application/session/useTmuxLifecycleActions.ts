@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { tmuxControllerActions, tmuxSessionKey } from "../../../features/tmux";
 import { removeControllerFromWorkspaces } from "../../../features/workspace";
-import type { Terminal, TerminalDisplayConfig } from "../../../models/runtime/config";
+import type { Terminal, TerminalDisplayConfig } from "../../../models/terminal/runtimeContracts";
 import type { SavedTerminalConfig } from "../../../models/launch/SavedTerminalConfig";
 import type { TmuxSessionConfig } from "../../../models/tmux/TmuxSessionConfig";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";

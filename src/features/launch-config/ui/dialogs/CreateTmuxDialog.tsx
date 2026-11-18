@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Terminal, TerminalDisplayConfig } from "../../../../models/runtime/config";
+import type { Terminal, TerminalDisplayConfig } from "../../../../models/terminal/runtimeContracts";
 import type { SavedTerminalConfig } from "../../../../models/launch/SavedTerminalConfig";
 import type { TmuxSessionConfig } from "../../../../models/tmux/TmuxSessionConfig";
 import { Dialog } from "../../../../shared/ui/Dialog";

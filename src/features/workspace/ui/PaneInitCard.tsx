@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import { useTerminalRuntime } from "../../terminal";
-import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../models/runtime/config";
+import type {
+  LocalTerminalConfig,
+  SshConfig,
+  Terminal,
+} from "../../../models/terminal/runtimeContracts";
 import { isApplicationError } from "../../../models/applicationError";
 import { PlusIcon, FolderOpenIcon } from "../../../shared/icons/Icon";
 import { CreateTerminalDialog } from "../../launch-config";

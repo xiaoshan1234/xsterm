@@ -8,7 +8,7 @@ import type {
   SshConfig,
   Terminal,
   TerminalDisplayConfig,
-} from "../../../models/runtime/config";
+} from "../../../models/terminal/runtimeContracts";
 import type {
   EditablePaneNode,
   PaneSplitDirection,

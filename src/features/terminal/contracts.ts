@@ -4,7 +4,7 @@ import type {
   SshConfig,
   Terminal,
   TerminalDisplayConfig,
-} from "../../models/runtime/config";
+} from "../../models/terminal/runtimeContracts";
 import type { TmuxSessionConfig } from "../../models/tmux/TmuxSessionConfig";
 import { type OpenTmuxSession, type TmuxControllerError } from "../tmux";
 

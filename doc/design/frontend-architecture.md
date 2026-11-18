@@ -138,8 +138,9 @@ small port that the use case or component consumes.
 5. Move tmux controller topology into `tmux`.
 6. Move Workspace and Window/Pane snapshots into `workspace`.
 7. Convert xterm integration to the `TerminalStreamPort` contract.
-8. Keep `features/sessions` and `useSession()` removed, then migrate the
-   `models/runtime` compatibility types to the canonical models.
+8. Keep `features/sessions` and `useSession()` removed, then replace the
+   former `models/runtime` compatibility namespace with feature-scoped
+   terminal and launch model contracts.
 
 Each step should be independently testable and must preserve persisted data and
 Tauri event compatibility.
@@ -190,10 +191,10 @@ Tauri event compatibility.
   injectable ports with production defaults.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
-- Completed: the compatibility namespace was renamed from `models/legacy` to
-  `models/runtime`.
-- Completed: remaining runtime compatibility definitions are isolated to the
-  terminal config/capability modules.
+- Completed: the `models/runtime` compatibility namespace has been retired.
+- Completed: frontend terminal projections and capability flags are isolated
+  under `models/terminal`, with `runtimeContracts.ts` providing the stable
+  feature-scoped entry.
 - Completed: the editable pane tree is owned by
   `models/workspace/EditablePaneTree.ts`; `models/runtime/pane.ts` has been
   removed and all consumers use the explicit `EditablePaneNode` model.
@@ -205,8 +206,9 @@ Tauri event compatibility.
 - Completed: saved terminal configurations and groups now live in
   `models/launch/SavedTerminalConfig.ts`; unused runtime event and saved-config
   compatibility modules have been removed.
+- Completed: local/SSH connection inputs and environment settings now live in
+  `models/launch/TerminalConnectionConfig.ts`.
 - Completed: all internal runtime model imports target concrete modules; the
   former `runtime/terminal` compatibility barrel has been removed.
-- Next: replace these runtime compatibility types with the canonical models.
-- Next: retire the remaining runtime compatibility models in favor of the
-  canonical model modules.
+- Next: converge the frontend terminal projection with the canonical terminal
+  aggregate when the transport mapping can preserve current tmux behavior.

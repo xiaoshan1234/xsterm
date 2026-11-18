@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPaneContextMenu, type PaneMenuActions } from "./paneContextMenu";
-import type { Terminal } from "../../../models/runtime/config";
+import type { Terminal } from "../../../models/terminal/runtimeContracts";
 
 function terminal(overrides: Partial<Terminal> = {}): Terminal {
   return {

@@ -3,7 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { isApplicationError } from "../../../models/applicationError";
-import { type Terminal } from "../../../models/runtime/config";
+import { type Terminal } from "../../../models/terminal/runtimeContracts";
 import { type EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import { type Workspace } from "../../../models/workspace/EditableWorkspace";
 import { type SessionActions, type TerminalState } from "./types";

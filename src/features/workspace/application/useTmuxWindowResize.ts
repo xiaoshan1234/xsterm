@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTerminalRuntime } from "../../terminal";
 import { tmuxControllerActions } from "../../tmux";
-import type { Terminal } from "../../../models/runtime/config";
+import type { Terminal } from "../../../models/terminal/runtimeContracts";
 import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { computeTmuxWindowSize, type WindowSize } from "./tmuxWindowSize";

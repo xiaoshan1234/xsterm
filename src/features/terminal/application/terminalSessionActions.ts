@@ -1,4 +1,4 @@
-import type { LocalTerminalConfig, SshConfig } from "../../../models/runtime/config";
+import type { LocalTerminalConfig, SshConfig } from "../../../models/terminal/runtimeContracts";
 import {
   terminalCommands,
   toBackendTerminalHandle,

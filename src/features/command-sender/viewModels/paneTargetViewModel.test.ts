@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Terminal } from "../../../models/runtime/config";
+import type { Terminal } from "../../../models/terminal/runtimeContracts";
 import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 import { selectPaneTargetDisplayInfos } from "./paneTargetViewModel";
 

@@ -1,4 +1,4 @@
-import type { Terminal } from "../../../models/runtime/config";
+import type { Terminal } from "../../../models/terminal/runtimeContracts";
 import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/workspace/EditableWorkspace";
 

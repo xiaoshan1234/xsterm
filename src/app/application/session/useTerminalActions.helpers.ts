@@ -1,5 +1,9 @@
 import type { TerminalConnectionInfo } from "../../../features/terminal";
-import type { Terminal, TerminalDisplayConfig, TerminalKind } from "../../../models/runtime/config";
+import type {
+  Terminal,
+  TerminalDisplayConfig,
+  TerminalKind,
+} from "../../../models/terminal/runtimeContracts";
 
 /**
  * Dispatches to the appropriate backend terminal creator based on terminal type.

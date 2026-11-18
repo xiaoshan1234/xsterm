@@ -1,4 +1,4 @@
-import type { CapabilityFlags } from "../../models/runtime/capabilities";
+import type { CapabilityFlags } from "../../models/terminal/TerminalCapabilityFlags";
 
 /**
  * Capability flags for tmux `-CC` panes. Mirrors the backend's

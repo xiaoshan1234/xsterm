@@ -5,7 +5,7 @@ import {
   type TerminalConnectionInfo,
 } from "../../../features/terminal";
 import { tmuxControllerActions } from "../../../features/tmux";
-import type { Terminal } from "../../../models/runtime/config";
+import type { Terminal } from "../../../models/terminal/runtimeContracts";
 import type {
   EditablePaneNode,
   PaneSplitDirection,

@@ -1,5 +1,5 @@
 import { terminalSessionActions } from "../../terminal";
-import type { Terminal } from "../../../models/runtime/config";
+import type { Terminal } from "../../../models/terminal/runtimeContracts";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
 interface RollbackDeps {
