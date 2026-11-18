@@ -1,4 +1,4 @@
-import { type PaneNode } from "../runtime/terminal";
+import { type PaneNode } from "../runtime/pane";
 
 export function findPaneNode<T extends { id: string; children?: T[] }>(
   node: T,

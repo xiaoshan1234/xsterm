@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LocalTerminalConfig, SshConfig, SavedTerminalConfig } from "./terminal";
+import type { LocalTerminalConfig, SshConfig } from "./config";
+import type { SavedTerminalConfig } from "./savedConfig";
 
 describe("LocalTerminalConfig — name field", () => {
   it("accepts an explicit name", () => {

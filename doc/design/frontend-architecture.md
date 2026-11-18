@@ -179,6 +179,8 @@ Tauri event compatibility.
   `models/runtime`.
 - Completed: runtime compatibility definitions are split into pane, workspace,
   config, tmux, saved-config, and event modules behind a stable barrel.
+- Completed: all internal runtime model imports target concrete modules; the
+  former `runtime/terminal` compatibility barrel has been removed.
 - Next: replace these runtime compatibility types with the canonical models.
 - Next: replace the remaining runtime compatibility model and consolidate
   launch-config dialogs under `launch-config/ui`.
