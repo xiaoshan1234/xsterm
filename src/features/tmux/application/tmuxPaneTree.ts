@@ -1,4 +1,7 @@
-import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type {
+  EditablePaneNode,
+  PaneSplitDirection,
+} from "../../../models/workspace/EditablePaneTree";
 import { createLeafPane, createSplitNode } from "../../workspace";
 
 interface TmuxGeometryLeaf {
@@ -11,7 +14,7 @@ interface TmuxGeometryLeaf {
 
 interface TmuxGeometrySplit {
   kind: "split";
-  direction: SplitDirection;
+  direction: PaneSplitDirection;
   width: number;
   height: number;
   x: number;
@@ -47,7 +50,7 @@ export function parseTmuxGeometry(layout: string): TmuxGeometryNode | null {
 }
 
 /**
- * Build a frontend `PaneNode` tree from tmux geometry, mapping each layout
+ * Build a frontend `EditablePaneNode` tree from tmux geometry, mapping each layout
  * leaf to a terminal via its rectangle. Falls back to a vertical stack so no
  * pane is hidden when the layout cannot be parsed.
  */
@@ -55,7 +58,7 @@ export function buildTmuxPaneTree(
   layout: string,
   panes: readonly TmuxPaneGeometry[],
   configId: string,
-): PaneNode | null {
+): EditablePaneNode | null {
   const geometry = parseTmuxGeometry(layout);
   if (!geometry || panes.length === 0) {
     return stackPanes(panes, configId);
@@ -72,7 +75,7 @@ function buildNode(
   geometry: TmuxGeometryNode,
   panesByRectangle: ReadonlyMap<string, TmuxPaneGeometry>,
   configId: string,
-): PaneNode | null {
+): EditablePaneNode | null {
   if (geometry.kind === "leaf") {
     const pane = panesByRectangle.get(
       rectangleKey(geometry.x, geometry.y, geometry.width, geometry.height),
@@ -94,7 +97,7 @@ function buildNode(
   return createSplitNode(geometry.direction, first, second);
 }
 
-function stackPanes(panes: readonly TmuxPaneGeometry[], configId: string): PaneNode | null {
+function stackPanes(panes: readonly TmuxPaneGeometry[], configId: string): EditablePaneNode | null {
   if (panes.length === 0) return null;
   if (panes.length === 1) {
     return createLeafPane(100, panes[0].terminalId, configId);

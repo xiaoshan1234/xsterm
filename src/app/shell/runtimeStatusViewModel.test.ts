@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Terminal } from "../../models/runtime/config";
-import type { PaneNode } from "../../models/runtime/pane";
+import type { EditablePaneNode } from "../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../models/runtime/workspace";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 
-const pane: PaneNode = { id: "pane-1", type: "leaf", size: 1, terminalId: 7 };
+const pane: EditablePaneNode = { id: "pane-1", type: "leaf", size: 1, terminalId: 7 };
 
 function workspaceWithPane(activePaneId = pane.id): Workspace {
   return {

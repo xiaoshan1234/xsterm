@@ -2,12 +2,12 @@ import { useCallback } from "react";
 import { terminalSessionActions } from "../../terminal";
 import { tmuxWindowActions } from "../../tmux";
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { SavedTerminalConfig } from "../../../models/runtime/savedConfig";
 import type { Window, Workspace } from "../../../models/runtime/workspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 
-function findPaneSessionId(pane: PaneNode, paneId: string): number | undefined {
+function findPaneSessionId(pane: EditablePaneNode, paneId: string): number | undefined {
   if (pane.id === paneId) return pane.terminalId;
   return pane.children?.find((c) => findPaneSessionId(c, paneId))?.terminalId;
 }

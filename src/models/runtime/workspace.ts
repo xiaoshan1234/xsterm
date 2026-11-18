@@ -1,9 +1,9 @@
-import { type PaneNode } from "./pane";
+import { type EditablePaneNode } from "../workspace/EditablePaneTree";
 
 export interface SavedWindow {
   id: string;
   name: string;
-  rootPane: PaneNode;
+  rootPane: EditablePaneNode;
 }
 
 export interface SavedWindowConfig extends SavedWindow {}
@@ -17,7 +17,7 @@ export interface SavedWorkspace {
 export interface Window {
   id: string;
   name: string;
-  rootPane: PaneNode;
+  rootPane: EditablePaneNode;
   activePaneId: string | null;
   windowType?: "terminal" | "init";
   xstermWindowId?: number;

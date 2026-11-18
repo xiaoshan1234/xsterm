@@ -192,8 +192,11 @@ Tauri event compatibility.
   Tauri plugins.
 - Completed: the compatibility namespace was renamed from `models/legacy` to
   `models/runtime`.
-- Completed: runtime compatibility definitions are split into pane, workspace,
+- Completed: runtime compatibility definitions are split into workspace,
   config, tmux, saved-config, and event modules behind a stable barrel.
+- Completed: the editable pane tree is owned by
+  `models/workspace/EditablePaneTree.ts`; `models/runtime/pane.ts` has been
+  removed and all consumers use the explicit `EditablePaneNode` model.
 - Completed: all internal runtime model imports target concrete modules; the
   former `runtime/terminal` compatibility barrel has been removed.
 - Next: replace these runtime compatibility types with the canonical models.

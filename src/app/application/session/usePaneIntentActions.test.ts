@@ -4,12 +4,12 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { isApplicationError } from "../../../models/applicationError";
 import { type Terminal } from "../../../models/runtime/config";
-import { type PaneNode } from "../../../models/runtime/pane";
+import { type EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import { type Workspace } from "../../../models/runtime/workspace";
 import { type SessionActions, type TerminalState } from "./types";
 import { usePaneIntentActions } from "./usePaneIntentActions";
 
-const targetPane: PaneNode = {
+const targetPane: EditablePaneNode = {
   id: "target-pane",
   type: "leaf",
   size: 100,

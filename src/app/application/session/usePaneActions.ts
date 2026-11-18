@@ -6,7 +6,10 @@ import {
 } from "../../../features/terminal";
 import { tmuxControllerActions } from "../../../features/tmux";
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type {
+  EditablePaneNode,
+  PaneSplitDirection,
+} from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/runtime/workspace";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
 import {
@@ -46,7 +49,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
       workspaceId: string,
       windowId: string,
       paneId: string,
-      direction: SplitDirection,
+      direction: PaneSplitDirection,
       terminalId?: number,
       configId?: string,
     ) => {
@@ -125,7 +128,11 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
   }, []);
 
   const updateWindowPaneTree = useCallback(
-    (workspaceId: string, windowId: string, updater: (root: PaneNode) => PaneNode) => {
+    (
+      workspaceId: string,
+      windowId: string,
+      updater: (root: EditablePaneNode) => EditablePaneNode,
+    ) => {
       setWorkspaces((prev) =>
         prev.map((workspace) =>
           workspace.id === workspaceId
@@ -248,7 +255,7 @@ async function splitTmuxPaneInternal(
   workspaceId: string,
   windowId: string,
   paneId: string,
-  direction: SplitDirection,
+  direction: PaneSplitDirection,
   terminalsRef: React.MutableRefObject<Terminal[]>,
   workspacesRef: React.MutableRefObject<Workspace[]>,
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>,

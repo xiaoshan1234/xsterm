@@ -1,4 +1,4 @@
-import { type PaneNode } from "../runtime/pane";
+import { type EditablePaneNode } from "./EditablePaneTree";
 
 export function findPaneNode<T extends { id: string; children?: T[] }>(
   node: T,
@@ -14,9 +14,9 @@ export function findPaneNode<T extends { id: string; children?: T[] }>(
   return null;
 }
 
-export function getLeafPaneIds(node: PaneNode): string[] {
+export function getLeafPaneIds(node: EditablePaneNode): string[] {
   const ids: string[] = [];
-  function collect(candidate: PaneNode): void {
+  function collect(candidate: EditablePaneNode): void {
     if (candidate.type === "leaf") {
       ids.push(candidate.id);
       return;

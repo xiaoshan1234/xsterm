@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { Window, Workspace } from "../../../models/runtime/workspace";
 import {
   appendOrReplaceInitWindow,
@@ -9,7 +9,7 @@ import {
   renameWindow,
 } from "./workspaceEventTransitions";
 
-function leaf(id: string, terminalId?: number): PaneNode {
+function leaf(id: string, terminalId?: number): EditablePaneNode {
   return { id, type: "leaf", size: 100, terminalId };
 }
 
@@ -68,7 +68,7 @@ describe("removeControllerFromWorkspaces", () => {
   });
 
   it("keeps the remaining split pane when a controlled terminal shares a window", () => {
-    const rootPane: PaneNode = {
+    const rootPane: EditablePaneNode = {
       id: "split",
       type: "split",
       direction: "horizontal",

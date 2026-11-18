@@ -1,3 +1,4 @@
+export * from "./EditablePaneTree";
 export * from "./PaneTarget";
 export * from "./RawPaneTree";
 export * from "./Workspace";

@@ -1,5 +1,8 @@
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type {
+  EditablePaneNode,
+  PaneSplitDirection,
+} from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/runtime/workspace";
 
 /** Pure PaneTree operations owned by the workspace feature. */
@@ -16,7 +19,11 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
-export function createLeafPane(size: number, terminalId?: number, configId?: string): PaneNode {
+export function createLeafPane(
+  size: number,
+  terminalId?: number,
+  configId?: string,
+): EditablePaneNode {
   return {
     id: generateId(),
     type: "leaf",
@@ -27,10 +34,10 @@ export function createLeafPane(size: number, terminalId?: number, configId?: str
 }
 
 export function createSplitNode(
-  direction: SplitDirection,
-  first: PaneNode,
-  second: PaneNode,
-): PaneNode {
+  direction: PaneSplitDirection,
+  first: EditablePaneNode,
+  second: EditablePaneNode,
+): EditablePaneNode {
   return {
     id: generateId(),
     type: "split",
@@ -40,14 +47,20 @@ export function createSplitNode(
   };
 }
 
-export function forEachPane(root: PaneNode, callback: (node: PaneNode) => void): void {
+export function forEachPane(
+  root: EditablePaneNode,
+  callback: (node: EditablePaneNode) => void,
+): void {
   callback(root);
   if (root.children) {
     root.children.forEach((child) => forEachPane(child, callback));
   }
 }
 
-export function removeSessionFromPaneTree(root: PaneNode, terminalId: number): PaneNode {
+export function removeSessionFromPaneTree(
+  root: EditablePaneNode,
+  terminalId: number,
+): EditablePaneNode {
   return mapPaneTree(root, (node) => {
     if (node.type === "leaf" && node.terminalId === terminalId) {
       return { ...node, terminalId: undefined };
@@ -57,10 +70,10 @@ export function removeSessionFromPaneTree(root: PaneNode, terminalId: number): P
 }
 
 export function replaceSessionIdInPaneTree(
-  root: PaneNode,
+  root: EditablePaneNode,
   oldSessionId: number,
   newSessionId: number,
-): PaneNode {
+): EditablePaneNode {
   return mapPaneTree(root, (node) => {
     if (node.type === "leaf" && node.terminalId === oldSessionId) {
       return { ...node, terminalId: newSessionId };
@@ -69,7 +82,7 @@ export function replaceSessionIdInPaneTree(
   });
 }
 
-export function collapseEmptySplits(root: PaneNode): PaneNode {
+export function collapseEmptySplits(root: EditablePaneNode): EditablePaneNode {
   if (root.type === "leaf") return root;
   const collapsedChildren = root.children?.map(collapseEmptySplits) ?? [];
   if (collapsedChildren.every((child) => child.type === "leaf" && child.terminalId === undefined)) {
@@ -78,7 +91,10 @@ export function collapseEmptySplits(root: PaneNode): PaneNode {
   return { ...root, children: collapsedChildren };
 }
 
-export function removeSessionAndCollapse(root: PaneNode, terminalId: number): PaneNode {
+export function removeSessionAndCollapse(
+  root: EditablePaneNode,
+  terminalId: number,
+): EditablePaneNode {
   return collapseEmptySplits(removeSessionFromPaneTree(root, terminalId));
 }
 
@@ -86,7 +102,7 @@ export function removeSessionAndCollapse(root: PaneNode, terminalId: number): Pa
  * Returns the first leaf node (depth-first) that has a defined `terminalId`.
  * Used to derive a default window name from the first terminal attached to the window.
  */
-export function findFirstLeafWithSession(root: PaneNode): PaneNode | null {
+export function findFirstLeafWithSession(root: EditablePaneNode): EditablePaneNode | null {
   if (root.type === "leaf") {
     return root.terminalId !== undefined ? root : null;
   }
@@ -103,7 +119,7 @@ export function findFirstLeafWithSession(root: PaneNode): PaneNode | null {
  * Falls back to `fallback` when no terminal is attached or the terminal can't be found.
  */
 export function getDefaultWindowName(
-  rootPane: PaneNode,
+  rootPane: EditablePaneNode,
   terminals: Terminal[],
   fallback: string,
 ): string {
@@ -117,7 +133,7 @@ export function getDefaultWindowName(
  * Returns true when the given `terminalId` is attached to any leaf pane
  * anywhere in the given pane tree (depth-first search).
  */
-export function isSessionInPaneTree(root: PaneNode, terminalId: number): boolean {
+export function isSessionInPaneTree(root: EditablePaneNode, terminalId: number): boolean {
   if (root.type === "leaf") {
     return root.terminalId === terminalId;
   }
@@ -169,7 +185,7 @@ export function isSessionUsedInOtherWindow(
   return false;
 }
 
-export function collectSessionIdsFromPaneTree(root: PaneNode): number[] {
+export function collectSessionIdsFromPaneTree(root: EditablePaneNode): number[] {
   const ids = new Set<number>();
   forEachPane(root, (node) => {
     if (node.type === "leaf" && node.terminalId !== undefined) {
@@ -187,7 +203,7 @@ export function collectSessionIdsFromWorkspace(workspace: Workspace): number[] {
   return Array.from(ids);
 }
 
-export function getPaneNumberMap(root: PaneNode): Map<string, number> {
+export function getPaneNumberMap(root: EditablePaneNode): Map<string, number> {
   const map = new Map<string, number>();
   let number = 1;
   forEachPane(root, (node) => {
@@ -198,7 +214,7 @@ export function getPaneNumberMap(root: PaneNode): Map<string, number> {
   return map;
 }
 
-export function getPaneNumber(root: PaneNode, paneId: string): number | null {
+export function getPaneNumber(root: EditablePaneNode, paneId: string): number | null {
   return getPaneNumberMap(root).get(paneId) ?? null;
 }
 
@@ -209,13 +225,13 @@ export function withRecomputedSessionIds(workspace: Workspace): Workspace {
   };
 }
 
-export function stripSessionIdFromPaneTree(root: PaneNode): PaneNode {
+export function stripSessionIdFromPaneTree(root: EditablePaneNode): EditablePaneNode {
   return mapPaneTree(root, (node) =>
     node.type === "leaf" ? { ...node, terminalId: undefined } : node,
   );
 }
 
-function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
+function removePaneRecursive(root: EditablePaneNode, paneId: string): EditablePaneNode | null {
   if (root.id === paneId) {
     return null;
   }
@@ -225,7 +241,7 @@ function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
   const children =
     root.children
       ?.map((child) => removePaneRecursive(child, paneId))
-      .filter((child): child is PaneNode => child !== null) ?? [];
+      .filter((child): child is EditablePaneNode => child !== null) ?? [];
   if (children.length === 0) {
     return null;
   }
@@ -235,6 +251,6 @@ function removePaneRecursive(root: PaneNode, paneId: string): PaneNode | null {
   return { ...root, children };
 }
 
-export function removePaneFromTree(root: PaneNode, paneId: string): PaneNode {
+export function removePaneFromTree(root: EditablePaneNode, paneId: string): EditablePaneNode {
   return removePaneRecursive(root, paneId) ?? createLeafPane(root.size);
 }

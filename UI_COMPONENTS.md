@@ -508,7 +508,7 @@ Target 失效时：
 - 编辑器占满面板剩余宽度和高度。
 - 折叠时只隐藏面板，不销毁输入标签和发送状态。
 - 与 MainArea 之间使用 `--hairline` 分隔。
-- 不把 TextSender 建模为新的 PaneNode。
+- 不把 TextSender 建模为新的 `EditablePaneNode`。
 
 ## 9. BottomBar
 

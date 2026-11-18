@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { SavedWorkspace, Window, Workspace } from "../../../models/runtime/workspace";
 import { createApplicationError } from "../../../models/applicationError";
 import {
@@ -129,7 +129,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
         logTag: "workspace",
       });
 
-      const buildTree = async (node: PaneNode, depth = 0): Promise<PaneNode> => {
+      const buildTree = async (node: EditablePaneNode, depth = 0): Promise<EditablePaneNode> => {
         if (node.type === "leaf") {
           if (node.terminalId !== undefined && node.configId === undefined) {
             console.warn(
@@ -168,7 +168,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
       const buildWindow = async (savedWindow: {
         id: string;
         name: string;
-        rootPane: PaneNode;
+        rootPane: EditablePaneNode;
       }): Promise<Window> => {
         const rootPane = await buildTree(savedWindow.rootPane);
         return {

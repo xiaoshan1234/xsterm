@@ -1,4 +1,4 @@
-import type { SplitDirection } from "../../../models/runtime/pane";
+import type { PaneSplitDirection } from "../../../models/workspace/EditablePaneTree";
 import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
 import {
   toBackendTerminalHandle,
@@ -23,7 +23,7 @@ export const tmuxControllerActions = {
   async createPane(
     controllerId: number,
     parentTerminalId: number,
-    direction: SplitDirection,
+    direction: PaneSplitDirection,
   ): Promise<TerminalConnectionInfo> {
     return toTerminalConnectionInfo(
       await tmuxCommands.createTmuxPane(

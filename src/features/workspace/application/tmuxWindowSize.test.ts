@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import { computeTmuxWindowSize, type TerminalSize } from "./tmuxWindowSize";
 
-function leaf(id: string, terminalId: number): PaneNode {
+function leaf(id: string, terminalId: number): EditablePaneNode {
   return { id, type: "leaf", size: 100, terminalId };
 }
 
 function split(
   id: string,
   direction: "horizontal" | "vertical",
-  first: PaneNode,
-  second: PaneNode,
-): PaneNode {
+  first: EditablePaneNode,
+  second: EditablePaneNode,
+): EditablePaneNode {
   return { id, type: "split", direction, size: 100, children: [first, second] };
 }
 

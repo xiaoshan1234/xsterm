@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useTerminalRuntime } from "../../terminal";
 import { tmuxControllerActions } from "../../tmux";
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/runtime/workspace";
 import { computeTmuxWindowSize, type WindowSize } from "./tmuxWindowSize";
 
@@ -47,7 +47,7 @@ export function useTmuxWindowResize(workspace: Workspace): void {
 }
 
 function findControllerId(
-  node: PaneNode,
+  node: EditablePaneNode,
   terminalsById: ReadonlyMap<number, Terminal>,
 ): number | undefined {
   if (node.type === "leaf") {

@@ -9,7 +9,10 @@ import type {
   Terminal,
   TerminalDisplayConfig,
 } from "../../../models/runtime/config";
-import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type {
+  EditablePaneNode,
+  PaneSplitDirection,
+} from "../../../models/workspace/EditablePaneTree";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../models/runtime/savedConfig";
 import type { TmuxSessionConfig } from "../../../models/runtime/tmux";
 import type {
@@ -174,14 +177,14 @@ export interface WorkspaceLayoutActions {
     workspaceId: string,
     windowId: string,
     paneId: string,
-    direction: SplitDirection,
+    direction: PaneSplitDirection,
     terminalId?: number,
     configId?: string,
   ) => void;
   updateWindowPaneTree: (
     workspaceId: string,
     windowId: string,
-    updater: (root: PaneNode) => PaneNode,
+    updater: (root: EditablePaneNode) => EditablePaneNode,
   ) => void;
   setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;

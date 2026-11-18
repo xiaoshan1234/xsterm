@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/runtime/workspace";
 import { isApplicationError } from "../../../models/applicationError";
 import { useWorkspaceLayout } from "../state/WorkspaceContext";
@@ -12,10 +12,10 @@ import { useTmuxWindowResize } from "../application/useTmuxWindowResize";
 import "./TabBar.css";
 
 function updateNodeInTree(
-  root: PaneNode,
+  root: EditablePaneNode,
   nodeId: string,
-  updater: (node: PaneNode) => PaneNode,
-): PaneNode {
+  updater: (node: EditablePaneNode) => EditablePaneNode,
+): EditablePaneNode {
   if (root.id === nodeId) {
     return updater(root);
   }
@@ -64,7 +64,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
   );
 
   const handleUpdateNode = useCallback(
-    (windowId: string, nodeId: string, updater: (node: PaneNode) => PaneNode) => {
+    (windowId: string, nodeId: string, updater: (node: EditablePaneNode) => EditablePaneNode) => {
       updateWindowPaneTree(workspace.id, windowId, (root) => {
         if (root.id === nodeId) {
           return updater(root);

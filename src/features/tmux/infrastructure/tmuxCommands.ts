@@ -7,7 +7,7 @@ import {
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
 import { type TmuxSessionConfigDto } from "./tauriContracts";
 
-type SplitDirection = "horizontal" | "vertical";
+type PaneSplitDirection = "horizontal" | "vertical";
 
 type InvokeFunction = <Value>(command: string, args?: Record<string, unknown>) => Promise<Value>;
 
@@ -23,7 +23,7 @@ export interface TmuxCommandClient {
   createTmuxPane(
     controllerHandle: BackendControllerHandle,
     parentTerminalHandle: BackendTerminalHandle,
-    direction: SplitDirection,
+    direction: PaneSplitDirection,
   ): Promise<TerminalInfoDto>;
   killTmuxPane(terminalHandle: BackendTerminalHandle): Promise<void>;
   captureTmuxPane(terminalHandle: BackendTerminalHandle, lines: number): Promise<string>;
@@ -74,7 +74,7 @@ export function createTmuxCommandClient(
     async createTmuxPane(
       controllerHandle: BackendControllerHandle,
       parentTerminalHandle: BackendTerminalHandle,
-      direction: SplitDirection,
+      direction: PaneSplitDirection,
     ): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("create_tmux_pane", {
         controllerId: controllerHandle,

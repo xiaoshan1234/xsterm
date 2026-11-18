@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/runtime/workspace";
 import {
   collapseEmptySplits,
@@ -32,7 +32,7 @@ import {
 // ---------- Test fixtures --------------------------------------------------
 
 /** Build a deterministic leaf (size-only). */
-function leaf(size: number, terminalId?: number, configId?: string): PaneNode {
+function leaf(size: number, terminalId?: number, configId?: string): EditablePaneNode {
   return { id: `leaf-${size}-${terminalId ?? "x"}`, type: "leaf", size, terminalId, configId };
 }
 
@@ -46,7 +46,7 @@ function leaf(size: number, terminalId?: number, configId?: string): PaneNode {
  *                    leaf-B (50,     leaf-C (50,
  *                      terminalId=2)   terminalId=1)
  */
-const tree: PaneNode = {
+const tree: EditablePaneNode = {
   id: "root",
   type: "split",
   direction: "horizontal",
@@ -268,7 +268,7 @@ describe("isSessionInPaneTree", () => {
 
 describe("collapseEmptySplits", () => {
   it("collapses a split whose children are all empty leaves", () => {
-    const root: PaneNode = {
+    const root: EditablePaneNode = {
       id: "r",
       type: "split",
       direction: "horizontal",
@@ -287,14 +287,14 @@ describe("collapseEmptySplits", () => {
 
   it("recurses into nested empty splits", () => {
     // outer( inner(empty-left, leaf-right) ) -> outer collapses when inner collapses
-    const inner: PaneNode = {
+    const inner: EditablePaneNode = {
       id: "inner",
       type: "split",
       direction: "vertical",
       size: 50,
       children: [createLeafPane(25), createLeafPane(25)],
     };
-    const outer: PaneNode = {
+    const outer: EditablePaneNode = {
       id: "outer",
       type: "split",
       direction: "horizontal",

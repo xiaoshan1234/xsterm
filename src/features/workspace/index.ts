@@ -1,6 +1,7 @@
 export * from "./viewModels/managerViewModel";
 export * from "./viewModels/paneLocationViewModel";
 export * from "./ui";
+export type { EditablePaneNode, PaneSplitDirection } from "../../models/workspace/EditablePaneTree";
 export * from "./application/paneTreeOperations";
 export * from "./application/workspaceEventTransitions";
 export * from "./application/windowOperations";

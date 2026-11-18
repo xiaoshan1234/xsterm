@@ -1,5 +1,5 @@
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/runtime/workspace";
 
 export interface PaneLocationViewData {
@@ -48,7 +48,7 @@ export function selectPaneLocations(
   return locations;
 }
 
-function visitPane(node: PaneNode, visitor: (pane: PaneNode) => void): void {
+function visitPane(node: EditablePaneNode, visitor: (pane: EditablePaneNode) => void): void {
   if (node.type === "leaf") {
     visitor(node);
     return;

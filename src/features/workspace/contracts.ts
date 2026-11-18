@@ -1,5 +1,5 @@
 import type { Terminal } from "../../models/runtime/config";
-import type { PaneNode, SplitDirection } from "../../models/runtime/pane";
+import type { EditablePaneNode, PaneSplitDirection } from "../../models/workspace/EditablePaneTree";
 import type {
   SavedWindowConfig,
   SavedWorkspace,
@@ -41,14 +41,14 @@ export interface WorkspaceLayoutContextType {
     workspaceId: string,
     windowId: string,
     paneId: string,
-    direction: SplitDirection,
+    direction: PaneSplitDirection,
     terminalId?: number,
     configId?: string,
   ) => void;
   updateWindowPaneTree: (
     workspaceId: string,
     windowId: string,
-    updater: (root: PaneNode) => PaneNode,
+    updater: (root: EditablePaneNode) => EditablePaneNode,
   ) => void;
   setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
@@ -78,13 +78,13 @@ export interface AttachExistingTerminalRequest extends PaneTarget {
 }
 
 export interface SplitPaneWithTerminalRequest extends PaneTarget {
-  direction: SplitDirection;
+  direction: PaneSplitDirection;
   terminalId: number;
   configId?: string;
 }
 
 export interface SplitPaneWithSavedConfigRequest extends PaneTarget {
-  direction: SplitDirection;
+  direction: PaneSplitDirection;
   configId: string;
 }
 

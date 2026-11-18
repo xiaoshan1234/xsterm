@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from "react";
-import type { PaneNode, SplitDirection } from "../../../models/runtime/pane";
+import type {
+  EditablePaneNode,
+  PaneSplitDirection,
+} from "../../../models/workspace/EditablePaneTree";
 import type { Workspace } from "../../../models/runtime/workspace";
 import { isApplicationError } from "../../../models/applicationError";
 import { useTerminalRuntime } from "../../terminal";
@@ -16,7 +19,7 @@ import "./Pane.css";
 interface PaneProps {
   workspace: Workspace;
   windowId: string;
-  pane: PaneNode;
+  pane: EditablePaneNode;
   isActive: boolean;
   isWindowActive: boolean;
   onActivate: () => void;
@@ -37,7 +40,7 @@ export function Pane({
   const { currentTheme } = useTheme();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
-  const [pendingSplit, setPendingSplit] = useState<SplitDirection | null>(null);
+  const [pendingSplit, setPendingSplit] = useState<PaneSplitDirection | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
   const contextMenuRef = useRef<ContextMenuRef>(null);
@@ -61,7 +64,7 @@ export function Pane({
   const paneNumber = selectedWindow ? getPaneNumber(selectedWindow.rootPane, pane.id) : null;
 
   const handleStartSplit = useCallback(
-    (direction: SplitDirection) => {
+    (direction: PaneSplitDirection) => {
       // tmux panes (supportsMultiplex) split immediately
       // through the backend — no "pick a terminal from the dialog"
       // step because the new pane IS the new tmux pane. The

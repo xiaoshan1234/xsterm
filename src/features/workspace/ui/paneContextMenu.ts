@@ -1,10 +1,10 @@
 import type { ContextMenuItem } from "../../../shared/ui/ContextMenu";
 import type { Terminal } from "../../../models/runtime/config";
-import type { SplitDirection } from "../../../models/runtime/pane";
+import type { PaneSplitDirection } from "../../../models/workspace/EditablePaneTree";
 import type { Window } from "../../../models/runtime/workspace";
 
 export interface PaneMenuActions {
-  startSplit: (direction: SplitDirection) => void;
+  startSplit: (direction: PaneSplitDirection) => void;
   startAttach: () => void;
   selectAll: () => void;
   copy: () => Promise<void>;

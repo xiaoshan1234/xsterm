@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Terminal } from "../../../models/runtime/config";
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 import type { SavedWindowConfig, Window, Workspace } from "../../../models/runtime/workspace";
 import {
   createLeafPane,
@@ -91,7 +91,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
         logTag: "window",
       });
 
-      const buildTree = async (node: PaneNode): Promise<PaneNode> => {
+      const buildTree = async (node: EditablePaneNode): Promise<EditablePaneNode> => {
         if (node.type === "leaf") {
           const configId = node.configId;
           if (configId) {

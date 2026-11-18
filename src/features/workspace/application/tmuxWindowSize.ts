@@ -1,4 +1,4 @@
-import type { PaneNode } from "../../../models/runtime/pane";
+import type { EditablePaneNode } from "../../../models/workspace/EditablePaneTree";
 
 export interface TerminalSize {
   rows: number;
@@ -15,7 +15,7 @@ export interface WindowSize {
  * Horizontal splits add columns; vertical splits add rows.
  */
 export function computeTmuxWindowSize(
-  node: PaneNode,
+  node: EditablePaneNode,
   sizes: ReadonlyMap<number, TerminalSize>,
 ): WindowSize | null {
   if (node.type === "leaf") {

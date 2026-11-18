@@ -1,7 +1,7 @@
 import { useShortcuts } from "../shared/hooks/useShortcut";
 import { useTerminalRuntime } from "../features/terminal";
 import { useWorkspaceLayout } from "../features/workspace";
-import type { PaneNode, SplitDirection } from "../models/runtime/pane";
+import type { EditablePaneNode, PaneSplitDirection } from "../models/workspace/EditablePaneTree";
 
 export function useAppShortcuts({
   onCreateSession,
@@ -21,7 +21,7 @@ export function useAppShortcuts({
   // tmux terminals via `supportsMultiplex` and dispatches to the
   // backend; non-multiplex terminals fall through to the existing
   // "open dialog and let the user pick a terminal" flow.
-  const splitActivePane = (direction: SplitDirection): void => {
+  const splitActivePane = (direction: PaneSplitDirection): void => {
     const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) return;
     const window = activeWindowFor(workspace);
@@ -100,9 +100,9 @@ export function useAppShortcuts({
   ]);
 }
 
-function collectLeafIds(root: PaneNode): string[] {
+function collectLeafIds(root: EditablePaneNode): string[] {
   const ids: string[] = [];
-  const traverse = (node: PaneNode) => {
+  const traverse = (node: EditablePaneNode) => {
     if (node.type === "leaf") {
       ids.push(node.id);
       return;
@@ -113,7 +113,7 @@ function collectLeafIds(root: PaneNode): string[] {
   return ids;
 }
 
-function findPane(root: PaneNode, id: string): PaneNode | null {
+function findPane(root: EditablePaneNode, id: string): EditablePaneNode | null {
   if (root.id === id) return root;
   if (root.children) {
     for (const child of root.children) {
