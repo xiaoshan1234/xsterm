@@ -7,7 +7,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import type { Terminal } from "../../../features/terminal";
+import type { Terminal } from "../contracts";
 
 export interface TerminalSessionState {
   terminals: Terminal[];

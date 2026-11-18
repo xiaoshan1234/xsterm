@@ -1,4 +1,4 @@
-import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../../../features/workspace";
+import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../contracts";
 
 export interface WindowManagerItemViewData {
   configId: string;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { SshConfig } from "../../../../../features/terminal";
+import type { SshConfig } from "../../../contracts";
 import { FormNumberField } from "../../../../../shared/ui/FormNumberField";
 import { FormSelectField } from "../../../../../shared/ui/FormSelectField";
 import { FormTextField } from "../../../../../shared/ui/FormTextField";

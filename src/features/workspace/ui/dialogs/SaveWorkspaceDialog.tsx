@@ -1,5 +1,5 @@
 import { SaveDialog } from "./SaveDialog";
-import type { SavedWorkspace } from "../../../../features/workspace";
+import type { SavedWorkspace } from "../../contracts";
 
 interface SaveWorkspaceDialogProps {
   isOpen: boolean;

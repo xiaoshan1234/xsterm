@@ -6,7 +6,7 @@ import { isApplicationError } from "../../../models/applicationError";
 import { type Terminal } from "../../../features/terminal";
 import { type EditablePaneNode } from "../../../features/workspace";
 import { type Workspace } from "../../../features/workspace";
-import { type SessionActions, type TerminalState } from "./types";
+import { type SessionActions } from "./types";
 import { usePaneIntentActions } from "./usePaneIntentActions";
 
 const targetPane: EditablePaneNode = {
@@ -59,6 +59,8 @@ function createActionPorts() {
     closePane: vi.fn(async () => undefined),
     closeTerminal: vi.fn(async () => undefined),
     createTerminalFromSavedConfig: vi.fn(async () => createTerminal()),
+    createLocalSessionOnly: vi.fn(async () => createTerminal()),
+    createSshSessionOnly: vi.fn(async () => createTerminal()),
     replaceInitWindowWithTerminal: vi.fn(),
     setActivePane: vi.fn(),
     setActiveWorkspace: vi.fn(),
@@ -69,6 +71,8 @@ function createActionPorts() {
     | "closePane"
     | "closeTerminal"
     | "createTerminalFromSavedConfig"
+    | "createLocalSessionOnly"
+    | "createSshSessionOnly"
     | "replaceInitWindowWithTerminal"
     | "setActivePane"
     | "setActiveWorkspace"
@@ -83,7 +87,7 @@ describe("usePaneIntentActions", () => {
     const state = {
       terminals: [createTerminal()],
       workspaces: [createWorkspace()],
-    } satisfies Pick<TerminalState, "terminals" | "workspaces">;
+    };
     const { result } = renderHook(() => usePaneIntentActions({ state, actions }));
 
     await act(() =>
@@ -125,7 +129,7 @@ describe("usePaneIntentActions", () => {
     const state = {
       terminals: [createTerminal()],
       workspaces: [occupied],
-    } satisfies Pick<TerminalState, "terminals" | "workspaces">;
+    };
     const { result } = renderHook(() => usePaneIntentActions({ state, actions }));
 
     let error: unknown;
@@ -149,7 +153,7 @@ describe("usePaneIntentActions", () => {
     const state = {
       terminals: [],
       workspaces: [createWorkspace()],
-    } satisfies Pick<TerminalState, "terminals" | "workspaces">;
+    };
     const { result } = renderHook(() => usePaneIntentActions({ state, actions }));
 
     await act(() =>

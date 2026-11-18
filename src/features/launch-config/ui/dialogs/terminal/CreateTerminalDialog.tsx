@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  CreatedTerminalRef,
   LocalTerminalConfig,
   SshConfig,
-  Terminal,
   TerminalDisplayConfig,
-} from "../../../../../features/terminal";
+} from "../../../contracts";
 import { Dialog } from "../../../../../shared/ui/Dialog";
 import { DEFAULT_GROUP_ID } from "../../../constants";
 import { useSavedLaunchConfigs } from "../../../state/LaunchConfigContext";
@@ -25,12 +25,12 @@ interface CreateTerminalDialogProps {
     config: LocalTerminalConfig,
     save: boolean,
     displayConfig?: TerminalDisplayConfig,
-  ) => Promise<Terminal>;
+  ) => Promise<CreatedTerminalRef>;
   onCreateSsh: (
     config: SshConfig,
     save: boolean,
     displayConfig?: TerminalDisplayConfig,
-  ) => Promise<Terminal>;
+  ) => Promise<CreatedTerminalRef>;
   initialTab?: TerminalCreateTab;
   initialGroupId?: number;
 }

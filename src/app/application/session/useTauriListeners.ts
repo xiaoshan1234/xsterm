@@ -1,50 +1,25 @@
 import { useTmuxEventBridge } from "./useTmuxEventBridge";
 import { useTerminalEventBridge } from "./useTerminalEventBridge";
-import { type TerminalState } from "./types";
+import { type SessionState } from "./types";
 
-type EventBridgeState = Pick<
-  TerminalState,
-  | "setSessions"
-  | "setWorkspaces"
-  | "terminalsRef"
-  | "workspacesRef"
-  | "establishingSessionsRef"
-  | "setTmuxControllerErrors"
-  | "tmuxControllerConfigsRef"
-  | "tmuxControllerConfigIdsRef"
-  | "syncOpenTmuxSessions"
-  | "tmuxControllersClosingRef"
->;
-
-export function useTauriListeners({
-  setSessions,
-  setWorkspaces,
-  terminalsRef,
-  workspacesRef,
-  establishingSessionsRef,
-  setTmuxControllerErrors,
-  tmuxControllerConfigsRef,
-  tmuxControllerConfigIdsRef,
-  syncOpenTmuxSessions,
-  tmuxControllersClosingRef,
-}: EventBridgeState): void {
+export function useTauriListeners(state: SessionState): void {
   useTerminalEventBridge({
-    setTerminals: setSessions,
-    setWorkspaces,
-    terminalsRef,
-    establishingSessionsRef,
+    setTerminals: state.terminal.setSessions,
+    setWorkspaces: state.workspace.setWorkspaces,
+    terminalsRef: state.terminal.terminalsRef,
+    establishingSessionsRef: state.terminal.establishingSessionsRef,
   });
 
   useTmuxEventBridge({
-    setTerminals: setSessions,
-    setWorkspaces,
-    terminalsRef,
-    workspacesRef,
-    establishingSessionsRef,
-    setTmuxControllerErrors,
-    tmuxControllerConfigsRef,
-    tmuxControllerConfigIdsRef,
-    syncOpenTmuxSessions,
-    tmuxControllersClosingRef,
+    setTerminals: state.terminal.setSessions,
+    setWorkspaces: state.workspace.setWorkspaces,
+    terminalsRef: state.terminal.terminalsRef,
+    workspacesRef: state.workspace.workspacesRef,
+    establishingSessionsRef: state.terminal.establishingSessionsRef,
+    setTmuxControllerErrors: state.tmux.setTmuxControllerErrors,
+    tmuxControllerConfigsRef: state.tmux.tmuxControllerConfigsRef,
+    tmuxControllerConfigIdsRef: state.tmux.tmuxControllerConfigIdsRef,
+    syncOpenTmuxSessions: state.tmux.syncOpenTmuxSessions,
+    tmuxControllersClosingRef: state.tmux.tmuxControllersClosingRef,
   });
 }

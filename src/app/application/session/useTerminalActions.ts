@@ -17,12 +17,15 @@ import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.help
 import { useGroupActions } from "../../../features/launch-config/composition";
 import { usePaneActions } from "./usePaneActions";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
-import type { SessionActions, SessionPersistence, TerminalState } from "./types";
+import type { SessionActions, SessionPersistence, SessionState } from "./types";
 import { findOpenTmuxControllerId, tmuxSessionKey } from "../../../features/tmux";
 import { useWindowActions } from "./useWindowActions";
 import { useWorkspaceActions } from "./useWorkspaceActions";
 
-interface UseSessionActionsOptions extends TerminalState, SessionPersistence {}
+interface UseSessionActionsOptions {
+  state: SessionState;
+  persistence: SessionPersistence;
+}
 
 /**
  * Composes the terminal action surface from six concern-focused hooks.
@@ -30,22 +33,32 @@ interface UseSessionActionsOptions extends TerminalState, SessionPersistence {}
  * point only adds the small set of "shared primitives" that are consumed by
  * multiple concerns (terminal-from-config, window-from-terminal, workspace-from-terminal).
  */
-export function useTerminalActions(opts: UseSessionActionsOptions): SessionActions {
+export function useTerminalActions({
+  state,
+  persistence: sessionPersistence,
+}: UseSessionActionsOptions): SessionActions {
+  const { savedConfigs, nextGroupId, setNextGroupId } = state.launchConfig;
+  const { terminalsRef, setSessions, establishingSessionsRef, reportTerminalSize } = state.terminal;
   const {
-    savedConfigs,
-    terminalsRef,
-    setSessions,
     workspacesRef,
     setWorkspaces,
     setActiveWorkspaceId,
     activeWorkspaceId,
-    establishingSessionsRef,
+    savedWorkspaces,
+    savedWindowConfigs,
+    setSavedWorkspaces,
+    setSavedWindowConfigs,
+  } = state.workspace;
+  const {
     tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef,
+    tmuxControllersClosingRef,
     pendingTmuxSessionKeysRef,
     syncOpenTmuxSessions,
     setTmuxControllerErrors,
-  } = opts;
+  } = state.tmux;
+  const { updateConfigs, updateGroups, persistSavedWorkspaces, persistSavedWindowConfigs } =
+    sessionPersistence;
 
   const focusTerminal = useCallback(
     (terminalId: number) => {
@@ -252,12 +265,30 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
   );
 
   const lifecycle = useTerminalLifecycle({
-    ...opts,
+    savedConfigs,
+    terminalsRef,
+    setSessions,
+    setWorkspaces,
+    activeWorkspaceId,
+    establishingSessionsRef,
+    updateConfigs,
+    updateGroups,
+    tmuxControllerConfigsRef,
+    tmuxControllerConfigIdsRef,
+    syncOpenTmuxSessions,
+    pendingTmuxSessionKeysRef,
+    tmuxControllersClosingRef,
     openFromConfigInternal,
     createWindowFromSession,
   });
 
-  const pane = usePaneActions(opts);
+  const pane = usePaneActions({
+    terminalsRef,
+    workspacesRef,
+    setSessions,
+    setWorkspaces,
+    establishingSessionsRef,
+  });
 
   const windowActions = useWindowActions({
     savedConfigs,
@@ -282,13 +313,29 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     closeTerminal: terminalSessionActions.closeTerminal,
   });
 
-  const persistence = usePersistenceActions({
-    ...opts,
+  const workspacePersistence = usePersistenceActions({
+    savedWorkspaces,
+    savedWindowConfigs,
+    workspacesRef,
+    terminalsRef,
+    setWorkspaces,
+    setActiveWorkspaceId,
+    setSavedWorkspaces,
+    setSavedWindowConfigs,
+    setSessions,
+    establishingSessionsRef,
+    persistSavedWorkspaces,
+    persistSavedWindowConfigs,
     openFromConfigInternal,
     closeTerminal: terminalSessionActions.closeTerminal,
   });
 
-  const group = useGroupActions(opts);
+  const group = useGroupActions({
+    nextGroupId,
+    setNextGroupId,
+    updateConfigs,
+    updateGroups,
+  });
 
   const dismissTmuxControllerError = useCallback(
     (controllerId: number) => {
@@ -308,7 +355,7 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     createWorkspaceFromSession,
     ...lifecycle,
     ...pane,
-    reportTerminalSize: opts.reportTerminalSize,
+    reportTerminalSize,
     createWindow: windowActions.createWindow,
     createInitWindow: windowActions.createInitWindow,
     replaceInitWindowWithTerminal: windowActions.replaceInitWindowWithTerminal,
@@ -321,7 +368,7 @@ export function useTerminalActions(opts: UseSessionActionsOptions): SessionActio
     createEmptyWorkspace: workspaceActions.createEmptyWorkspace,
     setActiveWorkspace: workspaceActions.setActiveWorkspace,
     closeWorkspace: workspaceActions.closeWorkspace,
-    ...persistence,
+    ...workspacePersistence,
     ...group,
     applyDisplayConfigToLiveSession: lifecycle.applyDisplayConfigToLiveSession,
     dismissTmuxControllerError,

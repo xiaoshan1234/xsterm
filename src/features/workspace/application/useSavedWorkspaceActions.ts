@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Terminal } from "../../../features/terminal";
-import type { EditablePaneNode } from "../../../features/workspace";
-import type { SavedWorkspace, Window, Workspace } from "../../../features/workspace";
+import type { EditablePaneNode } from "../contracts";
+import type { SavedWorkspace, Window, Workspace } from "../contracts";
 import { createApplicationError } from "../../../models/applicationError";
 import {
   collectSessionIdsFromWorkspace,

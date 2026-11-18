@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SavedTerminalConfig } from "../../../../../features/launch-config";
+import type { SavedTerminalConfig } from "../../../contracts";
 import { buildTmuxConfigForBase, isTmuxWslBaseConfig } from "./TmuxForm";
 
 describe("tmux base transport", () => {

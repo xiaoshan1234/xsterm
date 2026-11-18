@@ -1,7 +1,7 @@
 import type { Terminal } from "../../../features/terminal";
-import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
+import type { EditablePaneNode, PaneSplitDirection } from "../contracts";
 import { createEditableLeafPane, createEditableSplitNode } from "../contracts";
-import type { Workspace } from "../../../features/workspace";
+import type { Workspace } from "../contracts";
 
 /** Pure PaneTree operations owned by the workspace feature. */
 import { findPaneNode, getLeafPaneIds, mapPaneTree, replacePaneNode } from "./paneTreeAccess";

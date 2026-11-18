@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Terminal, TerminalDisplayConfig } from "../../../../../features/terminal";
-import type { SavedTerminalConfig } from "../../../../../features/launch-config";
-import type { TmuxSessionConfig } from "../../../../../features/launch-config";
+import type {
+  CreatedTerminalRef,
+  SavedTerminalConfig,
+  TerminalDisplayConfig,
+  TmuxSessionConfig,
+} from "../../../contracts";
 import { Dialog } from "../../../../../shared/ui/Dialog";
 import { DEFAULT_GROUP_ID } from "../../../constants";
 import { useSavedLaunchConfigs } from "../../../state/LaunchConfigContext";
@@ -29,7 +32,7 @@ interface AttachTmuxDialogProps {
     config: TmuxSessionConfig,
     save: boolean,
     displayConfig?: TerminalDisplayConfig,
-  ) => Promise<Terminal>;
+  ) => Promise<CreatedTerminalRef>;
   initialGroupId?: number;
 }
 

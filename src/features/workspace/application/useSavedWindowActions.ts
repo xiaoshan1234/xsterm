@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Terminal } from "../../../features/terminal";
-import type { EditablePaneNode } from "../../../features/workspace";
-import type { SavedWindowConfig, Window, Workspace } from "../../../features/workspace";
+import type { EditablePaneNode } from "../contracts";
+import type { SavedWindowConfig, Window, Workspace } from "../contracts";
 import {
   createLeafPane,
   getDefaultWindowName,

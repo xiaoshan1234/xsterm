@@ -149,9 +149,9 @@ Tauri event compatibility.
 ## Migration status
 
 - Completed: typed application errors and code-based UI handling.
-- Completed: editable PaneTree operations live under
-  `features/workspace/application`, while canonical workspace invariants stay
-  in `models/workspace`.
+- Completed: editable PaneTree operations and workspace invariants live under
+  `features/workspace`; `models` contains only shared primitives such as IDs,
+  result types, and stable pane-target identities.
 - Completed: saved launch configs, groups, defaults, schema migration, and
   persistence now live under `features/launch-config`.
 - Completed: launch-config group operations are pure functions, and launch
@@ -195,12 +195,10 @@ Tauri event compatibility.
 - Completed: feature UI is lint-restricted from infrastructure adapters and
   Tauri plugins.
 - Completed: the `models/runtime` compatibility namespace has been retired.
-- Completed: frontend terminal projections and capability flags are owned by
-  `features/terminal/contracts.ts`; `models/terminal` contains canonical domain
-  types only.
+- Completed: terminal projections and capability flags are owned by
+  `features/terminal/contracts.ts`.
 - Completed: editable pane/window/workspace projections live in
-  `features/workspace/contracts.ts`; canonical aggregates remain isolated in
-  `models/workspace`.
+  `features/workspace/contracts.ts`.
 - Completed: `TmuxSessionConfig`, saved terminal configurations, local/SSH
   connection inputs, and display settings live in
   `features/launch-config/contracts.ts`.
@@ -217,3 +215,12 @@ Tauri event compatibility.
   `groups/`.
 - Completed: AppShell manager composition and workspace main area are split into
   app runtime components.
+- Completed: app session state is grouped into feature slices instead of a
+  flattened god-state, and feature-local modules no longer import their own
+  root barrel.
+- Completed: canonical aggregate copies that were unused by production were
+  removed; `models/` now contains only shared primitives and stable target IDs.
+- Completed: tmux resize effects and local/SSH PaneInitCard transactions are
+  coordinated by the app layer through intent ports.
+- Completed: tmux event normalization is split into pure transition helpers
+  before app-level terminal/tmux/workspace submission.

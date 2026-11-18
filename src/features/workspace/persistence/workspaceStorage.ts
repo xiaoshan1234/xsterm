@@ -1,7 +1,7 @@
 import { frontendLogger as logger } from "../../../infra";
 import { getJsonStore } from "../../../infra/storage";
-import type { EditablePaneNode } from "../../../features/workspace";
-import type { SavedWindowConfig, SavedWorkspace } from "../../../features/workspace";
+import type { EditablePaneNode } from "../contracts";
+import type { SavedWindowConfig, SavedWorkspace } from "../contracts";
 
 const workspaceStore = getJsonStore("terminals.json");
 

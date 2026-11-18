@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useSavedLaunchConfigs } from "../../../state/LaunchConfigContext";
-import type { SshConfig } from "../../../../../features/terminal";
-import type { SavedTerminalConfig } from "../../../../../features/launch-config";
-import type { TmuxSessionConfig } from "../../../../../features/launch-config";
+import type { SshConfig } from "../../../contracts";
+import type { SavedTerminalConfig } from "../../../contracts";
+import type { TmuxSessionConfig } from "../../../contracts";
 import { FormSelectField, type FormSelectOption } from "../../../../../shared/ui/FormSelectField";
 import { FormTextField } from "../../../../../shared/ui/FormTextField";
 

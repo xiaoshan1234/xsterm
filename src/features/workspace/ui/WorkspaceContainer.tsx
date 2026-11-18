@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
-import type { EditablePaneNode } from "../../../features/workspace";
-import type { Workspace } from "../../../features/workspace";
+import type { EditablePaneNode } from "../contracts";
+import type { Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
 import { useWorkspaceLayout } from "../state/WorkspaceContext";
 import { PaneTree } from "./PaneTree";
@@ -8,7 +8,6 @@ import { InitWindowView } from "./InitWindowView";
 import { WindowTabBar } from "./WindowTabBar";
 import { SaveDialog } from "./dialogs/SaveDialog";
 import { SaveWorkspaceDialog } from "./dialogs/SaveWorkspaceDialog";
-import { useTmuxWindowResize } from "../application/useTmuxWindowResize";
 import "./TabBar.css";
 
 function updateNodeInTree(
@@ -31,7 +30,6 @@ interface WorkspaceContainerProps {
 }
 
 export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
-  useTmuxWindowResize(workspace);
   const {
     setActiveWorkspace,
     setActiveWindow,

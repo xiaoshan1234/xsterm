@@ -1,7 +1,4 @@
-import type {
-  TerminalDisplayConfig,
-  TerminalLoggingConfig,
-} from "../../../../../features/terminal";
+import type { TerminalDisplayConfig, TerminalLoggingConfig } from "../../../contracts";
 import { FormCheckboxField } from "../../../../../shared/ui/FormCheckboxField";
 import { FormNumberField } from "../../../../../shared/ui/FormNumberField";
 import { FormTextField } from "../../../../../shared/ui/FormTextField";

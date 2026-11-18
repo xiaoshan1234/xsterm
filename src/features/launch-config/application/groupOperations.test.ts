@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TerminalGroup } from "../../../features/launch-config";
+import type { TerminalGroup } from "../contracts";
 import {
   addConfigToGroup,
   addGroup,

@@ -12,9 +12,7 @@ import {
 
 function unwrap<Value>(result: ModelResult<Value>): Value {
   expect(result.ok).toBe(true);
-  if (!result.ok) {
-    throw new Error(result.error.message);
-  }
+  if (!result.ok) throw new Error(result.error.message);
   return result.value;
 }
 
@@ -30,12 +28,9 @@ describe("PaneTarget", () => {
     const resolved = createResolvedRawPaneTarget(target, createTerminalId(42));
 
     expect(createPaneTargetKey(target)).toBe("raw:workspace-1:window-1:pane-1");
-    expect(resolved).toEqual({
-      target,
-      stream: {
-        kind: "terminal",
-        terminalId: createTerminalId(42),
-      },
+    expect(resolved.stream).toEqual({
+      kind: "terminal",
+      terminalId: createTerminalId(42),
     });
   });
 

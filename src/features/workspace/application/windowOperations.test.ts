@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Window, Workspace } from "../../../features/workspace";
+import type { Window, Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
 import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "./windowOperations";
 

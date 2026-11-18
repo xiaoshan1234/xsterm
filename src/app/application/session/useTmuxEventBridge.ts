@@ -5,20 +5,19 @@ import type { Workspace } from "../../../features/workspace";
 import {
   appendOrReplaceInitWindow,
   closeWindow,
-  createLeafPane,
-  forEachPane,
-  getLeafPaneIds,
   removeControllerFromWorkspaces,
   removeSessionsFromWorkspaces,
   renameWindow,
 } from "../../../features/workspace";
-import {
-  buildTmuxPaneTree,
-  TMUX_PANE_CAPABILITIES,
-  tmuxEventStream,
-  type TmuxPaneGeometry,
-} from "../../../features/tmux/ports";
+import { tmuxEventStream } from "../../../features/tmux/ports";
 import { type TmuxControllerError } from "../../../features/tmux";
+import {
+  buildTmuxPaneSession,
+  buildTmuxWindow,
+  findControllerWorkspaceId,
+  mergeTmuxPaneMetadata,
+  type TmuxPaneGeometry,
+} from "./tmuxEventTransitions";
 
 interface TmuxEventBridgeOptions {
   setTerminals: Dispatch<SetStateAction<Terminal[]>>;
@@ -31,53 +30,6 @@ interface TmuxEventBridgeOptions {
   tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
   syncOpenTmuxSessions: () => void;
   tmuxControllersClosingRef: MutableRefObject<Set<number>>;
-}
-
-interface TmuxPaneSessionInfo {
-  id: number;
-  name: string;
-  tmuxPaneId: string;
-  tmuxSessionId: number;
-  configId?: string;
-  tmuxWindowId?: string;
-  tmuxSessionName?: string;
-  tmuxWindowName?: string;
-  tmuxWindowIndex?: number;
-  tmuxPaneIndex?: number;
-  tmuxPaneWidth?: number;
-  tmuxPaneHeight?: number;
-  tmuxPaneCommand?: string;
-  tmuxPaneActive?: boolean;
-}
-
-function buildTmuxPaneSession(info: TmuxPaneSessionInfo): Terminal {
-  return {
-    id: info.id,
-    configId: info.configId ?? "",
-    name: info.name,
-    type: "tmux-pane",
-    isConnected: true,
-    kind: {
-      type: "tmux-pane",
-      sessionId: info.tmuxSessionId,
-      paneId: info.tmuxPaneId,
-    },
-    tmuxPaneId: info.tmuxPaneId,
-    tmuxSessionId: info.tmuxSessionId,
-    ...(info.tmuxWindowId ? { tmuxWindowId: info.tmuxWindowId } : {}),
-    ...(info.tmuxSessionName ? { tmuxSessionName: info.tmuxSessionName } : {}),
-    ...(info.tmuxWindowName ? { tmuxWindowName: info.tmuxWindowName } : {}),
-    ...(info.tmuxWindowIndex !== undefined ? { tmuxWindowIndex: info.tmuxWindowIndex } : {}),
-    ...(info.tmuxPaneIndex !== undefined ? { tmuxPaneIndex: info.tmuxPaneIndex } : {}),
-    ...(info.tmuxPaneWidth !== undefined ? { tmuxPaneWidth: info.tmuxPaneWidth } : {}),
-    ...(info.tmuxPaneHeight !== undefined ? { tmuxPaneHeight: info.tmuxPaneHeight } : {}),
-    ...(info.tmuxPaneCommand ? { tmuxPaneCommand: info.tmuxPaneCommand } : {}),
-    ...(info.tmuxPaneActive !== undefined ? { tmuxPaneActive: info.tmuxPaneActive } : {}),
-    isHidden: false,
-    capabilities: TMUX_PANE_CAPABILITIES,
-    createdAt: Date.now(),
-    lastActivityAt: Date.now(),
-  };
 }
 
 export function useTmuxEventBridge({
@@ -170,17 +122,18 @@ export function useTmuxEventBridge({
                 terminals.map((terminal) =>
                   terminal.id === terminalId
                     ? {
-                        ...terminal,
+                        ...mergeTmuxPaneMetadata(terminal, {
+                          tmuxWindowId: parentTmuxWindowId,
+                          tmuxSessionName: sessionName,
+                          tmuxWindowName: windowName,
+                          tmuxWindowIndex: windowIndex,
+                          tmuxPaneIndex: paneIndex,
+                          tmuxPaneWidth: width,
+                          tmuxPaneHeight: height,
+                          tmuxPaneCommand: currentCommand,
+                          tmuxPaneActive: isActive,
+                        }),
                         tmuxPaneId,
-                        tmuxWindowId: parentTmuxWindowId,
-                        tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
-                        tmuxWindowName: windowName ?? terminal.tmuxWindowName,
-                        tmuxWindowIndex: windowIndex,
-                        tmuxPaneIndex: paneIndex,
-                        tmuxPaneWidth: width,
-                        tmuxPaneHeight: height,
-                        tmuxPaneCommand: currentCommand ?? terminal.tmuxPaneCommand,
-                        tmuxPaneActive: isActive ?? terminal.tmuxPaneActive,
                         kind: {
                           type: "tmux-pane",
                           sessionId: controllerId,
@@ -243,18 +196,17 @@ export function useTmuxEventBridge({
                 setTerminals((terminals) =>
                   terminals.map((terminal) =>
                     terminal.id === terminalId
-                      ? {
-                          ...terminal,
+                      ? mergeTmuxPaneMetadata(terminal, {
                           tmuxWindowId,
-                          tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
-                          tmuxWindowName: pane.windowName ?? terminal.tmuxWindowName,
+                          tmuxSessionName: sessionName,
+                          tmuxWindowName: pane.windowName,
                           tmuxWindowIndex: pane.windowIndex,
                           tmuxPaneIndex: pane.paneIndex,
                           tmuxPaneWidth: pane.width,
                           tmuxPaneHeight: pane.height,
-                          tmuxPaneCommand: pane.currentCommand ?? terminal.tmuxPaneCommand,
-                          tmuxPaneActive: pane.isActive ?? terminal.tmuxPaneActive,
-                        }
+                          tmuxPaneCommand: pane.currentCommand,
+                          tmuxPaneActive: pane.isActive,
+                        })
                       : terminal,
                   ),
                 );
@@ -291,41 +243,29 @@ export function useTmuxEventBridge({
               };
             });
 
-            const targetWorkspace = workspacesRef.current.find((workspace) =>
-              workspace.windows.some((window) => {
-                let belongsToController = false;
-                forEachPane(window.rootPane, (node) => {
-                  if (node.type !== "leaf" || node.terminalId === undefined) return;
-                  const terminal = terminalsRef.current.find(
-                    (candidate) => candidate.id === node.terminalId,
-                  );
-                  if (terminal?.tmuxSessionId === controllerId) {
-                    belongsToController = true;
-                  }
-                });
-                return belongsToController;
-              }),
-            );
-            const targetWorkspaceId = targetWorkspace?.id ?? workspacesRef.current[0]?.id;
+            const targetWorkspaceId =
+              findControllerWorkspaceId(
+                workspacesRef.current,
+                terminalsRef.current,
+                controllerId,
+              ) ?? workspacesRef.current[0]?.id;
             if (!targetWorkspaceId) return;
 
-            const rootPane =
-              buildTmuxPaneTree(layout, paneGeometries, configId) ??
-              createLeafPane(100, paneGeometries[0]?.terminalId, "");
-            const leafIds = getLeafPaneIds(rootPane);
             const windowName = name || `Window ${tmuxWindowId}`;
 
             setWorkspaces((workspaces) =>
               workspaces.map((workspace) => {
                 if (workspace.id !== targetWorkspaceId) return workspace;
-                return appendOrReplaceInitWindow(workspace, {
-                  id: crypto.randomUUID(),
-                  name: windowName,
-                  rootPane,
-                  activePaneId: leafIds[0] ?? null,
-                  windowType: "terminal",
-                  xstermWindowId,
-                });
+                return appendOrReplaceInitWindow(
+                  workspace,
+                  buildTmuxWindow({
+                    layout,
+                    panes: paneGeometries,
+                    configId,
+                    name: windowName,
+                    xstermWindowId,
+                  }),
+                );
               }),
             );
           },

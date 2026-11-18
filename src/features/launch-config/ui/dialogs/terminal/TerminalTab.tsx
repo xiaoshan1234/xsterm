@@ -1,8 +1,4 @@
-import type {
-  LocalTerminalConfig,
-  SshConfig,
-  TerminalDisplayConfig,
-} from "../../../../../features/terminal";
+import type { LocalTerminalConfig, SshConfig, TerminalDisplayConfig } from "../../../contracts";
 import { FormNumberField } from "../../../../../shared/ui/FormNumberField";
 import { FormRadioGroup } from "../../../../../shared/ui/FormRadioGroup";
 import { FormSelectField } from "../../../../../shared/ui/FormSelectField";

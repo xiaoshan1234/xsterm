@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
-import type { Workspace } from "../../../features/workspace";
+import type { EditablePaneNode, PaneSplitDirection } from "../contracts";
+import type { Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
 import { useTerminalRuntime } from "../../terminal";
 import { getPaneNumber } from "../application/paneTreeOperations";
@@ -332,7 +332,25 @@ export function Pane({
             </div>
           ) : (
             <PaneInitCard
-              onTerminalCreated={(terminal) => attachTerminalToPane(terminal.id)}
+              onAttachExistingTerminal={attachTerminalToPane}
+              onCreateLocal={(config, save) =>
+                paneIntents.createLocalTerminalForPane({
+                  workspaceId: workspace.id,
+                  windowId,
+                  paneId: pane.id,
+                  config,
+                  save,
+                })
+              }
+              onCreateSsh={(config, save) =>
+                paneIntents.createSshTerminalForPane({
+                  workspaceId: workspace.id,
+                  windowId,
+                  paneId: pane.id,
+                  config,
+                  save,
+                })
+              }
               onCreateFromSavedConfig={(configId) =>
                 paneIntents.attachSavedConfigToPane({
                   workspaceId: workspace.id,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Terminal } from "../../../features/terminal";
-import type { EditablePaneNode } from "../../../features/workspace";
-import type { Workspace } from "../../../features/workspace";
+import type { EditablePaneNode } from "../contracts";
+import type { Workspace } from "../contracts";
 import {
   collapseEmptySplits,
   collectSessionIdsFromPaneTree,

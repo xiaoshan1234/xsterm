@@ -16,10 +16,6 @@ import {
 } from "../ids";
 import { modelFailure, modelSuccess, type ModelResult } from "../result";
 
-/**
- * Stable user-selected pane identity. It survives a Terminal reconnect and can
- * be persisted by features such as the global command panel.
- */
 export type PaneTargetRef = RawPaneTargetRef | TmuxPaneTargetRef;
 
 export interface RawPaneTargetRef {
@@ -48,7 +44,6 @@ export interface CreateTmuxPaneTargetRefInput {
   tmuxPaneId: string;
 }
 
-/** Current backend endpoint used to write input for a selected pane. */
 export type TerminalStreamRef =
   | {
       readonly kind: "terminal";
@@ -110,7 +105,6 @@ export function createTmuxPaneTargetRef(
   }
 }
 
-/** Stable key for React lists, drafts, and persisted command jobs. */
 export function createPaneTargetKey(target: PaneTargetRef): string {
   return target.kind === "raw-pane"
     ? `raw:${target.workspaceId}:${target.windowId}:${target.paneId}`

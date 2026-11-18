@@ -1,5 +1,6 @@
 import type { Workspace } from "../../features/workspace";
 import { WorkspaceContainer } from "../../features/workspace";
+import { useTmuxWindowResize } from "./useTmuxWindowResize";
 
 interface RuntimeMainAreaProps {
   workspaces: Workspace[];
@@ -33,9 +34,14 @@ export function RuntimeMainArea({
             workspace.id === activeWorkspace.id ? "workspace-view--active" : ""
           }`}
         >
-          <WorkspaceContainer workspace={workspace} />
+          <RuntimeWorkspaceView workspace={workspace} />
         </div>
       ))}
     </div>
   );
+}
+
+function RuntimeWorkspaceView({ workspace }: { workspace: Workspace }) {
+  useTmuxWindowResize(workspace);
+  return <WorkspaceContainer workspace={workspace} />;
 }

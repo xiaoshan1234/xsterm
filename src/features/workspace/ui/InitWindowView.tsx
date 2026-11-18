@@ -1,6 +1,5 @@
-import { useWorkspaceLayout } from "../state/WorkspaceContext";
 import { usePaneIntents } from "../state/PaneIntentContext";
-import type { Workspace } from "../../../features/workspace";
+import type { Workspace } from "../contracts";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
 
@@ -10,14 +9,33 @@ interface InitWindowViewProps {
 }
 
 export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
-  const { replaceInitWindowWithTerminal } = useWorkspaceLayout();
   const paneIntents = usePaneIntents();
 
   return (
     <div className="init-window-view">
       <PaneInitCard
-        onTerminalCreated={(terminal) =>
-          replaceInitWindowWithTerminal(workspace.id, windowId, terminal)
+        onAttachExistingTerminal={(terminalId) =>
+          paneIntents.attachExistingTerminalToWindow({
+            workspaceId: workspace.id,
+            windowId,
+            terminalId,
+          })
+        }
+        onCreateLocal={(config, save) =>
+          paneIntents.createLocalTerminalForWindow({
+            workspaceId: workspace.id,
+            windowId,
+            config,
+            save,
+          })
+        }
+        onCreateSsh={(config, save) =>
+          paneIntents.createSshTerminalForWindow({
+            workspaceId: workspace.id,
+            windowId,
+            config,
+            save,
+          })
         }
         onCreateFromSavedConfig={(configId) =>
           paneIntents.createSavedConfigForWindow({

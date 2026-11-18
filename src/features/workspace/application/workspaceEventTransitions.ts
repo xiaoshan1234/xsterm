@@ -1,4 +1,4 @@
-import type { Window, Workspace } from "../../../features/workspace";
+import type { Window, Workspace } from "../contracts";
 import {
   collectSessionIdsFromPaneTree,
   findFirstLeafWithSession,

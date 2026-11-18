@@ -1,5 +1,5 @@
 import type { Terminal } from "../../../features/terminal";
-import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../../../features/workspace";
+import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../contracts";
 import { useSavedWindowActions } from "./useSavedWindowActions";
 import { useSavedWorkspaceActions } from "./useSavedWorkspaceActions";
 

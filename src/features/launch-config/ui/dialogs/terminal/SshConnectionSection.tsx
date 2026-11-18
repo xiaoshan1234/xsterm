@@ -1,4 +1,4 @@
-import type { SshConfig } from "../../../../../features/terminal";
+import type { SshConfig } from "../../../contracts";
 import { FormCheckboxField } from "../../../../../shared/ui/FormCheckboxField";
 import { FormNumberField } from "../../../../../shared/ui/FormNumberField";
 import { FormSelectField } from "../../../../../shared/ui/FormSelectField";

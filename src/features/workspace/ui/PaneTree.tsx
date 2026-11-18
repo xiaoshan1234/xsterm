@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
-import type { EditablePaneNode } from "../../../features/workspace";
-import type { Workspace } from "../../../features/workspace";
+import type { EditablePaneNode } from "../contracts";
+import type { Workspace } from "../contracts";
 import { useDragResize } from "../../../shared/hooks/useDragResize";
 import { Pane } from "./Pane";
 

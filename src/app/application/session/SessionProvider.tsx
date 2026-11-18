@@ -11,35 +11,50 @@ import {
   type TerminalRuntimeContextType,
   type WorkspaceLayoutContextType,
 } from "./types";
-import { useTerminalState } from "./useTerminalState";
+import { useSessionState } from "./useSessionState";
 import { useTerminalPersistence } from "./useTerminalPersistence";
 import { useTerminalActions } from "./useTerminalActions";
 import { useTauriListeners } from "./useTauriListeners";
 import { usePaneIntentActions } from "./usePaneIntentActions";
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const state = useTerminalState();
-  const persistence = useTerminalPersistence(state);
-  const actions = useTerminalActions({ ...state, ...persistence });
-  const paneIntents = usePaneIntentActions({ state, actions });
+  const state = useSessionState();
+  const persistence = useTerminalPersistence({
+    setSavedConfigs: state.launchConfig.setSavedConfigs,
+    setGroups: state.launchConfig.setGroups,
+    setNextGroupId: state.launchConfig.setNextGroupId,
+    setSavedWorkspaces: state.workspace.setSavedWorkspaces,
+    setSavedWindowConfigs: state.workspace.setSavedWindowConfigs,
+    setGlobalLocalEcho: state.preferences.setGlobalLocalEcho,
+    globalLocalEcho: state.preferences.globalLocalEcho,
+    nextGroupId: state.launchConfig.nextGroupId,
+  });
+  const actions = useTerminalActions({ state, persistence });
+  const paneIntents = usePaneIntentActions({
+    state: {
+      terminals: state.terminal.terminals,
+      workspaces: state.workspace.workspaces,
+    },
+    actions,
+  });
   useTauriListeners(state);
   const getTerminalSize = useCallback(
-    (terminalId: number) => state.terminalSizesRef.current.get(terminalId),
-    [state.terminalSizesRef],
+    (terminalId: number) => state.terminal.terminalSizesRef.current.get(terminalId),
+    [state.terminal.terminalSizesRef],
   );
 
   const preferences = useMemo<SessionPreferencesContextType>(
     () => ({
-      globalLocalEcho: state.globalLocalEcho,
-      setGlobalLocalEcho: state.setGlobalLocalEcho,
+      globalLocalEcho: state.preferences.globalLocalEcho,
+      setGlobalLocalEcho: state.preferences.setGlobalLocalEcho,
     }),
-    [state.globalLocalEcho, state.setGlobalLocalEcho],
+    [state.preferences.globalLocalEcho, state.preferences.setGlobalLocalEcho],
   );
 
   const savedLaunchConfigs = useMemo<SavedLaunchConfigsContextType>(
     () => ({
-      savedConfigs: state.savedConfigs,
-      groups: state.groups,
+      savedConfigs: state.launchConfig.savedConfigs,
+      groups: state.launchConfig.groups,
       saveConfigOnly: actions.saveConfigOnly,
       removeConfig: actions.removeConfig,
       addToGroup: actions.addToGroup,
@@ -52,8 +67,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       toggleGroup: actions.toggleGroup,
     }),
     [
-      state.savedConfigs,
-      state.groups,
+      state.launchConfig.savedConfigs,
+      state.launchConfig.groups,
       actions.saveConfigOnly,
       actions.removeConfig,
       actions.addToGroup,
@@ -69,10 +84,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const terminalRuntime = useMemo<TerminalRuntimeContextType>(
     () => ({
-      terminals: state.terminals,
-      terminalSizesVersion: state.terminalSizesVersion,
+      terminals: state.terminal.terminals,
+      terminalSizesVersion: state.terminal.terminalSizesVersion,
       getTerminalSize,
-      getEffectiveLocalEcho: state.getEffectiveLocalEcho,
+      getEffectiveLocalEcho: state.preferences.getEffectiveLocalEcho,
       createLocalSession: actions.createLocalSession,
       createSshSession: actions.createSshSession,
       createLocalSessionOnly: actions.createLocalSessionOnly,
@@ -88,10 +103,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       touchTerminalActivity: actions.touchTerminalActivity,
     }),
     [
-      state.terminals,
-      state.terminalSizesVersion,
+      state.terminal.terminals,
+      state.terminal.terminalSizesVersion,
       getTerminalSize,
-      state.getEffectiveLocalEcho,
+      state.preferences.getEffectiveLocalEcho,
       actions.createLocalSession,
       actions.createSshSession,
       actions.createLocalSessionOnly,
@@ -110,8 +125,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const tmuxRuntime = useMemo<TmuxRuntimeContextType>(
     () => ({
-      openTmuxSessions: state.openTmuxSessions,
-      tmuxControllerErrors: state.tmuxControllerErrors,
+      openTmuxSessions: state.tmux.openTmuxSessions,
+      tmuxControllerErrors: state.tmux.tmuxControllerErrors,
       createTmuxSession: actions.createTmuxSession,
       attachTmuxSession: actions.attachTmuxSession,
       detachTmuxSession: actions.detachTmuxSession,
@@ -120,8 +135,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       dismissTmuxControllerError: actions.dismissTmuxControllerError,
     }),
     [
-      state.openTmuxSessions,
-      state.tmuxControllerErrors,
+      state.tmux.openTmuxSessions,
+      state.tmux.tmuxControllerErrors,
       actions.createTmuxSession,
       actions.attachTmuxSession,
       actions.detachTmuxSession,
@@ -132,10 +147,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const workspaceLayout = useMemo<WorkspaceLayoutContextType>(
     () => ({
-      workspaces: state.workspaces,
-      activeWorkspaceId: state.activeWorkspaceId,
-      savedWorkspaces: state.savedWorkspaces,
-      savedWindowConfigs: state.savedWindowConfigs,
+      workspaces: state.workspace.workspaces,
+      activeWorkspaceId: state.workspace.activeWorkspaceId,
+      savedWorkspaces: state.workspace.savedWorkspaces,
+      savedWindowConfigs: state.workspace.savedWindowConfigs,
       createWorkspaceFromSession: actions.createWorkspaceFromSession,
       createWindowFromSession: actions.createWindowFromSession,
       createWindowFromSavedConfig: actions.createWindowFromSavedConfig,
@@ -165,10 +180,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       closePane: actions.closePane,
     }),
     [
-      state.workspaces,
-      state.activeWorkspaceId,
-      state.savedWorkspaces,
-      state.savedWindowConfigs,
+      state.workspace.workspaces,
+      state.workspace.activeWorkspaceId,
+      state.workspace.savedWorkspaces,
+      state.workspace.savedWindowConfigs,
       actions.createWorkspaceFromSession,
       actions.createWindowFromSession,
       actions.createWindowFromSavedConfig,

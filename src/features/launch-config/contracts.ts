@@ -117,6 +117,12 @@ export interface TerminalGroup {
   collapsed: boolean;
 }
 
+export interface CreatedTerminalRef {
+  id: number;
+  configId: string;
+  name: string;
+}
+
 export interface SavedLaunchConfigsContextType {
   savedConfigs: SavedTerminalConfig[];
   groups: TerminalGroup[];

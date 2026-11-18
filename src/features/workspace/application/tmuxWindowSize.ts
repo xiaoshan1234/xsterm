@@ -1,4 +1,4 @@
-import type { EditablePaneNode } from "../../../features/workspace";
+import type { EditablePaneNode } from "../contracts";
 
 export interface TerminalSize {
   rows: number;

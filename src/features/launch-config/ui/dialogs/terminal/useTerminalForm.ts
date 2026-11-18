@@ -1,9 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type {
-  LocalTerminalConfig,
-  SshConfig,
-  TerminalDisplayConfig,
-} from "../../../../../features/terminal";
+import type { LocalTerminalConfig, SshConfig, TerminalDisplayConfig } from "../../../contracts";
 import { type SectionId } from "./terminalDialogItems";
 
 export interface UseSessionFormOptions {

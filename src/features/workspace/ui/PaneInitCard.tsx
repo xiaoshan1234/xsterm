@@ -1,26 +1,30 @@
 import { useRef, useState } from "react";
-import { useTerminalRuntime } from "../../terminal";
-import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
+import type { CreatedTerminalRef, LocalTerminalConfig, SshConfig } from "../../launch-config";
 import { isApplicationError } from "../../../models/applicationError";
 import { PlusIcon, FolderOpenIcon } from "../../../shared/icons/Icon";
+import { useApplicationFeedback } from "../../../shared/ui/ApplicationFeedbackContext";
 import { CreateTerminalDialog } from "../../launch-config";
 import { SelectTerminalDialog } from "./dialogs/SelectTerminalDialog";
 import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {
-  onTerminalCreated: (terminal: Terminal) => void | Promise<void>;
+  onAttachExistingTerminal: (terminalId: number) => Promise<void>;
+  onCreateLocal: (config: LocalTerminalConfig, save: boolean) => Promise<CreatedTerminalRef>;
+  onCreateSsh: (config: SshConfig, save: boolean) => Promise<CreatedTerminalRef>;
   onCreateFromSavedConfig: (configId: string) => Promise<void>;
   title?: string;
   subtitle?: string;
 }
 
 export function PaneInitCard({
-  onTerminalCreated,
+  onAttachExistingTerminal,
+  onCreateLocal,
+  onCreateSsh,
   onCreateFromSavedConfig,
   title = "Create a terminal",
   subtitle = "Create new or open a saved terminal",
 }: PaneInitCardProps) {
-  const { terminals, createLocalSessionOnly, createSshSessionOnly } = useTerminalRuntime();
+  const feedback = useApplicationFeedback();
   const [createDialogTab, setCreateDialogTab] = useState<"local" | "ssh" | null>(null);
   const [showSelectDialog, setShowSelectDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,42 +42,35 @@ export function PaneInitCard({
     setIsSubmitting(false);
   };
 
-  const handleCreate = async (create: () => Promise<Terminal>): Promise<Terminal> => {
-    const terminal = await create();
+  const handleCreate = async <Result,>(create: () => Promise<Result>): Promise<Result> => {
     try {
-      await onTerminalCreated(terminal);
+      return await create();
     } catch (e) {
       if (isApplicationError(e, "terminal-already-attached")) {
-        window.alert("Terminal is already used in another window");
+        feedback.reportError("Terminal already attached", e);
       } else {
-        throw e;
+        feedback.reportError("Unable to create terminal", e);
       }
+      throw e;
     }
-    return terminal;
   };
 
   const handleCreateLocal = (config: LocalTerminalConfig, save: boolean) =>
-    handleCreate(() => createLocalSessionOnly(config, save));
+    handleCreate(() => onCreateLocal(config, save));
 
   const handleCreateSsh = (config: SshConfig, save: boolean) =>
-    handleCreate(() => createSshSessionOnly(config, save));
+    handleCreate(() => onCreateSsh(config, save));
 
   const handleSelectSession = async (terminalId: number) => {
     if (!startSubmitting()) return;
-    const terminal = terminals.find((s) => s.id === terminalId);
-    if (!terminal) {
-      endSubmitting();
-      return;
-    }
-
     try {
-      await onTerminalCreated(terminal);
+      await onAttachExistingTerminal(terminalId);
       setShowSelectDialog(false);
     } catch (e) {
       if (isApplicationError(e, "terminal-already-attached")) {
-        window.alert("Terminal is already used in another window");
+        feedback.reportError("Terminal already attached", e);
       } else {
-        window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);
+        feedback.reportError("Unable to attach terminal", e);
       }
     } finally {
       endSubmitting();
@@ -87,9 +84,9 @@ export function PaneInitCard({
       setShowSelectDialog(false);
     } catch (e) {
       if (isApplicationError(e, "terminal-already-attached")) {
-        window.alert("Terminal is already used in another window");
+        feedback.reportError("Terminal already attached", e);
       } else {
-        window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);
+        feedback.reportError("Unable to create terminal", e);
       }
     } finally {
       endSubmitting();

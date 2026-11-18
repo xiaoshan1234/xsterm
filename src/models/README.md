@@ -1,53 +1,12 @@
-# Frontend Domain Models
+# Models
 
-This directory contains pure frontend domain models. It must not import from
-`app`, `features`, `infra`, `shared`, React, Tauri, the DOM, or the store.
+`src/models` contains small, framework-independent primitives shared by
+features:
 
-## Core concepts
+- application error codes
+- branded identifiers
+- result types
 
-- `Terminal` is one local or SSH terminal stream. It owns exactly one
-  terminal surface, one resolved display configuration, and can be attached to
-  one pane at a time.
-- `TmuxController` is one tmux control connection. It owns tmux windows and
-  panes, including their layout.
-- `Workspace` owns user-visible window order and layout references. It does not
-  own backend connections.
-- `TmuxWindowReference` links a workspace tab to a window owned by a
-  `TmuxController`.
-- `PaneTargetRef` identifies a user-selected pane independently from the
-  current backend terminal stream.
-
-## Layout boundaries
-
-- `RawWindow` can contain local and SSH `Terminal` references.
-- `TmuxWindowReference` cannot contain direct terminal references.
-- tmux panes only appear inside their owning `TmuxController`.
-
-These boundaries are represented by discriminated unions so that invalid
-mixtures cannot be expressed in TypeScript.
-
-## Persistence
-
-`WorkspaceSnapshot` is intentionally separate from `Workspace`. Snapshots store
-launch config ids, not runtime terminal or tmux controller ids.
-
-Launch configuration is also split by concern:
-
-- `LocalTerminalLaunchConfig` owns shell arguments and environment variables.
-- `SshTerminalLaunchConfig` owns the full `SshConnectionConfig`, including
-  authentication and connection tuning.
-- `SavedLaunchConfig` stores display overrides separately from the launch
-  configuration.
-
-Runtime `TerminalTransport` only keeps the public SSH connection summary. It
-must not contain passwords, private-key passphrases, or other credentials.
-SSH authentication stores credential ids, not secret values.
-
-Workspace snapshots are parsed through `parseWorkspaceSnapshot` before use.
-The version field is enforced and nested pane/window ids are validated.
-
-## Dependency rule
-
-Models may import each other within `models`, but must not depend on any upper
-application layer. Infrastructure DTOs are converted into these models by the
-owning feature.
+Runtime projections and feature-specific schemas belong to the owning feature
+under `features/<name>/contracts.ts`. Do not introduce a parallel aggregate
+universe here unless production adapters create and consume it.

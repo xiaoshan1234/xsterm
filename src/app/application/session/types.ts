@@ -1,8 +1,13 @@
-import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from "react";
+import type { ReactNode } from "react";
 import type { SavedLaunchConfigsContextType } from "../../../features/launch-config";
+import type { LaunchConfigState } from "../../../features/launch-config/composition";
 import type { SessionPreferencesContextType } from "../../../features/settings";
+import type { TerminalPreferencesState } from "../../../features/settings";
 import type { TerminalRuntimeContextType } from "../../../features/terminal";
+import type { TerminalSessionState } from "../../../features/terminal/composition";
+import type { TmuxRuntimeState } from "../../../features/tmux/composition";
 import type { PaneTerminalRef, WorkspaceLayoutContextType } from "../../../features/workspace";
+import type { WorkspaceState } from "../../../features/workspace/composition";
 import type {
   LocalTerminalConfig,
   SshConfig,
@@ -18,9 +23,6 @@ import type {
   Window,
   Workspace,
 } from "../../../features/workspace";
-import type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
-
-export type { OpenTmuxSession, TmuxControllerError } from "../../../features/tmux";
 export type {
   SavedLaunchConfigsContextType,
   SessionPreferencesContextType,
@@ -28,69 +30,12 @@ export type {
   WorkspaceLayoutContextType,
 };
 
-export type SetSavedConfigs = Dispatch<SetStateAction<SavedTerminalConfig[]>>;
-export type SetSessions = Dispatch<SetStateAction<Terminal[]>>;
-export type SetWorkspaces = Dispatch<SetStateAction<Workspace[]>>;
-export type SetSavedWorkspaces = Dispatch<SetStateAction<SavedWorkspace[]>>;
-export type SetSavedWindowConfigs = Dispatch<SetStateAction<SavedWindowConfig[]>>;
-export type SetGroups = Dispatch<SetStateAction<TerminalGroup[]>>;
-
-export interface TerminalState {
-  savedConfigs: SavedTerminalConfig[];
-  setSavedConfigs: SetSavedConfigs;
-  terminals: Terminal[];
-  setSessions: SetSessions;
-  workspaces: Workspace[];
-  setWorkspaces: SetWorkspaces;
-  activeWorkspaceId: string | null;
-  setActiveWorkspaceId: Dispatch<SetStateAction<string | null>>;
-  savedWorkspaces: SavedWorkspace[];
-  setSavedWorkspaces: SetSavedWorkspaces;
-  savedWindowConfigs: SavedWindowConfig[];
-  setSavedWindowConfigs: SetSavedWindowConfigs;
-  groups: TerminalGroup[];
-  setGroups: SetGroups;
-  nextGroupId: number;
-  setNextGroupId: Dispatch<SetStateAction<number>>;
-  globalLocalEcho: boolean;
-  setGlobalLocalEcho: Dispatch<SetStateAction<boolean>>;
-  sessionLocalEchoOverrides: Map<number, boolean>;
-  terminalsRef: MutableRefObject<Terminal[]>;
-  workspacesRef: MutableRefObject<Workspace[]>;
-  establishingSessionsRef: MutableRefObject<Set<number>>;
-  getEffectiveLocalEcho: (terminalId: number) => boolean;
-  /**
-   * pending tmux-controller errors keyed by `controllerId`.
-   * Populated by the `tmux-controller-exit` listener; the retry
-   * banner reads it to render the Retry / Dismiss affordances.
-   */
-  tmuxControllerErrors: Map<number, TmuxControllerError>;
-  setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
-  /**
-   * `controllerId → TmuxSessionConfig` map. Populated by
-   * `attachTmuxSession` so the retry banner
-   * can re-call the backend with the same config. Survives pane
-   * teardown so the banner can still retry after the `Terminal`
-   * rows are gone.
-   */
-  tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
-  /** tmux session identities with an attach/create request currently in flight. */
-  pendingTmuxSessionKeysRef: MutableRefObject<Set<string>>;
-  /**
-   * `controllerId` -> `configId` map. Populated by `attachTmuxSession` so
-   * event-driven tmux panes can be linked back to their saved config.
-   */
-  tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
-  /** React-visible snapshot of the controller maps used by the tmux Manager. */
-  openTmuxSessions: OpenTmuxSession[];
-  syncOpenTmuxSessions: () => void;
-  /** Controllers intentionally detached/closed; suppresses retry banners. */
-  tmuxControllersClosingRef: MutableRefObject<Set<number>>;
-  /** Last fitted xterm dimensions per terminal. */
-  terminalSizesRef: MutableRefObject<Map<number, { rows: number; cols: number }>>;
-  /** Bumped whenever a terminal reports a new fitted size. */
-  terminalSizesVersion: number;
-  reportTerminalSize: (terminalId: number, rows: number, cols: number) => void;
+export interface SessionState {
+  launchConfig: LaunchConfigState;
+  terminal: TerminalSessionState;
+  tmux: TmuxRuntimeState;
+  workspace: WorkspaceState;
+  preferences: TerminalPreferencesState;
 }
 
 export interface SessionPersistence {

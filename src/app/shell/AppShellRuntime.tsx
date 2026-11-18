@@ -28,6 +28,7 @@ import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
 import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
+import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
 
 export function AppShellRuntime() {
   const { terminals, writeTerminal, getTerminalSize } = useTerminalRuntime();
@@ -310,53 +311,64 @@ export function AppShellRuntime() {
     />
   );
 
+  const feedback = useMemo(
+    () => ({
+      reportError: showError,
+    }),
+    [showError],
+  );
+
   return (
-    <AppShell
-      activeTool={activeTool}
-      navBar={
-        <NavBar
-          terminalItems={(terminalManagerGroups[0]?.items ?? []).map((terminal) => ({
-            configId: terminal.configId,
-            name: terminal.name,
-          }))}
-          workspaces={workspaces.map((workspace) => workspace.name)}
-          workspaceName={activeWorkspace?.name ?? "No workspace"}
-          isTextSenderOpen={isTextSenderOpen}
-          onSelectWorkspace={(workspaceName) => {
-            const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
-            if (workspace) setActiveWorkspace(workspace.id);
-          }}
-          onCloseWorkspace={(workspaceName) => {
-            const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
-            if (workspace) closeWorkspace(workspace.id);
-          }}
-          onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
-          onHelpAction={setHelpDialog}
-          onOpenTerminal={openConfig}
-        />
-      }
-      toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}
-      toolPanelContent={toolPanelContent}
-      mainArea={
-        <RuntimeMainArea
-          workspaces={workspaces}
-          activeWorkspace={activeWorkspace}
-          onCreateWorkspace={createDefaultWorkspace}
-        />
-      }
-      textSender={
-        <GlobalTextSender
-          targets={textSenderTargets}
-          selectedTargetId={selectedTargetKey}
-          onSelectTarget={setSelectedTargetKey}
-          onSend={sendTextToTarget}
-        />
-      }
-      overlay={overlay}
-      runtimeStatus={runtimeStatus}
-      isTextSenderOpen={isTextSenderOpen}
-      isInteractionBlocked={error !== null}
-      onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}
-    />
+    <ApplicationFeedbackProvider value={feedback}>
+      <AppShell
+        activeTool={activeTool}
+        navBar={
+          <NavBar
+            terminalItems={(terminalManagerGroups[0]?.items ?? []).map((terminal) => ({
+              configId: terminal.configId,
+              name: terminal.name,
+            }))}
+            workspaces={workspaces.map((workspace) => workspace.name)}
+            workspaceName={activeWorkspace?.name ?? "No workspace"}
+            isTextSenderOpen={isTextSenderOpen}
+            onSelectWorkspace={(workspaceName) => {
+              const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
+              if (workspace) setActiveWorkspace(workspace.id);
+            }}
+            onCloseWorkspace={(workspaceName) => {
+              const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
+              if (workspace) closeWorkspace(workspace.id);
+            }}
+            onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
+            onHelpAction={setHelpDialog}
+            onOpenTerminal={openConfig}
+          />
+        }
+        toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}
+        toolPanelContent={toolPanelContent}
+        mainArea={
+          <RuntimeMainArea
+            workspaces={workspaces}
+            activeWorkspace={activeWorkspace}
+            onCreateWorkspace={createDefaultWorkspace}
+          />
+        }
+        textSender={
+          <GlobalTextSender
+            targets={textSenderTargets}
+            selectedTargetId={selectedTargetKey}
+            onSelectTarget={setSelectedTargetKey}
+            onSend={sendTextToTarget}
+          />
+        }
+        overlay={overlay}
+        runtimeStatus={runtimeStatus}
+        isTextSenderOpen={isTextSenderOpen}
+        isInteractionBlocked={error !== null}
+        onSelectTool={(tool) =>
+          setActiveTool((currentTool) => (currentTool === tool ? null : tool))
+        }
+      />
+    </ApplicationFeedbackProvider>
   );
 }
