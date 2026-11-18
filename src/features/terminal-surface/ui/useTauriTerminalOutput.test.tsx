@@ -4,30 +4,31 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { type Terminal } from "@xterm/xterm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
+import { createTestApplication } from "../../../test/createTestApplication";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
 
 const mocks = vi.hoisted(() => ({
   subscribeTerminalOutput: vi.fn(),
 }));
 
-vi.mock("../../terminal", () => ({
-  useTerminalRuntime: () => ({
+const testApplication = createTestApplication({
+  terminal: {
     touchTerminalActivity: vi.fn(),
     terminals: [],
-  }),
-  terminalStreamActions: {
+  },
+});
+
+const outputPorts = {
+  stream: {
     subscribeOutput: mocks.subscribeTerminalOutput,
   },
-  terminalClipboard: {
+  clipboard: {
     writeText: vi.fn(async () => undefined),
   },
-}));
-
-vi.mock("../../tmux", () => ({
-  tmuxControllerActions: {
+  tmux: {
     capturePane: vi.fn(async () => ""),
   },
-}));
+};
 
 afterEach(() => {
   cleanup();
@@ -46,7 +47,9 @@ describe("useTauriTerminalOutput", () => {
     const write = vi.fn();
     const xterm = { write } as unknown as Terminal;
 
-    renderHook(() => useTauriTerminalOutput({ current: xterm }, 42));
+    renderHook(() => useTauriTerminalOutput({ current: xterm }, 42, outputPorts), {
+      wrapper: testApplication.Application,
+    });
 
     await waitFor(() => expect(write).toHaveBeenCalled());
     expect(write.mock.calls.map(([text]) => text)).toEqual(["prompt $ "]);

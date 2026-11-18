@@ -17,15 +17,16 @@ import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { useTerminalResize } from "./useTerminalResize";
 import type { TerminalDisplayConfig } from "../../../models/runtime/terminal";
+import { createTestApplication } from "../../../test/createTestApplication";
 
 const resizeTerminalMock = vi.fn(async (_id: number, _rows: number, _cols: number) => {});
 const reportTerminalSizeMock = vi.fn();
-vi.mock("../../terminal", () => ({
-  useTerminalRuntime: () => ({
+const testApplication = createTestApplication({
+  terminal: {
     resizeTerminal: resizeTerminalMock,
     reportTerminalSize: reportTerminalSizeMock,
-  }),
-}));
+  },
+});
 
 interface XTermStub {
   cols: number;
@@ -143,7 +144,11 @@ describe("useTerminalResize", () => {
   it("auto mode: ResizeObserver fires → after 150ms debounce, fit + resizeTerminal(rows=24, cols=80) are called", async () => {
     vi.useFakeTimers();
     const { Host, exposed } = buildHarness({ sizingMode: "auto" });
-    render(<Host />);
+    render(
+      <testApplication.Application>
+        <Host />
+      </testApplication.Application>,
+    );
 
     expect(observers.length).toBeGreaterThan(0);
 
@@ -159,7 +164,11 @@ describe("useTerminalResize", () => {
   it("fixed mode: ResizeObserver fires → after 150ms, NEITHER fit NOR resizeTerminal is called", async () => {
     vi.useFakeTimers();
     const { Host, exposed } = buildHarness({ sizingMode: "fixed", cols: 100, rows: 30 });
-    render(<Host />);
+    render(
+      <testApplication.Application>
+        <Host />
+      </testApplication.Application>,
+    );
 
     await act(async () => {
       observers[0].cb([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
@@ -172,7 +181,11 @@ describe("useTerminalResize", () => {
 
   it('sizingMode "auto" → "fixed" with cols=100/rows=30 → xterm.resize(100,30) + resizeTerminal(rows=30, cols=100)', async () => {
     const { Host, exposed } = buildHarness({ sizingMode: "auto" });
-    render(<Host />);
+    render(
+      <testApplication.Application>
+        <Host />
+      </testApplication.Application>,
+    );
 
     await act(async () => {
       exposed.setDisplayConfig({ sizingMode: "fixed", cols: 100, rows: 30 });
@@ -184,7 +197,11 @@ describe("useTerminalResize", () => {
 
   it('sizingMode "fixed" → "auto" → fit + resizeTerminal(current xterm dims: rows=24, cols=80)', async () => {
     const { Host, exposed } = buildHarness({ sizingMode: "fixed", cols: 100, rows: 30 });
-    render(<Host />);
+    render(
+      <testApplication.Application>
+        <Host />
+      </testApplication.Application>,
+    );
 
     await act(async () => {
       exposed.setDisplayConfig({ sizingMode: "auto" });
@@ -196,14 +213,22 @@ describe("useTerminalResize", () => {
 
   it("skip when isWindowActive === false", () => {
     const { Host, exposed } = buildHarness({ sizingMode: "auto" }, { isWindowActive: false });
-    render(<Host />);
+    render(
+      <testApplication.Application>
+        <Host />
+      </testApplication.Application>,
+    );
 
     expect(exposed.resizeTerminalCalls).toEqual([]);
   });
 
   it("skip when container.offsetHeight === 0", () => {
     const { Host, exposed } = buildHarness({ sizingMode: "auto" }, { containerHeight: 0 });
-    render(<Host />);
+    render(
+      <testApplication.Application>
+        <Host />
+      </testApplication.Application>,
+    );
 
     expect(exposed.resizeTerminalCalls).toEqual([]);
   });

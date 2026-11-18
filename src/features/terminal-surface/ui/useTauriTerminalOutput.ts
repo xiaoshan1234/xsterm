@@ -19,6 +19,18 @@ const replayedTerminalByXterm = new WeakMap<XTerm, number>();
 
 const SCROLLBACK_LINES = 2000;
 
+export interface TerminalOutputPorts {
+  stream: Pick<typeof terminalStreamActions, "subscribeOutput">;
+  clipboard: Pick<typeof terminalClipboard, "writeText">;
+  tmux: Pick<typeof tmuxControllerActions, "capturePane">;
+}
+
+const DEFAULT_OUTPUT_PORTS: TerminalOutputPorts = {
+  stream: terminalStreamActions,
+  clipboard: terminalClipboard,
+  tmux: tmuxControllerActions,
+};
+
 function decodeOutput(data: Uint8Array): string {
   return new TextDecoder().decode(data);
 }
@@ -36,7 +48,10 @@ function decodeBase64Utf8(encoded: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-function extractAndCopyOsc52(text: string): string {
+function extractAndCopyOsc52(
+  text: string,
+  writeClipboard: TerminalOutputPorts["clipboard"]["writeText"],
+): string {
   // Fast skip: most PTY output has no OSC52; avoid regex alloc. See Perf 007.
   if (text.indexOf("\x1b]52;") === -1) return text;
   const matches = text.matchAll(OSC52_REGEX);
@@ -45,7 +60,7 @@ function extractAndCopyOsc52(text: string): string {
     if (!encoded || encoded.length === 0) continue;
     try {
       const decoded = decodeBase64Utf8(encoded);
-      void terminalClipboard.writeText(decoded).catch((err) => {
+      void writeClipboard(decoded).catch((err) => {
         console.error("[xsterm] Failed to write OSC52 selection to clipboard:", err);
       });
     } catch (err) {
@@ -55,7 +70,11 @@ function extractAndCopyOsc52(text: string): string {
   return text.replace(OSC52_REGEX, "");
 }
 
-export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, terminalId: number): void {
+export function useTauriTerminalOutput(
+  termRef: RefObject<XTerm | null>,
+  terminalId: number,
+  ports: TerminalOutputPorts = DEFAULT_OUTPUT_PORTS,
+): void {
   const { touchTerminalActivity, terminals } = useTerminalRuntime();
   const replayStateRef = useRef<{ terminalId: number; promise: Promise<void> } | null>(null);
   // tmux scrollback replay applies only to tmux-backed panes.
@@ -71,7 +90,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
     replayedTerminalByXterm.set(xterm, terminalId);
 
     const replayTerminalId = terminalId;
-    const replayPromise = tmuxControllerActions
+    const replayPromise = ports.tmux
       .capturePane(terminalId, SCROLLBACK_LINES)
       .then((text) => {
         if (!text || replayedTerminalByXterm.get(xterm) !== replayTerminalId) return;
@@ -85,7 +104,7 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
         console.error("[xsterm] captureTmuxPane failed:", err);
       });
     replayStateRef.current = { terminalId, promise: replayPromise };
-  }, [isTmuxPane, terminalId, termRef]);
+  }, [isTmuxPane, ports, terminalId, termRef]);
 
   // Raw-byte output path: the frontend hands the backend a Tauri `Channel`,
   // and the Rust forwarder pushes coalesced bytes through it as raw binary.
@@ -129,9 +148,9 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
         // Snapshot history before subscribing. Anything arriving during the
         // subscription call is delivered live and must not be replayed again.
         bufferBeforeSubscribe = getTerminalOutput(terminalId);
-        return terminalStreamActions.subscribeOutput(terminalId, (data) => {
+        return ports.stream.subscribeOutput(terminalId, (data) => {
           if (!listenerActive) return;
-          handleOutput(extractAndCopyOsc52(decodeOutput(data)));
+          handleOutput(extractAndCopyOsc52(decodeOutput(data), ports.clipboard.writeText));
         });
       })
       .then((fn) => {
@@ -160,5 +179,5 @@ export function useTauriTerminalOutput(termRef: RefObject<XTerm | null>, termina
       listenerActive = false;
       unlisten?.();
     };
-  }, [isTmuxPane, termRef, terminalId, touchTerminalActivity]);
+  }, [isTmuxPane, ports, termRef, terminalId, touchTerminalActivity]);
 }
