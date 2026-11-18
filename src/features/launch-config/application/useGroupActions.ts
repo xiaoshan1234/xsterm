@@ -1,6 +1,14 @@
 import { useCallback } from "react";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../models/legacy/terminal";
-import { DEFAULT_GROUP_ID } from "../../launch-config";
+import {
+  addConfigToGroup,
+  addGroup,
+  deleteGroup as deleteGroupFromList,
+  moveConfigToGroup as moveConfigToGroupInList,
+  removeConfigFromGroup,
+  renameGroup as renameGroupInList,
+  toggleGroup as toggleGroupInList,
+} from "./groupOperations";
 
 interface UseGroupActionsDeps {
   nextGroupId: number;
@@ -16,68 +24,49 @@ export function useGroupActions(deps: UseGroupActionsDeps) {
     (name: string) => {
       const id = nextGroupId;
       setNextGroupId((prev) => prev + 1);
-      updateGroups((prev) => [...prev, { id, name, configIds: [], collapsed: false }], id + 1);
+      updateGroups((prev) => addGroup(prev, id, name), id + 1);
     },
     [nextGroupId, setNextGroupId, updateGroups],
   );
 
   const deleteGroup = useCallback(
     (id: number) => {
-      if (id === DEFAULT_GROUP_ID) return;
-      updateGroups((prev) => prev.filter((g) => g.id !== id));
+      updateGroups((prev) => deleteGroupFromList(prev, id));
     },
     [updateGroups],
   );
 
   const addToGroup = useCallback(
     (groupId: number, configId: string) => {
-      updateGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g)),
-      );
+      updateGroups((prev) => addConfigToGroup(prev, groupId, configId));
     },
     [updateGroups],
   );
 
   const removeFromGroup = useCallback(
     (groupId: number, configId: string) => {
-      updateGroups((prev) =>
-        prev.map((g) =>
-          g.id === groupId ? { ...g, configIds: g.configIds.filter((cid) => cid !== configId) } : g,
-        ),
-      );
+      updateGroups((prev) => removeConfigFromGroup(prev, groupId, configId));
     },
     [updateGroups],
   );
 
   const moveConfigToGroup = useCallback(
     (configId: string, groupId: number | null) => {
-      updateGroups((prev) =>
-        prev.map((g) => ({
-          ...g,
-          configIds: g.configIds.filter((id) => id !== configId),
-        })),
-      );
-      if (groupId !== null) {
-        updateGroups((prev) =>
-          prev.map((g) => (g.id === groupId ? { ...g, configIds: [...g.configIds, configId] } : g)),
-        );
-      }
+      updateGroups((prev) => moveConfigToGroupInList(prev, configId, groupId));
     },
     [updateGroups],
   );
 
   const renameGroup = useCallback(
     (id: number, name: string) => {
-      updateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name } : g)));
+      updateGroups((prev) => renameGroupInList(prev, id, name));
     },
     [updateGroups],
   );
 
   const toggleGroup = useCallback(
     (id: number) => {
-      updateGroups((prev) =>
-        prev.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)),
-      );
+      updateGroups((prev) => toggleGroupInList(prev, id));
     },
     [updateGroups],
   );

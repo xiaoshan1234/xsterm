@@ -1,12 +1,5 @@
 import { useCallback, useEffect } from "react";
-import {
-  DEFAULT_GROUP_ID,
-  DEFAULT_GROUP_NAME,
-  loadSavedConfigs,
-  loadSavedGroups,
-  persistConfigs,
-  persistGroups,
-} from "../../launch-config";
+import { useLaunchConfigPersistence } from "../../launch-config";
 import * as terminalStorage from "../persistence/terminalStorage";
 import {
   type SavedTerminalConfig,
@@ -43,6 +36,13 @@ export function useTerminalPersistence({
   globalLocalEcho,
   nextGroupId,
 }: UseSessionPersistenceOptions): SessionPersistence {
+  const launchConfigPersistence = useLaunchConfigPersistence({
+    setSavedConfigs,
+    setGroups,
+    setNextGroupId,
+    nextGroupId,
+  });
+
   const persistSavedWorkspaces = useCallback((workspacesData: SavedWorkspace[]) => {
     terminalStorage.persistWorkspaces(workspacesData);
   }, []);
@@ -51,51 +51,12 @@ export function useTerminalPersistence({
     terminalStorage.persistWindowConfigs(configs);
   }, []);
 
-  const updateConfigs = useCallback(
-    (updater: (prev: SavedTerminalConfig[]) => SavedTerminalConfig[]) => {
-      setSavedConfigs((prev) => {
-        const updated = updater(prev);
-        persistConfigs(updated);
-        return updated;
-      });
-    },
-    [setSavedConfigs],
-  );
-
-  const updateGroups = useCallback(
-    (updater: (prev: TerminalGroup[]) => TerminalGroup[], nextId?: number) => {
-      setGroups((prev) => {
-        const updated = updater(prev);
-        persistGroups({ groups: updated, nextGroupId: nextId ?? nextGroupId });
-        return updated;
-      });
-    },
-    [nextGroupId, setGroups],
-  );
-
   useEffect(() => {
     const init = async () => {
-      const [configs, savedGroups, workspacesData, windowConfigs] = await Promise.all([
-        loadSavedConfigs(),
-        loadSavedGroups(),
+      const [workspacesData, windowConfigs] = await Promise.all([
         terminalStorage.loadSavedWorkspaces(),
         terminalStorage.loadSavedWindowConfigs(),
       ]);
-      setSavedConfigs(configs);
-      if (savedGroups.groups.some((g) => g.id === DEFAULT_GROUP_ID)) {
-        setGroups(savedGroups.groups);
-      } else {
-        setGroups([
-          {
-            id: DEFAULT_GROUP_ID,
-            name: DEFAULT_GROUP_NAME,
-            configIds: [],
-            collapsed: false,
-          },
-          ...savedGroups.groups,
-        ]);
-      }
-      setNextGroupId(savedGroups.nextGroupId);
       setSavedWorkspaces(workspacesData);
       setSavedWindowConfigs(windowConfigs);
 
@@ -110,14 +71,7 @@ export function useTerminalPersistence({
       }
     };
     init();
-  }, [
-    setSavedConfigs,
-    setGroups,
-    setNextGroupId,
-    setSavedWorkspaces,
-    setSavedWindowConfigs,
-    setGlobalLocalEcho,
-  ]);
+  }, [setSavedWorkspaces, setSavedWindowConfigs, setGlobalLocalEcho]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,5 +92,9 @@ export function useTerminalPersistence({
     };
   }, [globalLocalEcho]);
 
-  return { updateConfigs, updateGroups, persistSavedWorkspaces, persistSavedWindowConfigs };
+  return {
+    ...launchConfigPersistence,
+    persistSavedWorkspaces,
+    persistSavedWindowConfigs,
+  };
 }

@@ -16,7 +16,7 @@ import {
   dispatchByType,
   getUniqueWindowName,
 } from "./useTerminalActions.helpers";
-import { useGroupActions } from "./useGroupActions";
+import { useGroupActions } from "../../launch-config";
 import { usePaneActions } from "./usePaneActions";
 import { usePersistenceActions } from "./usePersistenceActions";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";

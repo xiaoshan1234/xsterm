@@ -148,5 +148,8 @@ Tauri event compatibility.
 - Completed: pure legacy PaneTree operations now live under `models/workspace`.
 - Completed: saved launch configs, groups, defaults, schema migration, and
   persistence now live under `features/launch-config`.
-- Next: move launch-config state and actions out of `features/sessions`.
+- Completed: launch-config group operations are pure functions, and launch
+  config loading/persistence is owned by a `launch-config` application hook.
+- Next: move the launch-config state provider and public context out of
+  `features/sessions`.
 - Next: extract terminal and tmux event routing from the aggregate listener.
