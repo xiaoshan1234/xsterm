@@ -72,7 +72,7 @@ describe("tmux session identity", () => {
         type: "tmux-pane" as const,
         isConnected: true,
         kind: { type: "tmux-pane" as const, sessionId: 8, paneId: "%1" },
-        tmuxSessionId: 8,
+        tmux: { controllerId: 8, paneId: "%1" },
       },
     ];
     expect(

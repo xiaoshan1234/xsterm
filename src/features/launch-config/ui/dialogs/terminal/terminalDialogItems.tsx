@@ -72,8 +72,8 @@ export const DEFAULT_SSH: SshConfig = {
   host: "",
   port: 22,
   username: "",
-  auth_type: "password",
+  authType: "password",
   password: "",
-  key_file: "",
+  keyFile: "",
   passphrase: "",
 };

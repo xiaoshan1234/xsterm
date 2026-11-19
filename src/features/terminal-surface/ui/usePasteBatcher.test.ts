@@ -10,6 +10,7 @@ import {
   formatPasteForBracketedMode,
   usePasteBatcher,
 } from "./usePasteBatcher";
+import { createTestApplication } from "../../../test/createTestApplication";
 
 function bytes(s: string): Uint8Array {
   return new TextEncoder().encode(s);
@@ -200,7 +201,10 @@ describe("appendToPasteQueue", () => {
 describe("usePasteBatcher", () => {
   it("writes formatted paste data through the injected port", async () => {
     const writeBytes = vi.fn(async (_terminalId: number, _data: Uint8Array) => {});
-    const { result } = renderHook(() => usePasteBatcher(42, writeBytes));
+    const testApplication = createTestApplication();
+    const { result } = renderHook(() => usePasteBatcher(42, writeBytes), {
+      wrapper: testApplication.Application,
+    });
 
     act(() => {
       result.current.enqueuePaste("a\nb", false);

@@ -278,9 +278,7 @@ describe("buildFrontendTerminal", () => {
     };
     const terminal = buildFrontendTerminal(tmuxInfo, "cfg", "tmux-pane");
 
-    expect(terminal.tmuxSessionId).toBe(4);
-    expect(terminal.tmuxPaneId).toBe("%2");
-    expect(terminal.tmuxWindowId).toBe("@1");
+    expect(terminal.tmux).toEqual({ controllerId: 4, paneId: "%2", windowId: "@1" });
     expect(terminal.kind).toEqual({ type: "tmux-pane", sessionId: 4, paneId: "%2" });
   });
 });

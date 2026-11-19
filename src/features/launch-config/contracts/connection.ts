@@ -18,9 +18,9 @@ export interface SshConfig {
   host: string;
   port: number;
   username: string;
-  auth_type: "password" | "key";
+  authType: "password" | "key";
   password?: string;
-  key_file?: string;
+  keyFile?: string;
   passphrase?: string;
   termType?: string;
   initialRows?: number;

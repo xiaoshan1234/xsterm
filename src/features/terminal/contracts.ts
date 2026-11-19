@@ -20,6 +20,20 @@ export type TerminalKind =
   | { type: "wsl"; distribution?: string }
   | { type: "tmux-pane"; sessionId: number; paneId: string };
 
+export interface TmuxPaneRuntimeState {
+  controllerId: number;
+  paneId: string;
+  windowId?: string;
+  sessionName?: string;
+  windowName?: string;
+  windowIndex?: number;
+  paneIndex?: number;
+  width?: number;
+  height?: number;
+  command?: string;
+  isActive?: boolean;
+}
+
 export interface Terminal {
   id: number;
   configId: string;
@@ -31,17 +45,7 @@ export interface Terminal {
   capabilities?: CapabilityFlags;
   createdAt?: number;
   lastActivityAt?: number;
-  tmuxPaneId?: string;
-  tmuxSessionId?: number;
-  tmuxWindowId?: string;
-  tmuxSessionName?: string;
-  tmuxWindowName?: string;
-  tmuxWindowIndex?: number;
-  tmuxPaneIndex?: number;
-  tmuxPaneWidth?: number;
-  tmuxPaneHeight?: number;
-  tmuxPaneCommand?: string;
-  tmuxPaneActive?: boolean;
+  tmux?: TmuxPaneRuntimeState;
   isHidden?: boolean;
 }
 

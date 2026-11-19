@@ -18,26 +18,25 @@ import { useGroupActions } from "../../../features/launch-config";
 import { usePaneActions } from "./usePaneActions";
 import { useTerminalStreamActions } from "./useTerminalStreamActions";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
-import type { SessionActions, SessionPersistence, SessionState } from "./types";
+import type { SessionPersistence, SessionState } from "./types";
 import { findOpenTmuxControllerId, tmuxSessionKey } from "../../../features/tmux";
 import { useWindowActions } from "./useWindowActions";
 import { useWorkspaceActions } from "./useWorkspaceActions";
 
-interface UseSessionActionsOptions {
+interface UseSessionCoordinatorOptions {
   state: SessionState;
   persistence: SessionPersistence;
 }
 
 /**
- * Composes the terminal action surface from six concern-focused hooks.
- * Each sub-hook owns one slice of the public `SessionActions` API; this entry
- * point only adds the small set of "shared primitives" that are consumed by
- * multiple concerns (terminal-from-config, window-from-terminal, workspace-from-terminal).
+ * Composes the session command surface from concern-focused hooks.
+ * Each sub-hook owns one slice; this entry point only adds the shared
+ * primitives consumed by multiple concerns.
  */
 export function useTerminalActions({
   state,
   persistence: sessionPersistence,
-}: UseSessionActionsOptions): SessionActions {
+}: UseSessionCoordinatorOptions) {
   const { savedConfigs, nextGroupId, setNextGroupId } = state.launchConfig;
   const { terminalsRef, setSessions, establishingSessionsRef, reportTerminalSize } = state.terminal;
   const {
@@ -117,7 +116,7 @@ export function useTerminalActions({
         );
         if (openControllerId !== undefined) {
           const existing = terminalsRef.current.find(
-            (terminal) => terminal.tmuxSessionId === openControllerId,
+            (terminal) => terminal.tmux?.controllerId === openControllerId,
           );
           if (existing) {
             focusTerminal(existing.id);
@@ -136,13 +135,14 @@ export function useTerminalActions({
         try {
           const info = await tmuxControllerActions.attachSession(tmuxConfig);
           const terminal = buildFrontendTerminal(info, configId, "tmux-pane", config.displayConfig);
-          if (terminal.tmuxSessionId !== undefined) {
-            tmuxControllerConfigsRef.current.set(terminal.tmuxSessionId, tmuxConfig);
-            tmuxControllerConfigIdsRef.current.set(terminal.tmuxSessionId, configId);
+          const controllerId = terminal.tmux?.controllerId;
+          if (controllerId !== undefined) {
+            tmuxControllerConfigsRef.current.set(controllerId, tmuxConfig);
+            tmuxControllerConfigIdsRef.current.set(controllerId, configId);
             syncOpenTmuxSessions();
             setSessions((previous) =>
               previous.map((session) =>
-                session.tmuxSessionId === terminal.tmuxSessionId
+                session.tmux?.controllerId === controllerId
                   ? { ...session, configId, displayConfig: config.displayConfig }
                   : session,
               ),

@@ -6,3 +6,9 @@ export {
   getTerminalOutput,
   hasSessionOutput,
 } from "./application/terminalOutputBuffer";
+export {
+  TerminalSurfacePortsProvider,
+  useTerminalSurfacePorts,
+  type TerminalSurfacePorts,
+  type TerminalSurfaceTmuxError,
+} from "./state/TerminalSurfacePortsContext";

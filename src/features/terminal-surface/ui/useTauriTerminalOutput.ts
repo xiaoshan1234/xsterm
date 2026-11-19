@@ -1,9 +1,11 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
-import { terminalClipboard, terminalStreamActions, useTerminalRuntime } from "../../terminal";
 import { appendTerminalOutput, getTerminalOutput } from "../application/terminalOutputBuffer";
-import { tmuxControllerActions } from "../../tmux";
 import { normalizeCapturedScrollback } from "./scrollback";
+import {
+  useTerminalSurfacePorts,
+  type TerminalSurfacePorts,
+} from "../state/TerminalSurfacePortsContext";
 
 const lastTouchRef = new Map<number, number>();
 const TOUCH_DEBOUNCE_MS = 500;
@@ -17,16 +19,10 @@ const replayedTerminalByXterm = new WeakMap<XTerm, number>();
 const SCROLLBACK_LINES = 2000;
 
 export interface TerminalOutputPorts {
-  stream: Pick<typeof terminalStreamActions, "subscribeOutput">;
-  clipboard: Pick<typeof terminalClipboard, "writeText">;
-  tmux: Pick<typeof tmuxControllerActions, "capturePane">;
+  stream: Pick<TerminalSurfacePorts["stream"], "subscribeOutput">;
+  clipboard: Pick<TerminalSurfacePorts["clipboard"], "writeText">;
+  tmux: Pick<TerminalSurfacePorts["tmux"], "capturePane">;
 }
-
-const DEFAULT_OUTPUT_PORTS: TerminalOutputPorts = {
-  stream: terminalStreamActions,
-  clipboard: terminalClipboard,
-  tmux: tmuxControllerActions,
-};
 
 function decodeOutput(data: Uint8Array): string {
   return new TextDecoder().decode(data);
@@ -70,12 +66,13 @@ function extractAndCopyOsc52(
 export function useTauriTerminalOutput(
   termRef: RefObject<XTerm | null>,
   terminalId: number,
-  ports: TerminalOutputPorts = DEFAULT_OUTPUT_PORTS,
+  ports?: TerminalOutputPorts,
 ): void {
-  const { touchTerminalActivity, terminals } = useTerminalRuntime();
+  const surfacePorts = useTerminalSurfacePorts();
+  const outputPorts = ports ?? surfacePorts;
   const replayStateRef = useRef<{ terminalId: number; promise: Promise<void> } | null>(null);
   // tmux scrollback replay applies only to tmux-backed panes.
-  const isTmuxPane = !!terminals.find((s) => s.id === terminalId && !!s.tmuxPaneId);
+  const isTmuxPane = surfacePorts.session.isTmuxTerminal(terminalId);
 
   // Replay tmux snapshot/modes before the live listener attaches. This lets a
   // reconnect restore alternate-screen TUI state without a concurrent live
@@ -87,7 +84,7 @@ export function useTauriTerminalOutput(
     replayedTerminalByXterm.set(xterm, terminalId);
 
     const replayTerminalId = terminalId;
-    const replayPromise = ports.tmux
+    const replayPromise = outputPorts.tmux
       .capturePane(terminalId, SCROLLBACK_LINES)
       .then((text) => {
         if (!text || replayedTerminalByXterm.get(xterm) !== replayTerminalId) return;
@@ -101,7 +98,7 @@ export function useTauriTerminalOutput(
         console.error("[xsterm] captureTmuxPane failed:", err);
       });
     replayStateRef.current = { terminalId, promise: replayPromise };
-  }, [isTmuxPane, ports, terminalId, termRef]);
+  }, [isTmuxPane, outputPorts, terminalId, termRef]);
 
   // Raw-byte output path: the frontend hands the backend a Tauri `Channel`,
   // and the Rust forwarder pushes coalesced bytes through it as raw binary.
@@ -124,7 +121,7 @@ export function useTauriTerminalOutput(
       const last = lastTouchRef.get(terminalId) ?? 0;
       if (now - last >= TOUCH_DEBOUNCE_MS) {
         lastTouchRef.set(terminalId, now);
-        touchTerminalActivity(terminalId);
+        surfacePorts.session.touchActivity(terminalId);
       }
 
       try {
@@ -145,9 +142,9 @@ export function useTauriTerminalOutput(
         // Snapshot history before subscribing. Anything arriving during the
         // subscription call is delivered live and must not be replayed again.
         bufferBeforeSubscribe = getTerminalOutput(terminalId);
-        return ports.stream.subscribeOutput(terminalId, (data) => {
+        return outputPorts.stream.subscribeOutput(terminalId, (data) => {
           if (!listenerActive) return;
-          handleOutput(extractAndCopyOsc52(decodeOutput(data), ports.clipboard.writeText));
+          handleOutput(extractAndCopyOsc52(decodeOutput(data), outputPorts.clipboard.writeText));
         });
       })
       .then((fn) => {
@@ -176,5 +173,5 @@ export function useTauriTerminalOutput(
       listenerActive = false;
       unlisten?.();
     };
-  }, [isTmuxPane, ports, termRef, terminalId, touchTerminalActivity]);
+  }, [isTmuxPane, outputPorts, surfacePorts.session, termRef, terminalId]);
 }

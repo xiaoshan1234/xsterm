@@ -27,9 +27,7 @@ describe("pane target view model", () => {
         type: "tmux-pane",
         isConnected: true,
         kind: { type: "tmux-pane", sessionId: 4, paneId: "%2" },
-        tmuxSessionId: 4,
-        tmuxWindowId: "@1",
-        tmuxPaneId: "%2",
+        tmux: { controllerId: 4, paneId: "%2", windowId: "@1" },
         capabilities: {
           supportsResize: true,
           supportsReconnect: true,

@@ -171,4 +171,48 @@ describe("architecture boundaries", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("keeps tmux runtime metadata nested in the terminal model", () => {
+    const contract = sourceFiles["/src/features/terminal/contracts.ts"] ?? "";
+    expect(contract).not.toMatch(
+      /\btmux(?:PaneId|SessionId|WindowId|SessionName|WindowName|WindowIndex|PaneIndex|PaneWidth|PaneHeight|PaneCommand|PaneActive)\??:/,
+    );
+  });
+
+  it("does not reintroduce a public aggregate session action type", () => {
+    const violations = Object.entries(sourceFiles)
+      .filter(([, source]) => /\bSessionActions\b/.test(source))
+      .map(([path]) => path);
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps terminal-surface independent from runtime action implementations", () => {
+    const forbidden = [
+      "useTerminalRuntime",
+      "useTmuxRuntime",
+      "terminalSessionActions",
+      "terminalStreamActions",
+      "tmuxControllerActions",
+    ];
+    const violations = Object.entries(sourceFiles).flatMap(([path, source]) => {
+      if (!path.startsWith("/src/features/terminal-surface/")) return [];
+      return forbidden
+        .filter((symbol) => new RegExp(`\\b${symbol}\\b`).test(source))
+        .map((symbol) => `${path}: ${symbol}`);
+    });
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps SSH wire snake_case outside domain and UI layers", () => {
+    const allowedPaths = [
+      "/src/features/terminal-stream/application/configWireMappers.ts",
+      "/src/features/terminal-stream/infrastructure/tauriContracts.ts",
+      "/src/features/launch-config/persistence/launchConfigStorage.ts",
+    ];
+    const violations = Object.entries(sourceFiles).flatMap(([path, source]) => {
+      if (path.includes(".test.") || allowedPaths.includes(path)) return [];
+      return /\b(?:auth_type|key_file)\b/.test(source) ? [path] : [];
+    });
+    expect(violations).toEqual([]);
+  });
 });

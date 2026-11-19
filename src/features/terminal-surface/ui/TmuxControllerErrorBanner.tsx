@@ -1,7 +1,6 @@
 import { useCallback } from "react";
-import { tmuxControllerActions, useTmuxRuntime } from "../../tmux";
 import type { Terminal } from "../../../features/terminal";
-import type { TmuxSessionConfig } from "../../../features/launch-config";
+import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
 import "./TmuxControllerErrorBanner.css";
 
 interface TmuxControllerErrorBannerProps {
@@ -17,28 +16,24 @@ interface TmuxControllerErrorBannerProps {
  * `TmuxSessionConfig` captured at create / attach time.
  */
 export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorBannerProps) {
-  const { tmuxControllerErrors, dismissTmuxControllerError } = useTmuxRuntime();
+  const { tmux: tmuxPorts } = useTerminalSurfacePorts();
 
-  const match: { controllerId: number; config: TmuxSessionConfig; reason?: string } | null =
-    (() => {
-      for (const terminal of paneSessions) {
-        if (terminal.tmuxSessionId === undefined) continue;
-        const err = tmuxControllerErrors.get(terminal.tmuxSessionId);
-        if (err) {
-          return {
-            controllerId: terminal.tmuxSessionId,
-            config: err.config,
-            reason: err.reason,
-          };
-        }
+  const match: { controllerId: number; reason?: string } | null = (() => {
+    for (const terminal of paneSessions) {
+      const controllerId = terminal.tmux?.controllerId;
+      if (controllerId === undefined) continue;
+      const error = tmuxPorts.getControllerError(controllerId);
+      if (error) {
+        return { controllerId, reason: error.reason };
       }
-      return null;
-    })();
+    }
+    return null;
+  })();
 
   const handleRetry = useCallback(async () => {
     if (!match) return;
     try {
-      await tmuxControllerActions.attachSession(match.config);
+      await tmuxPorts.retryController(match.controllerId);
     } catch (e) {
       console.error("Failed to retry tmux controller:", e);
       window.alert(
@@ -46,13 +41,13 @@ export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorB
       );
       return;
     }
-    dismissTmuxControllerError(match.controllerId);
-  }, [dismissTmuxControllerError, match]);
+    tmuxPorts.dismissControllerError(match.controllerId);
+  }, [match, tmuxPorts]);
 
   const handleDismiss = useCallback(() => {
     if (!match) return;
-    dismissTmuxControllerError(match.controllerId);
-  }, [dismissTmuxControllerError, match]);
+    tmuxPorts.dismissControllerError(match.controllerId);
+  }, [match, tmuxPorts]);
 
   if (!match) return null;
   return (

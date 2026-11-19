@@ -58,7 +58,7 @@ function findControllerId(
 ): number | undefined {
   if (node.type === "leaf") {
     if (node.terminalId === undefined) return undefined;
-    return terminalsById.get(node.terminalId)?.tmuxSessionId;
+    return terminalsById.get(node.terminalId)?.tmux?.controllerId;
   }
   for (const child of node.children ?? []) {
     const controllerId = findControllerId(child, terminalsById);

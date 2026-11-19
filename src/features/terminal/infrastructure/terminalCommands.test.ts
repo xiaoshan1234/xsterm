@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SshConfig } from "../../launch-config";
 import { toBackendTerminalHandle } from "./handles";
 import { createTerminalCommandClient } from "./terminalCommands";
 import { type TerminalInfoDto } from "./tauriContracts";
@@ -46,6 +47,34 @@ function createTerminalInfo(): TerminalInfoDto {
 }
 
 describe("terminalCommands", () => {
+  it("maps camelCase SSH domain config to the snake_case wire contract", async () => {
+    const { calls, invokeFunction } = createInvokeSpy();
+    const client = createTerminalCommandClient(invokeFunction);
+    const config: SshConfig = {
+      host: "example.com",
+      port: 22,
+      username: "alice",
+      authType: "key",
+      keyFile: "/keys/id_ed25519",
+    };
+
+    await client.createSshTerminal(config);
+
+    expect(calls[0]).toEqual({
+      command: "create_ssh_terminal",
+      args: {
+        config: {
+          host: "example.com",
+          port: 22,
+          username: "alice",
+          auth_type: "key",
+          key_file: "/keys/id_ed25519",
+        },
+        logging: undefined,
+      },
+    });
+  });
+
   it("maps backend session_id parameters to the wire sessionId field", async () => {
     const { calls, invokeFunction } = createInvokeSpy();
     const client = createTerminalCommandClient(invokeFunction);

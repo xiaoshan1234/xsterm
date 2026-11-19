@@ -105,15 +105,19 @@ describe("Tmux status view model", () => {
   });
 
   it("maps tmux window/pane indices and command metadata", () => {
+    const base = createTmuxTerminal(10, "%1", "@0", true);
     const terminal: Terminal = {
-      ...createTmuxTerminal(10, "%1", "@0", true),
-      tmuxWindowName: "editor",
-      tmuxWindowIndex: 0,
-      tmuxPaneIndex: 1,
-      tmuxPaneWidth: 88,
-      tmuxPaneHeight: 1,
-      tmuxPaneCommand: "bash",
-      tmuxPaneActive: true,
+      ...base,
+      tmux: {
+        ...base.tmux!,
+        windowName: "editor",
+        windowIndex: 0,
+        paneIndex: 1,
+        width: 88,
+        height: 1,
+        command: "bash",
+        isActive: true,
+      },
     };
     const result = selectTmuxStatusControllers([terminal], [], []);
 
@@ -155,10 +159,12 @@ function createTmuxTerminal(
       sessionId: 4,
       paneId,
     },
-    tmuxSessionId: 4,
-    tmuxPaneId: paneId,
-    tmuxWindowId: windowId,
-    ...(tmuxSessionName ? { tmuxSessionName } : {}),
+    tmux: {
+      controllerId: 4,
+      paneId,
+      windowId,
+      ...(tmuxSessionName ? { sessionName: tmuxSessionName } : {}),
+    },
     capabilities: {
       supportsResize: true,
       supportsReconnect: true,

@@ -36,9 +36,9 @@ export async function dispatchByType(
  */
 /**
  * Builds the frontend `Terminal` object from a backend `TerminalInfo` returned
- * by `terminalService.createLocal` / `createSsh` / `createTmux`. The tmux
- * fields (`tmuxPaneId`, `tmuxSessionId`, `isHidden`, `tmuxWindowId`,
- * `xstermWindowId`) are forwarded when present.
+ * by `terminalService.createLocal` / `createSsh` / `createTmux`. Optional tmux
+ * metadata is grouped under `tmux` instead of being mixed into the terminal
+ * identity fields.
  */
 export function buildFrontendTerminal(
   info: TerminalConnectionInfo,
@@ -49,8 +49,13 @@ export function buildFrontendTerminal(
   const now = Date.now();
   const tmux =
     info.kind.type === "tmux-pane"
-      ? { tmuxSessionId: info.kind.sessionId, tmuxPaneId: info.kind.paneId }
-      : {};
+      ? {
+          controllerId: info.kind.sessionId,
+          paneId: info.kind.paneId,
+          ...(info.tmuxWindowId !== undefined ? { windowId: info.tmuxWindowId } : {}),
+          ...(info.tmuxSessionName !== undefined ? { sessionName: info.tmuxSessionName } : {}),
+        }
+      : undefined;
   return {
     id: info.id,
     configId,
@@ -61,9 +66,7 @@ export function buildFrontendTerminal(
     displayConfig,
     createdAt: now,
     lastActivityAt: now,
-    ...tmux,
-    ...(info.tmuxWindowId !== undefined ? { tmuxWindowId: info.tmuxWindowId } : {}),
-    ...(info.tmuxSessionName !== undefined ? { tmuxSessionName: info.tmuxSessionName } : {}),
+    ...(tmux ? { tmux } : {}),
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),
     ...(info.capabilities !== undefined ? { capabilities: info.capabilities } : {}),
   };

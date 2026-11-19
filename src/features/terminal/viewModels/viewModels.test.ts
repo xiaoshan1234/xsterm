@@ -19,7 +19,7 @@ const savedConfigs: SavedTerminalConfig[] = [
       host: "example.com",
       port: 22,
       username: "deploy",
-      auth_type: "password",
+      authType: "password",
     },
   },
   {

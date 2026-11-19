@@ -45,10 +45,11 @@ export function selectRuntimeStatus(
     typeof terminalSizes === "function"
       ? terminalSizes(terminal.id)
       : terminalSizes.get(terminal.id);
+  const tmuxState = terminal.tmux;
   const size =
     measuredSize ??
-    (terminal.tmuxPaneWidth !== undefined && terminal.tmuxPaneHeight !== undefined
-      ? { cols: terminal.tmuxPaneWidth, rows: terminal.tmuxPaneHeight }
+    (tmuxState?.width !== undefined && tmuxState.height !== undefined
+      ? { cols: tmuxState.width, rows: tmuxState.height }
       : undefined);
   if (terminal.type === "tmux-pane") {
     const controller = tmuxControllers.find((candidate) =>
@@ -64,12 +65,12 @@ export function selectRuntimeStatus(
     return {
       terminalId: terminal.id,
       status: tmuxPane?.status ?? (terminal.isConnected ? "connected" : "disconnected"),
-      name: tmuxPane?.currentCommand ?? terminal.tmuxPaneCommand ?? terminal.name,
+      name: tmuxPane?.currentCommand ?? tmuxState?.command ?? terminal.name,
       kind: `${transportLabel(controller?.transport ?? "local")} tmux`,
       detail: [
-        controller?.sessionName ?? controller?.title ?? terminal.tmuxSessionName ?? "session",
-        tmuxWindow?.name ?? terminal.tmuxWindowName ?? terminal.tmuxWindowId ?? "window",
-        terminal.tmuxPaneId ?? "pane",
+        controller?.sessionName ?? controller?.title ?? tmuxState?.sessionName ?? "session",
+        tmuxWindow?.name ?? tmuxState?.windowName ?? tmuxState?.windowId ?? "window",
+        tmuxState?.paneId ?? "pane",
       ].join(" / "),
       ...(size ? { size } : {}),
       ...(paneNumber !== undefined ? { paneNumber } : {}),

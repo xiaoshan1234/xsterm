@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { SshConfig } from "../../launch-config";
+import { toSshConfigDto } from "../../terminal-stream";
 import { toBackendTerminalHandle, type BackendTerminalHandle } from "./handles";
 import {
   type LocalTerminalConfigDto,
-  type SshConfigDto,
   type TerminalInfoDto,
   type TerminalLoggingConfigDto,
 } from "./tauriContracts";
@@ -16,7 +17,7 @@ export interface TerminalCommandClient {
     logging?: TerminalLoggingConfigDto,
   ): Promise<TerminalInfoDto>;
   createSshTerminal(
-    config: SshConfigDto,
+    config: SshConfig,
     logging?: TerminalLoggingConfigDto,
   ): Promise<TerminalInfoDto>;
   writeTerminal(terminalHandle: BackendTerminalHandle, data: Uint8Array): Promise<void>;
@@ -52,11 +53,11 @@ export function createTerminalCommandClient(
     },
 
     async createSshTerminal(
-      config: SshConfigDto,
+      config: SshConfig,
       logging?: TerminalLoggingConfigDto,
     ): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("create_ssh_terminal", {
-        config,
+        config: toSshConfigDto(config),
         logging,
       });
       return normalizeTerminalInfo(terminal);

@@ -1,4 +1,4 @@
-import type { Terminal } from "../../../features/terminal";
+import type { Terminal, TmuxPaneRuntimeState } from "../../../features/terminal";
 import {
   buildTmuxPaneTree,
   TMUX_PANE_CAPABILITIES,
@@ -44,6 +44,20 @@ export interface TmuxPaneMetadata {
 }
 
 export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): Terminal {
+  const tmux: TmuxPaneRuntimeState = {
+    controllerId: info.tmuxSessionId,
+    paneId: info.tmuxPaneId,
+    ...(info.tmuxWindowId ? { windowId: info.tmuxWindowId } : {}),
+    ...(info.tmuxSessionName ? { sessionName: info.tmuxSessionName } : {}),
+    ...(info.tmuxWindowName ? { windowName: info.tmuxWindowName } : {}),
+    ...(info.tmuxWindowIndex !== undefined ? { windowIndex: info.tmuxWindowIndex } : {}),
+    ...(info.tmuxPaneIndex !== undefined ? { paneIndex: info.tmuxPaneIndex } : {}),
+    ...(info.tmuxPaneWidth !== undefined ? { width: info.tmuxPaneWidth } : {}),
+    ...(info.tmuxPaneHeight !== undefined ? { height: info.tmuxPaneHeight } : {}),
+    ...(info.tmuxPaneCommand ? { command: info.tmuxPaneCommand } : {}),
+    ...(info.tmuxPaneActive !== undefined ? { isActive: info.tmuxPaneActive } : {}),
+  };
+
   return {
     id: info.id,
     configId: info.configId ?? "",
@@ -55,17 +69,7 @@ export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): Terminal {
       sessionId: info.tmuxSessionId,
       paneId: info.tmuxPaneId,
     },
-    tmuxPaneId: info.tmuxPaneId,
-    tmuxSessionId: info.tmuxSessionId,
-    ...(info.tmuxWindowId ? { tmuxWindowId: info.tmuxWindowId } : {}),
-    ...(info.tmuxSessionName ? { tmuxSessionName: info.tmuxSessionName } : {}),
-    ...(info.tmuxWindowName ? { tmuxWindowName: info.tmuxWindowName } : {}),
-    ...(info.tmuxWindowIndex !== undefined ? { tmuxWindowIndex: info.tmuxWindowIndex } : {}),
-    ...(info.tmuxPaneIndex !== undefined ? { tmuxPaneIndex: info.tmuxPaneIndex } : {}),
-    ...(info.tmuxPaneWidth !== undefined ? { tmuxPaneWidth: info.tmuxPaneWidth } : {}),
-    ...(info.tmuxPaneHeight !== undefined ? { tmuxPaneHeight: info.tmuxPaneHeight } : {}),
-    ...(info.tmuxPaneCommand ? { tmuxPaneCommand: info.tmuxPaneCommand } : {}),
-    ...(info.tmuxPaneActive !== undefined ? { tmuxPaneActive: info.tmuxPaneActive } : {}),
+    tmux,
     isHidden: false,
     capabilities: TMUX_PANE_CAPABILITIES,
     createdAt: Date.now(),
@@ -74,19 +78,21 @@ export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): Terminal {
 }
 
 export function mergeTmuxPaneMetadata(terminal: Terminal, metadata: TmuxPaneMetadata): Terminal {
+  if (!terminal.tmux) return terminal;
   return {
     ...terminal,
-    ...(metadata.tmuxWindowId ? { tmuxWindowId: metadata.tmuxWindowId } : {}),
-    ...(metadata.tmuxSessionName ? { tmuxSessionName: metadata.tmuxSessionName } : {}),
-    ...(metadata.tmuxWindowName ? { tmuxWindowName: metadata.tmuxWindowName } : {}),
-    ...(metadata.tmuxWindowIndex !== undefined
-      ? { tmuxWindowIndex: metadata.tmuxWindowIndex }
-      : {}),
-    ...(metadata.tmuxPaneIndex !== undefined ? { tmuxPaneIndex: metadata.tmuxPaneIndex } : {}),
-    ...(metadata.tmuxPaneWidth !== undefined ? { tmuxPaneWidth: metadata.tmuxPaneWidth } : {}),
-    ...(metadata.tmuxPaneHeight !== undefined ? { tmuxPaneHeight: metadata.tmuxPaneHeight } : {}),
-    ...(metadata.tmuxPaneCommand ? { tmuxPaneCommand: metadata.tmuxPaneCommand } : {}),
-    ...(metadata.tmuxPaneActive !== undefined ? { tmuxPaneActive: metadata.tmuxPaneActive } : {}),
+    tmux: {
+      ...terminal.tmux,
+      ...(metadata.tmuxWindowId ? { windowId: metadata.tmuxWindowId } : {}),
+      ...(metadata.tmuxSessionName ? { sessionName: metadata.tmuxSessionName } : {}),
+      ...(metadata.tmuxWindowName ? { windowName: metadata.tmuxWindowName } : {}),
+      ...(metadata.tmuxWindowIndex !== undefined ? { windowIndex: metadata.tmuxWindowIndex } : {}),
+      ...(metadata.tmuxPaneIndex !== undefined ? { paneIndex: metadata.tmuxPaneIndex } : {}),
+      ...(metadata.tmuxPaneWidth !== undefined ? { width: metadata.tmuxPaneWidth } : {}),
+      ...(metadata.tmuxPaneHeight !== undefined ? { height: metadata.tmuxPaneHeight } : {}),
+      ...(metadata.tmuxPaneCommand ? { command: metadata.tmuxPaneCommand } : {}),
+      ...(metadata.tmuxPaneActive !== undefined ? { isActive: metadata.tmuxPaneActive } : {}),
+    },
   };
 }
 
@@ -101,7 +107,7 @@ export function findControllerWorkspaceId(
       forEachPane(window.rootPane, (node) => {
         if (node.type !== "leaf" || node.terminalId === undefined) return;
         if (
-          terminals.find((terminal) => terminal.id === node.terminalId)?.tmuxSessionId ===
+          terminals.find((terminal) => terminal.id === node.terminalId)?.tmux?.controllerId ===
           controllerId
         ) {
           belongsToController = true;

@@ -34,8 +34,8 @@ interface SshSessionFormProps {
   mode?: "create" | "edit";
   /**
    * When set, render only the fields that belong to that section.
-   *   - "link"   → Authentication (host / port / username / auth_type /
-   *                password or key_file + passphrase)
+   *   - "link"   → Authentication (host / port / username / authType /
+   *                password or keyFile + passphrase)
    *   - "system" → Terminal (termType / initialRows / initialCols /
    *                keepaliveInterval)
    *   - undefined → render all fields (backward-compatible default; used
@@ -111,14 +111,14 @@ export function SshSessionForm({ config, onChange, section }: SshSessionFormProp
           />
           <FormSelectField
             label="Authentication"
-            value={config.auth_type}
-            onChange={(v) => onChange({ ...config, auth_type: v as "password" | "key" })}
+            value={config.authType}
+            onChange={(v) => onChange({ ...config, authType: v as "password" | "key" })}
             options={[
               { value: "password", label: "Password" },
               { value: "key", label: "Key File" },
             ]}
           />
-          {config.auth_type === "password" ? (
+          {config.authType === "password" ? (
             <FormTextField
               label="Password"
               placeholder="********"
@@ -131,8 +131,8 @@ export function SshSessionForm({ config, onChange, section }: SshSessionFormProp
               <FormTextField
                 label="Key File Path"
                 placeholder="~/.ssh/id_rsa"
-                value={config.key_file}
-                onChange={(key_file) => onChange({ ...config, key_file })}
+                value={config.keyFile}
+                onChange={(keyFile) => onChange({ ...config, keyFile })}
               />
               <FormTextField
                 label="Passphrase (optional)"
@@ -199,10 +199,10 @@ export function validateSshConfig(config: SshConfig): string | null {
   if (!config.host || !config.username) {
     return "Host and username are required";
   }
-  if (config.auth_type === "password" && !config.password) {
+  if (config.authType === "password" && !config.password) {
     return "Password is required";
   }
-  if (config.auth_type === "key" && !config.key_file) {
+  if (config.authType === "key" && !config.keyFile) {
     return "Key file path is required";
   }
   return null;

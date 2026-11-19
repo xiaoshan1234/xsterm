@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { frontendLogger as logger } from "../../../infra";
-import { terminalStreamActions } from "../../terminal";
+import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
 import { convertLineEndings } from "./textTransform";
 
 /**
@@ -115,10 +115,9 @@ export function appendToPasteQueue(
  */
 export type PasteWritePort = (terminalId: number, data: Uint8Array) => Promise<void>;
 
-export function usePasteBatcher(
-  terminalId: number,
-  writeBytes: PasteWritePort = terminalStreamActions.writeBytes,
-) {
+export function usePasteBatcher(terminalId: number, writeBytes?: PasteWritePort) {
+  const ports = useTerminalSurfacePorts();
+  const writeBytesPort = writeBytes ?? ports.stream.writeBytes;
   const terminalIdRef = useRef(terminalId);
   const inputQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -135,12 +134,12 @@ export function usePasteBatcher(
       // Append to the queue. `.catch(() => {})` isolates failures so one
       // rejection doesn't poison every subsequent paste.
       appendToPasteQueue(inputQueueRef, () =>
-        writeBytes(terminalIdRef.current, bytes).catch((err) => {
+        writeBytesPort(terminalIdRef.current, bytes).catch((err) => {
           logger.error("usePasteBatcher", "writeTerminal", err);
         }),
       );
     },
-    [writeBytes],
+    [writeBytesPort],
   );
 
   // On unmount, do NOT cancel the queue — pending bytes should still reach

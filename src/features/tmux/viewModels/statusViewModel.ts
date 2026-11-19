@@ -48,10 +48,11 @@ export function selectTmuxStatusControllers(
   const controllerTerminals = new Map<number, Terminal[]>();
 
   for (const terminal of terminals) {
-    if (terminal.type !== "tmux-pane" || terminal.tmuxSessionId === undefined) continue;
-    const controllerTerminalsForId = controllerTerminals.get(terminal.tmuxSessionId) ?? [];
+    const controllerId = terminal.tmux?.controllerId;
+    if (terminal.type !== "tmux-pane" || controllerId === undefined) continue;
+    const controllerTerminalsForId = controllerTerminals.get(controllerId) ?? [];
     controllerTerminalsForId.push(terminal);
-    controllerTerminals.set(terminal.tmuxSessionId, controllerTerminalsForId);
+    controllerTerminals.set(controllerId, controllerTerminalsForId);
   }
 
   return [...controllerTerminals.entries()].map(([controllerId, panes]) => {
@@ -59,7 +60,7 @@ export function selectTmuxStatusControllers(
       .map((pane) => savedConfigById.get(pane.configId))
       .find((candidate) => candidate?.type === "tmux-pane");
     const sessionName =
-      panes.find((pane) => pane.tmuxSessionName)?.tmuxSessionName ??
+      panes.find((pane) => pane.tmux?.sessionName)?.tmux?.sessionName ??
       (config?.type === "tmux-pane" ? config.config.tmuxSessionName?.trim() : undefined);
     const windows = groupWindows(panes, locations);
     const status = panes.some((pane) => pane.isConnected) ? "connected" : "disconnected";
@@ -87,7 +88,7 @@ function groupWindows(
   const windows = new Map<string, Terminal[]>();
 
   for (const pane of panes) {
-    const tmuxWindowId = pane.tmuxWindowId ?? "unknown";
+    const tmuxWindowId = pane.tmux?.windowId ?? "unknown";
     const windowPanes = windows.get(tmuxWindowId) ?? [];
     windowPanes.push(pane);
     windows.set(tmuxWindowId, windowPanes);
@@ -95,27 +96,26 @@ function groupWindows(
 
   return [...windows.entries()].map(([tmuxWindowId, windowPanes]) => {
     const status = windowPanes.some((pane) => pane.isConnected) ? "connected" : "disconnected";
-    const windowIndex = windowPanes.find(
-      (pane) => pane.tmuxWindowIndex !== undefined,
-    )?.tmuxWindowIndex;
+    const windowIndex = windowPanes.find((pane) => pane.tmux?.windowIndex !== undefined)?.tmux
+      ?.windowIndex;
     return {
       tmuxWindowId,
       ...(windowIndex !== undefined ? { windowIndex } : {}),
       name:
-        windowPanes.find((pane) => pane.tmuxWindowName)?.tmuxWindowName ??
+        windowPanes.find((pane) => pane.tmux?.windowName)?.tmux?.windowName ??
         windowPanes[0]?.name ??
         `Window ${tmuxWindowId}`,
       status,
       panes: windowPanes.map((pane) => ({
         terminalId: pane.id,
-        tmuxPaneId: pane.tmuxPaneId ?? "unknown",
+        tmuxPaneId: pane.tmux?.paneId ?? "unknown",
         tmuxWindowId,
-        ...(pane.tmuxWindowIndex !== undefined ? { windowIndex: pane.tmuxWindowIndex } : {}),
-        ...(pane.tmuxPaneIndex !== undefined ? { paneIndex: pane.tmuxPaneIndex } : {}),
-        ...(pane.tmuxPaneWidth !== undefined ? { width: pane.tmuxPaneWidth } : {}),
-        ...(pane.tmuxPaneHeight !== undefined ? { height: pane.tmuxPaneHeight } : {}),
-        ...(pane.tmuxPaneCommand ? { currentCommand: pane.tmuxPaneCommand } : {}),
-        ...(pane.tmuxPaneActive !== undefined ? { isActive: pane.tmuxPaneActive } : {}),
+        ...(pane.tmux?.windowIndex !== undefined ? { windowIndex: pane.tmux.windowIndex } : {}),
+        ...(pane.tmux?.paneIndex !== undefined ? { paneIndex: pane.tmux.paneIndex } : {}),
+        ...(pane.tmux?.width !== undefined ? { width: pane.tmux.width } : {}),
+        ...(pane.tmux?.height !== undefined ? { height: pane.tmux.height } : {}),
+        ...(pane.tmux?.command ? { currentCommand: pane.tmux.command } : {}),
+        ...(pane.tmux?.isActive !== undefined ? { isActive: pane.tmux.isActive } : {}),
         title: pane.name,
         status: pane.isConnected ? "connected" : "disconnected",
         ...(locations.has(pane.id) ? { location: locations.get(pane.id) } : {}),

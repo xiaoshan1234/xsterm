@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { createApplicationError } from "../../../models/applicationError";
-import type { Terminal } from "../../../features/terminal";
+import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
 import { tmuxWindowActions } from "../../../features/tmux";
 import {
   findPaneNode,
@@ -12,7 +12,10 @@ import {
   type CreateSavedConfigForWindowRequest,
   type CreateLocalTerminalForPaneRequest,
   type CreateLocalTerminalForWindowRequest,
+  type EditablePaneNode,
+  type PaneTerminalRef,
   type PaneIntentActions,
+  type PaneSplitDirection,
   type PaneTarget,
   type CreateSshTerminalForPaneRequest,
   type CreateSshTerminalForWindowRequest,
@@ -20,29 +23,42 @@ import {
   type SplitPaneWithTerminalRequest,
   type Workspace,
 } from "../../../features/workspace";
-import { type SessionActions } from "./types";
 
 interface PaneIntentState {
   terminals: Terminal[];
   workspaces: Workspace[];
 }
-type PaneIntentActionPorts = Pick<
-  SessionActions,
-  | "closePane"
-  | "closeTerminal"
-  | "createTerminalFromSavedConfig"
-  | "createLocalSessionOnly"
-  | "createSshSessionOnly"
-  | "replaceInitWindowWithTerminal"
-  | "setActivePane"
-  | "setActiveWorkspace"
-  | "splitPane"
-  | "updateWindowPaneTree"
->;
+export interface PaneCoordinatorPorts {
+  closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
+  closeTerminal: (terminalId: number) => Promise<void>;
+  createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
+  createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
+  createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
+  replaceInitWindowWithTerminal: (
+    workspaceId: string,
+    windowId: string,
+    terminal: PaneTerminalRef,
+  ) => void;
+  setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
+  setActiveWorkspace: (workspaceId: string) => void;
+  splitPane: (
+    workspaceId: string,
+    windowId: string,
+    paneId: string,
+    direction: PaneSplitDirection,
+    terminalId?: number,
+    configId?: string,
+  ) => void;
+  updateWindowPaneTree: (
+    workspaceId: string,
+    windowId: string,
+    updater: (root: EditablePaneNode) => EditablePaneNode,
+  ) => void;
+}
 
 interface UsePaneIntentActionsOptions {
   state: PaneIntentState;
-  actions: PaneIntentActionPorts;
+  actions: PaneCoordinatorPorts;
 }
 
 export function usePaneIntentActions({
@@ -275,10 +291,11 @@ export function usePaneIntentActions({
   const createTmuxWindow = useCallback(
     async (terminalId: number) => {
       const terminal = state.terminals.find((candidate) => candidate.id === terminalId);
-      if (terminal?.tmuxSessionId === undefined) {
+      const controllerId = terminal?.tmux?.controllerId;
+      if (controllerId === undefined) {
         throw new Error("Tmux controller not found");
       }
-      await tmuxWindowActions.createWindow(terminal.tmuxSessionId);
+      await tmuxWindowActions.createWindow(controllerId);
     },
     [state.terminals],
   );

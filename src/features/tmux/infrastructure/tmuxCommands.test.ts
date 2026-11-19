@@ -4,6 +4,7 @@ import {
   type BackendTerminalHandle,
   type TerminalInfoDto,
 } from "../../terminal-stream";
+import type { TmuxSessionConfig } from "../../launch-config";
 import { toBackendControllerHandle, toBackendWindowHandle } from "./handles";
 import { createTmuxCommandClient } from "./tmuxCommands";
 
@@ -52,6 +53,34 @@ function createTmuxTerminalInfo(): TerminalInfoDto {
 }
 
 describe("tmuxCommands", () => {
+  it("maps nested SSH config to the snake_case wire contract", async () => {
+    const { calls, invokeFunction } = createInvokeSpy();
+    const client = createTmuxCommandClient(invokeFunction);
+    const config: TmuxSessionConfig = {
+      tmuxSessionName: "work",
+      ssh: {
+        host: "example.com",
+        port: 22,
+        username: "alice",
+        authType: "key",
+        keyFile: "/keys/id_ed25519",
+      },
+    };
+
+    await client.createTmuxSession(config);
+
+    expect(calls[0]?.args?.config).toEqual({
+      tmuxSessionName: "work",
+      ssh: {
+        host: "example.com",
+        port: 22,
+        username: "alice",
+        auth_type: "key",
+        key_file: "/keys/id_ed25519",
+      },
+    });
+  });
+
   it("uses backend xstermSessionId for pane capture and kill", async () => {
     const { calls, invokeFunction } = createInvokeSpy();
     const client = createTmuxCommandClient(invokeFunction);

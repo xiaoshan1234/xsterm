@@ -226,9 +226,10 @@ async function splitTmuxPaneInternal(
 ): Promise<void> {
   const parent = terminalsRef.current.find((s) => s.id === xstermTerminalId);
   if (!parent) return;
-  const controllerId = parent.tmuxSessionId;
-  const parentTmuxPaneId = parent.tmuxPaneId;
-  if (controllerId === undefined || parentTmuxPaneId === undefined) return;
+  const tmux = parent.tmux;
+  if (!tmux) return;
+  const controllerId = tmux.controllerId;
+  const parentTmuxPaneId = tmux.paneId;
 
   let info: TerminalConnectionInfo;
   try {
@@ -248,8 +249,18 @@ async function splitTmuxPaneInternal(
           ? {
               ...session,
               configId: session.configId || parent.configId,
-              tmuxPaneId: info.kind.type === "tmux-pane" ? info.kind.paneId : session.tmuxPaneId,
-              tmuxWindowId: info.tmuxWindowId ?? session.tmuxWindowId,
+              tmux: {
+                controllerId: session.tmux?.controllerId ?? controllerId,
+                paneId:
+                  info.kind.type === "tmux-pane"
+                    ? info.kind.paneId
+                    : (session.tmux?.paneId ?? parentTmuxPaneId),
+                ...(info.tmuxWindowId
+                  ? { windowId: info.tmuxWindowId }
+                  : session.tmux?.windowId
+                    ? { windowId: session.tmux.windowId }
+                    : {}),
+              },
             }
           : session,
       );

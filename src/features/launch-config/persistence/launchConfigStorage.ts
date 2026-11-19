@@ -18,6 +18,36 @@ const launchConfigStore = getJsonStore("terminals.json");
  */
 export const SAVED_SESSION_CONFIG_VERSION = 1;
 
+function migrateSshConfig(raw: unknown): SshConfig | null {
+  if (raw === null || typeof raw !== "object") return null;
+  const source = raw as Record<string, unknown>;
+  const authType = source.authType ?? source.auth_type;
+  if (authType !== "password" && authType !== "key") return null;
+
+  const keyFile = source.keyFile ?? source.key_file;
+  if (keyFile !== undefined && typeof keyFile !== "string") return null;
+
+  const migrated = {
+    ...source,
+    authType,
+    ...(keyFile !== undefined ? { keyFile } : {}),
+  } as Record<string, unknown>;
+  delete migrated.auth_type;
+  delete migrated.key_file;
+  return migrated as unknown as SshConfig;
+}
+
+function migrateTmuxConfig(raw: unknown): TmuxSessionConfig | null {
+  if (raw === null || typeof raw !== "object") return null;
+  const source = raw as Record<string, unknown>;
+  if (!("ssh" in source) || source.ssh === undefined || source.ssh === null) {
+    return source as unknown as TmuxSessionConfig;
+  }
+  const ssh = migrateSshConfig(source.ssh);
+  if (!ssh) return null;
+  return { ...source, ssh } as TmuxSessionConfig;
+}
+
 /**
  * Migrate a raw entry read from the persisted JSON store into the current
  * `SavedTerminalConfig` shape.
@@ -54,22 +84,26 @@ export function migrateSavedConfig(raw: unknown): SavedTerminalConfig | null {
       };
     }
     if (obj.type === "ssh") {
+      const config = migrateSshConfig(obj.config);
+      if (!config) return null;
       return {
         id,
         name,
         version: SAVED_SESSION_CONFIG_VERSION,
         type: "ssh",
-        config: obj.config as SshConfig,
+        config,
         ...displayConfig,
       };
     }
     if (obj.type === "tmux-pane") {
+      const config = migrateTmuxConfig(obj.config);
+      if (!config) return null;
       return {
         id,
         name,
         version: SAVED_SESSION_CONFIG_VERSION,
         type: "tmux-pane",
-        config: obj.config as TmuxSessionConfig,
+        config,
         ...displayConfig,
       };
     }
@@ -108,12 +142,14 @@ export function migrateSavedConfig(raw: unknown): SavedTerminalConfig | null {
     if (!id || !name) {
       return null;
     }
+    const config = migrateSshConfig(sshConfig);
+    if (!config) return null;
     return {
       id,
       name,
       version: SAVED_SESSION_CONFIG_VERSION,
       type: "ssh",
-      config: sshConfig as SshConfig,
+      config,
       ...(obj.displayConfig !== undefined && obj.displayConfig !== null
         ? { displayConfig: obj.displayConfig as SavedTerminalConfig["displayConfig"] }
         : {}),

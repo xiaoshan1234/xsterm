@@ -89,7 +89,7 @@ export function findOpenTmuxControllerId(
     if (!openConfig || tmuxSessionKey(openConfig) !== targetKey) {
       continue;
     }
-    if (terminals.some((terminal) => terminal.tmuxSessionId === controllerId)) {
+    if (terminals.some((terminal) => terminal.tmux?.controllerId === controllerId)) {
       return controllerId;
     }
   }

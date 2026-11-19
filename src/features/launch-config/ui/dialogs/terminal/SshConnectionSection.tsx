@@ -25,7 +25,7 @@ const CHARSETS = [
  * connection itself, not to the terminal metadata.
  *
  * Sub-groups (collapsible `<details>`):
- *   - Authentication: host, port, username, auth_type, password/key_file, passphrase
+ *   - Authentication: host, port, username, authType, password/keyFile, passphrase
  *   - Stream: charset, knownHostsPath, proxyJump
  *   - Network: connectionTimeout, tcpNoDelay, soKeepalive, nullPacketKeepalive,
  *     enableCompression
@@ -58,14 +58,14 @@ export function SshConnectionSection({ config, onChange }: SshConnectionSectionP
           />
           <FormSelectField
             label="Authentication"
-            value={config.auth_type}
-            onChange={(v) => onChange({ ...config, auth_type: v as "password" | "key" })}
+            value={config.authType}
+            onChange={(v) => onChange({ ...config, authType: v as "password" | "key" })}
             options={[
               { value: "password", label: "Password" },
               { value: "key", label: "Key File" },
             ]}
           />
-          {config.auth_type === "password" ? (
+          {config.authType === "password" ? (
             <FormTextField
               label="Password"
               placeholder="********"
@@ -78,8 +78,8 @@ export function SshConnectionSection({ config, onChange }: SshConnectionSectionP
               <FormTextField
                 label="Key File Path"
                 placeholder="~/.ssh/id_rsa"
-                value={config.key_file}
-                onChange={(key_file) => onChange({ ...config, key_file })}
+                value={config.keyFile}
+                onChange={(keyFile) => onChange({ ...config, keyFile })}
               />
               <FormTextField
                 label="Passphrase (optional)"

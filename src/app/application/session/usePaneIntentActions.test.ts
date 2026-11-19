@@ -6,8 +6,7 @@ import { isApplicationError } from "../../../models/applicationError";
 import { type Terminal } from "../../../features/terminal";
 import { type EditablePaneNode } from "../../../features/workspace";
 import { type Workspace } from "../../../features/workspace";
-import { type SessionActions } from "./types";
-import { usePaneIntentActions } from "./usePaneIntentActions";
+import { type PaneCoordinatorPorts, usePaneIntentActions } from "./usePaneIntentActions";
 
 const targetPane: EditablePaneNode = {
   id: "target-pane",
@@ -66,19 +65,7 @@ function createActionPorts() {
     setActiveWorkspace: vi.fn(),
     splitPane: vi.fn(),
     updateWindowPaneTree: vi.fn(),
-  } satisfies Pick<
-    SessionActions,
-    | "closePane"
-    | "closeTerminal"
-    | "createTerminalFromSavedConfig"
-    | "createLocalSessionOnly"
-    | "createSshSessionOnly"
-    | "replaceInitWindowWithTerminal"
-    | "setActivePane"
-    | "setActiveWorkspace"
-    | "splitPane"
-    | "updateWindowPaneTree"
-  >;
+  } satisfies PaneCoordinatorPorts;
 }
 
 describe("usePaneIntentActions", () => {

@@ -65,7 +65,7 @@ export function useTmuxLifecycleActions({
       save: boolean,
       displayConfig?: TerminalDisplayConfig,
     ) => {
-      const controllerId = terminal.tmuxSessionId;
+      const controllerId = terminal.tmux?.controllerId;
       if (controllerId !== undefined) {
         tmuxControllerConfigsRef?.current.set(controllerId, config);
         if (tmuxControllerConfigIdsRef) {
@@ -73,7 +73,7 @@ export function useTmuxLifecycleActions({
           syncOpenTmuxSessions();
           setSessions((previous) =>
             previous.map((session) =>
-              session.tmuxSessionId === controllerId
+              session.tmux?.controllerId === controllerId
                 ? { ...session, configId: terminal.configId, displayConfig }
                 : session,
             ),
@@ -171,11 +171,11 @@ export function useTmuxLifecycleActions({
   const removeTmuxControllerFromState = useCallback(
     (controllerId: number) => {
       const deadIds = terminalsRef.current
-        .filter((terminal) => terminal.tmuxSessionId === controllerId)
+        .filter((terminal) => terminal.tmux?.controllerId === controllerId)
         .map((terminal) => terminal.id);
       if (deadIds.length > 0) {
         setSessions((previous) =>
-          previous.filter((terminal) => terminal.tmuxSessionId !== controllerId),
+          previous.filter((terminal) => terminal.tmux?.controllerId !== controllerId),
         );
         setWorkspaces((previous) => removeControllerFromWorkspaces(previous, deadIds));
         for (const terminalId of deadIds) {
@@ -217,15 +217,15 @@ export function useTmuxLifecycleActions({
   const reconnectTmuxSession = useCallback(
     async (controllerId: number): Promise<Terminal> => {
       const controlledTerminals = terminalsRef.current.filter(
-        (terminal) => terminal.tmuxSessionId === controllerId,
+        (terminal) => terminal.tmux?.controllerId === controllerId,
       );
       if (controlledTerminals.length === 0) {
         throw new Error("Tmux session not found");
       }
 
       const sessionName = controlledTerminals
-        .find((terminal) => terminal.tmuxSessionName)
-        ?.tmuxSessionName?.trim();
+        .find((terminal) => terminal.tmux?.sessionName)
+        ?.tmux?.sessionName?.trim();
       const terminalConfigId = controlledTerminals.find((terminal) => terminal.configId)?.configId;
       const savedConfig =
         savedConfigs.find(
@@ -248,7 +248,7 @@ export function useTmuxLifecycleActions({
       const displayConfig = savedConfig?.displayConfig ?? controlledTerminals[0]?.displayConfig;
       const info = await tmuxControllerActions.attachSession(config);
       const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
-      const newControllerId = terminal.tmuxSessionId;
+      const newControllerId = terminal.tmux?.controllerId;
       if (newControllerId === undefined) {
         throw new Error("Tmux reconnect returned no controller");
       }
@@ -259,7 +259,7 @@ export function useTmuxLifecycleActions({
         syncOpenTmuxSessions();
         setSessions((previous) =>
           previous.map((session) =>
-            session.tmuxSessionId === newControllerId
+            session.tmux?.controllerId === newControllerId
               ? { ...session, configId, displayConfig }
               : session,
           ),

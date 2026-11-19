@@ -54,7 +54,7 @@ export function useTmuxEventBridge({
           onControllerExited: ({ controllerHandle, reason }) => {
             const controllerId = Number(controllerHandle);
             const deadTerminals = terminalsRef.current.filter(
-              (terminal) => terminal.tmuxSessionId === controllerId,
+              (terminal) => terminal.tmux?.controllerId === controllerId,
             );
             const storedConfig = tmuxControllerConfigsRef.current.get(controllerId);
             const isIntentionalClose = tmuxControllersClosingRef.current.has(controllerId);
@@ -133,7 +133,19 @@ export function useTmuxEventBridge({
                           tmuxPaneCommand: currentCommand,
                           tmuxPaneActive: isActive,
                         }),
-                        tmuxPaneId,
+                        tmux: {
+                          controllerId,
+                          paneId: tmuxPaneId,
+                          ...(parentTmuxWindowId ? { windowId: parentTmuxWindowId } : {}),
+                          ...(sessionName ? { sessionName } : {}),
+                          ...(windowName ? { windowName } : {}),
+                          ...(windowIndex !== undefined ? { windowIndex } : {}),
+                          ...(paneIndex !== undefined ? { paneIndex } : {}),
+                          ...(width !== undefined ? { width } : {}),
+                          ...(height !== undefined ? { height } : {}),
+                          ...(currentCommand ? { command: currentCommand } : {}),
+                          ...(isActive !== undefined ? { isActive } : {}),
+                        },
                         kind: {
                           type: "tmux-pane",
                           sessionId: controllerId,
@@ -272,7 +284,7 @@ export function useTmuxEventBridge({
           onWindowClosed: ({ backendWindowHandle, tmuxWindowId }) => {
             const xstermWindowId = Number(backendWindowHandle);
             const deadIds = terminalsRef.current
-              .filter((terminal) => terminal.tmuxWindowId === tmuxWindowId)
+              .filter((terminal) => terminal.tmux?.windowId === tmuxWindowId)
               .map((terminal) => terminal.id);
 
             if (deadIds.length > 0) {
@@ -297,21 +309,24 @@ export function useTmuxEventBridge({
             );
             setTerminals((terminals) =>
               terminals.map((terminal) => {
-                if (terminal.tmuxSessionId !== controllerId) return terminal;
+                if (terminal.tmux?.controllerId !== controllerId) return terminal;
                 const pane = panesByTerminalId.get(terminal.id);
                 if (!pane) return terminal;
                 return {
                   ...terminal,
-                  tmuxPaneId: pane.tmuxPaneId,
-                  tmuxWindowId,
-                  tmuxSessionName: sessionName ?? terminal.tmuxSessionName,
-                  tmuxWindowName: pane.windowName ?? terminal.tmuxWindowName,
-                  tmuxWindowIndex: pane.windowIndex,
-                  tmuxPaneIndex: pane.paneIndex,
-                  tmuxPaneWidth: pane.width,
-                  tmuxPaneHeight: pane.height,
-                  tmuxPaneCommand: pane.currentCommand ?? terminal.tmuxPaneCommand,
-                  tmuxPaneActive: pane.isActive ?? terminal.tmuxPaneActive,
+                  tmux: {
+                    ...terminal.tmux,
+                    paneId: pane.tmuxPaneId,
+                    windowId: tmuxWindowId,
+                    sessionName: sessionName ?? terminal.tmux.sessionName,
+                    windowName: pane.windowName ?? terminal.tmux.windowName,
+                    windowIndex: pane.windowIndex,
+                    paneIndex: pane.paneIndex,
+                    width: pane.width,
+                    height: pane.height,
+                    command: pane.currentCommand ?? terminal.tmux.command,
+                    isActive: pane.isActive ?? terminal.tmux.isActive,
+                  },
                   ...(terminal.kind.type === "tmux-pane"
                     ? {
                         kind: {

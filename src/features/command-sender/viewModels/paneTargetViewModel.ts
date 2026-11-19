@@ -41,17 +41,12 @@ export function selectPaneTargetOptions(
     if (!terminal) continue;
 
     if (terminal.type === "tmux-pane") {
-      if (
-        terminal.tmuxSessionId === undefined ||
-        terminal.tmuxWindowId === undefined ||
-        terminal.tmuxPaneId === undefined
-      ) {
-        continue;
-      }
+      const tmux = terminal.tmux;
+      if (!tmux?.windowId) continue;
       const targetResult = createTmuxPaneTargetRef({
-        controllerId: terminal.tmuxSessionId,
-        tmuxWindowId: terminal.tmuxWindowId,
-        tmuxPaneId: terminal.tmuxPaneId,
+        controllerId: tmux.controllerId,
+        tmuxWindowId: tmux.windowId,
+        tmuxPaneId: tmux.paneId,
       });
       if (!targetResult.ok) continue;
       const displayResult = createPaneTargetDisplayInfo({
@@ -59,7 +54,7 @@ export function selectPaneTargetOptions(
         displayId: `P${location.paneNumber}`,
         title: terminal.name,
         breadcrumb: toBreadcrumb(location, configNames.get(terminal.configId)),
-        technicalId: `${terminal.tmuxWindowId}/${terminal.tmuxPaneId}`,
+        technicalId: `${tmux.windowId}/${tmux.paneId}`,
         isAvailable: terminal.isConnected,
       });
       if (displayResult.ok) {

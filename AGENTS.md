@@ -45,7 +45,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 - 当前顶层：`src/app/`（应用装配与 shell）、`src/features/`（纵向功能切片）、`src/models/`（纯领域模型）、`src/infra/`（公共日志与通用配置持久化）、`src/shared/`（尽量无业务依赖的 UI、hooks、utils）、`src/styles/`（全局样式）。
 - `src/models/` 不得依赖 React、Tauri、DOM、Store 或任何上层目录；`src/infra/` 不得依赖 `app/`、`features/`、`models/`。
 - Feature 子目录按实际需要创建，不预建空目录。当前常见目录是 `ui/`、`application/`、`state/`、`viewModels/`、`infrastructure/`、`persistence/`；只有存在纯选择器时才创建 `selectors/`。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。
-- 全局状态由 feature 内的 Context / hooks 提供，配置、终端运行时、工作区布局和偏好分别落在 `launch-config`、`terminal`、`workspace`、`settings`。跨聚合动作与 Provider 组合位于 `src/app/application/session/`。当前 `SessionActions` 仍保留一个较宽的内部组合接口，这是待拆分债务；新功能不得继续扩大该接口或新增 `useSession()` 式公共大 API。
+- 全局状态由 feature 内的 Context / hooks 提供，配置、终端运行时、工作区布局和偏好分别落在 `launch-config`、`terminal`、`workspace`、`settings`。跨聚合动作与 Provider 组合位于 `src/app/application/session/`；不要再引入聚合 `SessionActions` 或 `useSession()` 式公共大 API。terminal-surface 的运行时副作用通过 `TerminalSurfacePortsProvider` 注入。
 - Tauri IPC 必须收敛在 feature-local infrastructure adapter；组件不得直接 `invoke()` 或 `listen()` 原始后端事件。
 - 样式只用纯 CSS：全局 token 在 `src/styles/global.css` 的 `:root`，组件样式优先与组件同目录（`<Component>.css`），跨页面布局可放在 `src/styles/`。禁止新增 Tailwind / CSS-in-JS / CSS Modules。
 - 无路由，视图和全局面板切换由 AppShell 内部状态驱动。
@@ -66,11 +66,8 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 以下为 2026-11-19 当前工作区状态；修复后应同步删除对应条目，不要把它当成长期架构目标。
 
-- `features/terminal/contracts.ts` 的 `Terminal` 同时携带 tmux 元数据；tmux 与普通终端尚未形成清晰投影边界。
-- `app/application/session/types.ts` 的 `SessionActions` 仍然很宽；`AppShellRuntime` 已把 View Model 计算移到 `app/application/runtimeShell`，但仍负责较多领域回调和跨 Feature 组装，后续应继续拆分。
-- `features/terminal-surface` 仍直接导入 terminal/tmux 的根级动作；跨聚合副作用应继续向 app intent 收敛。
+- `AppShellRuntime` 已把 View Model 计算移到 `app/application/runtimeShell`，但仍负责较多领域回调和跨 Feature 组装，后续应继续拆分。
 - `features/terminal-stream/index.ts` 目前会导出 adapter contracts，其中包含后端 handle/DTO。它是现有 wire contract 方案的一部分，但不要让 UI 直接消费这些类型。
-- `features/launch-config` 的 SSH 公共配置仍使用 `auth_type` / `key_file` 等后端风格字段；新增领域 API 不要再扩散 snake_case。
 
 ## 5. 关键坑（Gotchas）
 
@@ -89,6 +86,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 - 当前实际存储文件是 `terminals.json`（`savedConfigs`、`groups`、`nextGroupId`、`savedWindowConfigs`、`savedWorkspaces`）、`settings.json`、`ui-shell.json` 和 `log_config.json`。
 - `src/infra/storage/jsonStore.ts` 只提供通用 key/value 持久化；领域 schema、迁移、校验归属对应 feature 的 `persistence/`。
+- SSH 领域配置使用 `authType` / `keyFile`；只有 terminal-stream 的 wire DTO、wire mapper 和 persisted-data migration 允许出现 `auth_type` / `key_file`。
 - 前端日志经 `src/infra/logging/` 的 `log_message` adapter 转后端，由 tracing 写滚动日志。
 
 ## 7. Husky（提交钩子）

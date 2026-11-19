@@ -158,17 +158,15 @@ export function SessionTab({
 
           <FormSelectField
             label="Authentication"
-            value={sshConfig.auth_type}
-            onChange={(v) =>
-              onSshConfigChange({ ...sshConfig, auth_type: v as "password" | "key" })
-            }
+            value={sshConfig.authType}
+            onChange={(v) => onSshConfigChange({ ...sshConfig, authType: v as "password" | "key" })}
             options={[
               { value: "password", label: "Password" },
               { value: "key", label: "Key File" },
             ]}
           />
 
-          {sshConfig.auth_type === "password" ? (
+          {sshConfig.authType === "password" ? (
             <FormTextField
               label="Password"
               placeholder="********"
@@ -181,8 +179,8 @@ export function SessionTab({
               <FormTextField
                 label="Key File Path"
                 placeholder="~/.ssh/id_rsa"
-                value={sshConfig.key_file}
-                onChange={(key_file) => onSshConfigChange({ ...sshConfig, key_file })}
+                value={sshConfig.keyFile}
+                onChange={(keyFile) => onSshConfigChange({ ...sshConfig, keyFile })}
               />
               <FormTextField
                 label="Passphrase"

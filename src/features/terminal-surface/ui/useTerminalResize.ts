@@ -1,8 +1,8 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { type FitAddon } from "@xterm/addon-fit";
-import { useTerminalRuntime } from "../../terminal";
 import type { TerminalDisplayConfig } from "../../../features/terminal";
+import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
 
 export function useTerminalResize(
   containerRef: RefObject<HTMLDivElement | null>,
@@ -12,17 +12,17 @@ export function useTerminalResize(
   displayConfig?: TerminalDisplayConfig,
   isWindowActive: boolean = true,
 ): void {
-  const { resizeTerminal, reportTerminalSize } = useTerminalRuntime();
-  const resizeTerminalRef = useRef(resizeTerminal);
-  const reportTerminalSizeRef = useRef(reportTerminalSize);
+  const { resize, reportSize } = useTerminalSurfacePorts().session;
+  const resizeTerminalRef = useRef(resize);
+  const reportTerminalSizeRef = useRef(reportSize);
 
   useEffect(() => {
-    resizeTerminalRef.current = resizeTerminal;
-  }, [resizeTerminal]);
+    resizeTerminalRef.current = resize;
+  }, [resize]);
 
   useEffect(() => {
-    reportTerminalSizeRef.current = reportTerminalSize;
-  }, [reportTerminalSize]);
+    reportTerminalSizeRef.current = reportSize;
+  }, [reportSize]);
 
   // Mirror displayConfig into a ref so the debounced ResizeObserver closure
   // always reads the latest sizing mode without re-subscribing to the observer.

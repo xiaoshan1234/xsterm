@@ -52,8 +52,8 @@ describe("migrateSavedConfig — legacy v0 → v1", () => {
         host: "example.com",
         port: 22,
         username: "alice",
-        auth_type: "key",
-        key_file: "/keys/id_ed25519",
+        authType: "key",
+        keyFile: "/keys/id_ed25519",
       },
     });
   });
@@ -145,8 +145,8 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
         host: "bastion.example.com",
         port: 22,
         username: "alice",
-        auth_type: "key",
-        key_file: "/k",
+        authType: "key",
+        keyFile: "/k",
         knownHostsPath: "/home/alice/.ssh/known_hosts",
         proxyJump: "jump@example.com",
       });
@@ -172,7 +172,7 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
     });
   });
 
-  it("accepts a v1 ssh config unchanged", () => {
+  it("migrates legacy SSH field names in a v1 config", () => {
     const raw = {
       id: "cfg-6",
       name: "dev",
@@ -185,8 +185,54 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
       host: "dev.local",
       port: 2222,
       username: "dev",
-      auth_type: "key",
-      key_file: "/k",
+      authType: "key",
+      keyFile: "/k",
+    });
+  });
+
+  it("accepts a v1 ssh config already using camelCase", () => {
+    const raw = {
+      id: "cfg-6-camel",
+      name: "dev",
+      version: 1,
+      type: "ssh",
+      config: {
+        host: "dev.local",
+        port: 2222,
+        username: "dev",
+        authType: "key",
+        keyFile: "/k",
+      },
+    };
+    expect(migrateSavedConfig(raw)?.config).toEqual(raw.config);
+  });
+
+  it("migrates nested SSH fields inside a tmux config", () => {
+    const raw = {
+      id: "cfg-tmux-ssh",
+      name: "tmux over ssh",
+      version: 1,
+      type: "tmux-pane",
+      config: {
+        tmuxSessionName: "work",
+        ssh: {
+          host: "bastion.example.com",
+          port: 22,
+          username: "alice",
+          auth_type: "key",
+          key_file: "/keys/id_ed25519",
+        },
+      },
+    };
+    expect(migrateSavedConfig(raw)?.config).toEqual({
+      tmuxSessionName: "work",
+      ssh: {
+        host: "bastion.example.com",
+        port: 22,
+        username: "alice",
+        authType: "key",
+        keyFile: "/keys/id_ed25519",
+      },
     });
   });
 
@@ -236,7 +282,7 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
       host: "h",
       port: 22,
       username: "u",
-      auth_type: "password",
+      authType: "password",
       password: "p",
     });
   });
@@ -303,8 +349,8 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
       host: "bastion.example.com",
       port: 2222,
       username: "alice",
-      auth_type: "key",
-      key_file: "/k",
+      authType: "key",
+      keyFile: "/k",
       termType: "xterm-256color",
       tcpNoDelay: true,
       soKeepalive: true,

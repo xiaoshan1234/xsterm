@@ -60,8 +60,7 @@ describe("selectRuntimeStatus", () => {
     const tmuxTerminal = terminal({
       type: "tmux-pane",
       name: "terminal",
-      tmuxSessionId: 3,
-      tmuxPaneId: "%2",
+      tmux: { controllerId: 3, paneId: "%2" },
     });
     const controllers = [
       {

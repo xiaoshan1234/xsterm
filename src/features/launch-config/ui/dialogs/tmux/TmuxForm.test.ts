@@ -63,7 +63,7 @@ describe("tmux base transport", () => {
         host: "example.com",
         port: 22,
         username: "dev",
-        auth_type: "password",
+        authType: "password",
       },
     };
 

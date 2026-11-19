@@ -16,6 +16,10 @@ import {
   type TmuxRuntimeContextType,
 } from "../features/tmux";
 import {
+  TerminalSurfacePortsProvider,
+  type TerminalSurfacePorts,
+} from "../features/terminal-surface";
+import {
   PaneIntentProvider,
   WorkspaceProvider,
   type PaneIntentActions,
@@ -29,6 +33,7 @@ interface CreateTestApplicationOptions {
   tmux?: Partial<TmuxRuntimeContextType>;
   workspace?: Partial<WorkspaceLayoutContextType>;
   paneIntents?: Partial<PaneIntentActions>;
+  terminalSurface?: Partial<TerminalSurfacePorts>;
 }
 
 function unsupported(): never {
@@ -149,6 +154,38 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     ...options.paneIntents,
   };
 
+  const terminalSurface: TerminalSurfacePorts = {
+    session: {
+      getEffectiveLocalEcho: terminal.getEffectiveLocalEcho,
+      reconnect: terminal.reconnectSession,
+      resize: terminal.resizeTerminal,
+      reportSize: terminal.reportTerminalSize,
+      uploadImage: terminal.uploadImageToSshTerminal,
+      write: terminal.writeTerminal,
+      isTmuxTerminal: (terminalId) =>
+        terminal.terminals.some(
+          (candidate) => candidate.id === terminalId && candidate.tmux !== undefined,
+        ),
+      touchActivity: terminal.touchTerminalActivity,
+    },
+    stream: {
+      subscribeOutput: async () => () => undefined,
+      writeBytes: async () => undefined,
+    },
+    clipboard: {
+      readImages: async () => [],
+      readText: async () => "",
+      writeText: async () => undefined,
+    },
+    tmux: {
+      capturePane: async () => "",
+      getControllerError: () => undefined,
+      retryController: async () => undefined,
+      dismissControllerError: () => undefined,
+    },
+    ...options.terminalSurface,
+  };
+
   function Application({ children }: { children: ReactNode }) {
     return (
       <SessionPreferencesProvider value={preferences}>
@@ -156,7 +193,11 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
           <TerminalRuntimeProvider value={terminal}>
             <TmuxRuntimeProvider value={tmux}>
               <WorkspaceProvider value={workspace}>
-                <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
+                <PaneIntentProvider value={paneIntents}>
+                  <TerminalSurfacePortsProvider ports={terminalSurface}>
+                    {children}
+                  </TerminalSurfacePortsProvider>
+                </PaneIntentProvider>
               </WorkspaceProvider>
             </TmuxRuntimeProvider>
           </TerminalRuntimeProvider>
@@ -173,5 +214,6 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     tmux,
     workspace,
     paneIntents,
+    terminalSurface,
   };
 }

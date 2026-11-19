@@ -51,7 +51,7 @@ describe("SshConfig — name field", () => {
       host: "h.example.com",
       port: 22,
       username: "ops",
-      auth_type: "password",
+      authType: "password",
       password: "secret",
     };
     expect(config.name).toBe("production");
@@ -62,7 +62,7 @@ describe("SshConfig — name field", () => {
       host: "h.example.com",
       port: 22,
       username: "ops",
-      auth_type: "password",
+      authType: "password",
       password: "secret",
     };
     expect(config.name).toBeUndefined();
@@ -74,8 +74,8 @@ describe("SshConfig — name field", () => {
       host: "bastion.example.com",
       port: 2222,
       username: "deploy",
-      auth_type: "key",
-      key_file: "/home/deploy/.ssh/id_ed25519",
+      authType: "key",
+      keyFile: "/home/deploy/.ssh/id_ed25519",
       passphrase: "secret",
     };
     const json = JSON.stringify(original);
@@ -85,8 +85,8 @@ describe("SshConfig — name field", () => {
     expect(parsed.host).toBe("bastion.example.com");
     expect(parsed.port).toBe(2222);
     expect(parsed.username).toBe("deploy");
-    expect(parsed.auth_type).toBe("key");
-    expect(parsed.key_file).toBe("/home/deploy/.ssh/id_ed25519");
+    expect(parsed.authType).toBe("key");
+    expect(parsed.keyFile).toBe("/home/deploy/.ssh/id_ed25519");
   });
 
   it("round-trips without a name field when omitted", () => {
@@ -94,7 +94,7 @@ describe("SshConfig — name field", () => {
       host: "h.example.com",
       port: 22,
       username: "u",
-      auth_type: "password",
+      authType: "password",
       password: "p",
     };
     const json = JSON.stringify(original);
@@ -134,7 +134,7 @@ describe("SavedTerminalConfig — shape compatibility", () => {
         host: "bastion.example.com",
         port: 22,
         username: "ops",
-        auth_type: "password",
+        authType: "password",
         password: "p",
       } as SshConfig,
     };

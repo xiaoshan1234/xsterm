@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   toBackendTerminalHandle,
+  toSshConfigDto,
   type BackendTerminalHandle,
   type TerminalInfoDto,
 } from "../../terminal-stream";
+import type { TmuxSessionConfig } from "../../launch-config";
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
 import { type TmuxSessionConfigDto } from "./tauriContracts";
 
@@ -12,8 +14,8 @@ type PaneSplitDirection = "horizontal" | "vertical";
 type InvokeFunction = <Value>(command: string, args?: Record<string, unknown>) => Promise<Value>;
 
 export interface TmuxCommandClient {
-  createTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto>;
-  attachTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto>;
+  createTmuxSession(config: TmuxSessionConfig): Promise<TerminalInfoDto>;
+  attachTmuxSession(config: TmuxSessionConfig): Promise<TerminalInfoDto>;
   detachTmuxSession(controllerHandle: BackendControllerHandle): Promise<void>;
   resizeTmuxWindow(
     controllerHandle: BackendControllerHandle,
@@ -39,16 +41,16 @@ export function createTmuxCommandClient(
   invokeFunction: InvokeFunction = defaultInvoke,
 ): TmuxCommandClient {
   return {
-    async createTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto> {
+    async createTmuxSession(config: TmuxSessionConfig): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("create_tmux_session", {
-        config,
+        config: toTmuxSessionConfigDto(config),
       });
       return normalizeTerminalInfo(terminal);
     },
 
-    async attachTmuxSession(config: TmuxSessionConfigDto): Promise<TerminalInfoDto> {
+    async attachTmuxSession(config: TmuxSessionConfig): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("attach_tmux_session", {
-        config,
+        config: toTmuxSessionConfigDto(config),
       });
       return normalizeTerminalInfo(terminal);
     },
@@ -120,6 +122,14 @@ export function createTmuxCommandClient(
         name,
       });
     },
+  };
+}
+
+function toTmuxSessionConfigDto(config: TmuxSessionConfig): TmuxSessionConfigDto {
+  const { ssh, ...rest } = config;
+  return {
+    ...rest,
+    ...(ssh ? { ssh: toSshConfigDto(ssh) } : {}),
   };
 }
 

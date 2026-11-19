@@ -239,7 +239,7 @@ export function Pane({
   }, [paneIntents, workspace.id, windowId, pane.id]);
 
   const handleCreateTmuxWindow = useCallback(async () => {
-    if (terminal?.tmuxSessionId === undefined) return;
+    if (terminal?.tmux?.controllerId === undefined) return;
     try {
       await paneIntents.createTmuxWindow(terminal.id);
     } catch (e) {
