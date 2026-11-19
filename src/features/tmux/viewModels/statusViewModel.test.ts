@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import type { Terminal, TmuxPaneTerminal } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { Workspace } from "../../../features/workspace";
@@ -13,30 +14,45 @@ describe("Tmux status view model", () => {
     ];
     const workspaces: Workspace[] = [
       {
-        id: "workspace-1",
+        id: createWorkspaceId("workspace-1"),
         name: "Default",
-        activeWindowId: "window-1",
-        terminalIds: [10, 11, 12],
+        activeWindowId: createWindowId("window-1"),
+        terminalIds: [createTerminalId(10), createTerminalId(11), createTerminalId(12)],
         windows: [
           {
-            id: "window-1",
+            id: createWindowId("window-1"),
             name: "tmux",
-            activePaneId: "pane-1",
+            activePaneId: createPaneId("pane-1"),
             rootPane: {
-              id: "split-1",
+              id: createPaneId("split-1"),
               type: "split",
               direction: "horizontal",
               size: 100,
               children: [
-                { id: "pane-1", type: "leaf", size: 50, terminalId: 10 },
                 {
-                  id: "split-2",
+                  id: createPaneId("pane-1"),
+                  type: "leaf",
+                  size: 50,
+                  terminalId: createTerminalId(10),
+                },
+                {
+                  id: createPaneId("split-2"),
                   type: "split",
                   direction: "vertical",
                   size: 50,
                   children: [
-                    { id: "pane-2", type: "leaf", size: 50, terminalId: 11 },
-                    { id: "pane-3", type: "leaf", size: 50, terminalId: 12 },
+                    {
+                      id: createPaneId("pane-2"),
+                      type: "leaf",
+                      size: 50,
+                      terminalId: createTerminalId(11),
+                    },
+                    {
+                      id: createPaneId("pane-3"),
+                      type: "leaf",
+                      size: 50,
+                      terminalId: createTerminalId(12),
+                    },
                   ],
                 },
               ],
@@ -149,7 +165,7 @@ function createTmuxTerminal(
   tmuxSessionName?: string,
 ): TmuxPaneTerminal {
   return {
-    id,
+    id: createTerminalId(id),
     configId,
     name: `tmux ${paneId}`,
     type: "tmux-pane",

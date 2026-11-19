@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import { type Terminal as XTerm } from "@xterm/xterm";
+import type { TerminalId } from "../../../models";
 
 /**
  * Line-number gutter, rendered as a plain overlay `<div>` that is a *sibling*
@@ -37,7 +38,7 @@ interface UseLineNumberOverlayOptions {
   /** The overlay element itself. */
   overlayRef: RefObject<HTMLDivElement | null>;
   /** Re-initialises the overlay when the pane is bound to another terminal. */
-  terminalId: number;
+  terminalId: TerminalId;
   /** Show or hide the line number gutter. @default true */
   enabled?: boolean;
 }

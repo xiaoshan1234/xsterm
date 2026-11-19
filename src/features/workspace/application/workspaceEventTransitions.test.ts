@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import type { EditablePaneNode } from "../contracts";
 import type { Window, Workspace } from "../contracts";
 import {
@@ -10,13 +11,18 @@ import {
 } from "./workspaceEventTransitions";
 
 function leaf(id: string, terminalId?: number): EditablePaneNode {
-  return { id, type: "leaf", size: 100, terminalId };
+  return {
+    id: createPaneId(id),
+    type: "leaf",
+    size: 100,
+    ...(terminalId !== undefined ? { terminalId: createTerminalId(terminalId) } : {}),
+  };
 }
 
 function terminalWindow(id: string, xstermWindowId: number, terminalId: number): Window {
   const rootPane = leaf(`${id}-pane`, terminalId);
   return {
-    id,
+    id: createWindowId(id),
     name: `win-${id}`,
     rootPane,
     activePaneId: rootPane.id,
@@ -27,7 +33,7 @@ function terminalWindow(id: string, xstermWindowId: number, terminalId: number):
 
 function workspaceWith(...windows: Window[]): Workspace {
   return {
-    id: "ws-1",
+    id: createWorkspaceId("ws-1"),
     name: "workspace",
     windows,
     activeWindowId: windows[0]?.id ?? null,
@@ -38,14 +44,14 @@ function workspaceWith(...windows: Window[]): Workspace {
 describe("removeSessionsFromWorkspaces", () => {
   it("clears the terminal from a single-leaf window and recomputes terminalIds", () => {
     const ws = workspaceWith(terminalWindow("w1", 1, 10));
-    const [next] = removeSessionsFromWorkspaces([ws], [10]);
+    const [next] = removeSessionsFromWorkspaces([ws], [createTerminalId(10)]);
     expect(next.windows[0].rootPane.terminalId).toBeUndefined();
     expect(next.terminalIds).toEqual([]);
   });
 
   it("removes multiple terminals across windows", () => {
     const ws = workspaceWith(terminalWindow("w1", 1, 10), terminalWindow("w2", 2, 20));
-    const [next] = removeSessionsFromWorkspaces([ws], [10, 20]);
+    const [next] = removeSessionsFromWorkspaces([ws], [createTerminalId(10), createTerminalId(20)]);
     expect(next.windows.map((w) => w.rootPane.terminalId)).toEqual([undefined, undefined]);
     expect(next.terminalIds).toEqual([]);
   });
@@ -59,7 +65,10 @@ describe("removeControllerFromWorkspaces", () => {
       terminalWindow("w3", 3, 20),
     );
 
-    const [next] = removeControllerFromWorkspaces([ws], [10, 11]);
+    const [next] = removeControllerFromWorkspaces(
+      [ws],
+      [createTerminalId(10), createTerminalId(11)],
+    );
 
     expect(next.windows.map((window) => window.xstermWindowId)).toEqual([3]);
     expect(next.windows[0].name).toBe("win-w3");
@@ -69,19 +78,22 @@ describe("removeControllerFromWorkspaces", () => {
 
   it("keeps the remaining split pane when a controlled terminal shares a window", () => {
     const rootPane: EditablePaneNode = {
-      id: "split",
+      id: createPaneId("split"),
       type: "split",
       direction: "horizontal",
       size: 100,
       children: [leaf("pane-10", 10), leaf("pane-20", 20)],
     };
     const mixedWindow: Window = {
-      id: "w1",
+      id: createWindowId("w1"),
       name: "mixed",
       rootPane,
-      activePaneId: "pane-10",
+      activePaneId: createPaneId("pane-10"),
     };
-    const [next] = removeControllerFromWorkspaces([workspaceWith(mixedWindow)], [10]);
+    const [next] = removeControllerFromWorkspaces(
+      [workspaceWith(mixedWindow)],
+      [createTerminalId(10)],
+    );
 
     expect(next.windows).toHaveLength(1);
     expect(next.windows[0].rootPane.type).toBe("split");
@@ -93,7 +105,7 @@ describe("removeControllerFromWorkspaces", () => {
 
   it("adds an init window after its last controlled window closes", () => {
     const ws = workspaceWith(terminalWindow("w1", 1, 10));
-    const [next] = removeControllerFromWorkspaces([ws], [10]);
+    const [next] = removeControllerFromWorkspaces([ws], [createTerminalId(10)]);
 
     expect(next.windows).toHaveLength(1);
     expect(next.windows[0].windowType).toBe("init");
@@ -107,7 +119,7 @@ describe("appendOrReplaceInitWindow", () => {
   it("replaces the placeholder init window when it is the only window", () => {
     const initPane = leaf("init-pane");
     const workspace = workspaceWith({
-      id: "init",
+      id: createWindowId("init"),
       name: "New Terminal",
       rootPane: initPane,
       activePaneId: initPane.id,

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { createApplicationError } from "../../../models/applicationError";
+import type { TerminalId } from "../../../models";
 import { terminalSessionActions } from "../../../features/terminal";
 import { defaultTmuxDisplayName, uniqueTmuxDisplayName } from "../../../features/tmux";
 import { tmuxControllerActions } from "../../../features/tmux";
@@ -136,7 +137,7 @@ export function useTerminalMaintenanceActions({
             ...workspace,
             windows: workspace.windows.map((window) => {
               const newRoot = removeSessionAndCollapse(window.rootPane, terminal.id);
-              const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
+              const newActivePaneId = findPaneNode(newRoot, window.activePaneId)
                 ? window.activePaneId
                 : (getLeafPaneIds(newRoot)[0] ?? null);
               return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
@@ -149,7 +150,7 @@ export function useTerminalMaintenanceActions({
   );
 
   const closeTerminal = useCallback(
-    async (terminalId: number): Promise<void> => {
+    async (terminalId: TerminalId): Promise<void> => {
       try {
         await terminalSessionActions.closeTerminal(terminalId);
       } catch (error) {
@@ -163,7 +164,7 @@ export function useTerminalMaintenanceActions({
               ...workspace,
               windows: workspace.windows.map((window) => {
                 const newRoot = removeSessionAndCollapse(window.rootPane, terminalId);
-                const newActivePaneId = findPaneNode(newRoot, window.activePaneId ?? "")
+                const newActivePaneId = findPaneNode(newRoot, window.activePaneId)
                   ? window.activePaneId
                   : (getLeafPaneIds(newRoot)[0] ?? null);
                 return { ...window, rootPane: newRoot, activePaneId: newActivePaneId };
@@ -177,7 +178,7 @@ export function useTerminalMaintenanceActions({
   );
 
   const reconnectSession = useCallback(
-    async (terminalId: number): Promise<Terminal> => {
+    async (terminalId: TerminalId): Promise<Terminal> => {
       const oldTerminal = terminalsRef.current.find((terminal) => terminal.id === terminalId);
       if (!oldTerminal) throw createApplicationError("not-found", "Terminal not found");
       if (oldTerminal.capabilities && !oldTerminal.capabilities.supportsReconnect) {
@@ -241,7 +242,7 @@ export function useTerminalMaintenanceActions({
   );
 
   const renameSession = useCallback(
-    (terminalId: number, name: string) => {
+    (terminalId: TerminalId, name: string) => {
       setSessions((previous) =>
         previous.map((terminal) => (terminal.id === terminalId ? { ...terminal, name } : terminal)),
       );
@@ -258,7 +259,7 @@ export function useTerminalMaintenanceActions({
   );
 
   const applyDisplayConfigToLiveSession = useCallback(
-    (terminalId: number, patch: Partial<TerminalDisplayConfig>) => {
+    (terminalId: TerminalId, patch: Partial<TerminalDisplayConfig>) => {
       setSessions((previous) =>
         previous.map((terminal) =>
           terminal.id === terminalId

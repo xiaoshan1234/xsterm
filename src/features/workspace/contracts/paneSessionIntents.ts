@@ -1,4 +1,5 @@
 import type { CreatedTerminalRef, LocalTerminalConfig, SshConfig } from "../../launch-config";
+import type { WindowId, WorkspaceId } from "../../../models";
 import type { PaneSplitDirection } from "./model";
 import type { PaneTarget } from "./paneIntents";
 
@@ -12,8 +13,8 @@ export interface AttachSavedConfigToPaneRequest extends PaneTarget {
 }
 
 export interface CreateSavedConfigForWindowRequest {
-  workspaceId: string;
-  windowId: string;
+  workspaceId: WorkspaceId;
+  windowId: WindowId;
   configId: string;
 }
 
@@ -28,15 +29,15 @@ export interface CreateSshTerminalForPaneRequest extends PaneTarget {
 }
 
 export interface CreateLocalTerminalForWindowRequest {
-  workspaceId: string;
-  windowId: string;
+  workspaceId: WorkspaceId;
+  windowId: WindowId;
   config: LocalTerminalConfig;
   save?: boolean;
 }
 
 export interface CreateSshTerminalForWindowRequest {
-  workspaceId: string;
-  windowId: string;
+  workspaceId: WorkspaceId;
+  windowId: WindowId;
   config: SshConfig;
   save?: boolean;
 }

@@ -1,3 +1,4 @@
+import { createTerminalId } from "../../../models";
 import { isTmuxPaneTerminal } from "../../../features/terminal";
 import { appendOrReplaceInitWindow, closeWindow, renameWindow } from "../../../features/workspace";
 import {
@@ -32,7 +33,7 @@ export function createTmuxWindowEventHandlers({
       const configId = tmuxControllerConfigIdsRef.current.get(controllerId) ?? "";
 
       const paneGeometries: TmuxPaneGeometry[] = panes.map((pane) => {
-        const terminalId = Number(pane.terminalHandle);
+        const terminalId = createTerminalId(Number(pane.terminalHandle));
         const existing = terminalsRef.current.find((terminal) => terminal.id === terminalId);
 
         if (existing) {
@@ -133,7 +134,9 @@ export function createTmuxWindowEventHandlers({
 
     onLayoutChanged: ({ controllerHandle, tmuxWindowId, sessionName, panes }) => {
       const controllerId = Number(controllerHandle);
-      const panesByTerminalId = new Map(panes.map((pane) => [Number(pane.terminalHandle), pane]));
+      const panesByTerminalId = new Map(
+        panes.map((pane) => [createTerminalId(Number(pane.terminalHandle)), pane]),
+      );
       setTerminals((terminals) =>
         terminals.map((terminal) => {
           if (!isTmuxPaneTerminal(terminal) || terminal.tmux.controllerId !== controllerId) {

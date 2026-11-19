@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { LaunchConfigId } from "../../../models";
 import {
   ManagerActionButton,
   ManagerEmptyState,
@@ -10,9 +11,9 @@ import { type WorkspaceManagerItemViewData } from "../viewModels/managerViewMode
 interface WorkspaceManagerPanelProps {
   items: readonly WorkspaceManagerItemViewData[];
   onNewWorkspace: () => void;
-  onOpen: (configId: string, isLoaded: boolean) => void;
-  onRename: (configId: string) => void;
-  onDelete: (configId: string) => void;
+  onOpen: (configId: LaunchConfigId, isLoaded: boolean) => void;
+  onRename: (configId: LaunchConfigId) => void;
+  onDelete: (configId: LaunchConfigId) => void;
 }
 
 export function WorkspaceManagerPanel({

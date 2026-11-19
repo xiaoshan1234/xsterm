@@ -1,4 +1,5 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { createTerminalId, type TerminalId } from "../../../models";
 import { terminalEventStream } from "../../../features/terminal";
 import { removeSessionsFromWorkspaces } from "../../../features/workspace";
 import type { Terminal } from "../../../features/terminal";
@@ -9,7 +10,7 @@ interface TerminalEventBridgeOptions {
   setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   terminalsRef: MutableRefObject<Terminal[]>;
-  establishingSessionsRef: MutableRefObject<Set<number>>;
+  establishingSessionsRef: MutableRefObject<Set<TerminalId>>;
 }
 
 export function useTerminalEventBridge({
@@ -28,7 +29,7 @@ export function useTerminalEventBridge({
       try {
         const unsubscribe = await terminalEventStream.subscribe({
           onDisconnected: ({ terminalHandle }) => {
-            const terminalId = Number(terminalHandle);
+            const terminalId = createTerminalId(Number(terminalHandle));
             establishingSessionsRef.current.delete(terminalId);
             setTerminals((terminals) =>
               terminals.map((terminal) =>
@@ -37,7 +38,7 @@ export function useTerminalEventBridge({
             );
           },
           onClosed: ({ terminalHandle }) => {
-            const terminalId = Number(terminalHandle);
+            const terminalId = createTerminalId(Number(terminalHandle));
             establishingSessionsRef.current.delete(terminalId);
             if (!terminalsRef.current.some((terminal) => terminal.id === terminalId)) return;
 

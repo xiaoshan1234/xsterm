@@ -15,11 +15,12 @@ import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import { createTerminalId } from "../../../models";
 import { useTerminalResize } from "./useTerminalResize";
 import type { TerminalDisplayConfig } from "../../../features/terminal";
 import { createTestApplication } from "../../../test/createTestApplication";
 
-const resizeTerminalMock = vi.fn(async (_id: number, _rows: number, _cols: number) => {});
+const resizeTerminalMock = vi.fn(async (_id: unknown, _rows: number, _cols: number) => {});
 const reportTerminalSizeMock = vi.fn();
 const testApplication = createTestApplication({
   terminal: {
@@ -116,7 +117,14 @@ function buildHarness(
       exposed.setDisplayConfig = setDisplayConfig;
     }, []);
 
-    useTerminalResize(containerRef, termRef, fitAddonRef, 42, displayConfig, opts?.isWindowActive);
+    useTerminalResize(
+      containerRef,
+      termRef,
+      fitAddonRef,
+      createTerminalId(42),
+      displayConfig,
+      opts?.isWindowActive,
+    );
 
     // Capture each resizeTerminal call onto exposed for richer assertions.
     useEffect(() => {

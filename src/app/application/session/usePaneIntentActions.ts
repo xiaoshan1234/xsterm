@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { createApplicationError } from "../../../models/applicationError";
+import type { PaneId, TerminalId, WindowId, WorkspaceId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import {
   findPaneNode,
@@ -21,26 +22,26 @@ interface PaneIntentState {
 }
 
 export interface PaneIntentPorts {
-  closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
-  closeTerminal: (terminalId: number) => Promise<void>;
+  closePane: (workspaceId: WorkspaceId, windowId: WindowId, paneId: PaneId) => Promise<void>;
+  closeTerminal: (terminalId: TerminalId) => Promise<void>;
   replaceInitWindowWithTerminal: (
-    workspaceId: string,
-    windowId: string,
+    workspaceId: WorkspaceId,
+    windowId: WindowId,
     terminal: Pick<Terminal, "id" | "configId" | "name">,
   ) => void;
-  setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
-  setActiveWorkspace: (workspaceId: string) => void;
+  setActivePane: (workspaceId: WorkspaceId, windowId: WindowId, paneId: PaneId) => void;
+  setActiveWorkspace: (workspaceId: WorkspaceId) => void;
   splitPane: (
-    workspaceId: string,
-    windowId: string,
-    paneId: string,
+    workspaceId: WorkspaceId,
+    windowId: WindowId,
+    paneId: PaneId,
     direction: PaneSplitDirection,
-    terminalId?: number,
+    terminalId?: TerminalId,
     configId?: string,
   ) => void;
   updateWindowPaneTree: (
-    workspaceId: string,
-    windowId: string,
+    workspaceId: WorkspaceId,
+    windowId: WindowId,
     updater: (root: EditablePaneNode) => EditablePaneNode,
   ) => void;
 }
@@ -121,7 +122,7 @@ export function usePaneIntentActions({
   );
 
   const closeTerminal = useCallback(
-    async (terminalId: number) => {
+    async (terminalId: TerminalId) => {
       await actions.closeTerminal(terminalId);
     },
     [actions],

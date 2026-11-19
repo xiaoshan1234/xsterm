@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { Workspace } from "../../../features/workspace";
 import { selectPaneTargetDisplayInfos } from "./paneTargetViewModel";
@@ -7,7 +8,7 @@ describe("pane target view model", () => {
   it("creates stable raw and tmux targets with human-readable metadata", () => {
     const terminals: Terminal[] = [
       {
-        id: 1,
+        id: createTerminalId(1),
         configId: "local-1",
         name: "Local PowerShell",
         type: "local",
@@ -21,7 +22,7 @@ describe("pane target view model", () => {
         },
       },
       {
-        id: 2,
+        id: createTerminalId(2),
         configId: "",
         name: "tmux editor",
         type: "tmux-pane",
@@ -38,23 +39,34 @@ describe("pane target view model", () => {
     ];
     const workspaces: Workspace[] = [
       {
-        id: "workspace-1",
+        id: createWorkspaceId("workspace-1"),
         name: "Default",
-        activeWindowId: "window-1",
-        terminalIds: [1, 2],
+        activeWindowId: createWindowId("window-1"),
+        terminalIds: [createTerminalId(1), createTerminalId(2)],
         windows: [
           {
-            id: "window-1",
+            id: createWindowId("window-1"),
             name: "Main",
-            activePaneId: "pane-2",
+            activePaneId: createPaneId("pane-2"),
             rootPane: {
-              id: "split-1",
+              id: createPaneId("split-1"),
               type: "split",
               direction: "horizontal",
               size: 100,
               children: [
-                { id: "pane-1", type: "leaf", size: 50, terminalId: 1, configId: "local-1" },
-                { id: "pane-2", type: "leaf", size: 50, terminalId: 2 },
+                {
+                  id: createPaneId("pane-1"),
+                  type: "leaf",
+                  size: 50,
+                  terminalId: createTerminalId(1),
+                  configId: "local-1",
+                },
+                {
+                  id: createPaneId("pane-2"),
+                  type: "leaf",
+                  size: 50,
+                  terminalId: createTerminalId(2),
+                },
               ],
             },
           },

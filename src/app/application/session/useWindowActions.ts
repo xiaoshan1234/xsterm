@@ -1,5 +1,13 @@
 import { useCallback } from "react";
 import { createApplicationError } from "../../../models/applicationError";
+import {
+  createPaneId,
+  createWindowId,
+  type PaneId,
+  type TerminalId,
+  type WindowId,
+  type WorkspaceId,
+} from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { PaneTerminalRef } from "../../../features/workspace";
 import type { EditablePaneNode } from "../../../features/workspace";
@@ -7,7 +15,7 @@ import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { Window, Workspace } from "../../../features/workspace";
 import { clearTerminalOutput } from "../../../features/terminal-surface";
 
-function findPaneSessionId(pane: EditablePaneNode, paneId: string): number | undefined {
+function findPaneSessionId(pane: EditablePaneNode, paneId: PaneId): TerminalId | undefined {
   if (pane.id === paneId) return pane.terminalId;
   return pane.children?.find((c) => findPaneSessionId(c, paneId))?.terminalId;
 }
@@ -24,18 +32,18 @@ interface UseWindowActionsDeps {
   savedConfigs: SavedTerminalConfig[];
   terminalsRef: React.MutableRefObject<Terminal[]>;
   workspacesRef: React.MutableRefObject<Workspace[]>;
-  activeWorkspaceId: string | null;
+  activeWorkspaceId: WorkspaceId | null;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<number>>;
+  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
-  closeTerminal: (terminalId: number) => Promise<void>;
+  closeTerminal: (terminalId: TerminalId) => Promise<void>;
   killTmuxWindow: (xstermWindowId: number) => Promise<void>;
   createWindowFromSession: (
-    terminalId: number,
+    terminalId: TerminalId,
     configId: string,
     name?: string,
-    targetWorkspaceId?: string,
+    targetWorkspaceId?: WorkspaceId,
   ) => Window;
 }
 
@@ -66,7 +74,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
         // a `Window` without inserting it into workspace state.
         const rootPane = createLeafPane(100, terminal.id, terminal.configId);
         return {
-          id: crypto.randomUUID(),
+          id: createWindowId(crypto.randomUUID()),
           name: name ?? config.name,
           rootPane,
           activePaneId: rootPane.id,
@@ -92,8 +100,8 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
 
   const createWindow = useCallback(
     (
-      workspaceId: string,
-      terminalId?: number,
+      workspaceId: WorkspaceId,
+      terminalId?: TerminalId,
       configId?: string,
       name?: string,
       windowType: "terminal" | "init" = "terminal",
@@ -110,7 +118,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
           windowType === "init" ? "New Terminal" : "Window",
         );
       const window: Window = {
-        id: crypto.randomUUID(),
+        id: createWindowId(crypto.randomUUID()),
         name: baseName,
         rootPane,
         activePaneId: rootPane.id,
@@ -135,8 +143,8 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   );
 
   const createInitWindow = useCallback((): Window => {
-    const windowId = crypto.randomUUID();
-    const paneId = crypto.randomUUID();
+    const windowId = createWindowId(crypto.randomUUID());
+    const paneId = createPaneId(crypto.randomUUID());
     const window: Window = {
       id: windowId,
       name: "New Terminal",
@@ -152,7 +160,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   }, []);
 
   const replaceInitWindowWithTerminal = useCallback(
-    (workspaceId: string, windowId: string, terminal: PaneTerminalRef) => {
+    (workspaceId: WorkspaceId, windowId: WindowId, terminal: PaneTerminalRef) => {
       assertSessionNotUsedElsewhere(workspacesRef.current, workspaceId, windowId, terminal.id);
       const rootPane = createLeafPane(100, terminal.id, terminal.configId);
       const baseName = terminal.name;
@@ -181,7 +189,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   );
 
   const closeWindow = useCallback(
-    (workspaceId: string, windowId: string) => {
+    (workspaceId: WorkspaceId, windowId: WindowId) => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       const window = workspace?.windows.find((w) => w.id === windowId);
       if (!window) return;
@@ -191,7 +199,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
         killTmuxWindow(tmuxWindowId).catch((e) => console.error("Failed to kill tmux window:", e));
       }
 
-      const terminalIdsToClose = new Set<number>();
+      const terminalIdsToClose = new Set<TerminalId>();
       forEachPane(window.rootPane, (node) => {
         if (node.type === "leaf" && node.terminalId !== undefined) {
           terminalIdsToClose.add(node.terminalId);
@@ -244,7 +252,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   );
 
   const reorderWindows = useCallback(
-    (workspaceId: string, fromIndex: number, toIndex: number) => {
+    (workspaceId: WorkspaceId, fromIndex: number, toIndex: number) => {
       if (fromIndex === toIndex) return;
       if (fromIndex < 0 || toIndex < 0) return;
       setWorkspaces((prev) =>
@@ -262,7 +270,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   );
 
   const setActiveWindow = useCallback(
-    (workspaceId: string, windowId: string) => {
+    (workspaceId: WorkspaceId, windowId: WindowId) => {
       setWorkspaces((prev) =>
         prev.map((workspace) =>
           workspace.id === workspaceId ? { ...workspace, activeWindowId: windowId } : workspace,
@@ -273,7 +281,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   );
 
   const setActivePane = useCallback(
-    (workspaceId: string, windowId: string, paneId: string) => {
+    (workspaceId: WorkspaceId, windowId: WindowId, paneId: PaneId) => {
       setWorkspaces((prev) =>
         prev.map((workspace) =>
           workspace.id === workspaceId
@@ -302,7 +310,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   );
 
   const renameWindow = useCallback(
-    (workspaceId: string, windowId: string, name: string) => {
+    (workspaceId: WorkspaceId, windowId: WindowId, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
       setWorkspaces((prev) =>

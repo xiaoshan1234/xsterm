@@ -1,3 +1,4 @@
+import type { TerminalId } from "../../../models";
 import type { LocalTerminalConfig, SshConfig } from "../contracts";
 import { terminalCommands, type TerminalLoggingConfigDto } from "../infrastructure";
 import { type TerminalConnectionInfo } from "../contracts";
@@ -18,16 +19,16 @@ export const terminalSessionActions = {
     return toTerminalConnectionInfo(await terminalCommands.createSshTerminal(config, logging));
   },
 
-  async closeTerminal(terminalId: number): Promise<void> {
+  async closeTerminal(terminalId: TerminalId): Promise<void> {
     await terminalCommands.closeTerminal(terminalId);
   },
 
-  async resizeTerminal(terminalId: number, rows: number, cols: number): Promise<void> {
+  async resizeTerminal(terminalId: TerminalId, rows: number, cols: number): Promise<void> {
     await terminalCommands.resizeTerminal(terminalId, rows, cols);
   },
 
   async uploadImageToSshTerminal(
-    terminalId: number,
+    terminalId: TerminalId,
     filename: string,
     data: Uint8Array,
   ): Promise<string> {

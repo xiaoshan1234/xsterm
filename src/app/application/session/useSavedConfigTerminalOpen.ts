@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { createApplicationError } from "../../../models/applicationError";
+import type { WorkspaceId } from "../../../models";
 import {
   isTmuxPaneTerminal,
   terminalSessionActions,
@@ -21,7 +22,7 @@ interface UseSavedConfigTerminalOpenOptions {
   workspacesRef: MutableRefObject<Workspace[]>;
   setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
-  setActiveWorkspaceId: Dispatch<SetStateAction<string | null>>;
+  setActiveWorkspaceId: Dispatch<SetStateAction<WorkspaceId | null>>;
   tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
   tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
   pendingTmuxSessionKeysRef: MutableRefObject<Set<string>>;

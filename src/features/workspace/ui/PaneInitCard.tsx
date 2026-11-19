@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { TerminalId } from "../../../models";
 import type { CreatedTerminalRef, LocalTerminalConfig, SshConfig } from "../../launch-config";
 import { isApplicationError } from "../../../models/applicationError";
 import { PlusIcon, FolderOpenIcon } from "../../../shared/icons/Icon";
@@ -8,7 +9,7 @@ import { SelectTerminalDialog } from "./dialogs/SelectTerminalDialog";
 import "./PaneInitCard.css";
 
 export interface PaneInitCardProps {
-  onAttachExistingTerminal: (terminalId: number) => Promise<void>;
+  onAttachExistingTerminal: (terminalId: TerminalId) => Promise<void>;
   onCreateLocal: (config: LocalTerminalConfig, save: boolean) => Promise<CreatedTerminalRef>;
   onCreateSsh: (config: SshConfig, save: boolean) => Promise<CreatedTerminalRef>;
   onCreateFromSavedConfig: (configId: string) => Promise<void>;
@@ -61,7 +62,7 @@ export function PaneInitCard({
   const handleCreateSsh = (config: SshConfig, save: boolean) =>
     handleCreate(() => onCreateSsh(config, save));
 
-  const handleSelectSession = async (terminalId: number) => {
+  const handleSelectSession = async (terminalId: TerminalId) => {
     if (!startSubmitting()) return;
     try {
       await onAttachExistingTerminal(terminalId);

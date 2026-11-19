@@ -5,6 +5,7 @@ import {
   createTmuxPaneTargetRef,
   type PaneTargetDisplayInfo,
 } from "../../../models";
+import type { TerminalId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { Workspace } from "../../../features/workspace";
@@ -22,7 +23,7 @@ export function selectPaneTargetDisplayInfos(
 
 export interface PaneTargetOptionViewData {
   targetKey: string;
-  terminalId: number;
+  terminalId: TerminalId;
   displayInfo: PaneTargetDisplayInfo;
 }
 

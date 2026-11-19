@@ -46,6 +46,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 - `src/models/` 不得依赖 React、Tauri、DOM、Store 或任何上层目录；`src/infra/` 不得依赖 `app/`、`features/`、`models/`。
 - Feature 子目录按实际需要创建，不预建空目录。当前常见目录是 `ui/`、`application/`、`state/`、`viewModels/`、`infrastructure/`、`persistence/`；只有存在纯选择器时才创建 `selectors/`。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。
 - 全局状态由 feature 内的 Context / hooks 提供，配置、终端运行时、工作区布局和偏好分别落在 `launch-config`、`terminal`、`workspace`、`settings`。跨聚合动作与 Provider 组合位于 `src/app/application/session/`；不要再引入聚合 `SessionActions` 或 `useSession()` 式公共大 API。Pane/window 的既有终端绑定走 `PaneIntentActions`，需要先创建终端的流程走独立的 `PaneSessionIntentActions`。Session 打开、工作区关联、tmux controller 事件和 tmux window 事件分别由独立 use case/handler 组合。terminal-surface 的运行时副作用通过 `TerminalSurfacePortsProvider` 注入。
+- Terminal、Workspace、Window、Pane 的核心身份使用 `src/models/ids.ts` 的 branded ID；运行时生成必须走对应 `generate*Id` / `create*Id`，持久化和 wire 数据必须在边界显式解析后再进入领域契约。tmux controller/window/pane 的 backend handle 仍保持原始类型，直到其适配器完成独立品牌化。
 - session 启动必须先完成持久化 hydration，再启动 Tauri 事件桥并渲染运行时 Shell；不要绕过 `SessionProvider` 的 `isLoaded` 门控。
 - Feature 根 `index.ts` 必须显式命名导出公共契约，不得恢复 `export *`。backend handle/DTO 只能通过 adapterContracts 进入 infrastructure。
 - Tauri IPC 必须收敛在 feature-local infrastructure adapter；组件不得直接 `invoke()` 或 `listen()` 原始后端事件。
@@ -69,7 +70,6 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 以下为 2026-11-19 当前工作区状态；修复后应同步删除对应条目，不要把它当成长期架构目标。
 
 - `AppShellRuntime` 已把 View Model、ToolPanel 和 NavBar 控制移出，但仍负责 Overlay、TextSender selection 和部分 shell 状态，后续可继续抽 controller。
-- `models/ids.ts` 的 branded ID 尚未全面用于 terminal、workspace、window、pane 公共契约，跨聚合身份仍可能混用。
 
 ## 5. 关键坑（Gotchas）
 
@@ -95,7 +95,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ## 7. Husky（提交钩子）
 
-- 提交钩子已启用：`git config core.hooksPath = .husky/_`，`.husky/pre-commit` 依次运行 `npx lint-staged` → `cargo fmt --manifest-path src-tauri/Cargo.toml` → `git add src-tauri`。
+- 提交钩子已启用：`git config core.hooksPath = .husky/_`，`.husky/pre-commit` 依次运行 `npx lint-staged --max-arg-length 4096` → `cargo fmt --manifest-path src-tauri/Cargo.toml` → `git add src-tauri`。`--max-arg-length` 用于规避 Windows 大提交时的命令行长度限制。
 - `package.json` 已含 `"prepare": "husky"` 脚本、`husky` / `lint-staged` 依赖，以及 `lint-staged` 配置（暂存的 `*.ts/tsx` 跑 `prettier --write` + `eslint --fix`，`*.css/json` 跑 `prettier --write`）。
 - Rust 在提交时自动 `cargo fmt` 全量格式化，并把 `src-tauri` 的改动自动重新暂存（`git add src-tauri`），不再只是 `--check` 拦截。
 

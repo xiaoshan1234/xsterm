@@ -1,21 +1,22 @@
+import type { TerminalId, WindowId, WorkspaceId } from "../../../models";
 import type { Workspace } from "../contracts";
 import { createApplicationError } from "../../../models/applicationError";
 import { isSessionUsedInOtherWindow } from "./paneTreeOperations";
 
 export function getUniqueWindowName(
   _workspaces: Workspace[],
-  _workspaceId: string,
+  _workspaceId: WorkspaceId | null,
   baseName: string,
-  _excludeWindowId?: string,
+  _excludeWindowId?: WindowId,
 ): string {
   return baseName;
 }
 
 export function assertSessionNotUsedElsewhere(
   workspaces: Workspace[],
-  workspaceId: string | null,
-  windowId: string | null,
-  terminalId: number,
+  workspaceId: WorkspaceId | null,
+  windowId: WindowId | null,
+  terminalId: TerminalId,
 ): void {
   if (isSessionUsedInOtherWindow(workspaces, workspaceId, windowId, terminalId)) {
     throw createApplicationError(

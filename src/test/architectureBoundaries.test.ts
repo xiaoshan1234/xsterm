@@ -186,6 +186,23 @@ describe("architecture boundaries", () => {
     );
   });
 
+  it("uses branded ids in core terminal and workspace contracts", () => {
+    const terminal = sourceFiles["/src/features/terminal/contracts.ts"] ?? "";
+    const workspace = sourceFiles["/src/features/workspace/contracts/model.ts"] ?? "";
+    const paneOps =
+      sourceFiles["/src/features/workspace/application/paneTreeOperations.ts"] ?? "";
+
+    expect(terminal).toMatch(/\bid: TerminalId;/);
+    expect(workspace).toMatch(/\bid: WorkspaceId;/);
+    expect(workspace).toMatch(/\bid: WindowId;/);
+    expect(workspace).toMatch(/\bid: PaneId;/);
+    expect(workspace).toMatch(/SavedWindowConfig[\s\S]*id: LaunchConfigId;/);
+    expect(workspace).toMatch(/SavedWorkspace[\s\S]*id: LaunchConfigId;/);
+    expect(paneOps).toMatch(/function generatePaneId\(\): PaneId/);
+    expect(paneOps).toMatch(/function generateWindowId\(\): WindowId/);
+    expect(paneOps).toMatch(/function generateWorkspaceId\(\): WorkspaceId/);
+  });
+
   it("keeps tmux window commands out of the workspace pane-intent contract", () => {
     const contract = sourceFiles["/src/features/workspace/contracts/paneIntents.ts"] ?? "";
     expect(contract).not.toMatch(/\btmux\b/i);

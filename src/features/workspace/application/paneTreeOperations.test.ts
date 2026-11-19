@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import {
+  createPaneId as toPaneId,
+  createTerminalId as toTerminalId,
+  createWindowId as toWindowId,
+  createWorkspaceId as toWorkspaceId,
+} from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode } from "../contracts";
 import type { Workspace } from "../contracts";
@@ -12,7 +18,7 @@ import {
   findPaneNode,
   findSessionWindow,
   forEachPane,
-  generateId,
+  generatePaneId,
   getDefaultWindowName,
   getLeafPaneIds,
   getPaneNumber,
@@ -33,11 +39,17 @@ import {
 
 /** Build a deterministic leaf (size-only). */
 function leaf(size: number, terminalId?: number, configId?: string): EditablePaneNode {
-  return { id: `leaf-${size}-${terminalId ?? "x"}`, type: "leaf", size, terminalId, configId };
+  return {
+    id: toPaneId(`leaf-${size}-${terminalId ?? "x"}`),
+    type: "leaf",
+    size,
+    ...(terminalId !== undefined ? { terminalId: toTerminalId(terminalId) } : {}),
+    configId,
+  };
 }
 
 /**
- * Hand-built pane tree (avoids generateId() so tests are deterministic):
+ * Hand-built pane tree (avoids generatePaneId() so tests are deterministic):
  *
  *        split-H (root, size 200)
  *        /                  \
@@ -47,14 +59,14 @@ function leaf(size: number, terminalId?: number, configId?: string): EditablePan
  *                      terminalId=2)   terminalId=1)
  */
 const tree: EditablePaneNode = {
-  id: "root",
+  id: toPaneId("root"),
   type: "split",
   direction: "horizontal",
   size: 200,
   children: [
     leaf(100, 1, "cfg-1"),
     {
-      id: "inner-split",
+      id: toPaneId("inner-split"),
       type: "split",
       direction: "vertical",
       size: 100,
@@ -65,7 +77,7 @@ const tree: EditablePaneNode = {
 
 function terminal(id: number, name = `s${id}`): Terminal {
   return {
-    id,
+    id: toTerminalId(id),
     configId: `cfg-${id}`,
     name,
     type: "local",
@@ -75,19 +87,21 @@ function terminal(id: number, name = `s${id}`): Terminal {
 }
 
 function workspace(id: string, windows: Workspace["windows"]): Workspace {
-  return { id, name: id, windows, activeWindowId: null, terminalIds: [] };
+  return { id: toWorkspaceId(id), name: id, windows, activeWindowId: null, terminalIds: [] };
 }
 
-// ---------- generateId -----------------------------------------------------
+// ---------- generatePaneId -------------------------------------------------
 
-describe("generateId", () => {
+describe("generatePaneId", () => {
   it("returns a UUID-shaped string", () => {
-    expect(generateId()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    expect(generatePaneId()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
   });
 
   it("returns unique values on each call", () => {
-    const a = generateId();
-    const b = generateId();
+    const a = generatePaneId();
+    const b = generatePaneId();
     expect(a).not.toBe(b);
   });
 });
@@ -96,7 +110,7 @@ describe("generateId", () => {
 
 describe("createLeafPane", () => {
   it("builds a leaf with the given size and optional ids", () => {
-    const p = createLeafPane(75, 42, "cfg-x");
+    const p = createLeafPane(75, toTerminalId(42), "cfg-x");
     expect(p.type).toBe("leaf");
     expect(p.size).toBe(75);
     expect(p.terminalId).toBe(42);
@@ -124,8 +138,8 @@ describe("createSplitNode", () => {
   });
 
   it("preserves child order", () => {
-    const a = createLeafPane(1, 1);
-    const b = createLeafPane(2, 2);
+    const a = createLeafPane(1, toTerminalId(1));
+    const b = createLeafPane(2, toTerminalId(2));
     const s = createSplitNode("vertical", a, b);
     expect(s.children?.map((c) => c.terminalId)).toEqual([1, 2]);
   });
@@ -135,15 +149,15 @@ describe("createSplitNode", () => {
 
 describe("findPaneNode", () => {
   it("returns the root when its id matches", () => {
-    expect(findPaneNode(tree, "root")?.id).toBe("root");
+    expect(findPaneNode(tree, toPaneId("root"))?.id).toBe("root");
   });
 
   it("returns a nested node by id", () => {
-    expect(findPaneNode(tree, "inner-split")?.id).toBe("inner-split");
+    expect(findPaneNode(tree, toPaneId("inner-split"))?.id).toBe("inner-split");
   });
 
   it("returns null when id is not found", () => {
-    expect(findPaneNode(tree, "missing")).toBeNull();
+    expect(findPaneNode(tree, toPaneId("missing"))).toBeNull();
   });
 });
 
@@ -153,7 +167,7 @@ describe("mapPaneTree", () => {
   it("applies the mapper to every node recursively", () => {
     const result = mapPaneTree(tree, (n) => ({ ...n, size: n.size + 1 }));
     expect(result.size).toBe(201);
-    expect(findPaneNode(result, "inner-split")?.size).toBe(101);
+    expect(findPaneNode(result, toPaneId("inner-split"))?.size).toBe(101);
     // leaves (excluding the inner one)
     for (const id of getLeafPaneIds(result)) {
       expect(findPaneNode(result, id)?.size).toBeDefined();
@@ -205,20 +219,20 @@ describe("findFirstLeafWithSession", () => {
 
 describe("removeSessionFromPaneTree", () => {
   it("clears terminalId from every matching leaf", () => {
-    const result = removeSessionFromPaneTree(tree, 1);
-    expect(isSessionInPaneTree(result, 1)).toBe(false);
-    expect(isSessionInPaneTree(result, 2)).toBe(true);
+    const result = removeSessionFromPaneTree(tree, toTerminalId(1));
+    expect(isSessionInPaneTree(result, toTerminalId(1))).toBe(false);
+    expect(isSessionInPaneTree(result, toTerminalId(2))).toBe(true);
   });
 
   it("leaves the tree otherwise intact", () => {
-    const result = removeSessionFromPaneTree(tree, 999);
+    const result = removeSessionFromPaneTree(tree, toTerminalId(999));
     expect(result).toEqual(tree);
   });
 });
 
 describe("replaceSessionIdInPaneTree", () => {
   it("rewrites terminalId everywhere it appears", () => {
-    const result = replaceSessionIdInPaneTree(tree, 1, 999);
+    const result = replaceSessionIdInPaneTree(tree, toTerminalId(1), toTerminalId(999));
     const ids = collectSessionIdsFromPaneTree(result);
     // collectSessionIdsFromPaneTree uses a Set, so the duplicate 999 collapses to one entry.
     expect(ids.sort()).toEqual([2, 999]);
@@ -235,7 +249,7 @@ describe("replaceSessionIdInPaneTree", () => {
   });
 
   it("is a no-op when the id is not present", () => {
-    const result = replaceSessionIdInPaneTree(tree, 42, 7);
+    const result = replaceSessionIdInPaneTree(tree, toTerminalId(42), toTerminalId(7));
     expect(result).toEqual(tree);
   });
 });
@@ -255,12 +269,12 @@ describe("collectSessionIdsFromPaneTree", () => {
 
 describe("isSessionInPaneTree", () => {
   it("is true for attached terminalIds", () => {
-    expect(isSessionInPaneTree(tree, 1)).toBe(true);
-    expect(isSessionInPaneTree(tree, 2)).toBe(true);
+    expect(isSessionInPaneTree(tree, toTerminalId(1))).toBe(true);
+    expect(isSessionInPaneTree(tree, toTerminalId(2))).toBe(true);
   });
 
   it("is false for unattached terminalIds", () => {
-    expect(isSessionInPaneTree(tree, 99)).toBe(false);
+    expect(isSessionInPaneTree(tree, toTerminalId(99))).toBe(false);
   });
 });
 
@@ -269,7 +283,7 @@ describe("isSessionInPaneTree", () => {
 describe("collapseEmptySplits", () => {
   it("collapses a split whose children are all empty leaves", () => {
     const root: EditablePaneNode = {
-      id: "r",
+      id: toPaneId("r"),
       type: "split",
       direction: "horizontal",
       size: 100,
@@ -288,14 +302,14 @@ describe("collapseEmptySplits", () => {
   it("recurses into nested empty splits", () => {
     // outer( inner(empty-left, leaf-right) ) -> outer collapses when inner collapses
     const inner: EditablePaneNode = {
-      id: "inner",
+      id: toPaneId("inner"),
       type: "split",
       direction: "vertical",
       size: 50,
       children: [createLeafPane(25), createLeafPane(25)],
     };
     const outer: EditablePaneNode = {
-      id: "outer",
+      id: toPaneId("outer"),
       type: "split",
       direction: "horizontal",
       size: 100,
@@ -311,8 +325,8 @@ describe("collapseEmptySplits", () => {
 describe("removeSessionAndCollapse", () => {
   it("removes the terminal and collapses resulting empty splits", () => {
     // Single-leaf window with the terminal: removing it should leave a leaf
-    const root = createLeafPane(100, 5);
-    const result = removeSessionAndCollapse(root, 5);
+    const root = createLeafPane(100, toTerminalId(5));
+    const result = removeSessionAndCollapse(root, toTerminalId(5));
     expect(result.type).toBe("leaf");
     expect(result.terminalId).toBeUndefined();
   });
@@ -322,20 +336,20 @@ describe("removeSessionAndCollapse", () => {
 
 describe("replacePaneNode", () => {
   it("replaces a leaf at any depth", () => {
-    const replacement = createLeafPane(99, 7, "new");
-    const result = replacePaneNode(tree, "leaf-50-1", replacement);
+    const replacement = createLeafPane(99, toTerminalId(7), "new");
+    const result = replacePaneNode(tree, toPaneId("leaf-50-1"), replacement);
     const replaced = findPaneNode(result, replacement.id);
     expect(replaced?.terminalId).toBe(7);
-    expect(findPaneNode(result, "leaf-50-1")).toBeNull();
+    expect(findPaneNode(result, toPaneId("leaf-50-1"))).toBeNull();
   });
 
   it("replaces the root when targetId matches", () => {
     const replacement = createLeafPane(10);
-    expect(replacePaneNode(tree, "root", replacement)).toBe(replacement);
+    expect(replacePaneNode(tree, toPaneId("root"), replacement)).toBe(replacement);
   });
 
   it("is a no-op when the id does not exist", () => {
-    expect(replacePaneNode(tree, "nope", createLeafPane(1))).toEqual(tree);
+    expect(replacePaneNode(tree, toPaneId("nope"), createLeafPane(1))).toEqual(tree);
   });
 });
 
@@ -346,7 +360,7 @@ describe("stripSessionIdFromPaneTree", () => {
     const stripped = stripSessionIdFromPaneTree(tree);
     expect(collectSessionIdsFromPaneTree(stripped)).toEqual([]);
     // split structure preserved
-    expect(findPaneNode(stripped, "inner-split")).not.toBeNull();
+    expect(findPaneNode(stripped, toPaneId("inner-split"))).not.toBeNull();
   });
 });
 
@@ -355,26 +369,26 @@ describe("stripSessionIdFromPaneTree", () => {
 describe("removePaneFromTree", () => {
   it("collapses a split that ends up with exactly one child", () => {
     // remove one leaf of an inner split -> the surviving leaf absorbs the split's id+size
-    const result = removePaneFromTree(tree, "leaf-50-1");
+    const result = removePaneFromTree(tree, toPaneId("leaf-50-1"));
     expect(result.type).toBe("split"); // root still a split
     // The inner-split id is dropped; the surviving leaf keeps its original id but inherits the split's size.
-    const survivor = findPaneNode(result, "leaf-50-2");
+    const survivor = findPaneNode(result, toPaneId("leaf-50-2"));
     expect(survivor?.type).toBe("leaf");
     expect(survivor?.size).toBe(100); // absorbed inner-split size
     expect(survivor?.terminalId).toBe(2);
     // The inner-split id no longer exists in the tree.
-    expect(findPaneNode(result, "inner-split")).toBeNull();
+    expect(findPaneNode(result, toPaneId("inner-split"))).toBeNull();
   });
 
   it("falls back to a fresh leaf when the root itself is removed", () => {
-    const result = removePaneFromTree(tree, "root");
+    const result = removePaneFromTree(tree, toPaneId("root"));
     expect(result.type).toBe("leaf");
     expect(result.size).toBe(200);
     expect(result.terminalId).toBeUndefined();
   });
 
   it("falls back to a fresh leaf when the last leaf is removed (whole tree empties)", () => {
-    const result = removePaneFromTree(createLeafPane(10), "anything");
+    const result = removePaneFromTree(createLeafPane(10), toPaneId("anything"));
     expect(result.type).toBe("leaf");
     expect(result.size).toBe(10);
   });
@@ -403,29 +417,59 @@ describe("getDefaultWindowName", () => {
 describe("findSessionWindow", () => {
   it("locates the workspace/window holding the terminal", () => {
     const w1 = workspace("ws1", [
-      { id: "w1-a", name: "A", rootPane: createLeafPane(1, 5), activePaneId: null },
+      {
+        id: toWindowId("w1-a"),
+        name: "A",
+        rootPane: createLeafPane(1, toTerminalId(5)),
+        activePaneId: null,
+      },
     ]);
     const w2 = workspace("ws2", [
-      { id: "w2-a", name: "A", rootPane: createLeafPane(1, 9), activePaneId: null },
+      {
+        id: toWindowId("w2-a"),
+        name: "A",
+        rootPane: createLeafPane(1, toTerminalId(9)),
+        activePaneId: null,
+      },
     ]);
-    expect(findSessionWindow([w1, w2], 9)).toEqual({ workspaceId: "ws2", windowId: "w2-a" });
+    expect(findSessionWindow([w1, w2], toTerminalId(9))).toEqual({
+      workspaceId: "ws2",
+      windowId: "w2-a",
+    });
   });
 
   it("returns null when no window contains the terminal", () => {
-    expect(findSessionWindow([workspace("ws", [])], 99)).toBeNull();
+    expect(findSessionWindow([workspace("ws", [])], toTerminalId(99))).toBeNull();
   });
 });
 
 describe("isSessionUsedInOtherWindow", () => {
   const ws1 = workspace("ws1", [
-    { id: "w1-a", name: "A", rootPane: createLeafPane(1, 5), activePaneId: null },
+    {
+      id: toWindowId("w1-a"),
+      name: "A",
+      rootPane: createLeafPane(1, toTerminalId(5)),
+      activePaneId: null,
+    },
   ]);
   const ws2 = workspace("ws2", [
-    { id: "w2-a", name: "A", rootPane: createLeafPane(1, 5), activePaneId: null },
+    {
+      id: toWindowId("w2-a"),
+      name: "A",
+      rootPane: createLeafPane(1, toTerminalId(5)),
+      activePaneId: null,
+    },
   ]);
 
   it("is true when used in a different window", () => {
-    expect(isSessionUsedInOtherWindow([ws1, ws2], "ws1", "w1-a", 5)).toBe(true);
+    expect(
+      isSessionUsedInOtherWindow(
+        [ws1, ws2],
+        toWorkspaceId("ws1"),
+        toWindowId("w1-a"),
+        toTerminalId(5),
+      ),
+    ).toBe(true);
   });
 
   // TODO: isSessionUsedInOtherWindow currently returns true even when the
@@ -434,15 +478,20 @@ describe("isSessionUsedInOtherWindow", () => {
   it.todo("isSessionUsedInOtherWindow returns false when terminal is only in the current window");
 
   it("treats null current ids as 'no current window' -> true if found anywhere", () => {
-    expect(isSessionUsedInOtherWindow([ws1], null, null, 5)).toBe(true);
+    expect(isSessionUsedInOtherWindow([ws1], null, null, toTerminalId(5))).toBe(true);
   });
 });
 
 describe("collectSessionIdsFromWorkspace", () => {
   it("unions terminal ids across all windows with deduplication", () => {
     const ws = workspace("ws", [
-      { id: "w1", name: "W1", rootPane: tree, activePaneId: null }, // 1, 2
-      { id: "w2", name: "W2", rootPane: createLeafPane(1, 2), activePaneId: null }, // 2
+      { id: toWindowId("w1"), name: "W1", rootPane: tree, activePaneId: null }, // 1, 2
+      {
+        id: toWindowId("w2"),
+        name: "W2",
+        rootPane: createLeafPane(1, toTerminalId(2)),
+        activePaneId: null,
+      }, // 2
     ]);
     expect(collectSessionIdsFromWorkspace(ws)).toEqual([1, 2]);
   });
@@ -451,8 +500,10 @@ describe("collectSessionIdsFromWorkspace", () => {
 describe("withRecomputedSessionIds", () => {
   it("replaces workspace.terminalIds with the deduplicated union from all windows", () => {
     const ws: Workspace = {
-      ...workspace("ws", [{ id: "w1", name: "W1", rootPane: tree, activePaneId: null }]),
-      terminalIds: [999],
+      ...workspace("ws", [
+        { id: toWindowId("w1"), name: "W1", rootPane: tree, activePaneId: null },
+      ]),
+      terminalIds: [toTerminalId(999)],
     };
     const result = withRecomputedSessionIds(ws);
     expect(result.terminalIds).toEqual([1, 2]);
@@ -474,12 +525,12 @@ describe("getPaneNumberMap / getPaneNumber", () => {
   });
 
   it("getPaneNumber returns the number for a known leaf", () => {
-    expect(getPaneNumber(tree, "leaf-50-2")).toBe(2);
+    expect(getPaneNumber(tree, toPaneId("leaf-50-2"))).toBe(2);
   });
 
   it("getPaneNumber returns null for unknown ids", () => {
-    expect(getPaneNumber(tree, "missing")).toBeNull();
+    expect(getPaneNumber(tree, toPaneId("missing"))).toBeNull();
     // split nodes are not numbered either
-    expect(getPaneNumber(tree, "root")).toBeNull();
+    expect(getPaneNumber(tree, toPaneId("root"))).toBeNull();
   });
 });

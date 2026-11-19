@@ -1,3 +1,4 @@
+import type { TerminalId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import { isTmuxPaneTerminal } from "../../../features/terminal";
 import type { Workspace } from "../../../features/workspace";
@@ -7,7 +8,7 @@ import { findPaneNode, getLeafPaneIds } from "../../../features/workspace";
 export type RuntimeStatusTransport = "local" | "ssh" | "wsl";
 
 export interface RuntimeStatusViewData {
-  terminalId: number;
+  terminalId: TerminalId;
   status: "connected" | "disconnected";
   name: string;
   kind: string;
@@ -22,8 +23,8 @@ export function selectRuntimeStatus(
   terminals: readonly Terminal[],
   tmuxControllers: readonly TmuxStatusControllerViewData[],
   terminalSizes:
-    | ReadonlyMap<number, { rows: number; cols: number }>
-    | ((terminalId: number) => { rows: number; cols: number } | undefined),
+    | ReadonlyMap<TerminalId, { rows: number; cols: number }>
+    | ((terminalId: TerminalId) => { rows: number; cols: number } | undefined),
 ): RuntimeStatusViewData | null {
   if (!activeWorkspace) return null;
 

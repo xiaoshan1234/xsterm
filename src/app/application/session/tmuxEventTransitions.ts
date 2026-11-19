@@ -1,3 +1,4 @@
+import { createWindowId, type TerminalId } from "../../../models";
 import type { Terminal, TmuxPaneRuntimeState, TmuxPaneTerminal } from "../../../features/terminal";
 import { isTmuxPaneTerminal } from "../../../features/terminal";
 import {
@@ -16,7 +17,7 @@ import {
 } from "../../../features/workspace";
 
 export interface TmuxPaneSessionInfo {
-  id: number;
+  id: TerminalId;
   name: string;
   tmuxPaneId: string;
   tmuxSessionId: number;
@@ -144,7 +145,7 @@ export function buildTmuxWindow(input: {
     createLeafPane(100, input.panes[0]?.terminalId, "");
   const leafIds = getLeafPaneIds(rootPane);
   return {
-    id: crypto.randomUUID(),
+    id: createWindowId(crypto.randomUUID()),
     name: input.name,
     rootPane,
     activePaneId: leafIds[0] ?? null,

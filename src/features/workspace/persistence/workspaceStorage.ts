@@ -1,13 +1,18 @@
 import { frontendLogger as logger } from "../../../infra";
 import { getJsonStore } from "../../../infra/storage";
-import type { EditablePaneNode } from "../contracts";
 import type { SavedWindowConfig, SavedWorkspace } from "../contracts";
+import {
+  parseLegacySavedWorkspace,
+  parseSavedWindowConfig,
+  parseSavedWorkspace,
+} from "./workspacePersistenceMappers";
 
 const workspaceStore = getJsonStore("terminals.json");
 
 export async function loadSavedWindowConfigsStrict(): Promise<SavedWindowConfig[]> {
   logger.debug("workspaceStorage", "loadSavedWindowConfigs", undefined);
-  const configs = (await workspaceStore.get<SavedWindowConfig[]>("savedWindowConfigs")) ?? [];
+  const raw = (await workspaceStore.get<unknown[]>("savedWindowConfigs")) ?? [];
+  const configs = raw.map(parseSavedWindowConfig);
   logger.debug("workspaceStorage", "loadSavedWindowConfigs:result", { count: configs.length });
   return configs;
 }
@@ -51,27 +56,14 @@ export async function deleteSavedWindowConfig(id: string): Promise<void> {
 
 export async function loadSavedWorkspacesStrict(): Promise<SavedWorkspace[]> {
   logger.debug("workspaceStorage", "loadSavedWorkspaces", undefined);
-  const raw =
-    (await workspaceStore.get<(SavedWorkspace & { rootPane?: unknown })[]>("savedWorkspaces")) ??
-    [];
+  const raw = (await workspaceStore.get<unknown[]>("savedWorkspaces")) ?? [];
   const workspaces = raw.map((workspace) => {
-    if ("rootPane" in workspace && workspace.rootPane !== undefined) {
-      const legacy = workspace as SavedWorkspace & {
-        rootPane: { id: string; type: "leaf" | "split"; size: number };
-      };
-      return {
-        id: legacy.id,
-        name: legacy.name,
-        windows: [
-          {
-            id: crypto.randomUUID(),
-            name: legacy.name || "Window",
-            rootPane: legacy.rootPane as EditablePaneNode,
-          },
-        ],
-      };
-    }
-    return workspace as SavedWorkspace;
+    const isLegacy =
+      workspace !== null &&
+      typeof workspace === "object" &&
+      "rootPane" in workspace &&
+      workspace.rootPane !== undefined;
+    return isLegacy ? parseLegacySavedWorkspace(workspace) : parseSavedWorkspace(workspace);
   });
   logger.debug("workspaceStorage", "loadSavedWorkspaces:result", { count: workspaces.length });
   return workspaces;

@@ -1,5 +1,6 @@
+import type { TerminalId } from "../../../models";
 import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
-import { createEditableLeafPane, createEditableSplitNode } from "../../workspace";
+import { createEditableLeafPane, createEditableSplitNode, generatePaneId } from "../../workspace";
 
 interface TmuxGeometryLeaf {
   kind: "leaf";
@@ -22,7 +23,7 @@ interface TmuxGeometrySplit {
 type TmuxGeometryNode = TmuxGeometryLeaf | TmuxGeometrySplit;
 
 export interface TmuxPaneGeometry {
-  terminalId: number;
+  terminalId: TerminalId;
   width: number;
   height: number;
   x: number;
@@ -78,7 +79,7 @@ function buildNode(
       rectangleKey(geometry.x, geometry.y, geometry.width, geometry.height),
     );
     if (!pane) return null;
-    return createEditableLeafPane(crypto.randomUUID(), 100, pane.terminalId, configId);
+    return createEditableLeafPane(generatePaneId(), 100, pane.terminalId, configId);
   }
 
   const first = buildNode(geometry.children[0], panesByRectangle, configId);
@@ -91,25 +92,20 @@ function buildNode(
   const firstPercent = total > 0 ? clampPercent(Math.round((firstLength / total) * 100)) : 50;
   first.size = firstPercent;
   second.size = 100 - firstPercent;
-  return createEditableSplitNode(crypto.randomUUID(), geometry.direction, first, second);
+  return createEditableSplitNode(generatePaneId(), geometry.direction, first, second);
 }
 
 function stackPanes(panes: readonly TmuxPaneGeometry[], configId: string): EditablePaneNode | null {
   if (panes.length === 0) return null;
   if (panes.length === 1) {
-    return createEditableLeafPane(crypto.randomUUID(), 100, panes[0].terminalId, configId);
+    return createEditableLeafPane(generatePaneId(), 100, panes[0].terminalId, configId);
   }
   const percent = Math.floor(100 / panes.length);
-  let root = createEditableLeafPane(crypto.randomUUID(), percent, panes[0].terminalId, configId);
+  let root = createEditableLeafPane(generatePaneId(), percent, panes[0].terminalId, configId);
   for (let index = 1; index < panes.length; index++) {
     const size = index === panes.length - 1 ? 100 - percent * index : percent;
-    const leaf = createEditableLeafPane(
-      crypto.randomUUID(),
-      size,
-      panes[index].terminalId,
-      configId,
-    );
-    root = createEditableSplitNode(crypto.randomUUID(), "vertical", root, leaf);
+    const leaf = createEditableLeafPane(generatePaneId(), size, panes[index].terminalId, configId);
+    root = createEditableSplitNode(generatePaneId(), "vertical", root, leaf);
   }
   return root;
 }

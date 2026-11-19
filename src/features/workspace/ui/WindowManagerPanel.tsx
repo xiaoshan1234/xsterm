@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { LaunchConfigId } from "../../../models";
 import {
   ManagerActionButton,
   ManagerEmptyState,
@@ -10,9 +11,9 @@ import { type WindowManagerItemViewData } from "../viewModels/managerViewModel";
 interface WindowManagerPanelProps {
   items: readonly WindowManagerItemViewData[];
   onNewWindow: () => void;
-  onLoad: (configId: string) => void;
-  onRename: (configId: string) => void;
-  onDelete: (configId: string) => void;
+  onLoad: (configId: LaunchConfigId) => void;
+  onRename: (configId: LaunchConfigId) => void;
+  onDelete: (configId: LaunchConfigId) => void;
 }
 
 export function WindowManagerPanel({

@@ -1,20 +1,26 @@
 import { describe, expect, it } from "vitest";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode } from "../../../features/workspace";
 import type { Workspace } from "../../../features/workspace";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 
-const pane: EditablePaneNode = { id: "pane-1", type: "leaf", size: 1, terminalId: 7 };
+const pane: EditablePaneNode = {
+  id: createPaneId("pane-1"),
+  type: "leaf",
+  size: 1,
+  terminalId: createTerminalId(7),
+};
 
 function workspaceWithPane(activePaneId = pane.id): Workspace {
   return {
-    id: "workspace-1",
+    id: createWorkspaceId("workspace-1"),
     name: "Default",
-    activeWindowId: "window-1",
-    terminalIds: [7],
+    activeWindowId: createWindowId("window-1"),
+    terminalIds: [createTerminalId(7)],
     windows: [
       {
-        id: "window-1",
+        id: createWindowId("window-1"),
         name: "Main",
         rootPane: pane,
         activePaneId,
@@ -25,7 +31,7 @@ function workspaceWithPane(activePaneId = pane.id): Workspace {
 
 function terminal(overrides: Partial<Terminal> = {}): Terminal {
   return {
-    id: 7,
+    id: createTerminalId(7),
     configId: "config-1",
     name: "Production SSH",
     type: "ssh",
@@ -42,7 +48,7 @@ describe("selectRuntimeStatus", () => {
         workspaceWithPane(),
         [terminal()],
         [],
-        new Map([[7, { rows: 24, cols: 80 }]]),
+        new Map([[createTerminalId(7), { rows: 24, cols: 80 }]]),
       ),
     ).toEqual({
       terminalId: 7,
@@ -76,7 +82,7 @@ describe("selectRuntimeStatus", () => {
             status: "connected" as const,
             panes: [
               {
-                terminalId: 7,
+                terminalId: createTerminalId(7),
                 tmuxPaneId: "%2",
                 tmuxWindowId: "@1",
                 currentCommand: "codex",
@@ -94,7 +100,7 @@ describe("selectRuntimeStatus", () => {
         workspaceWithPane(),
         [tmuxTerminal],
         controllers,
-        new Map([[7, { rows: 40, cols: 120 }]]),
+        new Map([[createTerminalId(7), { rows: 40, cols: 120 }]]),
       ),
     ).toEqual({
       terminalId: 7,
@@ -110,7 +116,7 @@ describe("selectRuntimeStatus", () => {
 
   it("returns null when the active pane is not a live terminal", () => {
     expect(
-      selectRuntimeStatus(workspaceWithPane("missing"), [terminal()], [], new Map()),
+      selectRuntimeStatus(workspaceWithPane(createPaneId("missing")), [terminal()], [], new Map()),
     ).toBeNull();
   });
 });

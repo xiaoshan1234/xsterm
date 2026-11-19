@@ -1,3 +1,4 @@
+import type { WindowId } from "../../../models";
 import { usePaneIntents } from "../state/PaneIntentContext";
 import { usePaneSessionIntents } from "../state/PaneSessionIntentContext";
 import type { Workspace } from "../contracts";
@@ -6,7 +7,7 @@ import "./InitWindowView.css";
 
 interface InitWindowViewProps {
   workspace: Workspace;
-  windowId: string;
+  windowId: WindowId;
 }
 
 export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {

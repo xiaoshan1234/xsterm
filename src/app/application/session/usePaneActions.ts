@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import type { PaneId, TerminalId, WindowId, WorkspaceId } from "../../../models";
 import {
   isTmuxPaneTerminal,
   terminalSessionActions,
@@ -26,7 +27,7 @@ interface UsePaneActionsDeps {
   workspacesRef: React.MutableRefObject<Workspace[]>;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<number>>;
+  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
 }
 
 export function usePaneActions(deps: UsePaneActionsDeps) {
@@ -43,11 +44,11 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
    */
   const splitPane = useCallback(
     (
-      workspaceId: string,
-      windowId: string,
-      paneId: string,
+      workspaceId: WorkspaceId,
+      windowId: WindowId,
+      paneId: PaneId,
       direction: PaneSplitDirection,
-      terminalId?: number,
+      terminalId?: TerminalId,
       configId?: string,
     ) => {
       // tmux panes have a real backend-side split; route to the
@@ -120,14 +121,14 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
    * event which the frontend listener uses to drop the Terminal from
    * React state and collapse the pane tree.
    */
-  const killTmuxPane = useCallback(async (xstermTerminalId: number): Promise<void> => {
+  const killTmuxPane = useCallback(async (xstermTerminalId: TerminalId): Promise<void> => {
     await tmuxControllerActions.killPane(xstermTerminalId);
   }, []);
 
   const updateWindowPaneTree = useCallback(
     (
-      workspaceId: string,
-      windowId: string,
+      workspaceId: WorkspaceId,
+      windowId: WindowId,
       updater: (root: EditablePaneNode) => EditablePaneNode,
     ) => {
       setWorkspaces((prev) =>
@@ -149,7 +150,7 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
   );
 
   const closePane = useCallback(
-    async (workspaceId: string, windowId: string, paneId: string): Promise<void> => {
+    async (workspaceId: WorkspaceId, windowId: WindowId, paneId: PaneId): Promise<void> => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       const window = workspace?.windows.find((w) => w.id === windowId);
       const pane = window ? findPaneNode(window.rootPane, paneId) : null;
@@ -218,10 +219,10 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
  * the tmux-only types.
  */
 async function splitTmuxPaneInternal(
-  xstermTerminalId: number,
-  workspaceId: string,
-  windowId: string,
-  paneId: string,
+  xstermTerminalId: TerminalId,
+  workspaceId: WorkspaceId,
+  windowId: WindowId,
+  paneId: PaneId,
   direction: PaneSplitDirection,
   terminalsRef: React.MutableRefObject<Terminal[]>,
   workspacesRef: React.MutableRefObject<Workspace[]>,

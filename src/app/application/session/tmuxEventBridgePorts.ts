@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
+import type { TerminalId } from "../../../models";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 import type { Terminal } from "../../../features/terminal";
 import type { tmuxEventStream, TmuxControllerError } from "../../../features/tmux";
@@ -9,7 +10,7 @@ export interface TmuxEventBridgePorts {
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   terminalsRef: MutableRefObject<Terminal[]>;
   workspacesRef: MutableRefObject<Workspace[]>;
-  establishingSessionsRef: MutableRefObject<Set<number>>;
+  establishingSessionsRef: MutableRefObject<Set<TerminalId>>;
   setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
   tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
   tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;

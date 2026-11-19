@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { WindowId, WorkspaceId } from "../../../models";
 import type { Window } from "../contracts";
 import { useWorkspaceLayout } from "../state/WorkspaceContext";
 import { ContextMenu, type ContextMenuItem } from "../../../shared/ui/ContextMenu";
@@ -10,15 +11,15 @@ import "./TabBar.css";
 const DRAG_CLICK_THRESHOLD_PX = 4;
 
 interface WindowTabBarProps {
-  workspaceId: string;
+  workspaceId: WorkspaceId;
   workspace: { windows: Window[]; name?: string };
-  activeWindowId: string | null;
-  onSelect: (windowId: string) => void;
+  activeWindowId: WindowId | null;
+  onSelect: (windowId: WindowId) => void;
   onAdd: () => void;
   onSaveAll: () => void;
-  onSaveWindow: (windowId: string) => void;
-  onCloseWindow: (windowId: string) => void;
-  onRenameWindow: (windowId: string) => void;
+  onSaveWindow: (windowId: WindowId) => void;
+  onCloseWindow: (windowId: WindowId) => void;
+  onRenameWindow: (windowId: WindowId) => void;
 }
 
 export function WindowTabBar({

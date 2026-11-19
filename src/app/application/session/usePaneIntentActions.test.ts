@@ -3,26 +3,27 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { isApplicationError } from "../../../models/applicationError";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import { type Terminal } from "../../../features/terminal";
 import { type EditablePaneNode } from "../../../features/workspace";
 import { type Workspace } from "../../../features/workspace";
 import { type PaneIntentPorts, usePaneIntentActions } from "./usePaneIntentActions";
 
 const targetPane: EditablePaneNode = {
-  id: "target-pane",
+  id: createPaneId("target-pane"),
   type: "leaf",
   size: 100,
 };
 
 function createWorkspace(terminalId?: number): Workspace {
   return {
-    id: "workspace-1",
+    id: createWorkspaceId("workspace-1"),
     name: "workspace",
-    activeWindowId: "window-1",
-    terminalIds: terminalId === undefined ? [] : [terminalId],
+    activeWindowId: createWindowId("window-1"),
+    terminalIds: terminalId === undefined ? [] : [createTerminalId(terminalId)],
     windows: [
       {
-        id: "window-1",
+        id: createWindowId("window-1"),
         name: "window",
         activePaneId: targetPane.id,
         rootPane:
@@ -30,7 +31,7 @@ function createWorkspace(terminalId?: number): Workspace {
             ? targetPane
             : {
                 ...targetPane,
-                terminalId,
+                terminalId: createTerminalId(terminalId),
                 configId: "config-1",
               },
       },
@@ -40,7 +41,7 @@ function createWorkspace(terminalId?: number): Workspace {
 
 function createTerminal(): Terminal {
   return {
-    id: 7,
+    id: createTerminalId(7),
     configId: "config-1",
     name: "Terminal",
     type: "local",
@@ -76,10 +77,10 @@ describe("usePaneIntentActions", () => {
 
     await act(() =>
       result.current.attachExistingTerminal({
-        workspaceId: "workspace-1",
-        windowId: "window-1",
+        workspaceId: createWorkspaceId("workspace-1"),
+        windowId: createWindowId("window-1"),
         paneId: targetPane.id,
-        terminalId: 7,
+        terminalId: createTerminalId(7),
       }),
     );
 
@@ -97,16 +98,16 @@ describe("usePaneIntentActions", () => {
   it("rejects attaching a terminal already used by another window", async () => {
     const actions = createActionPorts();
     const occupied = createWorkspace();
-    occupied.terminalIds = [7];
+    occupied.terminalIds = [createTerminalId(7)];
     occupied.windows.push({
-      id: "window-2",
+      id: createWindowId("window-2"),
       name: "other",
-      activePaneId: "other-pane",
+      activePaneId: createPaneId("other-pane"),
       rootPane: {
-        id: "other-pane",
+        id: createPaneId("other-pane"),
         type: "leaf",
         size: 100,
-        terminalId: 7,
+        terminalId: createTerminalId(7),
         configId: "config-1",
       },
     });
@@ -119,10 +120,10 @@ describe("usePaneIntentActions", () => {
     let error: unknown;
     try {
       await result.current.attachExistingTerminal({
-        workspaceId: "workspace-1",
-        windowId: "window-1",
+        workspaceId: createWorkspaceId("workspace-1"),
+        windowId: createWindowId("window-1"),
         paneId: targetPane.id,
-        terminalId: 7,
+        terminalId: createTerminalId(7),
       });
     } catch (cause) {
       error = cause;

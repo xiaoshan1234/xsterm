@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
 import {
   isTmuxPaneTerminal,
@@ -17,22 +18,22 @@ import { isApplicationError } from "../../../models/applicationError";
 
 function leafWindow(id: string, name: string, terminalIds: number[]): Window {
   return {
-    id,
+    id: createWindowId(id),
     name,
     windowType: "terminal",
-    activePaneId: "p",
+    activePaneId: createPaneId("p"),
     rootPane: {
-      id: "p",
+      id: createPaneId("p"),
       type: "leaf",
       size: 100,
-      terminalId: terminalIds[0],
+      ...(terminalIds[0] !== undefined ? { terminalId: createTerminalId(terminalIds[0]) } : {}),
     },
   };
 }
 
 function workspace(id: string, name: string, windows: Window[]): Workspace {
   return {
-    id,
+    id: createWorkspaceId(id),
     name,
     windows,
     activeWindowId: windows[0]?.id ?? null,
@@ -57,7 +58,7 @@ const capabilities = {
 describe("dispatchByType", () => {
   const tmux = async () =>
     ({
-      id: 3,
+      id: createTerminalId(3),
       name: "T",
       isConnected: true,
       kind: { type: "tmux-pane", sessionId: 1, paneId: "%1" },
@@ -67,7 +68,7 @@ describe("dispatchByType", () => {
   it("invokes the local creator for type 'local'", async () => {
     const local = async () =>
       ({
-        id: 1,
+        id: createTerminalId(1),
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
@@ -75,7 +76,7 @@ describe("dispatchByType", () => {
       }) as const;
     const ssh = async () =>
       ({
-        id: 2,
+        id: createTerminalId(2),
         name: "S",
         isConnected: true,
         kind: {
@@ -94,7 +95,7 @@ describe("dispatchByType", () => {
   it("invokes the ssh creator for type 'ssh'", async () => {
     const local = async () =>
       ({
-        id: 1,
+        id: createTerminalId(1),
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
@@ -102,7 +103,7 @@ describe("dispatchByType", () => {
       }) as const;
     const ssh = async () =>
       ({
-        id: 2,
+        id: createTerminalId(2),
         name: "S",
         isConnected: true,
         kind: {
@@ -121,7 +122,7 @@ describe("dispatchByType", () => {
   it("invokes the tmux creator for type 'tmux-pane'", async () => {
     const local = async () =>
       ({
-        id: 1,
+        id: createTerminalId(1),
         name: "L",
         isConnected: true,
         kind: { type: "local", shell: "", cwd: "" },
@@ -129,7 +130,7 @@ describe("dispatchByType", () => {
       }) as const;
     const ssh = async () =>
       ({
-        id: 2,
+        id: createTerminalId(2),
         name: "S",
         isConnected: true,
         kind: {
@@ -151,7 +152,7 @@ describe("dispatchByType", () => {
         "weird" as never,
         async () =>
           ({
-            id: 1,
+            id: createTerminalId(1),
             name: "L",
             isConnected: true,
             kind: { type: "local", shell: "", cwd: "" },
@@ -159,7 +160,7 @@ describe("dispatchByType", () => {
           }) as const,
         async () =>
           ({
-            id: 2,
+            id: createTerminalId(2),
             name: "S",
             isConnected: true,
             kind: {
@@ -172,7 +173,7 @@ describe("dispatchByType", () => {
           }) as const,
         async () =>
           ({
-            id: 3,
+            id: createTerminalId(3),
             name: "T",
             isConnected: true,
             kind: { type: "tmux-pane", sessionId: 1, paneId: "%1" },
@@ -193,26 +194,28 @@ describe("getUniqueWindowName", () => {
   ]);
 
   it("returns baseName unchanged when there is no collision", () => {
-    expect(getUniqueWindowName([ws], "ws1", "New-Window")).toBe("New-Window");
+    expect(getUniqueWindowName([ws], createWorkspaceId("ws1"), "New-Window")).toBe("New-Window");
   });
 
   it("returns baseName even when the workspace has a window with the same name", () => {
     // Collision does not trigger a suffix — visual uniqueness comes from position prefix.
-    expect(getUniqueWindowName([ws], "ws1", "Window")).toBe("Window");
+    expect(getUniqueWindowName([ws], createWorkspaceId("ws1"), "Window")).toBe("Window");
   });
 
   it("returns the baseName when the workspace has no conflicting windows", () => {
     const wsSingle = workspace("ws1", "default", [leafWindow("w1", "Alpha", [])]);
-    expect(getUniqueWindowName([wsSingle], "ws1", "Window")).toBe("Window");
+    expect(getUniqueWindowName([wsSingle], createWorkspaceId("ws1"), "Window")).toBe("Window");
   });
 
   it("ignores a window with id === excludeWindowId when renaming", () => {
     // Renaming w1 (currently "Window") to "Window" should be allowed.
-    expect(getUniqueWindowName([ws], "ws1", "Window", "w1")).toBe("Window");
+    expect(
+      getUniqueWindowName([ws], createWorkspaceId("ws1"), "Window", createWindowId("w1")),
+    ).toBe("Window");
   });
 
   it("returns baseName unchanged when the workspace is missing", () => {
-    expect(getUniqueWindowName([ws], "does-not-exist", "Foo")).toBe("Foo");
+    expect(getUniqueWindowName([ws], createWorkspaceId("does-not-exist"), "Foo")).toBe("Foo");
   });
 });
 
@@ -220,7 +223,7 @@ describe("getUniqueWindowName", () => {
 
 describe("buildFrontendTerminal", () => {
   const info = {
-    id: 7,
+    id: createTerminalId(7),
     name: "terminal-7",
     isConnected: true,
     kind: { type: "local", shell: "/bin/zsh", cwd: "/" } as const,
@@ -230,7 +233,7 @@ describe("buildFrontendTerminal", () => {
   it("maps all info fields onto the Terminal object", () => {
     const terminal = buildFrontendTerminal(info, "config-1", "local");
     expect(terminal).toEqual<Terminal>({
-      id: 7,
+      id: createTerminalId(7),
       configId: "config-1",
       name: "terminal-7",
       type: "local",
@@ -303,18 +306,39 @@ function expectTerminalAlreadyAttached(action: () => void): void {
 describe("assertSessionNotUsedElsewhere", () => {
   it("does not throw when the terminal is not used in any other window", () => {
     const ws = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
-    expect(() => assertSessionNotUsedElsewhere([ws], "ws1", "w1", 42)).not.toThrow();
+    expect(() =>
+      assertSessionNotUsedElsewhere(
+        [ws],
+        createWorkspaceId("ws1"),
+        createWindowId("w1"),
+        createTerminalId(42),
+      ),
+    ).not.toThrow();
   });
 
   it("does not throw when the terminal is used in the current workspace+window only", () => {
     const ws = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
-    expect(() => assertSessionNotUsedElsewhere([ws], "ws1", "w1", 42)).not.toThrow();
+    expect(() =>
+      assertSessionNotUsedElsewhere(
+        [ws],
+        createWorkspaceId("ws1"),
+        createWindowId("w1"),
+        createTerminalId(42),
+      ),
+    ).not.toThrow();
   });
 
   it("throws when the terminal is used in a different workspace", () => {
     const ws1 = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
     const ws2 = workspace("ws2", "default", [leafWindow("w2", "Window", [42])]);
-    expectTerminalAlreadyAttached(() => assertSessionNotUsedElsewhere([ws1, ws2], "ws2", "w2", 42));
+    expectTerminalAlreadyAttached(() =>
+      assertSessionNotUsedElsewhere(
+        [ws1, ws2],
+        createWorkspaceId("ws2"),
+        createWindowId("w2"),
+        createTerminalId(42),
+      ),
+    );
   });
 
   it("throws when the terminal is used in a different window of the same workspace", () => {
@@ -322,19 +346,35 @@ describe("assertSessionNotUsedElsewhere", () => {
       leafWindow("w1", "Window", [42]),
       leafWindow("w2", "Window-2", [42]),
     ]);
-    expectTerminalAlreadyAttached(() => assertSessionNotUsedElsewhere([ws], "ws1", "w2", 42));
+    expectTerminalAlreadyAttached(() =>
+      assertSessionNotUsedElsewhere(
+        [ws],
+        createWorkspaceId("ws1"),
+        createWindowId("w2"),
+        createTerminalId(42),
+      ),
+    );
   });
 
   it("throws when currentWindowId is null and the terminal exists anywhere", () => {
     const ws = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
-    expectTerminalAlreadyAttached(() => assertSessionNotUsedElsewhere([ws], null, null, 42));
+    expectTerminalAlreadyAttached(() =>
+      assertSessionNotUsedElsewhere([ws], null, null, createTerminalId(42)),
+    );
   });
 
   it("delegates the existence check to isSessionUsedInOtherWindow", () => {
     // This guards the implementation contract: if isSessionUsedInOtherWindow
     // is updated, assertSessionNotUsedElsewhere follows.
     const ws = workspace("ws1", "default", [leafWindow("w1", "Window", [42])]);
-    expect(isSessionUsedInOtherWindow([ws], "ws1", "w1", 42)).toBe(false);
-    expect(isSessionUsedInOtherWindow([ws], null, null, 42)).toBe(true);
+    expect(
+      isSessionUsedInOtherWindow(
+        [ws],
+        createWorkspaceId("ws1"),
+        createWindowId("w1"),
+        createTerminalId(42),
+      ),
+    ).toBe(false);
+    expect(isSessionUsedInOtherWindow([ws], null, null, createTerminalId(42))).toBe(true);
   });
 });

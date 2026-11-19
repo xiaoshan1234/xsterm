@@ -1,10 +1,11 @@
 import type { Terminal } from "../../../features/terminal";
+import type { TerminalId } from "../../../models";
 import { clearTerminalOutput } from "../../terminal-surface";
 
 interface RollbackDeps {
-  closeTerminal: (terminalId: number) => Promise<void>;
+  closeTerminal: (terminalId: TerminalId) => Promise<void>;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<number>>;
+  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
   /** Log prefix used when reporting close failures during rollback. */
   logTag: string;
 }

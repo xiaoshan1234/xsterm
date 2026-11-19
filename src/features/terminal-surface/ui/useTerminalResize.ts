@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
+import type { TerminalId } from "../../../models";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { type FitAddon } from "@xterm/addon-fit";
 import type { TerminalDisplayConfig } from "../../../features/terminal";
@@ -8,7 +9,7 @@ export function useTerminalResize(
   containerRef: RefObject<HTMLDivElement | null>,
   termRef: RefObject<XTerm | null>,
   fitAddonRef: RefObject<FitAddon | null>,
-  terminalId: number,
+  terminalId: TerminalId,
   displayConfig?: TerminalDisplayConfig,
   isWindowActive: boolean = true,
 ): void {

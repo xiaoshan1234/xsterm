@@ -1,25 +1,26 @@
+import type { PaneId, TerminalId, WindowId, WorkspaceId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode } from "../contracts";
 import type { Workspace } from "../contracts";
 
 export interface PaneLocationViewData {
-  workspaceId: string;
+  workspaceId: WorkspaceId;
   workspaceName: string;
-  windowId: string;
+  windowId: WindowId;
   windowName: string;
   windowIndex: number;
-  paneId: string;
+  paneId: PaneId;
   paneNumber: number;
-  terminalId?: number;
+  terminalId?: TerminalId;
   configId?: string;
 }
 
 export function selectPaneLocations(
   workspaces: readonly Workspace[],
   terminals: readonly Terminal[],
-): ReadonlyMap<number, PaneLocationViewData> {
+): ReadonlyMap<TerminalId, PaneLocationViewData> {
   const terminalIds = new Set(terminals.map((terminal) => terminal.id));
-  const locations = new Map<number, PaneLocationViewData>();
+  const locations = new Map<TerminalId, PaneLocationViewData>();
 
   for (const workspace of workspaces) {
     workspace.windows.forEach((window, windowIndex) => {

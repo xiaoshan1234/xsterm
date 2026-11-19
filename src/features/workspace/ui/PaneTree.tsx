@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import type { PaneId, WindowId } from "../../../models";
 import type { EditablePaneNode } from "../contracts";
 import type { Workspace } from "../contracts";
 import { useDragResize } from "../../../shared/hooks/useDragResize";
@@ -6,15 +7,15 @@ import { Pane } from "./Pane";
 
 interface PaneTreeProps {
   workspace: Workspace;
-  windowId: string;
+  windowId: WindowId;
   node: EditablePaneNode;
   isActive: boolean;
   isWindowActive: boolean;
-  activePaneId: string | null;
-  onActivatePane: (windowId: string, paneId: string) => void;
+  activePaneId: PaneId | null;
+  onActivatePane: (windowId: WindowId, paneId: PaneId) => void;
   onUpdateNode: (
-    windowId: string,
-    nodeId: string,
+    windowId: WindowId,
+    nodeId: PaneId,
     updater: (node: EditablePaneNode) => EditablePaneNode,
   ) => void;
 }
@@ -59,15 +60,15 @@ export function PaneTree({
 
 interface SplitNodeProps {
   workspace: Workspace;
-  windowId: string;
+  windowId: WindowId;
   node: EditablePaneNode;
   isActive: boolean;
   isWindowActive: boolean;
-  activePaneId: string | null;
-  onActivatePane: (windowId: string, paneId: string) => void;
+  activePaneId: PaneId | null;
+  onActivatePane: (windowId: WindowId, paneId: PaneId) => void;
   onUpdateNode: (
-    windowId: string,
-    nodeId: string,
+    windowId: WindowId,
+    nodeId: PaneId,
     updater: (node: EditablePaneNode) => EditablePaneNode,
   ) => void;
 }

@@ -1,10 +1,11 @@
 import { useCallback, useMemo } from "react";
+import type { TerminalId } from "../../models";
 import type { PaneTargetOptionViewData } from "../../features/command-sender";
 
 interface UseRuntimeTextSenderOptions {
   paneTargetOptions: readonly PaneTargetOptionViewData[];
   selectedTargetKey: string;
-  writeTerminal: (terminalId: number, data: string) => Promise<void>;
+  writeTerminal: (terminalId: TerminalId, data: string) => Promise<void>;
   onError: (title: string, cause: unknown) => void;
 }
 

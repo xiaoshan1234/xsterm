@@ -1,3 +1,4 @@
+import type { TerminalId } from "../../models";
 import type { LocalTerminalConfig, SshConfig, TerminalDisplayConfig } from "../launch-config";
 
 export type {
@@ -35,7 +36,7 @@ export interface TmuxPaneRuntimeState {
 }
 
 interface TerminalBase {
-  id: number;
+  id: TerminalId;
   configId: string;
   name: string;
   isConnected: boolean;
@@ -78,23 +79,23 @@ export type { TerminalConnectionInfo } from "../terminal-stream";
 export interface TerminalRuntimeContextType {
   terminals: Terminal[];
   terminalSizesVersion: number;
-  getTerminalSize: (terminalId: number) => { rows: number; cols: number } | undefined;
-  getEffectiveLocalEcho: (terminalId: number) => boolean;
+  getTerminalSize: (terminalId: TerminalId) => { rows: number; cols: number } | undefined;
+  getEffectiveLocalEcho: (terminalId: TerminalId) => boolean;
   createLocalSession: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSession: (config: SshConfig, save?: boolean) => Promise<Terminal>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<Terminal>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<Terminal>;
-  closeTerminal: (id: number) => Promise<void>;
-  reconnectSession: (id: number) => Promise<Terminal>;
-  renameSession: (id: number, name: string) => void;
-  writeTerminal: (id: number, data: string) => Promise<void>;
-  resizeTerminal: (id: number, rows: number, cols: number) => Promise<void>;
+  closeTerminal: (id: TerminalId) => Promise<void>;
+  reconnectSession: (id: TerminalId) => Promise<Terminal>;
+  renameSession: (id: TerminalId, name: string) => void;
+  writeTerminal: (id: TerminalId, data: string) => Promise<void>;
+  resizeTerminal: (id: TerminalId, rows: number, cols: number) => Promise<void>;
   uploadImageToSshTerminal: (
-    terminalId: number,
+    terminalId: TerminalId,
     filename: string,
     data: Uint8Array,
   ) => Promise<string>;
-  reportTerminalSize: (terminalId: number, rows: number, cols: number) => void;
-  applyDisplayConfigToLiveSession: (id: number, patch: Partial<TerminalDisplayConfig>) => void;
-  touchTerminalActivity: (id: number) => void;
+  reportTerminalSize: (terminalId: TerminalId, rows: number, cols: number) => void;
+  applyDisplayConfigToLiveSession: (id: TerminalId, patch: Partial<TerminalDisplayConfig>) => void;
+  touchTerminalActivity: (id: TerminalId) => void;
 }

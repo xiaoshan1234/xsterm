@@ -1,26 +1,28 @@
+import type { LaunchConfigId, PaneId, TerminalId, WindowId, WorkspaceId } from "../../../models";
+
 export type PaneSplitDirection = "horizontal" | "vertical";
 
 export interface EditablePaneNode {
-  id: string;
+  id: PaneId;
   type: "leaf" | "split";
   direction?: PaneSplitDirection;
   size: number;
   children?: EditablePaneNode[];
-  terminalId?: number;
+  terminalId?: TerminalId;
   configId?: string;
 }
 
 export function createEditableLeafPane(
-  id: string,
+  id: PaneId,
   size: number,
-  terminalId?: number,
+  terminalId?: TerminalId,
   configId?: string,
 ): EditablePaneNode {
   return { id, type: "leaf", size, terminalId, configId };
 }
 
 export function createEditableSplitNode(
-  id: string,
+  id: PaneId,
   direction: PaneSplitDirection,
   first: EditablePaneNode,
   second: EditablePaneNode,
@@ -35,37 +37,37 @@ export function createEditableSplitNode(
 }
 
 export interface SavedWindowConfig {
-  id: string;
+  id: LaunchConfigId;
   name: string;
   rootPane: EditablePaneNode;
 }
 
 export interface SavedWorkspace {
-  id: string;
+  id: LaunchConfigId;
   name: string;
   windows: SavedWindowConfig[];
 }
 
 export interface Window {
-  id: string;
+  id: WindowId;
   name: string;
   rootPane: EditablePaneNode;
-  activePaneId: string | null;
+  activePaneId: PaneId | null;
   windowType?: "terminal" | "init";
   xstermWindowId?: number;
 }
 
 export interface Workspace {
-  id: string;
+  id: WorkspaceId;
   name: string;
   windows: Window[];
-  activeWindowId: string | null;
-  terminalIds: number[];
-  savedWorkspaceId?: string;
+  activeWindowId: WindowId | null;
+  terminalIds: TerminalId[];
+  savedWorkspaceId?: LaunchConfigId;
 }
 
 export interface PaneTerminalRef {
-  id: number;
+  id: TerminalId;
   configId: string;
   name: string;
 }

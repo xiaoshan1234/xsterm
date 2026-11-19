@@ -1,4 +1,5 @@
 import { useShortcuts } from "../shared/hooks/useShortcut";
+import type { PaneId } from "../models";
 import { useTerminalRuntime } from "../features/terminal";
 import { useWorkspaceLayout } from "../features/workspace";
 import type { EditablePaneNode, PaneSplitDirection } from "../features/workspace";
@@ -100,8 +101,8 @@ export function useAppShortcuts({
   ]);
 }
 
-function collectLeafIds(root: EditablePaneNode): string[] {
-  const ids: string[] = [];
+function collectLeafIds(root: EditablePaneNode): PaneId[] {
+  const ids: PaneId[] = [];
   const traverse = (node: EditablePaneNode) => {
     if (node.type === "leaf") {
       ids.push(node.id);
@@ -113,7 +114,7 @@ function collectLeafIds(root: EditablePaneNode): string[] {
   return ids;
 }
 
-function findPane(root: EditablePaneNode, id: string): EditablePaneNode | null {
+function findPane(root: EditablePaneNode, id: PaneId): EditablePaneNode | null {
   if (root.id === id) return root;
   if (root.children) {
     for (const child of root.children) {

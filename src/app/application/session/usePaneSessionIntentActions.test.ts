@@ -2,6 +2,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { PaneIntentActions } from "../../../features/workspace";
 import {
@@ -11,7 +12,7 @@ import {
 
 function createTerminal(): Terminal {
   return {
-    id: 7,
+    id: createTerminalId(7),
     configId: "config-1",
     name: "Terminal",
     type: "local",
@@ -49,9 +50,9 @@ describe("usePaneSessionIntentActions", () => {
 
     await act(() =>
       result.current.splitPaneWithSavedConfig({
-        workspaceId: "workspace-1",
-        windowId: "window-1",
-        paneId: "pane-1",
+        workspaceId: createWorkspaceId("workspace-1"),
+        windowId: createWindowId("window-1"),
+        paneId: createPaneId("pane-1"),
         direction: "vertical",
         configId: "saved-config",
       }),
@@ -76,9 +77,9 @@ describe("usePaneSessionIntentActions", () => {
 
     await expect(
       result.current.attachSavedConfigToPane({
-        workspaceId: "workspace-1",
-        windowId: "window-1",
-        paneId: "pane-1",
+        workspaceId: createWorkspaceId("workspace-1"),
+        windowId: createWindowId("window-1"),
+        paneId: createPaneId("pane-1"),
         configId: "saved-config",
       }),
     ).rejects.toThrow("attach failed");
@@ -93,8 +94,8 @@ describe("usePaneSessionIntentActions", () => {
 
     await act(() =>
       result.current.createSshTerminalForWindow({
-        workspaceId: "workspace-1",
-        windowId: "window-1",
+        workspaceId: createWorkspaceId("workspace-1"),
+        windowId: createWindowId("window-1"),
         config: {
           host: "example.com",
           port: 22,

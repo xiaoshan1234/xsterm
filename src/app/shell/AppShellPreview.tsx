@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createTerminalId } from "../../models";
 import { GlobalOverlayHost } from "./GlobalOverlayHost";
 import { GlobalTextSender } from "../../features/command-sender";
 import { MainAreaPreview } from "./MainAreaPreview";
@@ -41,7 +42,7 @@ const TEXT_SENDER_TARGETS = [
 ];
 
 const PREVIEW_RUNTIME_STATUS: RuntimeStatusViewData = {
-  terminalId: 1,
+  terminalId: createTerminalId(1),
   status: "connected",
   name: "Local PowerShell",
   kind: "Local",

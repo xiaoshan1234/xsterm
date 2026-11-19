@@ -1,3 +1,4 @@
+import { createTerminalId } from "../../../models";
 import { isTmuxPaneTerminal } from "../../../features/terminal";
 import { removeControllerFromWorkspaces } from "../../../features/workspace";
 import { buildTmuxPaneSession, mergeTmuxPaneMetadata } from "./tmuxEventTransitions";
@@ -79,7 +80,7 @@ export function createTmuxControllerEventHandlers({
       isActive,
       windowName,
     }) => {
-      const terminalId = Number(terminalHandle);
+      const terminalId = createTerminalId(Number(terminalHandle));
       const controllerId = Number(controllerHandle);
       const existing = terminalsRef.current.find((terminal) => terminal.id === terminalId);
 
@@ -130,7 +131,7 @@ export function createTmuxControllerEventHandlers({
     },
 
     onPaneRemoved: ({ terminalHandle }) => {
-      const terminalId = Number(terminalHandle);
+      const terminalId = createTerminalId(Number(terminalHandle));
       establishingSessionsRef.current.delete(terminalId);
       if (!terminalsRef.current.some((terminal) => terminal.id === terminalId)) return;
       setTerminals((terminals) => terminals.filter((terminal) => terminal.id !== terminalId));

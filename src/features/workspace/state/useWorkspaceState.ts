@@ -7,14 +7,15 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
+import type { WorkspaceId } from "../../../models";
 import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../contracts";
 
 export interface WorkspaceState {
   workspaces: Workspace[];
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   workspacesRef: MutableRefObject<Workspace[]>;
-  activeWorkspaceId: string | null;
-  setActiveWorkspaceId: Dispatch<SetStateAction<string | null>>;
+  activeWorkspaceId: WorkspaceId | null;
+  setActiveWorkspaceId: Dispatch<SetStateAction<WorkspaceId | null>>;
   savedWorkspaces: SavedWorkspace[];
   setSavedWorkspaces: Dispatch<SetStateAction<SavedWorkspace[]>>;
   savedWindowConfigs: SavedWindowConfig[];
@@ -23,7 +24,7 @@ export interface WorkspaceState {
 
 export function useWorkspaceState(): WorkspaceState {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<WorkspaceId | null>(null);
   const [savedWorkspaces, setSavedWorkspaces] = useState<SavedWorkspace[]>([]);
   const [savedWindowConfigs, setSavedWindowConfigs] = useState<SavedWindowConfig[]>([]);
   const workspacesRef = useRef(workspaces);

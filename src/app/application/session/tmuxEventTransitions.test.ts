@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { createTerminalId } from "../../../models";
 import { isTmuxPaneTerminal } from "../../../features/terminal";
 import { buildTmuxPaneSession, mergeTmuxPaneMetadata } from "./tmuxEventTransitions";
 
 function createTmuxTerminal() {
   return buildTmuxPaneSession({
-    id: 7,
+    id: createTerminalId(7),
     name: "tmux-1:%1",
     tmuxPaneId: "%1",
     tmuxSessionId: 1,
@@ -55,7 +56,7 @@ describe("tmuxEventTransitions", () => {
 
   it("leaves non-tmux terminals unchanged", () => {
     const terminal = {
-      id: 8,
+      id: createTerminalId(8),
       configId: "config-1",
       name: "local",
       type: "local" as const,

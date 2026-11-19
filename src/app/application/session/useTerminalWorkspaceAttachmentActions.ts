@@ -1,9 +1,11 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import type { TerminalId, WorkspaceId } from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import {
   assertSessionNotUsedElsewhere,
   createLeafPane,
-  generateId,
+  generateWindowId,
+  generateWorkspaceId,
   getUniqueWindowName,
   withRecomputedSessionIds,
   type Window,
@@ -14,7 +16,7 @@ interface UseTerminalWorkspaceAttachmentActionsOptions {
   terminalsRef: MutableRefObject<Terminal[]>;
   workspacesRef: MutableRefObject<Workspace[]>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
-  setActiveWorkspaceId: Dispatch<SetStateAction<string | null>>;
+  setActiveWorkspaceId: Dispatch<SetStateAction<WorkspaceId | null>>;
 }
 
 export function useTerminalWorkspaceAttachmentActions({
@@ -25,16 +27,16 @@ export function useTerminalWorkspaceAttachmentActions({
 }: UseTerminalWorkspaceAttachmentActionsOptions) {
   const createWindowFromSession = useCallback(
     (
-      terminalId: number,
+      terminalId: TerminalId,
       configId: string,
       name?: string,
-      targetWorkspaceIdParam?: string,
+      targetWorkspaceIdParam?: WorkspaceId,
     ): Window => {
       assertSessionNotUsedElsewhere(workspacesRef.current, null, null, terminalId);
       const rootPane = createLeafPane(100, terminalId, configId);
       const baseName = name ?? "Window";
       const window: Window = {
-        id: generateId(),
+        id: generateWindowId(),
         name: baseName,
         rootPane,
         activePaneId: rootPane.id,
@@ -47,10 +49,10 @@ export function useTerminalWorkspaceAttachmentActions({
           targetWorkspaceId !== null &&
           previous.some((workspace) => workspace.id === targetWorkspaceId);
         if (!targetWorkspaceId || !workspaceExists) {
-          const uniqueName = getUniqueWindowName(previous, "", baseName);
+          const uniqueName = getUniqueWindowName(previous, null, baseName);
           const finalWindow: Window = { ...window, name: uniqueName };
           const workspace: Workspace = {
-            id: generateId(),
+            id: generateWorkspaceId(),
             name: "default",
             windows: [finalWindow],
             activeWindowId: finalWindow.id,
@@ -77,18 +79,18 @@ export function useTerminalWorkspaceAttachmentActions({
   );
 
   const createWorkspaceFromSession = useCallback(
-    (terminalId: number, configId: string, name?: string): Workspace => {
+    (terminalId: TerminalId, configId: string, name?: string): Workspace => {
       const terminal = terminalsRef.current.find((candidate) => candidate.id === terminalId);
       const windowName = name ?? terminal?.name ?? "Window";
       const rootPane = createLeafPane(100, terminalId, configId);
       const window: Window = {
-        id: generateId(),
+        id: generateWindowId(),
         name: windowName,
         rootPane,
         activePaneId: rootPane.id,
       };
       const workspace: Workspace = {
-        id: generateId(),
+        id: generateWorkspaceId(),
         name: name ?? terminal?.name ?? "Workspace",
         windows: [window],
         activeWindowId: window.id,

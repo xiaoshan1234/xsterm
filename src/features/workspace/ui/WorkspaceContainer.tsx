@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import type { PaneId, WindowId } from "../../../models";
 import type { EditablePaneNode } from "../contracts";
 import type { Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
@@ -12,7 +13,7 @@ import "./TabBar.css";
 
 function updateNodeInTree(
   root: EditablePaneNode,
-  nodeId: string,
+  nodeId: PaneId,
   updater: (node: EditablePaneNode) => EditablePaneNode,
 ): EditablePaneNode {
   if (root.id === nodeId) {
@@ -48,12 +49,12 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
     workspace.windows[0] ??
     null;
 
-  const [savingWindowId, setSavingWindowId] = useState<string | null>(null);
-  const [renamingWindow, setRenamingWindow] = useState<{ id: string; name: string } | null>(null);
+  const [savingWindowId, setSavingWindowId] = useState<WindowId | null>(null);
+  const [renamingWindow, setRenamingWindow] = useState<{ id: WindowId; name: string } | null>(null);
   const [showSaveWorkspaceDialog, setShowSaveWorkspaceDialog] = useState(false);
 
   const handleActivatePane = useCallback(
-    (windowId: string, paneId: string) => {
+    (windowId: WindowId, paneId: PaneId) => {
       setActiveWorkspace(workspace.id);
       setActiveWindow(workspace.id, windowId);
       setActivePane(workspace.id, windowId, paneId);
@@ -62,7 +63,7 @@ export function WorkspaceContainer({ workspace }: WorkspaceContainerProps) {
   );
 
   const handleUpdateNode = useCallback(
-    (windowId: string, nodeId: string, updater: (node: EditablePaneNode) => EditablePaneNode) => {
+    (windowId: WindowId, nodeId: PaneId, updater: (node: EditablePaneNode) => EditablePaneNode) => {
       updateWindowPaneTree(workspace.id, windowId, (root) => {
         if (root.id === nodeId) {
           return updater(root);

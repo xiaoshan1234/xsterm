@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
+import type { TerminalId } from "../../../models";
 import {
   terminalSessionActions,
   terminalStreamActions,
@@ -10,26 +11,26 @@ interface UseTerminalStreamActionsOptions {
 }
 
 export function useTerminalStreamActions({ setSessions }: UseTerminalStreamActionsOptions) {
-  const writeTerminal = useCallback(async (id: number, data: string): Promise<void> => {
+  const writeTerminal = useCallback(async (id: TerminalId, data: string): Promise<void> => {
     await terminalStreamActions.writeBytes(id, new TextEncoder().encode(data));
   }, []);
 
   const resizeTerminal = useCallback(
-    async (id: number, rows: number, cols: number): Promise<void> => {
+    async (id: TerminalId, rows: number, cols: number): Promise<void> => {
       await terminalSessionActions.resizeTerminal(id, rows, cols);
     },
     [],
   );
 
   const uploadImageToSshTerminal = useCallback(
-    async (terminalId: number, filename: string, data: Uint8Array): Promise<string> => {
+    async (terminalId: TerminalId, filename: string, data: Uint8Array): Promise<string> => {
       return terminalSessionActions.uploadImageToSshTerminal(terminalId, filename, data);
     },
     [],
   );
 
   const touchTerminalActivity = useCallback(
-    (id: number) => {
+    (id: TerminalId) => {
       const now = Date.now();
       setSessions((previous) =>
         previous.map((terminal) =>

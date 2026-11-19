@@ -1,18 +1,19 @@
+import type { PaneId, TerminalId, WindowId, WorkspaceId } from "../../../models";
 import { forEachPane, type Workspace } from "../../../features/workspace";
 
 export interface TerminalPaneLocation {
-  workspaceId: string;
-  windowId: string;
-  paneId: string;
+  workspaceId: WorkspaceId;
+  windowId: WindowId;
+  paneId: PaneId;
 }
 
 export function findTerminalPaneLocation(
   workspaces: readonly Workspace[],
-  terminalId: number,
+  terminalId: TerminalId,
 ): TerminalPaneLocation | undefined {
   for (const workspace of workspaces) {
     for (const window of workspace.windows) {
-      let paneId: string | undefined;
+      let paneId: PaneId | undefined;
       forEachPane(window.rootPane, (pane) => {
         if (!paneId && pane.type === "leaf" && pane.terminalId === terminalId) {
           paneId = pane.id;

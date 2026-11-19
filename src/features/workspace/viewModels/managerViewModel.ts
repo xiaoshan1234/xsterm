@@ -1,13 +1,14 @@
+import type { LaunchConfigId } from "../../../models";
 import type { SavedWindowConfig, SavedWorkspace, Workspace } from "../contracts";
 
 export interface WindowManagerItemViewData {
-  configId: string;
+  configId: LaunchConfigId;
   name: string;
   paneCount: number;
 }
 
 export interface WorkspaceManagerItemViewData {
-  configId: string;
+  configId: LaunchConfigId;
   name: string;
   windowCount: number;
   isLoaded: boolean;

@@ -1,26 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
 import type { Window, Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
 import { assertSessionNotUsedElsewhere, getUniqueWindowName } from "./windowOperations";
 
 function leafWindow(id: string, terminalId?: number): Window {
   return {
-    id,
+    id: createWindowId(id),
     name: id,
     windowType: "terminal",
-    activePaneId: `${id}-pane`,
+    activePaneId: createPaneId(`${id}-pane`),
     rootPane: {
-      id: `${id}-pane`,
+      id: createPaneId(`${id}-pane`),
       type: "leaf",
       size: 100,
-      terminalId,
+      ...(terminalId !== undefined ? { terminalId: createTerminalId(terminalId) } : {}),
     },
   };
 }
 
 function workspace(id: string, windows: Window[]): Workspace {
   return {
-    id,
+    id: createWorkspaceId(id),
     name: id,
     windows,
     activeWindowId: windows[0]?.id ?? null,
@@ -30,12 +31,19 @@ function workspace(id: string, windows: Window[]): Workspace {
 
 describe("workspace window operations", () => {
   it("keeps the requested base window name", () => {
-    expect(getUniqueWindowName([], "workspace", "Window")).toBe("Window");
+    expect(getUniqueWindowName([], createWorkspaceId("workspace"), "Window")).toBe("Window");
   });
 
   it("allows a terminal in its current window", () => {
     const target = workspace("work", [leafWindow("window", 42)]);
-    expect(() => assertSessionNotUsedElsewhere([target], "work", "window", 42)).not.toThrow();
+    expect(() =>
+      assertSessionNotUsedElsewhere(
+        [target],
+        createWorkspaceId("work"),
+        createWindowId("window"),
+        createTerminalId(42),
+      ),
+    ).not.toThrow();
   });
 
   it("rejects a terminal already attached to another window", () => {
@@ -43,7 +51,12 @@ describe("workspace window operations", () => {
     const second = workspace("second", [leafWindow("window-2", 42)]);
 
     try {
-      assertSessionNotUsedElsewhere([first, second], "second", "window-2", 42);
+      assertSessionNotUsedElsewhere(
+        [first, second],
+        createWorkspaceId("second"),
+        createWindowId("window-2"),
+        createTerminalId(42),
+      );
       throw new Error("Expected terminal-already-attached");
     } catch (error) {
       expect(isApplicationError(error, "terminal-already-attached")).toBe(true);

@@ -10,9 +10,11 @@
 
 const MAX_BUFFER_BYTES = 4 * 1024 * 1024; // 4 MB per terminal
 
-const buffers = new Map<number, string>();
+import type { TerminalId } from "../../../models";
 
-export function appendTerminalOutput(terminalId: number, data: string): void {
+const buffers = new Map<TerminalId, string>();
+
+export function appendTerminalOutput(terminalId: TerminalId, data: string): void {
   const combined = (buffers.get(terminalId) ?? "") + data;
   if (combined.length > MAX_BUFFER_BYTES) {
     // Drop oldest content at the next line boundary to keep ANSI sequences intact.
@@ -27,14 +29,14 @@ export function appendTerminalOutput(terminalId: number, data: string): void {
   }
 }
 
-export function getTerminalOutput(terminalId: number): string | undefined {
+export function getTerminalOutput(terminalId: TerminalId): string | undefined {
   return buffers.get(terminalId);
 }
 
-export function clearTerminalOutput(terminalId: number): void {
+export function clearTerminalOutput(terminalId: TerminalId): void {
   buffers.delete(terminalId);
 }
 
-export function hasSessionOutput(terminalId: number): boolean {
+export function hasSessionOutput(terminalId: TerminalId): boolean {
   return buffers.has(terminalId);
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createTerminalId } from "../../../models";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 import type { Terminal } from "../../../features/terminal";
 import type { Workspace } from "../../../features/workspace";
@@ -23,7 +24,7 @@ const tmuxConfig: TmuxSessionConfig = {
 
 function createTerminal(): Terminal {
   return buildTmuxPaneSession({
-    id: 7,
+    id: createTerminalId(7),
     name: "tmux-1:%1",
     tmuxPaneId: "%1",
     tmuxSessionId: 1,

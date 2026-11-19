@@ -1,9 +1,12 @@
+import type { TerminalId } from "../../../models";
 import type { Window, Workspace } from "../contracts";
 import {
   collectSessionIdsFromPaneTree,
   findFirstLeafWithSession,
   findPaneNode,
   getLeafPaneIds,
+  generatePaneId,
+  generateWindowId,
   removeSessionAndCollapse,
   withRecomputedSessionIds,
 } from "./paneTreeOperations";
@@ -19,7 +22,7 @@ import {
  */
 export function removeSessionsFromWorkspaces(
   workspaces: Workspace[],
-  terminalIds: Iterable<number>,
+  terminalIds: Iterable<TerminalId>,
 ): Workspace[] {
   const ids = [...terminalIds];
   return workspaces.map((workspace) =>
@@ -30,7 +33,7 @@ export function removeSessionsFromWorkspaces(
         for (const id of ids) {
           root = removeSessionAndCollapse(root, id);
         }
-        const newActivePaneId = findPaneNode(root, window.activePaneId ?? "")
+        const newActivePaneId = findPaneNode(root, window.activePaneId)
           ? window.activePaneId
           : (getLeafPaneIds(root)[0] ?? null);
         return { ...window, rootPane: root, activePaneId: newActivePaneId };
@@ -46,7 +49,7 @@ export function removeSessionsFromWorkspaces(
  */
 export function removeControllerFromWorkspaces(
   workspaces: Workspace[],
-  terminalIds: Iterable<number>,
+  terminalIds: Iterable<TerminalId>,
 ): Workspace[] {
   const controlledIds = new Set(terminalIds);
 
@@ -66,7 +69,7 @@ export function removeControllerFromWorkspaces(
         return [];
       }
 
-      const activePane = findPaneNode(rootPane, window.activePaneId ?? "");
+      const activePane = findPaneNode(rootPane, window.activePaneId);
       const activePaneId =
         activePane?.type === "leaf" && activePane.terminalId !== undefined
           ? window.activePaneId
@@ -159,9 +162,9 @@ export function closeWindow(workspaces: Workspace[], xstermWindowId: number): Wo
 }
 
 function buildInitWindow(): Window {
-  const paneId = crypto.randomUUID();
+  const paneId = generatePaneId();
   return {
-    id: crypto.randomUUID(),
+    id: generateWindowId(),
     name: "New Terminal",
     activePaneId: paneId,
     windowType: "init",

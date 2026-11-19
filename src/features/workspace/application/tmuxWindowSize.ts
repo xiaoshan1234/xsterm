@@ -1,3 +1,4 @@
+import type { TerminalId } from "../../../models";
 import type { EditablePaneNode } from "../contracts";
 
 export interface TerminalSize {
@@ -16,7 +17,7 @@ export interface WindowSize {
  */
 export function computeTmuxWindowSize(
   node: EditablePaneNode,
-  sizes: ReadonlyMap<number, TerminalSize>,
+  sizes: ReadonlyMap<TerminalId, TerminalSize>,
 ): WindowSize | null {
   if (node.type === "leaf") {
     if (node.terminalId === undefined) return null;

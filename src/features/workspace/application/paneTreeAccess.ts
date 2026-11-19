@@ -1,9 +1,11 @@
+import type { PaneId } from "../../../models";
 import { type EditablePaneNode } from "../contracts";
 
-export function findPaneNode<T extends { id: string; children?: T[] }>(
+export function findPaneNode<T extends { id: PaneId; children?: T[] }>(
   node: T,
-  paneId: string,
+  paneId: PaneId | null | undefined,
 ): T | null {
+  if (paneId === null || paneId === undefined) return null;
   if (node.id === paneId) return node;
   if (node.children) {
     for (const child of node.children) {
@@ -14,8 +16,8 @@ export function findPaneNode<T extends { id: string; children?: T[] }>(
   return null;
 }
 
-export function getLeafPaneIds(node: EditablePaneNode): string[] {
-  const ids: string[] = [];
+export function getLeafPaneIds(node: EditablePaneNode): PaneId[] {
+  const ids: PaneId[] = [];
   function collect(candidate: EditablePaneNode): void {
     if (candidate.type === "leaf") {
       ids.push(candidate.id);
@@ -31,9 +33,9 @@ export function getLeafPaneIds(node: EditablePaneNode): string[] {
   return ids;
 }
 
-export function replacePaneNode<T extends { id: string; children?: T[] }>(
+export function replacePaneNode<T extends { id: PaneId; children?: T[] }>(
   node: T,
-  paneId: string,
+  paneId: PaneId,
   newNode: T,
 ): T {
   if (node.id === paneId) return newNode;
@@ -44,7 +46,7 @@ export function replacePaneNode<T extends { id: string; children?: T[] }>(
   };
 }
 
-export function mapPaneTree<T extends { id: string; children?: T[] }>(
+export function mapPaneTree<T extends { id: PaneId; children?: T[] }>(
   node: T,
   mapper: (node: T) => T,
 ): T {

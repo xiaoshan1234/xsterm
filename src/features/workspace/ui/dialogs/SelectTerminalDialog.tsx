@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { TerminalId } from "../../../../models";
 import { useSavedLaunchConfigs } from "../../../launch-config";
 import { useTerminalRuntime } from "../../../terminal";
 import { useWorkspaceLayout } from "../../state/WorkspaceContext";
@@ -8,7 +9,7 @@ import "./SelectTerminalDialog.css";
 interface SelectTerminalDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectSession: (terminalId: number) => void;
+  onSelectSession: (terminalId: TerminalId) => void;
   onSelectConfig: (configId: string) => void;
   disabled?: boolean;
 }
@@ -25,7 +26,7 @@ export function SelectTerminalDialog({
   const { workspaces } = useWorkspaceLayout();
 
   const usedSessionIds = useMemo(() => {
-    const used = new Set<number>();
+    const used = new Set<TerminalId>();
     workspaces.forEach((workspace) => {
       workspace.windows.forEach((window) => {
         const collect = (node: typeof window.rootPane) => {

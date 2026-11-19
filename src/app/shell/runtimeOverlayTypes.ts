@@ -1,4 +1,5 @@
 import { type EditableTerminalConfig, type EditableTmuxConfig } from "../../features/launch-config";
+import type { LaunchConfigId } from "../../models";
 import { type ErrorDialogData } from "./ErrorDialog";
 
 export type RuntimeDialog =
@@ -9,8 +10,8 @@ export type RuntimeDialog =
   | { kind: "edit-tmux"; config: EditableTmuxConfig }
   | { kind: "new-group" }
   | { kind: "edit-group"; groupId: number }
-  | { kind: "rename-window"; configId: string; defaultName: string }
-  | { kind: "rename-workspace"; configId: string; defaultName: string }
+  | { kind: "rename-window"; configId: LaunchConfigId; defaultName: string }
+  | { kind: "rename-workspace"; configId: LaunchConfigId; defaultName: string }
   | null;
 
 export interface RuntimeConfirmState {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import type { TerminalId } from "../../../models";
 import { useTheme } from "../../../shared/theme/ThemeContext";
 import type { TerminalDisplayConfig } from "../../../features/terminal";
 import { frontendLogger as logger } from "../../../infra";
@@ -20,7 +21,7 @@ import "./Terminal.css";
 // - isActive: whether the current pane is active, determines focus/blur
 // - onFocus: triggered when clicked, notifies parent to switch active pane
 interface TerminalProps {
-  terminalId: number;
+  terminalId: TerminalId;
   // tmux control-mode terminals use the same write/resize/close IPC
   // surface as local; the `kind` prop is informational (e.g. for
   // the `useClipboardImagePaste` branch on the `kind === "ssh"` path).

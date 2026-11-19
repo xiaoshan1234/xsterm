@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { TerminalId } from "../../../models";
 import { frontendLogger as logger } from "../../../infra";
 import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
 import { convertLineEndings } from "./textTransform";
@@ -113,9 +114,9 @@ export function appendToPasteQueue(
  * layer and survives future changes (e.g. introducing async encoding for
  * non-UTF-8 terminals).
  */
-export type PasteWritePort = (terminalId: number, data: Uint8Array) => Promise<void>;
+export type PasteWritePort = (terminalId: TerminalId, data: Uint8Array) => Promise<void>;
 
-export function usePasteBatcher(terminalId: number, writeBytes?: PasteWritePort) {
+export function usePasteBatcher(terminalId: TerminalId, writeBytes?: PasteWritePort) {
   const ports = useTerminalSurfacePorts();
   const writeBytesPort = writeBytes ?? ports.stream.writeBytes;
   const terminalIdRef = useRef(terminalId);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createTerminalId } from "../../../models";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 import {
@@ -66,7 +67,7 @@ describe("tmux session identity", () => {
     const savedConfigs = [tmuxConfig("one", "work:dev")];
     const terminals = [
       {
-        id: 4,
+        id: createTerminalId(4),
         configId: "one",
         name: "work",
         type: "tmux-pane" as const,

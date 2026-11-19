@@ -1,4 +1,5 @@
 import { DEFAULT_GROUP_ID } from "../../features/launch-config";
+import type { LaunchConfigId } from "../../models";
 import { tmuxSessionKey } from "../../features/tmux";
 import type { RuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
@@ -52,7 +53,7 @@ export function RuntimeToolPanelContainer({
     );
   };
 
-  const openWorkspace = (configId: string, isLoaded: boolean) => {
+  const openWorkspace = (configId: LaunchConfigId, isLoaded: boolean) => {
     if (isLoaded) {
       const loadedWorkspace = workspaces.find(
         (workspace) => workspace.savedWorkspaceId === configId,

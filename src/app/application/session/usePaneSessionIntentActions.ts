@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import type { TerminalId, WindowId, WorkspaceId } from "../../../models";
 import type { LocalTerminalConfig, SshConfig } from "../../../features/terminal";
 import type {
   AttachSavedConfigToPaneRequest,
@@ -14,15 +15,15 @@ import type {
 } from "../../../features/workspace";
 
 export interface PaneSessionIntentPorts {
-  closeTerminal: (terminalId: number) => Promise<void>;
+  closeTerminal: (terminalId: TerminalId) => Promise<void>;
   createTerminalFromSavedConfig: (
     configId: string,
   ) => Promise<Pick<PaneTerminalRef, "id" | "configId" | "name">>;
   createLocalSessionOnly: (config: LocalTerminalConfig, save?: boolean) => Promise<PaneTerminalRef>;
   createSshSessionOnly: (config: SshConfig, save?: boolean) => Promise<PaneTerminalRef>;
   replaceInitWindowWithTerminal: (
-    workspaceId: string,
-    windowId: string,
+    workspaceId: WorkspaceId,
+    windowId: WindowId,
     terminal: PaneTerminalRef,
   ) => void;
 }

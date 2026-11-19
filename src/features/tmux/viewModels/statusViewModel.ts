@@ -1,3 +1,4 @@
+import type { TerminalId } from "../../../models";
 import {
   isTmuxPaneTerminal,
   type Terminal,
@@ -10,7 +11,7 @@ import { selectPaneLocations, type PaneLocationViewData } from "../../workspace"
 export type TmuxRuntimeStatus = "connected" | "disconnected";
 
 export interface TmuxStatusPaneViewData {
-  terminalId: number;
+  terminalId: TerminalId;
   tmuxPaneId: string;
   tmuxWindowId: string;
   windowIndex?: number;

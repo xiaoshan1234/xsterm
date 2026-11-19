@@ -1,4 +1,13 @@
 import { useCallback } from "react";
+import {
+  createLaunchConfigId,
+  createPaneId,
+  createWindowId,
+  createWorkspaceId,
+  type LaunchConfigId,
+  type TerminalId,
+  type WorkspaceId,
+} from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode } from "../contracts";
 import type { SavedWorkspace, Window, Workspace } from "../contracts";
@@ -15,13 +24,13 @@ interface UseSavedWorkspaceActionsDeps {
   savedWorkspaces: SavedWorkspace[];
   workspacesRef: React.MutableRefObject<Workspace[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  setActiveWorkspaceId: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveWorkspaceId: React.Dispatch<React.SetStateAction<WorkspaceId | null>>;
   setSavedWorkspaces: React.Dispatch<React.SetStateAction<SavedWorkspace[]>>;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<number>>;
+  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
   persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;
-  closeTerminal: (terminalId: number) => Promise<void>;
+  closeTerminal: (terminalId: TerminalId) => Promise<void>;
 }
 
 export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
@@ -49,7 +58,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
    * Note: configId is saved instead of terminal ID; terminals are reconstructed via loadWorkspace after restart
    */
   const saveWorkspace = useCallback(
-    (workspaceId: string, name: string) => {
+    (workspaceId: WorkspaceId, name: string) => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       if (!workspace) return;
 
@@ -60,11 +69,11 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
         throw createApplicationError("workspace-name-reserved", "Workspace name is reserved");
       }
 
-      const buildSavedWorkspace = (id: string): SavedWorkspace => ({
+      const buildSavedWorkspace = (id: LaunchConfigId): SavedWorkspace => ({
         id,
         name: finalName,
         windows: workspace.windows.map((window) => ({
-          id: crypto.randomUUID(),
+          id: createLaunchConfigId(crypto.randomUUID()),
           name: window.name,
           rootPane: stripSessionIdFromPaneTree(window.rootPane),
         })),
@@ -74,7 +83,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
         if (savedWorkspaces.some((w) => w.name.trim() === finalName)) {
           throw createApplicationError("workspace-name-conflict", "Workspace name already exists");
         }
-        const savedWorkspaceData = buildSavedWorkspace(crypto.randomUUID());
+        const savedWorkspaceData = buildSavedWorkspace(createLaunchConfigId(crypto.randomUUID()));
         setSavedWorkspaces((prev) => {
           const updated = [...prev, savedWorkspaceData];
           persistSavedWorkspaces(updated);
@@ -85,7 +94,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
 
       const existingSavedByName = savedWorkspaces.find((w) => w.name.trim() === finalName);
       const savedWorkspaceData = buildSavedWorkspace(
-        existingSavedByName?.id ?? crypto.randomUUID(),
+        existingSavedByName?.id ?? createLaunchConfigId(crypto.randomUUID()),
       );
 
       if (existingSavedByName) {
@@ -119,7 +128,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
    * Exception handling: if any pane reconstruction fails, rollback (close created terminals, revert terminals state)
    */
   const loadWorkspace = useCallback(
-    async (savedWorkspaceId: string): Promise<Workspace> => {
+    async (savedWorkspaceId: LaunchConfigId): Promise<Workspace> => {
       const saved = savedWorkspaces.find((w) => w.id === savedWorkspaceId);
       if (!saved) throw createApplicationError("not-found", "Saved workspace not found");
 
@@ -154,13 +163,13 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
             }
             return createLeafPane(node.size, terminal.id, configId);
           }
-          return { ...createLeafPane(node.size), id: crypto.randomUUID() };
+          return createLeafPane(node.size);
         }
         const children = await Promise.all(
           (node.children ?? []).map((child) => buildTree(child, depth + 1)),
         );
         return {
-          id: crypto.randomUUID(),
+          id: createPaneId(crypto.randomUUID()),
           type: "split",
           direction: node.direction,
           size: node.size,
@@ -175,7 +184,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
       }): Promise<Window> => {
         const rootPane = await buildTree(savedWindow.rootPane);
         return {
-          id: crypto.randomUUID(),
+          id: createWindowId(crypto.randomUUID()),
           name: savedWindow.name,
           rootPane,
           activePaneId: getLeafPaneIds(rootPane)[0] ?? null,
@@ -199,7 +208,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
       });
       const activeWindow = windows[0] ?? null;
       const workspaceWithoutIds: Workspace = {
-        id: crypto.randomUUID(),
+        id: createWorkspaceId(crypto.randomUUID()),
         name: saved.name,
         windows,
         activeWindowId: activeWindow?.id ?? null,
@@ -227,7 +236,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
   );
 
   const deleteSavedWorkspace = useCallback(
-    (id: string) => {
+    (id: LaunchConfigId) => {
       setSavedWorkspaces((prev) => {
         const updated = prev.filter((w) => w.id !== id);
         persistSavedWorkspaces(updated);
@@ -238,7 +247,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
   );
 
   const renameSavedWorkspace = useCallback(
-    (id: string, name: string) => {
+    (id: LaunchConfigId, name: string) => {
       const trimmedName = name.trim();
       if (trimmedName === "default") {
         throw createApplicationError("workspace-name-reserved", "Workspace name is reserved");

@@ -17,6 +17,7 @@ export type TerminalId = Brand<number, "TerminalId">;
 /** Backend stream id used by a tmux pane; it is not an xsterm `Terminal`. */
 export type TerminalStreamId = Brand<number, "TerminalStreamId">;
 export type TmuxControllerId = Brand<number, "TmuxControllerId">;
+export type XstermWindowId = Brand<number, "XstermWindowId">;
 
 export type TmuxWindowId = Brand<string, "TmuxWindowId">;
 export type TmuxPaneId = Brand<string, "TmuxPaneId">;
@@ -76,6 +77,10 @@ export function createTerminalStreamId(value: number): TerminalStreamId {
 
 export function createTmuxControllerId(value: number): TmuxControllerId {
   return createNumericIdentifier(value, "TmuxControllerId");
+}
+
+export function createXstermWindowId(value: number): XstermWindowId {
+  return createNumericIdentifier(value, "XstermWindowId");
 }
 
 export function createTmuxWindowId(value: string): TmuxWindowId {

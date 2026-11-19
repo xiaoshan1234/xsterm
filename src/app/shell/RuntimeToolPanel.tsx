@@ -29,13 +29,13 @@ interface RuntimeToolPanelProps {
   onRemoveConfig: (configId: string) => void;
   onDetachTmuxConfig: (configId: string) => void;
   onCreateWindow: () => void;
-  onLoadWindow: (configId: string) => void;
-  onRenameWindow: (configId: string) => void;
-  onDeleteWindow: (configId: string) => void;
+  onLoadWindow: (configId: LaunchConfigId) => void;
+  onRenameWindow: (configId: LaunchConfigId) => void;
+  onDeleteWindow: (configId: LaunchConfigId) => void;
   onCreateWorkspace: () => void;
-  onOpenWorkspace: (configId: string, isLoaded: boolean) => void;
-  onRenameWorkspace: (configId: string) => void;
-  onDeleteWorkspace: (configId: string) => void;
+  onOpenWorkspace: (configId: LaunchConfigId, isLoaded: boolean) => void;
+  onRenameWorkspace: (configId: LaunchConfigId) => void;
+  onDeleteWorkspace: (configId: LaunchConfigId) => void;
 }
 
 export function RuntimeToolPanel({
@@ -118,3 +118,4 @@ export function RuntimeToolPanel({
       return null;
   }
 }
+import type { LaunchConfigId } from "../../models";

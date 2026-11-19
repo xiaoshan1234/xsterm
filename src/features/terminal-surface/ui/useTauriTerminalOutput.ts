@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
+import type { TerminalId } from "../../../models";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { appendTerminalOutput, getTerminalOutput } from "../application/terminalOutputBuffer";
 import { normalizeCapturedScrollback } from "./scrollback";
@@ -7,14 +8,14 @@ import {
   type TerminalSurfacePorts,
 } from "../state/TerminalSurfacePortsContext";
 
-const lastTouchRef = new Map<number, number>();
+const lastTouchRef = new Map<TerminalId, number>();
 const TOUCH_DEBOUNCE_MS = 500;
 /**
  * Scrollback replay happens once per tmux terminal binding. A reconnect keeps
  * the same xterm instance but replaces its terminal id, so the map must allow
  * the new id to replay while still suppressing React strict-mode duplicates.
  */
-const replayedTerminalByXterm = new WeakMap<XTerm, number>();
+const replayedTerminalByXterm = new WeakMap<XTerm, TerminalId>();
 
 const SCROLLBACK_LINES = 2000;
 
@@ -65,12 +66,12 @@ function extractAndCopyOsc52(
 
 export function useTauriTerminalOutput(
   termRef: RefObject<XTerm | null>,
-  terminalId: number,
+  terminalId: TerminalId,
   ports?: TerminalOutputPorts,
 ): void {
   const surfacePorts = useTerminalSurfacePorts();
   const outputPorts = ports ?? surfacePorts;
-  const replayStateRef = useRef<{ terminalId: number; promise: Promise<void> } | null>(null);
+  const replayStateRef = useRef<{ terminalId: TerminalId; promise: Promise<void> } | null>(null);
   // tmux scrollback replay applies only to tmux-backed panes.
   const isTmuxPane = surfacePorts.session.isTmuxTerminal(terminalId);
 

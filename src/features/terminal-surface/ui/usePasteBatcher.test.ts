@@ -2,6 +2,7 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { createTerminalId } from "../../../models";
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
@@ -200,9 +201,9 @@ describe("appendToPasteQueue", () => {
 
 describe("usePasteBatcher", () => {
   it("writes formatted paste data through the injected port", async () => {
-    const writeBytes = vi.fn(async (_terminalId: number, _data: Uint8Array) => {});
+    const writeBytes = vi.fn(async (_terminalId: unknown, _data: Uint8Array) => {});
     const testApplication = createTestApplication();
-    const { result } = renderHook(() => usePasteBatcher(42, writeBytes), {
+    const { result } = renderHook(() => usePasteBatcher(createTerminalId(42), writeBytes), {
       wrapper: testApplication.Application,
     });
 

@@ -1,3 +1,4 @@
+import type { LaunchConfigId, PaneId, TerminalId, WindowId, WorkspaceId } from "../../../models";
 import type {
   EditablePaneNode,
   PaneSplitDirection,
@@ -10,20 +11,24 @@ import type {
 
 export interface WorkspaceLayoutContextType {
   workspaces: Workspace[];
-  activeWorkspaceId: string | null;
+  activeWorkspaceId: WorkspaceId | null;
   savedWorkspaces: SavedWorkspace[];
   savedWindowConfigs: SavedWindowConfig[];
-  createWorkspaceFromSession: (terminalId: number, configId: string, name?: string) => Workspace;
-  createWindowFromSession: (
-    terminalId: number,
+  createWorkspaceFromSession: (
+    terminalId: TerminalId,
     configId: string,
     name?: string,
-    targetWorkspaceId?: string,
+  ) => Workspace;
+  createWindowFromSession: (
+    terminalId: TerminalId,
+    configId: string,
+    name?: string,
+    targetWorkspaceId?: WorkspaceId,
   ) => Window;
   createWindowFromSavedConfig: (configId: string, name?: string) => Promise<Window>;
   createWindow: (
-    workspaceId: string,
-    terminalId?: number,
+    workspaceId: WorkspaceId,
+    terminalId?: TerminalId,
     configId?: string,
     name?: string,
     windowType?: "terminal" | "init",
@@ -32,38 +37,38 @@ export interface WorkspaceLayoutContextType {
   createEmptyWorkspace: () => Workspace;
   createInitWindow: () => Window;
   replaceInitWindowWithTerminal: (
-    workspaceId: string,
-    windowId: string,
+    workspaceId: WorkspaceId,
+    windowId: WindowId,
     terminal: PaneTerminalRef,
   ) => void;
-  closeWindow: (workspaceId: string, windowId: string) => void;
-  setActiveWindow: (workspaceId: string, windowId: string) => void;
+  closeWindow: (workspaceId: WorkspaceId, windowId: WindowId) => void;
+  setActiveWindow: (workspaceId: WorkspaceId, windowId: WindowId) => void;
   splitPane: (
-    workspaceId: string,
-    windowId: string,
-    paneId: string,
+    workspaceId: WorkspaceId,
+    windowId: WindowId,
+    paneId: PaneId,
     direction: PaneSplitDirection,
-    terminalId?: number,
+    terminalId?: TerminalId,
     configId?: string,
   ) => void;
   updateWindowPaneTree: (
-    workspaceId: string,
-    windowId: string,
+    workspaceId: WorkspaceId,
+    windowId: WindowId,
     updater: (root: EditablePaneNode) => EditablePaneNode,
   ) => void;
-  setActivePane: (workspaceId: string, windowId: string, paneId: string) => void;
-  setActiveWorkspace: (workspaceId: string) => void;
-  saveWorkspace: (workspaceId: string, name: string) => void;
-  loadWorkspace: (savedWorkspaceId: string) => Promise<Workspace>;
-  closeWorkspace: (workspaceId: string) => void;
-  deleteSavedWorkspace: (id: string) => void;
-  renameSavedWorkspace: (id: string, name: string) => void;
-  saveWindow: (workspaceId: string, windowId: string, name: string) => void;
-  saveAllWindows: (workspaceId: string) => void;
-  loadWindow: (savedWindowId: string, workspaceId?: string) => Promise<Window>;
-  deleteSavedWindow: (id: string) => void;
-  renameSavedWindow: (id: string, name: string) => void;
-  renameWindow: (workspaceId: string, windowId: string, name: string) => void;
-  reorderWindows: (workspaceId: string, fromIndex: number, toIndex: number) => void;
-  closePane: (workspaceId: string, windowId: string, paneId: string) => Promise<void>;
+  setActivePane: (workspaceId: WorkspaceId, windowId: WindowId, paneId: PaneId) => void;
+  setActiveWorkspace: (workspaceId: WorkspaceId) => void;
+  saveWorkspace: (workspaceId: WorkspaceId, name: string) => void;
+  loadWorkspace: (savedWorkspaceId: LaunchConfigId) => Promise<Workspace>;
+  closeWorkspace: (workspaceId: WorkspaceId) => void;
+  deleteSavedWorkspace: (id: LaunchConfigId) => void;
+  renameSavedWorkspace: (id: LaunchConfigId, name: string) => void;
+  saveWindow: (workspaceId: WorkspaceId, windowId: WindowId, name: string) => void;
+  saveAllWindows: (workspaceId: WorkspaceId) => void;
+  loadWindow: (savedWindowId: LaunchConfigId, workspaceId?: WorkspaceId) => Promise<Window>;
+  deleteSavedWindow: (id: LaunchConfigId) => void;
+  renameSavedWindow: (id: LaunchConfigId, name: string) => void;
+  renameWindow: (workspaceId: WorkspaceId, windowId: WindowId, name: string) => void;
+  reorderWindows: (workspaceId: WorkspaceId, fromIndex: number, toIndex: number) => void;
+  closePane: (workspaceId: WorkspaceId, windowId: WindowId, paneId: PaneId) => Promise<void>;
 }

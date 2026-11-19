@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactNode } from "react";
+import type { TerminalId } from "../../../models";
 import { LaunchConfigProvider } from "../../../features/launch-config";
 import { SessionPreferencesProvider } from "../../../features/settings";
 import { TerminalRuntimeProvider } from "../../../features/terminal";
@@ -59,7 +60,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
   useTauriListeners(state, persistence.isLoaded);
   const getTerminalSize = useCallback(
-    (terminalId: number) => state.terminal.terminalSizesRef.current.get(terminalId),
+    (terminalId: TerminalId) => state.terminal.terminalSizesRef.current.get(terminalId),
     [state.terminal.terminalSizesRef],
   );
   const persistenceStatus = useMemo<SessionPersistenceStatus>(

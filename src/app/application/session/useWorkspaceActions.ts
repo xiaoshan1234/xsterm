@@ -1,4 +1,11 @@
 import { useCallback } from "react";
+import {
+  createPaneId,
+  createWindowId,
+  createWorkspaceId,
+  type TerminalId,
+  type WorkspaceId,
+} from "../../../models";
 import type { Terminal } from "../../../features/terminal";
 import type { Workspace } from "../../../features/workspace";
 import { clearTerminalOutput } from "../../../features/terminal-surface";
@@ -6,10 +13,10 @@ import { clearTerminalOutput } from "../../../features/terminal-surface";
 interface UseWorkspaceActionsDeps {
   workspacesRef: React.MutableRefObject<Workspace[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  setActiveWorkspaceId: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveWorkspaceId: React.Dispatch<React.SetStateAction<WorkspaceId | null>>;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<number>>;
-  closeTerminal: (terminalId: number) => Promise<void>;
+  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  closeTerminal: (terminalId: TerminalId) => Promise<void>;
 }
 
 export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
@@ -29,9 +36,9 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
       return existingDefault;
     }
 
-    const workspaceId = crypto.randomUUID();
-    const windowId = crypto.randomUUID();
-    const paneId = crypto.randomUUID();
+    const workspaceId = createWorkspaceId(crypto.randomUUID());
+    const windowId = createWindowId(crypto.randomUUID());
+    const paneId = createPaneId(crypto.randomUUID());
 
     const workspace: Workspace = {
       id: workspaceId,
@@ -67,9 +74,9 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
       name = `New Workspace ${suffix}`;
     }
 
-    const workspaceId = crypto.randomUUID();
-    const windowId = crypto.randomUUID();
-    const paneId = crypto.randomUUID();
+    const workspaceId = createWorkspaceId(crypto.randomUUID());
+    const windowId = createWindowId(crypto.randomUUID());
+    const paneId = createPaneId(crypto.randomUUID());
     const workspace: Workspace = {
       id: workspaceId,
       name,
@@ -96,14 +103,14 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
   }, [setWorkspaces, setActiveWorkspaceId, workspacesRef]);
 
   const setActiveWorkspace = useCallback(
-    (workspaceId: string) => {
+    (workspaceId: WorkspaceId) => {
       setActiveWorkspaceId(workspaceId);
     },
     [setActiveWorkspaceId],
   );
 
   const closeWorkspace = useCallback(
-    (workspaceId: string) => {
+    (workspaceId: WorkspaceId) => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       if (!workspace || workspace.name === "default") return;
 

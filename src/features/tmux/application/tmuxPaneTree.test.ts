@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createTerminalId } from "../../../models";
 import { buildTmuxPaneTree, parseTmuxGeometry, type TmuxPaneGeometry } from "./tmuxPaneTree";
 
 describe("tmux layout parsing", () => {
@@ -56,8 +57,8 @@ describe("tmux layout parsing", () => {
 describe("tmux pane tree building", () => {
   it("maps layout rectangles to terminal ids and preserves split direction", () => {
     const panes: TmuxPaneGeometry[] = [
-      { terminalId: 8, width: 50, height: 24, x: 0, y: 0 },
-      { terminalId: 9, width: 49, height: 24, x: 51, y: 0 },
+      { terminalId: createTerminalId(8), width: 50, height: 24, x: 0, y: 0 },
+      { terminalId: createTerminalId(9), width: 49, height: 24, x: 51, y: 0 },
     ];
     const tree = buildTmuxPaneTree("abcd,100x24,0,0{50x24,0,0,0,49x24,51,0,1}", panes, "cfg-1");
 
@@ -73,8 +74,8 @@ describe("tmux pane tree building", () => {
 
   it("falls back to a vertical stack when layout is missing", () => {
     const panes: TmuxPaneGeometry[] = [
-      { terminalId: 8, width: 80, height: 24, x: 0, y: 0 },
-      { terminalId: 9, width: 80, height: 24, x: 0, y: 13 },
+      { terminalId: createTerminalId(8), width: 80, height: 24, x: 0, y: 0 },
+      { terminalId: createTerminalId(9), width: 80, height: 24, x: 0, y: 13 },
     ];
     const tree = buildTmuxPaneTree("", panes, "cfg-1");
     expect(tree).toMatchObject({ type: "split", direction: "vertical" });

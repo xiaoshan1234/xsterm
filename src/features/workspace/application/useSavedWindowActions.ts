@@ -1,4 +1,13 @@
 import { useCallback } from "react";
+import {
+  createLaunchConfigId,
+  createPaneId,
+  createWindowId,
+  type LaunchConfigId,
+  type TerminalId,
+  type WindowId,
+  type WorkspaceId,
+} from "../../../models";
 import { createApplicationError } from "../../../models/applicationError";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode } from "../contracts";
@@ -20,10 +29,10 @@ interface UseSavedWindowActionsDeps {
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   setSavedWindowConfigs: React.Dispatch<React.SetStateAction<SavedWindowConfig[]>>;
   setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<number>>;
+  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
   persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;
-  closeTerminal: (terminalId: number) => Promise<void>;
+  closeTerminal: (terminalId: TerminalId) => Promise<void>;
 }
 
 export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
@@ -41,13 +50,13 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
   } = deps;
 
   const saveWindow = useCallback(
-    (workspaceId: string, windowId: string, name: string) => {
+    (workspaceId: WorkspaceId, windowId: WindowId, name: string) => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       const window = workspace?.windows.find((w) => w.id === windowId);
       if (!workspace || !window) return;
 
       const savedWindow: SavedWindowConfig = {
-        id: crypto.randomUUID(),
+        id: createLaunchConfigId(crypto.randomUUID()),
         name: name.trim() || window.name,
         rootPane: stripSessionIdFromPaneTree(window.rootPane),
       };
@@ -62,12 +71,12 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
   );
 
   const saveAllWindows = useCallback(
-    (workspaceId: string) => {
+    (workspaceId: WorkspaceId) => {
       const workspace = workspacesRef.current.find((w) => w.id === workspaceId);
       if (!workspace) return;
 
       const newConfigs: SavedWindowConfig[] = workspace.windows.map((window) => ({
-        id: crypto.randomUUID(),
+        id: createLaunchConfigId(crypto.randomUUID()),
         name: window.name,
         rootPane: stripSessionIdFromPaneTree(window.rootPane),
       }));
@@ -82,7 +91,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
   );
 
   const loadWindow = useCallback(
-    async (savedWindowId: string, workspaceId?: string): Promise<Window> => {
+    async (savedWindowId: LaunchConfigId, workspaceId?: WorkspaceId): Promise<Window> => {
       const saved = savedWindowConfigs.find((w) => w.id === savedWindowId);
       if (!saved) throw createApplicationError("not-found", "Saved window config not found");
 
@@ -112,11 +121,11 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
             }
             return createLeafPane(node.size, terminal.id, configId);
           }
-          return { ...createLeafPane(node.size), id: crypto.randomUUID() };
+          return createLeafPane(node.size);
         }
         const children = await Promise.all((node.children ?? []).map((child) => buildTree(child)));
         return {
-          id: crypto.randomUUID(),
+          id: createPaneId(crypto.randomUUID()),
           type: "split",
           direction: node.direction,
           size: node.size,
@@ -127,7 +136,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
       const rootPane = await buildTree(saved.rootPane);
       const baseName = saved.name || getDefaultWindowName(rootPane, terminalsRef.current, "Window");
       const window: Window = {
-        id: crypto.randomUUID(),
+        id: createWindowId(crypto.randomUUID()),
         name: baseName,
         rootPane,
         activePaneId: getLeafPaneIds(rootPane)[0] ?? null,
@@ -166,7 +175,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
   );
 
   const deleteSavedWindow = useCallback(
-    (id: string) => {
+    (id: LaunchConfigId) => {
       setSavedWindowConfigs((prev) => {
         const updated = prev.filter((w) => w.id !== id);
         persistSavedWindowConfigs(updated);
@@ -177,7 +186,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
   );
 
   const renameSavedWindow = useCallback(
-    (id: string, name: string) => {
+    (id: LaunchConfigId, name: string) => {
       setSavedWindowConfigs((prev) => {
         const updated = prev.map((w) => (w.id === id ? { ...w, name } : w));
         persistSavedWindowConfigs(updated);

@@ -2,6 +2,7 @@
 
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { type Terminal } from "@xterm/xterm";
+import { createTerminalId } from "../../../models";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearTerminalOutput } from "../application/terminalOutputBuffer";
 import { createTestApplication } from "../../../test/createTestApplication";
@@ -32,14 +33,14 @@ const outputPorts = {
 
 afterEach(() => {
   cleanup();
-  clearTerminalOutput(42);
+  clearTerminalOutput(createTerminalId(42));
   vi.clearAllMocks();
 });
 
 describe("useTauriTerminalOutput", () => {
   it("does not replay output that arrived during subscription setup", async () => {
     mocks.subscribeTerminalOutput.mockImplementation(
-      async (_terminalId: number, onOutput: (data: Uint8Array) => void) => {
+      async (_terminalId: unknown, onOutput: (data: Uint8Array) => void) => {
         onOutput(new TextEncoder().encode("prompt $ "));
         return vi.fn();
       },
@@ -47,9 +48,12 @@ describe("useTauriTerminalOutput", () => {
     const write = vi.fn();
     const xterm = { write } as unknown as Terminal;
 
-    renderHook(() => useTauriTerminalOutput({ current: xterm }, 42, outputPorts), {
-      wrapper: testApplication.Application,
-    });
+    renderHook(
+      () => useTauriTerminalOutput({ current: xterm }, createTerminalId(42), outputPorts),
+      {
+        wrapper: testApplication.Application,
+      },
+    );
 
     await waitFor(() => expect(write).toHaveBeenCalled());
     expect(write.mock.calls.map(([text]) => text)).toEqual(["prompt $ "]);

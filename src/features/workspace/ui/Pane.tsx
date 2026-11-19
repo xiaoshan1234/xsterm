@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import type { TerminalId, WindowId } from "../../../models";
 import type { EditablePaneNode, PaneSplitDirection } from "../contracts";
 import type { Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
@@ -17,7 +18,7 @@ import "./Pane.css";
 
 interface PaneProps {
   workspace: Workspace;
-  windowId: string;
+  windowId: WindowId;
   pane: EditablePaneNode;
   isActive: boolean;
   isWindowActive: boolean;
@@ -108,7 +109,7 @@ export function Pane({
   }, []);
 
   const attachTerminalToPane = useCallback(
-    (terminalId: number) =>
+    (terminalId: TerminalId) =>
       paneIntents.attachExistingTerminal({
         workspaceId: workspace.id,
         windowId,
@@ -119,7 +120,7 @@ export function Pane({
   );
 
   const handleSelectSession = useCallback(
-    async (terminalId: number) => {
+    async (terminalId: TerminalId) => {
       if (!startSubmitting()) return;
       try {
         if (dialogMode === "split" && pendingSplit) {
