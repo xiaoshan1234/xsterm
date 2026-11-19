@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { createApplicationError } from "../../../models/applicationError";
 import type { Terminal } from "../../../features/terminal";
-import { tmuxWindowActions } from "../../../features/tmux/ports";
+import { tmuxWindowActions } from "../../../features/tmux";
 import {
   findPaneNode,
   isSessionUsedInOtherWindow,

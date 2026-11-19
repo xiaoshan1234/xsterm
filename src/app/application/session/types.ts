@@ -1,13 +1,17 @@
 import type { ReactNode } from "react";
-import type { SavedLaunchConfigsContextType } from "../../../features/launch-config";
-import type { LaunchConfigState } from "../../../features/launch-config/composition";
+import type {
+  LaunchConfigState,
+  SavedLaunchConfigsContextType,
+} from "../../../features/launch-config";
 import type { SessionPreferencesContextType } from "../../../features/settings";
 import type { TerminalPreferencesState } from "../../../features/settings";
-import type { TerminalRuntimeContextType } from "../../../features/terminal";
-import type { TerminalSessionState } from "../../../features/terminal/composition";
-import type { TmuxRuntimeState } from "../../../features/tmux/composition";
-import type { PaneTerminalRef, WorkspaceLayoutContextType } from "../../../features/workspace";
-import type { WorkspaceState } from "../../../features/workspace/composition";
+import type { TerminalRuntimeContextType, TerminalSessionState } from "../../../features/terminal";
+import type { TmuxRuntimeState } from "../../../features/tmux";
+import type {
+  PaneTerminalRef,
+  WorkspaceLayoutContextType,
+  WorkspaceState,
+} from "../../../features/workspace";
 import type {
   LocalTerminalConfig,
   SshConfig,

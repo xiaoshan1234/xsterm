@@ -7,10 +7,10 @@ import {
   getSenderUnitLabel,
   normalizeSenderRate,
   splitTextForSender,
-  useTextSenderRun,
   type TextSenderMode,
   type TextSenderTab,
-} from "..";
+} from "../viewModels/textSenderViewModel";
+import { useTextSenderRun } from "../application/useTextSenderRun";
 import { CloseIcon, PlusIcon } from "../../../shared/icons/Icon";
 import "./GlobalTextSender.css";
 

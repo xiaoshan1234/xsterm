@@ -8,7 +8,7 @@ import {
   createLeafPane,
   getLeafPaneIds,
   stripSessionIdFromPaneTree,
-} from "..";
+} from "./paneTreeOperations";
 import { createRollback } from "./usePersistenceActions.helpers";
 
 interface UseSavedWorkspaceActionsDeps {

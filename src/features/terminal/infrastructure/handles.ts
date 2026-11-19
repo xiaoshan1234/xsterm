@@ -1,4 +1,1 @@
-export {
-  toBackendTerminalHandle,
-  type BackendTerminalHandle,
-} from "../../terminal-stream/adapterContracts";
+export { toBackendTerminalHandle, type BackendTerminalHandle } from "../../terminal-stream";

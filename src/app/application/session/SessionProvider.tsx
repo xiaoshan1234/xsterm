@@ -3,8 +3,11 @@ import { LaunchConfigProvider } from "../../../features/launch-config";
 import { SessionPreferencesProvider } from "../../../features/settings";
 import { TerminalRuntimeProvider } from "../../../features/terminal";
 import { PaneIntentProvider, WorkspaceProvider } from "../../../features/workspace";
-import { TmuxRuntimeProvider, type TmuxRuntimeContextType } from "../../../features/tmux";
-import { tmuxControllerActions } from "../../../features/tmux/ports";
+import {
+  TmuxRuntimeProvider,
+  tmuxControllerActions,
+  type TmuxRuntimeContextType,
+} from "../../../features/tmux";
 import {
   type SavedLaunchConfigsContextType,
   type SessionPreferencesContextType,

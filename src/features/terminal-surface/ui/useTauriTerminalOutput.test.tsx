@@ -3,7 +3,7 @@
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { type Terminal } from "@xterm/xterm";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
+import { clearTerminalOutput } from "../application/terminalOutputBuffer";
 import { createTestApplication } from "../../../test/createTestApplication";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
 

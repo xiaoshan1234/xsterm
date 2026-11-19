@@ -8,7 +8,7 @@ import { AppShell } from "./AppShell";
 import { NavBarView } from "../NavBar";
 import { HelpDialog, type HelpDialogId } from "./HelpDialog";
 import { TOOL_TITLES, type PreviewDialogId, type ToolId } from "./types";
-import { type RuntimeStatusViewData } from "./runtimeStatusViewModel";
+import { type RuntimeStatusViewData } from "../application/runtimeShell/runtimeStatusViewModel";
 
 const WORKSPACES = ["Default", "Project X", "Infrastructure"];
 const PREVIEW_TERMINAL_ITEMS = [

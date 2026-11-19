@@ -1,18 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_GROUP_ID, useSavedLaunchConfigs } from "../../features/launch-config";
-import { useTerminalRuntime } from "../../features/terminal";
-import { useWorkspaceLayout } from "../../features/workspace";
+import { DEFAULT_GROUP_ID } from "../../features/launch-config";
 import NavBar from "../NavBar";
-import { selectWindowManagerItems, selectWorkspaceManagerItems } from "../../features/workspace";
-import { selectTerminalManagerGroups } from "../../features/terminal";
-import {
-  selectTmuxManagerGroups,
-  selectTmuxStatusControllers,
-  tmuxSessionBaseKey,
-  tmuxSessionKey,
-  useTmuxRuntime,
-} from "../../features/tmux";
-import { selectPaneTargetOptions } from "../../features/command-sender";
+import { tmuxSessionKey } from "../../features/tmux";
 import { AppShell } from "./AppShell";
 import { GlobalTextSender } from "../../features/command-sender";
 import { TOOL_TITLES, type ToolId } from "./types";
@@ -24,19 +13,31 @@ import {
   type RuntimeErrorState,
 } from "./runtimeOverlayTypes";
 import { useAppShortcuts } from "../useAppShortcuts";
-import { selectRuntimeStatus } from "./runtimeStatusViewModel";
+import { useRuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
 import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
 import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
 
 export function AppShellRuntime() {
-  const { terminals, writeTerminal, getTerminalSize } = useTerminalRuntime();
-  const { detachTmuxSession, openTmuxSessions } = useTmuxRuntime();
-  const { savedConfigs, groups, removeConfig, toggleGroup, deleteGroup } = useSavedLaunchConfigs();
+  const {
+    terminalRuntime,
+    tmuxRuntime,
+    launchConfig,
+    workspaceLayout,
+    activeWorkspace,
+    terminalManagerGroups,
+    tmuxManagerGroups,
+    runtimeStatus,
+    windowManagerItems,
+    workspaceManagerItems,
+    paneTargetOptions,
+  } = useRuntimeShellModel();
+  const { writeTerminal } = terminalRuntime;
+  const { detachTmuxSession, openTmuxSessions } = tmuxRuntime;
+  const { savedConfigs, removeConfig, toggleGroup, deleteGroup } = launchConfig;
   const {
     workspaces,
-    activeWorkspaceId,
     savedWorkspaces,
     savedWindowConfigs,
     setActiveWorkspace,
@@ -49,7 +50,7 @@ export function AppShellRuntime() {
     closeWorkspace,
     deleteSavedWindow,
     deleteSavedWorkspace,
-  } = useWorkspaceLayout();
+  } = workspaceLayout;
 
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
@@ -70,9 +71,6 @@ export function AppShellRuntime() {
     onToggleLogs: () => undefined,
   });
 
-  const activeWorkspace =
-    workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0] ?? null;
-
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -80,50 +78,6 @@ export function AppShellRuntime() {
       createDefaultWorkspace();
     }
   }, [createDefaultWorkspace, workspaces.length]);
-
-  const terminalManagerGroups = useMemo(
-    () => selectTerminalManagerGroups(savedConfigs, groups),
-    [groups, savedConfigs],
-  );
-  const openTmuxSessionKeys = new Set(
-    openTmuxSessions.map((session) => tmuxSessionKey(session.config)),
-  );
-  const openTmuxConfigIds = new Set(
-    openTmuxSessions
-      .map((session) => session.configId)
-      .filter((configId): configId is string => configId !== undefined),
-  );
-  const openTmuxBaseKeys = new Set(
-    openTmuxSessions.map((session) => tmuxSessionBaseKey(session.config)),
-  );
-  const tmuxManagerGroups = selectTmuxManagerGroups(
-    savedConfigs,
-    openTmuxSessionKeys,
-    openTmuxConfigIds,
-    openTmuxBaseKeys,
-  );
-  const tmuxStatusControllers = useMemo(
-    () => selectTmuxStatusControllers(terminals, workspaces, savedConfigs),
-    [savedConfigs, terminals, workspaces],
-  );
-  const runtimeStatus = selectRuntimeStatus(
-    activeWorkspace,
-    terminals,
-    tmuxStatusControllers,
-    getTerminalSize,
-  );
-  const windowManagerItems = useMemo(
-    () => selectWindowManagerItems(savedWindowConfigs),
-    [savedWindowConfigs],
-  );
-  const workspaceManagerItems = useMemo(
-    () => selectWorkspaceManagerItems(savedWorkspaces, workspaces),
-    [savedWorkspaces, workspaces],
-  );
-  const paneTargetOptions = useMemo(
-    () => selectPaneTargetOptions(workspaces, terminals, savedConfigs),
-    [savedConfigs, terminals, workspaces],
-  );
 
   useEffect(() => {
     if (

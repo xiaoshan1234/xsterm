@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  closeMainWindow,
+  isMainWindowMaximized,
+  listenToMainWindowResize,
+  minimizeMainWindow,
+  toggleMainWindowMaximized,
+} from "./infrastructure/windowControls";
 import { CloseIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from "../shared/icons/Icon";
 import { type HelpDialogId } from "./shell/HelpDialog";
 import "./NavBar.css";
@@ -317,12 +323,11 @@ export default function NavBar(
   props: Omit<NavBarViewProps, "isMaximized" | "onMaximize" | "onMinimize" | "onClose">,
 ) {
   const [isMaximized, setIsMaximized] = useState(false);
-  const appWindow = getCurrentWindow();
 
   useEffect(() => {
     const updateState = async () => {
       try {
-        setIsMaximized(await appWindow.isMaximized());
+        setIsMaximized(await isMainWindowMaximized());
       } catch {
         // Ignore when running outside Tauri.
       }
@@ -330,8 +335,9 @@ export default function NavBar(
     void updateState();
 
     let unlisten: (() => void) | undefined;
-    appWindow
-      .onResized(() => updateState())
+    listenToMainWindowResize(() => {
+      void updateState();
+    })
       .then((fn) => {
         unlisten = fn;
       })
@@ -342,20 +348,20 @@ export default function NavBar(
     return () => {
       unlisten?.();
     };
-  }, [appWindow]);
+  }, []);
 
   return (
     <NavBarView
       {...props}
       isMaximized={isMaximized}
       onMinimize={() => {
-        void appWindow.minimize();
+        void minimizeMainWindow();
       }}
       onMaximize={() => {
-        void (isMaximized ? appWindow.unmaximize() : appWindow.maximize());
+        void toggleMainWindowMaximized();
       }}
       onClose={() => {
-        void appWindow.close();
+        void closeMainWindow();
       }}
     />
   );

@@ -1,8 +1,5 @@
 import { useCallback } from "react";
-import {
-  terminalSessionActions,
-  type TerminalConnectionInfo,
-} from "../../../features/terminal/ports";
+import { terminalSessionActions, type TerminalConnectionInfo } from "../../../features/terminal";
 import type {
   LocalTerminalConfig,
   SshConfig,

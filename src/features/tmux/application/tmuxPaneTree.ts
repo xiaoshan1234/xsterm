@@ -1,5 +1,5 @@
 import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
-import { createEditableLeafPane, createEditableSplitNode } from "../../workspace/contracts";
+import { createEditableLeafPane, createEditableSplitNode } from "../../workspace";
 
 interface TmuxGeometryLeaf {
   kind: "leaf";

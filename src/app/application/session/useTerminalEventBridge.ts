@@ -1,5 +1,5 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import { terminalEventStream } from "../../../features/terminal/ports";
+import { terminalEventStream } from "../../../features/terminal";
 import { removeSessionsFromWorkspaces } from "../../../features/workspace";
 import type { Terminal } from "../../../features/terminal";
 import type { Workspace } from "../../../features/workspace";

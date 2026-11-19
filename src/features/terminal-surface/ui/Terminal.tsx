@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useTerminalRuntime } from "../../terminal";
-import { terminalClipboard } from "../../terminal/ports";
+import { terminalClipboard } from "../../terminal";
 import { useTheme } from "../../../shared/theme/ThemeContext";
 import type { TerminalDisplayConfig } from "../../../features/terminal";
 import { frontendLogger as logger } from "../../../infra";

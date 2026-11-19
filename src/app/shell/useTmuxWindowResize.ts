@@ -3,7 +3,7 @@ import { useTerminalRuntime } from "../../features/terminal";
 import { useTmuxRuntime } from "../../features/tmux";
 import type { Terminal } from "../../features/terminal";
 import type { EditablePaneNode, Workspace } from "../../features/workspace";
-import { computeTmuxWindowSize, type WindowSize } from "../../features/workspace/ports";
+import { computeTmuxWindowSize, type WindowSize } from "../../features/workspace";
 
 /**
  * Keep tmux window sizes in sync with the xsterm pane tree.

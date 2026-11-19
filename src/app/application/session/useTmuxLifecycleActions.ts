@@ -1,11 +1,11 @@
 import { useCallback } from "react";
 import { tmuxSessionKey } from "../../../features/tmux";
-import { tmuxControllerActions } from "../../../features/tmux/ports";
+import { tmuxControllerActions } from "../../../features/tmux";
 import { removeControllerFromWorkspaces } from "../../../features/workspace";
 import type { Terminal, TerminalDisplayConfig } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
-import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
+import { clearTerminalOutput } from "../../../features/terminal-surface";
 import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";
 import { buildFrontendTerminal } from "./useTerminalActions.helpers";
 import {

@@ -1,5 +1,5 @@
 import type { Terminal } from "../../../features/terminal";
-import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
+import { clearTerminalOutput } from "../../terminal-surface";
 
 interface RollbackDeps {
   closeTerminal: (terminalId: number) => Promise<void>;

@@ -1,14 +1,10 @@
 import { useCallback } from "react";
-import {
-  terminalSessionActions,
-  terminalStreamActions,
-  type TerminalConnectionInfo,
-} from "../../../features/terminal/ports";
-import { tmuxControllerActions } from "../../../features/tmux/ports";
+import { terminalSessionActions, type TerminalConnectionInfo } from "../../../features/terminal";
+import { tmuxControllerActions } from "../../../features/tmux";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
 import type { Workspace } from "../../../features/workspace";
-import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
+import { clearTerminalOutput } from "../../../features/terminal-surface";
 import {
   createLeafPane,
   createSplitNode,
@@ -189,40 +185,10 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
     [workspacesRef, setSessions, setWorkspaces, establishingSessionsRef],
   );
 
-  const writeTerminal = useCallback(async (id: number, data: string): Promise<void> => {
-    await terminalStreamActions.writeBytes(id, new TextEncoder().encode(data));
-  }, []);
-
-  const resizeTerminal = useCallback(
-    async (id: number, rows: number, cols: number): Promise<void> => {
-      await terminalSessionActions.resizeTerminal(id, rows, cols);
-    },
-    [],
-  );
-
-  const uploadImageToSshTerminal = useCallback(
-    async (terminalId: number, filename: string, data: Uint8Array): Promise<string> => {
-      return terminalSessionActions.uploadImageToSshTerminal(terminalId, filename, data);
-    },
-    [],
-  );
-
-  const touchTerminalActivity = useCallback(
-    (id: number) => {
-      const now = Date.now();
-      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, lastActivityAt: now } : s)));
-    },
-    [setSessions],
-  );
-
   return {
     splitPane,
     updateWindowPaneTree,
     closePane,
-    writeTerminal,
-    resizeTerminal,
-    uploadImageToSshTerminal,
-    touchTerminalActivity,
     killTmuxPane,
   };
 }

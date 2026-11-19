@@ -1,6 +1,8 @@
 # AGENTS.md — xsterm 项目守护规则
 
-> 本文件是所有 AI 编码代理与贡献者的**强制**工作规则。任何代码改动、UI 改动、新功能、重构，都必须先读本文件，并遵守其中引用的规范文档。
+> 本文件是所有 AI 编码代理与贡献者的**强制**工作规则。任何代码改动、UI 改动、新功能、重构，都必须先读本文件。
+>
+> **事实优先级：当前源码与可执行结果 > 本文件 > 其他文档。** `DESIGN.md`、`UI_COMPONENTS.md` 和其他说明文档可能过期，只能作为线索；如果它们与源码、类型检查或测试冲突，以当前代码和命令结果为准，并在本次改动中修正相关描述。
 
 ## 1. 项目定位
 
@@ -12,10 +14,10 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ## 2. 守护规则（Standing Rules）
 
-1. **UI 必须遵循 `DESIGN.md`**（根目录）。任何组件 / 对话框 / 面板 / 按钮 / 表面的改动，先读 DESIGN.md 并逐字套用 token 与模式，禁止 ad-hoc 样式。
-2. **代码命名必须遵循 `rules/`**：TS/TSX 看 `rules/ts-name-rules.md`，Rust 看 `rules/rust-name-rules.md`。
-3. **分层边界**（见 §4）。禁止跨层违规 import：组件不得直接 `invoke()` / `listen()` Tauri 原始接口，也不得导入对应 feature 的 `infrastructure/`；必须通过该 feature 的 application 接口。IPC 统一收敛在 feature-local infrastructure adapter，不存在全局 `sessionService.ts`。
-4. **提交前必须**：`npm run format` + `cargo fmt`，并跑通相关测试（`npm test` / `cargo test`）。
+1. **UI 样式以当前源码为准**。优先复用 `src/styles/global.css` 中已经存在的 token/class，以及组件同目录 CSS 的既有模式；不要凭文档臆造 token。需要新 token 或新模式时，先确认现有样式确实无法表达，再同时修改样式和相应说明文档，禁止 ad-hoc 内联样式。
+2. **代码命名遵循当前代码库和 `rules/` 的命名约定**：TS/TSX 看 `rules/ts-name-rules.md`，Rust 看 `rules/rust-name-rules.md`。如果规则文件与现有大量稳定命名冲突，记录差异并以现有代码为准，不要为了满足文档制造大面积无意义重命名。
+3. **分层边界**（见 §4）。禁止新增跨层违规 import：组件不得直接调用 Tauri `invoke()` / `listen()` 或其他窗口 API，也不得导入其他 feature 的 `infrastructure/`；必须通过 application action 或明确的端口。IPC 统一收敛在 feature-local infrastructure adapter，不存在全局 `sessionService.ts`。app 和跨 feature 调用只能走对应 feature 的根 `index.ts`，`ports` / `composition` 只供 feature 自身组合使用。
+4. **完成前必须验证**：`npm run format`、`npm run lint`、`npx tsc --noEmit`，并跑通相关测试（`npm test` / `cargo test`）；涉及 Rust 改动还要 `cargo fmt --manifest-path src-tauri/Cargo.toml`。`lint` 和 `format` 通过不能代替类型检查和测试。
 
 ## 3. 构建命令
 
@@ -40,43 +42,53 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 - 入口链：`index.html` → `src/main.tsx` → `src/app/App.tsx` → `src/app/shell/AppShellRuntime.tsx`。新 Shell 是唯一运行时入口。
 - `#ui-preview` 启动纯静态组件稿；旧 `AppLayout` / Sidebar / BottomBar 入口已移除。
-- 目标顶层：`src/app/`（应用装配与 shell）、`src/features/`（纵向功能切片）、`src/models/`（纯领域模型）、`src/infra/`（仅公共日志与通用配置持久化）、`src/shared/`（无业务依赖的 UI、hooks、utils）。
+- 当前顶层：`src/app/`（应用装配与 shell）、`src/features/`（纵向功能切片）、`src/models/`（纯领域模型）、`src/infra/`（公共日志与通用配置持久化）、`src/shared/`（尽量无业务依赖的 UI、hooks、utils）、`src/styles/`（全局样式）。
 - `src/models/` 不得依赖 React、Tauri、DOM、Store 或任何上层目录；`src/infra/` 不得依赖 `app/`、`features/`、`models/`。
-- Feature 内按 `ui/`、`application/`、`state/`、`selectors/`、`viewModels/`、`infrastructure/`、`persistence/` 组织。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。
-- 全局状态走 feature 内 React Context / reducers / selectors。配置、终端运行时、工作区布局和偏好分别由 `launch-config`、`terminal`、`workspace`、`settings` 提供窄 Context / Hook；跨聚合动作与 Provider 组合位于 `src/app/application/session/`。不得恢复 `features/sessions` 或 `useSession()` 大而全 API。
+- Feature 子目录按实际需要创建，不预建空目录。当前常见目录是 `ui/`、`application/`、`state/`、`viewModels/`、`infrastructure/`、`persistence/`；只有存在纯选择器时才创建 `selectors/`。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。
+- 全局状态由 feature 内的 Context / hooks 提供，配置、终端运行时、工作区布局和偏好分别落在 `launch-config`、`terminal`、`workspace`、`settings`。跨聚合动作与 Provider 组合位于 `src/app/application/session/`。当前 `SessionActions` 仍保留一个较宽的内部组合接口，这是待拆分债务；新功能不得继续扩大该接口或新增 `useSession()` 式公共大 API。
 - Tauri IPC 必须收敛在 feature-local infrastructure adapter；组件不得直接 `invoke()` 或 `listen()` 原始后端事件。
-- 样式只用纯 CSS：全局 token 在 `src/styles/global.css` 的 `:root`，组件样式与组件同目录（`<Component>.css`）。禁止 Tailwind / CSS-in-JS / CSS Modules
+- 样式只用纯 CSS：全局 token 在 `src/styles/global.css` 的 `:root`，组件样式优先与组件同目录（`<Component>.css`），跨页面布局可放在 `src/styles/`。禁止新增 Tailwind / CSS-in-JS / CSS Modules。
 - 无路由，视图和全局面板切换由 AppShell 内部状态驱动。
 
 ### 4.2 后端（`src-tauri/`）
 
 - 入口链：`src/main.rs` → `src/lib.rs::run()`
-- 分层：`commands/`（Tauri 命令薄壳）→ `services/`（业务逻辑与生命周期）→ `infrastructure/`（PTY/SSH/tmux 适配）→ `models/`（纯数据结构）
-- 会话状态：`Arc<SessionManager>`（内部 `DashMap` + `AtomicU32`，无外层 Mutex）
-- 事件名（前端依赖，勿改名）：`session-output`（二进制帧，经 `binary_frame.rs` 编码，通过 `get_session_output_channel` 拉取）、`session-closed`（payload `sessionId`）、`tmux-*`（tmux window/pane 事件）
+- 当前实际目录：`command/`（Tauri 命令）、`connect/`（PTY/SSH/tmux 连接、输出路由与会话注册表）、`feature/`（产品功能，目前主要是日志）、`shared/`（跨模块数据类型、错误和 capability）。
+- 会话状态：`Arc<TerminalRegistry>`，定义在 `connect/registry.rs`；内部用多个 `DashMap` 管理普通终端和 tmux controller，用 `AtomicU32` 分配 ID。
+- 输出和事件：前端通过 `subscribe_terminal_output` / `unsubscribe_terminal_output` 命令绑定 `Channel` 拉取原始输出；断连和关闭事件实际是 `terminal-disconnected` / `terminal-closed`，tmux 事件为 `tmux-*`。这些名称被前端 adapter 依赖，勿随意改名。
 
 ### 4.3 Capabilities / 权限
 
 - Tauri 2 用 `src-tauri/capabilities/default.json` 声明权限（v1 的 allowlist 已废弃）。
 - 新增插件三步：① `Cargo.toml` 加 crate ② `lib.rs` 注册 `.plugin(...)` ③ `default.json` 加权限标识。漏第三步会编译通过但运行时抛错。
 
+### 4.4 当前前端边界债务（不要扩散）
+
+以下为 2026-11-19 当前工作区状态；修复后应同步删除对应条目，不要把它当成长期架构目标。
+
+- `features/terminal/contracts.ts` 的 `Terminal` 同时携带 tmux 元数据；tmux 与普通终端尚未形成清晰投影边界。
+- `app/application/session/types.ts` 的 `SessionActions` 仍然很宽；`AppShellRuntime` 已把 View Model 计算移到 `app/application/runtimeShell`，但仍负责较多领域回调和跨 Feature 组装，后续应继续拆分。
+- `features/terminal-surface` 仍直接导入 terminal/tmux 的根级动作；跨聚合副作用应继续向 app intent 收敛。
+- `features/terminal-stream/index.ts` 目前会导出 adapter contracts，其中包含后端 handle/DTO。它是现有 wire contract 方案的一部分，但不要让 UI 直接消费这些类型。
+- `features/launch-config` 的 SSH 公共配置仍使用 `auth_type` / `key_file` 等后端风格字段；新增领域 API 不要再扩散 snake_case。
+
 ## 5. 关键坑（Gotchas）
 
 - `invoke()` 非类型安全（无 tauri-specta / 生成绑定），命令名与参数形状错误只在运行时暴露。
-- 窗口 `decorations: false`，自定义标题栏在 `src/app/NavBar.tsx`（用 `getCurrentWindow()`）。
+- 窗口 `decorations: false`，自定义标题栏在 `src/app/NavBar.tsx`；窗口最小化/最大化/关闭统一经由 `src/app/infrastructure/windowControls.ts`。
 - Vite dev server 固定 1420 端口 + `strictPort: true`；被占用则启动失败。
 - 不要用普通浏览器打开 `http://localhost:1420`（`__TAURI_INTERNALS__` 未定义，invoke 全抛错）。
 - 生成文件勿手改：`src/vite-env.d.ts`、`src-tauri/gen/schemas/`。
-- SSH host-key 校验当前**关闭**（`src-tauri/src/infrastructure/ssh.rs`），已知安全缺口，未经用户明确要求不要改动。
+- SSH host-key 校验当前**未实现**：图片上传使用的 `src-tauri/src/connect/ssh_exec.rs` 中 `check_server_key` 直接返回 `true`；会话传输由 xscore 负责。未经用户明确要求不要改动这个安全缺口。
 - 版本号三处同步：`package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json`。
-- 日志初始化故意泄漏一个 guard（`logging_setup.rs` 的 `std::mem::forget`）以保持滚动 writer 存活，勿删。
-- Rust mock 测试在 `services/session_manager.rs` 内联 `#[cfg(test)]`（mockall）。
-- `list_terminals` 已注册；使用前必须在对应 feature infrastructure 中增加类型化 wrapper。
+- 日志初始化故意泄漏一个 guard（`src-tauri/src/feature/logging/setup.rs` 的 `std::mem::forget`）以保持滚动 writer 存活，勿删。
+- Rust 测试主要是模块内联 `#[cfg(test)]`，分布在 `connect/registry.rs`、`connect/output.rs`、`connect/tmux.rs`、`shared/session.rs` 和 `feature/logging/session_log.rs`；当前没有 `services/session_manager.rs` 或 mockall 测试。
+- `list_terminals` 已注册，现有前端 wrapper 在 `features/terminal/infrastructure/terminalCommands.ts`；新增命令必须补对应的类型化 adapter。
 
 ## 6. 持久化与日志
 
-- 用 `tauri-plugin-store` 把配置存为 JSON（app data 目录）：sessions / groups / log_config。
-- `src/infra/storage/JsonStore.ts` 只提供通用 key/value 持久化；领域 schema、迁移、校验归属对应 feature 的 `persistence/`。
+- 当前实际存储文件是 `terminals.json`（`savedConfigs`、`groups`、`nextGroupId`、`savedWindowConfigs`、`savedWorkspaces`）、`settings.json`、`ui-shell.json` 和 `log_config.json`。
+- `src/infra/storage/jsonStore.ts` 只提供通用 key/value 持久化；领域 schema、迁移、校验归属对应 feature 的 `persistence/`。
 - 前端日志经 `src/infra/logging/` 的 `log_message` adapter 转后端，由 tracing 写滚动日志。
 
 ## 7. Husky（提交钩子）
@@ -87,10 +99,10 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ## 8. 文档地图
 
-| 文档                                  | 作用                                                          |
-| ------------------------------------- | ------------------------------------------------------------- |
-| `DESIGN.md`                           | 前端设计系统（权威），所有 UI 改动前必读                      |
-| `UI_COMPONENTS.md`                    | AppShell、全局组件、Manager、Dialog、View Model 与 Model 契约 |
-| `doc/design/frontend-architecture.md` | 前端目标分层、稳定接口、测试契约与重构顺序                    |
-| `rules/ts-name-rules.md`              | TS/TSX 命名规范                                               |
-| `rules/rust-name-rules.md`            | Rust 命名规范                                                 |
+| 文档                       | 作用                                                 |
+| -------------------------- | ---------------------------------------------------- |
+| `DESIGN.md`                | UI 设计参考；可能与代码不一致，以实际样式和组件为准  |
+| `UI_COMPONENTS.md`         | AppShell、Manager、Dialog 行为参考；可能与代码不一致 |
+| `rules/ts-name-rules.md`   | TS/TSX 命名参考                                      |
+| `rules/rust-name-rules.md` | Rust 命名参考                                        |
+| `src/models/README.md`     | 模型层边界参考；以 `src/models` 实际 import 关系为准 |

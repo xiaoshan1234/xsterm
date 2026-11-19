@@ -1,7 +1,10 @@
 import type { PaneSplitDirection } from "../../../features/workspace";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
-import { toBackendTerminalHandle } from "../../terminal-stream/adapterContracts";
-import { toTerminalConnectionInfo, type TerminalConnectionInfo } from "../../terminal-stream";
+import {
+  toBackendTerminalHandle,
+  toTerminalConnectionInfo,
+  type TerminalConnectionInfo,
+} from "../../terminal-stream";
 import { tmuxCommands, toBackendControllerHandle } from "../infrastructure";
 
 export const tmuxControllerActions = {

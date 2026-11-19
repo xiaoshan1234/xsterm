@@ -1,7 +1,7 @@
-import type { Terminal } from "../../features/terminal";
-import type { Workspace } from "../../features/workspace";
-import { type TmuxStatusControllerViewData } from "../../features/tmux";
-import { findPaneNode, getLeafPaneIds } from "../../features/workspace";
+import type { Terminal } from "../../../features/terminal";
+import type { Workspace } from "../../../features/workspace";
+import { type TmuxStatusControllerViewData } from "../../../features/tmux";
+import { findPaneNode, getLeafPaneIds } from "../../../features/workspace";
 
 export type RuntimeStatusTransport = "local" | "ssh" | "wsl";
 

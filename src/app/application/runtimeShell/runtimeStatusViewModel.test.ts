@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Terminal } from "../../features/terminal";
-import type { EditablePaneNode } from "../../features/workspace";
-import type { Workspace } from "../../features/workspace";
+import type { Terminal } from "../../../features/terminal";
+import type { EditablePaneNode } from "../../../features/workspace";
+import type { Workspace } from "../../../features/workspace";
 import { selectRuntimeStatus } from "./runtimeStatusViewModel";
 
 const pane: EditablePaneNode = { id: "pane-1", type: "leaf", size: 1, terminalId: 7 };

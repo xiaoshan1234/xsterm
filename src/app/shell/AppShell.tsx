@@ -9,7 +9,7 @@ import {
   MIN_TEXT_SENDER_HEIGHT,
   useTextSenderHeight,
 } from "./useTextSenderHeight";
-import { type RuntimeStatusViewData } from "./runtimeStatusViewModel";
+import { type RuntimeStatusViewData } from "../application/runtimeShell/runtimeStatusViewModel";
 import "./AppShell.css";
 
 interface AppShellProps {

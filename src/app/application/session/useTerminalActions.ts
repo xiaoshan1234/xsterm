@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { terminalSessionActions } from "../../../features/terminal/ports";
-import { tmuxControllerActions, tmuxWindowActions } from "../../../features/tmux/ports";
+import { terminalSessionActions } from "../../../features/terminal";
+import { tmuxControllerActions, tmuxWindowActions } from "../../../features/tmux";
 import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 import type { Window, Workspace } from "../../../features/workspace";
@@ -12,10 +12,11 @@ import {
   getUniqueWindowName,
   withRecomputedSessionIds,
 } from "../../../features/workspace";
-import { usePersistenceActions } from "../../../features/workspace/composition";
+import { usePersistenceActions } from "../../../features/workspace";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
-import { useGroupActions } from "../../../features/launch-config/composition";
+import { useGroupActions } from "../../../features/launch-config";
 import { usePaneActions } from "./usePaneActions";
+import { useTerminalStreamActions } from "./useTerminalStreamActions";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
 import type { SessionActions, SessionPersistence, SessionState } from "./types";
 import { findOpenTmuxControllerId, tmuxSessionKey } from "../../../features/tmux";
@@ -290,6 +291,8 @@ export function useTerminalActions({
     establishingSessionsRef,
   });
 
+  const terminalStream = useTerminalStreamActions({ setSessions });
+
   const windowActions = useWindowActions({
     savedConfigs,
     terminalsRef,
@@ -355,6 +358,7 @@ export function useTerminalActions({
     createWorkspaceFromSession,
     ...lifecycle,
     ...pane,
+    ...terminalStream,
     reportTerminalSize,
     createWindow: windowActions.createWindow,
     createInitWindow: windowActions.createInitWindow,

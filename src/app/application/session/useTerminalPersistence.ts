@@ -1,12 +1,12 @@
 import { useCallback, useEffect } from "react";
-import { useLaunchConfigPersistence } from "../../../features/launch-config/composition";
-import { getSettingsStore } from "../../../features/settings";
+import { useLaunchConfigPersistence } from "../../../features/launch-config";
+import { loadGlobalLocalEcho, persistGlobalLocalEcho } from "../../../features/settings";
 import {
   loadSavedWindowConfigs,
   loadSavedWorkspaces,
   persistWindowConfigs,
   persistWorkspaces,
-} from "../../../features/workspace/composition";
+} from "../../../features/workspace";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../features/launch-config";
 import type { SavedWindowConfig, SavedWorkspace } from "../../../features/workspace";
 import { type SessionPersistence } from "./types";
@@ -63,9 +63,8 @@ export function useTerminalPersistence({
       setSavedWindowConfigs(windowConfigs);
 
       try {
-        const store = getSettingsStore();
-        const savedGlobalEcho = await store.get<boolean>("globalLocalEcho");
-        if (savedGlobalEcho !== null && savedGlobalEcho !== undefined) {
+        const savedGlobalEcho = await loadGlobalLocalEcho();
+        if (savedGlobalEcho !== undefined) {
           setGlobalLocalEcho(savedGlobalEcho);
         }
       } catch (e) {
@@ -79,10 +78,8 @@ export function useTerminalPersistence({
     let cancelled = false;
     const persist = async () => {
       try {
-        const store = getSettingsStore();
         if (!cancelled) {
-          await store.set("globalLocalEcho", globalLocalEcho);
-          await store.save();
+          await persistGlobalLocalEcho(globalLocalEcho);
         }
       } catch (e) {
         console.error("Failed to save global settings:", e);

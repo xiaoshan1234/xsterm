@@ -1,15 +1,11 @@
-import type {
-  LocalTerminalConfig,
-  SshConfig,
-  TerminalDisplayConfig,
-} from "../launch-config/contracts";
+import type { LocalTerminalConfig, SshConfig, TerminalDisplayConfig } from "../launch-config";
 
 export type {
   LocalTerminalConfig,
   SshConfig,
   TerminalDisplayConfig,
   TerminalLoggingConfig,
-} from "../launch-config/contracts";
+} from "../launch-config";
 
 export interface CapabilityFlags {
   supportsResize: boolean;

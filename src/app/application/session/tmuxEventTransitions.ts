@@ -3,9 +3,9 @@ import {
   buildTmuxPaneTree,
   TMUX_PANE_CAPABILITIES,
   type TmuxPaneGeometry,
-} from "../../../features/tmux/ports";
+} from "../../../features/tmux";
 
-export type { TmuxPaneGeometry } from "../../../features/tmux/ports";
+export type { TmuxPaneGeometry } from "../../../features/tmux";
 import {
   createLeafPane,
   forEachPane,

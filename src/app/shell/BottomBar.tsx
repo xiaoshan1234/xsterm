@@ -1,4 +1,4 @@
-import { type RuntimeStatusViewData } from "./runtimeStatusViewModel";
+import { type RuntimeStatusViewData } from "../application/runtimeShell/runtimeStatusViewModel";
 
 interface BottomBarProps {
   runtimeStatus: RuntimeStatusViewData | null;

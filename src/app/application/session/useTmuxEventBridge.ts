@@ -9,7 +9,7 @@ import {
   removeSessionsFromWorkspaces,
   renameWindow,
 } from "../../../features/workspace";
-import { tmuxEventStream } from "../../../features/tmux/ports";
+import { tmuxEventStream } from "../../../features/tmux";
 import { type TmuxControllerError } from "../../../features/tmux";
 import {
   buildTmuxPaneSession,

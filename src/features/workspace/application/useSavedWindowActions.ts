@@ -6,10 +6,10 @@ import {
   createLeafPane,
   getDefaultWindowName,
   getLeafPaneIds,
-  getUniqueWindowName,
   stripSessionIdFromPaneTree,
   withRecomputedSessionIds,
-} from "..";
+} from "./paneTreeOperations";
+import { getUniqueWindowName } from "./windowOperations";
 import { createRollback } from "./usePersistenceActions.helpers";
 
 interface UseSavedWindowActionsDeps {

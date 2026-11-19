@@ -4,7 +4,7 @@ import type { PaneTerminalRef } from "../../../features/workspace";
 import type { EditablePaneNode } from "../../../features/workspace";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { Window, Workspace } from "../../../features/workspace";
-import { clearTerminalOutput } from "../../../shared/utils/terminalOutputBuffer";
+import { clearTerminalOutput } from "../../../features/terminal-surface";
 
 function findPaneSessionId(pane: EditablePaneNode, paneId: string): number | undefined {
   if (pane.id === paneId) return pane.terminalId;

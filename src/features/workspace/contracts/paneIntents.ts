@@ -1,8 +1,4 @@
-import type {
-  CreatedTerminalRef,
-  LocalTerminalConfig,
-  SshConfig,
-} from "../../launch-config/contracts";
+import type { CreatedTerminalRef, LocalTerminalConfig, SshConfig } from "../../launch-config";
 import { type PaneSplitDirection } from "./model";
 
 export interface PaneTarget {

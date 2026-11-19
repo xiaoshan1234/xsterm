@@ -1,5 +1,5 @@
 /**
- * Raw output buffer for each terminal.
+ * Raw output replay buffer owned by the terminal surface.
  * Used to restore terminal content when a pane is split/remounted, preventing loss of historical output.
  *
  * Per-terminal size is capped at MAX_BUFFER_BYTES. On overflow the buffer is
