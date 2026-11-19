@@ -4,13 +4,13 @@ import type { EditablePaneNode, PaneSplitDirection } from "../contracts";
 import type { Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
 import { isTmuxPaneTerminal, useTerminalRuntime } from "../../terminal";
-import { useTmuxRuntime } from "../../tmux";
 import { getPaneNumber } from "../application/paneTreeOperations";
 import { useTheme } from "../../../shared/theme/ThemeContext";
 import { Terminal, TmuxControllerErrorBanner, type TerminalRef } from "../../terminal-surface";
 import { ContextMenu, type ContextMenuRef } from "../../../shared/ui/ContextMenu";
 import { usePaneIntents } from "../state/PaneIntentContext";
 import { usePaneSessionIntents } from "../state/PaneSessionIntentContext";
+import { useWorkspacePaneRuntimeActions } from "../state/WorkspacePaneRuntimeActionsContext";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
 import { SelectTerminalDialog } from "./dialogs/SelectTerminalDialog";
@@ -36,7 +36,7 @@ export function Pane({
   onActivate,
 }: PaneProps) {
   const { terminals } = useTerminalRuntime();
-  const tmuxRuntime = useTmuxRuntime();
+  const paneRuntimeActions = useWorkspacePaneRuntimeActions();
   const paneIntents = usePaneIntents();
   const paneSessionIntents = usePaneSessionIntents();
   const { currentTheme } = useTheme();
@@ -246,23 +246,23 @@ export function Pane({
   const handleCreateTmuxWindow = useCallback(async () => {
     if (!terminal || !isTmuxPaneTerminal(terminal)) return;
     try {
-      await tmuxRuntime.createTmuxWindow(terminal.tmux.controllerId);
+      await paneRuntimeActions.createMultiplexedWindow(terminal.id);
     } catch (e) {
       console.error("Failed to create tmux window:", e);
       window.alert(`Failed to create Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [terminal, tmuxRuntime]);
+  }, [paneRuntimeActions, terminal]);
 
   const handleKillTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
     if (xid === undefined) return;
     try {
-      await tmuxRuntime.killTmuxWindow(xid);
+      await paneRuntimeActions.closeMultiplexedWindow(xid);
     } catch (e) {
       console.error("Failed to kill tmux window:", e);
       window.alert(`Failed to kill Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [selectedWindow?.xstermWindowId, tmuxRuntime]);
+  }, [paneRuntimeActions, selectedWindow?.xstermWindowId]);
 
   const handleRenameTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
@@ -270,12 +270,12 @@ export function Pane({
     const name = window.prompt("Rename Tmux window:");
     if (name === null || name.trim() === "") return;
     try {
-      await tmuxRuntime.renameTmuxWindow(xid, name.trim());
+      await paneRuntimeActions.renameMultiplexedWindow(xid, name.trim());
     } catch (e) {
       console.error("Failed to rename tmux window:", e);
       window.alert(`Failed to rename Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [selectedWindow?.xstermWindowId, tmuxRuntime]);
+  }, [paneRuntimeActions, selectedWindow?.xstermWindowId]);
 
   const contextMenuItems = buildPaneContextMenu(
     terminal,

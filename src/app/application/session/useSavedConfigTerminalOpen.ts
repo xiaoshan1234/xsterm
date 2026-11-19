@@ -8,13 +8,17 @@ import {
   type SshConfig,
   type Terminal,
 } from "../../../features/terminal";
-import type { SavedTerminalConfig, TmuxSessionConfig } from "../../../features/launch-config";
+import {
+  tmuxSessionKey,
+  type SavedTerminalConfig,
+  type TmuxSessionConfig,
+} from "../../../features/launch-config";
 import { tmuxControllerActions } from "../../../features/tmux";
 import type { Workspace } from "../../../features/workspace";
 import { dispatchByType } from "./useTerminalActions.helpers";
 import { buildFrontendTerminal } from "./useTerminalActions.helpers";
 import { findTerminalPaneLocation, focusTerminalInWorkspaces } from "./terminalPaneLocation";
-import { findOpenTmuxControllerId, tmuxSessionKey } from "../../../features/tmux";
+import { findOpenTmuxControllerId } from "../../../features/tmux";
 
 interface UseSavedConfigTerminalOpenOptions {
   savedConfigs: SavedTerminalConfig[];

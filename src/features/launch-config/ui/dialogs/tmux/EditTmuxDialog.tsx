@@ -19,7 +19,7 @@ import {
   defaultTmuxDisplayName,
   isTmuxDisplayNameAvailable,
   uniqueTmuxDisplayName,
-} from "../../../../tmux";
+} from "../../../application/tmuxIdentity";
 
 export type EditableTmuxConfig = Extract<SavedTerminalConfig, { type: "tmux-pane" }>;
 

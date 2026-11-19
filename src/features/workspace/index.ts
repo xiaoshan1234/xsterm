@@ -76,6 +76,7 @@ export {
   type EditablePaneNode,
   type PaneIntentActions,
   type PaneSessionIntentActions,
+  type WorkspacePaneRuntimeActions,
   type PaneSplitDirection,
   type PaneTarget,
   type PaneTerminalRef,
@@ -90,3 +91,7 @@ export {
 export { WorkspaceProvider, useWorkspaceLayout } from "./state/WorkspaceContext";
 export { PaneIntentProvider, usePaneIntents } from "./state/PaneIntentContext";
 export { PaneSessionIntentProvider, usePaneSessionIntents } from "./state/PaneSessionIntentContext";
+export {
+  WorkspacePaneRuntimeActionsProvider,
+  useWorkspacePaneRuntimeActions,
+} from "./state/WorkspacePaneRuntimeActionsContext";

@@ -5,8 +5,6 @@ import {
   type TmuxPaneTerminal,
 } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
-import type { Workspace } from "../../../features/workspace";
-import { selectPaneLocations, type PaneLocationViewData } from "../../workspace";
 
 export type TmuxRuntimeStatus = "connected" | "disconnected";
 
@@ -22,7 +20,6 @@ export interface TmuxStatusPaneViewData {
   isActive?: boolean;
   title: string;
   status: TmuxRuntimeStatus;
-  location?: PaneLocationViewData;
 }
 
 export interface TmuxStatusWindowViewData {
@@ -45,10 +42,8 @@ export interface TmuxStatusControllerViewData {
 
 export function selectTmuxStatusControllers(
   terminals: readonly Terminal[],
-  workspaces: readonly Workspace[],
   savedConfigs: readonly SavedTerminalConfig[],
 ): readonly TmuxStatusControllerViewData[] {
-  const locations = selectPaneLocations(workspaces, terminals);
   const savedConfigById = new Map(savedConfigs.map((config) => [config.id, config]));
   const controllerTerminals = new Map<number, Terminal[]>();
 
@@ -70,7 +65,7 @@ export function selectTmuxStatusControllers(
         .map((pane) => pane.tmux.sessionName)
         .find((name) => name !== undefined) ??
       (config?.type === "tmux-pane" ? config.config.tmuxSessionName?.trim() : undefined);
-    const windows = groupWindows(panes, locations);
+    const windows = groupWindows(panes);
     const status = panes.some((pane) => pane.isConnected) ? "connected" : "disconnected";
 
     return {
@@ -89,10 +84,7 @@ export function selectTmuxStatusControllers(
   });
 }
 
-function groupWindows(
-  panes: readonly Terminal[],
-  locations: ReadonlyMap<number, PaneLocationViewData>,
-): readonly TmuxStatusWindowViewData[] {
+function groupWindows(panes: readonly Terminal[]): readonly TmuxStatusWindowViewData[] {
   const windows = new Map<string, TmuxPaneTerminal[]>();
 
   for (const pane of panes) {
@@ -130,7 +122,6 @@ function groupWindows(
             ...(tmux.isActive !== undefined ? { isActive: tmux.isActive } : {}),
             title: pane.name,
             status: pane.isConnected ? "connected" : "disconnected",
-            ...(locations.has(pane.id) ? { location: locations.get(pane.id) } : {}),
           },
         ];
       }),

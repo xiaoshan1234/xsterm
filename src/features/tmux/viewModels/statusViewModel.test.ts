@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } from "../../../models";
+import { createTerminalId } from "../../../models";
 import type { Terminal, TmuxPaneTerminal } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
-import type { Workspace } from "../../../features/workspace";
 import { selectTmuxStatusControllers } from "./statusViewModel";
 
 describe("Tmux status view model", () => {
@@ -12,56 +11,6 @@ describe("Tmux status view model", () => {
       createTmuxTerminal(11, "%2", "@1", false, "cfg-1"),
       createTmuxTerminal(12, "%3", "@2", true, "cfg-1"),
     ];
-    const workspaces: Workspace[] = [
-      {
-        id: createWorkspaceId("workspace-1"),
-        name: "Default",
-        activeWindowId: createWindowId("window-1"),
-        terminalIds: [createTerminalId(10), createTerminalId(11), createTerminalId(12)],
-        windows: [
-          {
-            id: createWindowId("window-1"),
-            name: "tmux",
-            activePaneId: createPaneId("pane-1"),
-            rootPane: {
-              id: createPaneId("split-1"),
-              type: "split",
-              direction: "horizontal",
-              size: 100,
-              children: [
-                {
-                  id: createPaneId("pane-1"),
-                  type: "leaf",
-                  size: 50,
-                  terminalId: createTerminalId(10),
-                },
-                {
-                  id: createPaneId("split-2"),
-                  type: "split",
-                  direction: "vertical",
-                  size: 50,
-                  children: [
-                    {
-                      id: createPaneId("pane-2"),
-                      type: "leaf",
-                      size: 50,
-                      terminalId: createTerminalId(11),
-                    },
-                    {
-                      id: createPaneId("pane-3"),
-                      type: "leaf",
-                      size: 50,
-                      terminalId: createTerminalId(12),
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        ],
-      },
-    ];
-
     const savedConfigs: SavedTerminalConfig[] = [
       {
         id: "cfg-1",
@@ -71,7 +20,7 @@ describe("Tmux status view model", () => {
         config: { tmuxSessionName: "work" },
       },
     ];
-    const result = selectTmuxStatusControllers(terminals, workspaces, savedConfigs);
+    const result = selectTmuxStatusControllers(terminals, savedConfigs);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
@@ -94,7 +43,7 @@ describe("Tmux status view model", () => {
 
   it("prefers the session name carried by the terminal", () => {
     const terminals = [createTmuxTerminal(10, "%1", "@1", true, "", "work")];
-    const result = selectTmuxStatusControllers(terminals, [], []);
+    const result = selectTmuxStatusControllers(terminals, []);
 
     expect(result[0]?.sessionName).toBe("work");
   });
@@ -115,7 +64,7 @@ describe("Tmux status view model", () => {
       },
     ];
 
-    const result = selectTmuxStatusControllers(terminals, [], savedConfigs);
+    const result = selectTmuxStatusControllers(terminals, savedConfigs);
 
     expect(result[0]?.transport).toBe("wsl");
   });
@@ -135,7 +84,7 @@ describe("Tmux status view model", () => {
         isActive: true,
       },
     };
-    const result = selectTmuxStatusControllers([terminal], [], []);
+    const result = selectTmuxStatusControllers([terminal], []);
 
     expect(result[0]?.windows[0]).toMatchObject({
       tmuxWindowId: "@0",

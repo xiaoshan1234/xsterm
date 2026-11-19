@@ -6,8 +6,8 @@ import {
   buildTmuxWindow,
   findControllerWorkspaceId,
   mergeTmuxPaneMetadata,
-  type TmuxPaneGeometry,
 } from "./tmuxEventTransitions";
+import type { TmuxPaneGeometry } from "./tmuxWorkspacePaneTree";
 import type { TmuxEventBridgePorts, TmuxEventHandlerSet } from "./tmuxEventBridgePorts";
 
 export function createTmuxWindowEventHandlers({

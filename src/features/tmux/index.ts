@@ -4,15 +4,7 @@ export {
   type TmuxManagerGroupViewData,
   type TmuxManagerItemViewData,
 } from "./viewModels/managerViewModel";
-export {
-  defaultTmuxDisplayName,
-  findOpenTmuxControllerId,
-  generatedTmuxSessionName,
-  isTmuxDisplayNameAvailable,
-  tmuxSessionBaseKey,
-  tmuxSessionKey,
-  uniqueTmuxDisplayName,
-} from "./viewModels/sessionIdentity";
+export { findOpenTmuxControllerId } from "./viewModels/sessionIdentity";
 export {
   selectTmuxStatusControllers,
   type TmuxRuntimeStatus,
@@ -21,12 +13,12 @@ export {
   type TmuxStatusWindowViewData,
 } from "./viewModels/statusViewModel";
 export {
-  buildTmuxPaneTree,
+  parseTmuxGeometry,
   tmuxControllerActions,
   tmuxEventStream,
   tmuxWindowActions,
   TMUX_PANE_CAPABILITIES,
-  type TmuxPaneGeometry,
+  type TmuxGeometryNode,
 } from "./ports";
 export { useTmuxRuntimeState, type TmuxRuntimeState } from "./state/useTmuxRuntimeState";
 export type { OpenTmuxSession, TmuxControllerError } from "./state/types";

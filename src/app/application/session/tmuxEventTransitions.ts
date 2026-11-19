@@ -1,13 +1,7 @@
 import { createWindowId, type TerminalId } from "../../../models";
 import type { Terminal, TmuxPaneRuntimeState, TmuxPaneTerminal } from "../../../features/terminal";
 import { isTmuxPaneTerminal } from "../../../features/terminal";
-import {
-  buildTmuxPaneTree,
-  TMUX_PANE_CAPABILITIES,
-  type TmuxPaneGeometry,
-} from "../../../features/tmux";
-
-export type { TmuxPaneGeometry } from "../../../features/tmux";
+import { TMUX_PANE_CAPABILITIES } from "../../../features/tmux";
 import {
   createLeafPane,
   forEachPane,
@@ -15,6 +9,9 @@ import {
   type Window,
   type Workspace,
 } from "../../../features/workspace";
+import { buildTmuxPaneTree, type TmuxPaneGeometry } from "./tmuxWorkspacePaneTree";
+
+export type { TmuxPaneGeometry } from "./tmuxWorkspacePaneTree";
 
 export interface TmuxPaneSessionInfo {
   id: TerminalId;

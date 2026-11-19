@@ -23,7 +23,7 @@ import {
   defaultTmuxDisplayName,
   isTmuxDisplayNameAvailable,
   uniqueTmuxDisplayName,
-} from "../../../../tmux";
+} from "../../../application/tmuxIdentity";
 
 interface AttachTmuxDialogProps {
   isOpen: boolean;

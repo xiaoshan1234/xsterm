@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { createApplicationError } from "../../../models/applicationError";
 import type { TerminalId } from "../../../models";
 import { terminalSessionActions } from "../../../features/terminal";
-import { defaultTmuxDisplayName, uniqueTmuxDisplayName } from "../../../features/tmux";
+import { defaultTmuxDisplayName, uniqueTmuxDisplayName } from "../../../features/launch-config";
 import { tmuxControllerActions } from "../../../features/tmux";
 import {
   findPaneNode,

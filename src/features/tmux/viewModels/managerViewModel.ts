@@ -1,5 +1,5 @@
 import type { SavedTerminalConfig } from "../../../features/launch-config";
-import { defaultTmuxDisplayName, tmuxSessionBaseKey, tmuxSessionKey } from "./sessionIdentity";
+import { defaultTmuxDisplayName, tmuxSessionBaseKey, tmuxSessionKey } from "../../launch-config";
 
 export interface TmuxManagerItemViewData {
   configId: string;

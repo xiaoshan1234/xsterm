@@ -24,7 +24,7 @@ import {
   generatedTmuxSessionName,
   isTmuxDisplayNameAvailable,
   uniqueTmuxDisplayName,
-} from "../../../../tmux";
+} from "../../../application/tmuxIdentity";
 
 interface CreateTmuxDialogProps {
   isOpen: boolean;

@@ -23,9 +23,11 @@ import {
 import {
   PaneIntentProvider,
   PaneSessionIntentProvider,
+  WorkspacePaneRuntimeActionsProvider,
   WorkspaceProvider,
   type PaneIntentActions,
   type PaneSessionIntentActions,
+  type WorkspacePaneRuntimeActions,
   type WorkspaceLayoutContextType,
 } from "../features/workspace";
 
@@ -37,6 +39,7 @@ interface CreateTestApplicationOptions {
   workspace?: Partial<WorkspaceLayoutContextType>;
   paneIntents?: Partial<PaneIntentActions>;
   paneSessionIntents?: Partial<PaneSessionIntentActions>;
+  paneRuntimeActions?: Partial<WorkspacePaneRuntimeActions>;
   terminalSurface?: Partial<TerminalSurfacePorts>;
 }
 
@@ -162,6 +165,13 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     ...options.paneSessionIntents,
   };
 
+  const paneRuntimeActions: WorkspacePaneRuntimeActions = {
+    createMultiplexedWindow: unsupportedAsync,
+    closeMultiplexedWindow: unsupportedAsync,
+    renameMultiplexedWindow: unsupportedAsync,
+    ...options.paneRuntimeActions,
+  };
+
   const terminalSurface: TerminalSurfacePorts = {
     session: {
       getEffectiveLocalEcho: terminal.getEffectiveLocalEcho,
@@ -203,9 +213,11 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
               <WorkspaceProvider value={workspace}>
                 <PaneIntentProvider value={paneIntents}>
                   <PaneSessionIntentProvider value={paneSessionIntents}>
-                    <TerminalSurfacePortsProvider ports={terminalSurface}>
-                      {children}
-                    </TerminalSurfacePortsProvider>
+                    <WorkspacePaneRuntimeActionsProvider value={paneRuntimeActions}>
+                      <TerminalSurfacePortsProvider ports={terminalSurface}>
+                        {children}
+                      </TerminalSurfacePortsProvider>
+                    </WorkspacePaneRuntimeActionsProvider>
                   </PaneSessionIntentProvider>
                 </PaneIntentProvider>
               </WorkspaceProvider>
@@ -225,6 +237,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     workspace,
     paneIntents,
     paneSessionIntents,
+    paneRuntimeActions,
     terminalSurface,
   };
 }

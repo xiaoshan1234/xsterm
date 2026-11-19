@@ -64,6 +64,51 @@ function formatViolation(edge: ImportEdge, message: string): string {
   return `${edge.sourcePath}: ${edge.specifier} (${message})`;
 }
 
+function collectProductionFeatureEdges(edges: readonly ImportEdge[]): Map<string, Set<string>> {
+  const graph = new Map<string, Set<string>>();
+  for (const edge of edges) {
+    if (edge.sourcePath.includes(".test.") || !edge.targetPath) continue;
+    const source = featureOf(edge.sourcePath);
+    const target = featureOf(edge.targetPath);
+    if (!source || !target || source.feature === target.feature) continue;
+    const targets = graph.get(source.feature) ?? new Set<string>();
+    targets.add(target.feature);
+    graph.set(source.feature, targets);
+  }
+  return graph;
+}
+
+function findFeatureCycles(graph: ReadonlyMap<string, ReadonlySet<string>>): string[][] {
+  const state = new Map<string, "visiting" | "visited">();
+  const stack: string[] = [];
+  const cycles: string[][] = [];
+  const seen = new Set<string>();
+
+  const visit = (feature: string) => {
+    state.set(feature, "visiting");
+    stack.push(feature);
+    for (const target of graph.get(feature) ?? []) {
+      if (state.get(target) === "visiting") {
+        const cycle = [...stack.slice(stack.indexOf(target)), target];
+        const key = [...cycle].sort().join("|");
+        if (!seen.has(key)) {
+          seen.add(key);
+          cycles.push(cycle);
+        }
+      } else if (state.get(target) !== "visited") {
+        visit(target);
+      }
+    }
+    stack.pop();
+    state.set(feature, "visited");
+  };
+
+  for (const feature of graph.keys()) {
+    if (state.get(feature) === undefined) visit(feature);
+  }
+  return cycles;
+}
+
 describe("architecture boundaries", () => {
   const importEdges = collectImportEdges();
 
@@ -100,6 +145,27 @@ describe("architecture boundaries", () => {
       ];
     });
 
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps production feature dependencies acyclic", () => {
+    const graph = collectProductionFeatureEdges(importEdges);
+    expect(findFeatureCycles(graph)).toEqual([]);
+  });
+
+  it("keeps workspace and tmux independent from each other", () => {
+    const violations = importEdges.flatMap((edge) => {
+      if (edge.sourcePath.includes(".test.") || !edge.targetPath) return [];
+      const source = featureOf(edge.sourcePath);
+      const target = featureOf(edge.targetPath);
+      if (!source || !target) return [];
+      const crossesBoundary =
+        (source.feature === "workspace" && target.feature === "tmux") ||
+        (source.feature === "tmux" && target.feature === "workspace");
+      return crossesBoundary
+        ? [formatViolation(edge, "workspace and tmux must not depend on each other")]
+        : [];
+    });
     expect(violations).toEqual([]);
   });
 

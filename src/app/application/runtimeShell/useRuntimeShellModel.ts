@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import { selectPaneTargetOptions } from "../../../features/command-sender";
-import { useSavedLaunchConfigs } from "../../../features/launch-config";
+import {
+  tmuxSessionBaseKey,
+  tmuxSessionKey,
+  useSavedLaunchConfigs,
+} from "../../../features/launch-config";
 import { selectTerminalManagerGroups, useTerminalRuntime } from "../../../features/terminal";
 import {
   selectTmuxManagerGroups,
   selectTmuxStatusControllers,
-  tmuxSessionBaseKey,
-  tmuxSessionKey,
   useTmuxRuntime,
 } from "../../../features/tmux";
 import {
@@ -54,8 +56,8 @@ export function useRuntimeShellModel() {
   }, [openTmuxSessions, savedConfigs]);
 
   const tmuxStatusControllers = useMemo(
-    () => selectTmuxStatusControllers(terminals, workspaces, savedConfigs),
-    [savedConfigs, terminals, workspaces],
+    () => selectTmuxStatusControllers(terminals, savedConfigs),
+    [savedConfigs, terminals],
   );
 
   const runtimeStatus = useMemo(

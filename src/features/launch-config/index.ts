@@ -21,6 +21,14 @@ export {
   type LaunchConfigPersistenceActions,
   type LaunchConfigState,
 } from "./composition";
+export {
+  defaultTmuxDisplayName,
+  generatedTmuxSessionName,
+  isTmuxDisplayNameAvailable,
+  tmuxSessionBaseKey,
+  tmuxSessionKey,
+  uniqueTmuxDisplayName,
+} from "./application/tmuxIdentity";
 export { LaunchConfigProvider, useSavedLaunchConfigs } from "./state/LaunchConfigContext";
 export type {
   CreatedTerminalRef,

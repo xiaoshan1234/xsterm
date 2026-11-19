@@ -1,4 +1,4 @@
-import type { PaneSplitDirection } from "../../../features/workspace";
+import type { SplitDirection } from "../../../models";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 import { toTerminalConnectionInfo, type TerminalConnectionInfo } from "../../terminal-stream";
 import { tmuxCommands } from "../infrastructure";
@@ -19,7 +19,7 @@ export const tmuxControllerActions = {
   async createPane(
     controllerId: number,
     parentTerminalId: number,
-    direction: PaneSplitDirection,
+    direction: SplitDirection,
   ): Promise<TerminalConnectionInfo> {
     return toTerminalConnectionInfo(
       await tmuxCommands.createTmuxPane(controllerId, parentTerminalId, direction),

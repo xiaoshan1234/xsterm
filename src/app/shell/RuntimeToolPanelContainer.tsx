@@ -1,6 +1,5 @@
-import { DEFAULT_GROUP_ID } from "../../features/launch-config";
+import { DEFAULT_GROUP_ID, tmuxSessionKey } from "../../features/launch-config";
 import type { LaunchConfigId } from "../../models";
-import { tmuxSessionKey } from "../../features/tmux";
 import type { RuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
 import type { RuntimeConfirmState, RuntimeDialog } from "./runtimeOverlayTypes";

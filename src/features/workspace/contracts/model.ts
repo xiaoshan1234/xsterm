@@ -1,6 +1,13 @@
-import type { LaunchConfigId, PaneId, TerminalId, WindowId, WorkspaceId } from "../../../models";
+import type {
+  LaunchConfigId,
+  PaneId,
+  SplitDirection,
+  TerminalId,
+  WindowId,
+  WorkspaceId,
+} from "../../../models";
 
-export type PaneSplitDirection = "horizontal" | "vertical";
+export type PaneSplitDirection = SplitDirection;
 
 export interface EditablePaneNode {
   id: PaneId;
