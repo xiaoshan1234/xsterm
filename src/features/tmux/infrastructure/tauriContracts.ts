@@ -1,4 +1,7 @@
-import { type BackendTerminalHandle, type SshConfigDto } from "../../terminal-stream";
+import {
+  type BackendTerminalHandle,
+  type SshConfigDto,
+} from "../../terminal-stream/adapterContracts";
 import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
 
 export interface TmuxSessionConfigDto {

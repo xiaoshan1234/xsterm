@@ -11,7 +11,7 @@ function terminal(overrides: Partial<Terminal> = {}): Terminal {
     isConnected: true,
     kind: { type: "local", shell: "", cwd: "" },
     ...overrides,
-  };
+  } as Terminal;
 }
 
 const noopActions: PaneMenuActions = {

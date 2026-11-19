@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import {
+  isTmuxPaneTerminal,
   terminalClipboard,
   terminalStreamActions,
   useTerminalRuntime,
@@ -25,7 +26,7 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
         write: terminalRuntime.writeTerminal,
         isTmuxTerminal: (terminalId) =>
           terminalRuntime.terminals.some(
-            (terminal) => terminal.id === terminalId && terminal.tmux !== undefined,
+            (terminal) => terminal.id === terminalId && isTmuxPaneTerminal(terminal),
           ),
         touchActivity: terminalRuntime.touchTerminalActivity,
       },

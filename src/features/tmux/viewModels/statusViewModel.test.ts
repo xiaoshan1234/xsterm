@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Terminal } from "../../../features/terminal";
+import type { Terminal, TmuxPaneTerminal } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { Workspace } from "../../../features/workspace";
 import { selectTmuxStatusControllers } from "./statusViewModel";
@@ -147,7 +147,7 @@ function createTmuxTerminal(
   isConnected: boolean,
   configId = "",
   tmuxSessionName?: string,
-): Terminal {
+): TmuxPaneTerminal {
   return {
     id,
     configId,

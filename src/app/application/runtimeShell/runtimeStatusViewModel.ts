@@ -1,4 +1,5 @@
 import type { Terminal } from "../../../features/terminal";
+import { isTmuxPaneTerminal } from "../../../features/terminal";
 import type { Workspace } from "../../../features/workspace";
 import { type TmuxStatusControllerViewData } from "../../../features/tmux";
 import { findPaneNode, getLeafPaneIds } from "../../../features/workspace";
@@ -45,7 +46,7 @@ export function selectRuntimeStatus(
     typeof terminalSizes === "function"
       ? terminalSizes(terminal.id)
       : terminalSizes.get(terminal.id);
-  const tmuxState = terminal.tmux;
+  const tmuxState = isTmuxPaneTerminal(terminal) ? terminal.tmux : undefined;
   const size =
     measuredSize ??
     (tmuxState?.width !== undefined && tmuxState.height !== undefined

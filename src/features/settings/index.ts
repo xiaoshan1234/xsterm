@@ -1,5 +1,6 @@
 export { loadGlobalLocalEcho, persistGlobalLocalEcho } from "./persistence/settingsStorage";
-export * from "./ui";
+export { settingsRepository, type SettingsRepository } from "./persistence/settingsRepository";
+export { SettingsPanel } from "./ui/SettingsPanel";
 export {
   SessionPreferencesProvider,
   useSessionPreferences,

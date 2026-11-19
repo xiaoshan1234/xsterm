@@ -1,4 +1,5 @@
-import type { Terminal, TmuxPaneRuntimeState } from "../../../features/terminal";
+import type { Terminal, TmuxPaneRuntimeState, TmuxPaneTerminal } from "../../../features/terminal";
+import { isTmuxPaneTerminal } from "../../../features/terminal";
 import {
   buildTmuxPaneTree,
   TMUX_PANE_CAPABILITIES,
@@ -43,7 +44,7 @@ export interface TmuxPaneMetadata {
   tmuxPaneActive?: boolean;
 }
 
-export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): Terminal {
+export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): TmuxPaneTerminal {
   const tmux: TmuxPaneRuntimeState = {
     controllerId: info.tmuxSessionId,
     paneId: info.tmuxPaneId,
@@ -78,7 +79,7 @@ export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): Terminal {
 }
 
 export function mergeTmuxPaneMetadata(terminal: Terminal, metadata: TmuxPaneMetadata): Terminal {
-  if (!terminal.tmux) return terminal;
+  if (!isTmuxPaneTerminal(terminal)) return terminal;
   return {
     ...terminal,
     tmux: {
@@ -106,9 +107,11 @@ export function findControllerWorkspaceId(
       let belongsToController = false;
       forEachPane(window.rootPane, (node) => {
         if (node.type !== "leaf" || node.terminalId === undefined) return;
+        const terminal = terminals.find((candidate) => candidate.id === node.terminalId);
         if (
-          terminals.find((terminal) => terminal.id === node.terminalId)?.tmux?.controllerId ===
-          controllerId
+          terminal &&
+          isTmuxPaneTerminal(terminal) &&
+          terminal.tmux.controllerId === controllerId
         ) {
           belongsToController = true;
         }

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { Terminal } from "../../../features/terminal";
+import { isTmuxPaneTerminal, type Terminal } from "../../../features/terminal";
 import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
 import "./TmuxControllerErrorBanner.css";
 
@@ -20,8 +20,8 @@ export function TmuxControllerErrorBanner({ paneSessions }: TmuxControllerErrorB
 
   const match: { controllerId: number; reason?: string } | null = (() => {
     for (const terminal of paneSessions) {
-      const controllerId = terminal.tmux?.controllerId;
-      if (controllerId === undefined) continue;
+      if (!isTmuxPaneTerminal(terminal)) continue;
+      const controllerId = terminal.tmux.controllerId;
       const error = tmuxPorts.getControllerError(controllerId);
       if (error) {
         return { controllerId, reason: error.reason };

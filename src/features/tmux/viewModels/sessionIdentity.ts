@@ -1,4 +1,4 @@
-import type { Terminal } from "../../../features/terminal";
+import { isTmuxPaneTerminal, type Terminal } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 
@@ -89,7 +89,11 @@ export function findOpenTmuxControllerId(
     if (!openConfig || tmuxSessionKey(openConfig) !== targetKey) {
       continue;
     }
-    if (terminals.some((terminal) => terminal.tmux?.controllerId === controllerId)) {
+    if (
+      terminals.some(
+        (terminal) => isTmuxPaneTerminal(terminal) && terminal.tmux.controllerId === controllerId,
+      )
+    ) {
       return controllerId;
     }
   }

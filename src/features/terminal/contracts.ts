@@ -34,19 +34,43 @@ export interface TmuxPaneRuntimeState {
   isActive?: boolean;
 }
 
-export interface Terminal {
+interface TerminalBase {
   id: number;
   configId: string;
   name: string;
-  type: "local" | "ssh" | "wsl" | "tmux-pane";
   isConnected: boolean;
-  kind: TerminalKind;
   displayConfig?: TerminalDisplayConfig;
   capabilities?: CapabilityFlags;
   createdAt?: number;
   lastActivityAt?: number;
-  tmux?: TmuxPaneRuntimeState;
   isHidden?: boolean;
+}
+
+export interface LocalTerminal extends TerminalBase {
+  type: "local";
+  kind: Extract<TerminalKind, { type: "local" }>;
+}
+
+export interface SshTerminal extends TerminalBase {
+  type: "ssh";
+  kind: Extract<TerminalKind, { type: "ssh" }>;
+}
+
+export interface WslTerminal extends TerminalBase {
+  type: "wsl";
+  kind: Extract<TerminalKind, { type: "wsl" }>;
+}
+
+export interface TmuxPaneTerminal extends TerminalBase {
+  type: "tmux-pane";
+  kind: Extract<TerminalKind, { type: "tmux-pane" }>;
+  tmux: TmuxPaneRuntimeState;
+}
+
+export type Terminal = LocalTerminal | SshTerminal | WslTerminal | TmuxPaneTerminal;
+
+export function isTmuxPaneTerminal(terminal: Terminal): terminal is TmuxPaneTerminal {
+  return terminal.type === "tmux-pane";
 }
 
 export type { TerminalConnectionInfo } from "../terminal-stream";

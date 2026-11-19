@@ -1,11 +1,7 @@
 import type { PaneSplitDirection } from "../../../features/workspace";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
-import {
-  toBackendTerminalHandle,
-  toTerminalConnectionInfo,
-  type TerminalConnectionInfo,
-} from "../../terminal-stream";
-import { tmuxCommands, toBackendControllerHandle } from "../infrastructure";
+import { toTerminalConnectionInfo, type TerminalConnectionInfo } from "../../terminal-stream";
+import { tmuxCommands } from "../infrastructure";
 
 export const tmuxControllerActions = {
   async createSession(config: TmuxSessionConfig): Promise<TerminalConnectionInfo> {
@@ -17,7 +13,7 @@ export const tmuxControllerActions = {
   },
 
   async detachSession(controllerId: number): Promise<void> {
-    await tmuxCommands.detachTmuxSession(toBackendControllerHandle(controllerId));
+    await tmuxCommands.detachTmuxSession(controllerId);
   },
 
   async createPane(
@@ -26,23 +22,19 @@ export const tmuxControllerActions = {
     direction: PaneSplitDirection,
   ): Promise<TerminalConnectionInfo> {
     return toTerminalConnectionInfo(
-      await tmuxCommands.createTmuxPane(
-        toBackendControllerHandle(controllerId),
-        toBackendTerminalHandle(parentTerminalId),
-        direction,
-      ),
+      await tmuxCommands.createTmuxPane(controllerId, parentTerminalId, direction),
     );
   },
 
   async killPane(terminalId: number): Promise<void> {
-    await tmuxCommands.killTmuxPane(toBackendTerminalHandle(terminalId));
+    await tmuxCommands.killTmuxPane(terminalId);
   },
 
   async resizeWindow(controllerId: number, cols: number, rows: number): Promise<void> {
-    await tmuxCommands.resizeTmuxWindow(toBackendControllerHandle(controllerId), cols, rows);
+    await tmuxCommands.resizeTmuxWindow(controllerId, cols, rows);
   },
 
   async capturePane(terminalId: number, lines: number): Promise<string> {
-    return tmuxCommands.captureTmuxPane(toBackendTerminalHandle(terminalId), lines);
+    return tmuxCommands.captureTmuxPane(terminalId, lines);
   },
 };

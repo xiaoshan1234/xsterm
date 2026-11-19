@@ -121,7 +121,7 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
   const loadWorkspace = useCallback(
     async (savedWorkspaceId: string): Promise<Workspace> => {
       const saved = savedWorkspaces.find((w) => w.id === savedWorkspaceId);
-      if (!saved) throw new Error("Saved workspace not found");
+      if (!saved) throw createApplicationError("not-found", "Saved workspace not found");
 
       const configIdToSession = new Map<string, Terminal>();
 

@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { createApplicationError } from "../../../models/applicationError";
 import { terminalSessionActions } from "../../../features/terminal";
 import { defaultTmuxDisplayName, uniqueTmuxDisplayName } from "../../../features/tmux";
 import { tmuxControllerActions } from "../../../features/tmux";
@@ -178,13 +179,18 @@ export function useTerminalMaintenanceActions({
   const reconnectSession = useCallback(
     async (terminalId: number): Promise<Terminal> => {
       const oldTerminal = terminalsRef.current.find((terminal) => terminal.id === terminalId);
-      if (!oldTerminal) throw new Error("Terminal not found");
+      if (!oldTerminal) throw createApplicationError("not-found", "Terminal not found");
       if (oldTerminal.capabilities && !oldTerminal.capabilities.supportsReconnect) {
-        throw new Error("Reconnect not supported for this transport");
+        throw createApplicationError(
+          "unsupported-operation",
+          "Reconnect not supported for this transport",
+        );
       }
 
       const config = savedConfigs.find((candidate) => candidate.id === oldTerminal.configId);
-      if (!config) throw new Error("Saved config not found for terminal");
+      if (!config) {
+        throw createApplicationError("not-found", "Saved config not found for terminal");
+      }
 
       const info = await dispatchByType(
         config.type,

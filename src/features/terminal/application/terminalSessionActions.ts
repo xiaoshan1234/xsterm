@@ -1,9 +1,5 @@
 import type { LocalTerminalConfig, SshConfig } from "../contracts";
-import {
-  terminalCommands,
-  toBackendTerminalHandle,
-  type TerminalLoggingConfigDto,
-} from "../infrastructure";
+import { terminalCommands, type TerminalLoggingConfigDto } from "../infrastructure";
 import { type TerminalConnectionInfo } from "../contracts";
 import { toTerminalConnectionInfo } from "./terminalConnection";
 
@@ -23,11 +19,11 @@ export const terminalSessionActions = {
   },
 
   async closeTerminal(terminalId: number): Promise<void> {
-    await terminalCommands.closeTerminal(toBackendTerminalHandle(terminalId));
+    await terminalCommands.closeTerminal(terminalId);
   },
 
   async resizeTerminal(terminalId: number, rows: number, cols: number): Promise<void> {
-    await terminalCommands.resizeTerminal(toBackendTerminalHandle(terminalId), rows, cols);
+    await terminalCommands.resizeTerminal(terminalId, rows, cols);
   },
 
   async uploadImageToSshTerminal(
@@ -35,10 +31,6 @@ export const terminalSessionActions = {
     filename: string,
     data: Uint8Array,
   ): Promise<string> {
-    return terminalCommands.uploadImageToSshTerminal(
-      toBackendTerminalHandle(terminalId),
-      filename,
-      data,
-    );
+    return terminalCommands.uploadImageToSshTerminal(terminalId, filename, data);
   },
 };

@@ -1,5 +1,9 @@
 import { useCallback } from "react";
-import { terminalSessionActions, type TerminalConnectionInfo } from "../../../features/terminal";
+import {
+  isTmuxPaneTerminal,
+  terminalSessionActions,
+  type TerminalConnectionInfo,
+} from "../../../features/terminal";
 import { tmuxControllerActions } from "../../../features/tmux";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode, PaneSplitDirection } from "../../../features/workspace";
@@ -225,11 +229,9 @@ async function splitTmuxPaneInternal(
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>,
 ): Promise<void> {
   const parent = terminalsRef.current.find((s) => s.id === xstermTerminalId);
-  if (!parent) return;
+  if (!parent || !isTmuxPaneTerminal(parent)) return;
   const tmux = parent.tmux;
-  if (!tmux) return;
   const controllerId = tmux.controllerId;
-  const parentTmuxPaneId = tmux.paneId;
 
   let info: TerminalConnectionInfo;
   try {
@@ -245,19 +247,16 @@ async function splitTmuxPaneInternal(
       // The `tmux-pane-added` event may have created the terminal first.
       // Make sure it carries the new pane id, window id and config link.
       return prev.map((session) =>
-        session.id === newSessionId
+        session.id === newSessionId && isTmuxPaneTerminal(session)
           ? {
               ...session,
               configId: session.configId || parent.configId,
               tmux: {
-                controllerId: session.tmux?.controllerId ?? controllerId,
-                paneId:
-                  info.kind.type === "tmux-pane"
-                    ? info.kind.paneId
-                    : (session.tmux?.paneId ?? parentTmuxPaneId),
+                controllerId: session.tmux.controllerId,
+                paneId: info.kind.type === "tmux-pane" ? info.kind.paneId : session.tmux.paneId,
                 ...(info.tmuxWindowId
                   ? { windowId: info.tmuxWindowId }
-                  : session.tmux?.windowId
+                  : session.tmux.windowId
                     ? { windowId: session.tmux.windowId }
                     : {}),
               },

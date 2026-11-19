@@ -1,8 +1,13 @@
 import { useCallback } from "react";
+import { createApplicationError } from "../../../models/applicationError";
 import { tmuxSessionKey } from "../../../features/tmux";
 import { tmuxControllerActions } from "../../../features/tmux";
 import { removeControllerFromWorkspaces } from "../../../features/workspace";
-import type { Terminal, TerminalDisplayConfig } from "../../../features/terminal";
+import {
+  isTmuxPaneTerminal,
+  type Terminal,
+  type TerminalDisplayConfig,
+} from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 import { clearTerminalOutput } from "../../../features/terminal-surface";
@@ -46,7 +51,10 @@ export function useTmuxLifecycleActions({
     async <Value>(config: TmuxSessionConfig, operation: () => Promise<Value>): Promise<Value> => {
       const key = tmuxSessionKey(config);
       if (pendingTmuxSessionKeysRef.current.has(key)) {
-        throw new Error("This tmux session is already opening.");
+        throw createApplicationError(
+          "operation-in-progress",
+          "This tmux session is already opening.",
+        );
       }
       pendingTmuxSessionKeysRef.current.add(key);
       try {
@@ -65,7 +73,7 @@ export function useTmuxLifecycleActions({
       save: boolean,
       displayConfig?: TerminalDisplayConfig,
     ) => {
-      const controllerId = terminal.tmux?.controllerId;
+      const controllerId = isTmuxPaneTerminal(terminal) ? terminal.tmux.controllerId : undefined;
       if (controllerId !== undefined) {
         tmuxControllerConfigsRef?.current.set(controllerId, config);
         if (tmuxControllerConfigIdsRef) {
@@ -73,7 +81,7 @@ export function useTmuxLifecycleActions({
           syncOpenTmuxSessions();
           setSessions((previous) =>
             previous.map((session) =>
-              session.tmux?.controllerId === controllerId
+              isTmuxPaneTerminal(session) && session.tmux.controllerId === controllerId
                 ? { ...session, configId: terminal.configId, displayConfig }
                 : session,
             ),
@@ -120,7 +128,7 @@ export function useTmuxLifecycleActions({
         terminalsRef.current,
       );
       if (openControllerId !== undefined) {
-        throw new Error(message);
+        throw createApplicationError("operation-in-progress", message);
       }
     },
     [savedConfigs, terminalsRef, tmuxControllerConfigIdsRef, tmuxControllerConfigsRef],
@@ -171,11 +179,16 @@ export function useTmuxLifecycleActions({
   const removeTmuxControllerFromState = useCallback(
     (controllerId: number) => {
       const deadIds = terminalsRef.current
-        .filter((terminal) => terminal.tmux?.controllerId === controllerId)
+        .filter(
+          (terminal) => isTmuxPaneTerminal(terminal) && terminal.tmux.controllerId === controllerId,
+        )
         .map((terminal) => terminal.id);
       if (deadIds.length > 0) {
         setSessions((previous) =>
-          previous.filter((terminal) => terminal.tmux?.controllerId !== controllerId),
+          previous.filter(
+            (terminal) =>
+              !isTmuxPaneTerminal(terminal) || terminal.tmux.controllerId !== controllerId,
+          ),
         );
         setWorkspaces((previous) => removeControllerFromWorkspaces(previous, deadIds));
         for (const terminalId of deadIds) {
@@ -217,15 +230,17 @@ export function useTmuxLifecycleActions({
   const reconnectTmuxSession = useCallback(
     async (controllerId: number): Promise<Terminal> => {
       const controlledTerminals = terminalsRef.current.filter(
-        (terminal) => terminal.tmux?.controllerId === controllerId,
+        (terminal) => isTmuxPaneTerminal(terminal) && terminal.tmux.controllerId === controllerId,
       );
       if (controlledTerminals.length === 0) {
-        throw new Error("Tmux session not found");
+        throw createApplicationError("not-found", "Tmux session not found");
       }
 
       const sessionName = controlledTerminals
-        .find((terminal) => terminal.tmux?.sessionName)
-        ?.tmux?.sessionName?.trim();
+        .filter(isTmuxPaneTerminal)
+        .map((terminal) => terminal.tmux.sessionName)
+        .find((name) => name !== undefined)
+        ?.trim();
       const terminalConfigId = controlledTerminals.find((terminal) => terminal.configId)?.configId;
       const savedConfig =
         savedConfigs.find(
@@ -242,15 +257,15 @@ export function useTmuxLifecycleActions({
         tmuxControllerConfigsRef?.current.get(controllerId) ??
         (savedConfig?.type === "tmux-pane" ? savedConfig.config : undefined);
       if (!config) {
-        throw new Error("Saved config not found for tmux session");
+        throw createApplicationError("not-found", "Saved config not found for tmux session");
       }
 
       const displayConfig = savedConfig?.displayConfig ?? controlledTerminals[0]?.displayConfig;
       const info = await tmuxControllerActions.attachSession(config);
       const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
-      const newControllerId = terminal.tmux?.controllerId;
+      const newControllerId = isTmuxPaneTerminal(terminal) ? terminal.tmux.controllerId : undefined;
       if (newControllerId === undefined) {
-        throw new Error("Tmux reconnect returned no controller");
+        throw createApplicationError("invalid-state", "Tmux reconnect returned no controller");
       }
 
       tmuxControllerConfigsRef?.current.set(newControllerId, config);
@@ -259,7 +274,7 @@ export function useTmuxLifecycleActions({
         syncOpenTmuxSessions();
         setSessions((previous) =>
           previous.map((session) =>
-            session.tmux?.controllerId === newControllerId
+            isTmuxPaneTerminal(session) && session.tmux.controllerId === newControllerId
               ? { ...session, configId, displayConfig }
               : session,
           ),

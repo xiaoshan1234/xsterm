@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { terminalSessionActions } from "../../../features/terminal";
+import { createApplicationError } from "../../../models/applicationError";
+import { isTmuxPaneTerminal, terminalSessionActions } from "../../../features/terminal";
 import { tmuxControllerActions, tmuxWindowActions } from "../../../features/tmux";
 import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
@@ -103,7 +104,7 @@ export function useTerminalActions({
   const openFromConfigInternal = useCallback(
     async (configId: string): Promise<Terminal> => {
       const config = savedConfigs.find((c) => c.id === configId);
-      if (!config) throw new Error("Config not found");
+      if (!config) throw createApplicationError("not-found", "Config not found");
 
       if (config.type === "tmux-pane") {
         const tmuxConfig = config.config as TmuxSessionConfig;
@@ -116,7 +117,8 @@ export function useTerminalActions({
         );
         if (openControllerId !== undefined) {
           const existing = terminalsRef.current.find(
-            (terminal) => terminal.tmux?.controllerId === openControllerId,
+            (terminal) =>
+              isTmuxPaneTerminal(terminal) && terminal.tmux.controllerId === openControllerId,
           );
           if (existing) {
             focusTerminal(existing.id);
@@ -125,7 +127,10 @@ export function useTerminalActions({
         }
         const sessionKey = tmuxSessionKey(tmuxConfig);
         if (pendingTmuxSessionKeysRef.current.has(sessionKey)) {
-          throw new Error("This tmux session is already opening.");
+          throw createApplicationError(
+            "operation-in-progress",
+            "This tmux session is already opening.",
+          );
         }
         pendingTmuxSessionKeysRef.current.add(sessionKey);
         // Attach is event-driven: `attach_tmux_session` emits the
@@ -135,14 +140,16 @@ export function useTerminalActions({
         try {
           const info = await tmuxControllerActions.attachSession(tmuxConfig);
           const terminal = buildFrontendTerminal(info, configId, "tmux-pane", config.displayConfig);
-          const controllerId = terminal.tmux?.controllerId;
+          const controllerId = isTmuxPaneTerminal(terminal)
+            ? terminal.tmux.controllerId
+            : undefined;
           if (controllerId !== undefined) {
             tmuxControllerConfigsRef.current.set(controllerId, tmuxConfig);
             tmuxControllerConfigIdsRef.current.set(controllerId, configId);
             syncOpenTmuxSessions();
             setSessions((previous) =>
               previous.map((session) =>
-                session.tmux?.controllerId === controllerId
+                isTmuxPaneTerminal(session) && session.tmux.controllerId === controllerId
                   ? { ...session, configId, displayConfig: config.displayConfig }
                   : session,
               ),

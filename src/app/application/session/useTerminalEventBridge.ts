@@ -5,6 +5,7 @@ import type { Terminal } from "../../../features/terminal";
 import type { Workspace } from "../../../features/workspace";
 
 interface TerminalEventBridgeOptions {
+  isEnabled: boolean;
   setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   terminalsRef: MutableRefObject<Terminal[]>;
@@ -12,12 +13,14 @@ interface TerminalEventBridgeOptions {
 }
 
 export function useTerminalEventBridge({
+  isEnabled,
   setTerminals,
   setWorkspaces,
   terminalsRef,
   establishingSessionsRef,
 }: TerminalEventBridgeOptions): void {
   useEffect(() => {
+    if (!isEnabled) return;
     let isDisposed = false;
     let cleanup: (() => void) | undefined;
 
@@ -58,5 +61,5 @@ export function useTerminalEventBridge({
       isDisposed = true;
       cleanup?.();
     };
-  }, [establishingSessionsRef, setTerminals, setWorkspaces, terminalsRef]);
+  }, [establishingSessionsRef, isEnabled, setTerminals, setWorkspaces, terminalsRef]);
 }

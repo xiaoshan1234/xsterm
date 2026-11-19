@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { createApplicationError } from "../../../models/applicationError";
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode } from "../contracts";
 import type { SavedWindowConfig, Window, Workspace } from "../contracts";
@@ -83,7 +84,7 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
   const loadWindow = useCallback(
     async (savedWindowId: string, workspaceId?: string): Promise<Window> => {
       const saved = savedWindowConfigs.find((w) => w.id === savedWindowId);
-      if (!saved) throw new Error("Saved window config not found");
+      if (!saved) throw createApplicationError("not-found", "Saved window config not found");
 
       const configIdToSession = new Map<string, Terminal>();
 
@@ -133,7 +134,9 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
       };
 
       const targetWorkspaceId = workspaceId ?? workspacesRef.current[0]?.id;
-      if (!targetWorkspaceId) throw new Error("No workspace available to load window");
+      if (!targetWorkspaceId) {
+        throw createApplicationError("invalid-state", "No workspace available to load window");
+      }
 
       setWorkspaces((prev) => {
         const uniqueName = getUniqueWindowName(prev, targetWorkspaceId, baseName);

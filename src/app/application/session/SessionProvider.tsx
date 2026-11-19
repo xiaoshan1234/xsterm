@@ -19,6 +19,7 @@ import { useTerminalPersistence } from "./useTerminalPersistence";
 import { useTerminalActions } from "./useTerminalActions";
 import { useTauriListeners } from "./useTauriListeners";
 import { usePaneIntentActions } from "./usePaneIntentActions";
+import { SessionBootstrapScreen } from "../../SessionBootstrapScreen";
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const state = useSessionState();
@@ -29,6 +30,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSavedWorkspaces: state.workspace.setSavedWorkspaces,
     setSavedWindowConfigs: state.workspace.setSavedWindowConfigs,
     setGlobalLocalEcho: state.preferences.setGlobalLocalEcho,
+    savedConfigs: state.launchConfig.savedConfigs,
+    groups: state.launchConfig.groups,
     globalLocalEcho: state.preferences.globalLocalEcho,
     nextGroupId: state.launchConfig.nextGroupId,
   });
@@ -40,7 +43,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     actions,
   });
-  useTauriListeners(state);
+  useTauriListeners(state, persistence.isLoaded);
   const getTerminalSize = useCallback(
     (terminalId: number) => state.terminal.terminalSizesRef.current.get(terminalId),
     [state.terminal.terminalSizesRef],
@@ -216,6 +219,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       actions.closePane,
     ],
   );
+
+  if (!persistence.isLoaded) {
+    return <SessionBootstrapScreen />;
+  }
 
   return (
     <SessionPreferencesProvider value={preferences}>

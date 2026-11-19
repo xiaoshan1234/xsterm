@@ -1,5 +1,11 @@
 export type ApplicationErrorCode =
-  "terminal-already-attached" | "workspace-name-conflict" | "workspace-name-reserved";
+  | "invalid-state"
+  | "not-found"
+  | "operation-in-progress"
+  | "terminal-already-attached"
+  | "unsupported-operation"
+  | "workspace-name-conflict"
+  | "workspace-name-reserved";
 
 export interface ApplicationError extends Error {
   readonly code: ApplicationErrorCode;

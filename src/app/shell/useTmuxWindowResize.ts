@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTerminalRuntime } from "../../features/terminal";
 import { useTmuxRuntime } from "../../features/tmux";
-import type { Terminal } from "../../features/terminal";
+import { isTmuxPaneTerminal, type Terminal } from "../../features/terminal";
 import type { EditablePaneNode, Workspace } from "../../features/workspace";
 import { computeTmuxWindowSize, type WindowSize } from "../../features/workspace";
 
@@ -58,7 +58,8 @@ function findControllerId(
 ): number | undefined {
   if (node.type === "leaf") {
     if (node.terminalId === undefined) return undefined;
-    return terminalsById.get(node.terminalId)?.tmux?.controllerId;
+    const terminal = terminalsById.get(node.terminalId);
+    return terminal && isTmuxPaneTerminal(terminal) ? terminal.tmux.controllerId : undefined;
   }
   for (const child of node.children ?? []) {
     const controllerId = findControllerId(child, terminalsById);

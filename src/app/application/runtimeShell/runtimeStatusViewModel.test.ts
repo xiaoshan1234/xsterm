@@ -32,7 +32,7 @@ function terminal(overrides: Partial<Terminal> = {}): Terminal {
     isConnected: true,
     kind: { type: "ssh", host: "example.com", port: 22, user: "dev" },
     ...overrides,
-  };
+  } as Terminal;
 }
 
 describe("selectRuntimeStatus", () => {

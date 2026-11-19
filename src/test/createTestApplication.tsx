@@ -8,6 +8,7 @@ import {
   type SessionPreferencesContextType,
 } from "../features/settings";
 import {
+  isTmuxPaneTerminal,
   TerminalRuntimeProvider,
   type TerminalRuntimeContextType,
 } from "../features/terminal";
@@ -164,7 +165,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
       write: terminal.writeTerminal,
       isTmuxTerminal: (terminalId) =>
         terminal.terminals.some(
-          (candidate) => candidate.id === terminalId && candidate.tmux !== undefined,
+          (candidate) => candidate.id === terminalId && isTmuxPaneTerminal(candidate),
         ),
       touchActivity: terminal.touchTerminalActivity,
     },

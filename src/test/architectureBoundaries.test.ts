@@ -84,6 +84,13 @@ describe("architecture boundaries", () => {
       const source = featureOf(edge.sourcePath);
       const target = featureOf(edge.targetPath);
       if (!source || !target || source.feature === target.feature) return [];
+      if (
+        edge.sourcePath.includes("/infrastructure/") &&
+        target.feature === "terminal-stream" &&
+        target.subpath === "adapterContracts"
+      ) {
+        return [];
+      }
       if (target.subpath === "") return [];
       return [
         formatViolation(
@@ -214,5 +221,20 @@ describe("architecture boundaries", () => {
       return /\b(?:auth_type|key_file)\b/.test(source) ? [path] : [];
     });
     expect(violations).toEqual([]);
+  });
+
+  it("keeps feature root exports explicit", () => {
+    const violations = Object.entries(sourceFiles).flatMap(([path, source]) => {
+      if (!/^\/src\/features\/[^/]+\/index\.ts$/.test(path)) return [];
+      return source.includes("export *") ? [path] : [];
+    });
+    expect(violations).toEqual([]);
+  });
+
+  it("does not expose terminal-stream adapter contracts from its root", () => {
+    const root = sourceFiles["/src/features/terminal-stream/index.ts"] ?? "";
+    expect(root).not.toMatch(
+      /adapterContracts|BackendTerminalHandle|\b(?:SshConfigDto|TerminalInfoDto|TerminalKindDto|TerminalCapabilitiesDto)\b/,
+    );
   });
 });

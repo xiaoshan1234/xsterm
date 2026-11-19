@@ -1,8 +1,88 @@
-export * from "./viewModels/managerViewModel";
-export * from "./viewModels/paneLocationViewModel";
-export * from "./ui";
-export * from "./ports";
-export * from "./composition";
-export * from "./contracts";
+export {
+  selectWindowManagerItems,
+  selectWorkspaceManagerItems,
+  type WindowManagerItemViewData,
+  type WorkspaceManagerItemViewData,
+} from "./viewModels/managerViewModel";
+export { selectPaneLocations, type PaneLocationViewData } from "./viewModels/paneLocationViewModel";
+export {
+  SaveDialog,
+  SelectTerminalDialog,
+  WindowManagerPanel,
+  WorkspaceContainer,
+  WorkspaceManagerPanel,
+} from "./ui";
+export {
+  appendOrReplaceInitWindow,
+  assertSessionNotUsedElsewhere,
+  closeWindow,
+  collectSessionIdsFromPaneTree,
+  collectSessionIdsFromWorkspace,
+  collapseEmptySplits,
+  computeTmuxWindowSize,
+  createLeafPane,
+  createSplitNode,
+  findFirstLeafWithSession,
+  findPaneNode,
+  findSessionWindow,
+  forEachPane,
+  generateId,
+  getDefaultWindowName,
+  getLeafPaneIds,
+  getPaneNumber,
+  getPaneNumberMap,
+  getUniqueWindowName,
+  isSessionInPaneTree,
+  isSessionUsedInOtherWindow,
+  mapPaneTree,
+  removeControllerFromWorkspaces,
+  removePaneFromTree,
+  removeSessionAndCollapse,
+  removeSessionFromPaneTree,
+  removeSessionsFromWorkspaces,
+  renameWindow,
+  replacePaneNode,
+  replaceSessionIdInPaneTree,
+  stripSessionIdFromPaneTree,
+  withRecomputedSessionIds,
+  type TerminalSize,
+  type WindowSize,
+} from "./ports";
+export {
+  deleteSavedWindowConfig,
+  deleteSavedWorkspace,
+  loadSavedWindowConfigs,
+  loadSavedWorkspaces,
+  persistWindowConfigs,
+  persistWorkspaces,
+  usePersistenceActions,
+  useWorkspaceState,
+  type WorkspaceState,
+} from "./composition";
+export { workspaceRepository, type WorkspaceRepository } from "./persistence/workspaceRepository";
+export {
+  createEditableLeafPane,
+  createEditableSplitNode,
+  type AttachExistingTerminalRequest,
+  type AttachExistingTerminalToWindowRequest,
+  type AttachSavedConfigToPaneRequest,
+  type CreateLocalTerminalForPaneRequest,
+  type CreateLocalTerminalForWindowRequest,
+  type CreateSavedConfigForWindowRequest,
+  type CreateSshTerminalForPaneRequest,
+  type CreateSshTerminalForWindowRequest,
+  type EditablePaneNode,
+  type PaneIntentActions,
+  type PaneSplitDirection,
+  type PaneTarget,
+  type PaneTerminalRef,
+  type SavedWindowConfig,
+  type SavedWorkspace,
+  type SplitPaneWithSavedConfigRequest,
+  type SplitPaneWithTerminalRequest,
+  type Window,
+  type Workspace,
+  type WorkspaceLayoutContextType,
+} from "./contracts";
 export { WorkspaceProvider, useWorkspaceLayout } from "./state/WorkspaceContext";
 export { PaneIntentProvider, usePaneIntents } from "./state/PaneIntentContext";

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { EditablePaneNode, PaneSplitDirection } from "../contracts";
 import type { Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
+import { isTmuxPaneTerminal } from "../../terminal";
 import { useTerminalRuntime } from "../../terminal";
 import { getPaneNumber } from "../application/paneTreeOperations";
 import { useTheme } from "../../../shared/theme/ThemeContext";
@@ -239,7 +240,7 @@ export function Pane({
   }, [paneIntents, workspace.id, windowId, pane.id]);
 
   const handleCreateTmuxWindow = useCallback(async () => {
-    if (terminal?.tmux?.controllerId === undefined) return;
+    if (!terminal || !isTmuxPaneTerminal(terminal)) return;
     try {
       await paneIntents.createTmuxWindow(terminal.id);
     } catch (e) {

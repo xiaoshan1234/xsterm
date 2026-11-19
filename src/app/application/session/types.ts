@@ -33,6 +33,7 @@ export interface SessionState {
 }
 
 export interface SessionPersistence {
+  isLoaded: boolean;
   updateConfigs: (updater: (prev: SavedTerminalConfig[]) => SavedTerminalConfig[]) => void;
   updateGroups: (updater: (prev: TerminalGroup[]) => TerminalGroup[], nextId?: number) => void;
   persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;

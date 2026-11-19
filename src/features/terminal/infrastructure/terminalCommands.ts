@@ -20,14 +20,10 @@ export interface TerminalCommandClient {
     config: SshConfig,
     logging?: TerminalLoggingConfigDto,
   ): Promise<TerminalInfoDto>;
-  writeTerminal(terminalHandle: BackendTerminalHandle, data: Uint8Array): Promise<void>;
-  resizeTerminal(terminalHandle: BackendTerminalHandle, rows: number, cols: number): Promise<void>;
-  closeTerminal(terminalHandle: BackendTerminalHandle): Promise<void>;
-  uploadImageToSshTerminal(
-    terminalHandle: BackendTerminalHandle,
-    filename: string,
-    data: Uint8Array,
-  ): Promise<string>;
+  writeTerminal(terminalId: number, data: Uint8Array): Promise<void>;
+  resizeTerminal(terminalId: number, rows: number, cols: number): Promise<void>;
+  closeTerminal(terminalId: number): Promise<void>;
+  uploadImageToSshTerminal(terminalId: number, filename: string, data: Uint8Array): Promise<string>;
 }
 
 export function createTerminalCommandClient(
@@ -63,7 +59,8 @@ export function createTerminalCommandClient(
       return normalizeTerminalInfo(terminal);
     },
 
-    async writeTerminal(terminalHandle: BackendTerminalHandle, data: Uint8Array): Promise<void> {
+    async writeTerminal(terminalId: number, data: Uint8Array): Promise<void> {
+      const terminalHandle = toBackendTerminalHandle(terminalId);
       const previous = writeQueues.get(terminalHandle) ?? Promise.resolve();
       const operation = previous
         .catch(() => undefined)
@@ -89,11 +86,8 @@ export function createTerminalCommandClient(
       await operation;
     },
 
-    async resizeTerminal(
-      terminalHandle: BackendTerminalHandle,
-      rows: number,
-      cols: number,
-    ): Promise<void> {
+    async resizeTerminal(terminalId: number, rows: number, cols: number): Promise<void> {
+      const terminalHandle = toBackendTerminalHandle(terminalId);
       await invokeFunction<void>("resize_terminal", {
         sessionId: terminalHandle,
         rows,
@@ -101,17 +95,19 @@ export function createTerminalCommandClient(
       });
     },
 
-    async closeTerminal(terminalHandle: BackendTerminalHandle): Promise<void> {
+    async closeTerminal(terminalId: number): Promise<void> {
+      const terminalHandle = toBackendTerminalHandle(terminalId);
       await invokeFunction<void>("close_terminal", {
         sessionId: terminalHandle,
       });
     },
 
     async uploadImageToSshTerminal(
-      terminalHandle: BackendTerminalHandle,
+      terminalId: number,
       filename: string,
       data: Uint8Array,
     ): Promise<string> {
+      const terminalHandle = toBackendTerminalHandle(terminalId);
       return invokeFunction<string>("upload_image_to_ssh_terminal", {
         sessionId: terminalHandle,
         filename,

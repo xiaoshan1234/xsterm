@@ -1,12 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
+import { toSshConfigDto } from "../../terminal-stream";
 import {
   toBackendTerminalHandle,
-  toSshConfigDto,
-  type BackendTerminalHandle,
   type TerminalInfoDto,
-} from "../../terminal-stream";
+} from "../../terminal-stream/adapterContracts";
 import type { TmuxSessionConfig } from "../../launch-config";
-import { type BackendControllerHandle, type BackendWindowHandle } from "./handles";
+import { toBackendControllerHandle, toBackendWindowHandle } from "./handles";
 import { type TmuxSessionConfigDto } from "./tauriContracts";
 
 type PaneSplitDirection = "horizontal" | "vertical";
@@ -16,25 +15,18 @@ type InvokeFunction = <Value>(command: string, args?: Record<string, unknown>) =
 export interface TmuxCommandClient {
   createTmuxSession(config: TmuxSessionConfig): Promise<TerminalInfoDto>;
   attachTmuxSession(config: TmuxSessionConfig): Promise<TerminalInfoDto>;
-  detachTmuxSession(controllerHandle: BackendControllerHandle): Promise<void>;
-  resizeTmuxWindow(
-    controllerHandle: BackendControllerHandle,
-    cols: number,
-    rows: number,
-  ): Promise<void>;
+  detachTmuxSession(controllerId: number): Promise<void>;
+  resizeTmuxWindow(controllerId: number, cols: number, rows: number): Promise<void>;
   createTmuxPane(
-    controllerHandle: BackendControllerHandle,
-    parentTerminalHandle: BackendTerminalHandle,
+    controllerId: number,
+    parentTerminalId: number,
     direction: PaneSplitDirection,
   ): Promise<TerminalInfoDto>;
-  killTmuxPane(terminalHandle: BackendTerminalHandle): Promise<void>;
-  captureTmuxPane(terminalHandle: BackendTerminalHandle, lines: number): Promise<string>;
-  createTmuxWindow(
-    controllerHandle: BackendControllerHandle,
-    name?: string,
-  ): Promise<TerminalInfoDto>;
-  killTmuxWindow(windowHandle: BackendWindowHandle): Promise<void>;
-  renameTmuxWindow(windowHandle: BackendWindowHandle, name: string): Promise<void>;
+  killTmuxPane(terminalId: number): Promise<void>;
+  captureTmuxPane(terminalId: number, lines: number): Promise<string>;
+  createTmuxWindow(controllerId: number, name?: string): Promise<TerminalInfoDto>;
+  killTmuxWindow(windowId: number): Promise<void>;
+  renameTmuxWindow(windowId: number, name: string): Promise<void>;
 }
 
 export function createTmuxCommandClient(
@@ -55,70 +47,63 @@ export function createTmuxCommandClient(
       return normalizeTerminalInfo(terminal);
     },
 
-    async detachTmuxSession(controllerHandle: BackendControllerHandle): Promise<void> {
+    async detachTmuxSession(controllerId: number): Promise<void> {
       await invokeFunction<void>("detach_tmux_session", {
-        controllerId: controllerHandle,
+        controllerId: toBackendControllerHandle(controllerId),
       });
     },
 
-    async resizeTmuxWindow(
-      controllerHandle: BackendControllerHandle,
-      cols: number,
-      rows: number,
-    ): Promise<void> {
+    async resizeTmuxWindow(controllerId: number, cols: number, rows: number): Promise<void> {
       await invokeFunction<void>("resize_tmux_window", {
-        controllerId: controllerHandle,
+        controllerId: toBackendControllerHandle(controllerId),
         cols,
         rows,
       });
     },
 
     async createTmuxPane(
-      controllerHandle: BackendControllerHandle,
-      parentTerminalHandle: BackendTerminalHandle,
+      controllerId: number,
+      parentTerminalId: number,
       direction: PaneSplitDirection,
     ): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("create_tmux_pane", {
-        controllerId: controllerHandle,
-        parentXstermSessionId: parentTerminalHandle,
+        controllerId: toBackendControllerHandle(controllerId),
+        parentXstermSessionId: toBackendTerminalHandle(parentTerminalId),
         direction,
       });
       return normalizeTerminalInfo(terminal);
     },
 
-    async killTmuxPane(terminalHandle: BackendTerminalHandle): Promise<void> {
+    async killTmuxPane(terminalId: number): Promise<void> {
       await invokeFunction<void>("kill_tmux_pane", {
-        xstermSessionId: terminalHandle,
+        xstermSessionId: toBackendTerminalHandle(terminalId),
       });
     },
 
-    async captureTmuxPane(terminalHandle: BackendTerminalHandle, lines: number): Promise<string> {
+    async captureTmuxPane(terminalId: number, lines: number): Promise<string> {
       return invokeFunction<string>("capture_tmux_pane", {
-        xstermSessionId: terminalHandle,
+        xstermSessionId: toBackendTerminalHandle(terminalId),
         lines,
       });
     },
 
-    async createTmuxWindow(
-      controllerHandle: BackendControllerHandle,
-      name?: string,
-    ): Promise<TerminalInfoDto> {
+    async createTmuxWindow(controllerId: number, name?: string): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("create_tmux_window", {
-        controllerId: controllerHandle,
+        controllerId: toBackendControllerHandle(controllerId),
         name,
       });
       return normalizeTerminalInfo(terminal);
     },
 
-    async killTmuxWindow(windowHandle: BackendWindowHandle): Promise<void> {
+    async killTmuxWindow(windowId: number): Promise<void> {
       await invokeFunction<void>("kill_tmux_window", {
-        xstermWindowId: windowHandle,
+        xstermWindowId: toBackendWindowHandle(windowId),
       });
     },
 
-    async renameTmuxWindow(windowHandle: BackendWindowHandle, name: string): Promise<void> {
+    async renameTmuxWindow(windowId: number, name: string): Promise<void> {
       await invokeFunction<void>("rename_tmux_window", {
-        xstermWindowId: windowHandle,
+        xstermWindowId: toBackendWindowHandle(windowId),
         name,
       });
     },

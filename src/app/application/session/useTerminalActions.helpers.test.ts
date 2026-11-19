@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
-import type { Terminal, TerminalDisplayConfig } from "../../../features/terminal";
+import {
+  isTmuxPaneTerminal,
+  type Terminal,
+  type TerminalDisplayConfig,
+} from "../../../features/terminal";
 import type { Window, Workspace } from "../../../features/workspace";
 import {
   assertSessionNotUsedElsewhere,
@@ -278,6 +282,8 @@ describe("buildFrontendTerminal", () => {
     };
     const terminal = buildFrontendTerminal(tmuxInfo, "cfg", "tmux-pane");
 
+    expect(isTmuxPaneTerminal(terminal)).toBe(true);
+    if (!isTmuxPaneTerminal(terminal)) return;
     expect(terminal.tmux).toEqual({ controllerId: 4, paneId: "%2", windowId: "@1" });
     expect(terminal.kind).toEqual({ type: "tmux-pane", sessionId: 4, paneId: "%2" });
   });

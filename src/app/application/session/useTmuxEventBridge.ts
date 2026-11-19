@@ -1,5 +1,5 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { Terminal } from "../../../features/terminal";
+import { isTmuxPaneTerminal, type Terminal } from "../../../features/terminal";
 import type { TmuxSessionConfig } from "../../../features/launch-config";
 import type { Workspace } from "../../../features/workspace";
 import {
@@ -20,6 +20,7 @@ import {
 } from "./tmuxEventTransitions";
 
 interface TmuxEventBridgeOptions {
+  isEnabled: boolean;
   setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   terminalsRef: MutableRefObject<Terminal[]>;
@@ -33,6 +34,7 @@ interface TmuxEventBridgeOptions {
 }
 
 export function useTmuxEventBridge({
+  isEnabled,
   setTerminals,
   setWorkspaces,
   terminalsRef,
@@ -45,6 +47,7 @@ export function useTmuxEventBridge({
   tmuxControllersClosingRef,
 }: TmuxEventBridgeOptions): void {
   useEffect(() => {
+    if (!isEnabled) return;
     let isDisposed = false;
     let cleanup: (() => void) | undefined;
 
@@ -54,7 +57,8 @@ export function useTmuxEventBridge({
           onControllerExited: ({ controllerHandle, reason }) => {
             const controllerId = Number(controllerHandle);
             const deadTerminals = terminalsRef.current.filter(
-              (terminal) => terminal.tmux?.controllerId === controllerId,
+              (terminal) =>
+                isTmuxPaneTerminal(terminal) && terminal.tmux.controllerId === controllerId,
             );
             const storedConfig = tmuxControllerConfigsRef.current.get(controllerId);
             const isIntentionalClose = tmuxControllersClosingRef.current.has(controllerId);
@@ -120,20 +124,11 @@ export function useTmuxEventBridge({
             if (existing) {
               setTerminals((terminals) =>
                 terminals.map((terminal) =>
-                  terminal.id === terminalId
+                  terminal.id === terminalId && isTmuxPaneTerminal(terminal)
                     ? {
-                        ...mergeTmuxPaneMetadata(terminal, {
-                          tmuxWindowId: parentTmuxWindowId,
-                          tmuxSessionName: sessionName,
-                          tmuxWindowName: windowName,
-                          tmuxWindowIndex: windowIndex,
-                          tmuxPaneIndex: paneIndex,
-                          tmuxPaneWidth: width,
-                          tmuxPaneHeight: height,
-                          tmuxPaneCommand: currentCommand,
-                          tmuxPaneActive: isActive,
-                        }),
+                        ...terminal,
                         tmux: {
+                          ...terminal.tmux,
                           controllerId,
                           paneId: tmuxPaneId,
                           ...(parentTmuxWindowId ? { windowId: parentTmuxWindowId } : {}),
@@ -284,7 +279,10 @@ export function useTmuxEventBridge({
           onWindowClosed: ({ backendWindowHandle, tmuxWindowId }) => {
             const xstermWindowId = Number(backendWindowHandle);
             const deadIds = terminalsRef.current
-              .filter((terminal) => terminal.tmux?.windowId === tmuxWindowId)
+              .filter(
+                (terminal) =>
+                  isTmuxPaneTerminal(terminal) && terminal.tmux.windowId === tmuxWindowId,
+              )
               .map((terminal) => terminal.id);
 
             if (deadIds.length > 0) {
@@ -309,7 +307,9 @@ export function useTmuxEventBridge({
             );
             setTerminals((terminals) =>
               terminals.map((terminal) => {
-                if (terminal.tmux?.controllerId !== controllerId) return terminal;
+                if (!isTmuxPaneTerminal(terminal) || terminal.tmux.controllerId !== controllerId) {
+                  return terminal;
+                }
                 const pane = panesByTerminalId.get(terminal.id);
                 if (!pane) return terminal;
                 return {
@@ -327,15 +327,11 @@ export function useTmuxEventBridge({
                     command: pane.currentCommand ?? terminal.tmux.command,
                     isActive: pane.isActive ?? terminal.tmux.isActive,
                   },
-                  ...(terminal.kind.type === "tmux-pane"
-                    ? {
-                        kind: {
-                          type: "tmux-pane" as const,
-                          sessionId: terminal.kind.sessionId,
-                          paneId: pane.tmuxPaneId,
-                        },
-                      }
-                    : {}),
+                  kind: {
+                    type: "tmux-pane",
+                    sessionId: terminal.kind.sessionId,
+                    paneId: pane.tmuxPaneId,
+                  },
                 };
               }),
             );
@@ -359,6 +355,7 @@ export function useTmuxEventBridge({
     };
   }, [
     establishingSessionsRef,
+    isEnabled,
     setTerminals,
     setTmuxControllerErrors,
     setWorkspaces,

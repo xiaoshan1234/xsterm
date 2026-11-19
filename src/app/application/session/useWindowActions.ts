@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { createApplicationError } from "../../../models/applicationError";
 import type { Terminal } from "../../../features/terminal";
 import type { PaneTerminalRef } from "../../../features/workspace";
 import type { EditablePaneNode } from "../../../features/workspace";
@@ -56,7 +57,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   const createWindowFromSavedConfig = useCallback(
     async (configId: string, name?: string): Promise<Window> => {
       const config = savedConfigs.find((c) => c.id === configId);
-      if (!config) throw new Error("Config not found");
+      if (!config) throw createApplicationError("not-found", "Config not found");
 
       const terminal = await createTerminalFromSavedConfig(configId);
       if (config.type === "tmux-pane") {

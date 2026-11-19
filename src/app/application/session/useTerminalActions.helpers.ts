@@ -47,28 +47,37 @@ export function buildFrontendTerminal(
   displayConfig?: TerminalDisplayConfig,
 ): Terminal {
   const now = Date.now();
-  const tmux =
-    info.kind.type === "tmux-pane"
-      ? {
-          controllerId: info.kind.sessionId,
-          paneId: info.kind.paneId,
-          ...(info.tmuxWindowId !== undefined ? { windowId: info.tmuxWindowId } : {}),
-          ...(info.tmuxSessionName !== undefined ? { sessionName: info.tmuxSessionName } : {}),
-        }
-      : undefined;
-  return {
+  const common = {
     id: info.id,
     configId,
     name: info.name,
-    type: info.kind.type,
     isConnected: info.isConnected,
-    kind: info.kind,
     displayConfig,
     createdAt: now,
     lastActivityAt: now,
-    ...(tmux ? { tmux } : {}),
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),
     ...(info.capabilities !== undefined ? { capabilities: info.capabilities } : {}),
+  };
+
+  if (info.kind.type === "local") {
+    return { ...common, type: "local", kind: info.kind };
+  }
+  if (info.kind.type === "ssh") {
+    return { ...common, type: "ssh", kind: info.kind };
+  }
+  if (info.kind.type === "wsl") {
+    return { ...common, type: "wsl", kind: info.kind };
+  }
+  return {
+    ...common,
+    type: "tmux-pane",
+    kind: info.kind,
+    tmux: {
+      controllerId: info.kind.sessionId,
+      paneId: info.kind.paneId,
+      ...(info.tmuxWindowId !== undefined ? { windowId: info.tmuxWindowId } : {}),
+      ...(info.tmuxSessionName !== undefined ? { sessionName: info.tmuxSessionName } : {}),
+    },
   };
 }
 

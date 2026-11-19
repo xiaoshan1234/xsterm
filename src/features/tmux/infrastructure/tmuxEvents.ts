@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { toBackendTerminalHandle } from "../../terminal-stream";
+import { toBackendTerminalHandle } from "../../terminal-stream/adapterContracts";
 import { toBackendControllerHandle, toBackendWindowHandle } from "./handles";
 import {
   type TmuxControllerExitedEvent,

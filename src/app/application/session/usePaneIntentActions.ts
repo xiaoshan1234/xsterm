@@ -1,6 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { createApplicationError } from "../../../models/applicationError";
-import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
+import {
+  isTmuxPaneTerminal,
+  type LocalTerminalConfig,
+  type SshConfig,
+  type Terminal,
+} from "../../../features/terminal";
 import { tmuxWindowActions } from "../../../features/tmux";
 import {
   findPaneNode,
@@ -78,7 +83,7 @@ export function usePaneIntentActions({
       const window = workspace?.windows.find((candidate) => candidate.id === windowId);
       const pane = window ? findPaneNode(window.rootPane, paneId) : null;
       if (!pane || pane.type !== "leaf") {
-        throw new Error("Pane not found");
+        throw createApplicationError("not-found", "Pane not found");
       }
 
       const terminal = state.terminals.find((candidate) => candidate.id === terminalId);
@@ -178,7 +183,7 @@ export function usePaneIntentActions({
         );
       }
       const terminal = state.terminals.find((candidate) => candidate.id === terminalId);
-      if (!terminal) throw new Error("Terminal not found");
+      if (!terminal) throw createApplicationError("not-found", "Terminal not found");
       actions.replaceInitWindowWithTerminal(workspaceId, windowId, terminal);
     },
     [actions, state.terminals, state.workspaces],
@@ -291,11 +296,10 @@ export function usePaneIntentActions({
   const createTmuxWindow = useCallback(
     async (terminalId: number) => {
       const terminal = state.terminals.find((candidate) => candidate.id === terminalId);
-      const controllerId = terminal?.tmux?.controllerId;
-      if (controllerId === undefined) {
-        throw new Error("Tmux controller not found");
+      if (!terminal || !isTmuxPaneTerminal(terminal)) {
+        throw createApplicationError("not-found", "Tmux controller not found");
       }
-      await tmuxWindowActions.createWindow(controllerId);
+      await tmuxWindowActions.createWindow(terminal.tmux.controllerId);
     },
     [state.terminals],
   );

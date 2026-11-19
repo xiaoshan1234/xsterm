@@ -3,7 +3,7 @@ import {
   toBackendTerminalHandle,
   type BackendTerminalHandle,
   type TerminalInfoDto,
-} from "../../terminal-stream";
+} from "../../terminal-stream/adapterContracts";
 import type { TmuxSessionConfig } from "../../launch-config";
 import { toBackendControllerHandle, toBackendWindowHandle } from "./handles";
 import { createTmuxCommandClient } from "./tmuxCommands";
