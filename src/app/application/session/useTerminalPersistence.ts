@@ -14,7 +14,7 @@ import {
 } from "../../../features/workspace";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../features/launch-config";
 import type { SavedWindowConfig, SavedWorkspace } from "../../../features/workspace";
-import { type SessionPersistence } from "./types";
+import type { SessionPersistence, SessionPersistenceSaveError } from "./types";
 
 interface UseSessionPersistenceOptions {
   setSavedConfigs: (
@@ -57,7 +57,25 @@ export function useTerminalPersistence({
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<SessionPersistenceSaveError | null>(null);
   const skipInitialSettingsPersistRef = useRef(true);
+  const reportSaveError = useCallback(
+    (source: SessionPersistenceSaveError["source"], operation: string, cause: unknown) => {
+      console.error(`Failed to ${operation}:`, cause);
+      setSaveError({
+        source,
+        operation,
+        message: cause instanceof Error ? cause.message : String(cause),
+      });
+    },
+    [],
+  );
+  const reportLaunchConfigSaveError = useCallback(
+    (operation: string, cause: unknown) => {
+      reportSaveError("launch-config", operation, cause);
+    },
+    [reportSaveError],
+  );
   const launchConfigPersistence = useLaunchConfigPersistence({
     setSavedConfigs,
     setGroups,
@@ -66,24 +84,25 @@ export function useTerminalPersistence({
     groups,
     nextGroupId,
     repository: launchRepository,
+    onSaveError: reportLaunchConfigSaveError,
   });
 
   const persistSavedWorkspaces = useCallback(
     (workspacesData: SavedWorkspace[]) => {
       void workspaceRepo.persistWorkspaces(workspacesData).catch((cause) => {
-        console.error("Failed to persist workspaces:", cause);
+        reportSaveError("workspace", "save workspace snapshots", cause);
       });
     },
-    [workspaceRepo],
+    [reportSaveError, workspaceRepo],
   );
 
   const persistSavedWindowConfigs = useCallback(
     (configs: SavedWindowConfig[]) => {
       void workspaceRepo.persistWindowConfigs(configs).catch((cause) => {
-        console.error("Failed to persist window configs:", cause);
+        reportSaveError("workspace", "save window configurations", cause);
       });
     },
-    [workspaceRepo],
+    [reportSaveError, workspaceRepo],
   );
 
   useEffect(() => {
@@ -147,19 +166,27 @@ export function useTerminalPersistence({
           await settingsRepo.persistGlobalLocalEcho(globalLocalEcho);
         }
       } catch (e) {
-        console.error("Failed to save global settings:", e);
+        if (!cancelled) {
+          reportSaveError("settings", "save terminal preferences", e);
+        }
       }
     };
     persist();
     return () => {
       cancelled = true;
     };
-  }, [globalLocalEcho, isSettingsLoaded, settingsRepo]);
+  }, [globalLocalEcho, isSettingsLoaded, reportSaveError, settingsRepo]);
+
+  const clearSaveError = useCallback(() => {
+    setSaveError(null);
+  }, []);
 
   return {
     ...launchConfigPersistence,
     isLoaded: launchConfigPersistence.isLoaded && isWorkspaceDataLoaded && isSettingsLoaded,
     error: launchConfigPersistence.error ?? workspaceError ?? settingsError,
+    saveError,
+    clearSaveError,
     persistSavedWorkspaces,
     persistSavedWindowConfigs,
   };

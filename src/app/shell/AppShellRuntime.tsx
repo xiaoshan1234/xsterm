@@ -18,9 +18,22 @@ import { RuntimeNavBarContainer } from "./RuntimeNavBarContainer";
 import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
 import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
+import { useSessionPersistenceStatus } from "../application/session";
+
+function persistenceErrorTitle(source: "launch-config" | "workspace" | "settings"): string {
+  switch (source) {
+    case "launch-config":
+      return "Unable to save terminal configuration";
+    case "workspace":
+      return "Unable to save workspace configuration";
+    case "settings":
+      return "Unable to save terminal preferences";
+  }
+}
 
 export function AppShellRuntime() {
   const shellModel = useRuntimeShellModel();
+  const { saveError, clearSaveError } = useSessionPersistenceStatus();
   const { terminalRuntime, workspaceLayout, activeWorkspace, runtimeStatus, paneTargetOptions } =
     shellModel;
   const { writeTerminal } = terminalRuntime;
@@ -72,6 +85,15 @@ export function AppShellRuntime() {
       details: cause instanceof Error ? cause.stack : undefined,
     });
   }, []);
+
+  useEffect(() => {
+    if (!saveError || error !== null) return;
+    setError({
+      title: persistenceErrorTitle(saveError.source),
+      message: saveError.message,
+    });
+    clearSaveError();
+  }, [clearSaveError, error, saveError]);
 
   const { targets: textSenderTargets, sendText: sendTextToTarget } = useRuntimeTextSender({
     paneTargetOptions,

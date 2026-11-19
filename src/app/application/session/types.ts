@@ -35,8 +35,16 @@ export interface SessionState {
 export interface SessionPersistence {
   isLoaded: boolean;
   error: string | null;
+  saveError: SessionPersistenceSaveError | null;
+  clearSaveError: () => void;
   updateConfigs: (updater: (prev: SavedTerminalConfig[]) => SavedTerminalConfig[]) => void;
   updateGroups: (updater: (prev: TerminalGroup[]) => TerminalGroup[], nextId?: number) => void;
   persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
   persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
+}
+
+export interface SessionPersistenceSaveError {
+  source: "launch-config" | "workspace" | "settings";
+  operation: string;
+  message: string;
 }

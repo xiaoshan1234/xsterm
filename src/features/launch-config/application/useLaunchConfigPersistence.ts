@@ -16,6 +16,7 @@ interface UseLaunchConfigPersistenceOptions {
   groups: TerminalGroup[];
   nextGroupId: number;
   repository?: LaunchConfigRepository;
+  onSaveError?: (operation: string, cause: unknown) => void;
 }
 
 export interface LaunchConfigPersistenceActions {
@@ -33,6 +34,7 @@ export function useLaunchConfigPersistence({
   groups,
   nextGroupId,
   repository = launchConfigRepository,
+  onSaveError,
 }: UseLaunchConfigPersistenceOptions): LaunchConfigPersistenceActions {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,9 +65,13 @@ export function useLaunchConfigPersistence({
       return;
     }
     void repository.persistConfigs(savedConfigs).catch((cause) => {
-      console.error("Failed to persist launch configs:", cause);
+      if (onSaveError) {
+        onSaveError("save terminal configurations", cause);
+      } else {
+        console.error("Failed to persist launch configs:", cause);
+      }
     });
-  }, [isLoaded, repository, savedConfigs]);
+  }, [isLoaded, onSaveError, repository, savedConfigs]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -74,9 +80,13 @@ export function useLaunchConfigPersistence({
       return;
     }
     void repository.persistGroups({ groups, nextGroupId }).catch((cause) => {
-      console.error("Failed to persist launch config groups:", cause);
+      if (onSaveError) {
+        onSaveError("save terminal groups", cause);
+      } else {
+        console.error("Failed to persist launch config groups:", cause);
+      }
     });
-  }, [groups, isLoaded, nextGroupId, repository]);
+  }, [groups, isLoaded, nextGroupId, onSaveError, repository]);
 
   useEffect(() => {
     let isCancelled = false;

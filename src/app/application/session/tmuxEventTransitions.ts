@@ -33,6 +33,8 @@ export interface TmuxPaneSessionInfo {
 }
 
 export interface TmuxPaneMetadata {
+  controllerId?: number;
+  paneId?: string;
   tmuxWindowId?: string;
   tmuxSessionName?: string;
   tmuxWindowName?: string;
@@ -80,10 +82,19 @@ export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): TmuxPaneTermina
 
 export function mergeTmuxPaneMetadata(terminal: Terminal, metadata: TmuxPaneMetadata): Terminal {
   if (!isTmuxPaneTerminal(terminal)) return terminal;
+  const controllerId = metadata.controllerId ?? terminal.tmux.controllerId;
+  const paneId = metadata.paneId ?? terminal.tmux.paneId;
   return {
     ...terminal,
+    kind: {
+      type: "tmux-pane",
+      sessionId: controllerId,
+      paneId,
+    },
     tmux: {
       ...terminal.tmux,
+      controllerId,
+      paneId,
       ...(metadata.tmuxWindowId ? { windowId: metadata.tmuxWindowId } : {}),
       ...(metadata.tmuxSessionName ? { sessionName: metadata.tmuxSessionName } : {}),
       ...(metadata.tmuxWindowName ? { windowName: metadata.tmuxWindowName } : {}),

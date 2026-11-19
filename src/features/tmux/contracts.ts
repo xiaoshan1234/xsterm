@@ -9,6 +9,9 @@ export interface TmuxRuntimeContextType {
   attachTmuxSession: (config: TmuxSessionConfig, save?: boolean) => Promise<Terminal>;
   detachTmuxSession: (controllerId: number) => Promise<void>;
   reconnectTmuxSession: (controllerId: number) => Promise<Terminal>;
+  createTmuxWindow: (controllerId: number) => Promise<void>;
+  killTmuxWindow: (xstermWindowId: number) => Promise<void>;
+  renameTmuxWindow: (xstermWindowId: number, name: string) => Promise<void>;
   resizeTmuxWindow: (controllerId: number, cols: number, rows: number) => Promise<void>;
   dismissTmuxControllerError: (controllerId: number) => void;
 }

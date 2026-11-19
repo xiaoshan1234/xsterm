@@ -2,10 +2,15 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { LaunchConfigProvider } from "../../../features/launch-config";
 import { SessionPreferencesProvider } from "../../../features/settings";
 import { TerminalRuntimeProvider } from "../../../features/terminal";
-import { PaneIntentProvider, WorkspaceProvider } from "../../../features/workspace";
+import {
+  PaneIntentProvider,
+  PaneSessionIntentProvider,
+  WorkspaceProvider,
+} from "../../../features/workspace";
 import {
   TmuxRuntimeProvider,
   tmuxControllerActions,
+  tmuxWindowActions,
   type TmuxRuntimeContextType,
 } from "../../../features/tmux";
 import {
@@ -19,7 +24,12 @@ import { useTerminalPersistence } from "./useTerminalPersistence";
 import { useTerminalActions } from "./useTerminalActions";
 import { useTauriListeners } from "./useTauriListeners";
 import { usePaneIntentActions } from "./usePaneIntentActions";
+import { usePaneSessionIntentActions } from "./usePaneSessionIntentActions";
 import { SessionBootstrapScreen } from "../../SessionBootstrapScreen";
+import {
+  SessionPersistenceStatusProvider,
+  type SessionPersistenceStatus,
+} from "./SessionPersistenceStatusContext";
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const state = useSessionState();
@@ -43,10 +53,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     actions,
   });
+  const paneSessionIntents = usePaneSessionIntentActions({
+    actions,
+    workspaceIntents: paneIntents,
+  });
   useTauriListeners(state, persistence.isLoaded);
   const getTerminalSize = useCallback(
     (terminalId: number) => state.terminal.terminalSizesRef.current.get(terminalId),
     [state.terminal.terminalSizesRef],
+  );
+  const persistenceStatus = useMemo<SessionPersistenceStatus>(
+    () => ({
+      saveError: persistence.saveError,
+      clearSaveError: persistence.clearSaveError,
+    }),
+    [persistence.clearSaveError, persistence.saveError],
   );
 
   const preferences = useMemo<SessionPreferencesContextType>(
@@ -137,6 +158,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       attachTmuxSession: actions.attachTmuxSession,
       detachTmuxSession: actions.detachTmuxSession,
       reconnectTmuxSession: actions.reconnectTmuxSession,
+      createTmuxWindow: tmuxWindowActions.createWindow,
+      killTmuxWindow: tmuxWindowActions.killWindow,
+      renameTmuxWindow: tmuxWindowActions.renameWindow,
       resizeTmuxWindow: tmuxControllerActions.resizeWindow,
       dismissTmuxControllerError: actions.dismissTmuxControllerError,
     }),
@@ -225,16 +249,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SessionPreferencesProvider value={preferences}>
-      <LaunchConfigProvider value={savedLaunchConfigs}>
-        <TerminalRuntimeProvider value={terminalRuntime}>
-          <TmuxRuntimeProvider value={tmuxRuntime}>
-            <WorkspaceProvider value={workspaceLayout}>
-              <PaneIntentProvider value={paneIntents}>{children}</PaneIntentProvider>
-            </WorkspaceProvider>
-          </TmuxRuntimeProvider>
-        </TerminalRuntimeProvider>
-      </LaunchConfigProvider>
-    </SessionPreferencesProvider>
+    <SessionPersistenceStatusProvider value={persistenceStatus}>
+      <SessionPreferencesProvider value={preferences}>
+        <LaunchConfigProvider value={savedLaunchConfigs}>
+          <TerminalRuntimeProvider value={terminalRuntime}>
+            <TmuxRuntimeProvider value={tmuxRuntime}>
+              <WorkspaceProvider value={workspaceLayout}>
+                <PaneIntentProvider value={paneIntents}>
+                  <PaneSessionIntentProvider value={paneSessionIntents}>
+                    {children}
+                  </PaneSessionIntentProvider>
+                </PaneIntentProvider>
+              </WorkspaceProvider>
+            </TmuxRuntimeProvider>
+          </TerminalRuntimeProvider>
+        </LaunchConfigProvider>
+      </SessionPreferencesProvider>
+    </SessionPersistenceStatusProvider>
   );
 }

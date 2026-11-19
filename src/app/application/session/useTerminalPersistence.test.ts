@@ -46,7 +46,12 @@ function createOptions() {
 
 describe("useTerminalPersistence", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mocks.loadGlobalLocalEcho.mockReset().mockResolvedValue(false);
+    mocks.persistGlobalLocalEcho.mockReset().mockResolvedValue(undefined);
+    mocks.loadSavedWorkspaces.mockReset().mockResolvedValue([]);
+    mocks.loadSavedWindowConfigs.mockReset().mockResolvedValue([]);
+    mocks.persistWorkspaces.mockReset().mockResolvedValue(undefined);
+    mocks.persistWindowConfigs.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -87,5 +92,30 @@ describe("useTerminalPersistence", () => {
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
     expect(result.current.error).toBe("settings unavailable");
     expect(mocks.persistGlobalLocalEcho).not.toHaveBeenCalled();
+  });
+
+  it("surfaces workspace save failures and allows the error to be dismissed", async () => {
+    mocks.persistWorkspaces.mockRejectedValueOnce(new Error("disk full"));
+    const options = createOptions();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { result } = renderHook(() => useTerminalPersistence(options));
+
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    act(() => {
+      result.current.persistSavedWorkspaces([]);
+    });
+
+    await waitFor(() =>
+      expect(result.current.saveError).toEqual({
+        source: "workspace",
+        operation: "save workspace snapshots",
+        message: "disk full",
+      }),
+    );
+
+    act(() => {
+      result.current.clearSaveError();
+    });
+    expect(result.current.saveError).toBeNull();
   });
 });

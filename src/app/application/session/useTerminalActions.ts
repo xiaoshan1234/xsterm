@@ -1,26 +1,14 @@
 import { useCallback } from "react";
-import { createApplicationError } from "../../../models/applicationError";
-import { isTmuxPaneTerminal, terminalSessionActions } from "../../../features/terminal";
-import { tmuxControllerActions, tmuxWindowActions } from "../../../features/tmux";
-import type { LocalTerminalConfig, SshConfig, Terminal } from "../../../features/terminal";
-import type { TmuxSessionConfig } from "../../../features/launch-config";
-import type { Window, Workspace } from "../../../features/workspace";
-import {
-  assertSessionNotUsedElsewhere,
-  createLeafPane,
-  forEachPane,
-  generateId,
-  getUniqueWindowName,
-  withRecomputedSessionIds,
-} from "../../../features/workspace";
-import { usePersistenceActions } from "../../../features/workspace";
-import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.helpers";
+import { terminalSessionActions } from "../../../features/terminal";
+import { tmuxWindowActions } from "../../../features/tmux";
 import { useGroupActions } from "../../../features/launch-config";
+import { usePersistenceActions } from "../../../features/workspace";
+import { type SessionPersistence, type SessionState } from "./types";
 import { usePaneActions } from "./usePaneActions";
-import { useTerminalStreamActions } from "./useTerminalStreamActions";
+import { useSavedConfigTerminalOpen } from "./useSavedConfigTerminalOpen";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
-import type { SessionPersistence, SessionState } from "./types";
-import { findOpenTmuxControllerId, tmuxSessionKey } from "../../../features/tmux";
+import { useTerminalStreamActions } from "./useTerminalStreamActions";
+import { useTerminalWorkspaceAttachmentActions } from "./useTerminalWorkspaceAttachmentActions";
 import { useWindowActions } from "./useWindowActions";
 import { useWorkspaceActions } from "./useWorkspaceActions";
 
@@ -30,9 +18,9 @@ interface UseSessionCoordinatorOptions {
 }
 
 /**
- * Composes the session command surface from concern-focused hooks.
- * Each sub-hook owns one slice; this entry point only adds the shared
- * primitives consumed by multiple concerns.
+ * Composes concern-focused session hooks. Cross-aggregate use cases live in
+ * dedicated hooks; this function only wires their state, persistence, and
+ * event-facing contracts together.
  */
 export function useTerminalActions({
   state,
@@ -61,216 +49,25 @@ export function useTerminalActions({
   const { updateConfigs, updateGroups, persistSavedWorkspaces, persistSavedWindowConfigs } =
     sessionPersistence;
 
-  const focusTerminal = useCallback(
-    (terminalId: number) => {
-      let target: { workspaceId: string; windowId: string; paneId: string } | undefined;
-      for (const workspace of workspacesRef.current) {
-        for (const window of workspace.windows) {
-          forEachPane(window.rootPane, (pane) => {
-            if (!target && pane.type === "leaf" && pane.terminalId === terminalId) {
-              target = {
-                workspaceId: workspace.id,
-                windowId: window.id,
-                paneId: pane.id,
-              };
-            }
-          });
-          if (target) break;
-        }
-        if (target) break;
-      }
-      if (!target) return;
-
-      setWorkspaces((previous) =>
-        previous.map((workspace) =>
-          workspace.id === target?.workspaceId
-            ? {
-                ...workspace,
-                activeWindowId: target.windowId,
-                windows: workspace.windows.map((window) =>
-                  window.id === target?.windowId
-                    ? { ...window, activePaneId: target.paneId }
-                    : window,
-                ),
-              }
-            : workspace,
-        ),
-      );
-      setActiveWorkspaceId(target.workspaceId);
-    },
-    [setActiveWorkspaceId, setWorkspaces, workspacesRef],
-  );
-
-  const openFromConfigInternal = useCallback(
-    async (configId: string): Promise<Terminal> => {
-      const config = savedConfigs.find((c) => c.id === configId);
-      if (!config) throw createApplicationError("not-found", "Config not found");
-
-      if (config.type === "tmux-pane") {
-        const tmuxConfig = config.config as TmuxSessionConfig;
-        const openControllerId = findOpenTmuxControllerId(
-          tmuxConfig,
-          savedConfigs,
-          tmuxControllerConfigIdsRef.current,
-          tmuxControllerConfigsRef.current,
-          terminalsRef.current,
-        );
-        if (openControllerId !== undefined) {
-          const existing = terminalsRef.current.find(
-            (terminal) =>
-              isTmuxPaneTerminal(terminal) && terminal.tmux.controllerId === openControllerId,
-          );
-          if (existing) {
-            focusTerminal(existing.id);
-            return existing;
-          }
-        }
-        const sessionKey = tmuxSessionKey(tmuxConfig);
-        if (pendingTmuxSessionKeysRef.current.has(sessionKey)) {
-          throw createApplicationError(
-            "operation-in-progress",
-            "This tmux session is already opening.",
-          );
-        }
-        pendingTmuxSessionKeysRef.current.add(sessionKey);
-        // Attach is event-driven: `attach_tmux_session` emits the
-        // `tmux-window-added` / `tmux-pane-added` events that create the
-        // real windows and terminals. Return a representative Terminal for
-        // the caller without adding it to state.
-        try {
-          const info = await tmuxControllerActions.attachSession(tmuxConfig);
-          const terminal = buildFrontendTerminal(info, configId, "tmux-pane", config.displayConfig);
-          const controllerId = isTmuxPaneTerminal(terminal)
-            ? terminal.tmux.controllerId
-            : undefined;
-          if (controllerId !== undefined) {
-            tmuxControllerConfigsRef.current.set(controllerId, tmuxConfig);
-            tmuxControllerConfigIdsRef.current.set(controllerId, configId);
-            syncOpenTmuxSessions();
-            setSessions((previous) =>
-              previous.map((session) =>
-                isTmuxPaneTerminal(session) && session.tmux.controllerId === controllerId
-                  ? { ...session, configId, displayConfig: config.displayConfig }
-                  : session,
-              ),
-            );
-          }
-          return terminal;
-        } finally {
-          pendingTmuxSessionKeysRef.current.delete(sessionKey);
-        }
-      }
-
-      const info = await dispatchByType(
-        config.type,
-        () =>
-          terminalSessionActions.createLocal(
-            config.config as LocalTerminalConfig,
-            config.displayConfig?.logging,
-          ),
-        () =>
-          terminalSessionActions.createSsh(
-            config.config as SshConfig,
-            config.displayConfig?.logging,
-          ),
-        () => tmuxControllerActions.attachSession(config.config as TmuxSessionConfig),
-      );
-      const terminal = buildFrontendTerminal(info, configId, config.type, config.displayConfig);
-      setSessions((prev) => [...prev, terminal]);
-      return terminal;
-    },
-    [
-      focusTerminal,
-      savedConfigs,
-      setSessions,
+  const createTerminalFromSavedConfig = useSavedConfigTerminalOpen({
+    savedConfigs,
+    terminalsRef,
+    workspacesRef,
+    setTerminals: setSessions,
+    setWorkspaces,
+    setActiveWorkspaceId,
+    tmuxControllerConfigsRef,
+    tmuxControllerConfigIdsRef,
+    pendingTmuxSessionKeysRef,
+    syncOpenTmuxSessions,
+  });
+  const { createWindowFromSession, createWorkspaceFromSession } =
+    useTerminalWorkspaceAttachmentActions({
       terminalsRef,
-      pendingTmuxSessionKeysRef,
-      tmuxControllerConfigsRef,
-      tmuxControllerConfigIdsRef,
-      syncOpenTmuxSessions,
-    ],
-  );
-
-  const createTerminalFromSavedConfig = useCallback(
-    async (configId: string): Promise<Terminal> => openFromConfigInternal(configId),
-    [openFromConfigInternal],
-  );
-
-  const createWindowFromSession = useCallback(
-    (
-      terminalId: number,
-      configId: string,
-      name?: string,
-      targetWorkspaceIdParam?: string,
-    ): Window => {
-      assertSessionNotUsedElsewhere(workspacesRef.current, null, null, terminalId);
-      const rootPane = createLeafPane(100, terminalId, configId);
-      const baseName = name ?? "Window";
-      const window: Window = {
-        id: generateId(),
-        name: baseName,
-        rootPane,
-        activePaneId: rootPane.id,
-      };
-
-      setWorkspaces((prev) => {
-        const fallbackWorkspaceId = workspacesRef.current[0]?.id ?? prev[0]?.id ?? null;
-        const targetWorkspaceId = targetWorkspaceIdParam ?? fallbackWorkspaceId;
-        const workspaceExists = targetWorkspaceId && prev.some((w) => w.id === targetWorkspaceId);
-        if (prev.length === 0 || !targetWorkspaceId || !workspaceExists) {
-          const uniqueName = getUniqueWindowName(prev, "", baseName);
-          const finalWindow: Window = { ...window, name: uniqueName };
-          const workspace: Workspace = {
-            id: generateId(),
-            name: "default",
-            windows: [finalWindow],
-            activeWindowId: finalWindow.id,
-            terminalIds: [terminalId],
-          };
-          setActiveWorkspaceId(workspace.id);
-          return [workspace];
-        }
-        const uniqueName = getUniqueWindowName(prev, targetWorkspaceId, baseName);
-        const finalWindow: Window = { ...window, name: uniqueName };
-        return prev.map((workspace) =>
-          workspace.id === targetWorkspaceId
-            ? withRecomputedSessionIds({
-                ...workspace,
-                windows: [...workspace.windows, finalWindow],
-                activeWindowId: finalWindow.id,
-              })
-            : workspace,
-        );
-      });
-      return window;
-    },
-    [setWorkspaces, setActiveWorkspaceId, workspacesRef],
-  );
-
-  const createWorkspaceFromSession = useCallback(
-    (terminalId: number, configId: string, name?: string): Workspace => {
-      const terminal = terminalsRef.current.find((s) => s.id === terminalId);
-      const windowName = name ?? terminal?.name ?? "Window";
-      const rootPane = createLeafPane(100, terminalId, configId);
-      const window: Window = {
-        id: generateId(),
-        name: windowName,
-        rootPane,
-        activePaneId: rootPane.id,
-      };
-      const workspace: Workspace = {
-        id: generateId(),
-        name: name ?? terminal?.name ?? "Workspace",
-        windows: [window],
-        activeWindowId: window.id,
-        terminalIds: [terminalId],
-      };
-      setWorkspaces((prev) => [...prev, workspace]);
-      setActiveWorkspaceId(workspace.id);
-      return workspace;
-    },
-    [terminalsRef, setWorkspaces, setActiveWorkspaceId],
-  );
+      workspacesRef,
+      setWorkspaces,
+      setActiveWorkspaceId,
+    });
 
   const lifecycle = useTerminalLifecycle({
     savedConfigs,
@@ -286,7 +83,7 @@ export function useTerminalActions({
     syncOpenTmuxSessions,
     pendingTmuxSessionKeysRef,
     tmuxControllersClosingRef,
-    openFromConfigInternal,
+    openFromConfigInternal: createTerminalFromSavedConfig,
     createWindowFromSession,
   });
 
@@ -336,7 +133,7 @@ export function useTerminalActions({
     establishingSessionsRef,
     persistSavedWorkspaces,
     persistSavedWindowConfigs,
-    openFromConfigInternal,
+    openFromConfigInternal: createTerminalFromSavedConfig,
     closeTerminal: terminalSessionActions.closeTerminal,
   });
 
@@ -349,8 +146,8 @@ export function useTerminalActions({
 
   const dismissTmuxControllerError = useCallback(
     (controllerId: number) => {
-      setTmuxControllerErrors((prev) => {
-        const next = new Map(prev);
+      setTmuxControllerErrors((previous) => {
+        const next = new Map(previous);
         next.delete(controllerId);
         return next;
       });

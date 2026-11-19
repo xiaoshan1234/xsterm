@@ -73,6 +73,7 @@ export {
   type CreateSshTerminalForWindowRequest,
   type EditablePaneNode,
   type PaneIntentActions,
+  type PaneSessionIntentActions,
   type PaneSplitDirection,
   type PaneTarget,
   type PaneTerminalRef,
@@ -86,3 +87,4 @@ export {
 } from "./contracts";
 export { WorkspaceProvider, useWorkspaceLayout } from "./state/WorkspaceContext";
 export { PaneIntentProvider, usePaneIntents } from "./state/PaneIntentContext";
+export { PaneSessionIntentProvider, usePaneSessionIntents } from "./state/PaneSessionIntentContext";

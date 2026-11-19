@@ -2,13 +2,14 @@ import { useCallback, useRef, useState } from "react";
 import type { EditablePaneNode, PaneSplitDirection } from "../contracts";
 import type { Workspace } from "../contracts";
 import { isApplicationError } from "../../../models/applicationError";
-import { isTmuxPaneTerminal } from "../../terminal";
-import { useTerminalRuntime } from "../../terminal";
+import { isTmuxPaneTerminal, useTerminalRuntime } from "../../terminal";
+import { useTmuxRuntime } from "../../tmux";
 import { getPaneNumber } from "../application/paneTreeOperations";
 import { useTheme } from "../../../shared/theme/ThemeContext";
 import { Terminal, TmuxControllerErrorBanner, type TerminalRef } from "../../terminal-surface";
 import { ContextMenu, type ContextMenuRef } from "../../../shared/ui/ContextMenu";
 import { usePaneIntents } from "../state/PaneIntentContext";
+import { usePaneSessionIntents } from "../state/PaneSessionIntentContext";
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
 import { SelectTerminalDialog } from "./dialogs/SelectTerminalDialog";
@@ -34,7 +35,9 @@ export function Pane({
   onActivate,
 }: PaneProps) {
   const { terminals } = useTerminalRuntime();
+  const tmuxRuntime = useTmuxRuntime();
   const paneIntents = usePaneIntents();
+  const paneSessionIntents = usePaneSessionIntents();
   const { currentTheme } = useTheme();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
@@ -162,7 +165,7 @@ export function Pane({
       if (!startSubmitting()) return;
       try {
         if (dialogMode === "split" && pendingSplit) {
-          await paneIntents.splitPaneWithSavedConfig({
+          await paneSessionIntents.splitPaneWithSavedConfig({
             workspaceId: workspace.id,
             windowId,
             paneId: pane.id,
@@ -170,7 +173,7 @@ export function Pane({
             configId,
           });
         } else if (dialogMode === "attach") {
-          await paneIntents.attachSavedConfigToPane({
+          await paneSessionIntents.attachSavedConfigToPane({
             workspaceId: workspace.id,
             windowId,
             paneId: pane.id,
@@ -190,7 +193,7 @@ export function Pane({
         endSubmitting();
       }
     },
-    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, paneIntents],
+    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, paneSessionIntents],
   );
 
   const handleCloseSession = useCallback(() => {
@@ -242,23 +245,23 @@ export function Pane({
   const handleCreateTmuxWindow = useCallback(async () => {
     if (!terminal || !isTmuxPaneTerminal(terminal)) return;
     try {
-      await paneIntents.createTmuxWindow(terminal.id);
+      await tmuxRuntime.createTmuxWindow(terminal.tmux.controllerId);
     } catch (e) {
       console.error("Failed to create tmux window:", e);
       window.alert(`Failed to create Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [paneIntents, terminal]);
+  }, [terminal, tmuxRuntime]);
 
   const handleKillTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
     if (xid === undefined) return;
     try {
-      await paneIntents.killTmuxWindow(xid);
+      await tmuxRuntime.killTmuxWindow(xid);
     } catch (e) {
       console.error("Failed to kill tmux window:", e);
       window.alert(`Failed to kill Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [paneIntents, selectedWindow?.xstermWindowId]);
+  }, [selectedWindow?.xstermWindowId, tmuxRuntime]);
 
   const handleRenameTmuxWindow = useCallback(async () => {
     const xid = selectedWindow?.xstermWindowId;
@@ -266,12 +269,12 @@ export function Pane({
     const name = window.prompt("Rename Tmux window:");
     if (name === null || name.trim() === "") return;
     try {
-      await paneIntents.renameTmuxWindow(xid, name.trim());
+      await tmuxRuntime.renameTmuxWindow(xid, name.trim());
     } catch (e) {
       console.error("Failed to rename tmux window:", e);
       window.alert(`Failed to rename Tmux window: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [paneIntents, selectedWindow?.xstermWindowId]);
+  }, [selectedWindow?.xstermWindowId, tmuxRuntime]);
 
   const contextMenuItems = buildPaneContextMenu(
     terminal,
@@ -335,7 +338,7 @@ export function Pane({
             <PaneInitCard
               onAttachExistingTerminal={attachTerminalToPane}
               onCreateLocal={(config, save) =>
-                paneIntents.createLocalTerminalForPane({
+                paneSessionIntents.createLocalTerminalForPane({
                   workspaceId: workspace.id,
                   windowId,
                   paneId: pane.id,
@@ -344,7 +347,7 @@ export function Pane({
                 })
               }
               onCreateSsh={(config, save) =>
-                paneIntents.createSshTerminalForPane({
+                paneSessionIntents.createSshTerminalForPane({
                   workspaceId: workspace.id,
                   windowId,
                   paneId: pane.id,
@@ -353,7 +356,7 @@ export function Pane({
                 })
               }
               onCreateFromSavedConfig={(configId) =>
-                paneIntents.attachSavedConfigToPane({
+                paneSessionIntents.attachSavedConfigToPane({
                   workspaceId: workspace.id,
                   windowId,
                   paneId: pane.id,

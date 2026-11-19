@@ -186,6 +186,20 @@ describe("architecture boundaries", () => {
     );
   });
 
+  it("keeps tmux window commands out of the workspace pane-intent contract", () => {
+    const contract = sourceFiles["/src/features/workspace/contracts/paneIntents.ts"] ?? "";
+    expect(contract).not.toMatch(/\btmux\b/i);
+  });
+
+  it("keeps terminal creation out of the workspace pane-intent contract", () => {
+    const contract = sourceFiles["/src/features/workspace/contracts/paneIntents.ts"] ?? "";
+    expect(contract).not.toMatch(/launch-config|SavedConfig|create(?:Local|Ssh)Terminal/);
+
+    const sessionContract =
+      sourceFiles["/src/features/workspace/contracts/paneSessionIntents.ts"] ?? "";
+    expect(sessionContract).toMatch(/interface PaneSessionIntentActions/);
+  });
+
   it("does not reintroduce a public aggregate session action type", () => {
     const violations = Object.entries(sourceFiles)
       .filter(([, source]) => /\bSessionActions\b/.test(source))
@@ -208,6 +222,11 @@ describe("architecture boundaries", () => {
         .map((symbol) => `${path}: ${symbol}`);
     });
     expect(violations).toEqual([]);
+  });
+
+  it("keeps the tmux event bridge limited to subscription lifecycle", () => {
+    const source = sourceFiles["/src/app/application/session/useTmuxEventBridge.ts"] ?? "";
+    expect(source).not.toMatch(/on(?:ControllerExited|PaneAdded|PaneRemoved|WindowAdded|WindowClosed|LayoutChanged)/);
   });
 
   it("keeps SSH wire snake_case outside domain and UI layers", () => {

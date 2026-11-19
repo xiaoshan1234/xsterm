@@ -6,7 +6,7 @@ import { isApplicationError } from "../../../models/applicationError";
 import { type Terminal } from "../../../features/terminal";
 import { type EditablePaneNode } from "../../../features/workspace";
 import { type Workspace } from "../../../features/workspace";
-import { type PaneCoordinatorPorts, usePaneIntentActions } from "./usePaneIntentActions";
+import { type PaneIntentPorts, usePaneIntentActions } from "./usePaneIntentActions";
 
 const targetPane: EditablePaneNode = {
   id: "target-pane",
@@ -57,15 +57,12 @@ function createActionPorts() {
   return {
     closePane: vi.fn(async () => undefined),
     closeTerminal: vi.fn(async () => undefined),
-    createTerminalFromSavedConfig: vi.fn(async () => createTerminal()),
-    createLocalSessionOnly: vi.fn(async () => createTerminal()),
-    createSshSessionOnly: vi.fn(async () => createTerminal()),
     replaceInitWindowWithTerminal: vi.fn(),
     setActivePane: vi.fn(),
     setActiveWorkspace: vi.fn(),
     splitPane: vi.fn(),
     updateWindowPaneTree: vi.fn(),
-  } satisfies PaneCoordinatorPorts;
+  } satisfies PaneIntentPorts;
 }
 
 describe("usePaneIntentActions", () => {
@@ -133,34 +130,5 @@ describe("usePaneIntentActions", () => {
 
     expect(isApplicationError(error, "terminal-already-attached")).toBe(true);
     expect(actions.updateWindowPaneTree).not.toHaveBeenCalled();
-  });
-
-  it("creates a saved-config terminal and splits the target pane", async () => {
-    const actions = createActionPorts();
-    const state = {
-      terminals: [],
-      workspaces: [createWorkspace()],
-    };
-    const { result } = renderHook(() => usePaneIntentActions({ state, actions }));
-
-    await act(() =>
-      result.current.splitPaneWithSavedConfig({
-        workspaceId: "workspace-1",
-        windowId: "window-1",
-        paneId: targetPane.id,
-        direction: "vertical",
-        configId: "saved-config",
-      }),
-    );
-
-    expect(actions.createTerminalFromSavedConfig).toHaveBeenCalledWith("saved-config");
-    expect(actions.splitPane).toHaveBeenCalledWith(
-      "workspace-1",
-      "window-1",
-      targetPane.id,
-      "vertical",
-      7,
-      "config-1",
-    );
   });
 });

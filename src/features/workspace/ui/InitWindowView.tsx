@@ -1,4 +1,5 @@
 import { usePaneIntents } from "../state/PaneIntentContext";
+import { usePaneSessionIntents } from "../state/PaneSessionIntentContext";
 import type { Workspace } from "../contracts";
 import { PaneInitCard } from "./PaneInitCard";
 import "./InitWindowView.css";
@@ -10,6 +11,7 @@ interface InitWindowViewProps {
 
 export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
   const paneIntents = usePaneIntents();
+  const paneSessionIntents = usePaneSessionIntents();
 
   return (
     <div className="init-window-view">
@@ -22,7 +24,7 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
           })
         }
         onCreateLocal={(config, save) =>
-          paneIntents.createLocalTerminalForWindow({
+          paneSessionIntents.createLocalTerminalForWindow({
             workspaceId: workspace.id,
             windowId,
             config,
@@ -30,7 +32,7 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
           })
         }
         onCreateSsh={(config, save) =>
-          paneIntents.createSshTerminalForWindow({
+          paneSessionIntents.createSshTerminalForWindow({
             workspaceId: workspace.id,
             windowId,
             config,
@@ -38,7 +40,7 @@ export function InitWindowView({ workspace, windowId }: InitWindowViewProps) {
           })
         }
         onCreateFromSavedConfig={(configId) =>
-          paneIntents.createSavedConfigForWindow({
+          paneSessionIntents.createSavedConfigForWindow({
             workspaceId: workspace.id,
             windowId,
             configId,

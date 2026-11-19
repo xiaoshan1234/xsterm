@@ -22,8 +22,10 @@ import {
 } from "../features/terminal-surface";
 import {
   PaneIntentProvider,
+  PaneSessionIntentProvider,
   WorkspaceProvider,
   type PaneIntentActions,
+  type PaneSessionIntentActions,
   type WorkspaceLayoutContextType,
 } from "../features/workspace";
 
@@ -34,6 +36,7 @@ interface CreateTestApplicationOptions {
   tmux?: Partial<TmuxRuntimeContextType>;
   workspace?: Partial<WorkspaceLayoutContextType>;
   paneIntents?: Partial<PaneIntentActions>;
+  paneSessionIntents?: Partial<PaneSessionIntentActions>;
   terminalSurface?: Partial<TerminalSurfacePorts>;
 }
 
@@ -96,6 +99,9 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     attachTmuxSession: unsupportedAsync,
     detachTmuxSession: unsupportedAsync,
     reconnectTmuxSession: unsupportedAsync,
+    createTmuxWindow: unsupportedAsync,
+    killTmuxWindow: unsupportedAsync,
+    renameTmuxWindow: unsupportedAsync,
     resizeTmuxWindow: unsupportedAsync,
     dismissTmuxControllerError: () => undefined,
     ...options.tmux,
@@ -139,20 +145,21 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
   const paneIntents: PaneIntentActions = {
     attachExistingTerminal: unsupportedAsync,
     splitPaneWithTerminal: unsupportedAsync,
+    attachExistingTerminalToWindow: unsupportedAsync,
+    closePane: unsupportedAsync,
+    closeTerminal: unsupportedAsync,
+    ...options.paneIntents,
+  };
+
+  const paneSessionIntents: PaneSessionIntentActions = {
     splitPaneWithSavedConfig: unsupportedAsync,
     attachSavedConfigToPane: unsupportedAsync,
     createSavedConfigForWindow: unsupportedAsync,
-    attachExistingTerminalToWindow: unsupportedAsync,
     createLocalTerminalForPane: unsupportedAsync,
     createSshTerminalForPane: unsupportedAsync,
     createLocalTerminalForWindow: unsupportedAsync,
     createSshTerminalForWindow: unsupportedAsync,
-    closePane: unsupportedAsync,
-    closeTerminal: unsupportedAsync,
-    createTmuxWindow: unsupportedAsync,
-    killTmuxWindow: unsupportedAsync,
-    renameTmuxWindow: unsupportedAsync,
-    ...options.paneIntents,
+    ...options.paneSessionIntents,
   };
 
   const terminalSurface: TerminalSurfacePorts = {
@@ -195,9 +202,11 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
             <TmuxRuntimeProvider value={tmux}>
               <WorkspaceProvider value={workspace}>
                 <PaneIntentProvider value={paneIntents}>
-                  <TerminalSurfacePortsProvider ports={terminalSurface}>
-                    {children}
-                  </TerminalSurfacePortsProvider>
+                  <PaneSessionIntentProvider value={paneSessionIntents}>
+                    <TerminalSurfacePortsProvider ports={terminalSurface}>
+                      {children}
+                    </TerminalSurfacePortsProvider>
+                  </PaneSessionIntentProvider>
                 </PaneIntentProvider>
               </WorkspaceProvider>
             </TmuxRuntimeProvider>
@@ -215,6 +224,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     tmux,
     workspace,
     paneIntents,
+    paneSessionIntents,
     terminalSurface,
   };
 }
