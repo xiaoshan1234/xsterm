@@ -92,3 +92,5 @@ export function useRuntimeShellModel() {
     paneTargetOptions,
   };
 }
+
+export type RuntimeShellModel = ReturnType<typeof useRuntimeShellModel>;

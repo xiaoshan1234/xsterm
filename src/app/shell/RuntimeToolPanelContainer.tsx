@@ -1,11 +1,12 @@
 import { DEFAULT_GROUP_ID } from "../../features/launch-config";
 import { tmuxSessionKey } from "../../features/tmux";
-import { useRuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
+import type { RuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
 import type { RuntimeConfirmState, RuntimeDialog } from "./runtimeOverlayTypes";
 import type { ToolId } from "./types";
 
 interface RuntimeToolPanelContainerProps {
+  model: RuntimeShellModel;
   activeTool: ToolId | null;
   onOpenDialog: (dialog: RuntimeDialog) => void;
   onRequestConfirm: (confirm: RuntimeConfirmState) => void;
@@ -13,6 +14,7 @@ interface RuntimeToolPanelContainerProps {
 }
 
 export function RuntimeToolPanelContainer({
+  model,
   activeTool,
   onOpenDialog,
   onRequestConfirm,
@@ -27,7 +29,7 @@ export function RuntimeToolPanelContainer({
     tmuxManagerGroups,
     windowManagerItems,
     workspaceManagerItems,
-  } = useRuntimeShellModel();
+  } = model;
   const { savedConfigs, removeConfig, toggleGroup, deleteGroup } = launchConfig;
   const { detachTmuxSession, openTmuxSessions } = tmuxRuntime;
   const {

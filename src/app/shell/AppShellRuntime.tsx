@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_GROUP_ID } from "../../features/launch-config";
-import NavBar from "../NavBar";
 import { AppShell } from "./AppShell";
 import { GlobalTextSender } from "../../features/command-sender";
 import { TOOL_TITLES, type ToolId } from "./types";
@@ -15,27 +14,17 @@ import { useAppShortcuts } from "../useAppShortcuts";
 import { useRuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
 import { RuntimeTerminalSurfacePortsProvider } from "../application/terminalSurface/TerminalSurfacePortsProvider";
 import { RuntimeToolPanelContainer } from "./RuntimeToolPanelContainer";
+import { RuntimeNavBarContainer } from "./RuntimeNavBarContainer";
 import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
 import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
 
 export function AppShellRuntime() {
-  const {
-    terminalRuntime,
-    workspaceLayout,
-    activeWorkspace,
-    terminalManagerGroups,
-    runtimeStatus,
-    paneTargetOptions,
-  } = useRuntimeShellModel();
+  const shellModel = useRuntimeShellModel();
+  const { terminalRuntime, workspaceLayout, activeWorkspace, runtimeStatus, paneTargetOptions } =
+    shellModel;
   const { writeTerminal } = terminalRuntime;
-  const {
-    workspaces,
-    setActiveWorkspace,
-    createWindowFromSavedConfig,
-    createDefaultWorkspace,
-    closeWorkspace,
-  } = workspaceLayout;
+  const { workspaces, createDefaultWorkspace } = workspaceLayout;
 
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
@@ -84,15 +73,6 @@ export function AppShellRuntime() {
     });
   }, []);
 
-  const openConfig = useCallback(
-    (configId: string) => {
-      createWindowFromSavedConfig(configId).catch((cause) =>
-        showError("Unable to open saved configuration", cause),
-      );
-    },
-    [createWindowFromSavedConfig, showError],
-  );
-
   const { targets: textSenderTargets, sendText: sendTextToTarget } = useRuntimeTextSender({
     paneTargetOptions,
     selectedTargetKey,
@@ -102,6 +82,7 @@ export function AppShellRuntime() {
 
   const toolPanelContent = (
     <RuntimeToolPanelContainer
+      model={shellModel}
       activeTool={activeTool}
       onOpenDialog={setDialog}
       onRequestConfirm={setConfirm}
@@ -135,25 +116,12 @@ export function AppShellRuntime() {
         <AppShell
           activeTool={activeTool}
           navBar={
-            <NavBar
-              terminalItems={(terminalManagerGroups[0]?.items ?? []).map((terminal) => ({
-                configId: terminal.configId,
-                name: terminal.name,
-              }))}
-              workspaces={workspaces.map((workspace) => workspace.name)}
-              workspaceName={activeWorkspace?.name ?? "No workspace"}
+            <RuntimeNavBarContainer
+              model={shellModel}
               isTextSenderOpen={isTextSenderOpen}
-              onSelectWorkspace={(workspaceName) => {
-                const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
-                if (workspace) setActiveWorkspace(workspace.id);
-              }}
-              onCloseWorkspace={(workspaceName) => {
-                const workspace = workspaces.find((candidate) => candidate.name === workspaceName);
-                if (workspace) closeWorkspace(workspace.id);
-              }}
               onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
               onHelpAction={setHelpDialog}
-              onOpenTerminal={openConfig}
+              onError={showError}
             />
           }
           toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}
