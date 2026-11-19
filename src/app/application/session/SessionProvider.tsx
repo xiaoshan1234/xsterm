@@ -220,8 +220,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  if (!persistence.isLoaded) {
-    return <SessionBootstrapScreen />;
+  if (persistence.error || !persistence.isLoaded) {
+    return <SessionBootstrapScreen error={persistence.error ?? undefined} />;
   }
 
   return (

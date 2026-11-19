@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
   isTmuxPaneTerminal,
   terminalClipboard,
@@ -14,6 +14,17 @@ import {
 export function RuntimeTerminalSurfacePortsProvider({ children }: { children: ReactNode }) {
   const terminalRuntime = useTerminalRuntime();
   const { tmuxControllerErrors, dismissTmuxControllerError } = useTmuxRuntime();
+  const terminalsRef = useRef(terminalRuntime.terminals);
+
+  useEffect(() => {
+    terminalsRef.current = terminalRuntime.terminals;
+  }, [terminalRuntime.terminals]);
+
+  const isTmuxTerminal = useCallback((terminalId: number) => {
+    return terminalsRef.current.some(
+      (terminal) => terminal.id === terminalId && isTmuxPaneTerminal(terminal),
+    );
+  }, []);
 
   const ports = useMemo<TerminalSurfacePorts>(
     () => ({
@@ -24,10 +35,7 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
         reportSize: terminalRuntime.reportTerminalSize,
         uploadImage: terminalRuntime.uploadImageToSshTerminal,
         write: terminalRuntime.writeTerminal,
-        isTmuxTerminal: (terminalId) =>
-          terminalRuntime.terminals.some(
-            (terminal) => terminal.id === terminalId && isTmuxPaneTerminal(terminal),
-          ),
+        isTmuxTerminal,
         touchActivity: terminalRuntime.touchTerminalActivity,
       },
       stream: {
@@ -52,10 +60,10 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
       terminalRuntime.reconnectSession,
       terminalRuntime.reportTerminalSize,
       terminalRuntime.resizeTerminal,
-      terminalRuntime.terminals,
       terminalRuntime.touchTerminalActivity,
       terminalRuntime.uploadImageToSshTerminal,
       terminalRuntime.writeTerminal,
+      isTmuxTerminal,
       tmuxControllerErrors,
     ],
   );

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalPersistence } from "./useTerminalPersistence";
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +49,10 @@ describe("useTerminalPersistence", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("does not write the default setting before persisted settings finish loading", async () => {
     let resolveSettings: ((value: boolean) => void) | undefined;
     mocks.loadGlobalLocalEcho.mockImplementation(
@@ -70,6 +74,18 @@ describe("useTerminalPersistence", () => {
 
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
     expect(options.setGlobalLocalEcho).toHaveBeenCalledWith(true);
+    expect(mocks.persistGlobalLocalEcho).not.toHaveBeenCalled();
+  });
+
+  it("surfaces hydration failures instead of treating them as an empty workspace", async () => {
+    mocks.loadGlobalLocalEcho.mockRejectedValue(new Error("settings unavailable"));
+    const options = createOptions();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { result } = renderHook(() => useTerminalPersistence(options));
+
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(result.current.error).toBe("settings unavailable");
     expect(mocks.persistGlobalLocalEcho).not.toHaveBeenCalled();
   });
 });

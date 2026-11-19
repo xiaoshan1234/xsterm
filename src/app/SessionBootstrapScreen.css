@@ -26,6 +26,16 @@
   animation: session-bootstrap-spin 0.8s linear infinite;
 }
 
+.session-bootstrap__panel--error {
+  border-color: var(--error);
+  background: var(--error-bg);
+}
+
+.session-bootstrap__mark--error {
+  border-color: var(--error);
+  animation: none;
+}
+
 .session-bootstrap h1 {
   color: var(--ink);
   font-size: 15px;

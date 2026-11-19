@@ -1,9 +1,9 @@
 import type { SavedWindowConfig, SavedWorkspace } from "../contracts";
 import {
-  loadSavedWindowConfigs,
-  loadSavedWorkspaces,
-  persistWindowConfigs,
-  persistWorkspaces,
+  loadSavedWindowConfigsStrict,
+  loadSavedWorkspacesStrict,
+  persistWindowConfigsStrict,
+  persistWorkspacesStrict,
 } from "./workspaceStorage";
 
 export interface WorkspaceRepository {
@@ -14,8 +14,8 @@ export interface WorkspaceRepository {
 }
 
 export const workspaceRepository: WorkspaceRepository = {
-  loadWindowConfigs: loadSavedWindowConfigs,
-  loadWorkspaces: loadSavedWorkspaces,
-  persistWindowConfigs,
-  persistWorkspaces,
+  loadWindowConfigs: loadSavedWindowConfigsStrict,
+  loadWorkspaces: loadSavedWorkspacesStrict,
+  persistWindowConfigs: persistWindowConfigsStrict,
+  persistWorkspaces: persistWorkspacesStrict,
 };

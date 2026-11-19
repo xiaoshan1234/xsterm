@@ -22,6 +22,7 @@ export interface LaunchConfigPersistenceActions {
   updateConfigs: (updater: (prev: SavedTerminalConfig[]) => SavedTerminalConfig[]) => void;
   updateGroups: (updater: (prev: TerminalGroup[]) => TerminalGroup[], nextId?: number) => void;
   isLoaded: boolean;
+  error: string | null;
 }
 
 export function useLaunchConfigPersistence({
@@ -34,6 +35,7 @@ export function useLaunchConfigPersistence({
   repository = launchConfigRepository,
 }: UseLaunchConfigPersistenceOptions): LaunchConfigPersistenceActions {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const skipInitialConfigPersistRef = useRef(true);
   const skipInitialGroupPersistRef = useRef(true);
 
@@ -60,7 +62,9 @@ export function useLaunchConfigPersistence({
       skipInitialConfigPersistRef.current = false;
       return;
     }
-    void repository.persistConfigs(savedConfigs);
+    void repository.persistConfigs(savedConfigs).catch((cause) => {
+      console.error("Failed to persist launch configs:", cause);
+    });
   }, [isLoaded, repository, savedConfigs]);
 
   useEffect(() => {
@@ -69,34 +73,43 @@ export function useLaunchConfigPersistence({
       skipInitialGroupPersistRef.current = false;
       return;
     }
-    void repository.persistGroups({ groups, nextGroupId });
+    void repository.persistGroups({ groups, nextGroupId }).catch((cause) => {
+      console.error("Failed to persist launch config groups:", cause);
+    });
   }, [groups, isLoaded, nextGroupId, repository]);
 
   useEffect(() => {
     let isCancelled = false;
     const initialize = async () => {
-      const [configs, savedGroups] = await Promise.all([
-        repository.loadConfigs(),
-        repository.loadGroups(),
-      ]);
-      if (isCancelled) return;
+      try {
+        const [configs, savedGroups] = await Promise.all([
+          repository.loadConfigs(),
+          repository.loadGroups(),
+        ]);
+        if (isCancelled) return;
 
-      setSavedConfigs(configs);
-      setGroups(
-        savedGroups.groups.some((group) => group.id === DEFAULT_GROUP_ID)
-          ? savedGroups.groups
-          : [
-              {
-                id: DEFAULT_GROUP_ID,
-                name: DEFAULT_GROUP_NAME,
-                configIds: [],
-                collapsed: false,
-              },
-              ...savedGroups.groups,
-            ],
-      );
-      setNextGroupId(savedGroups.nextGroupId);
-      setIsLoaded(true);
+        setSavedConfigs(configs);
+        setGroups(
+          savedGroups.groups.some((group) => group.id === DEFAULT_GROUP_ID)
+            ? savedGroups.groups
+            : [
+                {
+                  id: DEFAULT_GROUP_ID,
+                  name: DEFAULT_GROUP_NAME,
+                  configIds: [],
+                  collapsed: false,
+                },
+                ...savedGroups.groups,
+              ],
+        );
+        setNextGroupId(savedGroups.nextGroupId);
+      } catch (cause) {
+        if (!isCancelled) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      } finally {
+        if (!isCancelled) setIsLoaded(true);
+      }
     };
 
     void initialize();
@@ -105,5 +118,5 @@ export function useLaunchConfigPersistence({
     };
   }, [repository, setGroups, setNextGroupId, setSavedConfigs]);
 
-  return { updateConfigs, updateGroups, isLoaded };
+  return { updateConfigs, updateGroups, isLoaded, error };
 }

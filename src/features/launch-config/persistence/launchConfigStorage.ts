@@ -181,58 +181,74 @@ export function migrateSavedConfigList(raw: unknown): SavedTerminalConfig[] {
   return migrated;
 }
 
-export async function loadSavedConfigs(): Promise<SavedTerminalConfig[]> {
+export async function loadSavedConfigsStrict(): Promise<SavedTerminalConfig[]> {
   logger.debug("launchConfigStorage", "loadSavedConfigs", undefined);
+  const raw = await launchConfigStore.get<unknown>("savedConfigs");
+  const configs = migrateSavedConfigList(raw ?? []);
+  logger.debug("launchConfigStorage", "loadSavedConfigs:result", { count: configs.length });
+  return configs;
+}
+
+export async function loadSavedConfigs(): Promise<SavedTerminalConfig[]> {
   try {
-    const raw = await launchConfigStore.get<unknown>("savedConfigs");
-    const configs = migrateSavedConfigList(raw ?? []);
-    logger.debug("launchConfigStorage", "loadSavedConfigs:result", { count: configs.length });
-    return configs;
+    return await loadSavedConfigsStrict();
   } catch (error) {
     console.error("Failed to load launch configs:", error);
     return [];
   }
 }
 
-export async function persistConfigs(configs: SavedTerminalConfig[]): Promise<void> {
+export async function persistConfigsStrict(configs: SavedTerminalConfig[]): Promise<void> {
   logger.debug("launchConfigStorage", "persistConfigs", { count: configs.length });
+  await launchConfigStore.set("savedConfigs", configs);
+  logger.debug("launchConfigStorage", "persistConfigs:result", undefined);
+}
+
+export async function persistConfigs(configs: SavedTerminalConfig[]): Promise<void> {
   try {
-    await launchConfigStore.set("savedConfigs", configs);
-    logger.debug("launchConfigStorage", "persistConfigs:result", undefined);
+    await persistConfigsStrict(configs);
   } catch (error) {
     console.error("Failed to save launch configs:", error);
   }
 }
 
-export async function loadSavedGroups(): Promise<LaunchConfigGroupStore> {
+export async function loadSavedGroupsStrict(): Promise<LaunchConfigGroupStore> {
   logger.debug("launchConfigStorage", "loadSavedGroups", undefined);
+  const [groups, nextGroupId] = await Promise.all([
+    launchConfigStore.get<TerminalGroup[]>("groups"),
+    launchConfigStore.get<number>("nextGroupId"),
+  ]);
+  const result = { groups: groups ?? [], nextGroupId: nextGroupId || 1 };
+  logger.debug("launchConfigStorage", "loadSavedGroups:result", {
+    groupCount: result.groups.length,
+    nextGroupId: result.nextGroupId,
+  });
+  return result;
+}
+
+export async function loadSavedGroups(): Promise<LaunchConfigGroupStore> {
   try {
-    const [groups, nextGroupId] = await Promise.all([
-      launchConfigStore.get<TerminalGroup[]>("groups"),
-      launchConfigStore.get<number>("nextGroupId"),
-    ]);
-    const result = { groups: groups ?? [], nextGroupId: nextGroupId || 1 };
-    logger.debug("launchConfigStorage", "loadSavedGroups:result", {
-      groupCount: result.groups.length,
-      nextGroupId: result.nextGroupId,
-    });
-    return result;
+    return await loadSavedGroupsStrict();
   } catch (error) {
     console.error("Failed to load launch config groups:", error);
     return { groups: [], nextGroupId: 1 };
   }
 }
 
-export async function persistGroups(groupsData: LaunchConfigGroupStore): Promise<void> {
+export async function persistGroupsStrict(groupsData: LaunchConfigGroupStore): Promise<void> {
   logger.debug("launchConfigStorage", "persistGroups", {
     groupCount: groupsData.groups.length,
     nextGroupId: groupsData.nextGroupId,
   });
+  await launchConfigStore.set("groups", groupsData.groups, false);
+  await launchConfigStore.set("nextGroupId", groupsData.nextGroupId, false);
+  await launchConfigStore.save();
+  logger.debug("launchConfigStorage", "persistGroups:result", undefined);
+}
+
+export async function persistGroups(groupsData: LaunchConfigGroupStore): Promise<void> {
   try {
-    await launchConfigStore.set("groups", groupsData.groups, false);
-    await launchConfigStore.set("nextGroupId", groupsData.nextGroupId, false);
-    await launchConfigStore.save();
-    logger.debug("launchConfigStorage", "persistGroups:result", undefined);
+    await persistGroupsStrict(groupsData);
   } catch (error) {
     console.error("Failed to save launch config groups:", error);
   }

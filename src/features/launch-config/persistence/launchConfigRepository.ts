@@ -1,9 +1,9 @@
 import type { SavedTerminalConfig, TerminalGroup } from "../contracts";
 import {
-  loadSavedConfigs,
-  loadSavedGroups,
-  persistConfigs,
-  persistGroups,
+  loadSavedConfigsStrict,
+  loadSavedGroupsStrict,
+  persistConfigsStrict,
+  persistGroupsStrict,
   type LaunchConfigGroupStore,
 } from "./launchConfigStorage";
 
@@ -15,8 +15,8 @@ export interface LaunchConfigRepository {
 }
 
 export const launchConfigRepository: LaunchConfigRepository = {
-  loadConfigs: loadSavedConfigs,
-  loadGroups: loadSavedGroups,
-  persistConfigs,
-  persistGroups,
+  loadConfigs: loadSavedConfigsStrict,
+  loadGroups: loadSavedGroupsStrict,
+  persistConfigs: persistConfigsStrict,
+  persistGroups: persistGroupsStrict,
 };

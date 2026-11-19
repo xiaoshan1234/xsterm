@@ -55,6 +55,8 @@ export function useTerminalPersistence({
 }: UseSessionPersistenceOptions): SessionPersistence {
   const [isWorkspaceDataLoaded, setIsWorkspaceDataLoaded] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const skipInitialSettingsPersistRef = useRef(true);
   const launchConfigPersistence = useLaunchConfigPersistence({
     setSavedConfigs,
@@ -68,14 +70,18 @@ export function useTerminalPersistence({
 
   const persistSavedWorkspaces = useCallback(
     (workspacesData: SavedWorkspace[]) => {
-      void workspaceRepo.persistWorkspaces(workspacesData);
+      void workspaceRepo.persistWorkspaces(workspacesData).catch((cause) => {
+        console.error("Failed to persist workspaces:", cause);
+      });
     },
     [workspaceRepo],
   );
 
   const persistSavedWindowConfigs = useCallback(
     (configs: SavedWindowConfig[]) => {
-      void workspaceRepo.persistWindowConfigs(configs);
+      void workspaceRepo.persistWindowConfigs(configs).catch((cause) => {
+        console.error("Failed to persist window configs:", cause);
+      });
     },
     [workspaceRepo],
   );
@@ -83,18 +89,23 @@ export function useTerminalPersistence({
   useEffect(() => {
     let isCancelled = false;
     const init = async () => {
-      const [workspacesData, windowConfigs] = await Promise.all([
-        workspaceRepo.loadWorkspaces(),
-        workspaceRepo.loadWindowConfigs(),
-      ]);
-      if (isCancelled) return;
-      setSavedWorkspaces(workspacesData);
-      setSavedWindowConfigs(windowConfigs);
-      setIsWorkspaceDataLoaded(true);
+      try {
+        const [workspacesData, windowConfigs] = await Promise.all([
+          workspaceRepo.loadWorkspaces(),
+          workspaceRepo.loadWindowConfigs(),
+        ]);
+        if (isCancelled) return;
+        setSavedWorkspaces(workspacesData);
+        setSavedWindowConfigs(windowConfigs);
+      } catch (cause) {
+        if (!isCancelled) {
+          setWorkspaceError(cause instanceof Error ? cause.message : String(cause));
+        }
+      } finally {
+        if (!isCancelled) setIsWorkspaceDataLoaded(true);
+      }
     };
-    void init().finally(() => {
-      if (!isCancelled) setIsWorkspaceDataLoaded(true);
-    });
+    void init();
     return () => {
       isCancelled = true;
     };
@@ -110,6 +121,9 @@ export function useTerminalPersistence({
         }
       } catch (e) {
         console.error("Failed to load global settings:", e);
+        if (!isCancelled) {
+          setSettingsError(e instanceof Error ? e.message : String(e));
+        }
       } finally {
         if (!isCancelled) setIsSettingsLoaded(true);
       }
@@ -145,6 +159,7 @@ export function useTerminalPersistence({
   return {
     ...launchConfigPersistence,
     isLoaded: launchConfigPersistence.isLoaded && isWorkspaceDataLoaded && isSettingsLoaded,
+    error: launchConfigPersistence.error ?? workspaceError ?? settingsError,
     persistSavedWorkspaces,
     persistSavedWindowConfigs,
   };

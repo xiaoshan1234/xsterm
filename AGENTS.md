@@ -68,11 +68,11 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 以下为 2026-11-19 当前工作区状态；修复后应同步删除对应条目，不要把它当成长期架构目标。
 
-- `AppShellRuntime` 已把 View Model 和 ToolPanel 控制移出，但仍负责 NavBar、Overlay 和部分领域回调，后续可继续抽 controller。
+- `AppShellRuntime` 已把 View Model、ToolPanel 和 NavBar 控制移出，但仍负责 Overlay、TextSender selection 和部分 shell 状态，后续可继续抽 controller。
 - `useTerminalActions` 和 `useTmuxEventBridge` 仍是较大的组合/事件协调模块，新增功能前优先拆成独立 use case。
 - `Workspace` 的 `PaneIntentActions` 仍包含 terminal/tmux 跨聚合创建动作；当前由 app 层实现，但后续可迁移到专门的 session coordination 契约。
 - `models/ids.ts` 的 branded ID 尚未全面用于 terminal、workspace、window、pane 公共契约，跨聚合身份仍可能混用。
-- persistence repository 已形成稳定端口，但底层存储实现仍以 best-effort 方式吞掉部分加载/保存错误，尚未把失败状态完整暴露给 app。
+- persistence repository 已形成稳定端口，加载失败会进入 bootstrap error；保存失败目前只记录日志，尚未进入统一用户错误通道。
 
 ## 5. 关键坑（Gotchas）
 
