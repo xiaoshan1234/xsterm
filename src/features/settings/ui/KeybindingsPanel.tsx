@@ -97,9 +97,18 @@ export function KeybindingsPanel() {
     const binding = keybindings.find((candidate) => candidate.actionId === action.id);
     const chords = binding?.chords ?? [];
     const isRecording = recordingActionId === action.id;
+    const isDisabled = binding?.enabled === false;
+
+    const rowClassName = [
+      "keybindings-panel__row",
+      isRecording ? "keybindings-panel__row--recording" : "",
+      isDisabled ? "keybindings-panel__row--disabled" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return (
-      <div className="keybindings-panel__row" key={action.id}>
+      <div className={rowClassName} key={action.id}>
         <div className="keybindings-panel__row-main">
           <span className="keybindings-panel__label">{action.label}</span>
           <span

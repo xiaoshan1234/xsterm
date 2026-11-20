@@ -2,6 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--canvas-soft);
 }
 
 .keybindings-panel__header {
@@ -12,9 +16,11 @@
 }
 
 .keybindings-panel__title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--ink);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .keybindings-panel__error {
@@ -49,7 +55,23 @@
   padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
-  background: var(--canvas-soft);
+  background: var(--surface-card);
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+
+.keybindings-panel__row:hover {
+  border-color: var(--hairline-strong);
+}
+
+.keybindings-panel__row--recording {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.keybindings-panel__row--disabled .keybindings-panel__row-main {
+  opacity: 0.55;
 }
 
 .keybindings-panel__row-main {
@@ -99,4 +121,5 @@
 .keybindings-panel__button {
   padding: 4px 10px;
   font-size: 12px;
+  white-space: nowrap;
 }
