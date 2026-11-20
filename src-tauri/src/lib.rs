@@ -43,21 +43,21 @@ pub fn run() {
             tracing::info!("Application starting, log dir: {:?}", log_dir);
 
             // --- per-session logging + TerminalRegistry ---
-            use feature::logging::session_log::TerminalLogRegistry;
-            let session_log_dir = app
+            use feature::logging::terminal_log::TerminalLogRegistry;
+            let terminal_log_dir = app
                 .handle()
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| log_dir.clone())
                 .join("session-logs");
-            let session_logs = Arc::new(TerminalLogRegistry::new(session_log_dir));
-            app.manage(Arc::new(TerminalRegistry::new(session_logs)));
+            let terminal_logs = Arc::new(TerminalLogRegistry::new(terminal_log_dir));
+            app.manage(Arc::new(TerminalRegistry::new(terminal_logs)));
 
             // --- raw output router + event emitter backend ---
-            use connect::app_backend::RealAppBackend;
+            use connect::event_emitter::TauriEventEmitter;
             use connect::output::OutputRouter;
             app.manage(Arc::new(OutputRouter::default()));
-            app.manage(Arc::new(RealAppBackend::new(app.handle().clone())));
+            app.manage(Arc::new(TauriEventEmitter::new(app.handle().clone())));
 
             Ok(())
         })

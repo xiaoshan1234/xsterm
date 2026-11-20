@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::connect::app_backend::AppBackend;
+use crate::connect::event_emitter::EventEmitter;
 
 /// Maximum bytes accumulated before forcing an emit.
 const DRAIN_SIZE_BYTES: usize = 64 * 1024;
@@ -21,7 +21,7 @@ const DRAIN_INTERVAL: Duration = Duration::from_millis(8);
 /// final `terminal-disconnected` event is emitted.
 pub(crate) fn spawn_output_forwarder(
     mut rx: UnboundedReceiver<Vec<u8>>,
-    backend: Arc<dyn AppBackend>,
+    backend: Arc<dyn EventEmitter>,
     session_id: u32,
 ) -> tauri::async_runtime::JoinHandle<()> {
     tauri::async_runtime::spawn(async move {

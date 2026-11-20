@@ -11,7 +11,7 @@ use russh::keys::{decode_secret_key, PrivateKeyWithHashAlg, PublicKey};
 use tokio::net::{TcpSocket, TcpStream};
 
 use crate::shared::error::StringError;
-use crate::shared::session::SshConfig;
+use crate::shared::terminal::SshConfig;
 
 struct ClientHandler;
 

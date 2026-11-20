@@ -5,15 +5,15 @@ use std::sync::Arc;
 
 use dashmap::{mapref::entry::Entry, DashMap};
 
-use crate::connect::app_backend::AppBackend;
+use crate::connect::event_emitter::EventEmitter;
 use crate::connect::local::create_local_terminal;
-use crate::connect::session::{BoundTerminal, TerminalTransport};
 use crate::connect::ssh::create_ssh_terminal;
 use crate::connect::ssh_exec::upload_file_via_ssh;
+use crate::connect::terminal::{BoundTerminal, TerminalTransport};
 use crate::connect::tmux::TmuxSession;
-use crate::feature::logging::session_log::TerminalLogRegistry;
+use crate::feature::logging::terminal_log::TerminalLogRegistry;
 use crate::shared::capabilities::CapabilityFlags;
-use crate::shared::session::{
+use crate::shared::terminal::{
     build_local_image_path, build_remote_image_path, tmux_pane_info, LocalTerminalConfig,
     SplitDirection, SshConfig, TerminalInfo, TerminalKind, TerminalLoggingConfig,
     TmuxSessionConfig,
@@ -21,28 +21,28 @@ use crate::shared::session::{
 
 /// Manages the lifecycle of all terminal sessions.
 pub(crate) struct TerminalRegistry {
-    sessions: DashMap<u32, Arc<BoundTerminal>>,
+    terminals: DashMap<u32, Arc<BoundTerminal>>,
     next_id: AtomicU32,
     tmux_sessions: DashMap<u32, Arc<TmuxSession>>,
     tmux_identities: DashMap<String, u32>,
     next_controller_id: AtomicU32,
-    session_logs: Arc<TerminalLogRegistry>,
+    terminal_logs: Arc<TerminalLogRegistry>,
 }
 
 impl TerminalRegistry {
-    pub(crate) fn new(session_logs: Arc<TerminalLogRegistry>) -> Self {
+    pub(crate) fn new(terminal_logs: Arc<TerminalLogRegistry>) -> Self {
         Self {
-            sessions: DashMap::new(),
+            terminals: DashMap::new(),
             next_id: AtomicU32::new(1),
             tmux_sessions: DashMap::new(),
             tmux_identities: DashMap::new(),
             next_controller_id: AtomicU32::new(1),
-            session_logs,
+            terminal_logs,
         }
     }
 
-    pub(crate) fn session_logs(&self) -> Arc<TerminalLogRegistry> {
-        Arc::clone(&self.session_logs)
+    pub(crate) fn terminal_logs(&self) -> Arc<TerminalLogRegistry> {
+        Arc::clone(&self.terminal_logs)
     }
 
     fn start_logging(
@@ -52,7 +52,7 @@ impl TerminalRegistry {
         session_name: &str,
     ) {
         let config = logging.cloned().unwrap_or_default();
-        if let Err(e) = self.session_logs.start(session_id, &config, session_name) {
+        if let Err(e) = self.terminal_logs.start(session_id, &config, session_name) {
             tracing::warn!("failed to start session logging for {session_id}: {e}");
         }
     }
@@ -60,33 +60,33 @@ impl TerminalRegistry {
     pub(crate) fn create_local(
         &self,
         config: LocalTerminalConfig,
-        backend: Arc<dyn AppBackend>,
+        backend: Arc<dyn EventEmitter>,
         logging: Option<TerminalLoggingConfig>,
     ) -> Result<TerminalInfo, String> {
-        let id = self.allocate_session_id();
+        let id = self.allocate_terminal_id();
         let session = create_local_terminal(config, backend, id)?;
         let name = session.info.name.clone();
         self.start_logging(id, logging.as_ref(), &name);
-        Ok(self.insert_session(id, session))
+        Ok(self.insert_terminal(id, session))
     }
 
     pub(crate) async fn create_ssh(
         &self,
         config: SshConfig,
-        backend: Arc<dyn AppBackend>,
+        backend: Arc<dyn EventEmitter>,
         logging: Option<TerminalLoggingConfig>,
     ) -> Result<TerminalInfo, String> {
-        let id = self.allocate_session_id();
+        let id = self.allocate_terminal_id();
         let session = create_ssh_terminal(config, backend, id).await?;
         let name = session.info.name.clone();
         self.start_logging(id, logging.as_ref(), &name);
-        Ok(self.insert_session(id, session))
+        Ok(self.insert_terminal(id, session))
     }
 
     pub(crate) async fn create_tmux(
         &self,
         config: &TmuxSessionConfig,
-        backend: Arc<dyn AppBackend>,
+        backend: Arc<dyn EventEmitter>,
     ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
         self.reserve_tmux_identity(config, controller_id)?;
@@ -112,7 +112,7 @@ impl TerminalRegistry {
     pub(crate) async fn attach_tmux(
         &self,
         config: &TmuxSessionConfig,
-        backend: Arc<dyn AppBackend>,
+        backend: Arc<dyn EventEmitter>,
     ) -> Result<TerminalInfo, String> {
         let controller_id = self.allocate_controller_id();
         self.reserve_tmux_identity(config, controller_id)?;
@@ -231,14 +231,14 @@ impl TerminalRegistry {
             .remove(&controller_id)
             .map(|(_, controller)| controller)?;
         let pane_ids: Vec<u32> = self
-            .sessions
+            .terminals
             .iter()
             .filter_map(|entry| {
                 (entry.value().info.tmux_session_id() == Some(controller_id)).then(|| *entry.key())
             })
             .collect();
         for pane_id in pane_ids {
-            self.sessions.remove(&pane_id);
+            self.terminals.remove(&pane_id);
         }
         Some(controller)
     }
@@ -335,10 +335,10 @@ impl TerminalRegistry {
     }
 
     pub(crate) fn get(&self, id: u32) -> Result<Arc<BoundTerminal>, String> {
-        self.sessions
+        self.terminals
             .get(&id)
             .map(|entry| entry.value().clone())
-            .ok_or_else(|| format!("Session {id} not found"))
+            .ok_or_else(|| format!("Terminal {id} not found"))
     }
 
     pub(crate) async fn write(&self, id: u32, data: &[u8]) -> Result<(), String> {
@@ -395,15 +395,15 @@ impl TerminalRegistry {
     }
 
     pub(crate) async fn close(&self, id: u32) -> Result<(), String> {
-        self.session_logs.stop(id);
-        let Some((_, session)) = self.sessions.remove(&id) else {
+        self.terminal_logs.stop(id);
+        let Some((_, session)) = self.terminals.remove(&id) else {
             return Ok(());
         };
         session.transport.close().await
     }
 
     pub(crate) fn list(&self) -> Vec<TerminalInfo> {
-        self.sessions
+        self.terminals
             .iter()
             .map(|entry| {
                 let mut info = entry.value().info.clone();
@@ -413,9 +413,9 @@ impl TerminalRegistry {
             .collect()
     }
 
-    fn insert_session(&self, id: u32, session: BoundTerminal) -> TerminalInfo {
+    fn insert_terminal(&self, id: u32, session: BoundTerminal) -> TerminalInfo {
         let info = session.info.clone();
-        self.sessions.insert(id, Arc::new(session));
+        self.terminals.insert(id, Arc::new(session));
         info
     }
 
@@ -447,7 +447,7 @@ impl TerminalRegistry {
             },
             ssh_config: None,
         };
-        self.sessions.insert(xsterm_id, Arc::new(session));
+        self.terminals.insert(xsterm_id, Arc::new(session));
         info
     }
 
@@ -487,7 +487,7 @@ impl TerminalRegistry {
             .ok_or_else(|| format!("session {xsterm_id} has no tmux_pane_id"))
     }
 
-    fn allocate_session_id(&self) -> u32 {
+    fn allocate_terminal_id(&self) -> u32 {
         self.next_id.fetch_add(1, Ordering::Relaxed)
     }
 

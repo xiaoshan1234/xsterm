@@ -7,7 +7,7 @@ use xscore::platform::{LocalPty, Size};
 
 use crate::connect::tmux::TmuxSession;
 use crate::shared::capabilities::CapabilityFlags;
-use crate::shared::session::{SshConfig, TerminalInfo};
+use crate::shared::terminal::{SshConfig, TerminalInfo};
 
 /// Transport backing a bound terminal session.
 pub(crate) enum TerminalTransport {

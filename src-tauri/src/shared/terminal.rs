@@ -485,18 +485,18 @@ pub struct EnvConfig {
     pub env: Option<HashMap<String, String>>,
 }
 
-/// Returns the default schema version for [`SavedSessionConfigV1`].
+/// Returns the default schema version for [`SavedTerminalConfigV1`].
 ///
 /// Current schema is version `1`. Bump this constant (and migrate older payloads
-/// in `src/services/sessionStorage.ts`) whenever the on-disk shape changes.
+/// in the frontend launch-config persistence) whenever the on-disk shape changes.
 #[allow(dead_code)]
 fn default_version() -> u32 {
     1
 }
 
-/// Top-level persisted session configuration (schema v1).
+/// Top-level persisted terminal configuration (schema v1).
 ///
-/// Shape (matches the TS `SavedSessionConfig`):
+/// Shape (matches the TS `SavedTerminalConfig`):
 /// ```json
 /// {
 ///   "id": "...",
@@ -508,30 +508,30 @@ fn default_version() -> u32 {
 /// }
 /// ```
 ///
-/// The `type` / `config` pair is produced by flattening [`SavedSessionConfigKind`]
+/// The `type` / `config` pair is produced by flattening [`SavedTerminalConfigKind`]
 /// (an adjacently-tagged enum: `tag = "type"`, `content = "config"`), so the
 /// serialized form is a flat object — identical to what the TS side emits.
 ///
 /// Migration responsibility: the frontend persistence layer
-/// (`src/services/sessionStorage.ts`) reads the legacy v0 shape
+/// (`src/features/launch-config/persistence/launchConfigStorage.ts`) reads the legacy v0 shape
 /// (`{ id, name, type, localConfig?, sshConfig? }`) and upgrades it to this v1
 /// shape before writing back. The Rust backend treats this struct as the
 /// authoritative representation for any v1+ payloads it is asked to deserialize.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SavedSessionConfigV1 {
+pub struct SavedTerminalConfigV1 {
     pub id: String,
     pub name: String,
     #[serde(default = "default_version")]
     pub version: u32,
     #[serde(flatten)]
-    pub config: SavedSessionConfigKind,
+    pub config: SavedTerminalConfigKind,
     #[serde(default)]
     pub display_config: Option<DisplayConfig>,
 }
 
-/// Discriminated union carried inside [`SavedSessionConfigV1`].
+/// Discriminated union carried inside [`SavedTerminalConfigV1`].
 ///
 /// Serialized as `{ "type": "...", "config": { ... } }`. The variants mirror
 /// the create-time [`SessionConfig`] enum but reuse the existing
@@ -539,7 +539,7 @@ pub struct SavedSessionConfigV1 {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "config", rename_all = "camelCase")]
-pub enum SavedSessionConfigKind {
+pub enum SavedTerminalConfigKind {
     #[serde(rename = "local")]
     Local(LocalTerminalConfig),
     #[serde(rename = "ssh")]
@@ -1024,7 +1024,7 @@ mod tests {
     }
 
     #[test]
-    fn session_logging_config_json_roundtrip() {
+    fn terminal_logging_config_json_roundtrip() {
         let config = TerminalLoggingConfig {
             enabled: Some(true),
             append: Some(false),

@@ -15,7 +15,7 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 const MAX_PENDING_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Default)]
-struct SessionRoute {
+struct TerminalRoute {
     subscription_id: u64,
     channel: Option<Channel<InvokeResponseBody>>,
     pending: Vec<u8>,
@@ -25,7 +25,7 @@ struct SessionRoute {
 /// Fan raw terminal bytes out to the per-session frontend channels.
 #[derive(Default)]
 pub(crate) struct OutputRouter {
-    routes: DashMap<u32, Mutex<SessionRoute>>,
+    routes: DashMap<u32, Mutex<TerminalRoute>>,
     next_subscription_id: AtomicU64,
 }
 

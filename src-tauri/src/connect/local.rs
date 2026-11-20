@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use xscore::platform::{LocalPty, Size};
 
-use crate::connect::app_backend::AppBackend;
+use crate::connect::event_emitter::EventEmitter;
 use crate::connect::forward::spawn_output_forwarder;
-use crate::connect::session::{BoundTerminal, TerminalTransport};
+use crate::connect::terminal::{BoundTerminal, TerminalTransport};
 use crate::shared::capabilities::CapabilityFlags;
-use crate::shared::session::{LocalTerminalConfig, TerminalInfo, TerminalKind};
+use crate::shared::terminal::{LocalTerminalConfig, TerminalInfo, TerminalKind};
 
 const UNIX_FALLBACK_SHELL: &str = "/bin/bash";
 const POWERSHELL_NOLOGO_FLAG: &str = "-NoLogo";
@@ -17,7 +17,7 @@ const BASH_LOGIN_FLAG: &str = "--login";
 
 pub(crate) fn create_local_terminal(
     config: LocalTerminalConfig,
-    backend: Arc<dyn AppBackend>,
+    backend: Arc<dyn EventEmitter>,
     session_id: u32,
 ) -> Result<BoundTerminal, String> {
     let shell_path = resolve_shell_path(config.shell, config.shell_template.as_deref());

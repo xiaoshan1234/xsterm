@@ -6,12 +6,12 @@
 //! whose receivers close on process/channel exit, and unify them behind a small
 //! transport enum.
 
-pub(crate) mod app_backend;
+pub(crate) mod event_emitter;
 pub(crate) mod forward;
 pub(crate) mod local;
 pub(crate) mod output;
 pub(crate) mod registry;
-pub(crate) mod session;
 pub(crate) mod ssh;
 pub(crate) mod ssh_exec;
+pub(crate) mod terminal;
 pub(crate) mod tmux;

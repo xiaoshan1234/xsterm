@@ -10,10 +10,10 @@ use xscore::platform::tmux::{
     socket_args, TmuxControl, TmuxEvent, TmuxHostConfig, TmuxSocket,
 };
 
-use crate::connect::app_backend::AppBackend;
+use crate::connect::event_emitter::EventEmitter;
 use crate::connect::forward::spawn_output_forwarder;
 use crate::connect::ssh_exec::{ssh_exec_capture, ssh_exec_status};
-use crate::shared::session::{SplitDirection, SshConfig, TmuxSessionConfig};
+use crate::shared::terminal::{SplitDirection, SshConfig, TmuxSessionConfig};
 
 const EXTENDED_PANE_FORMAT: &str = "#{window_index}|#{pane_index}|#{pane_id}|#{pane_width}|#{pane_height}|#{pane_left}|#{pane_top}|#{pane_current_command}|#{pane_active}|#{window_name}";
 
@@ -78,7 +78,7 @@ pub(crate) struct TmuxSession {
     ssh_config: Option<SshConfig>,
     host_config: TmuxHostConfig,
     socket: TmuxSocket,
-    app_backend: Arc<dyn AppBackend>,
+    app_backend: Arc<dyn EventEmitter>,
     pane_bindings: Mutex<HashMap<String, u32>>,
     pane_window_bindings: Mutex<HashMap<String, String>>,
     window_bindings: Mutex<HashMap<String, u32>>,
@@ -100,7 +100,7 @@ impl TmuxSession {
     /// and registers every window / pane it finds.
     pub(crate) async fn spawn_attach(
         config: &TmuxSessionConfig,
-        app_backend: Arc<dyn AppBackend>,
+        app_backend: Arc<dyn EventEmitter>,
         controller_id: u32,
     ) -> Result<Arc<Self>, String> {
         let session_name = config
@@ -131,7 +131,7 @@ impl TmuxSession {
     /// a session with the requested name already exists.
     pub(crate) async fn spawn_new(
         config: &TmuxSessionConfig,
-        app_backend: Arc<dyn AppBackend>,
+        app_backend: Arc<dyn EventEmitter>,
         controller_id: u32,
     ) -> Result<Arc<Self>, String> {
         let session_name = config
@@ -169,7 +169,7 @@ impl TmuxSession {
         ssh_config: Option<SshConfig>,
         host_config: TmuxHostConfig,
         socket: TmuxSocket,
-        app_backend: Arc<dyn AppBackend>,
+        app_backend: Arc<dyn EventEmitter>,
     ) -> Result<Arc<Self>, String> {
         let id_base = controller_id.saturating_mul(1_000_000);
         let session = Arc::new(Self {
@@ -1267,8 +1267,8 @@ mod tests {
         terminal_modes_replay, PaneTerminalModes, TmuxControl, TmuxHostConfig, TmuxSession,
         TmuxSocket,
     };
-    use crate::connect::app_backend::AppBackend;
-    use crate::shared::session::{SshConfig, TmuxSessionConfig};
+    use crate::connect::event_emitter::EventEmitter;
+    use crate::shared::terminal::{SshConfig, TmuxSessionConfig};
 
     #[test]
     fn parses_extended_pane_line_with_indices_and_command() {
@@ -1448,9 +1448,9 @@ mod tests {
         assert!(build_tmux_target(&config).is_err());
     }
 
-    struct TestAppBackend;
+    struct TestEventEmitter;
 
-    impl AppBackend for TestAppBackend {
+    impl EventEmitter for TestEventEmitter {
         fn emit(&self, _event: &str, _payload: &serde_json::Value) -> Result<(), String> {
             Ok(())
         }
@@ -1598,7 +1598,7 @@ tmux -L "__SOCKET_NAME__" new-session -d -s "__SESSION_NAME__" \
             None,
             fixture.host_config(),
             fixture.socket(),
-            std::sync::Arc::new(TestAppBackend),
+            std::sync::Arc::new(TestEventEmitter),
         )
         .await
         .expect("build first tmux session");
@@ -1634,7 +1634,7 @@ tmux -L "__SOCKET_NAME__" new-session -d -s "__SESSION_NAME__" \
             None,
             fixture.host_config(),
             fixture.socket(),
-            std::sync::Arc::new(TestAppBackend),
+            std::sync::Arc::new(TestEventEmitter),
         )
         .await
         .expect("build reconnected tmux session");
@@ -1701,7 +1701,7 @@ tmux -L "__SOCKET_NAME__" new-session -d -s "__SESSION_NAME__" \
             ..TmuxSessionConfig::default()
         };
 
-        let session = TmuxSession::spawn_new(&config, std::sync::Arc::new(TestAppBackend), 3)
+        let session = TmuxSession::spawn_new(&config, std::sync::Arc::new(TestEventEmitter), 3)
             .await
             .expect("create native WSL tmux session");
         assert!(!session.registered_panes().is_empty());

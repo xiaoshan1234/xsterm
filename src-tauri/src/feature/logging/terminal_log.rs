@@ -2,7 +2,7 @@
 //!
 //! Writes each terminal's raw output byte stream to per-session files under
 //! `session-logs/`. The fan-out happens centrally in
-//! [`TerminalLoggingBackend`], which wraps any [`AppBackend`] and taps the
+//! [`TerminalLoggingBackend`], which wraps any [`EventEmitter`] and taps the
 //! `emit_bytes` path before forwarding it. Session logging defaults to
 //! disabled; only sessions whose [`TerminalLoggingConfig::enabled`] is `true`
 //! get a writer, so the tap is a single `DashMap` lookup for everyone else.
@@ -15,9 +15,9 @@ use std::sync::{Arc, Mutex};
 use chrono::Local;
 use dashmap::DashMap;
 
-use crate::connect::app_backend::AppBackend;
+use crate::connect::event_emitter::EventEmitter;
 use crate::shared::error::StringError;
-use crate::shared::session::TerminalLoggingConfig;
+use crate::shared::terminal::TerminalLoggingConfig;
 
 /// Default timestamp format rendered by `{{ts}}`.
 const DEFAULT_TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
@@ -102,7 +102,7 @@ fn sanitize_file_name(name: &str) -> String {
 }
 
 /// A single session's on-disk log writer.
-struct SessionLogWriter {
+struct TerminalLogWriter {
     file: BufWriter<File>,
     base_path: PathBuf,
     rotation_index: u32,
@@ -114,7 +114,7 @@ struct SessionLogWriter {
     session_id: u32,
 }
 
-impl SessionLogWriter {
+impl TerminalLogWriter {
     fn open(
         base_dir: &Path,
         session_name: &str,
@@ -250,7 +250,7 @@ fn open_target(path: &Path, append: bool) -> Result<(BufWriter<File>, u64), Stri
 /// Registry of per-session log writers.
 pub struct TerminalLogRegistry {
     base_dir: PathBuf,
-    writers: DashMap<u32, Arc<Mutex<SessionLogWriter>>>,
+    writers: DashMap<u32, Arc<Mutex<TerminalLogWriter>>>,
 }
 
 impl TerminalLogRegistry {
@@ -271,7 +271,7 @@ impl TerminalLogRegistry {
             return Ok(());
         }
         let resolved = ResolvedLogConfig::from(config);
-        let writer = SessionLogWriter::open(&self.base_dir, session_name, session_id, &resolved)?;
+        let writer = TerminalLogWriter::open(&self.base_dir, session_name, session_id, &resolved)?;
         self.writers
             .insert(session_id, Arc::new(Mutex::new(writer)));
         Ok(())
@@ -311,19 +311,19 @@ impl TerminalLogRegistry {
     }
 }
 
-/// [`AppBackend`] decorator that fans `terminal-output` out to the session log.
+/// [`EventEmitter`] decorator that fans `terminal-output` out to the session log.
 pub struct TerminalLoggingBackend {
-    inner: Arc<dyn AppBackend>,
+    inner: Arc<dyn EventEmitter>,
     logs: Arc<TerminalLogRegistry>,
 }
 
 impl TerminalLoggingBackend {
-    pub fn new(inner: Arc<dyn AppBackend>, logs: Arc<TerminalLogRegistry>) -> Self {
+    pub fn new(inner: Arc<dyn EventEmitter>, logs: Arc<TerminalLogRegistry>) -> Self {
         Self { inner, logs }
     }
 }
 
-impl AppBackend for TerminalLoggingBackend {
+impl EventEmitter for TerminalLoggingBackend {
     fn emit(&self, event: &str, payload: &serde_json::Value) -> Result<(), String> {
         self.inner.emit(event, payload)
     }

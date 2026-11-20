@@ -5,16 +5,16 @@ use std::sync::Arc;
 use xscore::platform::ssh::{SshConnection, SshOptions};
 use xscore::platform::Size;
 
-use crate::connect::app_backend::AppBackend;
+use crate::connect::event_emitter::EventEmitter;
 use crate::connect::forward::spawn_output_forwarder;
-use crate::connect::session::{BoundTerminal, TerminalTransport};
+use crate::connect::terminal::{BoundTerminal, TerminalTransport};
 use crate::connect::tmux::ssh_options_from_config;
 use crate::shared::capabilities::CapabilityFlags;
-use crate::shared::session::{SshConfig, TerminalInfo, TerminalKind};
+use crate::shared::terminal::{SshConfig, TerminalInfo, TerminalKind};
 
 pub(crate) async fn create_ssh_terminal(
     config: SshConfig,
-    backend: Arc<dyn AppBackend>,
+    backend: Arc<dyn EventEmitter>,
     session_id: u32,
 ) -> Result<BoundTerminal, String> {
     let host = config.host.clone();
