@@ -7,6 +7,7 @@ import {
 import {
   settingsRepository as defaultSettingsRepository,
   type SettingsRepository,
+  type KeybindingEntry,
 } from "../../../features/settings";
 import {
   workspaceRepository as defaultWorkspaceRepository,
@@ -29,9 +30,13 @@ interface UseApplicationPersistenceOptions {
     value: SavedWindowConfig[] | ((prev: SavedWindowConfig[]) => SavedWindowConfig[]),
   ) => void;
   setGlobalLocalEcho: (value: boolean | ((prev: boolean) => boolean)) => void;
+  setKeybindingsOverrides: (
+    value: KeybindingEntry[] | ((prev: KeybindingEntry[]) => KeybindingEntry[]),
+  ) => void;
   savedConfigs: SavedTerminalConfig[];
   groups: TerminalGroup[];
   globalLocalEcho: boolean;
+  keybindingsOverrides: KeybindingEntry[];
   nextGroupId: number;
   launchConfigRepository?: LaunchConfigRepository;
   workspaceRepository?: WorkspaceRepository;
@@ -45,9 +50,11 @@ export function useTerminalPersistence({
   setSavedWorkspaces,
   setSavedWindowConfigs,
   setGlobalLocalEcho,
+  setKeybindingsOverrides,
   savedConfigs,
   groups,
   globalLocalEcho,
+  keybindingsOverrides,
   nextGroupId,
   launchConfigRepository: launchRepository = defaultLaunchConfigRepository,
   workspaceRepository: workspaceRepo = defaultWorkspaceRepository,
@@ -134,9 +141,17 @@ export function useTerminalPersistence({
     let isCancelled = false;
     const loadSettings = async () => {
       try {
-        const savedGlobalEcho = await settingsRepo.loadGlobalLocalEcho();
-        if (!isCancelled && savedGlobalEcho !== undefined) {
-          setGlobalLocalEcho(savedGlobalEcho);
+        const [savedGlobalEcho, savedKeybindings] = await Promise.all([
+          settingsRepo.loadGlobalLocalEcho(),
+          settingsRepo.loadKeybindingsOverrides(),
+        ]);
+        if (!isCancelled) {
+          if (savedGlobalEcho !== undefined) {
+            setGlobalLocalEcho(savedGlobalEcho);
+          }
+          if (savedKeybindings !== undefined) {
+            setKeybindingsOverrides(savedKeybindings);
+          }
         }
       } catch (e) {
         console.error("Failed to load global settings:", e);
@@ -151,7 +166,7 @@ export function useTerminalPersistence({
     return () => {
       isCancelled = true;
     };
-  }, [setGlobalLocalEcho, settingsRepo]);
+  }, [setGlobalLocalEcho, setKeybindingsOverrides, settingsRepo]);
 
   useEffect(() => {
     if (!isSettingsLoaded) return;
@@ -163,7 +178,10 @@ export function useTerminalPersistence({
     const persist = async () => {
       try {
         if (!cancelled) {
-          await settingsRepo.persistGlobalLocalEcho(globalLocalEcho);
+          await Promise.all([
+            settingsRepo.persistGlobalLocalEcho(globalLocalEcho),
+            settingsRepo.persistKeybindingsOverrides(keybindingsOverrides),
+          ]);
         }
       } catch (e) {
         if (!cancelled) {
@@ -175,7 +193,7 @@ export function useTerminalPersistence({
     return () => {
       cancelled = true;
     };
-  }, [globalLocalEcho, isSettingsLoaded, reportSaveError, settingsRepo]);
+  }, [globalLocalEcho, isSettingsLoaded, keybindingsOverrides, reportSaveError, settingsRepo]);
 
   const clearSaveError = useCallback(() => {
     setSaveError(null);

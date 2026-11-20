@@ -24,9 +24,11 @@ export function ApplicationProvider({ children }: { children: ReactNode }) {
     setSavedWorkspaces: state.workspace.setSavedWorkspaces,
     setSavedWindowConfigs: state.workspace.setSavedWindowConfigs,
     setGlobalLocalEcho: state.preferences.setGlobalLocalEcho,
+    setKeybindingsOverrides: state.preferences.setKeybindingsOverrides,
     savedConfigs: state.launchConfig.savedConfigs,
     groups: state.launchConfig.groups,
     globalLocalEcho: state.preferences.globalLocalEcho,
+    keybindingsOverrides: state.preferences.keybindingsOverrides,
     nextGroupId: state.launchConfig.nextGroupId,
   });
   const actions = useTerminalActions({ state, persistence });
@@ -58,8 +60,19 @@ export function ApplicationProvider({ children }: { children: ReactNode }) {
     () => ({
       globalLocalEcho: state.preferences.globalLocalEcho,
       setGlobalLocalEcho: state.preferences.setGlobalLocalEcho,
+      keybindings: state.preferences.keybindings,
+      updateKeybinding: state.preferences.updateKeybinding,
+      resetKeybinding: state.preferences.resetKeybinding,
+      resetAllKeybindings: state.preferences.resetAllKeybindings,
     }),
-    [state.preferences.globalLocalEcho, state.preferences.setGlobalLocalEcho],
+    [
+      state.preferences.globalLocalEcho,
+      state.preferences.keybindings,
+      state.preferences.resetAllKeybindings,
+      state.preferences.resetKeybinding,
+      state.preferences.setGlobalLocalEcho,
+      state.preferences.updateKeybinding,
+    ],
   );
   const savedLaunchConfigs = useSavedLaunchConfigsValue({ state, actions });
   const terminalRuntime = useTerminalRuntimeValue({

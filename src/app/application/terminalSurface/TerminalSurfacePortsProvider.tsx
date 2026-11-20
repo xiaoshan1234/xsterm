@@ -9,11 +9,15 @@ import { tmuxControllerActions, useTmuxRuntime } from "../../../features/tmux";
 import {
   TerminalSurfacePortsProvider,
   type TerminalSurfacePorts,
+  type TerminalKeyActionId,
 } from "../../../features/terminal-surface";
+import { findMatchingKeybinding, useSessionPreferences } from "../../../features/settings";
+import type { KeyChord } from "../../../shared/keyboard";
 
 export function RuntimeTerminalSurfacePortsProvider({ children }: { children: ReactNode }) {
   const terminalRuntime = useTerminalRuntime();
   const { tmuxControllerErrors, dismissTmuxControllerError } = useTmuxRuntime();
+  const { keybindings } = useSessionPreferences();
   const terminalsRef = useRef(terminalRuntime.terminals);
 
   useEffect(() => {
@@ -25,6 +29,19 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
       (terminal) => terminal.id === terminalId && isTmuxPaneTerminal(terminal),
     );
   }, []);
+
+  const shouldBlockAppChord = useCallback(
+    (chord: KeyChord) => findMatchingKeybinding(keybindings, chord, "app") !== undefined,
+    [keybindings],
+  );
+
+  const resolveTerminalAction = useCallback(
+    (chord: KeyChord): TerminalKeyActionId | undefined => {
+      const binding = findMatchingKeybinding(keybindings, chord, "terminal");
+      return binding ? (binding.actionId as TerminalKeyActionId) : undefined;
+    },
+    [keybindings],
+  );
 
   const ports = useMemo<TerminalSurfacePorts>(
     () => ({
@@ -53,6 +70,10 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
         },
         dismissControllerError: dismissTmuxControllerError,
       },
+      keyboard: {
+        shouldBlockAppChord,
+        resolveTerminalAction,
+      },
     }),
     [
       dismissTmuxControllerError,
@@ -65,6 +86,8 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
       terminalRuntime.writeTerminal,
       isTmuxTerminal,
       tmuxControllerErrors,
+      shouldBlockAppChord,
+      resolveTerminalAction,
     ],
   );
 

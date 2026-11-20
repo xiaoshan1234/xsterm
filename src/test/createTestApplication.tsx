@@ -4,6 +4,7 @@ import {
   type SavedLaunchConfigsContextType,
 } from "../features/launch-config";
 import {
+  getDefaultKeybindings,
   SessionPreferencesProvider,
   type SessionPreferencesContextType,
 } from "../features/settings";
@@ -71,6 +72,10 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
   const preferences: SessionPreferencesContextType = {
     globalLocalEcho: false,
     setGlobalLocalEcho: () => undefined,
+    keybindings: getDefaultKeybindings(),
+    updateKeybinding: () => undefined,
+    resetKeybinding: () => undefined,
+    resetAllKeybindings: () => undefined,
     ...options.preferences,
   };
 
@@ -200,6 +205,10 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
       getControllerError: () => undefined,
       retryController: async () => undefined,
       dismissControllerError: () => undefined,
+    },
+    keyboard: {
+      shouldBlockAppChord: () => false,
+      resolveTerminalAction: () => undefined,
     },
     ...options.terminalSurface,
   };

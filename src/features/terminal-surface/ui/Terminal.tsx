@@ -12,6 +12,7 @@ import { filterTerminalInput } from "./terminalInput";
 import { countLines } from "./textTransform";
 import { PasteConfirmDialog } from "./PasteConfirmDialog";
 import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
+import { chordFromKeyboardEvent } from "../../../shared/keyboard";
 import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";
 
@@ -73,6 +74,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
   const surfacePorts = useTerminalSurfacePorts();
+  const keyboardPortsRef = useRef(surfacePorts.keyboard);
   const {
     write: writeTerminal,
     getEffectiveLocalEcho,
@@ -109,6 +111,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   useEffect(() => {
     writeTerminalRef.current = writeTerminal;
   }, [writeTerminal]);
+
+  useEffect(() => {
+    keyboardPortsRef.current = surfacePorts.keyboard;
+  }, [surfacePorts.keyboard]);
 
   // Perf 010: paste chunking + confirmation. The batcher owns rAF pacing so
   // a single paste doesn't hold the TerminalManager mutex across one giant
@@ -225,12 +231,15 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     xterm.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
 
-      const copyShortcut =
-        (event.ctrlKey && event.shiftKey && (event.key === "c" || event.key === "C")) ||
-        (event.ctrlKey && event.key === "Insert") ||
-        (event.metaKey && (event.key === "c" || event.key === "C"));
+      const chord = chordFromKeyboardEvent(event);
+      if (keyboardPortsRef.current.shouldBlockAppChord(chord)) {
+        return false;
+      }
 
-      if (copyShortcut) {
+      const terminalAction = keyboardPortsRef.current.resolveTerminalAction(chord);
+      if (!terminalAction) return true;
+
+      if (terminalAction === "terminal.copy") {
         const selection = xterm.getSelection();
         if (selection && selection.length > 0) {
           clipboard.writeText(selection).catch((err) => {
@@ -240,13 +249,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         return false;
       }
 
-      // Only handle shortcuts whose browser default does NOT synthesize a
-      // paste event; otherwise let the document handler run so it can read
-      // both text and image clipboard data.
-      const isTerminalPasteShortcut =
-        event.ctrlKey && event.shiftKey && (event.key === "v" || event.key === "V");
-
-      if (isTerminalPasteShortcut && isConnectedRef.current) {
+      if (terminalAction === "terminal.paste") {
         event.preventDefault();
         clipboard
           .readText()
@@ -261,21 +264,16 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         return false;
       }
 
-      if (event.ctrlKey && (event.key === "n" || event.key === "N") && event.shiftKey) {
+      if (terminalAction === "terminal.selectAll") {
+        xterm.selectAll();
         return false;
       }
-      if (event.ctrlKey && event.key === "Tab") {
+
+      if (terminalAction === "terminal.clear") {
+        xterm.clear();
         return false;
       }
-      if (event.ctrlKey && (event.key === "w" || event.key === "W")) {
-        return false;
-      }
-      if (event.ctrlKey && (event.key === "l" || event.key === "L")) {
-        return false;
-      }
-      if (event.ctrlKey && event.key === ",") {
-        return false;
-      }
+
       return true;
     });
 

@@ -4,7 +4,7 @@ import { AppShell } from "./AppShell";
 import { GlobalTextSender } from "../../features/command-sender";
 import { TOOL_TITLES } from "./types";
 import { RuntimeOverlays } from "./RuntimeOverlays";
-import { useAppShortcuts } from "../useAppShortcuts";
+import { useKeybindingDispatcher } from "../application/keybindings";
 import { useShellModel } from "../application/shellModel/useShellModel";
 import { RuntimeTerminalSurfacePortsProvider } from "../application/terminalSurface/TerminalSurfacePortsProvider";
 import { RuntimeToolPanelContainer } from "./RuntimeToolPanelContainer";
@@ -35,7 +35,7 @@ export function AppShellRuntime() {
   });
   const initializedRef = useRef(false);
 
-  useAppShortcuts({
+  useKeybindingDispatcher({
     onCreateSession: () =>
       overlayController.openDialog({
         kind: "create-terminal",

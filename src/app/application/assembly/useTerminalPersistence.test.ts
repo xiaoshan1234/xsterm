@@ -7,6 +7,8 @@ import { useTerminalPersistence } from "./useTerminalPersistence";
 const mocks = vi.hoisted(() => ({
   loadGlobalLocalEcho: vi.fn(),
   persistGlobalLocalEcho: vi.fn(async () => undefined),
+  loadKeybindingsOverrides: vi.fn(async () => undefined),
+  persistKeybindingsOverrides: vi.fn(async () => undefined),
   loadSavedWorkspaces: vi.fn(async () => []),
   loadSavedWindowConfigs: vi.fn(async () => []),
   persistWorkspaces: vi.fn(async () => undefined),
@@ -21,9 +23,11 @@ function createOptions() {
     setSavedWorkspaces: vi.fn(),
     setSavedWindowConfigs: vi.fn(),
     setGlobalLocalEcho: vi.fn(),
+    setKeybindingsOverrides: vi.fn(),
     savedConfigs: [],
     groups: [],
     globalLocalEcho: false,
+    keybindingsOverrides: [],
     nextGroupId: 1,
     launchConfigRepository: {
       loadConfigs: vi.fn(async () => []),
@@ -40,6 +44,8 @@ function createOptions() {
     settingsRepository: {
       loadGlobalLocalEcho: mocks.loadGlobalLocalEcho,
       persistGlobalLocalEcho: mocks.persistGlobalLocalEcho,
+      loadKeybindingsOverrides: mocks.loadKeybindingsOverrides,
+      persistKeybindingsOverrides: mocks.persistKeybindingsOverrides,
     },
   };
 }
@@ -48,6 +54,8 @@ describe("useTerminalPersistence", () => {
   beforeEach(() => {
     mocks.loadGlobalLocalEcho.mockReset().mockResolvedValue(false);
     mocks.persistGlobalLocalEcho.mockReset().mockResolvedValue(undefined);
+    mocks.loadKeybindingsOverrides.mockReset().mockResolvedValue(undefined);
+    mocks.persistKeybindingsOverrides.mockReset().mockResolvedValue(undefined);
     mocks.loadSavedWorkspaces.mockReset().mockResolvedValue([]);
     mocks.loadSavedWindowConfigs.mockReset().mockResolvedValue([]);
     mocks.persistWorkspaces.mockReset().mockResolvedValue(undefined);

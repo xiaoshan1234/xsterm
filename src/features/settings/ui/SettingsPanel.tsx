@@ -2,6 +2,7 @@ import { useTheme } from "../../../shared/theme/ThemeContext";
 import { FormCheckboxField } from "../../../shared/ui/FormCheckboxField";
 import { FormSelectField } from "../../../shared/ui/FormSelectField";
 import { useSessionPreferences } from "../state/SessionPreferencesContext";
+import { KeybindingsPanel } from "./KeybindingsPanel";
 
 export function SettingsPanel() {
   const { currentThemeKey, setTheme, themeKeys } = useTheme();
@@ -20,6 +21,7 @@ export function SettingsPanel() {
         checked={globalLocalEcho}
         onChange={setGlobalLocalEcho}
       />
+      <KeybindingsPanel />
     </div>
   );
 }

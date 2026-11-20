@@ -1,5 +1,9 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { TerminalId } from "../../../models";
+import type { KeyChord } from "../../../shared/keyboard";
+
+export type TerminalKeyActionId =
+  "terminal.copy" | "terminal.paste" | "terminal.selectAll" | "terminal.clear";
 
 export interface TerminalSurfaceTmuxError {
   reason?: string;
@@ -33,6 +37,10 @@ export interface TerminalSurfacePorts {
     getControllerError: (controllerId: number) => TerminalSurfaceTmuxError | undefined;
     retryController: (controllerId: number) => Promise<void>;
     dismissControllerError: (controllerId: number) => void;
+  };
+  keyboard: {
+    shouldBlockAppChord: (chord: KeyChord) => boolean;
+    resolveTerminalAction: (chord: KeyChord) => TerminalKeyActionId | undefined;
   };
 }
 

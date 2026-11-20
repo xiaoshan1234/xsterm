@@ -10,5 +10,6 @@ export {
   TerminalSurfacePortsProvider,
   useTerminalSurfacePorts,
   type TerminalSurfacePorts,
+  type TerminalKeyActionId,
   type TerminalSurfaceTmuxError,
 } from "./state/TerminalSurfacePortsContext";
