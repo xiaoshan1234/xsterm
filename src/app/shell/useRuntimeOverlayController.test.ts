@@ -2,7 +2,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { ApplicationPersistenceSaveError } from "../application/session/types";
+import type { ApplicationPersistenceSaveError } from "../application/runtime/types";
 import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
 
 function renderController(saveError: ApplicationPersistenceSaveError | null = null) {

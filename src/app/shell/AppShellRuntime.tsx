@@ -12,7 +12,7 @@ import { RuntimeNavBarContainer } from "./RuntimeNavBarContainer";
 import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
 import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
-import { useApplicationPersistenceStatus } from "../application/session";
+import { useApplicationPersistenceStatus } from "../application/runtime";
 import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
 import { useRuntimeShellUiState } from "./useRuntimeShellUiState";
 
