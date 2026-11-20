@@ -59,7 +59,7 @@ pub async fn detach_tmux_session(
 /// Parameters:
 /// - `controller_id` — id of the `tmux -CC` controller that owns the
 ///   parent session's tmux pane.
-/// - `parent_xsterm_session_id` — **xsterm** session id (`Session.id`
+/// - `parent_xsterm_terminal_id` — **xsterm** session id (`Session.id`
 ///   in React state) of the parent. NOT a tmux pane id, NOT an xsterm
 ///   pane UUID.
 /// - `direction` — `"horizontal"` (`split-window -h`, right of parent)
@@ -73,18 +73,18 @@ pub async fn detach_tmux_session(
 #[tauri::command]
 pub async fn create_tmux_pane(
     controller_id: u32,
-    parent_xsterm_session_id: u32,
+    parent_xsterm_terminal_id: u32,
     direction: String,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<TerminalInfo, String> {
     tracing::info!(
-        "create_tmux_pane: controller_id={} parent_xsterm_session_id={} direction={:?}",
+        "create_tmux_pane: controller_id={} parent_xsterm_terminal_id={} direction={:?}",
         controller_id,
-        parent_xsterm_session_id,
+        parent_xsterm_terminal_id,
         direction,
     );
     state
-        .create_tmux_pane(controller_id, parent_xsterm_session_id, &direction)
+        .create_tmux_pane(controller_id, parent_xsterm_terminal_id, &direction)
         .await
         .inspect(|info| {
             tracing::info!(
@@ -97,7 +97,7 @@ pub async fn create_tmux_pane(
 
 /// Kill the tmux pane backing an xsterm session via `kill-pane`.
 ///
-/// `xsterm_session_id` is the **xsterm** session id (the leaf-bound
+/// `xsterm_terminal_id` is the **xsterm** session id (the leaf-bound
 /// `Session.id` from React state), NOT a tmux pane id or xsterm pane
 /// UUID. The command name reflects the tmux-side effect (`kill-pane`);
 /// the argument reflects the xsterm-side caller identifier. On success
@@ -106,11 +106,11 @@ pub async fn create_tmux_pane(
 /// `Session` from React state at that point.
 #[tauri::command]
 pub async fn kill_tmux_pane(
-    xsterm_session_id: u32,
+    xsterm_terminal_id: u32,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
-    tracing::info!("kill_tmux_pane: xsterm_session_id={}", xsterm_session_id);
-    state.kill_tmux_pane(xsterm_session_id)
+    tracing::info!("kill_tmux_pane: xsterm_terminal_id={}", xsterm_terminal_id);
+    state.kill_tmux_pane(xsterm_terminal_id)
 }
 
 /// Attach to an existing tmux server (Wave 4 §D4, req-006 §5).
@@ -219,16 +219,16 @@ pub async fn kill_tmux_window(
 /// itself reports `%error` / the call times out after 5 s.
 #[tauri::command]
 pub async fn capture_tmux_pane(
-    xsterm_session_id: u32,
+    xsterm_terminal_id: u32,
     lines: i32,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<String, String> {
     tracing::info!(
-        "capture_tmux_pane: xsterm_session_id={} lines={}",
-        xsterm_session_id,
+        "capture_tmux_pane: xsterm_terminal_id={} lines={}",
+        xsterm_terminal_id,
         lines
     );
-    state.capture_tmux_pane(xsterm_session_id, lines).await
+    state.capture_tmux_pane(xsterm_terminal_id, lines).await
 }
 
 #[tauri::command]

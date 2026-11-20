@@ -47,13 +47,13 @@ impl TerminalRegistry {
 
     fn start_logging(
         &self,
-        session_id: u32,
+        terminal_id: u32,
         logging: Option<&TerminalLoggingConfig>,
         session_name: &str,
     ) {
         let config = logging.cloned().unwrap_or_default();
-        if let Err(e) = self.terminal_logs.start(session_id, &config, session_name) {
-            tracing::warn!("failed to start session logging for {session_id}: {e}");
+        if let Err(e) = self.terminal_logs.start(terminal_id, &config, session_name) {
+            tracing::warn!("failed to start session logging for {terminal_id}: {e}");
         }
     }
 
@@ -207,10 +207,10 @@ impl TerminalRegistry {
 
     pub(crate) async fn capture_tmux_pane(
         &self,
-        xsterm_session_id: u32,
+        xsterm_terminal_id: u32,
         lines: i32,
     ) -> Result<String, String> {
-        let (controller, pane) = self.tmux_pane_for(xsterm_session_id)?;
+        let (controller, pane) = self.tmux_pane_for(xsterm_terminal_id)?;
         controller.capture_pane(&pane, lines).await
     }
 
@@ -246,13 +246,13 @@ impl TerminalRegistry {
     pub(crate) async fn create_tmux_pane(
         &self,
         controller_id: u32,
-        parent_xsterm_session_id: u32,
+        parent_xsterm_terminal_id: u32,
         direction: &str,
     ) -> Result<TerminalInfo, String> {
         let direction = SplitDirection::parse(direction)
             .ok_or_else(|| format!("invalid split direction: {direction:?}"))?;
         let controller = self.tmux_controller(controller_id)?;
-        let parent_pane = self.tmux_pane_id(parent_xsterm_session_id, controller_id)?;
+        let parent_pane = self.tmux_pane_id(parent_xsterm_terminal_id, controller_id)?;
         let (xsterm_id, pane_id, window_id) =
             controller.split_pane(&parent_pane, direction).await?;
         let session_name = controller.session_name();
@@ -268,8 +268,8 @@ impl TerminalRegistry {
         Ok(self.insert_tmux_pane(xsterm_id, controller_id, pane_id, info))
     }
 
-    pub(crate) fn kill_tmux_pane(&self, xsterm_session_id: u32) -> Result<(), String> {
-        let (controller, pane) = self.tmux_pane_for(xsterm_session_id)?;
+    pub(crate) fn kill_tmux_pane(&self, xsterm_terminal_id: u32) -> Result<(), String> {
+        let (controller, pane) = self.tmux_pane_for(xsterm_terminal_id)?;
         controller.kill_pane(&pane)
     }
 

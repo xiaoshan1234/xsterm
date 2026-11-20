@@ -15,7 +15,7 @@ use crate::shared::terminal::{SshConfig, TerminalInfo, TerminalKind};
 pub(crate) async fn create_ssh_terminal(
     config: SshConfig,
     backend: Arc<dyn EventEmitter>,
-    session_id: u32,
+    terminal_id: u32,
 ) -> Result<BoundTerminal, String> {
     let host = config.host.clone();
     let port = config.port;
@@ -23,7 +23,7 @@ pub(crate) async fn create_ssh_terminal(
     let default_name = format!("{username}@{host}");
 
     let info = TerminalInfo {
-        id: session_id,
+        id: terminal_id,
         name: resolve_session_name(config.name.clone(), &default_name),
         kind: TerminalKind::Ssh {
             host: host.clone(),
@@ -67,7 +67,7 @@ pub(crate) async fn create_ssh_terminal(
         .await
         .map_err(|e| format!("SSH connection failed: {e}"))?;
 
-    spawn_output_forwarder(rx, backend, session_id);
+    spawn_output_forwarder(rx, backend, terminal_id);
 
     Ok(BoundTerminal {
         info,

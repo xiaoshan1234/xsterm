@@ -48,7 +48,7 @@ describe("terminal events", () => {
     );
 
     expect(invokeFunction).toHaveBeenCalledWith("subscribe_terminal_output", {
-      sessionId: 7,
+      terminalId: 7,
       channel: fakeChannel,
     });
 
@@ -60,7 +60,7 @@ describe("terminal events", () => {
     cleanup();
     await Promise.resolve();
     expect(invokeFunction).toHaveBeenCalledWith("unsubscribe_terminal_output", {
-      sessionId: 7,
+      terminalId: 7,
       subscriptionId: 42,
     });
   });

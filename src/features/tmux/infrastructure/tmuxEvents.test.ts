@@ -28,7 +28,7 @@ describe("tmux event normalization", () => {
       normalizePaneAdded({
         controller_id: 3,
         tmux_pane_id: "%2",
-        xsterm_session_id: 8,
+        xsterm_terminal_id: 8,
         parent_tmux_window_id: "@1",
         window_index: 0,
         pane_index: 1,
@@ -58,7 +58,7 @@ describe("tmux event normalization", () => {
       normalizePaneRemoved({
         controller_id: 3,
         tmux_pane_id: "%2",
-        xsterm_session_id: 8,
+        xsterm_terminal_id: 8,
       }),
     ).toEqual({
       controllerHandle: toBackendControllerHandle(3),
@@ -80,7 +80,7 @@ describe("tmux event normalization", () => {
         panes: [
           {
             tmux_pane_id: "%1",
-            xsterm_session_id: 8,
+            xsterm_terminal_id: 8,
             window_index: 0,
             pane_index: 0,
             width: 80,
@@ -153,7 +153,7 @@ describe("tmux event normalization", () => {
         panes: [
           {
             tmux_pane_id: "%2",
-            xsterm_session_id: 8,
+            xsterm_terminal_id: 8,
             window_index: 0,
             pane_index: 1,
             width: 88,

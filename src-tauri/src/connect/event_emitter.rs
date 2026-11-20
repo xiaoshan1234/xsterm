@@ -16,7 +16,7 @@ pub trait EventEmitter: Send + Sync {
     ///
     /// Unlike [`EventEmitter::emit`] this bypasses JSON entirely; the payload is
     /// delivered as binary to the WebView.
-    fn emit_bytes(&self, session_id: u32, bytes: Vec<u8>) -> Result<(), String>;
+    fn emit_bytes(&self, terminal_id: u32, bytes: Vec<u8>) -> Result<(), String>;
 }
 
 /// Tauri-based implementation of [`EventEmitter`].
@@ -37,9 +37,9 @@ impl EventEmitter for TauriEventEmitter {
         self.app.emit(event, payload.clone()).map_err_string()
     }
 
-    fn emit_bytes(&self, session_id: u32, bytes: Vec<u8>) -> Result<(), String> {
+    fn emit_bytes(&self, terminal_id: u32, bytes: Vec<u8>) -> Result<(), String> {
         self.app
             .state::<Arc<OutputRouter>>()
-            .send(session_id, bytes)
+            .send(terminal_id, bytes)
     }
 }

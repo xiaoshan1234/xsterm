@@ -65,7 +65,7 @@ pub async fn create_ssh_terminal(
 /// `write(&self, data)`.
 #[tauri::command]
 pub async fn write_terminal(
-    session_id: u32,
+    terminal_id: u32,
     data: Vec<u8>,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
@@ -76,7 +76,7 @@ pub async fn write_terminal(
             MAX_WRITE_PAYLOAD_BYTES
         ));
     }
-    state.write(session_id, &data).await
+    state.write(terminal_id, &data).await
 }
 
 /// Bind a frontend channel to a session's raw output stream.
@@ -88,43 +88,43 @@ pub async fn write_terminal(
 /// unsubscribing so a stale unsubscribe cannot evict a newer subscription.
 #[tauri::command]
 pub fn subscribe_terminal_output(
-    session_id: u32,
+    terminal_id: u32,
     channel: Channel<InvokeResponseBody>,
     state: State<'_, Arc<OutputRouter>>,
 ) -> Result<u64, String> {
-    Ok(state.subscribe(session_id, channel))
+    Ok(state.subscribe(terminal_id, channel))
 }
 
 /// Forget the channel bound to a session (frontend unmount / session close).
 #[tauri::command]
 pub fn unsubscribe_terminal_output(
-    session_id: u32,
+    terminal_id: u32,
     subscription_id: u64,
     state: State<'_, Arc<OutputRouter>>,
 ) -> Result<(), String> {
-    state.unsubscribe(session_id, subscription_id);
+    state.unsubscribe(terminal_id, subscription_id);
     Ok(())
 }
 
 /// Resize the PTY of an existing session.
 #[tauri::command]
 pub async fn resize_terminal(
-    session_id: u32,
+    terminal_id: u32,
     rows: u16,
     cols: u16,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
-    state.resize(session_id, rows, cols).await
+    state.resize(terminal_id, rows, cols).await
 }
 
 /// Close an existing session.
 #[tauri::command]
 pub async fn close_terminal(
-    session_id: u32,
+    terminal_id: u32,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<(), String> {
-    tracing::info!("Closing session: id={}", session_id);
-    state.close(session_id).await
+    tracing::info!("Closing session: id={}", terminal_id);
+    state.close(terminal_id).await
 }
 
 /// List metadata for all active sessions.
@@ -139,10 +139,10 @@ pub fn list_terminals(
 /// remote path where it was stored.
 #[tauri::command]
 pub async fn upload_image_to_ssh_terminal(
-    session_id: u32,
+    terminal_id: u32,
     filename: String,
     data: Vec<u8>,
     state: State<'_, Arc<TerminalRegistry>>,
 ) -> Result<String, String> {
-    state.upload_image(session_id, &filename, data).await
+    state.upload_image(terminal_id, &filename, data).await
 }

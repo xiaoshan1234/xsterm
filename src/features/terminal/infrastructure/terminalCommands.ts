@@ -66,7 +66,7 @@ export function createTerminalCommandClient(
         .catch(() => undefined)
         .then(() =>
           invokeFunction<void>("write_terminal", {
-            sessionId: terminalHandle,
+            terminalId: terminalHandle,
             data,
           }),
         );
@@ -89,7 +89,7 @@ export function createTerminalCommandClient(
     async resizeTerminal(terminalId: number, rows: number, cols: number): Promise<void> {
       const terminalHandle = toBackendTerminalHandle(terminalId);
       await invokeFunction<void>("resize_terminal", {
-        sessionId: terminalHandle,
+        terminalId: terminalHandle,
         rows,
         cols,
       });
@@ -98,7 +98,7 @@ export function createTerminalCommandClient(
     async closeTerminal(terminalId: number): Promise<void> {
       const terminalHandle = toBackendTerminalHandle(terminalId);
       await invokeFunction<void>("close_terminal", {
-        sessionId: terminalHandle,
+        terminalId: terminalHandle,
       });
     },
 
@@ -109,7 +109,7 @@ export function createTerminalCommandClient(
     ): Promise<string> {
       const terminalHandle = toBackendTerminalHandle(terminalId);
       return invokeFunction<string>("upload_image_to_ssh_terminal", {
-        sessionId: terminalHandle,
+        terminalId: terminalHandle,
         filename,
         data,
       });

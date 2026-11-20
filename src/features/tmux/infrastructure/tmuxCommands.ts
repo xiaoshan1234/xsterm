@@ -67,7 +67,7 @@ export function createTmuxCommandClient(
     ): Promise<TerminalInfoDto> {
       const terminal = await invokeFunction<TerminalInfoDto>("create_tmux_pane", {
         controllerId: toBackendControllerHandle(controllerId),
-        parentXstermSessionId: toBackendTerminalHandle(parentTerminalId),
+        parentXstermTerminalId: toBackendTerminalHandle(parentTerminalId),
         direction,
       });
       return normalizeTerminalInfo(terminal);
@@ -75,13 +75,13 @@ export function createTmuxCommandClient(
 
     async killTmuxPane(terminalId: number): Promise<void> {
       await invokeFunction<void>("kill_tmux_pane", {
-        xstermSessionId: toBackendTerminalHandle(terminalId),
+        xstermTerminalId: toBackendTerminalHandle(terminalId),
       });
     },
 
     async captureTmuxPane(terminalId: number, lines: number): Promise<string> {
       return invokeFunction<string>("capture_tmux_pane", {
-        xstermSessionId: toBackendTerminalHandle(terminalId),
+        xstermTerminalId: toBackendTerminalHandle(terminalId),
         lines,
       });
     },

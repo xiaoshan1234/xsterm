@@ -54,7 +54,7 @@ impl From<&TerminalLoggingConfig> for ResolvedLogConfig {
 fn render_template(
     template: &str,
     session_name: &str,
-    session_id: u32,
+    terminal_id: u32,
     line: Option<&str>,
 ) -> String {
     let mut output = String::new();
@@ -69,7 +69,7 @@ fn render_template(
             break;
         };
         let token = &after[..end];
-        output.push_str(&render_token(token, session_name, session_id, line));
+        output.push_str(&render_token(token, session_name, terminal_id, line));
         rest = &after[end + 2..];
     }
 
@@ -77,14 +77,14 @@ fn render_template(
     output
 }
 
-fn render_token(token: &str, session_name: &str, session_id: u32, line: Option<&str>) -> String {
+fn render_token(token: &str, session_name: &str, terminal_id: u32, line: Option<&str>) -> String {
     if let Some(format) = token.strip_prefix("ts:") {
         return Local::now().format(format).to_string();
     }
     match token {
         "ts" => Local::now().format(DEFAULT_TIMESTAMP_FORMAT).to_string(),
         "name" => session_name.to_string(),
-        "id" => session_id.to_string(),
+        "id" => terminal_id.to_string(),
         "line" => line.unwrap_or_default().to_string(),
         _ => format!("{{{{{token}}}}}"),
     }
@@ -111,20 +111,20 @@ struct TerminalLogWriter {
     line_format: String,
     pending: Vec<u8>,
     session_name: String,
-    session_id: u32,
+    terminal_id: u32,
 }
 
 impl TerminalLogWriter {
     fn open(
         base_dir: &Path,
         session_name: &str,
-        session_id: u32,
+        terminal_id: u32,
         config: &ResolvedLogConfig,
     ) -> Result<Self, String> {
         fs::create_dir_all(base_dir).map_err_string()?;
 
         let rendered_name =
-            render_template(&config.file_name_template, session_name, session_id, None);
+            render_template(&config.file_name_template, session_name, terminal_id, None);
         let base_path = base_dir.join(sanitize_file_name(&rendered_name));
         let (file, bytes_written) = open_target(&base_path, config.append)?;
 
@@ -137,7 +137,7 @@ impl TerminalLogWriter {
             line_format: config.line_format.clone(),
             pending: Vec::new(),
             session_name: session_name.to_string(),
-            session_id,
+            terminal_id,
         })
     }
 
@@ -170,7 +170,7 @@ impl TerminalLogWriter {
         render_template(
             &self.line_format,
             &self.session_name,
-            self.session_id,
+            self.terminal_id,
             Some(&line_text),
         )
     }
@@ -263,7 +263,7 @@ impl TerminalLogRegistry {
 
     pub fn start(
         &self,
-        session_id: u32,
+        terminal_id: u32,
         config: &TerminalLoggingConfig,
         session_name: &str,
     ) -> Result<(), String> {
@@ -271,18 +271,18 @@ impl TerminalLogRegistry {
             return Ok(());
         }
         let resolved = ResolvedLogConfig::from(config);
-        let writer = TerminalLogWriter::open(&self.base_dir, session_name, session_id, &resolved)?;
+        let writer = TerminalLogWriter::open(&self.base_dir, session_name, terminal_id, &resolved)?;
         self.writers
-            .insert(session_id, Arc::new(Mutex::new(writer)));
+            .insert(terminal_id, Arc::new(Mutex::new(writer)));
         Ok(())
     }
 
-    pub fn is_enabled(&self, session_id: u32) -> bool {
-        self.writers.contains_key(&session_id)
+    pub fn is_enabled(&self, terminal_id: u32) -> bool {
+        self.writers.contains_key(&terminal_id)
     }
 
-    pub fn write(&self, session_id: u32, data: &[u8]) {
-        let Some(writer) = self.writers.get(&session_id) else {
+    pub fn write(&self, terminal_id: u32, data: &[u8]) {
+        let Some(writer) = self.writers.get(&terminal_id) else {
             return;
         };
         let poisoned = match writer.lock() {
@@ -295,15 +295,15 @@ impl TerminalLogRegistry {
         if poisoned {
             tracing::warn!(
                 "Session log writer lock poisoned for session {}",
-                session_id
+                terminal_id
             );
             drop(writer);
-            self.writers.remove(&session_id);
+            self.writers.remove(&terminal_id);
         }
     }
 
-    pub fn stop(&self, session_id: u32) {
-        if let Some((_, writer)) = self.writers.remove(&session_id) {
+    pub fn stop(&self, terminal_id: u32) {
+        if let Some((_, writer)) = self.writers.remove(&terminal_id) {
             if let Ok(mut guard) = writer.lock() {
                 guard.flush_pending();
             }
@@ -328,11 +328,11 @@ impl EventEmitter for TerminalLoggingBackend {
         self.inner.emit(event, payload)
     }
 
-    fn emit_bytes(&self, session_id: u32, bytes: Vec<u8>) -> Result<(), String> {
-        if self.logs.is_enabled(session_id) {
-            self.logs.write(session_id, &bytes);
+    fn emit_bytes(&self, terminal_id: u32, bytes: Vec<u8>) -> Result<(), String> {
+        if self.logs.is_enabled(terminal_id) {
+            self.logs.write(terminal_id, &bytes);
         }
-        self.inner.emit_bytes(session_id, bytes)
+        self.inner.emit_bytes(terminal_id, bytes)
     }
 }
 

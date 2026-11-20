@@ -81,7 +81,7 @@ describe("tmuxCommands", () => {
     });
   });
 
-  it("uses backend xstermSessionId for pane capture and kill", async () => {
+  it("uses backend xstermTerminalId for pane capture and kill", async () => {
     const { calls, invokeFunction } = createInvokeSpy();
     const client = createTmuxCommandClient(invokeFunction);
     const terminalHandle = toBackendTerminalHandle(8);
@@ -92,11 +92,11 @@ describe("tmuxCommands", () => {
     expect(calls).toEqual([
       {
         command: "capture_tmux_pane",
-        args: { xstermSessionId: terminalHandle, lines: 200 },
+        args: { xstermTerminalId: terminalHandle, lines: 200 },
       },
       {
         command: "kill_tmux_pane",
-        args: { xstermSessionId: terminalHandle },
+        args: { xstermTerminalId: terminalHandle },
       },
     ]);
   });
@@ -116,7 +116,7 @@ describe("tmuxCommands", () => {
         command: "create_tmux_pane",
         args: {
           controllerId: controllerHandle,
-          parentXstermSessionId: parentTerminalHandle,
+          parentXstermTerminalId: parentTerminalHandle,
           direction: "vertical",
         },
       },

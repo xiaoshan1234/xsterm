@@ -75,7 +75,7 @@ describe("terminalCommands", () => {
     });
   });
 
-  it("maps backend session_id parameters to the wire sessionId field", async () => {
+  it("maps backend terminal_id parameters to the wire terminalId field", async () => {
     const { calls, invokeFunction } = createInvokeSpy();
     const client = createTerminalCommandClient(invokeFunction);
     const handle = toBackendTerminalHandle(7);
@@ -89,19 +89,19 @@ describe("terminalCommands", () => {
     expect(calls).toEqual([
       {
         command: "write_terminal",
-        args: { sessionId: handle, data },
+        args: { terminalId: handle, data },
       },
       {
         command: "resize_terminal",
-        args: { sessionId: handle, rows: 24, cols: 80 },
+        args: { terminalId: handle, rows: 24, cols: 80 },
       },
       {
         command: "close_terminal",
-        args: { sessionId: handle },
+        args: { terminalId: handle },
       },
       {
         command: "upload_image_to_ssh_terminal",
-        args: { sessionId: handle, filename: "image.png", data },
+        args: { terminalId: handle, filename: "image.png", data },
       },
     ]);
   });

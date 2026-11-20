@@ -22,7 +22,7 @@ const DRAIN_INTERVAL: Duration = Duration::from_millis(8);
 pub(crate) fn spawn_output_forwarder(
     mut rx: UnboundedReceiver<Vec<u8>>,
     backend: Arc<dyn EventEmitter>,
-    session_id: u32,
+    terminal_id: u32,
 ) -> tauri::async_runtime::JoinHandle<()> {
     tauri::async_runtime::spawn(async move {
         let mut remainder: Vec<u8> = Vec::new();
@@ -63,12 +63,12 @@ pub(crate) fn spawn_output_forwarder(
                 accumulated[..safe_len].to_vec()
             };
 
-            if !to_emit.is_empty() && backend.emit_bytes(session_id, to_emit).is_err() {
+            if !to_emit.is_empty() && backend.emit_bytes(terminal_id, to_emit).is_err() {
                 break;
             }
         }
 
-        let _ = backend.emit("terminal-disconnected", &serde_json::json!(session_id));
+        let _ = backend.emit("terminal-disconnected", &serde_json::json!(terminal_id));
     })
 }
 

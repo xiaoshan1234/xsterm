@@ -18,7 +18,7 @@ const BASH_LOGIN_FLAG: &str = "--login";
 pub(crate) fn create_local_terminal(
     config: LocalTerminalConfig,
     backend: Arc<dyn EventEmitter>,
-    session_id: u32,
+    terminal_id: u32,
 ) -> Result<BoundTerminal, String> {
     let shell_path = resolve_shell_path(config.shell, config.shell_template.as_deref());
     let (shell_exe, mut shell_args) = parse_shell_command(&shell_path);
@@ -86,7 +86,7 @@ pub(crate) fn create_local_terminal(
     };
 
     let info = TerminalInfo {
-        id: session_id,
+        id: terminal_id,
         name: resolve_session_name(config.name, &shell_name),
         kind,
         is_connected: true,
@@ -96,7 +96,7 @@ pub(crate) fn create_local_terminal(
         is_hidden: false,
     };
 
-    spawn_output_forwarder(rx, backend.clone(), session_id);
+    spawn_output_forwarder(rx, backend.clone(), terminal_id);
 
     if let Some(startup_command) = config.startup_command {
         let delay_ms = config.startup_delay_ms.unwrap_or(0);

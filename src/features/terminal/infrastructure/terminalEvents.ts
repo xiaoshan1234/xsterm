@@ -66,7 +66,7 @@ export async function subscribeTerminalEvents(
  * unsubscribes so the backend can stop routing this session's bytes.
  */
 export async function subscribeTerminalOutput(
-  sessionId: number,
+  terminalId: number,
   onOutput: (data: Uint8Array) => void,
   invokeFunction: InvokeFunction = defaultInvoke,
   channelFactory: () => Channel<ArrayBuffer> = () => new Channel<ArrayBuffer>(),
@@ -77,13 +77,13 @@ export async function subscribeTerminalOutput(
   };
 
   const subscriptionId = await invokeFunction<number>("subscribe_terminal_output", {
-    sessionId,
+    terminalId,
     channel,
   });
 
   return () => {
     invokeFunction<void>("unsubscribe_terminal_output", {
-      sessionId,
+      terminalId,
       subscriptionId,
     }).catch(() => {
       // Best-effort: the channel is torn down with the webview on unload.

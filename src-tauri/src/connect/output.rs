@@ -33,9 +33,9 @@ impl OutputRouter {
     /// Bind a frontend channel to a session. A later subscribe replaces any
     /// earlier channel for the same session id. Returns the subscription id
     /// the frontend must pass to [`Self::unsubscribe`].
-    pub(crate) fn subscribe(&self, session_id: u32, channel: Channel<InvokeResponseBody>) -> u64 {
+    pub(crate) fn subscribe(&self, terminal_id: u32, channel: Channel<InvokeResponseBody>) -> u64 {
         let subscription_id = self.next_subscription_id.fetch_add(1, Ordering::Relaxed);
-        let route_entry = self.routes.entry(session_id).or_default();
+        let route_entry = self.routes.entry(terminal_id).or_default();
         let mut route = route_entry
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -53,8 +53,8 @@ impl OutputRouter {
     /// registered by `subscription_id`. This makes a late unsubscribe (e.g.
     /// React strict-mode's mount/unmount/mount cycle) unable to evict the
     /// newer subscription that replaced it.
-    pub(crate) fn unsubscribe(&self, session_id: u32, subscription_id: u64) {
-        if let Some(route) = self.routes.get(&session_id) {
+    pub(crate) fn unsubscribe(&self, terminal_id: u32, subscription_id: u64) {
+        if let Some(route) = self.routes.get(&terminal_id) {
             let mut route = route
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -69,8 +69,8 @@ impl OutputRouter {
     /// Send raw bytes to the session's channel. Before the first subscription,
     /// retain a bounded copy so fast remote prompts are not lost while React
     /// mounts the xterm instance.
-    pub(crate) fn send(&self, session_id: u32, bytes: Vec<u8>) -> Result<(), String> {
-        let route_entry = self.routes.entry(session_id).or_default();
+    pub(crate) fn send(&self, terminal_id: u32, bytes: Vec<u8>) -> Result<(), String> {
+        let route_entry = self.routes.entry(terminal_id).or_default();
         let mut route = route_entry
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());

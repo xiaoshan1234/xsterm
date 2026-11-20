@@ -49,7 +49,7 @@ interface RawTmuxPaneMetadata {
 interface RawTmuxPaneAdded extends RawTmuxPaneMetadata {
   controller_id: number;
   tmux_pane_id: string;
-  xsterm_session_id: number;
+  xsterm_terminal_id: number;
   parent_tmux_window_id: string;
   session_name?: string;
 }
@@ -57,7 +57,7 @@ interface RawTmuxPaneAdded extends RawTmuxPaneMetadata {
 interface RawTmuxPaneRemoved {
   controller_id: number;
   tmux_pane_id: string;
-  xsterm_session_id: number;
+  xsterm_terminal_id: number;
 }
 
 interface RawTmuxWindowAdded {
@@ -69,7 +69,7 @@ interface RawTmuxWindowAdded {
   panes: Array<
     RawTmuxPaneMetadata & {
       tmux_pane_id: string;
-      xsterm_session_id: number;
+      xsterm_terminal_id: number;
     }
   >;
   layout?: string;
@@ -88,7 +88,7 @@ interface RawTmuxLayoutChanged {
   panes: Array<
     RawTmuxPaneMetadata & {
       tmux_pane_id: string;
-      xsterm_session_id: number;
+      xsterm_terminal_id: number;
     }
   >;
 }
@@ -197,7 +197,7 @@ export function normalizeControllerExited(
 export function normalizePaneAdded(payload: RawTmuxPaneAdded): TmuxPaneAddedEvent {
   return {
     controllerHandle: toBackendControllerHandle(payload.controller_id),
-    terminalHandle: toBackendTerminalHandle(payload.xsterm_session_id),
+    terminalHandle: toBackendTerminalHandle(payload.xsterm_terminal_id),
     tmuxPaneId: payload.tmux_pane_id,
     parentTmuxWindowId: payload.parent_tmux_window_id,
     ...(payload.session_name ? { sessionName: payload.session_name } : {}),
@@ -216,7 +216,7 @@ export function normalizePaneAdded(payload: RawTmuxPaneAdded): TmuxPaneAddedEven
 export function normalizePaneRemoved(payload: RawTmuxPaneRemoved): TmuxPaneRemovedEvent {
   return {
     controllerHandle: toBackendControllerHandle(payload.controller_id),
-    terminalHandle: toBackendTerminalHandle(payload.xsterm_session_id),
+    terminalHandle: toBackendTerminalHandle(payload.xsterm_terminal_id),
     tmuxPaneId: payload.tmux_pane_id,
   };
 }
@@ -235,7 +235,7 @@ export function normalizeWindowAdded(payload: RawTmuxWindowAdded): TmuxWindowAdd
     name: payload.name,
     ...(payload.session_name ? { sessionName: payload.session_name } : {}),
     panes: (payload.panes ?? []).map((pane) => ({
-      terminalHandle: toBackendTerminalHandle(pane.xsterm_session_id),
+      terminalHandle: toBackendTerminalHandle(pane.xsterm_terminal_id),
       tmuxPaneId: pane.tmux_pane_id,
       windowIndex: pane.window_index,
       paneIndex: pane.pane_index,
@@ -274,7 +274,7 @@ export function normalizeLayoutChanged(payload: RawTmuxLayoutChanged): TmuxLayou
     tmuxWindowId: payload.tmux_window_id,
     ...(payload.session_name ? { sessionName: payload.session_name } : {}),
     panes: (payload.panes ?? []).map((pane) => ({
-      terminalHandle: toBackendTerminalHandle(pane.xsterm_session_id),
+      terminalHandle: toBackendTerminalHandle(pane.xsterm_terminal_id),
       tmuxPaneId: pane.tmux_pane_id,
       windowIndex: pane.window_index,
       paneIndex: pane.pane_index,

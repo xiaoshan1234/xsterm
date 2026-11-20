@@ -230,7 +230,7 @@ impl TmuxSession {
                         &serde_json::json!({
                             "controller_id": self.controller_id,
                             "tmux_pane_id": pane,
-                            "xsterm_session_id": xsterm_id,
+                            "xsterm_terminal_id": xsterm_id,
                         }),
                     );
                 }
@@ -331,7 +331,7 @@ impl TmuxSession {
                 let xsterm_id = bindings.get(&pane.handle).copied()?;
                 Some(serde_json::json!({
                     "tmux_pane_id": pane.handle,
-                    "xsterm_session_id": xsterm_id,
+                    "xsterm_terminal_id": xsterm_id,
                     "window_index": pane.window_index,
                     "pane_index": pane.pane_index,
                     "width": pane.cols,
@@ -442,7 +442,7 @@ impl TmuxSession {
 
                 pane_entries.push(serde_json::json!({
                     "tmux_pane_id": pane.handle,
-                    "xsterm_session_id": xsterm_id,
+                    "xsterm_terminal_id": xsterm_id,
                     "window_index": pane.window_index,
                     "pane_index": pane.pane_index,
                     "width": pane.cols,
@@ -554,7 +554,7 @@ impl TmuxSession {
             &serde_json::json!({
                 "controller_id": self.controller_id,
                 "tmux_pane_id": pane,
-                "xsterm_session_id": xsterm_id,
+                "xsterm_terminal_id": xsterm_id,
                 "parent_tmux_window_id": window,
                 "session_name": session_name,
                 "window_index": details.window_index,
@@ -617,7 +617,7 @@ impl TmuxSession {
                 "session_name": session_name,
                 "panes": [{
                     "tmux_pane_id": pane.handle,
-                    "xsterm_session_id": xsterm_id,
+                    "xsterm_terminal_id": xsterm_id,
                     "window_index": pane.window_index,
                     "pane_index": pane.pane_index,
                     "width": pane.cols,
@@ -1455,7 +1455,7 @@ mod tests {
             Ok(())
         }
 
-        fn emit_bytes(&self, _session_id: u32, _bytes: Vec<u8>) -> Result<(), String> {
+        fn emit_bytes(&self, _terminal_id: u32, _bytes: Vec<u8>) -> Result<(), String> {
             Ok(())
         }
     }
