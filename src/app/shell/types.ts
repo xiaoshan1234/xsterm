@@ -1,6 +1,14 @@
 export type ToolId =
   "terminal-manager" | "tmux-manager" | "window-manager" | "workspace-manager" | "settings";
 
+export const TOOL_ORDER: readonly ToolId[] = [
+  "terminal-manager",
+  "tmux-manager",
+  "window-manager",
+  "workspace-manager",
+  "settings",
+];
+
 export type PreviewDialogId =
   | "create-terminal"
   | "create-tmux"

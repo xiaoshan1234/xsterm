@@ -32,6 +32,10 @@ dashmap = "6"
 futures-core = "0.3"
 xscore = { path = "../third_party/xscore/crates/xscore" }
 
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+
 [dev-dependencies]
 mockall = "0.12"
 mockall_derive = "0.12"

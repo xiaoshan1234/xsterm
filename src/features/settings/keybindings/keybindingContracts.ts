@@ -9,7 +9,14 @@ export type AppKeybindingActionId =
   | "app.nextPane"
   | "app.prevPane"
   | "app.splitVertical"
-  | "app.splitHorizontal";
+  | "app.splitHorizontal"
+  | "app.nextWindow"
+  | "app.prevWindow"
+  | "app.openWindow"
+  | "app.closeWindow"
+  | "app.toggleToolPanel"
+  | "app.nextToolPanel"
+  | "app.prevToolPanel";
 
 export type TerminalKeybindingActionId =
   "terminal.copy" | "terminal.paste" | "terminal.selectAll" | "terminal.clear";

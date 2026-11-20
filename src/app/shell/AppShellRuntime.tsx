@@ -43,6 +43,8 @@ export function AppShellRuntime() {
         groupId: DEFAULT_GROUP_ID,
       }),
     onToggleLogs: () => undefined,
+    onToggleToolPanel: shellUi.toggleToolPanel,
+    onCycleToolPanel: shellUi.cycleTool,
   });
 
   useEffect(() => {

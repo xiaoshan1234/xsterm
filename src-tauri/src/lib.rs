@@ -16,6 +16,39 @@ use feature::logging::{cleanup_old_logs, get_log_config_impl, init_logging};
 use std::sync::Arc;
 use tauri::Manager;
 
+#[cfg(target_os = "windows")]
+fn disable_webview2_browser_accelerators(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+    use windows_core::Interface;
+
+    let Some(window) = app.get_webview_window("main") else {
+        tracing::warn!("main webview window not found; browser accelerator keys remain enabled");
+        return;
+    };
+
+    if let Err(err) = window.with_webview(|webview| {
+        let controller = webview.controller();
+        let Ok(core) = (unsafe { controller.CoreWebView2() }) else {
+            tracing::warn!("failed to access WebView2 core");
+            return;
+        };
+        let Ok(settings) = (unsafe { core.Settings() }) else {
+            tracing::warn!("failed to access WebView2 settings");
+            return;
+        };
+        let Ok(settings3) = settings.cast::<ICoreWebView2Settings3>() else {
+            tracing::warn!("failed to access WebView2 settings (ICoreWebView2Settings3)");
+            return;
+        };
+        if let Err(err) = unsafe { settings3.SetAreBrowserAcceleratorKeysEnabled(false) } {
+            tracing::warn!("failed to disable WebView2 browser accelerator keys: {err}");
+        }
+    }) {
+        tracing::warn!("failed to access WebView2 handle: {err}");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Ensure panic messages are written both to stderr and the tracing log so
@@ -58,6 +91,9 @@ pub fn run() {
             use connect::output::OutputRouter;
             app.manage(Arc::new(OutputRouter::default()));
             app.manage(Arc::new(TauriEventEmitter::new(app.handle().clone())));
+
+            #[cfg(target_os = "windows")]
+            disable_webview2_browser_accelerators(app.handle());
 
             Ok(())
         })

@@ -16,14 +16,26 @@ import { chordFromKeyboardEvent } from "../../../shared/keyboard";
 interface UseKeybindingDispatcherOptions {
   onCreateSession: () => void;
   onToggleLogs: () => void;
+  onToggleToolPanel: () => void;
+  onCycleToolPanel: (step: 1 | -1) => void;
 }
 
 export function useKeybindingDispatcher({
   onCreateSession,
   onToggleLogs,
+  onToggleToolPanel,
+  onCycleToolPanel,
 }: UseKeybindingDispatcherOptions) {
   const { closeTerminal } = useTerminalRuntime();
-  const { workspaces, activeWorkspaceId, setActivePane, splitPane } = useWorkspaceLayout();
+  const {
+    workspaces,
+    activeWorkspaceId,
+    setActivePane,
+    setActiveWindow,
+    splitPane,
+    createWindow,
+    closeWindow,
+  } = useWorkspaceLayout();
   const { keybindings } = useSessionPreferences();
 
   const handlers = useMemo<Partial<Record<AppKeybindingActionId, () => void>>>(() => {
@@ -69,6 +81,38 @@ export function useKeybindingDispatcher({
       setActivePane(workspace.id, window.id, leafIds[nextIndex]);
     };
 
+    const cycleWindow = (step: 1 | -1): void => {
+      const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId);
+      if (!workspace) return;
+      const windowIds = workspace.windows.map((window) => window.id);
+      if (windowIds.length <= 1) return;
+      const currentIndex = workspace.activeWindowId
+        ? windowIds.indexOf(workspace.activeWindowId)
+        : -1;
+      const nextIndex =
+        currentIndex >= 0
+          ? (currentIndex + step + windowIds.length) % windowIds.length
+          : step === 1
+            ? 0
+            : windowIds.length - 1;
+      setActiveWindow(workspace.id, windowIds[nextIndex]);
+    };
+
+    const openWindow = (): void => {
+      const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId);
+      if (!workspace) return;
+      createWindow(workspace.id, undefined, undefined, undefined, "init");
+    };
+
+    const closeActiveWindow = (): void => {
+      const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId);
+      if (!workspace) return;
+      const windowId = workspace.activeWindowId ?? workspace.windows[0]?.id;
+      if (windowId !== undefined) {
+        closeWindow(workspace.id, windowId);
+      }
+    };
+
     return {
       "app.newSession": onCreateSession,
       "app.closePane": closeActivePane,
@@ -77,13 +121,25 @@ export function useKeybindingDispatcher({
       "app.prevPane": () => cyclePane(-1),
       "app.splitVertical": () => splitActivePane("vertical"),
       "app.splitHorizontal": () => splitActivePane("horizontal"),
+      "app.nextWindow": () => cycleWindow(1),
+      "app.prevWindow": () => cycleWindow(-1),
+      "app.openWindow": openWindow,
+      "app.closeWindow": closeActiveWindow,
+      "app.toggleToolPanel": onToggleToolPanel,
+      "app.nextToolPanel": () => onCycleToolPanel(1),
+      "app.prevToolPanel": () => onCycleToolPanel(-1),
     };
   }, [
     activeWorkspaceId,
+    closeWindow,
     closeTerminal,
+    createWindow,
+    onCycleToolPanel,
     onCreateSession,
     onToggleLogs,
+    onToggleToolPanel,
     setActivePane,
+    setActiveWindow,
     splitPane,
     workspaces,
   ]);

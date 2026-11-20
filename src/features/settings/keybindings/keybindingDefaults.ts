@@ -49,6 +49,48 @@ export const KEYBINDING_ACTIONS: readonly KeybindingAction[] = [
     defaultChords: [chord("Slash", { ctrl: true, shift: true })],
   },
   {
+    id: "app.nextWindow",
+    label: "Next window",
+    context: "app",
+    defaultChords: [chord("PageDown", { ctrl: true })],
+  },
+  {
+    id: "app.prevWindow",
+    label: "Previous window",
+    context: "app",
+    defaultChords: [chord("PageUp", { ctrl: true })],
+  },
+  {
+    id: "app.openWindow",
+    label: "New window",
+    context: "app",
+    defaultChords: [chord("KeyT", { ctrl: true, shift: true })],
+  },
+  {
+    id: "app.closeWindow",
+    label: "Close window",
+    context: "app",
+    defaultChords: [chord("KeyQ", { ctrl: true, shift: true })],
+  },
+  {
+    id: "app.toggleToolPanel",
+    label: "Toggle tool panel",
+    context: "app",
+    defaultChords: [chord("KeyE", { ctrl: true, shift: true })],
+  },
+  {
+    id: "app.nextToolPanel",
+    label: "Next tool panel",
+    context: "app",
+    defaultChords: [chord("BracketRight", { ctrl: true, shift: true })],
+  },
+  {
+    id: "app.prevToolPanel",
+    label: "Previous tool panel",
+    context: "app",
+    defaultChords: [chord("BracketLeft", { ctrl: true, shift: true })],
+  },
+  {
     id: "terminal.copy",
     label: "Copy",
     context: "terminal",

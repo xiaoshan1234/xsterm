@@ -16,6 +16,7 @@
     "test:cleanup": "node scripts/cleanup-test-env.cjs",
     "test": "vitest run",
     "test:e2e:tmux": "node --experimental-strip-types test/e2e/tmuxTuiWebview.ts",
+    "test:e2e:keys": "node --experimental-strip-types test/e2e/keybindingShortcuts.ts",
     "test:tmux:tui": "cargo test --manifest-path src-tauri/Cargo.toml connect::tmux::tests -- --ignored --nocapture",
     "test:watch": "vitest",
     "lint": "eslint src",
