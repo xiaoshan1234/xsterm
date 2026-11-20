@@ -21,9 +21,9 @@ export interface UseSessionLifecycleDeps {
     name?: string,
     targetWorkspaceId?: WorkspaceId,
   ) => Window;
-  tmuxControllerConfigsRef?: MutableRefObject<Map<number, TmuxSessionConfig>>;
-  tmuxControllerConfigIdsRef?: MutableRefObject<Map<number, string>>;
+  tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
+  tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;
   syncOpenTmuxSessions: () => void;
   pendingTmuxSessionKeysRef: MutableRefObject<Set<string>>;
-  tmuxControllersClosingRef?: MutableRefObject<Set<number>>;
+  tmuxControllersClosingRef: MutableRefObject<Set<number>>;
 }

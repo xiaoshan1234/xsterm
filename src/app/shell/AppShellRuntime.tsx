@@ -1,15 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { DEFAULT_GROUP_ID } from "../../features/launch-config";
 import { AppShell } from "./AppShell";
 import { GlobalTextSender } from "../../features/command-sender";
-import { TOOL_TITLES, type ToolId } from "./types";
-import { type HelpDialogId } from "./HelpDialog";
+import { TOOL_TITLES } from "./types";
 import { RuntimeOverlays } from "./RuntimeOverlays";
-import {
-  type RuntimeConfirmState,
-  type RuntimeDialog,
-  type RuntimeErrorState,
-} from "./runtimeOverlayTypes";
 import { useAppShortcuts } from "../useAppShortcuts";
 import { useRuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
 import { RuntimeTerminalSurfacePortsProvider } from "../application/terminalSurface/TerminalSurfacePortsProvider";
@@ -19,17 +13,8 @@ import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
 import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
 import { useSessionPersistenceStatus } from "../application/session";
-
-function persistenceErrorTitle(source: "launch-config" | "workspace" | "settings"): string {
-  switch (source) {
-    case "launch-config":
-      return "Unable to save terminal configuration";
-    case "workspace":
-      return "Unable to save workspace configuration";
-    case "settings":
-      return "Unable to save terminal preferences";
-  }
-}
+import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
+import { useRuntimeShellUiState } from "./useRuntimeShellUiState";
 
 export function AppShellRuntime() {
   const shellModel = useRuntimeShellModel();
@@ -39,18 +24,20 @@ export function AppShellRuntime() {
   const { writeTerminal } = terminalRuntime;
   const { workspaces, createDefaultWorkspace } = workspaceLayout;
 
-  const [activeTool, setActiveTool] = useState<ToolId | null>(null);
-  const [isTextSenderOpen, setIsTextSenderOpen] = useState(false);
-  const [dialog, setDialog] = useState<RuntimeDialog>(null);
-  const [confirm, setConfirm] = useState<RuntimeConfirmState | null>(null);
-  const [error, setError] = useState<RuntimeErrorState | null>(null);
-  const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
-  const [selectedTargetKey, setSelectedTargetKey] = useState("");
+  const paneTargetKeys = useMemo(
+    () => paneTargetOptions.map((option) => option.targetKey),
+    [paneTargetOptions],
+  );
+  const shellUi = useRuntimeShellUiState(paneTargetKeys);
+  const overlayController = useRuntimeOverlayController({
+    saveError,
+    clearSaveError,
+  });
   const initializedRef = useRef(false);
 
   useAppShortcuts({
     onCreateSession: () =>
-      setDialog({
+      overlayController.openDialog({
         kind: "create-terminal",
         initialTab: "local",
         groupId: DEFAULT_GROUP_ID,
@@ -66,87 +53,58 @@ export function AppShellRuntime() {
     }
   }, [createDefaultWorkspace, workspaces.length]);
 
-  useEffect(() => {
-    if (
-      paneTargetOptions.length > 0 &&
-      !paneTargetOptions.some((option) => option.targetKey === selectedTargetKey)
-    ) {
-      setSelectedTargetKey(paneTargetOptions[0].targetKey);
-    }
-    if (paneTargetOptions.length === 0 && selectedTargetKey) {
-      setSelectedTargetKey("");
-    }
-  }, [paneTargetOptions, selectedTargetKey]);
-
-  const showError = useCallback((title: string, cause: unknown) => {
-    setError({
-      title,
-      message: cause instanceof Error ? cause.message : String(cause),
-      details: cause instanceof Error ? cause.stack : undefined,
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!saveError || error !== null) return;
-    setError({
-      title: persistenceErrorTitle(saveError.source),
-      message: saveError.message,
-    });
-    clearSaveError();
-  }, [clearSaveError, error, saveError]);
-
   const { targets: textSenderTargets, sendText: sendTextToTarget } = useRuntimeTextSender({
     paneTargetOptions,
-    selectedTargetKey,
+    selectedTargetKey: shellUi.selectedTargetKey,
     writeTerminal,
-    onError: showError,
+    onError: overlayController.showError,
   });
 
   const toolPanelContent = (
     <RuntimeToolPanelContainer
       model={shellModel}
-      activeTool={activeTool}
-      onOpenDialog={setDialog}
-      onRequestConfirm={setConfirm}
-      onError={showError}
+      activeTool={shellUi.activeTool}
+      onOpenDialog={overlayController.openDialog}
+      onRequestConfirm={overlayController.requestConfirm}
+      onError={overlayController.showError}
     />
   );
 
-  const overlay = (
+  const overlays = (
     <RuntimeOverlays
-      dialog={dialog}
-      error={error}
-      confirm={confirm}
-      helpDialog={helpDialog}
-      onCloseDialog={() => setDialog(null)}
-      onDismissConfirm={() => setConfirm(null)}
-      onAcknowledgeError={() => setError(null)}
-      onCloseHelp={() => setHelpDialog(null)}
+      dialog={overlayController.dialog}
+      error={overlayController.error}
+      confirm={overlayController.confirm}
+      helpDialog={overlayController.helpDialog}
+      onCloseDialog={overlayController.closeDialog}
+      onDismissConfirm={overlayController.dismissConfirm}
+      onAcknowledgeError={overlayController.acknowledgeError}
+      onCloseHelp={overlayController.closeHelp}
     />
   );
 
   const feedback = useMemo(
     () => ({
-      reportError: showError,
+      reportError: overlayController.showError,
     }),
-    [showError],
+    [overlayController.showError],
   );
 
   return (
     <ApplicationFeedbackProvider value={feedback}>
       <RuntimeTerminalSurfacePortsProvider>
         <AppShell
-          activeTool={activeTool}
+          activeTool={shellUi.activeTool}
           navBar={
             <RuntimeNavBarContainer
               model={shellModel}
-              isTextSenderOpen={isTextSenderOpen}
-              onToggleTextSender={() => setIsTextSenderOpen((current) => !current)}
-              onHelpAction={setHelpDialog}
-              onError={showError}
+              isTextSenderOpen={shellUi.isTextSenderOpen}
+              onToggleTextSender={shellUi.toggleTextSender}
+              onHelpAction={overlayController.openHelp}
+              onError={overlayController.showError}
             />
           }
-          toolTitle={activeTool ? TOOL_TITLES[activeTool] : ""}
+          toolTitle={shellUi.activeTool ? TOOL_TITLES[shellUi.activeTool] : ""}
           toolPanelContent={toolPanelContent}
           mainArea={
             <RuntimeMainArea
@@ -158,18 +116,16 @@ export function AppShellRuntime() {
           textSender={
             <GlobalTextSender
               targets={textSenderTargets}
-              selectedTargetId={selectedTargetKey}
-              onSelectTarget={setSelectedTargetKey}
+              selectedTargetId={shellUi.selectedTargetKey}
+              onSelectTarget={shellUi.setSelectedTargetKey}
               onSend={sendTextToTarget}
             />
           }
-          overlay={overlay}
+          overlay={overlays}
           runtimeStatus={runtimeStatus}
-          isTextSenderOpen={isTextSenderOpen}
-          isInteractionBlocked={error !== null}
-          onSelectTool={(tool) =>
-            setActiveTool((currentTool) => (currentTool === tool ? null : tool))
-          }
+          isTextSenderOpen={shellUi.isTextSenderOpen}
+          isInteractionBlocked={overlayController.error !== null}
+          onSelectTool={shellUi.toggleTool}
         />
       </RuntimeTerminalSurfacePortsProvider>
     </ApplicationFeedbackProvider>

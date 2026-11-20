@@ -45,7 +45,7 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 - 当前顶层：`src/app/`（应用装配与 shell）、`src/features/`（纵向功能切片）、`src/models/`（纯领域模型）、`src/infra/`（公共日志与通用配置持久化）、`src/shared/`（尽量无业务依赖的 UI、hooks、utils）、`src/styles/`（全局样式）。
 - `src/models/` 不得依赖 React、Tauri、DOM、Store 或任何上层目录；`src/infra/` 不得依赖 `app/`、`features/`、`models/`。
 - Feature 子目录按实际需要创建，不预建空目录。当前常见目录是 `ui/`、`application/`、`state/`、`viewModels/`、`infrastructure/`、`persistence/`；只有存在纯选择器时才创建 `selectors/`。终端命令/事件属于对应 feature 的 `infrastructure/`，不得放入全局 `infra/`。
-- 全局状态由 feature 内的 Context / hooks 提供，配置、终端运行时、工作区布局和偏好分别落在 `launch-config`、`terminal`、`workspace`、`settings`。跨聚合动作与 Provider 组合位于 `src/app/application/session/`；不要再引入聚合 `SessionActions` 或 `useSession()` 式公共大 API。Pane/window 的既有终端绑定走 `PaneIntentActions`，需要先创建终端的流程走独立的 `PaneSessionIntentActions`。Session 打开、工作区关联、tmux controller 事件和 tmux window 事件分别由独立 use case/handler 组合。terminal-surface 的运行时副作用通过 `TerminalSurfacePortsProvider` 注入。
+- 全局状态由 feature 内的 Context / hooks 提供，配置、终端运行时、工作区布局和偏好分别落在 `launch-config`、`terminal`、`workspace`、`settings`。跨聚合动作与 Provider 组合位于 `src/app/application/session/`；不要再引入聚合 `SessionActions` 或 `useSession()` 式公共大 API。Pane/window 的既有终端绑定走 `PaneIntentActions`，需要先创建终端的流程走独立的 `PaneSessionIntentActions`。Session 打开、工作区关联、window/pane 布局、tmux controller 生命周期和事件分别由独立 use case/handler 组合；`SessionProvider` 只做状态、持久化和 Provider 装配。terminal-surface 的运行时副作用通过 `TerminalSurfacePortsProvider` 注入。
 - Terminal、Workspace、Window、Pane 的核心身份使用 `src/models/ids.ts` 的 branded ID；运行时生成必须走对应 `generate*Id` / `create*Id`，持久化和 wire 数据必须在边界显式解析后再进入领域契约。tmux controller/window/pane 的 backend handle 仍保持原始类型，直到其适配器完成独立品牌化。
 - 生产代码的 feature 依赖图必须保持无环。`workspace` 与 `tmux` 必须互不依赖；tmux 布局解析留在 `tmux`，布局到 PaneTree 的跨聚合转换由 `app/application/session/` 完成，Pane 的多路复用窗口命令通过 app 注入的窄端口提供。tmux 配置命名/身份 helper 属于 `launch-config`，不要放回 tmux runtime。
 - session 启动必须先完成持久化 hydration，再启动 Tauri 事件桥并渲染运行时 Shell；不要绕过 `SessionProvider` 的 `isLoaded` 门控。
@@ -68,9 +68,9 @@ xsterm 是一个 **Tauri 2 桌面终端模拟器**：前端 React 19 + TypeScrip
 
 ### 4.4 当前前端边界债务（不要扩散）
 
-以下为 2026-11-19 当前工作区状态；修复后应同步删除对应条目，不要把它当成长期架构目标。
+以下为 2026-11-20 当前工作区状态；修复后应同步删除对应条目，不要把它当成长期架构目标。
 
-- `AppShellRuntime` 已把 View Model、ToolPanel 和 NavBar 控制移出，但仍负责 Overlay、TextSender selection 和部分 shell 状态，后续可继续抽 controller。
+- 当前未发现高优先级的前端边界债务。剩余工作主要是大型展示组件的局部复杂度，不应为追求行数进行机械拆分。
 
 ## 5. 关键坑（Gotchas）
 

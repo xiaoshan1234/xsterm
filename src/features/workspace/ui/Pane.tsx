@@ -1,9 +1,7 @@
-import { useCallback, useRef, useState } from "react";
-import type { TerminalId, WindowId } from "../../../models";
-import type { EditablePaneNode, PaneSplitDirection } from "../contracts";
-import type { Workspace } from "../contracts";
-import { isApplicationError } from "../../../models/applicationError";
-import { isTmuxPaneTerminal, useTerminalRuntime } from "../../terminal";
+import { useCallback, useRef } from "react";
+import type { WindowId } from "../../../models";
+import type { EditablePaneNode, Workspace } from "../contracts";
+import { useTerminalRuntime } from "../../terminal";
 import { getPaneNumber } from "../application/paneTreeOperations";
 import { useTheme } from "../../../shared/theme/ThemeContext";
 import { Terminal, TmuxControllerErrorBanner, type TerminalRef } from "../../terminal-surface";
@@ -14,6 +12,8 @@ import { useWorkspacePaneRuntimeActions } from "../state/WorkspacePaneRuntimeAct
 import { PaneInitCard } from "./PaneInitCard";
 import { buildPaneContextMenu } from "./paneContextMenu";
 import { SelectTerminalDialog } from "./dialogs/SelectTerminalDialog";
+import { usePaneRuntimeCommands } from "./usePaneRuntimeCommands";
+import { usePaneSessionDialogController } from "./usePaneSessionDialogController";
 import "./Pane.css";
 
 interface PaneProps {
@@ -24,8 +24,6 @@ interface PaneProps {
   isWindowActive: boolean;
   onActivate: () => void;
 }
-
-type DialogMode = "split" | "attach";
 
 export function Pane({
   workspace,
@@ -40,262 +38,90 @@ export function Pane({
   const paneIntents = usePaneIntents();
   const paneSessionIntents = usePaneSessionIntents();
   const { currentTheme } = useTheme();
-  const [showSessionDialog, setShowSessionDialog] = useState(false);
-  const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
-  const [pendingSplit, setPendingSplit] = useState<PaneSplitDirection | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const isSubmittingRef = useRef(false);
   const contextMenuRef = useRef<ContextMenuRef>(null);
   const terminalRef = useRef<TerminalRef>(null);
 
-  const startSubmitting = () => {
-    if (isSubmittingRef.current) return false;
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    return true;
-  };
-
-  const endSubmitting = () => {
-    isSubmittingRef.current = false;
-    setIsSubmitting(false);
-  };
-
   const terminal =
-    pane.terminalId !== undefined ? terminals.find((s) => s.id === pane.terminalId) : undefined;
-  const selectedWindow = workspace.windows.find((w) => w.id === windowId);
+    pane.terminalId !== undefined
+      ? terminals.find((session) => session.id === pane.terminalId)
+      : undefined;
+  const selectedWindow = workspace.windows.find((candidate) => candidate.id === windowId);
   const paneNumber = selectedWindow ? getPaneNumber(selectedWindow.rootPane, pane.id) : null;
-
-  const handleStartSplit = useCallback(
-    (direction: PaneSplitDirection) => {
-      // tmux panes (supportsMultiplex) split immediately
-      // through the backend — no "pick a terminal from the dialog"
-      // step because the new pane IS the new tmux pane. The
-      // `tmux-pane-added` listener / `splitTmuxPaneInternal` updates
-      // React state and the pane tree.
-      if (
-        terminal?.capabilities?.supportsMultiplex &&
-        terminal.id !== undefined &&
-        pane.terminalId !== undefined
-      ) {
-        void paneIntents
-          .splitPaneWithTerminal({
-            workspaceId: workspace.id,
-            windowId,
-            paneId: pane.id,
-            direction,
-            terminalId: pane.terminalId,
-            configId: pane.configId,
-          })
-          .catch((error) => {
-            window.alert(
-              `Failed to split terminal: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          });
-        return;
-      }
-      // Non-multiplex path: open the dialog so the user picks what
-      // terminal to attach to the new leaf.
-      setPendingSplit(direction);
-      setDialogMode("split");
-      setShowSessionDialog(true);
-    },
-    [terminal, pane.terminalId, pane.configId, paneIntents, workspace.id, windowId, pane.id],
-  );
-
-  const handleStartAttach = useCallback(() => {
-    setPendingSplit(null);
-    setDialogMode("attach");
-    setShowSessionDialog(true);
+  const reportError = useCallback((title: string, cause: unknown) => {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    window.alert(`${title}: ${message}`);
   }, []);
 
-  const attachTerminalToPane = useCallback(
-    (terminalId: TerminalId) =>
-      paneIntents.attachExistingTerminal({
-        workspaceId: workspace.id,
-        windowId,
-        paneId: pane.id,
-        terminalId,
-      }),
-    [paneIntents, workspace.id, windowId, pane.id],
-  );
+  const sessionDialog = usePaneSessionDialogController({
+    workspaceId: workspace.id,
+    windowId,
+    paneId: pane.id,
+    terminal,
+    paneTerminalId: pane.terminalId,
+    paneConfigId: pane.configId,
+    terminals,
+    paneIntents,
+    paneSessionIntents,
+    reportError,
+  });
+  const runtimeCommands = usePaneRuntimeCommands({
+    workspaceId: workspace.id,
+    windowId,
+    paneId: pane.id,
+    terminal,
+    selectedWindow,
+    paneIntents,
+    paneRuntimeActions,
+    reportError,
+  });
 
-  const handleSelectSession = useCallback(
-    async (terminalId: TerminalId) => {
-      if (!startSubmitting()) return;
-      try {
-        if (dialogMode === "split" && pendingSplit) {
-          const terminalConfigId = terminals.find((s) => s.id === terminalId)?.configId;
-          await paneIntents.splitPaneWithTerminal({
-            workspaceId: workspace.id,
-            windowId,
-            paneId: pane.id,
-            direction: pendingSplit,
-            terminalId,
-            configId: terminalConfigId,
-          });
-        } else if (dialogMode === "attach") {
-          await attachTerminalToPane(terminalId);
-        }
-        setPendingSplit(null);
-        setDialogMode(null);
-        setShowSessionDialog(false);
-      } catch (e) {
-        if (isApplicationError(e, "terminal-already-attached")) {
-          window.alert("Terminal is already used in another window");
-        } else {
-          window.alert(`Failed to attach terminal: ${e instanceof Error ? e.message : String(e)}`);
-        }
-      } finally {
-        endSubmitting();
-      }
-    },
-    [
-      dialogMode,
-      pendingSplit,
-      workspace.id,
-      windowId,
-      pane.id,
-      paneIntents,
-      attachTerminalToPane,
-      terminals,
-    ],
-  );
-
-  const handleSelectConfig = useCallback(
-    async (configId: string) => {
-      if (!startSubmitting()) return;
-      try {
-        if (dialogMode === "split" && pendingSplit) {
-          await paneSessionIntents.splitPaneWithSavedConfig({
-            workspaceId: workspace.id,
-            windowId,
-            paneId: pane.id,
-            direction: pendingSplit,
-            configId,
-          });
-        } else if (dialogMode === "attach") {
-          await paneSessionIntents.attachSavedConfigToPane({
-            workspaceId: workspace.id,
-            windowId,
-            paneId: pane.id,
-            configId,
-          });
-        }
-        setPendingSplit(null);
-        setDialogMode(null);
-        setShowSessionDialog(false);
-      } catch (e) {
-        if (isApplicationError(e, "terminal-already-attached")) {
-          window.alert("Terminal is already used in another window");
-        } else {
-          window.alert(`Failed to create terminal: ${e instanceof Error ? e.message : String(e)}`);
-        }
-      } finally {
-        endSubmitting();
-      }
-    },
-    [dialogMode, pendingSplit, workspace.id, windowId, pane.id, paneSessionIntents],
-  );
-
-  const handleCloseSession = useCallback(() => {
-    if (pane.terminalId !== undefined) {
-      void paneIntents.closeTerminal(pane.terminalId).catch((error) => {
-        window.alert(
-          `Failed to close terminal: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-    }
-  }, [pane.terminalId, paneIntents]);
-
-  const handleClear = useCallback(() => {
+  const clearTerminal = useCallback(() => {
     terminalRef.current?.clear();
   }, []);
 
-  const handleSelectAll = useCallback(() => {
+  const selectAll = useCallback(() => {
     terminalRef.current?.selectAll();
   }, []);
 
-  const handleCopy = useCallback(async () => {
+  const copySelection = useCallback(async () => {
     await terminalRef.current?.copySelection();
   }, []);
 
-  const handlePaste = useCallback(async () => {
+  const pasteFromClipboard = useCallback(async () => {
     await terminalRef.current?.pasteFromClipboard();
   }, []);
 
-  const handleContextMenuCapture = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    contextMenuRef.current?.open(e.clientX, e.clientY);
+  const handleContextMenuCapture = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    contextMenuRef.current?.open(event.clientX, event.clientY);
   }, []);
 
-  const handleClosePane = useCallback(() => {
-    void paneIntents
-      .closePane({
-        workspaceId: workspace.id,
-        windowId,
-        paneId: pane.id,
-      })
-      .catch((error) => {
-        window.alert(
-          `Failed to close pane: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-  }, [paneIntents, workspace.id, windowId, pane.id]);
-
-  const handleCreateTmuxWindow = useCallback(async () => {
-    if (!terminal || !isTmuxPaneTerminal(terminal)) return;
-    try {
-      await paneRuntimeActions.createMultiplexedWindow(terminal.id);
-    } catch (e) {
-      console.error("Failed to create tmux window:", e);
-      window.alert(`Failed to create Tmux window: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [paneRuntimeActions, terminal]);
-
-  const handleKillTmuxWindow = useCallback(async () => {
-    const xid = selectedWindow?.xstermWindowId;
-    if (xid === undefined) return;
-    try {
-      await paneRuntimeActions.closeMultiplexedWindow(xid);
-    } catch (e) {
-      console.error("Failed to kill tmux window:", e);
-      window.alert(`Failed to kill Tmux window: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [paneRuntimeActions, selectedWindow?.xstermWindowId]);
-
-  const handleRenameTmuxWindow = useCallback(async () => {
-    const xid = selectedWindow?.xstermWindowId;
-    if (xid === undefined) return;
+  const renameMultiplexedWindow = useCallback(async () => {
     const name = window.prompt("Rename Tmux window:");
-    if (name === null || name.trim() === "") return;
-    try {
-      await paneRuntimeActions.renameMultiplexedWindow(xid, name.trim());
-    } catch (e) {
-      console.error("Failed to rename tmux window:", e);
-      window.alert(`Failed to rename Tmux window: ${e instanceof Error ? e.message : String(e)}`);
+    if (name !== null) {
+      await runtimeCommands.renameMultiplexedWindow(name);
     }
-  }, [paneRuntimeActions, selectedWindow?.xstermWindowId]);
+  }, [runtimeCommands]);
 
   const contextMenuItems = buildPaneContextMenu(
     terminal,
     {
-      startSplit: handleStartSplit,
-      startAttach: handleStartAttach,
-      selectAll: handleSelectAll,
-      copy: handleCopy,
-      paste: handlePaste,
-      clear: handleClear,
-      closePane: handleClosePane,
-      closeTerminal: handleCloseSession,
-      createTmuxWindow: handleCreateTmuxWindow,
-      killTmuxWindow: handleKillTmuxWindow,
-      renameTmuxWindow: handleRenameTmuxWindow,
+      startSplit: sessionDialog.startSplit,
+      startAttach: sessionDialog.startAttach,
+      selectAll,
+      copy: copySelection,
+      paste: pasteFromClipboard,
+      clear: clearTerminal,
+      closePane: runtimeCommands.closePane,
+      closeTerminal: runtimeCommands.closeTerminal,
+      createTmuxWindow: runtimeCommands.createMultiplexedWindow,
+      killTmuxWindow: runtimeCommands.closeMultiplexedWindow,
+      renameTmuxWindow: renameMultiplexedWindow,
     },
     selectedWindow,
   );
 
-  // hidden panes (from tmux -CC attach) are suppressed. MVP panes have is_hidden = false.
   if (terminal?.isHidden) {
     return null;
   }
@@ -337,7 +163,7 @@ export function Pane({
             </div>
           ) : (
             <PaneInitCard
-              onAttachExistingTerminal={attachTerminalToPane}
+              onAttachExistingTerminal={sessionDialog.attachTerminalToPane}
               onCreateLocal={(config, save) =>
                 paneSessionIntents.createLocalTerminalForPane({
                   workspaceId: workspace.id,
@@ -371,16 +197,11 @@ export function Pane({
         </div>
       </ContextMenu>
       <SelectTerminalDialog
-        isOpen={showSessionDialog}
-        onClose={() => {
-          if (isSubmitting) return;
-          setShowSessionDialog(false);
-          setPendingSplit(null);
-          setDialogMode(null);
-        }}
-        onSelectSession={handleSelectSession}
-        onSelectConfig={handleSelectConfig}
-        disabled={isSubmitting}
+        isOpen={sessionDialog.showSessionDialog}
+        onClose={sessionDialog.closeDialog}
+        onSelectSession={sessionDialog.selectSession}
+        onSelectConfig={sessionDialog.selectConfig}
+        disabled={sessionDialog.isSubmitting}
       />
     </>
   );
