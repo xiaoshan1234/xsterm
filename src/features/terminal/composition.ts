@@ -1,4 +1,1 @@
-export {
-  useTerminalSessionState,
-  type TerminalSessionState,
-} from "./state/useTerminalSessionState";
+export { useTerminalState, type TerminalState } from "./state/useTerminalState";

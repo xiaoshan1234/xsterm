@@ -10,7 +10,7 @@ interface TerminalEventBridgeOptions {
   setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   terminalsRef: MutableRefObject<Terminal[]>;
-  establishingSessionsRef: MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: MutableRefObject<Set<TerminalId>>;
 }
 
 export function useTerminalEventBridge({
@@ -18,7 +18,7 @@ export function useTerminalEventBridge({
   setTerminals,
   setWorkspaces,
   terminalsRef,
-  establishingSessionsRef,
+  establishingTerminalsRef,
 }: TerminalEventBridgeOptions): void {
   useEffect(() => {
     if (!isEnabled) return;
@@ -30,7 +30,7 @@ export function useTerminalEventBridge({
         const unsubscribe = await terminalEventStream.subscribe({
           onDisconnected: ({ terminalHandle }) => {
             const terminalId = createTerminalId(Number(terminalHandle));
-            establishingSessionsRef.current.delete(terminalId);
+            establishingTerminalsRef.current.delete(terminalId);
             setTerminals((terminals) =>
               terminals.map((terminal) =>
                 terminal.id === terminalId ? { ...terminal, isConnected: false } : terminal,
@@ -39,7 +39,7 @@ export function useTerminalEventBridge({
           },
           onClosed: ({ terminalHandle }) => {
             const terminalId = createTerminalId(Number(terminalHandle));
-            establishingSessionsRef.current.delete(terminalId);
+            establishingTerminalsRef.current.delete(terminalId);
             if (!terminalsRef.current.some((terminal) => terminal.id === terminalId)) return;
 
             setTerminals((terminals) => terminals.filter((terminal) => terminal.id !== terminalId));
@@ -62,5 +62,5 @@ export function useTerminalEventBridge({
       isDisposed = true;
       cleanup?.();
     };
-  }, [establishingSessionsRef, isEnabled, setTerminals, setWorkspaces, terminalsRef]);
+  }, [establishingTerminalsRef, isEnabled, setTerminals, setWorkspaces, terminalsRef]);
 }

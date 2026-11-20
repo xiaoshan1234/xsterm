@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import type { TerminalId } from "../../../models";
-import type { TerminalRuntimeContextType, SessionState } from "./types";
+import type { TerminalRuntimeContextType, ApplicationState } from "./types";
 import type { useTerminalActions } from "./useTerminalActions";
 
 interface UseTerminalRuntimeValueOptions {
-  state: SessionState;
+  state: ApplicationState;
   actions: ReturnType<typeof useTerminalActions>;
   getTerminalSize: (terminalId: TerminalId) => { rows: number; cols: number } | undefined;
 }

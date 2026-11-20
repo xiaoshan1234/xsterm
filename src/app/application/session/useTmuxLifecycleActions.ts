@@ -7,9 +7,9 @@ type TmuxLifecycleDeps = Pick<
   UseSessionLifecycleDeps,
   | "savedConfigs"
   | "terminalsRef"
-  | "setSessions"
+  | "setTerminals"
   | "setWorkspaces"
-  | "establishingSessionsRef"
+  | "establishingTerminalsRef"
   | "updateConfigs"
   | "tmuxControllerConfigsRef"
   | "tmuxControllerConfigIdsRef"
@@ -25,7 +25,7 @@ export function useTmuxLifecycleActions(deps: TmuxLifecycleDeps) {
     tracking,
     savedConfigs: deps.savedConfigs,
     terminalsRef: deps.terminalsRef,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     tmuxControllerConfigsRef: deps.tmuxControllerConfigsRef,
     tmuxControllerConfigIdsRef: deps.tmuxControllerConfigIdsRef,
     syncOpenTmuxSessions: deps.syncOpenTmuxSessions,

@@ -83,13 +83,13 @@ describe("useTerminalReconnectAction", () => {
       useTerminalReconnectAction({
         savedConfigs: [savedConfig],
         terminalsRef: { current: [oldTerminal] },
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         setWorkspaces: (action) => {
           workspaces = typeof action === "function" ? action(workspaces) : action;
         },
-        establishingSessionsRef: { current: establishing },
+        establishingTerminalsRef: { current: establishing },
       }),
     );
 
@@ -109,9 +109,9 @@ describe("useTerminalReconnectAction", () => {
       useTerminalReconnectAction({
         savedConfigs: [savedConfig],
         terminalsRef: { current: [] },
-        setSessions: vi.fn(),
+        setTerminals: vi.fn(),
         setWorkspaces: vi.fn(),
-        establishingSessionsRef: { current: new Set() },
+        establishingTerminalsRef: { current: new Set() },
       }),
     );
 
@@ -126,9 +126,9 @@ describe("useTerminalReconnectAction", () => {
       useTerminalReconnectAction({
         savedConfigs: [],
         terminalsRef: { current: [oldTerminal] },
-        setSessions: vi.fn(),
+        setTerminals: vi.fn(),
         setWorkspaces: vi.fn(),
-        establishingSessionsRef: { current: new Set() },
+        establishingTerminalsRef: { current: new Set() },
       }),
     );
 

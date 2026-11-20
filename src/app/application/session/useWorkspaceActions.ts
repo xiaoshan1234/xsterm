@@ -14,8 +14,8 @@ interface UseWorkspaceActionsDeps {
   workspacesRef: React.MutableRefObject<Workspace[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   setActiveWorkspaceId: React.Dispatch<React.SetStateAction<WorkspaceId | null>>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
   closeTerminal: (terminalId: TerminalId) => Promise<void>;
 }
 
@@ -24,8 +24,8 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
     workspacesRef,
     setWorkspaces,
     setActiveWorkspaceId,
-    setSessions,
-    establishingSessionsRef,
+    setTerminals,
+    establishingTerminalsRef,
     closeTerminal,
   } = deps;
 
@@ -118,10 +118,10 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
         const idsToClose = new Set(workspace.terminalIds);
         idsToClose.forEach((terminalId) => {
           closeTerminal(terminalId).catch((e) => console.error("Failed to close terminal:", e));
-          establishingSessionsRef.current.delete(terminalId);
+          establishingTerminalsRef.current.delete(terminalId);
           clearTerminalOutput(terminalId);
         });
-        setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
+        setTerminals((prev) => prev.filter((s) => !idsToClose.has(s.id)));
       }
       setWorkspaces((prev) => prev.filter((w) => w.id !== workspaceId));
       setActiveWorkspaceId((current) => {
@@ -141,8 +141,8 @@ export function useWorkspaceActions(deps: UseWorkspaceActionsDeps) {
       setWorkspaces,
       setActiveWorkspaceId,
       workspacesRef,
-      setSessions,
-      establishingSessionsRef,
+      setTerminals,
+      establishingTerminalsRef,
       closeTerminal,
     ],
   );

@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import type { SavedLaunchConfigsContextType } from "./types";
-import type { SessionState } from "./types";
+import type { ApplicationState } from "./types";
 import type { useTerminalActions } from "./useTerminalActions";
 
 interface UseSavedLaunchConfigsValueOptions {
-  state: SessionState;
+  state: ApplicationState;
   actions: ReturnType<typeof useTerminalActions>;
 }
 

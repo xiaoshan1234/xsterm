@@ -49,7 +49,7 @@ function createPorts(terminals: Terminal[]) {
     },
     terminalsRef: { current: terminals },
     workspacesRef: { current: state.workspaces },
-    establishingSessionsRef: { current: new Set() },
+    establishingTerminalsRef: { current: new Set() },
     setTmuxControllerErrors: (action) => {
       state.controllerErrors =
         typeof action === "function" ? action(state.controllerErrors) : action;

@@ -26,8 +26,8 @@ interface UseSavedWorkspaceActionsDeps {
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   setActiveWorkspaceId: React.Dispatch<React.SetStateAction<WorkspaceId | null>>;
   setSavedWorkspaces: React.Dispatch<React.SetStateAction<SavedWorkspace[]>>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
   persistSavedWorkspaces: (workspacesData: SavedWorkspace[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;
   closeTerminal: (terminalId: TerminalId) => Promise<void>;
@@ -40,8 +40,8 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
     setWorkspaces,
     setActiveWorkspaceId,
     setSavedWorkspaces,
-    setSessions,
-    establishingSessionsRef,
+    setTerminals,
+    establishingTerminalsRef,
     persistSavedWorkspaces,
     openFromConfigInternal,
     closeTerminal,
@@ -136,8 +136,8 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
 
       const rollback = createRollback({
         closeTerminal,
-        setSessions,
-        establishingSessionsRef,
+        setTerminals,
+        establishingTerminalsRef,
         logTag: "workspace",
       });
 
@@ -227,10 +227,10 @@ export function useSavedWorkspaceActions(deps: UseSavedWorkspaceActionsDeps) {
     [
       savedWorkspaces,
       openFromConfigInternal,
-      setSessions,
+      setTerminals,
       setWorkspaces,
       setActiveWorkspaceId,
-      establishingSessionsRef,
+      establishingTerminalsRef,
       closeTerminal,
     ],
   );

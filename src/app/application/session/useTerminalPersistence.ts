@@ -14,9 +14,9 @@ import {
 } from "../../../features/workspace";
 import type { SavedTerminalConfig, TerminalGroup } from "../../../features/launch-config";
 import type { SavedWindowConfig, SavedWorkspace } from "../../../features/workspace";
-import type { SessionPersistence, SessionPersistenceSaveError } from "./types";
+import type { ApplicationPersistence, ApplicationPersistenceSaveError } from "./types";
 
-interface UseSessionPersistenceOptions {
+interface UseApplicationPersistenceOptions {
   setSavedConfigs: (
     value: SavedTerminalConfig[] | ((prev: SavedTerminalConfig[]) => SavedTerminalConfig[]),
   ) => void;
@@ -52,15 +52,15 @@ export function useTerminalPersistence({
   launchConfigRepository: launchRepository = defaultLaunchConfigRepository,
   workspaceRepository: workspaceRepo = defaultWorkspaceRepository,
   settingsRepository: settingsRepo = defaultSettingsRepository,
-}: UseSessionPersistenceOptions): SessionPersistence {
+}: UseApplicationPersistenceOptions): ApplicationPersistence {
   const [isWorkspaceDataLoaded, setIsWorkspaceDataLoaded] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<SessionPersistenceSaveError | null>(null);
+  const [saveError, setSaveError] = useState<ApplicationPersistenceSaveError | null>(null);
   const skipInitialSettingsPersistRef = useRef(true);
   const reportSaveError = useCallback(
-    (source: SessionPersistenceSaveError["source"], operation: string, cause: unknown) => {
+    (source: ApplicationPersistenceSaveError["source"], operation: string, cause: unknown) => {
       console.error(`Failed to ${operation}:`, cause);
       setSaveError({
         source,

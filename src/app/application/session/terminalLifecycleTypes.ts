@@ -8,10 +8,10 @@ import type { Window, Workspace } from "../../../features/workspace";
 export interface UseSessionLifecycleDeps {
   savedConfigs: SavedTerminalConfig[];
   terminalsRef: MutableRefObject<Terminal[]>;
-  setSessions: Dispatch<SetStateAction<Terminal[]>>;
+  setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   activeWorkspaceId: WorkspaceId | null;
-  establishingSessionsRef: MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: MutableRefObject<Set<TerminalId>>;
   updateConfigs: (updater: (prev: SavedTerminalConfig[]) => SavedTerminalConfig[]) => void;
   updateGroups: (updater: (prev: TerminalGroup[]) => TerminalGroup[], nextId?: number) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;

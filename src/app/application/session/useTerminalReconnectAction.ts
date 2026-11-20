@@ -16,17 +16,17 @@ import { buildFrontendTerminal, dispatchByType } from "./useTerminalActions.help
 interface UseTerminalReconnectActionOptions {
   savedConfigs: SavedTerminalConfig[];
   terminalsRef: React.MutableRefObject<Terminal[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
 }
 
 export function useTerminalReconnectAction({
   savedConfigs,
   terminalsRef,
-  setSessions,
+  setTerminals,
   setWorkspaces,
-  establishingSessionsRef,
+  establishingTerminalsRef,
 }: UseTerminalReconnectActionOptions) {
   return useCallback(
     async (terminalId: TerminalId): Promise<Terminal> => {
@@ -63,7 +63,7 @@ export function useTerminalReconnectAction({
         config.type,
         config.displayConfig,
       );
-      setSessions((previous) => [...previous, newTerminal]);
+      setTerminals((previous) => [...previous, newTerminal]);
       setWorkspaces((previous) =>
         previous.map((workspace) =>
           withRecomputedSessionIds({
@@ -76,8 +76,8 @@ export function useTerminalReconnectAction({
         ),
       );
 
-      establishingSessionsRef.current.delete(terminalId);
-      setSessions((previous) => previous.filter((terminal) => terminal.id !== terminalId));
+      establishingTerminalsRef.current.delete(terminalId);
+      setTerminals((previous) => previous.filter((terminal) => terminal.id !== terminalId));
       try {
         await terminalSessionActions.closeTerminal(terminalId);
       } catch (error) {
@@ -87,6 +87,6 @@ export function useTerminalReconnectAction({
       }
       return newTerminal;
     },
-    [establishingSessionsRef, savedConfigs, setSessions, setWorkspaces, terminalsRef],
+    [establishingTerminalsRef, savedConfigs, setTerminals, setWorkspaces, terminalsRef],
   );
 }

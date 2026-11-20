@@ -11,10 +11,7 @@ export {
   terminalSessionActions,
   terminalStreamActions,
 } from "./ports";
-export {
-  useTerminalSessionState,
-  type TerminalSessionState,
-} from "./state/useTerminalSessionState";
+export { useTerminalState, type TerminalState } from "./state/useTerminalState";
 export { TerminalRuntimeProvider, useTerminalRuntime } from "./state/TerminalRuntimeContext";
 export { isTmuxPaneTerminal } from "./contracts";
 export type {

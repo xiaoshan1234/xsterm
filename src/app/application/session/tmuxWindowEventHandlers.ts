@@ -11,7 +11,7 @@ import type { TmuxPaneGeometry } from "./tmuxWorkspacePaneTree";
 import type { TmuxEventBridgePorts, TmuxEventHandlerSet } from "./tmuxEventBridgePorts";
 
 export function createTmuxWindowEventHandlers({
-  establishingSessionsRef,
+  establishingTerminalsRef,
   setTerminals,
   setWorkspaces,
   terminalsRef,
@@ -121,7 +121,7 @@ export function createTmuxWindowEventHandlers({
 
       if (deadIds.length > 0) {
         for (const terminalId of deadIds) {
-          establishingSessionsRef.current.delete(terminalId);
+          establishingTerminalsRef.current.delete(terminalId);
         }
         setTerminals((terminals) => terminals.filter((terminal) => !deadIds.includes(terminal.id)));
       }

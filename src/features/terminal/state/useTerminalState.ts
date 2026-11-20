@@ -10,21 +10,21 @@ import {
 import type { TerminalId } from "../../../models";
 import type { Terminal } from "../contracts";
 
-export interface TerminalSessionState {
+export interface TerminalState {
   terminals: Terminal[];
-  setSessions: Dispatch<SetStateAction<Terminal[]>>;
+  setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   terminalsRef: MutableRefObject<Terminal[]>;
-  establishingSessionsRef: MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: MutableRefObject<Set<TerminalId>>;
   terminalSizesRef: MutableRefObject<Map<TerminalId, { rows: number; cols: number }>>;
   terminalSizesVersion: number;
   reportTerminalSize: (terminalId: TerminalId, rows: number, cols: number) => void;
 }
 
-export function useTerminalSessionState(): TerminalSessionState {
-  const [terminals, setSessions] = useState<Terminal[]>([]);
+export function useTerminalState(): TerminalState {
+  const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [terminalSizesVersion, setTerminalSizesVersion] = useState(0);
   const terminalsRef = useRef(terminals);
-  const establishingSessionsRef = useRef<Set<TerminalId>>(new Set());
+  const establishingTerminalsRef = useRef<Set<TerminalId>>(new Set());
   const terminalSizesRef = useRef<Map<TerminalId, { rows: number; cols: number }>>(new Map());
 
   useEffect(() => {
@@ -40,9 +40,9 @@ export function useTerminalSessionState(): TerminalSessionState {
 
   return {
     terminals,
-    setSessions,
+    setTerminals,
     terminalsRef,
-    establishingSessionsRef,
+    establishingTerminalsRef,
     terminalSizesRef,
     terminalSizesVersion,
     reportTerminalSize,

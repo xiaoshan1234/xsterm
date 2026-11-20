@@ -21,9 +21,9 @@ type TmuxControllerTrackingDeps = Pick<
   UseSessionLifecycleDeps,
   | "savedConfigs"
   | "terminalsRef"
-  | "setSessions"
+  | "setTerminals"
   | "setWorkspaces"
-  | "establishingSessionsRef"
+  | "establishingTerminalsRef"
   | "updateConfigs"
   | "tmuxControllerConfigsRef"
   | "tmuxControllerConfigIdsRef"
@@ -35,9 +35,9 @@ type TmuxControllerTrackingDeps = Pick<
 export function useTmuxControllerTracking({
   savedConfigs,
   terminalsRef,
-  setSessions,
+  setTerminals,
   setWorkspaces,
-  establishingSessionsRef,
+  establishingTerminalsRef,
   updateConfigs,
   tmuxControllerConfigsRef,
   tmuxControllerConfigIdsRef,
@@ -77,7 +77,7 @@ export function useTmuxControllerTracking({
         if (tmuxControllerConfigIdsRef) {
           tmuxControllerConfigIdsRef.current.set(controllerId, terminal.configId);
           syncOpenTmuxSessions();
-          setSessions((previous) =>
+          setTerminals((previous) =>
             previous.map((session) =>
               isTmuxPaneTerminal(session) && session.tmux.controllerId === controllerId
                 ? { ...session, configId: terminal.configId, displayConfig }
@@ -106,7 +106,7 @@ export function useTmuxControllerTracking({
     },
     [
       savedConfigs,
-      setSessions,
+      setTerminals,
       syncOpenTmuxSessions,
       tmuxControllerConfigIdsRef,
       tmuxControllerConfigsRef,
@@ -138,7 +138,7 @@ export function useTmuxControllerTracking({
         )
         .map((terminal) => terminal.id);
       if (deadIds.length > 0) {
-        setSessions((previous) =>
+        setTerminals((previous) =>
           previous.filter(
             (terminal) =>
               !isTmuxPaneTerminal(terminal) || terminal.tmux.controllerId !== controllerId,
@@ -146,7 +146,7 @@ export function useTmuxControllerTracking({
         );
         setWorkspaces((previous) => removeControllerFromWorkspaces(previous, deadIds));
         for (const terminalId of deadIds) {
-          establishingSessionsRef.current.delete(terminalId);
+          establishingTerminalsRef.current.delete(terminalId);
           clearTerminalOutput(terminalId);
         }
       }
@@ -156,8 +156,8 @@ export function useTmuxControllerTracking({
       tmuxControllersClosingRef.current.delete(controllerId);
     },
     [
-      establishingSessionsRef,
-      setSessions,
+      establishingTerminalsRef,
+      setTerminals,
       setWorkspaces,
       syncOpenTmuxSessions,
       terminalsRef,

@@ -18,7 +18,7 @@ import { buildFrontendTerminal } from "./useTerminalActions.helpers";
 
 interface UseMultiplexedPaneActionsOptions {
   terminalsRef: MutableRefObject<Terminal[]>;
-  setSessions: Dispatch<SetStateAction<Terminal[]>>;
+  setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   createPane?: (
     controllerId: number,
@@ -29,7 +29,7 @@ interface UseMultiplexedPaneActionsOptions {
 
 export function useMultiplexedPaneActions({
   terminalsRef,
-  setSessions,
+  setTerminals,
   setWorkspaces,
   createPane = tmuxControllerActions.createPane,
 }: UseMultiplexedPaneActionsOptions) {
@@ -53,7 +53,7 @@ export function useMultiplexedPaneActions({
       }
       const newTerminalId = info.id;
 
-      setSessions((previous) => {
+      setTerminals((previous) => {
         if (previous.some((terminal) => terminal.id === newTerminalId)) {
           return previous.map((terminal) =>
             terminal.id === newTerminalId && isTmuxPaneTerminal(terminal)
@@ -104,7 +104,7 @@ export function useMultiplexedPaneActions({
         );
       });
     },
-    [createPane, setSessions, setWorkspaces, terminalsRef],
+    [createPane, setTerminals, setWorkspaces, terminalsRef],
   );
 
   const killTmuxPane = useCallback(async (terminalId: TerminalId): Promise<void> => {

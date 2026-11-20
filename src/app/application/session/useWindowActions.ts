@@ -11,9 +11,9 @@ interface UseWindowActionsDeps {
   terminalsRef: React.MutableRefObject<Terminal[]>;
   workspacesRef: React.MutableRefObject<Workspace[]>;
   activeWorkspaceId: WorkspaceId | null;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
   createTerminalFromSavedConfig: (configId: string) => Promise<Terminal>;
   closeTerminal: (terminalId: TerminalId) => Promise<void>;
   killTmuxWindow: (xstermWindowId: number) => Promise<void>;
@@ -29,7 +29,7 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   const layout = useWindowLayoutActions({
     terminalsRef: deps.terminalsRef,
     workspacesRef: deps.workspacesRef,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     setWorkspaces: deps.setWorkspaces,
   });
   const createWindowFromSavedConfig = useWindowOpenActions({
@@ -41,9 +41,9 @@ export function useWindowActions(deps: UseWindowActionsDeps) {
   });
   const closeWindow = useWindowLifecycleActions({
     workspacesRef: deps.workspacesRef,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     setWorkspaces: deps.setWorkspaces,
-    establishingSessionsRef: deps.establishingSessionsRef,
+    establishingTerminalsRef: deps.establishingTerminalsRef,
     closeTerminal: deps.closeTerminal,
     killTmuxWindow: deps.killTmuxWindow,
     createInitWindow: layout.createInitWindow,

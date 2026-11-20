@@ -1,22 +1,22 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import type { TerminalId } from "../../../models";
-import { SessionBootstrapScreen } from "../../SessionBootstrapScreen";
-import { SessionRuntimeProviders } from "./SessionRuntimeProviders";
+import { ApplicationBootstrapScreen } from "../../ApplicationBootstrapScreen";
+import { ApplicationRuntimeProviders } from "./ApplicationRuntimeProviders";
 import { usePaneIntentActions } from "./usePaneIntentActions";
 import { usePaneSessionIntentActions } from "./usePaneSessionIntentActions";
 import { useSavedLaunchConfigsValue } from "./useSavedLaunchConfigsValue";
-import { useSessionState } from "./useSessionState";
+import { useApplicationState } from "./useApplicationState";
 import { useTauriListeners } from "./useTauriListeners";
 import { useTerminalActions } from "./useTerminalActions";
 import { useTerminalPersistence } from "./useTerminalPersistence";
 import { useTerminalRuntimeValue } from "./useTerminalRuntimeValue";
 import { useTmuxRuntimeValue } from "./useTmuxRuntimeValue";
 import { useWorkspaceLayoutValue } from "./useWorkspaceLayoutValue";
-import type { SessionPersistenceStatus } from "./SessionPersistenceStatusContext";
+import type { ApplicationPersistenceStatus } from "./ApplicationPersistenceStatusContext";
 import type { SessionPreferencesContextType } from "./types";
 
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const state = useSessionState();
+export function ApplicationProvider({ children }: { children: ReactNode }) {
+  const state = useApplicationState();
   const persistence = useTerminalPersistence({
     setSavedConfigs: state.launchConfig.setSavedConfigs,
     setGroups: state.launchConfig.setGroups,
@@ -47,7 +47,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     (terminalId: TerminalId) => state.terminal.terminalSizesRef.current.get(terminalId),
     [state.terminal.terminalSizesRef],
   );
-  const persistenceStatus = useMemo<SessionPersistenceStatus>(
+  const persistenceStatus = useMemo<ApplicationPersistenceStatus>(
     () => ({
       saveError: persistence.saveError,
       clearSaveError: persistence.clearSaveError,
@@ -71,11 +71,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const workspaceLayout = useWorkspaceLayoutValue({ state, actions });
 
   if (persistence.error || !persistence.isLoaded) {
-    return <SessionBootstrapScreen error={persistence.error ?? undefined} />;
+    return <ApplicationBootstrapScreen error={persistence.error ?? undefined} />;
   }
 
   return (
-    <SessionRuntimeProviders
+    <ApplicationRuntimeProviders
       persistenceStatus={persistenceStatus}
       preferences={preferences}
       savedLaunchConfigs={savedLaunchConfigs}
@@ -86,6 +86,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       paneSessionIntents={paneSessionIntents}
     >
       {children}
-    </SessionRuntimeProviders>
+    </ApplicationRuntimeProviders>
   );
 }

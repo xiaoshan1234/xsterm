@@ -9,9 +9,9 @@ import { usePaneTreeActions } from "./usePaneTreeActions";
 interface UsePaneActionsDeps {
   terminalsRef: React.MutableRefObject<Terminal[]>;
   workspacesRef: React.MutableRefObject<Workspace[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
 }
 
 export function usePaneActions(deps: UsePaneActionsDeps) {
@@ -22,14 +22,14 @@ export function usePaneActions(deps: UsePaneActionsDeps) {
   });
   const multiplexed = useMultiplexedPaneActions({
     terminalsRef: deps.terminalsRef,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     setWorkspaces: deps.setWorkspaces,
   });
   const closePane = usePaneTreeActions({
     workspacesRef: deps.workspacesRef,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     setWorkspaces: deps.setWorkspaces,
-    establishingSessionsRef: deps.establishingSessionsRef,
+    establishingTerminalsRef: deps.establishingTerminalsRef,
     closeTerminal: terminalSessionActions.closeTerminal,
   });
 

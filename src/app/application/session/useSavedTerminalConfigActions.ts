@@ -28,7 +28,7 @@ interface UseSavedTerminalConfigActionsOptions {
   savedConfigs: SavedTerminalConfig[];
   terminalsRef: React.MutableRefObject<Terminal[]>;
   activeWorkspaceId: WorkspaceId | null;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   updateConfigs: (updater: (previous: SavedTerminalConfig[]) => SavedTerminalConfig[]) => void;
   updateGroups: (updater: (previous: TerminalGroup[]) => TerminalGroup[]) => void;
@@ -45,7 +45,7 @@ export function useSavedTerminalConfigActions({
   savedConfigs,
   terminalsRef,
   activeWorkspaceId,
-  setSessions,
+  setTerminals,
   setWorkspaces,
   updateConfigs,
   updateGroups,
@@ -133,7 +133,7 @@ export function useSavedTerminalConfigActions({
 
       terminalSessionActions.closeTerminal(terminal.id).catch(console.error);
       clearTerminalOutput(terminal.id);
-      setSessions((previous) => previous.filter((candidate) => candidate.configId !== configId));
+      setTerminals((previous) => previous.filter((candidate) => candidate.configId !== configId));
       setWorkspaces((previous) =>
         previous.map((workspace) =>
           withRecomputedSessionIds({
@@ -149,7 +149,7 @@ export function useSavedTerminalConfigActions({
         ),
       );
     },
-    [setSessions, setWorkspaces, terminalsRef, updateConfigs, updateGroups],
+    [setTerminals, setWorkspaces, terminalsRef, updateConfigs, updateGroups],
   );
 
   return { openFromConfig, removeConfig, saveConfigOnly };

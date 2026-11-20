@@ -1,4 +1,4 @@
-import { SessionProvider } from "./application/session";
+import { ApplicationProvider } from "./application/session";
 import { ThemeProvider } from "../shared/theme/ThemeContext";
 import { AppShellPreview } from "./shell/AppShellPreview";
 import { AppShellRuntime } from "./shell/AppShellRuntime";
@@ -14,10 +14,10 @@ export default function App() {
   }
 
   return (
-    <SessionProvider>
+    <ApplicationProvider>
       <ThemeProvider>
         <AppShellRuntime />
       </ThemeProvider>
-    </SessionProvider>
+    </ApplicationProvider>
   );
 }

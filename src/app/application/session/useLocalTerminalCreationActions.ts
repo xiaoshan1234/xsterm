@@ -12,13 +12,13 @@ import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";
 
 type LocalCreationDeps = Pick<
   UseSessionLifecycleDeps,
-  "activeWorkspaceId" | "createWindowFromSession" | "setSessions" | "updateConfigs"
+  "activeWorkspaceId" | "createWindowFromSession" | "setTerminals" | "updateConfigs"
 >;
 
 export function useLocalTerminalCreationActions({
   activeWorkspaceId,
   createWindowFromSession,
-  setSessions,
+  setTerminals,
   updateConfigs,
 }: LocalCreationDeps) {
   const createAndActivateSession = useCallback(
@@ -34,7 +34,7 @@ export function useLocalTerminalCreationActions({
       const info = await create();
       const terminal = buildFrontendTerminal(info, configId, type, displayConfig);
 
-      setSessions((previous) => [...previous, terminal]);
+      setTerminals((previous) => [...previous, terminal]);
 
       if (save) {
         const savedConfig: SavedTerminalConfig =
@@ -68,7 +68,7 @@ export function useLocalTerminalCreationActions({
       }
       return terminal;
     },
-    [activeWorkspaceId, createWindowFromSession, setSessions, updateConfigs],
+    [activeWorkspaceId, createWindowFromSession, setTerminals, updateConfigs],
   );
 
   const createLocalSession = useCallback(

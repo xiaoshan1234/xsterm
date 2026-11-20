@@ -1,2 +1,2 @@
-export { SessionProvider } from "./SessionProvider";
-export { useSessionPersistenceStatus } from "./SessionPersistenceStatusContext";
+export { ApplicationProvider } from "./ApplicationProvider";
+export { useApplicationPersistenceStatus } from "./ApplicationPersistenceStatusContext";

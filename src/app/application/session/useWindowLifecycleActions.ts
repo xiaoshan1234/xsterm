@@ -11,9 +11,9 @@ import { clearTerminalOutput } from "../../../features/terminal-surface";
 
 interface UseWindowLifecycleActionsOptions {
   workspacesRef: React.MutableRefObject<Workspace[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
   closeTerminal: (terminalId: TerminalId) => Promise<void>;
   killTmuxWindow: (xstermWindowId: number) => Promise<void>;
   createInitWindow: () => Window;
@@ -21,9 +21,9 @@ interface UseWindowLifecycleActionsOptions {
 
 export function useWindowLifecycleActions({
   workspacesRef,
-  setSessions,
+  setTerminals,
   setWorkspaces,
-  establishingSessionsRef,
+  establishingTerminalsRef,
   closeTerminal,
   killTmuxWindow,
   createInitWindow,
@@ -82,11 +82,11 @@ export function useWindowLifecycleActions({
             console.error("Failed to close terminal:", error),
           );
         }
-        establishingSessionsRef.current.delete(terminalId);
+        establishingTerminalsRef.current.delete(terminalId);
         clearTerminalOutput(terminalId);
       });
       if (terminalIdsToClose.size > 0) {
-        setSessions((previous) =>
+        setTerminals((previous) =>
           previous.filter((terminal) => !terminalIdsToClose.has(terminal.id)),
         );
       }
@@ -94,9 +94,9 @@ export function useWindowLifecycleActions({
     [
       closeTerminal,
       createInitWindow,
-      establishingSessionsRef,
+      establishingTerminalsRef,
       killTmuxWindow,
-      setSessions,
+      setTerminals,
       setWorkspaces,
       workspacesRef,
     ],

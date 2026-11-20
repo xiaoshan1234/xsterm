@@ -28,7 +28,7 @@ afterEach(() => {
 describe("useTerminalStreamActions", () => {
   it("encodes text to bytes before writing to the terminal stream", async () => {
     vi.spyOn(terminalStreamActions, "writeBytes").mockResolvedValue(undefined);
-    const { result } = renderHook(() => useTerminalStreamActions({ setSessions: vi.fn() }));
+    const { result } = renderHook(() => useTerminalStreamActions({ setTerminals: vi.fn() }));
     const terminalId = createTerminalId(7);
 
     await act(() => result.current.writeTerminal(terminalId, "hello"));
@@ -41,7 +41,7 @@ describe("useTerminalStreamActions", () => {
 
   it("forwards terminal resize to the session adapter", async () => {
     vi.spyOn(terminalSessionActions, "resizeTerminal").mockResolvedValue(undefined);
-    const { result } = renderHook(() => useTerminalStreamActions({ setSessions: vi.fn() }));
+    const { result } = renderHook(() => useTerminalStreamActions({ setTerminals: vi.fn() }));
     const terminalId = createTerminalId(7);
 
     await act(() => result.current.resizeTerminal(terminalId, 24, 80));
@@ -53,7 +53,7 @@ describe("useTerminalStreamActions", () => {
     vi.spyOn(terminalSessionActions, "uploadImageToSshTerminal").mockResolvedValue(
       "https://example.com/a.png",
     );
-    const { result } = renderHook(() => useTerminalStreamActions({ setSessions: vi.fn() }));
+    const { result } = renderHook(() => useTerminalStreamActions({ setTerminals: vi.fn() }));
     const terminalId = createTerminalId(7);
     const bytes = new Uint8Array([1, 2, 3]);
 
@@ -76,7 +76,7 @@ describe("useTerminalStreamActions", () => {
     let sessions: Terminal[] = [target, other];
     const { result } = renderHook(() =>
       useTerminalStreamActions({
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
       }),

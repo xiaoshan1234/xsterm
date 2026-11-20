@@ -32,14 +32,14 @@ function createTrackingOptions() {
   const options = {
     savedConfigs: [],
     terminalsRef: { current: sessions },
-    setSessions: vi.fn((action) => {
+    setTerminals: vi.fn((action) => {
       sessions = typeof action === "function" ? action(sessions) : action;
       options.terminalsRef.current = sessions;
     }),
     setWorkspaces: vi.fn((action) => {
       workspaces = typeof action === "function" ? action(workspaces) : action;
     }),
-    establishingSessionsRef: { current: new Set([createTerminalId(7)]) },
+    establishingTerminalsRef: { current: new Set([createTerminalId(7)]) },
     updateConfigs: vi.fn(),
     tmuxControllerConfigsRef: { current: new Map([[3, tmuxConfig]]) },
     tmuxControllerConfigIdsRef: { current: new Map([[3, "config-1"]]) },
@@ -82,7 +82,7 @@ describe("tmux controller tracking", () => {
     expect(getSessions()).toEqual([]);
     expect(options.tmuxControllerConfigsRef.current.has(3)).toBe(false);
     expect(options.tmuxControllerConfigIdsRef.current.has(3)).toBe(false);
-    expect(options.establishingSessionsRef.current.size).toBe(0);
+    expect(options.establishingTerminalsRef.current.size).toBe(0);
     expect(syncOpenTmuxSessions).toHaveBeenCalled();
   });
 });

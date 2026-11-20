@@ -25,14 +25,14 @@ import {
 interface UseWindowLayoutActionsOptions {
   terminalsRef: React.MutableRefObject<Terminal[]>;
   workspacesRef: React.MutableRefObject<Workspace[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
 }
 
 export function useWindowLayoutActions({
   terminalsRef,
   workspacesRef,
-  setSessions,
+  setTerminals,
   setWorkspaces,
 }: UseWindowLayoutActionsOptions) {
   const createWindow = useCallback(
@@ -172,14 +172,14 @@ export function useWindowLayoutActions({
       const terminalId = window ? findPaneSessionId(window.rootPane, paneId) : undefined;
       if (terminalId !== undefined) {
         const now = Date.now();
-        setSessions((previous) =>
+        setTerminals((previous) =>
           previous.map((terminal) =>
             terminal.id === terminalId ? { ...terminal, lastActivityAt: now } : terminal,
           ),
         );
       }
     },
-    [setSessions, setWorkspaces, workspacesRef],
+    [setTerminals, setWorkspaces, workspacesRef],
   );
 
   const renameWindow = useCallback(

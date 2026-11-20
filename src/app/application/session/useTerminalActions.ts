@@ -3,7 +3,7 @@ import { terminalSessionActions } from "../../../features/terminal";
 import { tmuxWindowActions } from "../../../features/tmux";
 import { useGroupActions } from "../../../features/launch-config";
 import { usePersistenceActions } from "../../../features/workspace";
-import { type SessionPersistence, type SessionState } from "./types";
+import { type ApplicationPersistence, type ApplicationState } from "./types";
 import { usePaneActions } from "./usePaneActions";
 import { useSavedConfigTerminalOpen } from "./useSavedConfigTerminalOpen";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
@@ -13,8 +13,8 @@ import { useWindowActions } from "./useWindowActions";
 import { useWorkspaceActions } from "./useWorkspaceActions";
 
 interface UseSessionCoordinatorOptions {
-  state: SessionState;
-  persistence: SessionPersistence;
+  state: ApplicationState;
+  persistence: ApplicationPersistence;
 }
 
 /**
@@ -27,7 +27,8 @@ export function useTerminalActions({
   persistence: sessionPersistence,
 }: UseSessionCoordinatorOptions) {
   const { savedConfigs, nextGroupId, setNextGroupId } = state.launchConfig;
-  const { terminalsRef, setSessions, establishingSessionsRef, reportTerminalSize } = state.terminal;
+  const { terminalsRef, setTerminals, establishingTerminalsRef, reportTerminalSize } =
+    state.terminal;
   const {
     workspacesRef,
     setWorkspaces,
@@ -53,7 +54,7 @@ export function useTerminalActions({
     savedConfigs,
     terminalsRef,
     workspacesRef,
-    setTerminals: setSessions,
+    setTerminals: setTerminals,
     setWorkspaces,
     setActiveWorkspaceId,
     tmuxControllerConfigsRef,
@@ -72,10 +73,10 @@ export function useTerminalActions({
   const lifecycle = useTerminalLifecycle({
     savedConfigs,
     terminalsRef,
-    setSessions,
+    setTerminals,
     setWorkspaces,
     activeWorkspaceId,
-    establishingSessionsRef,
+    establishingTerminalsRef,
     updateConfigs,
     updateGroups,
     tmuxControllerConfigsRef,
@@ -90,21 +91,21 @@ export function useTerminalActions({
   const pane = usePaneActions({
     terminalsRef,
     workspacesRef,
-    setSessions,
+    setTerminals,
     setWorkspaces,
-    establishingSessionsRef,
+    establishingTerminalsRef,
   });
 
-  const terminalStream = useTerminalStreamActions({ setSessions });
+  const terminalStream = useTerminalStreamActions({ setTerminals });
 
   const windowActions = useWindowActions({
     savedConfigs,
     terminalsRef,
     workspacesRef,
     activeWorkspaceId,
-    setSessions,
+    setTerminals,
     setWorkspaces,
-    establishingSessionsRef,
+    establishingTerminalsRef,
     createTerminalFromSavedConfig,
     createWindowFromSession,
     closeTerminal: terminalSessionActions.closeTerminal,
@@ -115,8 +116,8 @@ export function useTerminalActions({
     workspacesRef,
     setWorkspaces,
     setActiveWorkspaceId,
-    setSessions,
-    establishingSessionsRef,
+    setTerminals,
+    establishingTerminalsRef,
     closeTerminal: terminalSessionActions.closeTerminal,
   });
 
@@ -129,8 +130,8 @@ export function useTerminalActions({
     setActiveWorkspaceId,
     setSavedWorkspaces,
     setSavedWindowConfigs,
-    setSessions,
-    establishingSessionsRef,
+    setTerminals,
+    establishingTerminalsRef,
     persistSavedWorkspaces,
     persistSavedWindowConfigs,
     openFromConfigInternal: createTerminalFromSavedConfig,

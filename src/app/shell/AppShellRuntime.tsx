@@ -12,13 +12,13 @@ import { RuntimeNavBarContainer } from "./RuntimeNavBarContainer";
 import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
 import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
-import { useSessionPersistenceStatus } from "../application/session";
+import { useApplicationPersistenceStatus } from "../application/session";
 import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
 import { useRuntimeShellUiState } from "./useRuntimeShellUiState";
 
 export function AppShellRuntime() {
   const shellModel = useRuntimeShellModel();
-  const { saveError, clearSaveError } = useSessionPersistenceStatus();
+  const { saveError, clearSaveError } = useApplicationPersistenceStatus();
   const { terminalRuntime, workspaceLayout, activeWorkspace, runtimeStatus, paneTargetOptions } =
     shellModel;
   const { writeTerminal } = terminalRuntime;

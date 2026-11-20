@@ -9,9 +9,9 @@ import {
   WorkspaceProvider,
 } from "../../../features/workspace";
 import {
-  SessionPersistenceStatusProvider,
-  type SessionPersistenceStatus,
-} from "./SessionPersistenceStatusContext";
+  ApplicationPersistenceStatusProvider,
+  type ApplicationPersistenceStatus,
+} from "./ApplicationPersistenceStatusContext";
 import type {
   SavedLaunchConfigsContextType,
   SessionPreferencesContextType,
@@ -21,8 +21,8 @@ import type {
 import type { TmuxRuntimeContextType } from "../../../features/tmux";
 import type { PaneIntentActions, PaneSessionIntentActions } from "../../../features/workspace";
 
-interface SessionRuntimeProvidersProps {
-  persistenceStatus: SessionPersistenceStatus;
+interface ApplicationRuntimeProvidersProps {
+  persistenceStatus: ApplicationPersistenceStatus;
   preferences: SessionPreferencesContextType;
   savedLaunchConfigs: SavedLaunchConfigsContextType;
   terminalRuntime: TerminalRuntimeContextType;
@@ -33,7 +33,7 @@ interface SessionRuntimeProvidersProps {
   children: ReactNode;
 }
 
-export function SessionRuntimeProviders({
+export function ApplicationRuntimeProviders({
   persistenceStatus,
   preferences,
   savedLaunchConfigs,
@@ -43,9 +43,9 @@ export function SessionRuntimeProviders({
   paneIntents,
   paneSessionIntents,
   children,
-}: SessionRuntimeProvidersProps) {
+}: ApplicationRuntimeProvidersProps) {
   return (
-    <SessionPersistenceStatusProvider value={persistenceStatus}>
+    <ApplicationPersistenceStatusProvider value={persistenceStatus}>
       <SessionPreferencesProvider value={preferences}>
         <LaunchConfigProvider value={savedLaunchConfigs}>
           <TerminalRuntimeProvider value={terminalRuntime}>
@@ -61,6 +61,6 @@ export function SessionRuntimeProviders({
           </TerminalRuntimeProvider>
         </LaunchConfigProvider>
       </SessionPreferencesProvider>
-    </SessionPersistenceStatusProvider>
+    </ApplicationPersistenceStatusProvider>
   );
 }

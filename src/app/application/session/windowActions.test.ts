@@ -64,7 +64,7 @@ describe("window action use cases", () => {
       useWindowLayoutActions({
         terminalsRef: { current: [terminal] },
         workspacesRef: { current: [createWorkspace([])] },
-        setSessions: vi.fn(),
+        setTerminals: vi.fn(),
         setWorkspaces: (action) => {
           const current = [createWorkspace([])];
           const next = typeof action === "function" ? action(current) : action;
@@ -88,14 +88,14 @@ describe("window action use cases", () => {
     const window = createWindow();
     const workspace = createWorkspace([window]);
     const setWorkspaces = vi.fn();
-    const setSessions = vi.fn();
+    const setTerminals = vi.fn();
     const closeTerminal = vi.fn(async () => undefined);
     const { result } = renderHook(() =>
       useWindowLifecycleActions({
         workspacesRef: { current: [workspace] },
-        setSessions,
+        setTerminals,
         setWorkspaces,
-        establishingSessionsRef: { current: new Set([terminal.id]) },
+        establishingTerminalsRef: { current: new Set([terminal.id]) },
         closeTerminal,
         killTmuxWindow: vi.fn(async () => undefined),
         createInitWindow: () => ({
@@ -110,7 +110,7 @@ describe("window action use cases", () => {
     act(() => result.current(workspaceId, window.id));
 
     expect(closeTerminal).toHaveBeenCalledWith(terminal.id);
-    expect(setSessions).toHaveBeenCalled();
+    expect(setTerminals).toHaveBeenCalled();
     expect(setWorkspaces).toHaveBeenCalled();
   });
 

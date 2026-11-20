@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import type { WorkspaceLayoutContextType, SessionState } from "./types";
+import type { WorkspaceLayoutContextType, ApplicationState } from "./types";
 import type { useTerminalActions } from "./useTerminalActions";
 
 interface UseWorkspaceLayoutValueOptions {
-  state: SessionState;
+  state: ApplicationState;
   actions: ReturnType<typeof useTerminalActions>;
 }
 

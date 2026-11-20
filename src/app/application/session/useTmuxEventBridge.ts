@@ -14,7 +14,7 @@ export function useTmuxEventBridge({
   setWorkspaces,
   terminalsRef,
   workspacesRef,
-  establishingSessionsRef,
+  establishingTerminalsRef,
   setTmuxControllerErrors,
   tmuxControllerConfigsRef,
   tmuxControllerConfigIdsRef,
@@ -31,7 +31,7 @@ export function useTmuxEventBridge({
       setWorkspaces,
       terminalsRef,
       workspacesRef,
-      establishingSessionsRef,
+      establishingTerminalsRef,
       setTmuxControllerErrors,
       tmuxControllerConfigsRef,
       tmuxControllerConfigIdsRef,
@@ -62,7 +62,7 @@ export function useTmuxEventBridge({
       cleanup?.();
     };
   }, [
-    establishingSessionsRef,
+    establishingTerminalsRef,
     isEnabled,
     setTerminals,
     setTmuxControllerErrors,

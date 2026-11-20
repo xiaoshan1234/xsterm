@@ -8,10 +8,10 @@ type MaintenanceDeps = Pick<
   UseSessionLifecycleDeps,
   | "savedConfigs"
   | "terminalsRef"
-  | "setSessions"
+  | "setTerminals"
   | "setWorkspaces"
   | "activeWorkspaceId"
-  | "establishingSessionsRef"
+  | "establishingTerminalsRef"
   | "updateConfigs"
   | "updateGroups"
   | "openFromConfigInternal"
@@ -23,7 +23,7 @@ export function useTerminalMaintenanceActions(deps: MaintenanceDeps) {
     savedConfigs: deps.savedConfigs,
     terminalsRef: deps.terminalsRef,
     activeWorkspaceId: deps.activeWorkspaceId,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     setWorkspaces: deps.setWorkspaces,
     updateConfigs: deps.updateConfigs,
     updateGroups: deps.updateGroups,
@@ -31,19 +31,19 @@ export function useTerminalMaintenanceActions(deps: MaintenanceDeps) {
     createWindowFromSession: deps.createWindowFromSession,
   });
   const closeTerminal = useTerminalCloseAction({
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     setWorkspaces: deps.setWorkspaces,
   });
   const reconnectSession = useTerminalReconnectAction({
     savedConfigs: deps.savedConfigs,
     terminalsRef: deps.terminalsRef,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     setWorkspaces: deps.setWorkspaces,
-    establishingSessionsRef: deps.establishingSessionsRef,
+    establishingTerminalsRef: deps.establishingTerminalsRef,
   });
   const metadata = useTerminalMetadataActions({
     terminalsRef: deps.terminalsRef,
-    setSessions: deps.setSessions,
+    setTerminals: deps.setTerminals,
     updateConfigs: deps.updateConfigs,
   });
 

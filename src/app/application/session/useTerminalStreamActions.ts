@@ -7,10 +7,10 @@ import {
 } from "../../../features/terminal";
 
 interface UseTerminalStreamActionsOptions {
-  setSessions: Dispatch<SetStateAction<Terminal[]>>;
+  setTerminals: Dispatch<SetStateAction<Terminal[]>>;
 }
 
-export function useTerminalStreamActions({ setSessions }: UseTerminalStreamActionsOptions) {
+export function useTerminalStreamActions({ setTerminals }: UseTerminalStreamActionsOptions) {
   const writeTerminal = useCallback(async (id: TerminalId, data: string): Promise<void> => {
     await terminalStreamActions.writeBytes(id, new TextEncoder().encode(data));
   }, []);
@@ -32,13 +32,13 @@ export function useTerminalStreamActions({ setSessions }: UseTerminalStreamActio
   const touchTerminalActivity = useCallback(
     (id: TerminalId) => {
       const now = Date.now();
-      setSessions((previous) =>
+      setTerminals((previous) =>
         previous.map((terminal) =>
           terminal.id === id ? { ...terminal, lastActivityAt: now } : terminal,
         ),
       );
     },
-    [setSessions],
+    [setTerminals],
   );
 
   return {

@@ -5,10 +5,10 @@ import {
   type RuntimeDialog,
   type RuntimeErrorState,
 } from "./runtimeOverlayTypes";
-import type { SessionPersistenceSaveError } from "../application/session/types";
+import type { ApplicationPersistenceSaveError } from "../application/session/types";
 
 interface RuntimeOverlayControllerOptions {
-  saveError: SessionPersistenceSaveError | null;
+  saveError: ApplicationPersistenceSaveError | null;
   clearSaveError: () => void;
 }
 
@@ -59,7 +59,7 @@ export function useRuntimeOverlayController({
   };
 }
 
-function persistenceErrorTitle(source: SessionPersistenceSaveError["source"]): string {
+function persistenceErrorTitle(source: ApplicationPersistenceSaveError["source"]): string {
   switch (source) {
     case "launch-config":
       return "Unable to save terminal configuration";

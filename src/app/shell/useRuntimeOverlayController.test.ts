@@ -2,10 +2,10 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { SessionPersistenceSaveError } from "../application/session/types";
+import type { ApplicationPersistenceSaveError } from "../application/session/types";
 import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
 
-function renderController(saveError: SessionPersistenceSaveError | null = null) {
+function renderController(saveError: ApplicationPersistenceSaveError | null = null) {
   const clearSaveError = vi.fn();
   return {
     clearSaveError,
@@ -49,7 +49,7 @@ describe("useRuntimeOverlayController", () => {
   it("does not replace an error that is already visible", () => {
     const clearSaveError = vi.fn();
     const props = {
-      saveError: null as SessionPersistenceSaveError | null,
+      saveError: null as ApplicationPersistenceSaveError | null,
       clearSaveError,
     };
     const { result, rerender } = renderHook(

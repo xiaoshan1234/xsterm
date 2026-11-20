@@ -12,17 +12,17 @@ import { clearTerminalOutput } from "../../../features/terminal-surface";
 
 interface UsePaneTreeActionsOptions {
   workspacesRef: MutableRefObject<Workspace[]>;
-  setSessions: Dispatch<SetStateAction<Terminal[]>>;
+  setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
-  establishingSessionsRef: MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: MutableRefObject<Set<TerminalId>>;
   closeTerminal: (terminalId: TerminalId) => Promise<void>;
 }
 
 export function usePaneTreeActions({
   workspacesRef,
-  setSessions,
+  setTerminals,
   setWorkspaces,
-  establishingSessionsRef,
+  establishingTerminalsRef,
   closeTerminal,
 }: UsePaneTreeActionsOptions) {
   return useCallback(
@@ -39,10 +39,10 @@ export function usePaneTreeActions({
         } catch (error) {
           console.error("Failed to close terminal backend:", error);
         } finally {
-          establishingSessionsRef.current.delete(terminalId);
+          establishingTerminalsRef.current.delete(terminalId);
         }
         clearTerminalOutput(terminalId);
-        setSessions((previous) => previous.filter((terminal) => terminal.id !== terminalId));
+        setTerminals((previous) => previous.filter((terminal) => terminal.id !== terminalId));
       }
 
       setWorkspaces((previous) =>
@@ -63,6 +63,6 @@ export function usePaneTreeActions({
         }),
       );
     },
-    [closeTerminal, establishingSessionsRef, setSessions, setWorkspaces, workspacesRef],
+    [closeTerminal, establishingTerminalsRef, setTerminals, setWorkspaces, workspacesRef],
   );
 }

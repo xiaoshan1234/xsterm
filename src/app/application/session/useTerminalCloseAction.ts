@@ -12,12 +12,12 @@ import {
 import { clearTerminalOutput } from "../../../features/terminal-surface";
 
 interface UseTerminalCloseActionOptions {
-  setSessions: Dispatch<SetStateAction<Terminal[]>>;
+  setTerminals: Dispatch<SetStateAction<Terminal[]>>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
 }
 
 export function useTerminalCloseAction({
-  setSessions,
+  setTerminals,
   setWorkspaces,
 }: UseTerminalCloseActionOptions) {
   return useCallback(
@@ -28,7 +28,7 @@ export function useTerminalCloseAction({
         console.error("Failed to close terminal backend:", error);
       } finally {
         clearTerminalOutput(terminalId);
-        setSessions((previous) => previous.filter((terminal) => terminal.id !== terminalId));
+        setTerminals((previous) => previous.filter((terminal) => terminal.id !== terminalId));
         setWorkspaces((previous) =>
           previous.map((workspace) =>
             withRecomputedSessionIds({
@@ -45,6 +45,6 @@ export function useTerminalCloseAction({
         );
       }
     },
-    [setSessions, setWorkspaces],
+    [setTerminals, setWorkspaces],
   );
 }

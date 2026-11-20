@@ -6,7 +6,7 @@ import type { TmuxEventBridgePorts, TmuxEventHandlerSet } from "./tmuxEventBridg
 import { removeSessionsFromWorkspaces } from "../../../features/workspace";
 
 export function createTmuxControllerEventHandlers({
-  establishingSessionsRef,
+  establishingTerminalsRef,
   setTerminals,
   setTmuxControllerErrors,
   setWorkspaces,
@@ -38,7 +38,7 @@ export function createTmuxControllerEventHandlers({
           `[xsterm] tmux-controller-exit controllerId=${controllerId} reason=${reason ?? "(none)"} dropping ${deadTerminals.length} terminal(s)`,
         );
         for (const terminalId of deadIds) {
-          establishingSessionsRef.current.delete(terminalId);
+          establishingTerminalsRef.current.delete(terminalId);
         }
         setTerminals((terminals) => terminals.filter((terminal) => !deadIds.has(terminal.id)));
         setWorkspaces((workspaces) => removeControllerFromWorkspaces(workspaces, deadIds));
@@ -132,7 +132,7 @@ export function createTmuxControllerEventHandlers({
 
     onPaneRemoved: ({ terminalHandle }) => {
       const terminalId = createTerminalId(Number(terminalHandle));
-      establishingSessionsRef.current.delete(terminalId);
+      establishingTerminalsRef.current.delete(terminalId);
       if (!terminalsRef.current.some((terminal) => terminal.id === terminalId)) return;
       setTerminals((terminals) => terminals.filter((terminal) => terminal.id !== terminalId));
       setWorkspaces((workspaces) => removeSessionsFromWorkspaces(workspaces, [terminalId]));

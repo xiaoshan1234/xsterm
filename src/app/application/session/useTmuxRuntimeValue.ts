@@ -4,11 +4,11 @@ import {
   tmuxWindowActions,
   type TmuxRuntimeContextType,
 } from "../../../features/tmux";
-import type { SessionState } from "./types";
+import type { ApplicationState } from "./types";
 import type { useTerminalActions } from "./useTerminalActions";
 
 interface UseTmuxRuntimeValueOptions {
-  state: SessionState;
+  state: ApplicationState;
   actions: ReturnType<typeof useTerminalActions>;
 }
 

@@ -11,7 +11,7 @@ interface UseTmuxRecoveryActionsOptions {
   tracking: ReturnType<typeof useTmuxControllerTracking>;
   savedConfigs: SavedTerminalConfig[];
   terminalsRef: React.MutableRefObject<Terminal[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   tmuxControllerConfigsRef: React.MutableRefObject<Map<number, TmuxSessionConfig>>;
   tmuxControllerConfigIdsRef: React.MutableRefObject<Map<number, string>>;
   syncOpenTmuxSessions: () => void;
@@ -78,7 +78,7 @@ export function useTmuxRecoveryActions(options: UseTmuxRecoveryActionsOptions) {
       if (configId) {
         options.tmuxControllerConfigIdsRef.current.set(newControllerId, configId);
         options.syncOpenTmuxSessions();
-        options.setSessions((previous) =>
+        options.setTerminals((previous) =>
           previous.map((session) =>
             isTmuxPaneTerminal(session) && session.tmux.controllerId === newControllerId
               ? { ...session, configId, displayConfig }

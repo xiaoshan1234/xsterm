@@ -5,18 +5,18 @@ import type { SavedTerminalConfig } from "../../../features/launch-config";
 
 interface UseTerminalMetadataActionsOptions {
   terminalsRef: React.MutableRefObject<Terminal[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
   updateConfigs: (updater: (previous: SavedTerminalConfig[]) => SavedTerminalConfig[]) => void;
 }
 
 export function useTerminalMetadataActions({
   terminalsRef,
-  setSessions,
+  setTerminals,
   updateConfigs,
 }: UseTerminalMetadataActionsOptions) {
   const renameSession = useCallback(
     (terminalId: TerminalId, name: string) => {
-      setSessions((previous) =>
+      setTerminals((previous) =>
         previous.map((terminal) => (terminal.id === terminalId ? { ...terminal, name } : terminal)),
       );
       const terminal = terminalsRef.current.find((candidate) => candidate.id === terminalId);
@@ -28,12 +28,12 @@ export function useTerminalMetadataActions({
         );
       }
     },
-    [setSessions, terminalsRef, updateConfigs],
+    [setTerminals, terminalsRef, updateConfigs],
   );
 
   const applyDisplayConfigToLiveSession = useCallback(
     (terminalId: TerminalId, patch: Partial<TerminalDisplayConfig>) => {
-      setSessions((previous) =>
+      setTerminals((previous) =>
         previous.map((terminal) =>
           terminal.id === terminalId
             ? { ...terminal, displayConfig: { ...(terminal.displayConfig ?? {}), ...patch } }
@@ -41,7 +41,7 @@ export function useTerminalMetadataActions({
         ),
       );
     },
-    [setSessions],
+    [setTerminals],
   );
 
   return { applyDisplayConfigToLiveSession, renameSession };

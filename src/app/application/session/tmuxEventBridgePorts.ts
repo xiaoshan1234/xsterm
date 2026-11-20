@@ -10,7 +10,7 @@ export interface TmuxEventBridgePorts {
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
   terminalsRef: MutableRefObject<Terminal[]>;
   workspacesRef: MutableRefObject<Workspace[]>;
-  establishingSessionsRef: MutableRefObject<Set<TerminalId>>;
+  establishingTerminalsRef: MutableRefObject<Set<TerminalId>>;
   setTmuxControllerErrors: Dispatch<SetStateAction<Map<number, TmuxControllerError>>>;
   tmuxControllerConfigsRef: MutableRefObject<Map<number, TmuxSessionConfig>>;
   tmuxControllerConfigIdsRef: MutableRefObject<Map<number, string>>;

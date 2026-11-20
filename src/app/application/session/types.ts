@@ -8,7 +8,7 @@ import type {
   SessionPreferencesContextType,
   TerminalPreferencesState,
 } from "../../../features/settings";
-import type { TerminalRuntimeContextType, TerminalSessionState } from "../../../features/terminal";
+import type { TerminalRuntimeContextType, TerminalState } from "../../../features/terminal";
 import type { TmuxRuntimeState } from "../../../features/tmux";
 import type {
   SavedWindowConfig,
@@ -24,18 +24,18 @@ export type {
   WorkspaceLayoutContextType,
 };
 
-export interface SessionState {
+export interface ApplicationState {
   launchConfig: LaunchConfigState;
-  terminal: TerminalSessionState;
+  terminal: TerminalState;
   tmux: TmuxRuntimeState;
   workspace: WorkspaceState;
   preferences: TerminalPreferencesState;
 }
 
-export interface SessionPersistence {
+export interface ApplicationPersistence {
   isLoaded: boolean;
   error: string | null;
-  saveError: SessionPersistenceSaveError | null;
+  saveError: ApplicationPersistenceSaveError | null;
   clearSaveError: () => void;
   updateConfigs: (updater: (prev: SavedTerminalConfig[]) => SavedTerminalConfig[]) => void;
   updateGroups: (updater: (prev: TerminalGroup[]) => TerminalGroup[], nextId?: number) => void;
@@ -43,7 +43,7 @@ export interface SessionPersistence {
   persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
 }
 
-export interface SessionPersistenceSaveError {
+export interface ApplicationPersistenceSaveError {
   source: "launch-config" | "workspace" | "settings";
   operation: string;
   message: string;

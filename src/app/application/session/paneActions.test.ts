@@ -94,7 +94,7 @@ describe("pane action use cases", () => {
     const { result } = renderHook(() =>
       useMultiplexedPaneActions({
         terminalsRef: { current: sessions },
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         setWorkspaces: (action) => {
@@ -120,13 +120,13 @@ describe("pane action use cases", () => {
     const { result } = renderHook(() =>
       usePaneTreeActions({
         workspacesRef: { current: workspaces },
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         setWorkspaces: (action) => {
           workspaces = typeof action === "function" ? action(workspaces) : action;
         },
-        establishingSessionsRef: { current: new Set([terminal.id]) },
+        establishingTerminalsRef: { current: new Set([terminal.id]) },
         closeTerminal,
       }),
     );

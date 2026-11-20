@@ -4,8 +4,8 @@ import { clearTerminalOutput } from "../../terminal-surface";
 
 interface RollbackDeps {
   closeTerminal: (terminalId: TerminalId) => Promise<void>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
   /** Log prefix used when reporting close failures during rollback. */
   logTag: string;
 }
@@ -15,13 +15,13 @@ interface RollbackDeps {
  * to undo partially-created terminals when a snapshot fails to reconstruct.
  *
  * Closes every terminal in `configIdToSession` (best effort), then prunes them
- * from `establishingSessionsRef`, clears their output buffers, and removes
+ * from `establishingTerminalsRef`, clears their output buffers, and removes
  * them from `terminals`.
  */
 export function createRollback({
   closeTerminal,
-  setSessions,
-  establishingSessionsRef,
+  setTerminals,
+  establishingTerminalsRef,
   logTag,
 }: RollbackDeps) {
   return async (configIdToSession: Map<string, Terminal>): Promise<void> => {
@@ -35,11 +35,11 @@ export function createRollback({
       ),
     );
     for (const id of idsToClose) {
-      establishingSessionsRef.current.delete(id);
+      establishingTerminalsRef.current.delete(id);
       clearTerminalOutput(id);
     }
     if (idsToClose.size > 0) {
-      setSessions((prev) => prev.filter((s) => !idsToClose.has(s.id)));
+      setTerminals((prev) => prev.filter((s) => !idsToClose.has(s.id)));
     }
   };
 }

@@ -28,8 +28,8 @@ interface UseSavedWindowActionsDeps {
   terminalsRef: React.MutableRefObject<Terminal[]>;
   setWorkspaces: React.Dispatch<React.SetStateAction<Workspace[]>>;
   setSavedWindowConfigs: React.Dispatch<React.SetStateAction<SavedWindowConfig[]>>;
-  setSessions: React.Dispatch<React.SetStateAction<Terminal[]>>;
-  establishingSessionsRef: React.MutableRefObject<Set<TerminalId>>;
+  setTerminals: React.Dispatch<React.SetStateAction<Terminal[]>>;
+  establishingTerminalsRef: React.MutableRefObject<Set<TerminalId>>;
   persistSavedWindowConfigs: (windowConfigs: SavedWindowConfig[]) => void;
   openFromConfigInternal: (configId: string) => Promise<Terminal>;
   closeTerminal: (terminalId: TerminalId) => Promise<void>;
@@ -42,8 +42,8 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
     terminalsRef,
     setWorkspaces,
     setSavedWindowConfigs,
-    setSessions,
-    establishingSessionsRef,
+    setTerminals,
+    establishingTerminalsRef,
     persistSavedWindowConfigs,
     openFromConfigInternal,
     closeTerminal,
@@ -99,8 +99,8 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
 
       const rollback = createRollback({
         closeTerminal,
-        setSessions,
-        establishingSessionsRef,
+        setTerminals,
+        establishingTerminalsRef,
         logTag: "window",
       });
 
@@ -167,9 +167,9 @@ export function useSavedWindowActions(deps: UseSavedWindowActionsDeps) {
       openFromConfigInternal,
       terminalsRef,
       workspacesRef,
-      setSessions,
+      setTerminals,
       setWorkspaces,
-      establishingSessionsRef,
+      establishingTerminalsRef,
       closeTerminal,
     ],
   );

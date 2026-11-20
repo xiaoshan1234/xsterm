@@ -67,7 +67,7 @@ describe("useLocalTerminalCreationActions", () => {
       useLocalTerminalCreationActions({
         activeWorkspaceId: createWorkspaceId("ws"),
         createWindowFromSession,
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         updateConfigs: (action) => {
@@ -103,7 +103,7 @@ describe("useLocalTerminalCreationActions", () => {
       useLocalTerminalCreationActions({
         activeWorkspaceId: null,
         createWindowFromSession,
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         updateConfigs: (action) => {
@@ -129,7 +129,7 @@ describe("useLocalTerminalCreationActions", () => {
       useLocalTerminalCreationActions({
         activeWorkspaceId: createWorkspaceId("ws"),
         createWindowFromSession,
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         updateConfigs: (action) => {

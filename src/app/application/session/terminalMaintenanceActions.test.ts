@@ -35,7 +35,7 @@ describe("terminal maintenance actions", () => {
     vi.spyOn(terminalSessionActions, "closeTerminal").mockResolvedValue(undefined);
     const { result } = renderHook(() =>
       useTerminalCloseAction({
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         setWorkspaces: vi.fn(),
@@ -55,7 +55,7 @@ describe("terminal maintenance actions", () => {
     const { result } = renderHook(() =>
       useTerminalMetadataActions({
         terminalsRef: { current: [terminal] },
-        setSessions: (action) => {
+        setTerminals: (action) => {
           sessions = typeof action === "function" ? action(sessions) : action;
         },
         updateConfigs,
@@ -74,9 +74,9 @@ describe("terminal maintenance actions", () => {
       useTerminalReconnectAction({
         savedConfigs: [],
         terminalsRef: { current: [terminal] },
-        setSessions: vi.fn(),
+        setTerminals: vi.fn(),
         setWorkspaces: vi.fn(),
-        establishingSessionsRef: { current: new Set() },
+        establishingTerminalsRef: { current: new Set() },
       }),
     );
 
