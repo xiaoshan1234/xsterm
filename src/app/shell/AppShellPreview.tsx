@@ -9,7 +9,7 @@ import { AppShell } from "./AppShell";
 import { NavBarView } from "../NavBar";
 import { HelpDialog, type HelpDialogId } from "./HelpDialog";
 import { TOOL_TITLES, type PreviewDialogId, type ToolId } from "./types";
-import { type RuntimeStatusViewData } from "../application/runtimeShell/runtimeStatusViewModel";
+import { type ShellStatusViewData } from "../application/shellModel/shellStatusViewModel";
 
 const WORKSPACES = ["Default", "Project X", "Infrastructure"];
 const PREVIEW_TERMINAL_ITEMS = [
@@ -41,7 +41,7 @@ const TEXT_SENDER_TARGETS = [
   },
 ];
 
-const PREVIEW_RUNTIME_STATUS: RuntimeStatusViewData = {
+const PREVIEW_RUNTIME_STATUS: ShellStatusViewData = {
   terminalId: createTerminalId(1),
   status: "connected",
   name: "Local PowerShell",

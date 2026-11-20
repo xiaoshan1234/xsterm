@@ -5,19 +5,19 @@ import { GlobalTextSender } from "../../features/command-sender";
 import { TOOL_TITLES } from "./types";
 import { RuntimeOverlays } from "./RuntimeOverlays";
 import { useAppShortcuts } from "../useAppShortcuts";
-import { useRuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
+import { useShellModel } from "../application/shellModel/useShellModel";
 import { RuntimeTerminalSurfacePortsProvider } from "../application/terminalSurface/TerminalSurfacePortsProvider";
 import { RuntimeToolPanelContainer } from "./RuntimeToolPanelContainer";
 import { RuntimeNavBarContainer } from "./RuntimeNavBarContainer";
 import { RuntimeMainArea } from "./RuntimeMainArea";
 import { useRuntimeTextSender } from "./useRuntimeTextSender";
 import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedbackContext";
-import { useApplicationPersistenceStatus } from "../application/runtime";
+import { useApplicationPersistenceStatus } from "../application/assembly";
 import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
 import { useRuntimeShellUiState } from "./useRuntimeShellUiState";
 
 export function AppShellRuntime() {
-  const shellModel = useRuntimeShellModel();
+  const shellModel = useShellModel();
   const { saveError, clearSaveError } = useApplicationPersistenceStatus();
   const { terminalRuntime, workspaceLayout, activeWorkspace, runtimeStatus, paneTargetOptions } =
     shellModel;

@@ -9,7 +9,7 @@ import {
   MIN_TEXT_SENDER_HEIGHT,
   useTextSenderHeight,
 } from "./useTextSenderHeight";
-import { type RuntimeStatusViewData } from "../application/runtimeShell/runtimeStatusViewModel";
+import { type ShellStatusViewData } from "../application/shellModel/shellStatusViewModel";
 import "./AppShell.css";
 
 interface AppShellProps {
@@ -20,7 +20,7 @@ interface AppShellProps {
   mainArea: ReactNode;
   textSender: ReactNode;
   overlay: ReactNode;
-  runtimeStatus: RuntimeStatusViewData | null;
+  runtimeStatus: ShellStatusViewData | null;
   isTextSenderOpen: boolean;
   isInteractionBlocked?: boolean;
   onSelectTool: (tool: ToolId) => void;

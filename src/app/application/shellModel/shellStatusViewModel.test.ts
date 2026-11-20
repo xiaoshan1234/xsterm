@@ -3,7 +3,7 @@ import { createPaneId, createTerminalId, createWindowId, createWorkspaceId } fro
 import type { Terminal } from "../../../features/terminal";
 import type { EditablePaneNode } from "../../../features/workspace";
 import type { Workspace } from "../../../features/workspace";
-import { selectRuntimeStatus } from "./runtimeStatusViewModel";
+import { selectShellStatus } from "./shellStatusViewModel";
 
 const pane: EditablePaneNode = {
   id: createPaneId("pane-1"),
@@ -41,10 +41,10 @@ function terminal(overrides: Partial<Terminal> = {}): Terminal {
   } as Terminal;
 }
 
-describe("selectRuntimeStatus", () => {
+describe("selectShellStatus", () => {
   it("describes the active non-tmux pane", () => {
     expect(
-      selectRuntimeStatus(
+      selectShellStatus(
         workspaceWithPane(),
         [terminal()],
         [],
@@ -96,7 +96,7 @@ describe("selectRuntimeStatus", () => {
     ];
 
     expect(
-      selectRuntimeStatus(
+      selectShellStatus(
         workspaceWithPane(),
         [tmuxTerminal],
         controllers,
@@ -116,7 +116,7 @@ describe("selectRuntimeStatus", () => {
 
   it("returns null when the active pane is not a live terminal", () => {
     expect(
-      selectRuntimeStatus(workspaceWithPane(createPaneId("missing")), [terminal()], [], new Map()),
+      selectShellStatus(workspaceWithPane(createPaneId("missing")), [terminal()], [], new Map()),
     ).toBeNull();
   });
 });

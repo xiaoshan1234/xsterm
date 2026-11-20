@@ -5,7 +5,7 @@ import {
   type RuntimeDialog,
   type RuntimeErrorState,
 } from "./runtimeOverlayTypes";
-import type { ApplicationPersistenceSaveError } from "../application/runtime/types";
+import type { ApplicationPersistenceSaveError } from "../application/assembly/types";
 
 interface RuntimeOverlayControllerOptions {
   saveError: ApplicationPersistenceSaveError | null;

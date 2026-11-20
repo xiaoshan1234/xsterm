@@ -1,7 +1,7 @@
-import { type RuntimeStatusViewData } from "../application/runtimeShell/runtimeStatusViewModel";
+import { type ShellStatusViewData } from "../application/shellModel/shellStatusViewModel";
 
 interface BottomBarProps {
-  runtimeStatus: RuntimeStatusViewData | null;
+  runtimeStatus: ShellStatusViewData | null;
 }
 
 export function BottomBar({ runtimeStatus }: BottomBarProps) {

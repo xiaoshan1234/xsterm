@@ -16,9 +16,9 @@ import {
   selectWorkspaceManagerItems,
   useWorkspaceLayout,
 } from "../../../features/workspace";
-import { selectRuntimeStatus } from "./runtimeStatusViewModel";
+import { selectShellStatus } from "./shellStatusViewModel";
 
-export function useRuntimeShellModel() {
+export function useShellModel() {
   const terminalRuntime = useTerminalRuntime();
   const tmuxRuntime = useTmuxRuntime();
   const launchConfig = useSavedLaunchConfigs();
@@ -61,7 +61,7 @@ export function useRuntimeShellModel() {
   );
 
   const runtimeStatus = useMemo(
-    () => selectRuntimeStatus(activeWorkspace, terminals, tmuxStatusControllers, getTerminalSize),
+    () => selectShellStatus(activeWorkspace, terminals, tmuxStatusControllers, getTerminalSize),
     [activeWorkspace, getTerminalSize, terminals, tmuxStatusControllers],
   );
 
@@ -95,4 +95,4 @@ export function useRuntimeShellModel() {
   };
 }
 
-export type RuntimeShellModel = ReturnType<typeof useRuntimeShellModel>;
+export type ShellModel = ReturnType<typeof useShellModel>;

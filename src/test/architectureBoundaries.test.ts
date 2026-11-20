@@ -308,7 +308,7 @@ describe("architecture boundaries", () => {
   });
 
   it("keeps the tmux event bridge limited to subscription lifecycle", () => {
-    const source = sourceFiles["/src/app/application/runtime/useTmuxEventBridge.ts"] ?? "";
+    const source = sourceFiles["/src/app/application/assembly/useTmuxEventBridge.ts"] ?? "";
     expect(source).not.toMatch(/on(?:ControllerExited|PaneAdded|PaneRemoved|WindowAdded|WindowClosed|LayoutChanged)/);
   });
 

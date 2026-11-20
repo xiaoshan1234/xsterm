@@ -1,12 +1,12 @@
 import { DEFAULT_GROUP_ID, tmuxSessionKey } from "../../features/launch-config";
 import type { LaunchConfigId } from "../../models";
-import type { RuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
+import type { ShellModel } from "../application/shellModel/useShellModel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
 import type { RuntimeConfirmState, RuntimeDialog } from "./runtimeOverlayTypes";
 import type { ToolId } from "./types";
 
 interface RuntimeToolPanelContainerProps {
-  model: RuntimeShellModel;
+  model: ShellModel;
   activeTool: ToolId | null;
   onOpenDialog: (dialog: RuntimeDialog) => void;
   onRequestConfirm: (confirm: RuntimeConfirmState) => void;

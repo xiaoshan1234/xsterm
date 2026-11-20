@@ -1,9 +1,9 @@
-import type { RuntimeShellModel } from "../application/runtimeShell/useRuntimeShellModel";
+import type { ShellModel } from "../application/shellModel/useShellModel";
 import NavBar from "../NavBar";
 import type { HelpDialogId } from "./HelpDialog";
 
 interface RuntimeNavBarContainerProps {
-  model: RuntimeShellModel;
+  model: ShellModel;
   isTextSenderOpen: boolean;
   onToggleTextSender: () => void;
   onHelpAction: (dialog: HelpDialogId) => void;

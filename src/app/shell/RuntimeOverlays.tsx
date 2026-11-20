@@ -17,7 +17,7 @@ import {
   type RuntimeDialog,
   type RuntimeErrorState,
 } from "./runtimeOverlayTypes";
-import { useRuntimeOverlayActions } from "../application/runtimeOverlays/useRuntimeOverlayActions";
+import { useOverlayActions } from "../application/overlays/useOverlayActions";
 
 interface RuntimeOverlaysProps {
   dialog: RuntimeDialog;
@@ -52,7 +52,7 @@ export function RuntimeOverlays({
     renameSavedWorkspace,
     saveTerminalConfig,
     saveTmuxConfig,
-  } = useRuntimeOverlayActions();
+  } = useOverlayActions();
 
   const editingGroup =
     dialog?.kind === "edit-group"

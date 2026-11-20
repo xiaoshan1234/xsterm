@@ -5,9 +5,9 @@ import type { Workspace } from "../../../features/workspace";
 import { type TmuxStatusControllerViewData } from "../../../features/tmux";
 import { findPaneNode, getLeafPaneIds } from "../../../features/workspace";
 
-export type RuntimeStatusTransport = "local" | "ssh" | "wsl";
+export type ShellStatusTransport = "local" | "ssh" | "wsl";
 
-export interface RuntimeStatusViewData {
+export interface ShellStatusViewData {
   terminalId: TerminalId;
   status: "connected" | "disconnected";
   name: string;
@@ -18,14 +18,14 @@ export interface RuntimeStatusViewData {
   paneCount: number;
 }
 
-export function selectRuntimeStatus(
+export function selectShellStatus(
   activeWorkspace: Workspace | null,
   terminals: readonly Terminal[],
   tmuxControllers: readonly TmuxStatusControllerViewData[],
   terminalSizes:
     | ReadonlyMap<TerminalId, { rows: number; cols: number }>
     | ((terminalId: TerminalId) => { rows: number; cols: number } | undefined),
-): RuntimeStatusViewData | null {
+): ShellStatusViewData | null {
   if (!activeWorkspace) return null;
 
   const activeWindow =
@@ -102,7 +102,7 @@ export function selectRuntimeStatus(
   };
 }
 
-function transportLabel(transport: RuntimeStatusTransport): string {
+function transportLabel(transport: ShellStatusTransport): string {
   if (transport === "ssh") return "SSH";
   if (transport === "wsl") return "WSL";
   return "Local";

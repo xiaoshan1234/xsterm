@@ -7,7 +7,7 @@ import { useTerminalRuntime } from "../../../features/terminal";
 import { useTmuxRuntime } from "../../../features/tmux";
 import { useWorkspaceLayout } from "../../../features/workspace";
 
-export function useRuntimeOverlayActions() {
+export function useOverlayActions() {
   const { createLocalSession, createSshSession, applyDisplayConfigToLiveSession, terminals } =
     useTerminalRuntime();
   const { createTmuxSession, attachTmuxSession } = useTmuxRuntime();

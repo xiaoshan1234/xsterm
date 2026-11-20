@@ -1,4 +1,4 @@
-import { ApplicationProvider } from "./application/runtime";
+import { ApplicationProvider } from "./application/assembly";
 import { ThemeProvider } from "../shared/theme/ThemeContext";
 import { AppShellPreview } from "./shell/AppShellPreview";
 import { AppShellRuntime } from "./shell/AppShellRuntime";
