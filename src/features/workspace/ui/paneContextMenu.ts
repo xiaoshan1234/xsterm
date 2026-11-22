@@ -10,6 +10,8 @@ export interface PaneMenuActions {
   copy: () => Promise<void>;
   paste: () => Promise<void>;
   clear: () => void;
+  /** toggle the pane terminal's line-number gutter on/off. */
+  toggleLineNumbers: () => void;
   closePane: () => void;
   closeTerminal: () => void;
   /** create a new tmux window on the pane's controller. */
@@ -30,7 +32,8 @@ export interface PaneMenuActions {
  * Layout:
  *  - Always: Split Horizontal, Split Vertical
  *  - If no terminal attached: Attach Terminal
- *  - If terminal attached: Select All, Copy, (Paste if connected), Clear Pane
+ *  - If terminal attached: Select All, Copy, (Paste if connected), Clear Pane,
+ *    Show Line Numbers
  *  - Always: Close Pane (danger)
  *  - If terminal attached: Close Terminal (danger)
  *  - tmux terminal: New Tmux Window, Rename Tmux Window, Close Tmux Window
@@ -58,6 +61,11 @@ export function buildPaneContextMenu(
       items.push({ label: "Paste", onClick: actions.paste });
     }
     items.push({ label: "Clear Pane", onClick: actions.clear });
+    items.push({
+      label: "Show Line Numbers",
+      checked: terminal.displayConfig?.lineNumberEnabled ?? true,
+      onClick: actions.toggleLineNumbers,
+    });
   }
 
   // tmux window management (only when the terminal is a tmux pane

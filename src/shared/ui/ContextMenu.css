@@ -44,3 +44,11 @@
   background: var(--error-bg);
   color: var(--error);
 }
+
+.context-menu-item__check {
+  display: inline-block;
+  width: 14px;
+  margin-right: 2px;
+  color: var(--ink);
+  text-align: center;
+}

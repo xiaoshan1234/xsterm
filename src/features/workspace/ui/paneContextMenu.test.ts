@@ -21,6 +21,7 @@ const noopActions: PaneMenuActions = {
   copy: async () => undefined,
   paste: async () => undefined,
   clear: () => undefined,
+  toggleLineNumbers: () => undefined,
   closePane: () => undefined,
   closeTerminal: () => undefined,
 };
@@ -49,6 +50,7 @@ describe("buildPaneContextMenu", () => {
       "Copy",
       "Paste",
       "Clear Pane",
+      "Show Line Numbers",
       "Close Pane",
       "Close Terminal",
     ]);
@@ -62,9 +64,37 @@ describe("buildPaneContextMenu", () => {
       "Select All",
       "Copy",
       "Clear Pane",
+      "Show Line Numbers",
       "Close Pane",
       "Close Terminal",
     ]);
+  });
+
+  it("marks Show Line Numbers as checked when no displayConfig is set", () => {
+    const items = buildPaneContextMenu(terminal(), noopActions);
+    const item = items.find((i) => i.label === "Show Line Numbers");
+    expect(item?.checked).toBe(true);
+  });
+
+  it("reflects a disabled line-number displayConfig as unchecked", () => {
+    const items = buildPaneContextMenu(
+      terminal({ displayConfig: { lineNumberEnabled: false } }),
+      noopActions,
+    );
+    const item = items.find((i) => i.label === "Show Line Numbers");
+    expect(item?.checked).toBe(false);
+  });
+
+  it("Show Line Numbers delegates to actions.toggleLineNumbers", () => {
+    let called = false;
+    const items = buildPaneContextMenu(terminal(), {
+      ...noopActions,
+      toggleLineNumbers: () => {
+        called = true;
+      },
+    });
+    items.find((i) => i.label === "Show Line Numbers")!.onClick();
+    expect(called).toBe(true);
   });
 
   it("marks both Close items as danger", () => {

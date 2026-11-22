@@ -20,6 +20,10 @@
   padding-left: 48px;
 }
 
+.terminal-host--no-gutter {
+  padding-left: 0;
+}
+
 .terminal-line-number-overlay {
   position: absolute;
   /* Anchored to .pane-terminal-wrapper so the gutter is clipped to the

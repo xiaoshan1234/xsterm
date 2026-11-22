@@ -70,6 +70,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   const lineNumberOverlayRef = useRef<HTMLDivElement>(null);
   const { currentTheme } = useTheme();
   const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...displayConfig };
+  const lineNumbersEnabled = displayConfig?.lineNumberEnabled ?? true;
   // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
@@ -339,7 +340,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     hostRef,
     overlayRef: lineNumberOverlayRef,
     terminalId,
-    enabled: displayConfig?.lineNumberEnabled ?? true,
+    enabled: lineNumbersEnabled,
   });
 
   useImperativeHandle(
@@ -386,7 +387,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   }, [isActive, termRef]);
 
   return (
-    <div ref={hostRef} className="terminal-host" onMouseDown={onFocus}>
+    <div
+      ref={hostRef}
+      className={`terminal-host${lineNumbersEnabled ? "" : " terminal-host--no-gutter"}`}
+      onMouseDown={onFocus}
+    >
       <div ref={lineNumberOverlayRef} className="terminal-line-number-overlay" aria-hidden="true" />
       <div ref={containerRef} className="terminal-container" />
       <PasteConfirmDialog

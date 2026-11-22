@@ -15,6 +15,8 @@ export interface ContextMenuItem {
   onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
+  /** Render the item as a checkbox toggle and show a check mark when set. */
+  checked?: boolean;
 }
 
 export interface ContextMenuRef {
@@ -107,9 +109,17 @@ export const ContextMenu = forwardRef<ContextMenuRef, ContextMenuProps>(function
             <button
               key={item.id ?? item.label ?? index}
               className={`context-menu-item ${item.danger ? "context-menu-item--danger" : ""}`}
+              {...(item.checked !== undefined
+                ? { role: "menuitemcheckbox", "aria-checked": item.checked }
+                : {})}
               disabled={item.disabled}
               onClick={() => handleItemClick(item)}
             >
+              {item.checked !== undefined && (
+                <span className="context-menu-item__check" aria-hidden="true">
+                  {item.checked ? "✓" : ""}
+                </span>
+              )}
               {item.label}
             </button>
           ))}

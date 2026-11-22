@@ -33,7 +33,7 @@ export function Pane({
   isWindowActive,
   onActivate,
 }: PaneProps) {
-  const { terminals } = useTerminalRuntime();
+  const { terminals, applyDisplayConfigToLiveSession } = useTerminalRuntime();
   const paneRuntimeActions = useWorkspacePaneRuntimeActions();
   const paneIntents = usePaneIntents();
   const paneSessionIntents = usePaneSessionIntents();
@@ -79,6 +79,13 @@ export function Pane({
     terminalRef.current?.clear();
   }, []);
 
+  const toggleLineNumbers = useCallback(() => {
+    if (!terminal) return;
+    applyDisplayConfigToLiveSession(terminal.id, {
+      lineNumberEnabled: !(terminal.displayConfig?.lineNumberEnabled ?? true),
+    });
+  }, [applyDisplayConfigToLiveSession, terminal]);
+
   const selectAll = useCallback(() => {
     terminalRef.current?.selectAll();
   }, []);
@@ -113,6 +120,7 @@ export function Pane({
       copy: copySelection,
       paste: pasteFromClipboard,
       clear: clearTerminal,
+      toggleLineNumbers,
       closePane: runtimeCommands.closePane,
       closeTerminal: runtimeCommands.closeTerminal,
       createTmuxWindow: runtimeCommands.createMultiplexedWindow,
