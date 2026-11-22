@@ -596,26 +596,6 @@
   text-align: center;
 }
 
-.shell-bottom-jump-prompt {
-  flex: 0 0 auto;
-  height: 22px;
-  margin-right: var(--space-sm);
-  padding: 0 var(--space-sm);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.shell-bottom-jump-prompt:hover {
-  color: var(--ink);
-  background: var(--bg-hover);
-  border-color: var(--hairline);
-}
-
 .shell-overlay-host {
   position: relative;
   z-index: 1000;

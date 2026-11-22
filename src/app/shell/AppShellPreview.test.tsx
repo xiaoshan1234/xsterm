@@ -115,11 +115,10 @@ describe("AppShellPreview", () => {
     expect(runtimeStatus?.textContent).toContain("Pane 1/2");
     expect(screen.queryByRole("button", { name: /Runtime status/ })).toBeNull();
     expect(container.querySelector(".shell-bottom-bar")?.querySelectorAll("button")).toHaveLength(
-      3,
+      2,
     );
     expect(screen.getByRole("button", { name: "Previous bookmark" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Next bookmark" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Jump to prompt" })).toBeTruthy();
   });
 
   it("shows saved tmux sessions grouped by their base configuration", () => {

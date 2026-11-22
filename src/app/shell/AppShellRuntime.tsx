@@ -20,7 +20,7 @@ import { useRuntimeShellUiState } from "./useRuntimeShellUiState";
 
 type RuntimeAppShellProps = Omit<
   AppShellProps,
-  "bookmarkCount" | "bookmarkIndex" | "onPrevBookmark" | "onNextBookmark" | "onJumpToPrompt"
+  "bookmarkCount" | "bookmarkIndex" | "onPrevBookmark" | "onNextBookmark"
 >;
 
 function RuntimeAppShell(props: RuntimeAppShellProps) {
@@ -74,12 +74,6 @@ function RuntimeAppShell(props: RuntimeAppShellProps) {
     setCurrentBookmarkIndex(targetIndex + 1);
   }, [bookmarkLines, runtimeStatus, viewport]);
 
-  const onJumpToPrompt = useCallback(() => {
-    if (runtimeStatus) {
-      void viewport.jumpToPrompt(runtimeStatus.terminalId);
-    }
-  }, [runtimeStatus, viewport]);
-
   return (
     <AppShell
       {...props}
@@ -87,7 +81,6 @@ function RuntimeAppShell(props: RuntimeAppShellProps) {
       bookmarkIndex={Math.min(currentBookmarkIndex, bookmarkLines.length)}
       onPrevBookmark={onPrevBookmark}
       onNextBookmark={onNextBookmark}
-      onJumpToPrompt={onJumpToPrompt}
     />
   );
 }

@@ -119,7 +119,6 @@ export function AppShellPreview() {
       bookmarkIndex={0}
       onPrevBookmark={() => undefined}
       onNextBookmark={() => undefined}
-      onJumpToPrompt={() => undefined}
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={activeDialog === "error"}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}

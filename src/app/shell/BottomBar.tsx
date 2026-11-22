@@ -6,7 +6,6 @@ interface BottomBarProps {
   bookmarkIndex: number;
   onPrevBookmark: () => void;
   onNextBookmark: () => void;
-  onJumpToPrompt: () => void;
 }
 
 export function BottomBar({
@@ -15,7 +14,6 @@ export function BottomBar({
   bookmarkIndex,
   onPrevBookmark,
   onNextBookmark,
-  onJumpToPrompt,
 }: BottomBarProps) {
   return (
     <footer className="shell-bottom-bar">
@@ -95,15 +93,6 @@ export function BottomBar({
           ▶
         </button>
       </div>
-      <button
-        type="button"
-        className="shell-bottom-jump-prompt"
-        onClick={onJumpToPrompt}
-        aria-label="Jump to prompt"
-        title="Jump to prompt"
-      >
-        Jump to Prompt
-      </button>
     </footer>
   );
 }

@@ -15,14 +15,6 @@ import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
 import { useTerminalResize } from "./useTerminalResize";
 import { useTerminalGutter } from "./useTerminalGutter";
-import {
-  MAX_PROMPT_JUMP_STEPS,
-  encodeWheelDownSequence,
-  readPromptFingerprint,
-  screenContainsLine,
-  screenSignature,
-  waitForNextRender,
-} from "./promptJump";
 import { usePasteBatcher } from "./usePasteBatcher";
 import { filterTerminalInput } from "./terminalInput";
 import { countLines } from "./textTransform";
@@ -149,58 +141,14 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     keyboardPortsRef.current = surfacePorts.keyboard;
   }, [surfacePorts.keyboard]);
 
-  const promptFingerprintRef = useRef("");
-
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-    const updateFingerprint = () => {
-      if (term.buffer.active.type === "alternate") {
-        promptFingerprintRef.current = readPromptFingerprint(term);
-      }
-    };
-    const disposable = term.onRender(updateFingerprint);
-    updateFingerprint();
-    return () => disposable.dispose();
-  }, [termRef]);
-
-  const jumpToPrompt = useCallback(async (): Promise<boolean> => {
-    const term = termRef.current;
-    if (!term) return false;
-    if (term.buffer.active.type !== "alternate") {
-      term.scrollToBottom();
-      return true;
-    }
-    const fingerprint = promptFingerprintRef.current.trimEnd();
-    if (!fingerprint) return false;
-    if (screenContainsLine(term, fingerprint)) return true;
-    if (term.modes.mouseTrackingMode === "none") return false;
-    const wheel = encodeWheelDownSequence(1, 1);
-    let previous = screenSignature(term);
-    for (let step = 0; step < MAX_PROMPT_JUMP_STEPS; step++) {
-      writeTerminalRef.current(terminalId, wheel).catch((err) => {
-        logger.error("terminal", "jumpToPrompt:wheel", err);
-      });
-      await waitForNextRender(term);
-      if (screenContainsLine(term, fingerprint)) return true;
-      const current = screenSignature(term);
-      if (current === previous) break;
-      previous = current;
-    }
-    return screenContainsLine(term, fingerprint);
-  }, [terminalId, termRef]);
-
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
     return viewport.register(terminalId, {
       getTopLine: () => term.buffer.active.viewportY,
-      getBufferType: () => term.buffer.active.type,
       scrollToLine: (line) => term.scrollToLine(line),
-      scrollToBottom: () => term.scrollToBottom(),
-      jumpToPrompt,
     });
-  }, [terminalId, termRef, viewport, jumpToPrompt]);
+  }, [terminalId, termRef, viewport]);
 
   // Perf 010: paste chunking + confirmation. The batcher owns rAF pacing so
   // a single paste doesn't hold the TerminalManager mutex across one giant

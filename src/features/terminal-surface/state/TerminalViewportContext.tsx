@@ -4,18 +4,12 @@ import type { TerminalId } from "../../../models";
 export interface TerminalViewportController {
   getTopLine: () => number;
   scrollToLine: (line: number) => void;
-  getBufferType: () => "normal" | "alternate";
-  scrollToBottom: () => void;
-  jumpToPrompt: () => Promise<boolean>;
 }
 
 interface TerminalViewportContextValue {
   register: (terminalId: TerminalId, controller: TerminalViewportController) => () => void;
   getTopLine: (terminalId: TerminalId) => number | undefined;
   scrollToLine: (terminalId: TerminalId, line: number) => void;
-  getBufferType: (terminalId: TerminalId) => "normal" | "alternate" | undefined;
-  scrollToBottom: (terminalId: TerminalId) => void;
-  jumpToPrompt: (terminalId: TerminalId) => Promise<boolean>;
 }
 
 const TerminalViewportContext = createContext<TerminalViewportContextValue | null>(null);
@@ -40,21 +34,9 @@ export function TerminalViewportProvider({ children }: { children: ReactNode }) 
     controllersRef.current.get(terminalId)?.scrollToLine(line);
   }, []);
 
-  const getBufferType = useCallback((terminalId: TerminalId) => {
-    return controllersRef.current.get(terminalId)?.getBufferType();
-  }, []);
-
-  const scrollToBottom = useCallback((terminalId: TerminalId) => {
-    controllersRef.current.get(terminalId)?.scrollToBottom();
-  }, []);
-
-  const jumpToPrompt = useCallback((terminalId: TerminalId) => {
-    return controllersRef.current.get(terminalId)?.jumpToPrompt() ?? Promise.resolve(false);
-  }, []);
-
   const value = useMemo(
-    () => ({ register, getTopLine, scrollToLine, getBufferType, scrollToBottom, jumpToPrompt }),
-    [getBufferType, getTopLine, jumpToPrompt, register, scrollToBottom, scrollToLine],
+    () => ({ register, getTopLine, scrollToLine }),
+    [getTopLine, register, scrollToLine],
   );
 
   return (

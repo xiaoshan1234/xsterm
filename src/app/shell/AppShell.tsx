@@ -25,7 +25,6 @@ export interface AppShellProps {
   bookmarkIndex: number;
   onPrevBookmark: () => void;
   onNextBookmark: () => void;
-  onJumpToPrompt: () => void;
   isTextSenderOpen: boolean;
   isInteractionBlocked?: boolean;
   onSelectTool: (tool: ToolId) => void;
@@ -44,7 +43,6 @@ export function AppShell({
   bookmarkIndex,
   onPrevBookmark,
   onNextBookmark,
-  onJumpToPrompt,
   isTextSenderOpen,
   isInteractionBlocked = false,
   onSelectTool,
@@ -118,7 +116,6 @@ export function AppShell({
           bookmarkIndex={bookmarkIndex}
           onPrevBookmark={onPrevBookmark}
           onNextBookmark={onNextBookmark}
-          onJumpToPrompt={onJumpToPrompt}
         />
       </div>
       {overlay}
