@@ -21,7 +21,7 @@ const noopActions: PaneMenuActions = {
   copy: async () => undefined,
   paste: async () => undefined,
   clear: () => undefined,
-  toggleLineNumbers: () => undefined,
+  toggleGutter: () => undefined,
   closePane: () => undefined,
   closeTerminal: () => undefined,
 };
@@ -50,7 +50,7 @@ describe("buildPaneContextMenu", () => {
       "Copy",
       "Paste",
       "Clear Pane",
-      "Show Line Numbers",
+      "Show Gutter",
       "Close Pane",
       "Close Terminal",
     ]);
@@ -64,36 +64,36 @@ describe("buildPaneContextMenu", () => {
       "Select All",
       "Copy",
       "Clear Pane",
-      "Show Line Numbers",
+      "Show Gutter",
       "Close Pane",
       "Close Terminal",
     ]);
   });
 
-  it("marks Show Line Numbers as checked when no displayConfig is set", () => {
+  it("marks Show Gutter as checked when no displayConfig is set", () => {
     const items = buildPaneContextMenu(terminal(), noopActions);
-    const item = items.find((i) => i.label === "Show Line Numbers");
+    const item = items.find((i) => i.label === "Show Gutter");
     expect(item?.checked).toBe(true);
   });
 
-  it("reflects a disabled line-number displayConfig as unchecked", () => {
+  it("reflects a disabled gutter displayConfig as unchecked", () => {
     const items = buildPaneContextMenu(
-      terminal({ displayConfig: { lineNumberEnabled: false } }),
+      terminal({ displayConfig: { gutterEnabled: false } }),
       noopActions,
     );
-    const item = items.find((i) => i.label === "Show Line Numbers");
+    const item = items.find((i) => i.label === "Show Gutter");
     expect(item?.checked).toBe(false);
   });
 
-  it("Show Line Numbers delegates to actions.toggleLineNumbers", () => {
+  it("Show Gutter delegates to actions.toggleGutter", () => {
     let called = false;
     const items = buildPaneContextMenu(terminal(), {
       ...noopActions,
-      toggleLineNumbers: () => {
+      toggleGutter: () => {
         called = true;
       },
     });
-    items.find((i) => i.label === "Show Line Numbers")!.onClick();
+    items.find((i) => i.label === "Show Gutter")!.onClick();
     expect(called).toBe(true);
   });
 

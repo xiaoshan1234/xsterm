@@ -2,9 +2,21 @@ import { type ShellStatusViewData } from "../application/shellModel/shellStatusV
 
 interface BottomBarProps {
   runtimeStatus: ShellStatusViewData | null;
+  bookmarkCount: number;
+  bookmarkIndex: number;
+  onPrevBookmark: () => void;
+  onNextBookmark: () => void;
+  onJumpToPrompt: () => void;
 }
 
-export function BottomBar({ runtimeStatus }: BottomBarProps) {
+export function BottomBar({
+  runtimeStatus,
+  bookmarkCount,
+  bookmarkIndex,
+  onPrevBookmark,
+  onNextBookmark,
+  onJumpToPrompt,
+}: BottomBarProps) {
   return (
     <footer className="shell-bottom-bar">
       <div
@@ -58,6 +70,40 @@ export function BottomBar({ runtimeStatus }: BottomBarProps) {
           </>
         )}
       </div>
+      <div className="shell-bottom-bookmarks" aria-label="Bookmarks">
+        <button
+          type="button"
+          className="shell-bottom-bookmark-button"
+          onClick={onPrevBookmark}
+          disabled={bookmarkCount === 0}
+          aria-label="Previous bookmark"
+          title="Previous bookmark"
+        >
+          ◀
+        </button>
+        <span className="shell-bottom-bookmark-count">
+          {bookmarkCount === 0 ? "0/0" : `${bookmarkIndex}/${bookmarkCount}`}
+        </span>
+        <button
+          type="button"
+          className="shell-bottom-bookmark-button"
+          onClick={onNextBookmark}
+          disabled={bookmarkCount === 0}
+          aria-label="Next bookmark"
+          title="Next bookmark"
+        >
+          ▶
+        </button>
+      </div>
+      <button
+        type="button"
+        className="shell-bottom-jump-prompt"
+        onClick={onJumpToPrompt}
+        aria-label="Jump to prompt"
+        title="Jump to prompt"
+      >
+        Jump to Prompt
+      </button>
     </footer>
   );
 }

@@ -1,5 +1,5 @@
 /*
- * Terminal host + line-number gutter overlay.
+ * Terminal host + left gutter overlay.
  *
  * The gutter is `position: absolute` and anchored to the terminal wrapper.
  * Keeping it inside the terminal content region prevents it from spilling
@@ -16,7 +16,7 @@
   min-width: 0;
   min-height: 0;
   /* Reserve space for the absolutely-positioned gutter so xterm never
-   * slides under it. See .terminal-line-number-overlay for why. */
+   * slides under it. See .terminal-gutter-overlay for why. */
   padding-left: 48px;
 }
 
@@ -24,7 +24,7 @@
   padding-left: 0;
 }
 
-.terminal-line-number-overlay {
+.terminal-gutter-overlay {
   position: absolute;
   /* Anchored to .pane-terminal-wrapper so the gutter is clipped to the
    * terminal content area. */
@@ -52,7 +52,7 @@
   background-color: var(--canvas);
 }
 
-.terminal-line-number-overlay .line-number-overlay-row {
+.terminal-gutter-overlay .terminal-gutter-row {
   position: absolute;
   left: 0;
   right: 0;
@@ -65,4 +65,22 @@
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.terminal-gutter-overlay .terminal-gutter-row--bookmarked {
+  color: var(--accent);
+}
+
+.terminal-gutter-overlay .terminal-gutter-row--bookmarked::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateY(-50%);
 }

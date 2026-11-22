@@ -32,6 +32,7 @@ export function useTerminalRuntimeValue({
       uploadImageToSshTerminal: actions.uploadImageToSshTerminal,
       reportTerminalSize: actions.reportTerminalSize,
       applyDisplayConfigToLiveSession: actions.applyDisplayConfigToLiveSession,
+      toggleBookmark: actions.toggleBookmark,
       touchTerminalActivity: actions.touchTerminalActivity,
     }),
     [
@@ -45,6 +46,7 @@ export function useTerminalRuntimeValue({
       actions.renameSession,
       actions.reportTerminalSize,
       actions.resizeTerminal,
+      actions.toggleBookmark,
       actions.touchTerminalActivity,
       actions.uploadImageToSshTerminal,
       actions.writeTerminal,

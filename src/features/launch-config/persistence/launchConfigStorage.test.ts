@@ -360,6 +360,46 @@ describe("migrateSavedConfig — new v1 pass-through", () => {
   });
 });
 
+describe("migrateSavedConfig - displayConfig gutter migration", () => {
+  it("maps legacy lineNumberEnabled onto gutterEnabled for v1 configs", () => {
+    const raw = {
+      id: "cfg-gutter-v1",
+      name: "gutter",
+      version: 1,
+      type: "local",
+      config: { shell: "sh" },
+      displayConfig: { lineNumberEnabled: false, fontSize: 14 },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result?.displayConfig).toEqual({ gutterEnabled: false, fontSize: 14 });
+  });
+
+  it("maps legacy lineNumberEnabled onto gutterEnabled for legacy v0 configs", () => {
+    const raw = {
+      id: "cfg-gutter-v0",
+      name: "gutter",
+      type: "local",
+      localConfig: { shell: "sh" },
+      displayConfig: { lineNumberEnabled: false },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result?.displayConfig).toEqual({ gutterEnabled: false });
+  });
+
+  it("keeps displayConfig without the legacy key unchanged", () => {
+    const raw = {
+      id: "cfg-gutter-plain",
+      name: "gutter",
+      version: 1,
+      type: "local",
+      config: { shell: "sh" },
+      displayConfig: { gutterEnabled: true, fontSize: 15 },
+    };
+    const result = migrateSavedConfig(raw);
+    expect(result?.displayConfig).toEqual({ gutterEnabled: true, fontSize: 15 });
+  });
+});
+
 describe("migrateSavedConfig — malformed input", () => {
   it("returns null when type is missing entirely", () => {
     expect(migrateSavedConfig({ id: "x", name: "y" })).toBeNull();

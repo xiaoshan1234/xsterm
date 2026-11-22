@@ -1,17 +1,34 @@
-import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import type { TerminalId } from "../../../models";
 import { useTheme } from "../../../shared/theme/ThemeContext";
-import type { TerminalDisplayConfig } from "../../../features/terminal";
+import type { TerminalBookmark, TerminalDisplayConfig } from "../../../features/terminal";
 import { frontendLogger as logger } from "../../../infra";
 import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
 import { useTerminalResize } from "./useTerminalResize";
-import { useLineNumberOverlay } from "./useLineNumberOverlay";
+import { useTerminalGutter } from "./useTerminalGutter";
+import {
+  MAX_PROMPT_JUMP_STEPS,
+  encodeWheelDownSequence,
+  readPromptFingerprint,
+  screenContainsLine,
+  screenSignature,
+  waitForNextRender,
+} from "./promptJump";
 import { usePasteBatcher } from "./usePasteBatcher";
 import { filterTerminalInput } from "./terminalInput";
 import { countLines } from "./textTransform";
 import { PasteConfirmDialog } from "./PasteConfirmDialog";
 import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
+import { useTerminalViewport } from "../state/TerminalViewportContext";
 import { chordFromKeyboardEvent } from "../../../shared/keyboard";
 import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";
@@ -32,6 +49,7 @@ interface TerminalProps {
   isConnected: boolean;
   configId: string;
   displayConfig?: TerminalDisplayConfig;
+  bookmarks?: readonly TerminalBookmark[];
   onFocus?: () => void;
 }
 
@@ -59,18 +77,23 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     isConnected,
     configId: _configId,
     displayConfig,
+    bookmarks,
     onFocus,
   },
   ref,
 ) {
   // containerRef: xterm.js actual DOM mount point; useXterm creates the Terminal instance inside this div
   const containerRef = useRef<HTMLDivElement>(null);
-  // hostRef: positioned ancestor the gutter overlay is measured against (see useLineNumberOverlay)
+  // hostRef: positioned ancestor the gutter overlay is measured against (see useTerminalGutter)
   const hostRef = useRef<HTMLDivElement>(null);
-  const lineNumberOverlayRef = useRef<HTMLDivElement>(null);
+  const gutterOverlayRef = useRef<HTMLDivElement>(null);
   const { currentTheme } = useTheme();
   const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...displayConfig };
-  const lineNumbersEnabled = displayConfig?.lineNumberEnabled ?? true;
+  const gutterEnabled = displayConfig?.gutterEnabled ?? true;
+  const bookmarkLines = useMemo(
+    () => (bookmarks ? bookmarks.map((bookmark) => bookmark.line) : []),
+    [bookmarks],
+  );
   // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
 
@@ -81,9 +104,18 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     getEffectiveLocalEcho,
     reconnect: reconnectSession,
     uploadImage: uploadImageToSshTerminal,
+    toggleBookmark: toggleBookmarkSession,
   } = surfacePorts.session;
   const { clipboard } = surfacePorts;
+  const viewport = useTerminalViewport();
   const localEchoEnabled = getEffectiveLocalEcho(terminalId);
+  const handleGutterLineClick = useCallback(
+    (line: number) => {
+      const text = termRef.current?.buffer.active.getLine(line)?.translateToString(true) ?? "";
+      toggleBookmarkSession(terminalId, line, text);
+    },
+    [terminalId, termRef, toggleBookmarkSession],
+  );
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
   const isFocusedRef = useRef(isActive);
@@ -116,6 +148,59 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   useEffect(() => {
     keyboardPortsRef.current = surfacePorts.keyboard;
   }, [surfacePorts.keyboard]);
+
+  const promptFingerprintRef = useRef("");
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const updateFingerprint = () => {
+      if (term.buffer.active.type === "alternate") {
+        promptFingerprintRef.current = readPromptFingerprint(term);
+      }
+    };
+    const disposable = term.onRender(updateFingerprint);
+    updateFingerprint();
+    return () => disposable.dispose();
+  }, [termRef]);
+
+  const jumpToPrompt = useCallback(async (): Promise<boolean> => {
+    const term = termRef.current;
+    if (!term) return false;
+    if (term.buffer.active.type !== "alternate") {
+      term.scrollToBottom();
+      return true;
+    }
+    const fingerprint = promptFingerprintRef.current.trimEnd();
+    if (!fingerprint) return false;
+    if (screenContainsLine(term, fingerprint)) return true;
+    if (term.modes.mouseTrackingMode === "none") return false;
+    const wheel = encodeWheelDownSequence(1, 1);
+    let previous = screenSignature(term);
+    for (let step = 0; step < MAX_PROMPT_JUMP_STEPS; step++) {
+      writeTerminalRef.current(terminalId, wheel).catch((err) => {
+        logger.error("terminal", "jumpToPrompt:wheel", err);
+      });
+      await waitForNextRender(term);
+      if (screenContainsLine(term, fingerprint)) return true;
+      const current = screenSignature(term);
+      if (current === previous) break;
+      previous = current;
+    }
+    return screenContainsLine(term, fingerprint);
+  }, [terminalId, termRef]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    return viewport.register(terminalId, {
+      getTopLine: () => term.buffer.active.viewportY,
+      getBufferType: () => term.buffer.active.type,
+      scrollToLine: (line) => term.scrollToLine(line),
+      scrollToBottom: () => term.scrollToBottom(),
+      jumpToPrompt,
+    });
+  }, [terminalId, termRef, viewport, jumpToPrompt]);
 
   // Perf 010: paste chunking + confirmation. The batcher owns rAF pacing so
   // a single paste doesn't hold the TerminalManager mutex across one giant
@@ -335,12 +420,14 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useTerminalResize: listens for container size changes, calls fitAddon.fit() to make xterm adapt to the new size
   useTauriTerminalOutput(termRef, terminalId);
   useTerminalResize(containerRef, termRef, fitAddonRef, terminalId, displayConfig, isWindowActive);
-  useLineNumberOverlay({
+  useTerminalGutter({
     termRef,
     hostRef,
-    overlayRef: lineNumberOverlayRef,
+    overlayRef: gutterOverlayRef,
     terminalId,
-    enabled: lineNumbersEnabled,
+    bookmarks: bookmarkLines,
+    onLineClick: handleGutterLineClick,
+    enabled: gutterEnabled,
   });
 
   useImperativeHandle(
@@ -389,10 +476,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   return (
     <div
       ref={hostRef}
-      className={`terminal-host${lineNumbersEnabled ? "" : " terminal-host--no-gutter"}`}
+      className={`terminal-host${gutterEnabled ? "" : " terminal-host--no-gutter"}`}
       onMouseDown={onFocus}
     >
-      <div ref={lineNumberOverlayRef} className="terminal-line-number-overlay" aria-hidden="true" />
+      <div ref={gutterOverlayRef} className="terminal-gutter-overlay" aria-hidden="true" />
       <div ref={containerRef} className="terminal-container" />
       <PasteConfirmDialog
         isOpen={pendingPasteText !== null}

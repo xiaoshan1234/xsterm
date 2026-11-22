@@ -60,7 +60,7 @@ describe("AppShellPreview", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Version" }));
 
     expect(screen.getByRole("heading", { name: "Version" })).toBeTruthy();
-    expect(screen.getByText("Version 0.2.3")).toBeTruthy();
+    expect(screen.getByText("Version 0.3.1")).toBeTruthy();
   });
 
   it("opens the update dialog from Help", () => {
@@ -70,7 +70,7 @@ describe("AppShellPreview", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Update" }));
 
     expect(screen.getByRole("heading", { name: "Update" })).toBeTruthy();
-    expect(screen.getByText("Current version: 0.2.3")).toBeTruthy();
+    expect(screen.getByText("Current version: 0.3.1")).toBeTruthy();
   });
 
   it("opens the license dialog from Help", () => {
@@ -115,8 +115,11 @@ describe("AppShellPreview", () => {
     expect(runtimeStatus?.textContent).toContain("Pane 1/2");
     expect(screen.queryByRole("button", { name: /Runtime status/ })).toBeNull();
     expect(container.querySelector(".shell-bottom-bar")?.querySelectorAll("button")).toHaveLength(
-      0,
+      3,
     );
+    expect(screen.getByRole("button", { name: "Previous bookmark" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next bookmark" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Jump to prompt" })).toBeTruthy();
   });
 
   it("shows saved tmux sessions grouped by their base configuration", () => {

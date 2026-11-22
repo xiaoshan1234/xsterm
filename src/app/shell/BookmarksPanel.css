@@ -1,0 +1,52 @@
+.bookmarks-panel-empty {
+  padding: var(--space-sm);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.bookmarks-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  margin: 0;
+  padding: var(--space-xs);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.bookmarks-panel-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--body);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bookmarks-panel-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--hairline);
+}
+
+.bookmarks-panel-line {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bookmarks-panel-tag {
+  flex: 1;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

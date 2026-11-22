@@ -555,6 +555,67 @@
   font-variant-numeric: tabular-nums;
 }
 
+.shell-bottom-bookmarks {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--space-xs);
+}
+
+.shell-bottom-bookmark-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.shell-bottom-bookmark-button:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+
+.shell-bottom-bookmark-button:disabled {
+  color: var(--muted-soft);
+  cursor: default;
+}
+
+.shell-bottom-bookmark-count {
+  min-width: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.shell-bottom-jump-prompt {
+  flex: 0 0 auto;
+  height: 22px;
+  margin-right: var(--space-sm);
+  padding: 0 var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.shell-bottom-jump-prompt:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
+  border-color: var(--hairline);
+}
+
 .shell-overlay-host {
   position: relative;
   z-index: 1000;

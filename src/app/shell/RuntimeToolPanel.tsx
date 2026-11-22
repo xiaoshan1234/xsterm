@@ -1,4 +1,5 @@
 import type { ToolId } from "./types";
+import type { TerminalId } from "../../models";
 import type { TerminalManagerGroupViewData } from "../../features/terminal";
 import type { TmuxManagerGroupViewData } from "../../features/tmux";
 import type {
@@ -9,6 +10,7 @@ import { SettingsPanel } from "../../features/settings";
 import { TerminalManagerPanel } from "../../features/terminal";
 import { TmuxManagerPanel } from "../../features/tmux";
 import { WindowManagerPanel, WorkspaceManagerPanel } from "../../features/workspace";
+import { BookmarksPanel, type BookmarkItemViewData } from "./BookmarksPanel";
 
 interface RuntimeToolPanelProps {
   activeTool: ToolId | null;
@@ -16,6 +18,9 @@ interface RuntimeToolPanelProps {
   tmuxManagerGroups: readonly TmuxManagerGroupViewData[];
   windowManagerItems: readonly WindowManagerItemViewData[];
   workspaceManagerItems: readonly WorkspaceManagerItemViewData[];
+  bookmarkItems: readonly BookmarkItemViewData[];
+  activeTerminalId?: TerminalId;
+  onJumpToBookmark: (line: number) => void;
   onCreateTerminal: () => void;
   onCreateTmux: () => void;
   onAttachTmux: () => void;
@@ -44,6 +49,9 @@ export function RuntimeToolPanel({
   tmuxManagerGroups,
   windowManagerItems,
   workspaceManagerItems,
+  bookmarkItems,
+  activeTerminalId,
+  onJumpToBookmark,
   onCreateTerminal,
   onCreateTmux,
   onAttachTmux,
@@ -114,6 +122,14 @@ export function RuntimeToolPanel({
       );
     case "settings":
       return <SettingsPanel />;
+    case "bookmarks":
+      return (
+        <BookmarksPanel
+          terminalId={activeTerminalId}
+          items={bookmarkItems}
+          onJump={onJumpToBookmark}
+        />
+      );
     default:
       return null;
   }

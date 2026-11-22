@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_GROUP_ID } from "../../features/launch-config";
-import { AppShell } from "./AppShell";
+import { AppShell, type AppShellProps } from "./AppShell";
+import { useTerminalRuntime } from "../../features/terminal";
+import { TerminalViewportProvider, useTerminalViewport } from "../../features/terminal-surface";
 import { GlobalTextSender } from "../../features/command-sender";
 import { TOOL_TITLES } from "./types";
 import { RuntimeOverlays } from "./RuntimeOverlays";
@@ -15,6 +17,80 @@ import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedback
 import { useApplicationPersistenceStatus } from "../application/assembly";
 import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
 import { useRuntimeShellUiState } from "./useRuntimeShellUiState";
+
+type RuntimeAppShellProps = Omit<
+  AppShellProps,
+  "bookmarkCount" | "bookmarkIndex" | "onPrevBookmark" | "onNextBookmark" | "onJumpToPrompt"
+>;
+
+function RuntimeAppShell(props: RuntimeAppShellProps) {
+  const { terminals } = useTerminalRuntime();
+  const viewport = useTerminalViewport();
+  const { runtimeStatus } = props;
+  const [currentBookmarkIndex, setCurrentBookmarkIndex] = useState(0);
+
+  const bookmarkLines = useMemo(() => {
+    if (!runtimeStatus) return [];
+    const terminal = terminals.find((candidate) => candidate.id === runtimeStatus.terminalId);
+    return terminal?.bookmarks
+      ? terminal.bookmarks.map((bookmark) => bookmark.line).sort((a, b) => a - b)
+      : [];
+  }, [runtimeStatus, terminals]);
+
+  useEffect(() => {
+    setCurrentBookmarkIndex(0);
+  }, [runtimeStatus?.terminalId]);
+
+  const onPrevBookmark = useCallback(() => {
+    if (!runtimeStatus || bookmarkLines.length === 0) return;
+    const top = viewport.getTopLine(runtimeStatus.terminalId) ?? 0;
+    let target = bookmarkLines[bookmarkLines.length - 1];
+    let targetIndex = bookmarkLines.length - 1;
+    for (let index = bookmarkLines.length - 1; index >= 0; index--) {
+      if (bookmarkLines[index] < top) {
+        target = bookmarkLines[index];
+        targetIndex = index;
+        break;
+      }
+    }
+    viewport.scrollToLine(runtimeStatus.terminalId, target);
+    setCurrentBookmarkIndex(targetIndex + 1);
+  }, [bookmarkLines, runtimeStatus, viewport]);
+
+  const onNextBookmark = useCallback(() => {
+    if (!runtimeStatus || bookmarkLines.length === 0) return;
+    const top = viewport.getTopLine(runtimeStatus.terminalId) ?? 0;
+    let target = bookmarkLines[0];
+    let targetIndex = 0;
+    for (let index = 0; index < bookmarkLines.length; index++) {
+      const line = bookmarkLines[index];
+      if (line > top) {
+        target = line;
+        targetIndex = index;
+        break;
+      }
+    }
+    viewport.scrollToLine(runtimeStatus.terminalId, target);
+    setCurrentBookmarkIndex(targetIndex + 1);
+  }, [bookmarkLines, runtimeStatus, viewport]);
+
+  const onJumpToPrompt = useCallback(() => {
+    if (runtimeStatus) {
+      void viewport.jumpToPrompt(runtimeStatus.terminalId);
+    }
+  }, [runtimeStatus, viewport]);
+
+  return (
+    <AppShell
+      {...props}
+      bookmarkCount={bookmarkLines.length}
+      bookmarkIndex={Math.min(currentBookmarkIndex, bookmarkLines.length)}
+      onPrevBookmark={onPrevBookmark}
+      onNextBookmark={onNextBookmark}
+      onJumpToPrompt={onJumpToPrompt}
+    />
+  );
+}
 
 export function AppShellRuntime() {
   const shellModel = useShellModel();
@@ -95,40 +171,42 @@ export function AppShellRuntime() {
   return (
     <ApplicationFeedbackProvider value={feedback}>
       <RuntimeTerminalSurfacePortsProvider>
-        <AppShell
-          activeTool={shellUi.activeTool}
-          navBar={
-            <RuntimeNavBarContainer
-              model={shellModel}
-              isTextSenderOpen={shellUi.isTextSenderOpen}
-              onToggleTextSender={shellUi.toggleTextSender}
-              onHelpAction={overlayController.openHelp}
-              onError={overlayController.showError}
-            />
-          }
-          toolTitle={shellUi.activeTool ? TOOL_TITLES[shellUi.activeTool] : ""}
-          toolPanelContent={toolPanelContent}
-          mainArea={
-            <RuntimeMainArea
-              workspaces={workspaces}
-              activeWorkspace={activeWorkspace}
-              onCreateWorkspace={createDefaultWorkspace}
-            />
-          }
-          textSender={
-            <GlobalTextSender
-              targets={textSenderTargets}
-              selectedTargetId={shellUi.selectedTargetKey}
-              onSelectTarget={shellUi.setSelectedTargetKey}
-              onSend={sendTextToTarget}
-            />
-          }
-          overlay={overlays}
-          runtimeStatus={runtimeStatus}
-          isTextSenderOpen={shellUi.isTextSenderOpen}
-          isInteractionBlocked={overlayController.error !== null}
-          onSelectTool={shellUi.toggleTool}
-        />
+        <TerminalViewportProvider>
+          <RuntimeAppShell
+            activeTool={shellUi.activeTool}
+            navBar={
+              <RuntimeNavBarContainer
+                model={shellModel}
+                isTextSenderOpen={shellUi.isTextSenderOpen}
+                onToggleTextSender={shellUi.toggleTextSender}
+                onHelpAction={overlayController.openHelp}
+                onError={overlayController.showError}
+              />
+            }
+            toolTitle={shellUi.activeTool ? TOOL_TITLES[shellUi.activeTool] : ""}
+            toolPanelContent={toolPanelContent}
+            mainArea={
+              <RuntimeMainArea
+                workspaces={workspaces}
+                activeWorkspace={activeWorkspace}
+                onCreateWorkspace={createDefaultWorkspace}
+              />
+            }
+            textSender={
+              <GlobalTextSender
+                targets={textSenderTargets}
+                selectedTargetId={shellUi.selectedTargetKey}
+                onSelectTarget={shellUi.setSelectedTargetKey}
+                onSend={sendTextToTarget}
+              />
+            }
+            overlay={overlays}
+            runtimeStatus={runtimeStatus}
+            isTextSenderOpen={shellUi.isTextSenderOpen}
+            isInteractionBlocked={overlayController.error !== null}
+            onSelectTool={shellUi.toggleTool}
+          />
+        </TerminalViewportProvider>
       </RuntimeTerminalSurfacePortsProvider>
     </ApplicationFeedbackProvider>
   );

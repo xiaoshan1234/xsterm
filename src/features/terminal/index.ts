@@ -21,6 +21,7 @@ export type {
   SshConfig,
   SshTerminal,
   Terminal,
+  TerminalBookmark,
   TerminalConnectionInfo,
   TerminalDisplayConfig,
   TerminalKind,

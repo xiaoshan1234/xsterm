@@ -68,6 +68,37 @@ describe("terminal maintenance actions", () => {
     expect(updateConfigs).toHaveBeenCalled();
   });
 
+  it("toggles bookmarks on a live session and keeps them sorted", () => {
+    const terminal = createTerminal();
+    let sessions = [terminal];
+    const { result } = renderHook(() =>
+      useTerminalMetadataActions({
+        terminalsRef: { current: [terminal] },
+        setTerminals: (action) => {
+          sessions = typeof action === "function" ? action(sessions) : action;
+        },
+        updateConfigs: vi.fn(),
+      }),
+    );
+
+    act(() => result.current.toggleBookmark(terminal.id, 100, "echo hi"));
+    expect(sessions[0].bookmarks).toEqual([{ line: 100, text: "echo hi" }]);
+
+    act(() => result.current.toggleBookmark(terminal.id, 120, "ls"));
+    act(() => result.current.toggleBookmark(terminal.id, 90, "pwd"));
+    expect(sessions[0].bookmarks).toEqual([
+      { line: 90, text: "pwd" },
+      { line: 100, text: "echo hi" },
+      { line: 120, text: "ls" },
+    ]);
+
+    act(() => result.current.toggleBookmark(terminal.id, 100, "echo hi"));
+    expect(sessions[0].bookmarks).toEqual([
+      { line: 90, text: "pwd" },
+      { line: 120, text: "ls" },
+    ]);
+  });
+
   it("rejects reconnect when the transport does not support it", async () => {
     const terminal = createTerminal();
     const { result } = renderHook(() =>

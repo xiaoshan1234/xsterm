@@ -21,6 +21,13 @@ export type TerminalKind =
   | { type: "wsl"; distribution?: string }
   | { type: "tmux-pane"; sessionId: number; paneId: string };
 
+export interface TerminalBookmark {
+  /** 0-indexed absolute scrollback line. */
+  line: number;
+  /** The line's text content at the moment it was bookmarked. */
+  text: string;
+}
+
 export interface TmuxPaneRuntimeState {
   controllerId: number;
   paneId: string;
@@ -41,6 +48,8 @@ interface TerminalBase {
   name: string;
   isConnected: boolean;
   displayConfig?: TerminalDisplayConfig;
+  /** Bookmarked scrollback lines, kept sorted by absolute line. */
+  bookmarks?: TerminalBookmark[];
   capabilities?: CapabilityFlags;
   createdAt?: number;
   lastActivityAt?: number;
@@ -97,5 +106,6 @@ export interface TerminalRuntimeContextType {
   ) => Promise<string>;
   reportTerminalSize: (terminalId: TerminalId, rows: number, cols: number) => void;
   applyDisplayConfigToLiveSession: (id: TerminalId, patch: Partial<TerminalDisplayConfig>) => void;
+  toggleBookmark: (id: TerminalId, line: number, text: string) => void;
   touchTerminalActivity: (id: TerminalId) => void;
 }

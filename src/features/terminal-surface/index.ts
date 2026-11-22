@@ -13,3 +13,8 @@ export {
   type TerminalKeyActionId,
   type TerminalSurfaceTmuxError,
 } from "./state/TerminalSurfacePortsContext";
+export {
+  TerminalViewportProvider,
+  useTerminalViewport,
+  type TerminalViewportController,
+} from "./state/TerminalViewportContext";

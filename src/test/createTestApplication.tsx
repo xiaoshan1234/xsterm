@@ -96,6 +96,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     uploadImageToSshTerminal: unsupportedAsync,
     reportTerminalSize: () => undefined,
     applyDisplayConfigToLiveSession: unsupported,
+    toggleBookmark: () => undefined,
     touchTerminalActivity: () => undefined,
     ...options.terminal,
   };
@@ -190,6 +191,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
           (candidate) => candidate.id === terminalId && isTmuxPaneTerminal(candidate),
         ),
       touchActivity: terminal.touchTerminalActivity,
+      toggleBookmark: terminal.toggleBookmark,
     },
     stream: {
       subscribeOutput: async () => () => undefined,

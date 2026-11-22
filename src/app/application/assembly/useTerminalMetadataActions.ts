@@ -44,5 +44,22 @@ export function useTerminalMetadataActions({
     [setTerminals],
   );
 
-  return { applyDisplayConfigToLiveSession, renameSession };
+  const toggleBookmark = useCallback(
+    (terminalId: TerminalId, line: number, text: string) => {
+      setTerminals((previous) =>
+        previous.map((terminal) => {
+          if (terminal.id !== terminalId) return terminal;
+          const current = terminal.bookmarks ?? [];
+          const present = current.some((bookmark) => bookmark.line === line);
+          const next = present
+            ? current.filter((bookmark) => bookmark.line !== line)
+            : [...current, { line, text }].sort((a, b) => a.line - b.line);
+          return { ...terminal, bookmarks: next.length > 0 ? next : undefined };
+        }),
+      );
+    },
+    [setTerminals],
+  );
+
+  return { applyDisplayConfigToLiveSession, renameSession, toggleBookmark };
 }

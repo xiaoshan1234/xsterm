@@ -10,7 +10,7 @@ export interface TerminalDisplayConfig {
   lineTimestamp?: boolean;
   timeFormat?: string;
   dateTimeFormat?: string;
-  lineNumberEnabled?: boolean;
+  gutterEnabled?: boolean;
   autoWrap?: boolean;
   reverseVideo?: boolean;
   mouseWheelScrollLines?: number;

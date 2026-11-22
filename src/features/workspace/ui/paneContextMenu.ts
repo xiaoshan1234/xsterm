@@ -10,8 +10,8 @@ export interface PaneMenuActions {
   copy: () => Promise<void>;
   paste: () => Promise<void>;
   clear: () => void;
-  /** toggle the pane terminal's line-number gutter on/off. */
-  toggleLineNumbers: () => void;
+  /** toggle the pane terminal's left gutter on/off. */
+  toggleGutter: () => void;
   closePane: () => void;
   closeTerminal: () => void;
   /** create a new tmux window on the pane's controller. */
@@ -33,7 +33,7 @@ export interface PaneMenuActions {
  *  - Always: Split Horizontal, Split Vertical
  *  - If no terminal attached: Attach Terminal
  *  - If terminal attached: Select All, Copy, (Paste if connected), Clear Pane,
- *    Show Line Numbers
+ *    Show Gutter
  *  - Always: Close Pane (danger)
  *  - If terminal attached: Close Terminal (danger)
  *  - tmux terminal: New Tmux Window, Rename Tmux Window, Close Tmux Window
@@ -62,9 +62,9 @@ export function buildPaneContextMenu(
     }
     items.push({ label: "Clear Pane", onClick: actions.clear });
     items.push({
-      label: "Show Line Numbers",
-      checked: terminal.displayConfig?.lineNumberEnabled ?? true,
-      onClick: actions.toggleLineNumbers,
+      label: "Show Gutter",
+      checked: terminal.displayConfig?.gutterEnabled ?? true,
+      onClick: actions.toggleGutter,
     });
   }
 

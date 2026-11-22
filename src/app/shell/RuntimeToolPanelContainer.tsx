@@ -1,6 +1,9 @@
+import { useCallback, useMemo } from "react";
 import { DEFAULT_GROUP_ID, tmuxSessionKey } from "../../features/launch-config";
 import type { LaunchConfigId } from "../../models";
+import { useTerminalViewport } from "../../features/terminal-surface";
 import type { ShellModel } from "../application/shellModel/useShellModel";
+import type { BookmarkItemViewData } from "./BookmarksPanel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
 import type { RuntimeConfirmState, RuntimeDialog } from "./runtimeOverlayTypes";
 import type { ToolId } from "./types";
@@ -29,9 +32,12 @@ export function RuntimeToolPanelContainer({
     tmuxManagerGroups,
     windowManagerItems,
     workspaceManagerItems,
+    terminalRuntime,
+    runtimeStatus,
   } = model;
   const { savedConfigs, removeConfig, toggleGroup, deleteGroup } = launchConfig;
   const { detachTmuxSession, openTmuxSessions } = tmuxRuntime;
+  const viewport = useTerminalViewport();
   const {
     workspaces,
     savedWorkspaces,
@@ -45,6 +51,33 @@ export function RuntimeToolPanelContainer({
     deleteSavedWindow,
     deleteSavedWorkspace,
   } = workspaceLayout;
+
+  const activeTerminal = useMemo(
+    () =>
+      runtimeStatus
+        ? terminalRuntime.terminals.find((candidate) => candidate.id === runtimeStatus.terminalId)
+        : undefined,
+    [runtimeStatus, terminalRuntime.terminals],
+  );
+
+  const bookmarkItems = useMemo<BookmarkItemViewData[]>(() => {
+    const bookmarks = activeTerminal?.bookmarks;
+    if (!bookmarks) return [];
+    return bookmarks.map((bookmark) => ({
+      id: String(bookmark.line),
+      line: bookmark.line,
+      text: bookmark.text,
+    }));
+  }, [activeTerminal]);
+
+  const onJumpToBookmark = useCallback(
+    (line: number) => {
+      if (runtimeStatus) {
+        viewport.scrollToLine(runtimeStatus.terminalId, line);
+      }
+    },
+    [runtimeStatus, viewport],
+  );
 
   const openConfig = (configId: string) => {
     createWindowFromSavedConfig(configId).catch((cause) =>
@@ -85,6 +118,9 @@ export function RuntimeToolPanelContainer({
       tmuxManagerGroups={tmuxManagerGroups}
       windowManagerItems={windowManagerItems}
       workspaceManagerItems={workspaceManagerItems}
+      bookmarkItems={bookmarkItems}
+      activeTerminalId={activeTerminal?.id}
+      onJumpToBookmark={onJumpToBookmark}
       onCreateTerminal={() =>
         onOpenDialog({
           kind: "create-terminal",

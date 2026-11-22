@@ -19,6 +19,7 @@ export interface TerminalSurfacePorts {
     write: (terminalId: TerminalId, data: string) => Promise<void>;
     isTmuxTerminal: (terminalId: TerminalId) => boolean;
     touchActivity: (terminalId: TerminalId) => void;
+    toggleBookmark: (terminalId: TerminalId, line: number, text: string) => void;
   };
   stream: {
     subscribeOutput: (

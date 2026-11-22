@@ -115,6 +115,11 @@ export function AppShellPreview() {
         </GlobalOverlayHost>
       }
       runtimeStatus={PREVIEW_RUNTIME_STATUS}
+      bookmarkCount={0}
+      bookmarkIndex={0}
+      onPrevBookmark={() => undefined}
+      onNextBookmark={() => undefined}
+      onJumpToPrompt={() => undefined}
       isTextSenderOpen={isTextSenderOpen}
       isInteractionBlocked={activeDialog === "error"}
       onSelectTool={(tool) => setActiveTool((currentTool) => (currentTool === tool ? null : tool))}

@@ -54,6 +54,7 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
         write: terminalRuntime.writeTerminal,
         isTmuxTerminal,
         touchActivity: terminalRuntime.touchTerminalActivity,
+        toggleBookmark: terminalRuntime.toggleBookmark,
       },
       stream: {
         subscribeOutput: terminalStreamActions.subscribeOutput,
@@ -81,6 +82,7 @@ export function RuntimeTerminalSurfacePortsProvider({ children }: { children: Re
       terminalRuntime.reconnectSession,
       terminalRuntime.reportTerminalSize,
       terminalRuntime.resizeTerminal,
+      terminalRuntime.toggleBookmark,
       terminalRuntime.touchTerminalActivity,
       terminalRuntime.uploadImageToSshTerminal,
       terminalRuntime.writeTerminal,

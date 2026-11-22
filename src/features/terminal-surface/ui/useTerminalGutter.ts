@@ -3,8 +3,12 @@ import { type Terminal as XTerm } from "@xterm/xterm";
 import type { TerminalId } from "../../../models";
 
 /**
- * Line-number gutter, rendered as a plain overlay `<div>` that is a *sibling*
- * of xterm's mount node.
+ * Terminal gutter, rendered as a plain overlay `<div>` that is a *sibling* of
+ * xterm's mount node.
+ *
+ * Today the gutter paints 1-indexed line numbers, but it is intentionally named
+ * "gutter" (not "line number") because the same left rail is expected to host
+ * timestamps, bookmarks and other per-row annotations later.
  *
  * xterm 6.x's Decoration API (`registerMarker` + `registerDecoration`) does not
  * place decoration elements per row in this app: every decoration collapses to
@@ -24,13 +28,13 @@ import type { TerminalId } from "../../../models";
 
 type ActiveBuffer = XTerm["buffer"]["active"];
 
-const ROW_CLASS = "line-number-overlay-row";
+const ROW_CLASS = "terminal-gutter-row";
 /** xterm's own default when `lineHeight` is not configured. */
 const DEFAULT_LINE_HEIGHT = 1.0;
 /** xterm's own default when `fontSize` is not configured. */
 const DEFAULT_FONT_SIZE = 15;
 
-interface UseLineNumberOverlayOptions {
+interface UseTerminalGutterOptions {
   /** xterm instance owner (created by `useXterm`). */
   termRef: RefObject<XTerm | null>;
   /** Positioned ancestor that holds both the xterm mount node and the overlay. */
@@ -39,7 +43,11 @@ interface UseLineNumberOverlayOptions {
   overlayRef: RefObject<HTMLDivElement | null>;
   /** Re-initialises the overlay when the pane is bound to another terminal. */
   terminalId: TerminalId;
-  /** Show or hide the line number gutter. @default true */
+  /** 0-indexed absolute scrollback lines to mark in the gutter. */
+  bookmarks?: readonly number[];
+  /** Invoked when the user clicks a gutter row (toggle a bookmark there). */
+  onLineClick?: (line: number) => void;
+  /** Show or hide the terminal gutter. @default true */
   enabled?: boolean;
 }
 
@@ -56,17 +64,20 @@ function paintNormalRows(
   viewportY: number,
   cellHeight: number,
   lastRow: number,
+  bookmarkSet: ReadonlySet<number>,
 ): void {
   const fragment = document.createDocumentFragment();
   for (let row = 0; row <= lastRow; row++) {
     const rowTop = row * cellHeight;
     // Never let a half-clipped number hang out of the viewport.
     if (rowTop + cellHeight > screenRect.height + 1) break;
+    const line = viewportY + row;
     const span = document.createElement("span");
-    span.className = ROW_CLASS;
+    span.className = bookmarkSet.has(line) ? `${ROW_CLASS} ${ROW_CLASS}--bookmarked` : ROW_CLASS;
+    span.dataset.line = String(line);
     span.style.top = `${rowTop}px`;
     span.style.height = `${cellHeight}px`;
-    span.textContent = String(viewportY + row + 1);
+    span.textContent = String(line + 1);
     fragment.appendChild(span);
   }
   overlay.replaceChildren(fragment);
@@ -111,13 +122,15 @@ function findLastNumberedRow(buffer: ActiveBuffer, viewportY: number, rows: numb
   return last;
 }
 
-export function useLineNumberOverlay({
+export function useTerminalGutter({
   termRef,
   hostRef,
   overlayRef,
   terminalId,
+  bookmarks,
+  onLineClick,
   enabled = true,
-}: UseLineNumberOverlayOptions): void {
+}: UseTerminalGutterOptions): void {
   useEffect(() => {
     if (enabled === false) {
       const overlay = overlayRef.current;
@@ -130,6 +143,14 @@ export function useLineNumberOverlay({
 
     const term = termRef.current;
     if (!term) return;
+    const bookmarkSet = new Set(bookmarks ?? []);
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const row = target?.closest<HTMLElement>(`.${ROW_CLASS}`);
+      if (!row || row.dataset.line === undefined) return;
+      const line = Number(row.dataset.line);
+      if (Number.isInteger(line)) onLineClick?.(line);
+    };
 
     let rafId: number | null = null;
     // Signature of the last painted state. onRender fires on every frame of
@@ -176,7 +197,7 @@ export function useLineNumberOverlay({
 
       overlay.style.display = "block";
 
-      paintNormalRows(overlay, screenRect, viewportY, cellHeight, lastRow);
+      paintNormalRows(overlay, screenRect, viewportY, cellHeight, lastRow, bookmarkSet);
     };
 
     const schedule = () => {
@@ -197,6 +218,7 @@ export function useLineNumberOverlay({
     // Pane resize changes both the row count and the overlay's origin.
     const host = hostRef.current;
     const overlay = overlayRef.current;
+    overlay?.addEventListener("click", handleClick);
     const resizeObserver = new ResizeObserver(schedule);
     if (host) resizeObserver.observe(host);
 
@@ -207,10 +229,11 @@ export function useLineNumberOverlay({
       for (const disposable of disposables) disposable.dispose();
       viewportEl?.removeEventListener("scroll", schedule);
       resizeObserver.disconnect();
+      overlay?.removeEventListener("click", handleClick);
       if (overlay) {
         overlay.replaceChildren();
         overlay.style.display = "none";
       }
     };
-  }, [termRef, hostRef, overlayRef, terminalId, enabled]);
+  }, [termRef, hostRef, overlayRef, terminalId, bookmarks, onLineClick, enabled]);
 }

@@ -12,7 +12,7 @@ import {
 import { type ShellStatusViewData } from "../application/shellModel/shellStatusViewModel";
 import "./AppShell.css";
 
-interface AppShellProps {
+export interface AppShellProps {
   activeTool: ToolId | null;
   navBar: ReactNode;
   toolTitle: string;
@@ -21,6 +21,11 @@ interface AppShellProps {
   textSender: ReactNode;
   overlay: ReactNode;
   runtimeStatus: ShellStatusViewData | null;
+  bookmarkCount: number;
+  bookmarkIndex: number;
+  onPrevBookmark: () => void;
+  onNextBookmark: () => void;
+  onJumpToPrompt: () => void;
   isTextSenderOpen: boolean;
   isInteractionBlocked?: boolean;
   onSelectTool: (tool: ToolId) => void;
@@ -35,6 +40,11 @@ export function AppShell({
   textSender,
   overlay,
   runtimeStatus,
+  bookmarkCount,
+  bookmarkIndex,
+  onPrevBookmark,
+  onNextBookmark,
+  onJumpToPrompt,
   isTextSenderOpen,
   isInteractionBlocked = false,
   onSelectTool,
@@ -102,7 +112,14 @@ export function AppShell({
             </div>
           </main>
         </div>
-        <BottomBar runtimeStatus={runtimeStatus} />
+        <BottomBar
+          runtimeStatus={runtimeStatus}
+          bookmarkCount={bookmarkCount}
+          bookmarkIndex={bookmarkIndex}
+          onPrevBookmark={onPrevBookmark}
+          onNextBookmark={onNextBookmark}
+          onJumpToPrompt={onJumpToPrompt}
+        />
       </div>
       {overlay}
     </div>

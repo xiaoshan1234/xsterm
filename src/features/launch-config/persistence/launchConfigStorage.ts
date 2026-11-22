@@ -49,6 +49,21 @@ function migrateTmuxConfig(raw: unknown): TmuxSessionConfig | null {
 }
 
 /**
+ * Normalise a persisted `displayConfig`, mapping the legacy `lineNumberEnabled`
+ * flag onto the generic `gutterEnabled` flag. The left gutter used to be
+ * line-number specific; it now hosts numbers, timestamps, bookmarks, etc.
+ */
+function migrateDisplayConfig(raw: unknown): SavedTerminalConfig["displayConfig"] {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const source = raw as Record<string, unknown>;
+  if (!("lineNumberEnabled" in source)) {
+    return source as SavedTerminalConfig["displayConfig"];
+  }
+  const { lineNumberEnabled, ...rest } = source;
+  return { ...rest, gutterEnabled: lineNumberEnabled } as SavedTerminalConfig["displayConfig"];
+}
+
+/**
  * Migrate a raw entry read from the persisted JSON store into the current
  * `SavedTerminalConfig` shape.
  *
@@ -59,6 +74,7 @@ export function migrateSavedConfig(raw: unknown): SavedTerminalConfig | null {
     return null;
   }
   const obj = raw as Record<string, unknown>;
+  const migratedDisplayConfig = migrateDisplayConfig(obj.displayConfig);
 
   if (typeof obj.type === "string" && "config" in obj) {
     if (obj.config === null || typeof obj.config !== "object") {
@@ -70,9 +86,7 @@ export function migrateSavedConfig(raw: unknown): SavedTerminalConfig | null {
     const id = String(obj.id ?? "");
     const name = String(obj.name ?? "");
     const displayConfig =
-      obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedTerminalConfig["displayConfig"] }
-        : {};
+      migratedDisplayConfig !== undefined ? { displayConfig: migratedDisplayConfig } : {};
     if (obj.type === "local") {
       return {
         id,
@@ -126,9 +140,7 @@ export function migrateSavedConfig(raw: unknown): SavedTerminalConfig | null {
       version: SAVED_SESSION_CONFIG_VERSION,
       type: "local",
       config: localConfig as LocalTerminalConfig,
-      ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedTerminalConfig["displayConfig"] }
-        : {}),
+      ...(migratedDisplayConfig !== undefined ? { displayConfig: migratedDisplayConfig } : {}),
     };
   }
 
@@ -150,9 +162,7 @@ export function migrateSavedConfig(raw: unknown): SavedTerminalConfig | null {
       version: SAVED_SESSION_CONFIG_VERSION,
       type: "ssh",
       config,
-      ...(obj.displayConfig !== undefined && obj.displayConfig !== null
-        ? { displayConfig: obj.displayConfig as SavedTerminalConfig["displayConfig"] }
-        : {}),
+      ...(migratedDisplayConfig !== undefined ? { displayConfig: migratedDisplayConfig } : {}),
     };
   }
 

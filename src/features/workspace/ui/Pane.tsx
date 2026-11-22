@@ -79,10 +79,10 @@ export function Pane({
     terminalRef.current?.clear();
   }, []);
 
-  const toggleLineNumbers = useCallback(() => {
+  const toggleGutter = useCallback(() => {
     if (!terminal) return;
     applyDisplayConfigToLiveSession(terminal.id, {
-      lineNumberEnabled: !(terminal.displayConfig?.lineNumberEnabled ?? true),
+      gutterEnabled: !(terminal.displayConfig?.gutterEnabled ?? true),
     });
   }, [applyDisplayConfigToLiveSession, terminal]);
 
@@ -120,7 +120,7 @@ export function Pane({
       copy: copySelection,
       paste: pasteFromClipboard,
       clear: clearTerminal,
-      toggleLineNumbers,
+      toggleGutter,
       closePane: runtimeCommands.closePane,
       closeTerminal: runtimeCommands.closeTerminal,
       createTmuxWindow: runtimeCommands.createMultiplexedWindow,
@@ -166,6 +166,7 @@ export function Pane({
                   isConnected={terminal.isConnected}
                   configId={terminal.configId}
                   displayConfig={terminal.displayConfig}
+                  bookmarks={terminal.bookmarks}
                 />
               </div>
             </div>

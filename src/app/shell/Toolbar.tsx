@@ -1,4 +1,5 @@
 import {
+  BookmarkIcon,
   ChatIcon,
   SessionIcon,
   SettingsIcon,
@@ -17,6 +18,7 @@ const CONFIGURATION_TOOLS = [
   { id: "tmux-manager", label: "Tmux Manager", icon: SessionIcon },
   { id: "window-manager", label: "Window Manager", icon: WindowIcon },
   { id: "workspace-manager", label: "Workspace Manager", icon: WorkspaceIcon },
+  { id: "bookmarks", label: "Bookmarks", icon: BookmarkIcon },
 ] as const;
 
 export function Toolbar({ activeTool, onSelectTool }: ToolbarProps) {

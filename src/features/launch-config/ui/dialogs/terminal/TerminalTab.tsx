@@ -95,9 +95,9 @@ export default function TerminalTab({
       <div className="terminal-tab__group">
         <span className="terminal-tab__group-title">Terminal</span>
         <FormCheckboxField
-          label="Show Line Numbers"
-          checked={config.lineNumberEnabled ?? true}
-          onChange={(lineNumberEnabled) => update({ lineNumberEnabled })}
+          label="Show Gutter"
+          checked={config.gutterEnabled ?? true}
+          onChange={(gutterEnabled) => update({ gutterEnabled })}
         />
         <FormRadioGroup
           label="Sizing Mode"
