@@ -86,6 +86,7 @@ pub(crate) struct TmuxSession {
     pane_tasks: Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
     layout_refresh_pending: Mutex<HashSet<String>>,
     layout_refresh_scheduled: AtomicBool,
+    capture_exact_screen: AtomicBool,
     has_exited: AtomicBool,
     next_xsterm_id: AtomicU32,
     next_xsterm_window_id: AtomicU32,
@@ -187,6 +188,7 @@ impl TmuxSession {
             pane_tasks: Mutex::new(HashMap::new()),
             layout_refresh_pending: Mutex::new(HashSet::new()),
             layout_refresh_scheduled: AtomicBool::new(false),
+            capture_exact_screen: AtomicBool::new(true),
             has_exited: AtomicBool::new(false),
             next_xsterm_id: AtomicU32::new(id_base + 1),
             next_xsterm_window_id: AtomicU32::new(id_base + 1),
@@ -673,22 +675,54 @@ impl TmuxSession {
             }
         };
 
-        if !modes.alternate {
-            let normal = self
-                .capture_pane_raw(pane, Some(lines), false, false)
-                .await?;
-            return Ok(format!("{normal}{}", terminal_modes_replay(&modes)));
-        }
+        // Screen snapshots are best-effort: the live pane output repaints the
+        // screen immediately after attach. The mode replay, however, must
+        // always be delivered because it is what restores the TUI's mouse and
+        // cursor modes. Never let a snapshot failure drop it.
+        let screen = if modes.alternate {
+            self.capture_alternate_screen(pane, lines).await
+        } else {
+            self.capture_pane_raw(pane, Some(lines), false, false)
+                .await
+                .unwrap_or_default()
+        };
 
-        let normal = self
-            .capture_pane_raw(pane, Some(lines), true, false)
-            .await?;
-        let alternate = self.capture_pane_raw(pane, None, false, true).await?;
-        Ok(format!(
-            "{}{}",
-            alternate_screen_replay(&normal, &alternate),
-            terminal_modes_replay(&modes)
-        ))
+        Ok(format!("{screen}{}", terminal_modes_replay(&modes)))
+    }
+
+    /// Build an alternate-screen replay script without failing when the host
+    /// tmux lacks a capture flag. `-N` (exact grid) was added in tmux 3.2, so
+    /// older tmux rejects it. The first rejection flips `capture_exact_screen`
+    /// off so subsequent captures go straight to the compatible `-J` shape
+    /// instead of failing again on every attach.
+    async fn capture_alternate_screen(&self, pane: &str, lines: i32) -> String {
+        let main = self
+            .capture_pane_raw(pane, Some(lines), false, false)
+            .await
+            .unwrap_or_default();
+
+        let alternate = if self.capture_exact_screen.load(Ordering::SeqCst) {
+            match self.capture_pane_raw(pane, None, true, true).await {
+                Ok(screen) => screen,
+                Err(error) => {
+                    tracing::warn!(
+                        pane,
+                        error,
+                        "tmux exact-screen capture failed; caching fallback to joined capture"
+                    );
+                    self.capture_exact_screen.store(false, Ordering::SeqCst);
+                    self.capture_pane_raw(pane, None, true, false)
+                        .await
+                        .unwrap_or_default()
+                }
+            }
+        } else {
+            self.capture_pane_raw(pane, None, true, false)
+                .await
+                .unwrap_or_default()
+        };
+
+        alternate_screen_replay(&main, &alternate)
     }
 
     /// Query the terminal modes tmux preserved for this pane. tmux does not
@@ -729,10 +763,11 @@ impl TmuxSession {
 
     /// Run one `capture-pane` and join the returned rows with `\n`.
     ///
-    /// `alternate` flips tmux's `-a` flag so the saved main screen can be
-    /// captured while a TUI occupies the alternate screen. `lines = None`
-    /// captures only the visible screen. `exact_screen` selects `-N` instead
-    /// of `-J` for callers that explicitly need that capture shape.
+    /// `alternate` selects tmux's `-a` flag to capture the alternate screen
+    /// (`saved_grid`); without it the main screen (`base.grid`) is captured.
+    /// `lines = None` captures only the visible screen. `exact_screen` selects
+    /// `-N` instead of `-J` for callers that explicitly need that capture
+    /// shape.
     async fn capture_pane_raw(
         &self,
         pane: &str,
@@ -1094,11 +1129,12 @@ fn shell_quote(s: &str) -> String {
 
 /// Build a `capture-pane` command for a single pane.
 ///
-/// `alternate` selects tmux's `-a` flag (the saved main screen while a TUI
-/// occupies the alternate screen). `lines = None` omits `-S` so only the
-/// visible screen is captured. `exact_screen` uses `-N` instead of `-J`;
-/// `-J` remains the default because it preserves trailing cells and avoids
-/// a control-mode reply stall observed with dense full-screen UIs.
+/// `alternate` selects tmux's `-a` flag to capture the alternate screen
+/// (`saved_grid`); without it the main screen (`base.grid`) is captured.
+/// `lines = None` omits `-S` so only the visible screen is captured.
+/// `exact_screen` uses `-N` instead of `-J`; `-J` remains the default because
+/// it preserves trailing cells and avoids a control-mode reply stall observed
+/// with dense full-screen UIs.
 fn capture_pane_command(
     pane: &str,
     lines: Option<i32>,
