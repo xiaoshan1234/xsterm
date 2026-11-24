@@ -97,6 +97,8 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     reportTerminalSize: () => undefined,
     applyDisplayConfigToLiveSession: unsupported,
     toggleBookmark: () => undefined,
+    removeBookmark: () => undefined,
+    clearBookmarks: () => undefined,
     touchTerminalActivity: () => undefined,
     ...options.terminal,
   };
@@ -192,6 +194,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
         ),
       touchActivity: terminal.touchTerminalActivity,
       toggleBookmark: terminal.toggleBookmark,
+      clearBookmarks: terminal.clearBookmarks,
     },
     stream: {
       subscribeOutput: async () => () => undefined,

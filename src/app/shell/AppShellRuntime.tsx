@@ -17,6 +17,7 @@ import { ApplicationFeedbackProvider } from "../../shared/ui/ApplicationFeedback
 import { useApplicationPersistenceStatus } from "../application/assembly";
 import { useRuntimeOverlayController } from "./useRuntimeOverlayController";
 import { useRuntimeShellUiState } from "./useRuntimeShellUiState";
+import { BookmarkNavigationProvider } from "./bookmarkNavigation";
 
 type RuntimeAppShellProps = Omit<
   AppShellProps,
@@ -29,59 +30,73 @@ function RuntimeAppShell(props: RuntimeAppShellProps) {
   const { runtimeStatus } = props;
   const [currentBookmarkIndex, setCurrentBookmarkIndex] = useState(0);
 
-  const bookmarkLines = useMemo(() => {
+  const sortedBookmarks = useMemo(() => {
     if (!runtimeStatus) return [];
     const terminal = terminals.find((candidate) => candidate.id === runtimeStatus.terminalId);
-    return terminal?.bookmarks
-      ? terminal.bookmarks.map((bookmark) => bookmark.line).sort((a, b) => a - b)
-      : [];
+    return terminal?.bookmarks ? [...terminal.bookmarks].sort((a, b) => a.line - b.line) : [];
   }, [runtimeStatus, terminals]);
+
+  const currentLine = useMemo(
+    () => (currentBookmarkIndex > 0 ? sortedBookmarks[currentBookmarkIndex - 1]?.line : undefined),
+    [currentBookmarkIndex, sortedBookmarks],
+  );
 
   useEffect(() => {
     setCurrentBookmarkIndex(0);
   }, [runtimeStatus?.terminalId]);
 
   const onPrevBookmark = useCallback(() => {
-    if (!runtimeStatus || bookmarkLines.length === 0) return;
+    if (!runtimeStatus || sortedBookmarks.length === 0) return;
     const top = viewport.getTopLine(runtimeStatus.terminalId) ?? 0;
-    let target = bookmarkLines[bookmarkLines.length - 1];
-    let targetIndex = bookmarkLines.length - 1;
-    for (let index = bookmarkLines.length - 1; index >= 0; index--) {
-      if (bookmarkLines[index] < top) {
-        target = bookmarkLines[index];
+    let target = sortedBookmarks[sortedBookmarks.length - 1];
+    let targetIndex = sortedBookmarks.length - 1;
+    for (let index = sortedBookmarks.length - 1; index >= 0; index--) {
+      if (sortedBookmarks[index].line < top) {
+        target = sortedBookmarks[index];
         targetIndex = index;
         break;
       }
     }
-    viewport.scrollToLine(runtimeStatus.terminalId, target);
+    viewport.scrollToBookmark(runtimeStatus.terminalId, target);
     setCurrentBookmarkIndex(targetIndex + 1);
-  }, [bookmarkLines, runtimeStatus, viewport]);
+  }, [sortedBookmarks, runtimeStatus, viewport]);
 
   const onNextBookmark = useCallback(() => {
-    if (!runtimeStatus || bookmarkLines.length === 0) return;
+    if (!runtimeStatus || sortedBookmarks.length === 0) return;
     const top = viewport.getTopLine(runtimeStatus.terminalId) ?? 0;
-    let target = bookmarkLines[0];
+    let target = sortedBookmarks[0];
     let targetIndex = 0;
-    for (let index = 0; index < bookmarkLines.length; index++) {
-      const line = bookmarkLines[index];
-      if (line > top) {
-        target = line;
+    for (let index = 0; index < sortedBookmarks.length; index++) {
+      if (sortedBookmarks[index].line > top) {
+        target = sortedBookmarks[index];
         targetIndex = index;
         break;
       }
     }
-    viewport.scrollToLine(runtimeStatus.terminalId, target);
+    viewport.scrollToBookmark(runtimeStatus.terminalId, target);
     setCurrentBookmarkIndex(targetIndex + 1);
-  }, [bookmarkLines, runtimeStatus, viewport]);
+  }, [sortedBookmarks, runtimeStatus, viewport]);
+
+  const jumpToBookmark = useCallback(
+    (line: number, text: string) => {
+      if (!runtimeStatus) return;
+      viewport.scrollToBookmark(runtimeStatus.terminalId, { line, text });
+      const index = sortedBookmarks.findIndex((bookmark) => bookmark.line === line);
+      setCurrentBookmarkIndex(index >= 0 ? index + 1 : 0);
+    },
+    [runtimeStatus, sortedBookmarks, viewport],
+  );
 
   return (
-    <AppShell
-      {...props}
-      bookmarkCount={bookmarkLines.length}
-      bookmarkIndex={Math.min(currentBookmarkIndex, bookmarkLines.length)}
-      onPrevBookmark={onPrevBookmark}
-      onNextBookmark={onNextBookmark}
-    />
+    <BookmarkNavigationProvider value={{ currentLine, jumpTo: jumpToBookmark }}>
+      <AppShell
+        {...props}
+        bookmarkCount={sortedBookmarks.length}
+        bookmarkIndex={Math.min(currentBookmarkIndex, sortedBookmarks.length)}
+        onPrevBookmark={onPrevBookmark}
+        onNextBookmark={onNextBookmark}
+      />
+    </BookmarkNavigationProvider>
   );
 }
 

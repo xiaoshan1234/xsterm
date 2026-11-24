@@ -118,6 +118,24 @@ export const KEYBINDING_ACTIONS: readonly KeybindingAction[] = [
     context: "terminal",
     defaultChords: [chord("KeyK", { ctrl: true, shift: true })],
   },
+  {
+    id: "bookmark.toggle",
+    label: "Toggle bookmark",
+    context: "terminal",
+    defaultChords: [chord("KeyB", { ctrl: true, shift: true })],
+  },
+  {
+    id: "bookmark.next",
+    label: "Next bookmark",
+    context: "terminal",
+    defaultChords: [chord("F3")],
+  },
+  {
+    id: "bookmark.prev",
+    label: "Previous bookmark",
+    context: "terminal",
+    defaultChords: [chord("F3", { shift: true })],
+  },
 ];
 
 export function getDefaultKeybindings(): KeybindingEntry[] {

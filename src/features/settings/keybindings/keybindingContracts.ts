@@ -19,7 +19,13 @@ export type AppKeybindingActionId =
   | "app.prevToolPanel";
 
 export type TerminalKeybindingActionId =
-  "terminal.copy" | "terminal.paste" | "terminal.selectAll" | "terminal.clear";
+  | "terminal.copy"
+  | "terminal.paste"
+  | "terminal.selectAll"
+  | "terminal.clear"
+  | "bookmark.toggle"
+  | "bookmark.next"
+  | "bookmark.prev";
 
 export type KeybindingActionId = AppKeybindingActionId | TerminalKeybindingActionId;
 

@@ -4,12 +4,14 @@ import type { TerminalId } from "../../../models";
 export interface TerminalViewportController {
   getTopLine: () => number;
   scrollToLine: (line: number) => void;
+  scrollToBookmark: (target: { line: number; text: string }) => void;
 }
 
 interface TerminalViewportContextValue {
   register: (terminalId: TerminalId, controller: TerminalViewportController) => () => void;
   getTopLine: (terminalId: TerminalId) => number | undefined;
   scrollToLine: (terminalId: TerminalId, line: number) => void;
+  scrollToBookmark: (terminalId: TerminalId, target: { line: number; text: string }) => void;
 }
 
 const TerminalViewportContext = createContext<TerminalViewportContextValue | null>(null);
@@ -34,9 +36,16 @@ export function TerminalViewportProvider({ children }: { children: ReactNode }) 
     controllersRef.current.get(terminalId)?.scrollToLine(line);
   }, []);
 
+  const scrollToBookmark = useCallback(
+    (terminalId: TerminalId, target: { line: number; text: string }) => {
+      controllersRef.current.get(terminalId)?.scrollToBookmark(target);
+    },
+    [],
+  );
+
   const value = useMemo(
-    () => ({ register, getTopLine, scrollToLine }),
-    [getTopLine, register, scrollToLine],
+    () => ({ register, getTopLine, scrollToLine, scrollToBookmark }),
+    [getTopLine, register, scrollToBookmark, scrollToLine],
   );
 
   return (

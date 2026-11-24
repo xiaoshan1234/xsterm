@@ -20,7 +20,8 @@ interface RuntimeToolPanelProps {
   workspaceManagerItems: readonly WorkspaceManagerItemViewData[];
   bookmarkItems: readonly BookmarkItemViewData[];
   activeTerminalId?: TerminalId;
-  onJumpToBookmark: (line: number) => void;
+  onRemoveBookmark: (line: number) => void;
+  onClearBookmarks: () => void;
   onCreateTerminal: () => void;
   onCreateTmux: () => void;
   onAttachTmux: () => void;
@@ -51,7 +52,8 @@ export function RuntimeToolPanel({
   workspaceManagerItems,
   bookmarkItems,
   activeTerminalId,
-  onJumpToBookmark,
+  onRemoveBookmark,
+  onClearBookmarks,
   onCreateTerminal,
   onCreateTmux,
   onAttachTmux,
@@ -127,7 +129,8 @@ export function RuntimeToolPanel({
         <BookmarksPanel
           terminalId={activeTerminalId}
           items={bookmarkItems}
-          onJump={onJumpToBookmark}
+          onRemove={onRemoveBookmark}
+          onClear={onClearBookmarks}
         />
       );
     default:

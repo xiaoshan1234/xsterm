@@ -61,5 +61,35 @@ export function useTerminalMetadataActions({
     [setTerminals],
   );
 
-  return { applyDisplayConfigToLiveSession, renameSession, toggleBookmark };
+  const removeBookmark = useCallback(
+    (terminalId: TerminalId, line: number) => {
+      setTerminals((previous) =>
+        previous.map((terminal) => {
+          if (terminal.id !== terminalId) return terminal;
+          const next = (terminal.bookmarks ?? []).filter((bookmark) => bookmark.line !== line);
+          return { ...terminal, bookmarks: next.length > 0 ? next : undefined };
+        }),
+      );
+    },
+    [setTerminals],
+  );
+
+  const clearBookmarks = useCallback(
+    (terminalId: TerminalId) => {
+      setTerminals((previous) =>
+        previous.map((terminal) =>
+          terminal.id === terminalId ? { ...terminal, bookmarks: undefined } : terminal,
+        ),
+      );
+    },
+    [setTerminals],
+  );
+
+  return {
+    applyDisplayConfigToLiveSession,
+    clearBookmarks,
+    removeBookmark,
+    renameSession,
+    toggleBookmark,
+  };
 }

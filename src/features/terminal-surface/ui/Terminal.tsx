@@ -15,6 +15,7 @@ import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
 import { useTerminalResize } from "./useTerminalResize";
 import { useTerminalGutter } from "./useTerminalGutter";
+import { scrollToBookmarkLine } from "./bookmarkScroll";
 import { usePasteBatcher } from "./usePasteBatcher";
 import { filterTerminalInput } from "./terminalInput";
 import { countLines } from "./textTransform";
@@ -97,6 +98,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     reconnect: reconnectSession,
     uploadImage: uploadImageToSshTerminal,
     toggleBookmark: toggleBookmarkSession,
+    clearBookmarks: clearBookmarksSession,
   } = surfacePorts.session;
   const { clipboard } = surfacePorts;
   const viewport = useTerminalViewport();
@@ -108,6 +110,42 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     },
     [terminalId, termRef, toggleBookmarkSession],
   );
+
+  const toggleBookmarkAtCursor = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const buffer = term.buffer.active;
+    const line = buffer.baseY + buffer.cursorY;
+    const text = buffer.getLine(line)?.translateToString(true) ?? "";
+    toggleBookmarkSession(terminalId, line, text);
+  }, [terminalId, termRef, toggleBookmarkSession]);
+
+  const jumpBookmark = useCallback(
+    (direction: 1 | -1) => {
+      const term = termRef.current;
+      if (!term || !bookmarks || bookmarks.length === 0) return;
+      const top = term.buffer.active.viewportY;
+      const sorted = [...bookmarks].sort((a, b) => a.line - b.line);
+      let target = direction === 1 ? sorted[0] : sorted[sorted.length - 1];
+      if (direction === 1) {
+        target = sorted.find((bookmark) => bookmark.line > top) ?? sorted[0];
+      } else {
+        for (let index = sorted.length - 1; index >= 0; index--) {
+          if (sorted[index].line < top) {
+            target = sorted[index];
+            break;
+          }
+        }
+      }
+      scrollToBookmarkLine(term, target);
+    },
+    [bookmarks, termRef],
+  );
+
+  const bookmarkActionsRef = useRef({ toggle: toggleBookmarkAtCursor, jump: jumpBookmark });
+  useEffect(() => {
+    bookmarkActionsRef.current = { toggle: toggleBookmarkAtCursor, jump: jumpBookmark };
+  }, [jumpBookmark, toggleBookmarkAtCursor]);
 
   const localEchoEnabledRef = useRef(localEchoEnabled);
   const isFocusedRef = useRef(isActive);
@@ -147,6 +185,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     return viewport.register(terminalId, {
       getTopLine: () => term.buffer.active.viewportY,
       scrollToLine: (line) => term.scrollToLine(line),
+      scrollToBookmark: (target) => scrollToBookmarkLine(term, target),
     });
   }, [terminalId, termRef, viewport]);
 
@@ -304,7 +343,23 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       }
 
       if (terminalAction === "terminal.clear") {
+        clearBookmarksSession(terminalId);
         xterm.clear();
+        return false;
+      }
+
+      if (terminalAction === "bookmark.toggle") {
+        bookmarkActionsRef.current.toggle();
+        return false;
+      }
+
+      if (terminalAction === "bookmark.next") {
+        bookmarkActionsRef.current.jump(1);
+        return false;
+      }
+
+      if (terminalAction === "bookmark.prev") {
+        bookmarkActionsRef.current.jump(-1);
         return false;
       }
 
@@ -355,7 +410,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
       dataDisposer.dispose();
       selectionDisposer.dispose();
     };
-  }, [clipboard, kind, requestPaste, terminalId, termRef]);
+  }, [clearBookmarksSession, clipboard, kind, requestPaste, terminalId, termRef]);
 
   useEffect(() => {
     document.addEventListener("paste", handlePaste, true);
@@ -395,6 +450,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       },
       clear: () => {
+        clearBookmarksSession(terminalId);
         termRef.current?.clear();
       },
       pasteFromClipboard: async () => {
@@ -408,7 +464,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
         }
       },
     }),
-    [clipboard, requestPaste, termRef],
+    [clearBookmarksSession, clipboard, requestPaste, termRef, terminalId],
   );
 
   useEffect(() => {

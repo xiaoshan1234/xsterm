@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { DEFAULT_GROUP_ID, tmuxSessionKey } from "../../features/launch-config";
 import type { LaunchConfigId } from "../../models";
-import { useTerminalViewport } from "../../features/terminal-surface";
 import type { ShellModel } from "../application/shellModel/useShellModel";
 import type { BookmarkItemViewData } from "./BookmarksPanel";
 import { RuntimeToolPanel } from "./RuntimeToolPanel";
@@ -37,7 +36,6 @@ export function RuntimeToolPanelContainer({
   } = model;
   const { savedConfigs, removeConfig, toggleGroup, deleteGroup } = launchConfig;
   const { detachTmuxSession, openTmuxSessions } = tmuxRuntime;
-  const viewport = useTerminalViewport();
   const {
     workspaces,
     savedWorkspaces,
@@ -70,14 +68,20 @@ export function RuntimeToolPanelContainer({
     }));
   }, [activeTerminal]);
 
-  const onJumpToBookmark = useCallback(
+  const onRemoveBookmark = useCallback(
     (line: number) => {
-      if (runtimeStatus) {
-        viewport.scrollToLine(runtimeStatus.terminalId, line);
+      if (activeTerminal) {
+        terminalRuntime.removeBookmark(activeTerminal.id, line);
       }
     },
-    [runtimeStatus, viewport],
+    [activeTerminal, terminalRuntime],
   );
+
+  const onClearBookmarks = useCallback(() => {
+    if (activeTerminal) {
+      terminalRuntime.clearBookmarks(activeTerminal.id);
+    }
+  }, [activeTerminal, terminalRuntime]);
 
   const openConfig = (configId: string) => {
     createWindowFromSavedConfig(configId).catch((cause) =>
@@ -120,7 +124,8 @@ export function RuntimeToolPanelContainer({
       workspaceManagerItems={workspaceManagerItems}
       bookmarkItems={bookmarkItems}
       activeTerminalId={activeTerminal?.id}
-      onJumpToBookmark={onJumpToBookmark}
+      onRemoveBookmark={onRemoveBookmark}
+      onClearBookmarks={onClearBookmarks}
       onCreateTerminal={() =>
         onOpenDialog({
           kind: "create-terminal",

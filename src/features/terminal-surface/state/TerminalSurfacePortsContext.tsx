@@ -20,6 +20,7 @@ export interface TerminalSurfacePorts {
     isTmuxTerminal: (terminalId: TerminalId) => boolean;
     touchActivity: (terminalId: TerminalId) => void;
     toggleBookmark: (terminalId: TerminalId, line: number, text: string) => void;
+    clearBookmarks: (terminalId: TerminalId) => void;
   };
   stream: {
     subscribeOutput: (

@@ -107,5 +107,7 @@ export interface TerminalRuntimeContextType {
   reportTerminalSize: (terminalId: TerminalId, rows: number, cols: number) => void;
   applyDisplayConfigToLiveSession: (id: TerminalId, patch: Partial<TerminalDisplayConfig>) => void;
   toggleBookmark: (id: TerminalId, line: number, text: string) => void;
+  removeBookmark: (id: TerminalId, line: number) => void;
+  clearBookmarks: (id: TerminalId) => void;
   touchTerminalActivity: (id: TerminalId) => void;
 }

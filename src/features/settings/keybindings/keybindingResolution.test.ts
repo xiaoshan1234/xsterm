@@ -23,7 +23,7 @@ function chord(
 describe("keybindingResolution", () => {
   it("resolves defaults when no overrides exist", () => {
     const bindings = resolveKeybindings([]);
-    expect(bindings).toHaveLength(18);
+    expect(bindings).toHaveLength(21);
     expect(bindings.every((binding) => binding.enabled)).toBe(true);
   });
 
