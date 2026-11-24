@@ -83,12 +83,36 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   const { currentTheme } = useTheme();
   const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...displayConfig };
   const gutterEnabled = displayConfig?.gutterEnabled ?? true;
+  // TUI apps (vim / htop / less) switch xterm into its alternate buffer, which
+  // owns the full viewport. The gutter has no per-row meaning there, so the
+  // reserved left rail is released and restored automatically.
+  const [isAlternateBufferActive, setIsAlternateBufferActive] = useState(false);
   const bookmarkLines = useMemo(
     () => (bookmarks ? bookmarks.map((bookmark) => bookmark.line) : []),
     [bookmarks],
   );
   // useXterm: initializes xterm.js, loads theme and applies xterm options; returns termRef (xterm instance) and fitAddonRef (auto-fit addon)
   const { termRef, fitAddonRef } = useXterm(containerRef, currentTheme, xtermOptions);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+
+    const syncAlternateBuffer = () => {
+      setIsAlternateBufferActive(term.buffer.active.type === "alternate");
+    };
+
+    const disposables = [
+      term.onRender(syncAlternateBuffer),
+      term.onScroll(syncAlternateBuffer),
+      term.onResize(syncAlternateBuffer),
+    ];
+    syncAlternateBuffer();
+
+    return () => {
+      for (const disposable of disposables) disposable.dispose();
+    };
+  }, [termRef]);
 
   const surfacePorts = useTerminalSurfacePorts();
   const keyboardPortsRef = useRef(surfacePorts.keyboard);
@@ -423,6 +447,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useTerminalResize: listens for container size changes, calls fitAddon.fit() to make xterm adapt to the new size
   useTauriTerminalOutput(termRef, terminalId);
   useTerminalResize(containerRef, termRef, fitAddonRef, terminalId, displayConfig, isWindowActive);
+  const gutterVisible = gutterEnabled && !isAlternateBufferActive;
   useTerminalGutter({
     termRef,
     hostRef,
@@ -430,7 +455,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     terminalId,
     bookmarks: bookmarkLines,
     onLineClick: handleGutterLineClick,
-    enabled: gutterEnabled,
+    enabled: gutterVisible,
   });
 
   useImperativeHandle(
@@ -480,7 +505,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   return (
     <div
       ref={hostRef}
-      className={`terminal-host${gutterEnabled ? "" : " terminal-host--no-gutter"}`}
+      className={`terminal-host${gutterVisible ? "" : " terminal-host--no-gutter"}`}
       onMouseDown={onFocus}
     >
       <div ref={gutterOverlayRef} className="terminal-gutter-overlay" aria-hidden="true" />
