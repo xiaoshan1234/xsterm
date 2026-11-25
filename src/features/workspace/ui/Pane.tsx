@@ -1,10 +1,15 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { WindowId } from "../../../models";
 import type { EditablePaneNode, Workspace } from "../contracts";
 import { useTerminalRuntime } from "../../terminal";
 import { getPaneNumber } from "../application/paneTreeOperations";
 import { useTheme } from "../../../shared/theme/ThemeContext";
-import { Terminal, TmuxControllerErrorBanner, type TerminalRef } from "../../terminal-surface";
+import {
+  Terminal,
+  TerminalPropertiesDialog,
+  TmuxControllerErrorBanner,
+  type TerminalRef,
+} from "../../terminal-surface";
 import { ContextMenu, type ContextMenuRef } from "../../../shared/ui/ContextMenu";
 import { usePaneIntents } from "../state/PaneIntentContext";
 import { usePaneSessionIntents } from "../state/PaneSessionIntentContext";
@@ -33,13 +38,14 @@ export function Pane({
   isWindowActive,
   onActivate,
 }: PaneProps) {
-  const { terminals, applyDisplayConfigToLiveSession } = useTerminalRuntime();
+  const { terminals, updateTerminalProperties } = useTerminalRuntime();
   const paneRuntimeActions = useWorkspacePaneRuntimeActions();
   const paneIntents = usePaneIntents();
   const paneSessionIntents = usePaneSessionIntents();
   const { currentTheme } = useTheme();
   const contextMenuRef = useRef<ContextMenuRef>(null);
   const terminalRef = useRef<TerminalRef>(null);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
 
   const terminal =
     pane.terminalId !== undefined
@@ -79,13 +85,6 @@ export function Pane({
     terminalRef.current?.clear();
   }, []);
 
-  const toggleGutter = useCallback(() => {
-    if (!terminal) return;
-    applyDisplayConfigToLiveSession(terminal.id, {
-      gutterEnabled: !(terminal.displayConfig?.gutterEnabled ?? true),
-    });
-  }, [applyDisplayConfigToLiveSession, terminal]);
-
   const selectAll = useCallback(() => {
     terminalRef.current?.selectAll();
   }, []);
@@ -120,7 +119,7 @@ export function Pane({
       copy: copySelection,
       paste: pasteFromClipboard,
       clear: clearTerminal,
-      toggleGutter,
+      editProperties: () => setPropertiesOpen(true),
       closePane: runtimeCommands.closePane,
       closeTerminal: runtimeCommands.closeTerminal,
       createTmuxWindow: runtimeCommands.createMultiplexedWindow,
@@ -165,7 +164,7 @@ export function Pane({
                   onFocus={onActivate}
                   isConnected={terminal.isConnected}
                   configId={terminal.configId}
-                  displayConfig={terminal.displayConfig}
+                  properties={terminal.properties}
                   bookmarks={terminal.bookmarks}
                 />
               </div>
@@ -212,6 +211,15 @@ export function Pane({
         onSelectConfig={sessionDialog.selectConfig}
         disabled={sessionDialog.isSubmitting}
       />
+      {terminal && (
+        <TerminalPropertiesDialog
+          isOpen={propertiesOpen}
+          terminalName={terminal.name}
+          properties={terminal.properties}
+          onClose={() => setPropertiesOpen(false)}
+          onChange={(patch) => updateTerminalProperties(terminal.id, patch)}
+        />
+      )}
     </>
   );
 }

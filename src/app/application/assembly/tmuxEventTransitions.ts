@@ -65,6 +65,7 @@ export function buildTmuxPaneSession(info: TmuxPaneSessionInfo): TmuxPaneTermina
     name: info.name,
     type: "tmux-pane",
     isConnected: true,
+    properties: {},
     kind: {
       type: "tmux-pane",
       sessionId: info.tmuxSessionId,

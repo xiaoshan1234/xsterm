@@ -10,6 +10,7 @@ function terminal(overrides: Partial<Terminal> = {}): Terminal {
     type: "local",
     isConnected: true,
     kind: { type: "local", shell: "", cwd: "" },
+    properties: {},
     ...overrides,
   } as Terminal;
 }
@@ -21,7 +22,7 @@ const noopActions: PaneMenuActions = {
   copy: async () => undefined,
   paste: async () => undefined,
   clear: () => undefined,
-  toggleGutter: () => undefined,
+  editProperties: () => undefined,
   closePane: () => undefined,
   closeTerminal: () => undefined,
 };
@@ -41,7 +42,7 @@ describe("buildPaneContextMenu", () => {
     ]);
   });
 
-  it("includes Select All, Copy, Paste, Clear Pane, Close Pane, Close Terminal when a connected terminal is attached", () => {
+  it("includes Select All, Copy, Paste, Clear Pane, Edit Properties, Close Pane, Close Terminal when a connected terminal is attached", () => {
     const items = buildPaneContextMenu(terminal({ isConnected: true }), noopActions);
     expect(labels(items)).toEqual([
       "Split Horizontal",
@@ -50,7 +51,7 @@ describe("buildPaneContextMenu", () => {
       "Copy",
       "Paste",
       "Clear Pane",
-      "Show Gutter",
+      "Edit Properties…",
       "Close Pane",
       "Close Terminal",
     ]);
@@ -64,36 +65,21 @@ describe("buildPaneContextMenu", () => {
       "Select All",
       "Copy",
       "Clear Pane",
-      "Show Gutter",
+      "Edit Properties…",
       "Close Pane",
       "Close Terminal",
     ]);
   });
 
-  it("marks Show Gutter as checked when no displayConfig is set", () => {
-    const items = buildPaneContextMenu(terminal(), noopActions);
-    const item = items.find((i) => i.label === "Show Gutter");
-    expect(item?.checked).toBe(true);
-  });
-
-  it("reflects a disabled gutter displayConfig as unchecked", () => {
-    const items = buildPaneContextMenu(
-      terminal({ displayConfig: { gutterEnabled: false } }),
-      noopActions,
-    );
-    const item = items.find((i) => i.label === "Show Gutter");
-    expect(item?.checked).toBe(false);
-  });
-
-  it("Show Gutter delegates to actions.toggleGutter", () => {
+  it("Edit Properties delegates to actions.editProperties", () => {
     let called = false;
     const items = buildPaneContextMenu(terminal(), {
       ...noopActions,
-      toggleGutter: () => {
+      editProperties: () => {
         called = true;
       },
     });
-    items.find((i) => i.label === "Show Gutter")!.onClick();
+    items.find((i) => i.label === "Edit Properties…")!.onClick();
     expect(called).toBe(true);
   });
 

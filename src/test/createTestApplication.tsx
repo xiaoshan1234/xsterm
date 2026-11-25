@@ -95,7 +95,7 @@ export function createTestApplication(options: CreateTestApplicationOptions = {}
     resizeTerminal: unsupportedAsync,
     uploadImageToSshTerminal: unsupportedAsync,
     reportTerminalSize: () => undefined,
-    applyDisplayConfigToLiveSession: unsupported,
+    updateTerminalProperties: unsupported,
     toggleBookmark: () => undefined,
     removeBookmark: () => undefined,
     clearBookmarks: () => undefined,

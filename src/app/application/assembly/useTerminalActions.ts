@@ -179,7 +179,7 @@ export function useTerminalActions({
     closeWorkspace: workspaceActions.closeWorkspace,
     ...workspacePersistence,
     ...group,
-    applyDisplayConfigToLiveSession: lifecycle.applyDisplayConfigToLiveSession,
+    updateTerminalProperties: lifecycle.updateTerminalProperties,
     dismissTmuxControllerError,
   };
 }

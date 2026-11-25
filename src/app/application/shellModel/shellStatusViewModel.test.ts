@@ -37,6 +37,7 @@ function terminal(overrides: Partial<Terminal> = {}): Terminal {
     type: "ssh",
     isConnected: true,
     kind: { type: "ssh", host: "example.com", port: 22, user: "dev" },
+    properties: {},
     ...overrides,
   } as Terminal;
 }

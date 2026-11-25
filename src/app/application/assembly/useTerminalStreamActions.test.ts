@@ -18,6 +18,7 @@ function createTerminal(id: number): Terminal {
     type: "local",
     isConnected: true,
     kind: { type: "local", shell: "pwsh", cwd: "C:\\" },
+    properties: {},
   };
 }
 

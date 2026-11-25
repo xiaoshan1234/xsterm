@@ -119,6 +119,7 @@ function createTmuxTerminal(
     name: `tmux ${paneId}`,
     type: "tmux-pane",
     isConnected,
+    properties: {},
     kind: {
       type: "tmux-pane",
       sessionId: 4,

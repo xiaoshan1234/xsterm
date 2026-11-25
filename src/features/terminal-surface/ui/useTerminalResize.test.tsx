@@ -6,7 +6,7 @@
  *      `sizingMode === "fixed"` (container resizes do not affect the
  *      terminal).
  *   2. A runtime-apply effect resizes xterm + the PTY whenever
- *      `sizingMode` / `cols` / `rows` change so EditTerminalDialog can
+ *      `sizingMode` / `cols` / `rows` change so the terminal properties dialog can
  *      switch modes on a live terminal without a restart.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -17,7 +17,7 @@ import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { createTerminalId } from "../../../models";
 import { useTerminalResize } from "./useTerminalResize";
-import type { TerminalDisplayConfig } from "../../../features/terminal";
+import type { TerminalProperties } from "../../../features/terminal";
 import { createTestApplication } from "../../../test/createTestApplication";
 
 const resizeTerminalMock = vi.fn(async (_id: unknown, _rows: number, _cols: number) => {});
@@ -41,7 +41,7 @@ interface ExposedHarness {
   termRef: RefObject<XTerm | null>;
   fitAddonRef: RefObject<FitAddon | null>;
   resizeTerminalCalls: Array<{ rows: number; cols: number }>;
-  setDisplayConfig: (next: TerminalDisplayConfig) => void;
+  setProperties: (next: TerminalProperties) => void;
   xterm: XTermStub;
   fitAddon: { fit: ReturnType<typeof vi.fn> };
 }
@@ -67,7 +67,7 @@ afterEach(() => {
 });
 
 function buildHarness(
-  initial: TerminalDisplayConfig,
+  initial: TerminalProperties,
   opts?: { isWindowActive?: boolean; containerHeight?: number },
 ) {
   const exposed: Partial<ExposedHarness> = { resizeTerminalCalls: [] };
@@ -76,7 +76,7 @@ function buildHarness(
     const containerRef = useRef<HTMLDivElement | null>(null);
     const termRef = useRef<XTerm | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
-    const [displayConfig, setDisplayConfig] = useState<TerminalDisplayConfig>(initial);
+    const [properties, setProperties] = useState<TerminalProperties>(initial);
 
     useEffect(() => {
       const el = containerRef.current;
@@ -114,7 +114,7 @@ function buildHarness(
       exposed.containerRef = containerRef;
       exposed.xterm = xterm;
       exposed.fitAddon = fitAddon;
-      exposed.setDisplayConfig = setDisplayConfig;
+      exposed.setProperties = setProperties;
     }, []);
 
     useTerminalResize(
@@ -122,7 +122,7 @@ function buildHarness(
       termRef,
       fitAddonRef,
       createTerminalId(42),
-      displayConfig,
+      properties,
       opts?.isWindowActive,
     );
 
@@ -196,7 +196,7 @@ describe("useTerminalResize", () => {
     );
 
     await act(async () => {
-      exposed.setDisplayConfig({ sizingMode: "fixed", cols: 100, rows: 30 });
+      exposed.setProperties({ sizingMode: "fixed", cols: 100, rows: 30 });
     });
 
     expect(exposed.xterm.resize).toHaveBeenCalledWith(100, 30);
@@ -212,7 +212,7 @@ describe("useTerminalResize", () => {
     );
 
     await act(async () => {
-      exposed.setDisplayConfig({ sizingMode: "auto" });
+      exposed.setProperties({ sizingMode: "auto" });
     });
 
     expect(exposed.fitAddon.fit).toHaveBeenCalled();

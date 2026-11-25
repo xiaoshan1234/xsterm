@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { TerminalId } from "../../../models";
-import type { Terminal, TerminalDisplayConfig } from "../../../features/terminal";
+import type { Terminal, TerminalProperties } from "../../../features/terminal";
 import type { SavedTerminalConfig } from "../../../features/launch-config";
 
 interface UseTerminalMetadataActionsOptions {
@@ -31,12 +31,12 @@ export function useTerminalMetadataActions({
     [setTerminals, terminalsRef, updateConfigs],
   );
 
-  const applyDisplayConfigToLiveSession = useCallback(
-    (terminalId: TerminalId, patch: Partial<TerminalDisplayConfig>) => {
+  const updateTerminalProperties = useCallback(
+    (terminalId: TerminalId, patch: Partial<TerminalProperties>) => {
       setTerminals((previous) =>
         previous.map((terminal) =>
           terminal.id === terminalId
-            ? { ...terminal, displayConfig: { ...(terminal.displayConfig ?? {}), ...patch } }
+            ? { ...terminal, properties: { ...terminal.properties, ...patch } }
             : terminal,
         ),
       );
@@ -86,7 +86,7 @@ export function useTerminalMetadataActions({
   );
 
   return {
-    applyDisplayConfigToLiveSession,
+    updateTerminalProperties,
     clearBookmarks,
     removeBookmark,
     renameSession,

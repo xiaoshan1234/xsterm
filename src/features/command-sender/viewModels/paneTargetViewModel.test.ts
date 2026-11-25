@@ -14,6 +14,7 @@ describe("pane target view model", () => {
         type: "local",
         isConnected: true,
         kind: { type: "local", shell: "pwsh.exe", cwd: "C:\\" },
+        properties: {},
         capabilities: {
           supportsResize: true,
           supportsReconnect: true,
@@ -29,6 +30,7 @@ describe("pane target view model", () => {
         isConnected: true,
         kind: { type: "tmux-pane", sessionId: 4, paneId: "%2" },
         tmux: { controllerId: 4, paneId: "%2", windowId: "@1" },
+        properties: {},
         capabilities: {
           supportsResize: true,
           supportsReconnect: true,

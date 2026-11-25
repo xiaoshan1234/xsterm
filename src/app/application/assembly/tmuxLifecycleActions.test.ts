@@ -22,6 +22,7 @@ function createTmuxTerminal(): Terminal {
     isConnected: true,
     kind: { type: "tmux-pane", sessionId: 3, paneId: "%1" },
     tmux: { controllerId: 3, paneId: "%1" },
+    properties: {},
   };
 }
 

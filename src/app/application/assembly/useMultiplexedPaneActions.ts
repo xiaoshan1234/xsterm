@@ -76,7 +76,7 @@ export function useMultiplexedPaneActions({
         }
         return [
           ...previous,
-          buildFrontendTerminal(info, parent.configId, "tmux-pane", parent.displayConfig),
+          buildFrontendTerminal(info, parent.configId, "tmux-pane", parent.properties),
         ];
       });
 

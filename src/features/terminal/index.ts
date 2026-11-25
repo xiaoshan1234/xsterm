@@ -26,6 +26,7 @@ export type {
   TerminalDisplayConfig,
   TerminalKind,
   TerminalLoggingConfig,
+  TerminalProperties,
   TerminalRuntimeContextType,
   TmuxPaneRuntimeState,
   TmuxPaneTerminal,

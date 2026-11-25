@@ -61,7 +61,7 @@ export function useTerminalReconnectAction({
         info,
         oldTerminal.configId,
         config.type,
-        config.displayConfig,
+        oldTerminal.properties,
       );
       setTerminals((previous) => [...previous, newTerminal]);
       setWorkspaces((previous) =>

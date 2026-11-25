@@ -16,7 +16,10 @@ import {
 import { tmuxControllerActions } from "../../../features/tmux";
 import type { Workspace } from "../../../features/workspace";
 import { dispatchByType } from "./useTerminalActions.helpers";
-import { buildFrontendTerminal } from "./useTerminalActions.helpers";
+import {
+  buildFrontendTerminal,
+  createInitialTerminalProperties,
+} from "./useTerminalActions.helpers";
 import { findTerminalPaneLocation, focusTerminalInWorkspaces } from "./terminalPaneLocation";
 import { findOpenTmuxControllerId } from "../../../features/tmux";
 
@@ -97,7 +100,11 @@ export function useSavedConfigTerminalOpen({
             setTerminals((previous) =>
               previous.map((session) =>
                 isTmuxPaneTerminal(session) && session.tmux.controllerId === controllerId
-                  ? { ...session, configId, displayConfig: config.displayConfig }
+                  ? {
+                      ...session,
+                      configId,
+                      properties: createInitialTerminalProperties(config.displayConfig),
+                    }
                   : session,
               ),
             );

@@ -1,5 +1,10 @@
 import type { TerminalConnectionInfo } from "../../../features/terminal";
-import type { Terminal, TerminalDisplayConfig, TerminalKind } from "../../../features/terminal";
+import type {
+  Terminal,
+  TerminalDisplayConfig,
+  TerminalKind,
+  TerminalProperties,
+} from "../../../features/terminal";
 
 /**
  * Dispatches to the appropriate backend terminal creator based on terminal type.
@@ -28,6 +33,14 @@ export async function dispatchByType(
   }
 }
 
+/** Copies launch defaults into a new per-terminal property object. */
+export function createInitialTerminalProperties(
+  initialConfig?: TerminalDisplayConfig,
+): TerminalProperties {
+  const { logging: _logging, ...properties } = initialConfig ?? {};
+  return { ...properties };
+}
+
 /**
  * Returns the given `baseName` unchanged. Uniqueness is no longer enforced
  * here — visual uniqueness comes from the position prefix rendered in
@@ -38,21 +51,23 @@ export async function dispatchByType(
  * Builds the frontend `Terminal` object from a backend `TerminalInfo` returned
  * by `terminalService.createLocal` / `createSsh` / `createTmux`. Optional tmux
  * metadata is grouped under `tmux` instead of being mixed into the terminal
- * identity fields.
+ * identity fields. Launch settings are copied so later edits to the saved
+ * config cannot mutate an existing terminal; logging remains creation-only.
  */
 export function buildFrontendTerminal(
   info: TerminalConnectionInfo,
   configId: string,
   _type: Terminal["type"],
-  displayConfig?: TerminalDisplayConfig,
+  initialConfig?: TerminalDisplayConfig,
 ): Terminal {
   const now = Date.now();
+  const properties = createInitialTerminalProperties(initialConfig);
   const common = {
     id: info.id,
     configId,
     name: info.name,
     isConnected: info.isConnected,
-    displayConfig,
+    properties,
     createdAt: now,
     lastActivityAt: now,
     ...(info.isHidden !== undefined ? { isHidden: info.isHidden } : {}),

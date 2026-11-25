@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { TerminalId } from "../../../models";
 import { useTheme } from "../../../shared/theme/ThemeContext";
-import type { TerminalBookmark, TerminalDisplayConfig } from "../../../features/terminal";
+import type { TerminalBookmark, TerminalProperties } from "../../../features/terminal";
 import { frontendLogger as logger } from "../../../infra";
 import { useXterm } from "./useXterm";
 import { useTauriTerminalOutput } from "./useTauriTerminalOutput";
@@ -41,7 +41,7 @@ interface TerminalProps {
   isWindowActive?: boolean;
   isConnected: boolean;
   configId: string;
-  displayConfig?: TerminalDisplayConfig;
+  properties: TerminalProperties;
   bookmarks?: readonly TerminalBookmark[];
   onFocus?: () => void;
 }
@@ -69,7 +69,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
     isWindowActive = true,
     isConnected,
     configId: _configId,
-    displayConfig,
+    properties,
     bookmarks,
     onFocus,
   },
@@ -81,8 +81,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   const hostRef = useRef<HTMLDivElement>(null);
   const gutterOverlayRef = useRef<HTMLDivElement>(null);
   const { currentTheme } = useTheme();
-  const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...displayConfig };
-  const gutterEnabled = displayConfig?.gutterEnabled ?? true;
+  const xtermOptions = { ...DEFAULT_XTERM_OPTIONS, ...properties };
+  const gutterEnabled = properties.gutterEnabled ?? true;
   // TUI apps (vim / htop / less) switch xterm into its alternate buffer, which
   // owns the full viewport. The gutter has no per-row meaning there, so the
   // reserved left rail is released and restored automatically.
@@ -446,7 +446,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(function Terminal(
   // useTauriTerminalOutput: subscribes to Tauri backend PTY output stream, writes data to xterm display
   // useTerminalResize: listens for container size changes, calls fitAddon.fit() to make xterm adapt to the new size
   useTauriTerminalOutput(termRef, terminalId);
-  useTerminalResize(containerRef, termRef, fitAddonRef, terminalId, displayConfig, isWindowActive);
+  useTerminalResize(containerRef, termRef, fitAddonRef, terminalId, properties, isWindowActive);
   const gutterVisible = gutterEnabled && !isAlternateBufferActive;
   useTerminalGutter({
     termRef,

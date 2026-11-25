@@ -239,16 +239,34 @@ describe("buildFrontendTerminal", () => {
       type: "local",
       isConnected: true,
       kind: info.kind,
-      displayConfig: undefined,
+      properties: {},
       createdAt: expect.any(Number),
       lastActivityAt: expect.any(Number),
       capabilities,
     });
   });
 
-  it("forwards displayConfig when provided", () => {
+  it("copies launch properties into an independent per-terminal object", () => {
     const terminal = buildFrontendTerminal(info, "config-1", "local", displayConfig);
-    expect(terminal.displayConfig).toBe(displayConfig);
+    expect(terminal.properties).toEqual(displayConfig);
+    expect(terminal.properties).not.toBe(displayConfig);
+  });
+
+  it("gives terminals created from the same launch config independent properties", () => {
+    const first = buildFrontendTerminal(info, "config-1", "local", displayConfig);
+    const second = buildFrontendTerminal(info, "config-1", "local", displayConfig);
+
+    first.properties.gutterEnabled = false;
+
+    expect(second.properties.gutterEnabled).toBeUndefined();
+  });
+
+  it("does not copy creation-only logging into terminal properties", () => {
+    const terminal = buildFrontendTerminal(info, "config-1", "local", {
+      fontSize: 16,
+      logging: { enabled: true },
+    });
+    expect(terminal.properties).toEqual({ fontSize: 16 });
   });
 
   it("forwards capabilities from TerminalInfo", () => {

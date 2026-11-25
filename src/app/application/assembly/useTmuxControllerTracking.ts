@@ -16,6 +16,7 @@ import {
 import { removeControllerFromWorkspaces } from "../../../features/workspace";
 import { clearTerminalOutput } from "../../../features/terminal-surface";
 import { type UseSessionLifecycleDeps } from "./terminalLifecycleTypes";
+import { createInitialTerminalProperties } from "./useTerminalActions.helpers";
 
 type TmuxControllerTrackingDeps = Pick<
   UseSessionLifecycleDeps,
@@ -80,7 +81,11 @@ export function useTmuxControllerTracking({
           setTerminals((previous) =>
             previous.map((session) =>
               isTmuxPaneTerminal(session) && session.tmux.controllerId === controllerId
-                ? { ...session, configId: terminal.configId, displayConfig }
+                ? {
+                    ...session,
+                    configId: terminal.configId,
+                    properties: createInitialTerminalProperties(displayConfig),
+                  }
                 : session,
             ),
           );

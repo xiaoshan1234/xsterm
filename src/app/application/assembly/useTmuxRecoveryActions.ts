@@ -4,7 +4,10 @@ import type { Terminal } from "../../../features/terminal";
 import { tmuxControllerActions } from "../../../features/tmux";
 import { isTmuxPaneTerminal } from "../../../features/terminal";
 import type { SavedTerminalConfig, TmuxSessionConfig } from "../../../features/launch-config";
-import { buildFrontendTerminal } from "./useTerminalActions.helpers";
+import {
+  buildFrontendTerminal,
+  createInitialTerminalProperties,
+} from "./useTerminalActions.helpers";
 import { type useTmuxControllerTracking } from "./useTmuxControllerTracking";
 
 interface UseTmuxRecoveryActionsOptions {
@@ -66,9 +69,14 @@ export function useTmuxRecoveryActions(options: UseTmuxRecoveryActionsOptions) {
         throw createApplicationError("not-found", "Saved config not found for tmux session");
       }
 
-      const displayConfig = savedConfig?.displayConfig ?? controlledTerminals[0]?.displayConfig;
+      const propertiesByPaneId = new Map(
+        controlledTerminals.map((terminal) => [terminal.tmux.paneId, terminal.properties]),
+      );
+      const fallbackProperties =
+        controlledTerminals[0]?.properties ??
+        createInitialTerminalProperties(savedConfig?.displayConfig);
       const info = await tmuxControllerActions.attachSession(config);
-      const terminal = buildFrontendTerminal(info, configId, "tmux-pane", displayConfig);
+      const terminal = buildFrontendTerminal(info, configId, "tmux-pane", fallbackProperties);
       const newControllerId = isTmuxPaneTerminal(terminal) ? terminal.tmux.controllerId : undefined;
       if (newControllerId === undefined) {
         throw createApplicationError("invalid-state", "Tmux reconnect returned no controller");
@@ -81,7 +89,13 @@ export function useTmuxRecoveryActions(options: UseTmuxRecoveryActionsOptions) {
         options.setTerminals((previous) =>
           previous.map((session) =>
             isTmuxPaneTerminal(session) && session.tmux.controllerId === newControllerId
-              ? { ...session, configId, displayConfig }
+              ? {
+                  ...session,
+                  configId,
+                  properties: {
+                    ...(propertiesByPaneId.get(session.tmux.paneId) ?? fallbackProperties),
+                  },
+                }
               : session,
           ),
         );

@@ -1,4 +1,5 @@
 export { default as Terminal, type TerminalRef } from "./ui/Terminal";
+export { TerminalPropertiesDialog } from "./ui/TerminalPropertiesDialog";
 export { TmuxControllerErrorBanner } from "./ui/TmuxControllerErrorBanner";
 export {
   appendTerminalOutput,

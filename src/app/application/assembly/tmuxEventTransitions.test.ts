@@ -62,6 +62,7 @@ describe("tmuxEventTransitions", () => {
       type: "local" as const,
       isConnected: true,
       kind: { type: "local" as const, shell: "pwsh", cwd: "C:\\" },
+      properties: {},
     };
 
     expect(mergeTmuxPaneMetadata(terminal, { paneId: "%9" })).toBe(terminal);

@@ -31,6 +31,7 @@ describe("tmux session runtime identity", () => {
         isConnected: true,
         kind: { type: "tmux-pane" as const, sessionId: 8, paneId: "%1" },
         tmux: { controllerId: 8, paneId: "%1" },
+        properties: {},
       },
     ];
     expect(

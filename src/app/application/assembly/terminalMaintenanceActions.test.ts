@@ -16,6 +16,7 @@ function createTerminal(): Terminal {
     type: "local",
     isConnected: true,
     kind: { type: "local", shell: "pwsh", cwd: "C:\\" },
+    properties: {},
     capabilities: {
       supportsResize: true,
       supportsReconnect: false,
@@ -66,6 +67,30 @@ describe("terminal maintenance actions", () => {
 
     expect(sessions[0].name).toBe("renamed");
     expect(updateConfigs).toHaveBeenCalled();
+  });
+
+  it("updates properties on only the targeted live terminal", () => {
+    const first = createTerminal();
+    const second = {
+      ...createTerminal(),
+      id: createTerminalId(8),
+      name: "Second",
+    };
+    let sessions = [first, second];
+    const { result } = renderHook(() =>
+      useTerminalMetadataActions({
+        terminalsRef: { current: sessions },
+        setTerminals: (action) => {
+          sessions = typeof action === "function" ? action(sessions) : action;
+        },
+        updateConfigs: vi.fn(),
+      }),
+    );
+
+    act(() => result.current.updateTerminalProperties(first.id, { fontSize: 18 }));
+
+    expect(sessions[0].properties).toEqual({ fontSize: 18 });
+    expect(sessions[1].properties).toEqual({});
   });
 
   it("toggles bookmarks on a live session and keeps them sorted", () => {

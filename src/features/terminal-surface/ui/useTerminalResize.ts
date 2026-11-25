@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import type { TerminalId } from "../../../models";
 import { type Terminal as XTerm } from "@xterm/xterm";
 import { type FitAddon } from "@xterm/addon-fit";
-import type { TerminalDisplayConfig } from "../../../features/terminal";
+import type { TerminalProperties } from "../../../features/terminal";
 import { useTerminalSurfacePorts } from "../state/TerminalSurfacePortsContext";
 
 export function useTerminalResize(
@@ -10,7 +10,7 @@ export function useTerminalResize(
   termRef: RefObject<XTerm | null>,
   fitAddonRef: RefObject<FitAddon | null>,
   terminalId: TerminalId,
-  displayConfig?: TerminalDisplayConfig,
+  properties: TerminalProperties,
   isWindowActive: boolean = true,
 ): void {
   const { resize, reportSize } = useTerminalSurfacePorts().session;
@@ -25,12 +25,12 @@ export function useTerminalResize(
     reportTerminalSizeRef.current = reportSize;
   }, [reportSize]);
 
-  // Mirror displayConfig into a ref so the debounced ResizeObserver closure
+  // Mirror properties into a ref so the debounced ResizeObserver closure
   // always reads the latest sizing mode without re-subscribing to the observer.
-  const displayConfigRef = useRef<TerminalDisplayConfig | undefined>(displayConfig);
+  const propertiesRef = useRef<TerminalProperties>(properties);
   useEffect(() => {
-    displayConfigRef.current = displayConfig;
-  }, [displayConfig]);
+    propertiesRef.current = properties;
+  }, [properties]);
 
   // Use ResizeObserver to listen for container size changes, trigger fitAddon.fit() to make xterm adapt to the new size,
   // and notify Tauri backend of rows/cols to resize the PTY.
@@ -50,7 +50,7 @@ export function useTerminalResize(
 
     const fitAndResize = () => {
       if (!isWindowActive) return;
-      if (displayConfigRef.current?.sizingMode === "fixed") return;
+      if (propertiesRef.current.sizingMode === "fixed") return;
       if (fitAddonRef.current && container.offsetWidth > 0 && container.offsetHeight > 0) {
         fitAddonRef.current.fit();
         resizeTerminalRef.current(terminalId, xterm.rows, xterm.cols);
@@ -95,9 +95,9 @@ export function useTerminalResize(
   }, [containerRef, termRef, fitAddonRef, terminalId, isWindowActive]);
 
   // Runtime apply: when the user changes sizingMode, cols, or rows via the
-  // EditTerminalDialog, push the new size to the live xterm + PTY without
+  // terminal properties dialog, push the new size to the live xterm + PTY without
   // requiring a terminal restart.
-  // - "fixed": lock xterm (and PTY) to displayConfig.cols × displayConfig.rows.
+  // - "fixed": lock xterm (and PTY) to properties.cols × properties.rows.
   // - "auto": re-fit to container and resync PTY from current xterm dims.
   useEffect(() => {
     const xterm = termRef.current;
@@ -107,11 +107,11 @@ export function useTerminalResize(
     if (!isWindowActive) return;
     if (container.offsetWidth === 0 || container.offsetHeight === 0) return;
 
-    const sizingMode = displayConfig?.sizingMode ?? "auto";
+    const sizingMode = properties.sizingMode ?? "auto";
 
     if (sizingMode === "fixed") {
-      const targetCols = displayConfig?.cols ?? xterm.cols ?? 80;
-      const targetRows = displayConfig?.rows ?? xterm.rows ?? 24;
+      const targetCols = properties.cols ?? xterm.cols ?? 80;
+      const targetRows = properties.rows ?? xterm.rows ?? 24;
       if (xterm.cols !== targetCols || xterm.rows !== targetRows) {
         xterm.resize(targetCols, targetRows);
         resizeTerminalRef.current(terminalId, targetRows, targetCols);
@@ -123,9 +123,9 @@ export function useTerminalResize(
       reportTerminalSizeRef.current(terminalId, xterm.rows, xterm.cols);
     }
   }, [
-    displayConfig?.sizingMode,
-    displayConfig?.cols,
-    displayConfig?.rows,
+    properties.sizingMode,
+    properties.cols,
+    properties.rows,
     isWindowActive,
     terminalId,
     containerRef,

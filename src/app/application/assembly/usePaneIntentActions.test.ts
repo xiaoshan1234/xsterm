@@ -46,6 +46,7 @@ function createTerminal(): Terminal {
     name: "Terminal",
     type: "local",
     isConnected: true,
+    properties: {},
     kind: {
       type: "local",
       shell: "pwsh",

@@ -20,6 +20,7 @@ function createTerminal(id: number): Terminal {
     type: "local",
     isConnected: true,
     kind: { type: "local", shell: "pwsh", cwd: "C:\\" },
+    properties: {},
     capabilities: {
       supportsResize: true,
       supportsReconnect: true,
@@ -60,7 +61,10 @@ afterEach(() => {
 
 describe("useTerminalReconnectAction", () => {
   it("reconnects a local session and swaps its id in the pane tree", async () => {
-    const oldTerminal = createTerminal(7);
+    const oldTerminal = {
+      ...createTerminal(7),
+      properties: { fontSize: 18, gutterEnabled: false },
+    };
     const info: TerminalConnectionInfo = {
       id: createTerminalId(99),
       name: "reconnected",
@@ -96,6 +100,7 @@ describe("useTerminalReconnectAction", () => {
     const reconnected = await act(() => result.current(oldTerminal.id));
 
     expect(reconnected.id).toBe(createTerminalId(99));
+    expect(reconnected.properties).toEqual({ fontSize: 18, gutterEnabled: false });
     expect(terminalSessionActions.createLocal).toHaveBeenCalledWith(savedConfig.config, undefined);
     expect(sessions).toEqual([reconnected]);
     expect(workspaces[0].terminalIds).toEqual([createTerminalId(99)]);

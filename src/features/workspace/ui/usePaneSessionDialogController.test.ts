@@ -17,6 +17,7 @@ function createTerminal(supportsMultiplex = false): Terminal {
     name: "Terminal",
     type: "local",
     isConnected: true,
+    properties: {},
     kind: { type: "local", shell: "pwsh", cwd: "C:\\" },
     capabilities: {
       supportsResize: true,

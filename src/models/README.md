@@ -6,6 +6,7 @@ features:
 - application error codes
 - branded identifiers
 - result types
+- terminal property contracts shared by launch templates and live terminals
 
 Runtime projections and feature-specific schemas belong to the owning feature
 under `features/<name>/contracts.ts`. Do not introduce a parallel aggregate

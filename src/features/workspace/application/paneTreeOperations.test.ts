@@ -83,6 +83,7 @@ function terminal(id: number, name = `s${id}`): Terminal {
     type: "local",
     isConnected: true,
     kind: { type: "local", shell: "/bin/sh", cwd: "/" },
+    properties: {},
   };
 }
 

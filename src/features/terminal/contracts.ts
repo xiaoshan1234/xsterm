@@ -1,12 +1,8 @@
-import type { TerminalId } from "../../models";
-import type { LocalTerminalConfig, SshConfig, TerminalDisplayConfig } from "../launch-config";
+import type { TerminalId, TerminalProperties } from "../../models";
+import type { LocalTerminalConfig, SshConfig } from "../launch-config";
 
-export type {
-  LocalTerminalConfig,
-  SshConfig,
-  TerminalDisplayConfig,
-  TerminalLoggingConfig,
-} from "../launch-config";
+export type { LocalTerminalConfig, SshConfig, TerminalDisplayConfig } from "../launch-config";
+export type { TerminalLoggingConfig, TerminalProperties } from "../../models";
 
 export interface CapabilityFlags {
   supportsResize: boolean;
@@ -47,7 +43,8 @@ interface TerminalBase {
   configId: string;
   name: string;
   isConnected: boolean;
-  displayConfig?: TerminalDisplayConfig;
+  /** Per-terminal settings, copied from the launch config when created. */
+  properties: TerminalProperties;
   /** Bookmarked scrollback lines, kept sorted by absolute line. */
   bookmarks?: TerminalBookmark[];
   capabilities?: CapabilityFlags;
@@ -105,7 +102,7 @@ export interface TerminalRuntimeContextType {
     data: Uint8Array,
   ) => Promise<string>;
   reportTerminalSize: (terminalId: TerminalId, rows: number, cols: number) => void;
-  applyDisplayConfigToLiveSession: (id: TerminalId, patch: Partial<TerminalDisplayConfig>) => void;
+  updateTerminalProperties: (id: TerminalId, patch: Partial<TerminalProperties>) => void;
   toggleBookmark: (id: TerminalId, line: number, text: string) => void;
   removeBookmark: (id: TerminalId, line: number) => void;
   clearBookmarks: (id: TerminalId) => void;
